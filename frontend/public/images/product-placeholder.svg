@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" role="img" aria-label="상품 이미지 준비 중">
+  <rect width="600" height="600" fill="#f3f2f1"/>
+  <g fill="none" stroke="#c9c6c3" stroke-width="6">
+    <rect x="210" y="180" width="180" height="240" rx="14"/>
+    <path d="M210 250h180"/>
+    <path d="M262 180v-28a38 38 0 0 1 76 0v28"/>
+  </g>
+  <text x="300" y="480" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" fill="#8b8785">
+    이미지 준비 중
+  </text>
+</svg>

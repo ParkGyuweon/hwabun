@@ -1,0 +1,38 @@
+{
+  "review_fill_rate_pct": {
+    "rating": 100.0,
+    "is_recommended": 100.0,
+    "review_title": 68.89,
+    "review_text": 99.84,
+    "skin_tone": 100.0,
+    "eye_color": 100.0,
+    "skin_type": 100.0,
+    "hair_color": 100.0
+  },
+  "product_fill_rate_pct": {
+    "product_name": 100.0,
+    "brand_name": 100.0,
+    "size": 80.8,
+    "rating": 96.73,
+    "reviews": 96.73,
+    "price_usd": 100.0,
+    "highlights": 74.02,
+    "ingredients": 88.87,
+    "primary_category": 100.0,
+    "secondary_category": 99.91,
+    "tertiary_category": 88.34
+  },
+  "product_fill_rate_top_pct": {
+    "product_name": 100.0,
+    "brand_name": 100.0,
+    "size": 96.7,
+    "rating": 100.0,
+    "reviews": 100.0,
+    "price_usd": 100.0,
+    "highlights": 91.87,
+    "ingredients": 98.9,
+    "primary_category": 100.0,
+    "secondary_category": 100.0,
+    "tertiary_category": 86.59
+  }
+}
