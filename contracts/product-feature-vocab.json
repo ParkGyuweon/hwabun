@@ -9,7 +9,7 @@
     {
       "name": "secondary_category",
       "encoding": "one_hot",
-      "block_weight": 0.13,
+      "block_weight": 0.15,
       "dim": 8,
       "vocab": [
         "Cleansers",
@@ -26,7 +26,7 @@
     {
       "name": "tertiary_category",
       "encoding": "one_hot",
-      "block_weight": 0.2,
+      "block_weight": 0.24,
       "dim": 19,
       "vocab": [
         "BB & CC Creams",
@@ -54,7 +54,7 @@
     {
       "name": "concern",
       "encoding": "multi_hot_idf",
-      "block_weight": 0.25,
+      "block_weight": 0.29,
       "dim": 9,
       "vocab": [
         "Dullness/Uneven Texture",
@@ -80,27 +80,9 @@
       }
     },
     {
-      "name": "skin_fit",
-      "encoding": "continuous_lift",
-      "block_weight": 0.15,
-      "dim": 4,
-      "vocab": [
-        "combination",
-        "dry",
-        "normal",
-        "oily"
-      ],
-      "doc_freq": {
-        "combination": 59,
-        "dry": 38,
-        "normal": 58,
-        "oily": 27
-      }
-    },
-    {
       "name": "ingredient",
       "encoding": "multi_hot_idf",
-      "block_weight": 0.15,
+      "block_weight": 0.18,
       "dim": 9,
       "vocab": [
         "Hyaluronic Acid",
@@ -128,7 +110,7 @@
     {
       "name": "clean",
       "encoding": "multi_hot_idf",
-      "block_weight": 0.05,
+      "block_weight": 0.06,
       "dim": 16,
       "vocab": [
         "Clean at Sephora",
@@ -190,7 +172,7 @@
     {
       "name": "price_bin",
       "encoding": "one_hot",
-      "block_weight": 0.03,
+      "block_weight": 0.04,
       "dim": 5,
       "vocab": [
         "~20",
@@ -234,19 +216,42 @@
       "note": "Community Favorite / allure 수상. 콘텐츠가 아니라 인기 신호"
     }
   ],
-  "skin_fit_lift": {
-    "source": "리뷰의 skin_type 구성비 (highlights 태그 아님)",
+  "attribute_affinity": {
+    "_note": "콘텐츠 벡터가 아니라 추천 점수의 속성 항(attr_affinity)에서 소비된다. 사용자 속성으로 조회하는 테이블이므로 사용자별 가중치 분기가 가능하다.",
+    "table": "artifacts/affinity_lift.csv",
+    "attributes": [
+      "skin_type",
+      "skin_tone",
+      "hair_color",
+      "eye_color"
+    ],
+    "source": "리뷰의 사용자 속성 구성비 (highlights 태그 아님)",
     "formula": "clip((share_in_product / share_overall - LO) / (HI - LO), 0, 1)",
     "LO": 0.8,
     "HI": 1.2,
-    "base_share": {
+    "shrinkage_k": 50,
+    "skin_type_base_share": {
       "combination": 0.552656,
       "dry": 0.191721,
       "normal": 0.13227,
       "oily": 0.123352
     },
     "coverage": "200/200 (100%)",
-    "note": "combination은 표준편차 0.137로 거의 상수. 제외 검토 대상"
+    "user_weights": {
+      "dry|oily|normal": {
+        "skin_type": 0.4,
+        "skin_tone": 0.4,
+        "hair_color": 0.1,
+        "eye_color": 0.1
+      },
+      "combination": {
+        "skin_type": 0.0,
+        "skin_tone": 0.8,
+        "hair_color": 0.1,
+        "eye_color": 0.1
+      }
+    },
+    "combination_note": "combination은 상품 200개 전부 lift 0.85~1.19(표준편차 0.053)로 판별력이 없어 가중치 0. 해당 몫을 skin_tone으로 이관한다."
   },
   "price_bin_edges": [
     0,
@@ -255,5 +260,5 @@
     50,
     80
   ],
-  "total_content_dim": 76
+  "total_content_dim": 72
 }
