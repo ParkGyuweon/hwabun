@@ -1,5 +1,5 @@
 {
-  "version": "0.2",
+  "version": "0.3",
   "generated_from": "artifacts/products_200.json",
   "n_products": 200,
   "min_tag_freq": 3,
@@ -68,7 +68,7 @@
         "Dark spots"
       ],
       "doc_freq": {
-        "Dullness/Uneven Texture": 68,
+        "Dullness/Uneven Texture": 69,
         "Dryness": 56,
         "Anti-Aging": 49,
         "Pores": 35,
@@ -81,30 +81,72 @@
     },
     {
       "name": "ingredient",
-      "encoding": "multi_hot_idf",
+      "encoding": "multi_hot_idf_position",
       "block_weight": 0.27,
-      "dim": 9,
+      "dim": 30,
       "vocab": [
         "Hyaluronic Acid",
+        "Silicone",
         "Vitamin C",
+        "Squalane",
+        "Probiotic / Ferment",
+        "Green Tea",
+        "Peptides",
+        "Aloe",
+        "Lactic Acid",
+        "Licorice",
+        "Shea Butter",
+        "Panthenol (B5)",
+        "Niacinamide",
+        "Jojoba",
         "AHA/Glycolic Acid",
         "Salicylic Acid",
-        "Niacinamide",
-        "SPF",
+        "Ceramide",
+        "Rosehip / Rose",
+        "Caffeine",
+        "Urea",
+        "Adenosine",
+        "Allantoin",
         "Retinol",
-        "Lactic Acid",
-        "Collagen"
+        "Zinc",
+        "Alcohol Denat",
+        "SPF",
+        "Centella (Cica)",
+        "Willow Bark",
+        "Collagen",
+        "Mineral Oil / Petrolatum"
       ],
       "doc_freq": {
-        "Hyaluronic Acid": 46,
-        "Vitamin C": 19,
-        "AHA/Glycolic Acid": 16,
-        "Salicylic Acid": 16,
-        "Niacinamide": 12,
+        "Hyaluronic Acid": 104,
+        "Silicone": 59,
+        "Vitamin C": 55,
+        "Squalane": 49,
+        "Probiotic / Ferment": 41,
+        "Green Tea": 39,
+        "Peptides": 36,
+        "Aloe": 35,
+        "Lactic Acid": 33,
+        "Licorice": 33,
+        "Shea Butter": 32,
+        "Panthenol (B5)": 32,
+        "Niacinamide": 30,
+        "Jojoba": 24,
+        "AHA/Glycolic Acid": 23,
+        "Salicylic Acid": 23,
+        "Ceramide": 23,
+        "Rosehip / Rose": 19,
+        "Caffeine": 17,
+        "Urea": 16,
+        "Adenosine": 15,
+        "Allantoin": 15,
+        "Retinol": 14,
+        "Zinc": 12,
+        "Alcohol Denat": 11,
         "SPF": 10,
-        "Retinol": 10,
-        "Lactic Acid": 7,
-        "Collagen": 3
+        "Centella (Cica)": 9,
+        "Willow Bark": 8,
+        "Collagen": 6,
+        "Mineral Oil / Petrolatum": 5
       }
     },
     {
@@ -131,8 +173,8 @@
         "Without Oxybenzone"
       ],
       "doc_freq": {
-        "Clean at Sephora": 80,
-        "Vegan": 62,
+        "Clean at Sephora": 81,
+        "Vegan": 63,
         "Without Parabens": 40,
         "Cruelty-Free": 40,
         "Clean + Planet Positive": 27,
@@ -189,7 +231,7 @@
       "name": "rating",
       "transform": "minmax",
       "min": 3.3076,
-      "max": 4.8284,
+      "max": 4.797,
       "block_weight": 0.02,
       "note": "변동계수 0.057로 변별력 낮음. 가중치 최소로 유지하거나 제외 검토"
     }
@@ -216,6 +258,127 @@
       "note": "Community Favorite / allure 수상. 콘텐츠가 아니라 인기 신호"
     }
   ],
+  "ingredient_source": {
+    "_note": "highlights 태그가 없어도 전성분 문자열에서 성분을 복원한다. 태그로 표시된 성분은 1.0, 전성분에서만 찾은 성분은 위치 기반 감쇠.",
+    "synonyms": {
+      "Hyaluronic Acid": [
+        "hyaluronic acid",
+        "sodium hyaluronate",
+        "hyaluronate"
+      ],
+      "Vitamin C": [
+        "ascorbic acid",
+        "ascorbyl",
+        "ascorbate"
+      ],
+      "Niacinamide": [
+        "niacinamide"
+      ],
+      "Retinol": [
+        "retinol",
+        "retinyl"
+      ],
+      "Salicylic Acid": [
+        "salicylic acid"
+      ],
+      "AHA/Glycolic Acid": [
+        "glycolic acid"
+      ],
+      "Lactic Acid": [
+        "lactic acid"
+      ],
+      "Collagen": [
+        "collagen"
+      ],
+      "Silicone": [
+        "dimethicone",
+        "cyclopentasiloxane"
+      ],
+      "Squalane": [
+        "squalane",
+        "squalene"
+      ],
+      "Probiotic / Ferment": [
+        "ferment filtrate",
+        "lactobacillus",
+        "bifida"
+      ],
+      "Green Tea": [
+        "camellia sinensis"
+      ],
+      "Peptides": [
+        "peptide",
+        "palmitoyl tripeptide",
+        "acetyl hexapeptide",
+        "copper tripeptide"
+      ],
+      "Aloe": [
+        "aloe barbadensis",
+        "aloe vera"
+      ],
+      "Licorice": [
+        "glycyrrhiza",
+        "licorice"
+      ],
+      "Panthenol (B5)": [
+        "panthenol",
+        "pantothenic"
+      ],
+      "Shea Butter": [
+        "butyrospermum",
+        "shea butter"
+      ],
+      "Jojoba": [
+        "jojoba"
+      ],
+      "Ceramide": [
+        "ceramide"
+      ],
+      "Rosehip / Rose": [
+        "rosa canina",
+        "rosa damascena",
+        "rose flower"
+      ],
+      "Caffeine": [
+        "caffeine"
+      ],
+      "Urea": [
+        "urea"
+      ],
+      "Allantoin": [
+        "allantoin"
+      ],
+      "Adenosine": [
+        "adenosine"
+      ],
+      "Zinc": [
+        "zinc pca",
+        "zinc oxide",
+        "zinc gluconate"
+      ],
+      "Alcohol Denat": [
+        "alcohol denat"
+      ],
+      "Centella (Cica)": [
+        "centella",
+        "asiaticoside",
+        "madecassoside",
+        "asiatic acid"
+      ],
+      "Willow Bark": [
+        "salix",
+        "willow bark"
+      ],
+      "Mineral Oil / Petrolatum": [
+        "petrolatum",
+        "mineral oil"
+      ]
+    },
+    "tag_value": 1.0,
+    "position_formula": "max(1 - 등장위치/전체성분수, POS_MIN)",
+    "position_min": 0.1,
+    "vocab_criteria": "상위 200개 중 5~120개 상품 보유"
+  },
   "attribute_affinity": {
     "_note": "콘텐츠 벡터가 아니라 추천 점수의 속성 항(attr_affinity)에서 소비된다. 사용자 속성으로 조회하는 테이블이므로 사용자별 가중치 분기가 가능하다.",
     "table": "artifacts/affinity_lift.csv",
@@ -231,10 +394,10 @@
     "HI": 1.6,
     "shrinkage_k": 50,
     "skin_type_base_share": {
-      "combination": 0.552656,
-      "dry": 0.191721,
-      "normal": 0.13227,
-      "oily": 0.123352
+      "combination": 0.552733,
+      "dry": 0.191562,
+      "normal": 0.132297,
+      "oily": 0.123408
     },
     "coverage": "200/200 (100%)",
     "user_weights": {
@@ -260,5 +423,5 @@
     50,
     80
   ],
-  "total_content_dim": 72
+  "total_content_dim": 93
 }

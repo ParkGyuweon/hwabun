@@ -4,20 +4,31 @@
     "product_name": "Mini Liquid Silk Canvas: Featherweight Protective Primer",
     "brand_name": "Tatcha",
     "secondary_category": "Mini Size",
-    "unique_reviewers": 1774
+    "unique_reviewers": 1774,
+    "reason": "secondary_category=Mini Size"
+  },
+  {
+    "product_id": "P173726",
+    "product_name": "Facial Cotton",
+    "brand_name": "Shiseido",
+    "secondary_category": "Cleansers",
+    "unique_reviewers": 1388,
+    "reason": "Shiseido Facial Cotton - 화장솜. 전성분이 '100% Cotton'인 도구"
   },
   {
     "product_id": "P456211",
     "product_name": "GOOPGLOW Morning Skin Superpowder",
     "brand_name": "goop",
     "secondary_category": "Wellness",
-    "unique_reviewers": 1088
+    "unique_reviewers": 1088,
+    "reason": "secondary_category=Wellness"
   },
   {
     "product_id": "P470041",
     "product_name": "UV Expert Aquagel Defense Sunscreen, Primer & Moisturizer SPF 50 Duo",
     "brand_name": "Lancôme",
     "secondary_category": "Value & Gift Sets",
-    "unique_reviewers": 1007
+    "unique_reviewers": 1007,
+    "reason": "secondary_category=Value & Gift Sets"
   }
 ]

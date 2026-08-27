@@ -11,13 +11,13 @@
 
 ## 0. 한눈에 보기
 
-**콘텐츠 벡터 72차원 · 블록 가중치 합계 1.00**
+**콘텐츠 벡터 93차원 · 블록 가중치 합계 1.00**
 
 | 순 | Feature | 담는 내용 | 원본 | 인코딩 | 차원 | 보유율 | 가중치 |
 |---:|---|---|---|---|---:|---:|---:|
 | 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.42** |
 | 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
-| 3 | `ingredient` | 핵심 성분 9종 | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | 55.0% | 0.27 |
+| 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
 | 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
 | 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.0% | 0.06 |
 | 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
@@ -41,18 +41,19 @@
 |---|---|
 | `concern` | Dullness/Uneven Texture, Dryness, Anti-Aging, Pores, Loss of firmness, Dark Circles, Acne/Blemishes, Redness, Dark spots |
 | `tertiary_category` | Moisturizers, Face Serums, Face Wash & Cleansers, Eye Creams & Treatments, Face Masks, Lip Balms & Treatments, Face Sunscreen, Toners, Face Oils, Exfoliators, Facial Peels, Makeup Removers, Mists & Essences, BB & CC Creams, Blemish & Acne Treatments, For Face, Night Creams, Face Wipes, Eye Masks |
-| `ingredient` | Hyaluronic Acid, Vitamin C, AHA/Glycolic Acid, Salicylic Acid, Niacinamide, SPF, Retinol, Lactic Acid, Collagen |
+| `ingredient` | Hyaluronic Acid, Silicone, Vitamin C, Squalane, Probiotic/Ferment, Green Tea, Peptides, Aloe, Lactic Acid, Licorice, Shea Butter, Panthenol(B5), Niacinamide, Jojoba, AHA/Glycolic Acid, Salicylic Acid, Ceramide, Rosehip/Rose, Caffeine, Urea, Adenosine, Allantoin, Retinol, Zinc, Alcohol Denat, SPF, Centella(Cica), Willow Bark, Collagen, Mineral Oil/Petrolatum |
 | `secondary_category` | Moisturizers, Treatments, Cleansers, Eye Care, Masks, Lip Balms & Treatments, Sunscreen, Self Tanners |
 | `clean` | Clean at Sephora, Vegan, Without Parabens, Cruelty-Free, Clean + Planet Positive, Fragrance Free, Oil Free, Without Sulfates SLS & SLES, Without Silicones, Refill Available, Without Phthalates, Alcohol Free, Without Mineral Oil, Gluten Free, Hypoallergenic, Without Oxybenzone |
 | `price_bin` | ~$20, $20-35, $35-50, $50-80, $80+ |
 | `texture` | Hydrating, Plumping, Radiant Finish, Natural Finish, High Shine Finish |
 
-### 인코딩 방식 2가지
+### 인코딩 방식
 
 | 방식 | 뜻 | 예시 |
 |---|---|---|
 | **원핫** (one-hot) | 여러 칸 중 **하나만** 1 | 한 상품은 클렌저이거나 수분크림. 둘 다일 수 없음 |
 | **멀티핫 + IDF** (multi-hot) | **여러 칸이 동시에** 1. 흔한 값은 약하게 반영 | 비건이면서 파라벤 프리이면서 크루얼티프리일 수 있음 |
+| **+ 위치 가중** | `ingredient` 전용. 전성분 앞쪽일수록 큰 값 | 히알루론산이 2번째면 0.9, 40번째면 0.2 |
 
 **IDF가 필요한 이유**
 
@@ -89,14 +90,14 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 |---:|---|---|---|---|---:|---:|---:|
 | 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.42** |
 | 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
-| 3 | `ingredient` | 핵심 성분 9종 | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | 55.0% | 0.27 |
+| 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
 | 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
 | 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.0% | 0.06 |
 | 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
 | 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
 | 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 28.0% | 0.02 |
 
-**콘텐츠 벡터 총 72차원**
+**콘텐츠 벡터 총 93차원**
 
 ---
 
@@ -230,7 +231,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 상세 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절, 테이블은 `batch/ingest/data/affinity_lift.csv` 참조.
 
-#### ingredient — 9종 / 보유 110개 (55.0%) / 가중치 0.27
+#### ingredient — 30종 / 보유 196개 (98.0%) / 가중치 0.27
 
 | 값 | 개수 | | 값 | 개수 |
 |---|---:|---|---|---:|
@@ -240,7 +241,37 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 | Salicylic Acid | 16 | | Collagen | 3 |
 | Niacinamide | 12 | | | |
 
-**`ingredients` 원본 컬럼의 TF-IDF는 이번 초안에서 제외합니다.** 원본이 성분 배열이 아니라 전 성분을 쉼표로 이어붙인 1,000자 내외 통짜 문자열이라, 분리·정규화 품질이 결과를 좌우하고 차원이 수천 개로 증가합니다. `highlights`의 성분 태그 9종만으로 **주요 활성 성분은 이미 커버**됩니다.
+**`highlights` 태그만 쓰면 보유율이 55%뿐이어서, 전성분 문자열까지 파싱합니다.**
+
+`highlights`는 세포라 마케팅 태그라 상품마다 있고 없습니다. 반면 `ingredients`(전성분)는 200/200 채워져 있고, 그 안에 성분명이 실제로 들어 있습니다.
+
+```
+highlights:  []
+ingredients: ["Water, Glycerin, Sodium Hyaluronate, Niacinamide, ..."]
+```
+
+동의어 패턴으로 매칭합니다 (`Hyaluronic Acid` ← `hyaluronic acid` / `sodium hyaluronate` / `hyaluronate`). 태그가 붙은 성분의 **91.5%** 를 전성분에서 재발견했고, 태그에 없던 **159건**을 새로 찾았습니다.
+
+**어휘 30종은 데이터로 선별했습니다.** 상위 200개 중 **5~120개 상품 보유** 구간만 채택했습니다. `Vitamin E`는 127개(63.5%)가 보유해 변별력이 없어 제외했고, `Bakuchiol`·`Mandelic Acid`는 각 2개뿐이라 제외했습니다.
+
+**위치 가중이 필수입니다.** 전성분은 함량 순 나열이므로 뒤쪽 성분은 미량입니다.
+
+```
+태그로 표시됨        -> 1.0    (브랜드가 핵심이라고 표시)
+전성분에서만 발견     -> max(1 - 등장위치/전체성분수, 0.10)
+```
+
+Cicapair Tiger Grass Cream(전성분 62개)의 실제 값입니다.
+
+| 성분 | 값 | 해석 |
+|---|---:|---|
+| Shea Butter | 0.871 | 앞쪽 = 주요 성분 |
+| Niacinamide | 0.855 | 앞쪽 |
+| Centella (Cica) | 0.661 | 중간. 제품명의 핵심 성분 |
+| Adenosine | 0.355 | 뒤쪽 = 미량 |
+| Panthenol (B5) | 0.226 | 뒤쪽 = 미량 |
+
+이 처리가 없으면 히알루론산 세럼과 히알루론산이 0.01% 들어간 클렌저가 같은 값을 받습니다.
 
 #### clean — 16종 / 보유 170개 (85.0%) / 가중치 0.05
 
@@ -347,9 +378,9 @@ prior(i) = (log1p(loves_count) - log_min) / (log_max - log_min)
 
 ```
 [secondary_category  8] [tertiary_category 19] [concern 9]
-[ingredient 9] [clean 16] [texture 5] [price_bin 5] [rating 1]
+[ingredient 30] [clean 16] [texture 5] [price_bin 5] [rating 1]
 
-총 72차원
+총 93차원
 ```
 
 ### 3-2. IDF 가중
@@ -384,7 +415,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 |---|---:|---|
 | `concern` | 0.42 | 사용자가 해결하려는 문제와 직결 |
 | `tertiary_category` | 0.11 | 가장 정밀한 제품 종류. 카테고리 쏠림 방지를 위해 하향 |
-| `ingredient` | 0.27 | 효능 근거. 성분 기반 설명 가능 |
+| `ingredient` | 0.27 | 효능 근거. 전성분 파싱으로 보유율 98% |
 | `secondary_category` | 0.06 | 계층 상위. tertiary와 중복 있어 낮춤 |
 | `clean` | 0.06 | 보유율 높으나 변별력 낮음 |
 | `price_bin` | 0.04 | 보조 신호 |
@@ -399,7 +430,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 | 상황 | 처리 |
 |---|---|
-| `highlights` 전체 없음 (19개 상품) | `concern`·`ingredient`·`clean`·`texture` 4개 블록이 0 |
+| `highlights` 전체 없음 (19개 상품) | `concern`·`clean`·`texture` 3개 블록이 0. `ingredient`는 전성분 파싱으로 채워짐 |
 | 블록 하나만 없음 | 해당 블록만 0. 나머지 블록 가중치는 재분배하지 않음 |
 | `rating` 결측 | 전체 평균으로 대체 (상위 200개에는 없음) |
 
@@ -443,7 +474,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 | 블록 | 가중치 | 보유율 | 기대 기여 | 실효 비중 |
 |---|---:|---:|---:|---:|
 | `concern` | 0.42 | 77.5% | 0.326 | **42.8%** |
-| `ingredient` | 0.27 | 55.0% | 0.149 | 19.5% |
+| `ingredient` | 0.27 | 98.0% | 0.265 | 27.8% |
 | `tertiary_category` | 0.11 | 100.0% | 0.110 | 14.5% |
 | `secondary_category` | 0.06 | 100.0% | 0.060 | 7.9% |
 | `clean` | 0.06 | 85.0% | 0.051 | 6.7% |
@@ -486,7 +517,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 CREATE TABLE product_feature (
     product_id      VARCHAR(16)  NOT NULL,
     vocab_version   VARCHAR(16)  NOT NULL,
-    vector          JSON         NOT NULL,   -- float[72]
+    vector          JSON         NOT NULL,   -- float[93]
     prior_score     DECIMAL(6,5) NOT NULL,   -- log 정규화 loves_count
     secondary_category VARCHAR(64) NOT NULL, -- 필터·디버깅용 원본 보존
     tertiary_category  VARCHAR(64) NOT NULL,
@@ -500,7 +531,7 @@ CREATE TABLE product_feature (
 
 `vocab_version`을 PK에 포함해 어휘집 변경 시 **구버전 벡터와 공존**할 수 있게 합니다. 롤백과 A/B 테스트에 필요합니다.
 
-200개 × 72차원 float32 = **58KB**입니다. `RankingService`가 기동 시 전량 메모리에 적재해도 무방합니다.
+200개 × 93차원 float32 = **73KB**입니다. `RankingService`가 기동 시 전량 메모리에 적재해도 무방합니다.
 
 ---
 

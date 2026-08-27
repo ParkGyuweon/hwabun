@@ -1,17 +1,17 @@
 # Product Feature 샘플 — 실제 상품 5개
 
-> 어휘집 버전 `0.2` · 콘텐츠 벡터 72차원 · 2026-08-27
-> 원본 데이터: `artifacts/feature_sample.json` (72차원 벡터 전체 값 포함)
+> 어휘집 버전 `0.3` · 콘텐츠 벡터 93차원 · 2026-08-27
+> 원본 데이터: `artifacts/feature_sample.json` (93차원 벡터 전체 값 포함)
 
 명세([`product-feature-spec.md`](./product-feature-spec.md))가 실제로 어떤 값을 만들어내는지 확인하기 위한 샘플입니다. 각 속성의 신호를 보여줄 수 있는 극단 사례 5개를 골랐습니다.
 
-| 상품 | 선정 이유 |
-|---|---|
-| Balancing Force Oil Control Toner | `skin_type=oily` lift 최고 (2.56배) |
-| Cicapair Tiger Grass Cream | `skin_type=dry` lift 최고 (1.97배), `skin_tone=fair` 편중 |
-| LANEIGE Lip Sleeping Mask | 1위 상품, `loves_count` 최고 (108만) |
-| Greek Yoghurt Foaming Cream Cleanser | `skin_tone=deep` lift 최고 (2.67배) |
-| Smart Clinical Repair Wrinkle Serum | `hair_color=gray` lift 최고 (2.80배, 연령 대리변수) |
+| 상품 | 순위 | 선정 이유 |
+|---|---:|---|
+| Balancing Force Oil Control Toner | 168 | `skin_type=oily` lift **2.56배** — 지성 편중 최고 |
+| Cicapair Tiger Grass Cream | 152 | `skin_type=dry` lift **1.98배** — 건성 편중 최고 |
+| Lip Sleeping Mask Intense Hydration with V | 1 | `skin_tone=light` lift **0.94배** — 1위 상품, loves_count 최고 |
+| Greek Yoghurt Foaming Cream Cleanser | 12 | `skin_tone=deep` lift **2.68배** — 어두운 톤 편중 최고 |
+| Smart Clinical Repair Wrinkle Correcting S | 160 | `hair_color=gray` lift **2.81배** — 흰머리(연령 대리) 편중 최고 |
 
 ---
 
@@ -19,53 +19,55 @@
 
 | 상품 | 순위 | secondary | tertiary | 가격 | 평점 | loves_count |
 |---|---:|---|---|---:|---:|---:|
-| Balancing Force Oil Control Toner | 169 | Cleansers | Toners | $35 | 4.30 | 98,160 |
-| Cicapair Tiger Grass Cream | 153 | Moisturizers | Moisturizers | $49 | 4.32 | 73,855 |
+| Balancing Force Oil Control Toner | 168 | Cleansers | Toners | $35 | 4.30 | 98,160 |
+| Cicapair Tiger Grass Cream | 152 | Moisturizers | Moisturizers | $49 | 4.32 | 73,855 |
 | Lip Sleeping Mask Intense Hydration wi | 1 | Lip Balms & Treatments | Lip Balms & Treatments | $24 | 4.35 | 1,081,315 |
 | Greek Yoghurt Foaming Cream Cleanser | 12 | Cleansers | Face Wash & Cleansers | $28 | 4.57 | 38,097 |
-| Smart Clinical Repair Wrinkle Correcti | 161 | Treatments | Face Serums | $71 | 4.19 | 4,293 |
+| Smart Clinical Repair Wrinkle Correcti | 160 | Treatments | Face Serums | $71 | 4.19 | 4,293 |
 
 ### highlights 태그 분류
 
-62종 태그를 4개 블록으로 나눈 결과입니다. `Best for ... Skin`과 인기 태그(`Community Favorite`, allure 수상)는 콘텐츠 벡터에서 제외됩니다.
+`highlights` 태그는 `concern`·`clean`·`texture` 3개 블록으로 나뉩니다. `ingredient`는 태그뿐 아니라 **전성분 문자열까지 파싱**해 값을 만듭니다(3-2절). `Best for ... Skin`과 인기 태그(`Community Favorite`, allure 수상)는 콘텐츠 벡터에서 제외됩니다.
 
 **Balancing Force Oil Control Toner**
 
 - `concern` (피부 고민): Pores, Acne/Blemishes
-- `ingredient` (성분): AHA/Glycolic Acid, Salicylic Acid
 - `clean` (클린뷰티): Vegan, Without Parabens
+- `ingredient` (성분, 전성분 25개 파싱): AHA/Glycolic Acid `1.0`, Salicylic Acid `1.0`, Lactic Acid `0.8`, Green Tea `0.28`
 
 **Cicapair Tiger Grass Cream**
 
 - `concern` (피부 고민): Redness, Dryness
+- `ingredient` (성분, 전성분 62개 파싱): Shea Butter `0.871`, Niacinamide `0.8548`, Silicone `0.8387`, Centella (Cica) `0.6613`, Adenosine `0.3548`, Panthenol (B5) `0.2258`
 
 **Lip Sleeping Mask Intense Hydration with Vitamin C**
 
 - `concern` (피부 고민): Dryness
-- `ingredient` (성분): Vitamin C
 - `clean` (클린뷰티): Without Parabens
 - `texture` (제형): Hydrating
+- `ingredient` (성분, 전성분 29개 파싱): Vitamin C `1.0`, Shea Butter `0.8621`
 
 **Greek Yoghurt Foaming Cream Cleanser**
 
 - `concern` (피부 고민): Redness, Dryness
 - `clean` (클린뷰티): Clean at Sephora
+- `ingredient` (성분, 전성분 39개 파싱): Lactic Acid `0.5128`, Probiotic / Ferment `0.4872`
 
 **Smart Clinical Repair Wrinkle Correcting Serum**
 
 - `concern` (피부 고민): Anti-Aging
-- `ingredient` (성분): Hyaluronic Acid, Retinol
 - `clean` (클린뷰티): Fragrance Free, Oil Free, Without Sulfates SLS & SLES
+- `ingredient` (성분, 전성분 51개 파싱): Hyaluronic Acid `1.0`, Retinol `1.0`, Silicone `0.9804`, Vitamin C `0.8824`, Squalane `0.8235`, Caffeine `0.6667`, Peptides `0.6471`
 
 ---
 
 ## 2. 인코딩 결과 — 0이 아닌 값만
 
-블록별 L2 정규화 후 블록 가중치를 곱한 값입니다. 전체 L2 정규화 전 단계이며, 72차원 최종 벡터는 `feature_sample.json`의 `벡터_72차원`에 있습니다.
+블록별 L2 정규화 후 블록 가중치를 곱한 값입니다. 전체 L2 정규화 전 단계이며, 93차원 최종 벡터는 `feature_sample.json`의 `벡터_93차원`에 있습니다.
 
 ### Balancing Force Oil Control Toner
 
-`P416816` · 169위 · `prior_score` **0.6457**
+`P416816` · 168위 · `prior_score` **0.6457**
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
@@ -73,16 +75,18 @@
 | tertiary_category | Toners | 0.11 |
 | concern | Pores | 0.2276 |
 |  | Acne/Blemishes | 0.353 |
-| ingredient | AHA/Glycolic Acid | 0.1909 |
-|  | Salicylic Acid | 0.1909 |
-| clean | Vegan | 0.0353 |
-|  | Without Parabens | 0.0485 |
+| ingredient | Green Tea | 0.0364 |
+|  | Lactic Acid | 0.1143 |
+|  | AHA/Glycolic Acid | 0.171 |
+|  | Salicylic Acid | 0.171 |
+| clean | Vegan | 0.035 |
+|  | Without Parabens | 0.0487 |
 | price_bin | 35-50 | 0.04 |
 | rating | rating | 0.02 |
 
 ### Cicapair Tiger Grass Cream
 
-`P411539` · 153위 · `prior_score` **0.6037**
+`P411539` · 152위 · `prior_score` **0.6037**
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
@@ -90,6 +94,12 @@
 | tertiary_category | Moisturizers | 0.11 |
 | concern | Dryness | 0.1753 |
 |  | Redness | 0.3817 |
+| ingredient | Silicone | 0.0825 |
+|  | Shea Butter | 0.1282 |
+|  | Panthenol (B5) | 0.0332 |
+|  | Niacinamide | 0.1302 |
+|  | Adenosine | 0.0732 |
+|  | Centella (Cica) | 0.1619 |
 | price_bin | 35-50 | 0.04 |
 | rating | rating | 0.02 |
 
@@ -102,7 +112,8 @@
 | secondary_category | Lip Balms & Treatments | 0.06 |
 | tertiary_category | Lip Balms & Treatments | 0.11 |
 | concern | Dryness | 0.42 |
-| ingredient | Vitamin C | 0.27 |
+| ingredient | Vitamin C | 0.1711 |
+|  | Shea Butter | 0.2088 |
 | clean | Without Parabens | 0.06 |
 | texture | Hydrating | 0.02 |
 | price_bin | 20-35 | 0.04 |
@@ -118,21 +129,28 @@
 | tertiary_category | Face Wash & Cleansers | 0.11 |
 | concern | Dryness | 0.1753 |
 |  | Redness | 0.3817 |
+| ingredient | Probiotic / Ferment | 0.1733 |
+|  | Lactic Acid | 0.2071 |
 | clean | Clean at Sephora | 0.06 |
 | price_bin | 20-35 | 0.04 |
 | rating | rating | 0.02 |
 
 ### Smart Clinical Repair Wrinkle Correcting Serum
 
-`P473267` · 161위 · `prior_score` **0.1836**
+`P473267` · 160위 · `prior_score` **0.1836**
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
 | secondary_category | Treatments | 0.06 |
 | tertiary_category | Face Serums | 0.11 |
 | concern | Anti-Aging | 0.42 |
-| ingredient | Hyaluronic Acid | 0.1206 |
-|  | Retinol | 0.2416 |
+| ingredient | Hyaluronic Acid | 0.0451 |
+|  | Silicone | 0.0827 |
+|  | Vitamin C | 0.0787 |
+|  | Squalane | 0.08 |
+|  | Peptides | 0.0765 |
+|  | Caffeine | 0.1125 |
+|  | Retinol | 0.1815 |
 | clean | Fragrance Free | 0.0299 |
 |  | Oil Free | 0.0345 |
 |  | Without Sulfates SLS & SLES | 0.039 |
@@ -141,24 +159,41 @@
 
 ---
 
-## 3. IDF가 실제로 하는 일
+## 3. IDF와 위치 가중이 실제로 하는 일
 
-Balancing Force Oil Control Toner의 `concern` 블록을 보면 IDF 효과가 드러납니다.
+### 3-1. IDF — 흔한 태그를 억제
+
+Balancing Force Oil Control Toner의 `concern` 블록입니다.
 
 | 태그 | 보유 상품 수 | 가중치 적용값 |
 |---|---:|---:|
-| Pores | 35 | 0.1572 |
-| Acne/Blemishes | 13 | **0.2437** |
+| Pores | 35 | 0.2274 |
+| Acne/Blemishes | 13 | **0.3527** |
 
 두 태그를 똑같이 하나씩 갖고 있는데도 **드문 `Acne/Blemishes`가 1.55배 무겁게** 반영됩니다. 흔한 태그로 상품을 묶는 것을 IDF가 자동으로 억제합니다.
 
-`clean` 블록에서는 효과가 더 큽니다. LANEIGE 립마스크는 `Without Parabens` 하나만 가져서 블록 전체 가중치 0.06을 독점하지만, Smart Clinical Repair는 태그 3개를 나눠 가져 각각 0.03~0.04로 분산됩니다.
+### 3-2. 위치 가중 — 미량 성분을 억제
+
+전성분은 함량 순으로 나열되므로 **등장 위치가 함량의 대리 지표**입니다. `highlights` 태그로 표시된 성분은 1.0을, 전성분에서만 찾은 성분은 `max(1 - 등장위치/전체성분수, 0.10)`을 적용합니다.
+
+Cicapair Tiger Grass Cream (전성분 62개)의 성분 값입니다.
+
+| 성분 | 값 | 해석 |
+|---|---:|---|
+| Shea Butter | 0.871 | 앞쪽 = 주요 성분 |
+| Niacinamide | 0.855 | 앞쪽 |
+| Silicone | 0.839 | 앞쪽 |
+| Centella (Cica) | 0.661 | 중간. 제품명의 핵심 성분 |
+| Adenosine | 0.355 | 뒤쪽 = 미량 |
+| Panthenol (B5) | 0.226 | 뒤쪽 = 미량 |
+
+이 처리가 없으면 히알루론산 세럼과 히알루론산이 0.01% 들어간 클렌저가 같은 값을 받습니다.
 
 ---
 
 ## 4. 속성별 통계 — `attr_affinity` 테이블
 
-리뷰 458,614건으로 계산한 구성비 lift입니다. `affinity`는 lift를 `clip((lift-0.80)/0.40, 0, 1)`로 0~1 변환한 값입니다.
+리뷰 458,180건으로 계산한 구성비 lift입니다. `affinity`는 lift를 `clip((lift-0.60)/1.00, 0, 1)`로 0~1 변환한 값입니다.
 
 ### skin_type
 
@@ -167,7 +202,7 @@ Balancing Force Oil Control Toner의 `concern` 블록을 보면 IDF 효과가 �
 | Balancing Force Oil Control Toner | 0.40 (1.0x) | 0.00 (0.4x) | 0.00 (0.4x) | 1.00 (2.6x) |
 | Cicapair Tiger Grass Cream | 0.27 (0.9x) | 1.00 (2.0x) | 0.10 (0.7x) | 0.00 (0.4x) |
 | Lip Sleeping Mask Intense Hydratio | 0.36 (1.0x) | 0.43 (1.0x) | 0.48 (1.1x) | 0.43 (1.0x) |
-| Greek Yoghurt Foaming Cream Cleans | 0.39 (1.0x) | 0.44 (1.0x) | 0.34 (0.9x) | 0.43 (1.0x) |
+| Greek Yoghurt Foaming Cream Cleans | 0.39 (1.0x) | 0.44 (1.0x) | 0.34 (0.9x) | 0.42 (1.0x) |
 | Smart Clinical Repair Wrinkle Corr | 0.44 (1.0x) | 0.44 (1.0x) | 0.55 (1.2x) | 0.00 (0.6x) |
 
 ### skin_tone
@@ -185,18 +220,18 @@ Balancing Force Oil Control Toner의 `concern` 블록을 보면 IDF 효과가 �
 | 상품 | black | blonde | brown | auburn | red | gray |
 |---|---:|---:|---:|---:|---:|---:|
 | Balancing Force Oil Control Toner | 0.60 (1.2x) | 0.28 (0.9x) | 0.42 (1.0x) | 0.19 (0.8x) | 0.05 (0.7x) | 0.00 (0.2x) |
-| Cicapair Tiger Grass Cream | 0.26 (0.9x) | 0.47 (1.1x) | 0.42 (1.0x) | 0.31 (0.9x) | 0.72 (1.3x) | 0.42 (1.0x) |
-| Lip Sleeping Mask Intense Hydratio | 0.37 (1.0x) | 0.40 (1.0x) | 0.42 (1.0x) | 0.32 (0.9x) | 0.39 (1.0x) | 0.42 (1.0x) |
-| Greek Yoghurt Foaming Cream Cleans | 0.32 (0.9x) | 0.36 (1.0x) | 0.44 (1.0x) | 0.58 (1.2x) | 0.52 (1.1x) | 0.22 (0.8x) |
+| Cicapair Tiger Grass Cream | 0.26 (0.9x) | 0.47 (1.1x) | 0.42 (1.0x) | 0.31 (0.9x) | 0.72 (1.3x) | 0.43 (1.0x) |
+| Lip Sleeping Mask Intense Hydratio | 0.37 (1.0x) | 0.40 (1.0x) | 0.42 (1.0x) | 0.32 (0.9x) | 0.38 (1.0x) | 0.42 (1.0x) |
+| Greek Yoghurt Foaming Cream Cleans | 0.32 (0.9x) | 0.36 (1.0x) | 0.43 (1.0x) | 0.58 (1.2x) | 0.52 (1.1x) | 0.22 (0.8x) |
 | Smart Clinical Repair Wrinkle Corr | 0.66 (1.3x) | 0.65 (1.2x) | 0.09 (0.7x) | 1.00 (1.6x) | 0.71 (1.3x) | 1.00 (2.8x) |
 
 ### eye_color
 
 | 상품 | brown | blue | green | hazel | gray |
 |---|---:|---:|---:|---:|---:|
-| Balancing Force Oil Control Toner | 0.55 (1.1x) | 0.16 (0.8x) | 0.21 (0.8x) | 0.38 (1.0x) | 0.04 (0.6x) |
+| Balancing Force Oil Control Toner | 0.55 (1.2x) | 0.16 (0.8x) | 0.21 (0.8x) | 0.38 (1.0x) | 0.04 (0.6x) |
 | Cicapair Tiger Grass Cream | 0.28 (0.9x) | 0.55 (1.1x) | 0.52 (1.1x) | 0.52 (1.1x) | 0.42 (1.0x) |
-| Lip Sleeping Mask Intense Hydratio | 0.38 (1.0x) | 0.44 (1.0x) | 0.41 (1.0x) | 0.40 (1.0x) | 0.80 (1.4x) |
+| Lip Sleeping Mask Intense Hydratio | 0.38 (1.0x) | 0.44 (1.0x) | 0.40 (1.0x) | 0.40 (1.0x) | 0.80 (1.4x) |
 | Greek Yoghurt Foaming Cream Cleans | 0.38 (1.0x) | 0.46 (1.1x) | 0.33 (0.9x) | 0.46 (1.1x) | 0.39 (1.0x) |
 | Smart Clinical Repair Wrinkle Corr | 0.34 (0.9x) | 0.49 (1.1x) | 0.43 (1.0x) | 0.44 (1.0x) | 1.00 (1.6x) |
 
@@ -214,15 +249,16 @@ Balancing Force Oil Control Toner의 `concern` 블록을 보면 IDF 효과가 �
 
 | | (1) | (2) | (3) | (4) | (5) |
 |---|---:|---:|---:|---:|---:|
-| (1) Balancing Force Oil Control Toner | 1.000 | 0.009 | 0.012 | 0.017 | 0.001 |
-| (2) Cicapair Tiger Grass Cream | 0.009 | 1.000 | 0.323 | 0.903 | 0.002 |
-| (3) Lip Sleeping Mask Intense Hydratio | 0.012 | 0.323 | 1.000 | 0.327 | 0.001 |
-| (4) Greek Yoghurt Foaming Cream Cleans | 0.017 | 0.903 | 0.327 | 1.000 | 0.002 |
-| (5) Smart Clinical Repair Wrinkle Corr | 0.001 | 0.002 | 0.001 | 0.002 | 1.000 |
+| (1) Balancing Force Oil Control Toner | 1.000 | 0.007 | 0.012 | 0.102 | 0.001 |
+| (2) Cicapair Tiger Grass Cream | 0.007 | 1.000 | 0.375 | 0.658 | 0.027 |
+| (3) Lip Sleeping Mask Intense Hydratio | 0.012 | 0.375 | 1.000 | 0.279 | 0.051 |
+| (4) Greek Yoghurt Foaming Cream Cleans | 0.102 | 0.658 | 0.279 | 1.000 | 0.001 |
+| (5) Smart Clinical Repair Wrinkle Corr | 0.001 | 0.027 | 0.051 | 0.001 | 1.000 |
 
-- **(2) Cicapair ↔ (4) Greek Yoghurt = 0.503** — 카테고리가 다른데(모이스처라이저 vs 클렌저) 유사도가 높습니다. `concern` 태그가 `Dryness`·`Redness`로 완전히 겹치기 때문입니다. **`concern`이 카테고리를 넘나드는 추천을 만든다**는 근거입니다
-- **(5) Smart Clinical Repair는 모든 상품과 0.002** — 유일한 `Anti-Aging` 제품이고 카테고리·성분도 겹치지 않습니다
-- (1) Oil Control Toner ↔ (4) Greek Yoghurt = 0.124 — 둘 다 `Cleansers`지만 tertiary(Toners vs Face Wash)와 concern이 달라 낮습니다
+- **(2) Cicapair ↔ (4) Greek Yoghurt = 0.658** — 카테고리가 다른데(모이스처라이저 vs 클렌저) 유사도가 높습니다. `concern` 태그가 `Dryness`·`Redness`로 겹치고 `Lactic Acid` 성분도 공유하기 때문입니다. **`concern`과 `ingredient`가 카테고리를 넘나드는 추천을 만든다**는 근거입니다
+- **(2) Cicapair ↔ (3) 립 슬리핑 마스크 = 0.375** — 카테고리가 완전히 다른데도 `Shea Butter`를 공유해 값이 잡힙니다
+- **(5) Smart Clinical Repair는 모든 상품과 0.051 이하** — 유일한 `Anti-Aging` 제품이고 성분 구성(Retinol·Peptides)도 겹치지 않습니다
+- (1) Oil Control Toner ↔ (4) Greek Yoghurt = 0.102 — 둘 다 `Cleansers`지만 tertiary(Toners vs Face Wash)와 concern이 달라 낮습니다
 
 ---
 
@@ -241,8 +277,8 @@ score = w2 x attr_affinity(u, i) + w3 x prior(i)
 | 순위 | 상품 | attr_affinity | prior | **최종 점수** |
 |---:|---|---:|---:|---:|
 | 1 | Balancing Force Oil Control Toner | 0.664 | 0.646 | **0.6602** |
-| 2 | Lip Sleeping Mask Intense Hydration wi | 0.389 | 1.000 | **0.5109** |
-| 3 | Greek Yoghurt Foaming Cream Cleanser | 0.255 | 0.506 | **0.3052** |
+| 2 | Lip Sleeping Mask Intense Hydration wi | 0.388 | 1.000 | **0.5107** |
+| 3 | Greek Yoghurt Foaming Cream Cleanser | 0.255 | 0.506 | **0.3051** |
 | 4 | Cicapair Tiger Grass Cream | 0.197 | 0.604 | **0.2784** |
 | 5 | Smart Clinical Repair Wrinkle Correcti | 0.242 | 0.184 | **0.2304** |
 
@@ -261,20 +297,20 @@ score = w2 x attr_affinity(u, i) + w3 x prior(i)
 
 | 순위 | 상품 | attr_affinity | prior | **최종 점수** |
 |---:|---|---:|---:|---:|
-| 1 | Cicapair Tiger Grass Cream | 0.797 | 0.604 | **0.7583** |
+| 1 | Cicapair Tiger Grass Cream | 0.797 | 0.604 | **0.7581** |
 | 2 | Lip Sleeping Mask Intense Hydration wi | 0.438 | 1.000 | **0.5504** |
 | 3 | Greek Yoghurt Foaming Cream Cleanser | 0.449 | 0.506 | **0.4602** |
 | 4 | Smart Clinical Repair Wrinkle Correcti | 0.471 | 0.184 | **0.4136** |
-| 5 | Balancing Force Oil Control Toner | 0.122 | 0.646 | **0.2267** |
+| 5 | Balancing Force Oil Control Toner | 0.122 | 0.646 | **0.2265** |
 
 1위 상품의 속성 항 분해:
 
 | 속성 | 세그먼트 | affinity | 가중치 | 기여 |
 |---|---|---:|---:|---:|
 | skin_type | dry | 1.000 | 0.40 | 0.4000 |
-| skin_tone | fair | 0.739 | 0.40 | 0.2955 |
+| skin_tone | fair | 0.738 | 0.40 | 0.2954 |
 | hair_color | blonde | 0.467 | 0.10 | 0.0467 |
-| eye_color | blue | 0.547 | 0.10 | 0.0547 |
+| eye_color | blue | 0.546 | 0.10 | 0.0546 |
 
 ### 복합성 / deep 톤
 
@@ -284,20 +320,20 @@ score = w2 x attr_affinity(u, i) + w3 x prior(i)
 
 | 순위 | 상품 | attr_affinity | prior | **최종 점수** |
 |---:|---|---:|---:|---:|
-| 1 | Greek Yoghurt Foaming Cream Cleanser | 0.870 | 0.506 | **0.7972** |
-| 2 | Balancing Force Oil Control Toner | 0.586 | 0.646 | **0.5983** |
-| 3 | Lip Sleeping Mask Intense Hydration wi | 0.477 | 1.000 | **0.5814** |
-| 4 | Cicapair Tiger Grass Cream | 0.054 | 0.604 | **0.1636** |
-| 5 | Smart Clinical Repair Wrinkle Correcti | 0.100 | 0.184 | **0.1164** |
+| 1 | Greek Yoghurt Foaming Cream Cleanser | 0.870 | 0.506 | **0.7973** |
+| 2 | Balancing Force Oil Control Toner | 0.588 | 0.646 | **0.5998** |
+| 3 | Lip Sleeping Mask Intense Hydration wi | 0.478 | 1.000 | **0.5828** |
+| 4 | Cicapair Tiger Grass Cream | 0.054 | 0.604 | **0.1637** |
+| 5 | Smart Clinical Repair Wrinkle Correcti | 0.100 | 0.184 | **0.1166** |
 
 1위 상품의 속성 항 분해:
 
 | 속성 | 세그먼트 | affinity | 가중치 | 기여 |
 |---|---|---:|---:|---:|
-| skin_type | combination | 0.395 | 0.00 | 0.0000 |
+| skin_type | combination | 0.394 | 0.00 | 0.0000 |
 | skin_tone | deep | 1.000 | 0.80 | 0.8000 |
-| hair_color | black | 0.318 | 0.10 | 0.0318 |
-| eye_color | brown | 0.382 | 0.10 | 0.0382 |
+| hair_color | black | 0.319 | 0.10 | 0.0319 |
+| eye_color | brown | 0.383 | 0.10 | 0.0383 |
 
 ### 결과 해석
 
@@ -321,6 +357,8 @@ Cicapair Cream이 복합성/deep 사용자에게 최하위권(0.148)인 것은 �
 |---|---|
 | 인코딩 파이프라인 | 원본 → 72차원 벡터 정상 생성 |
 | IDF 가중 | 드문 태그가 1.55배 이상 무겁게 반영됨 |
+| 위치 가중 | 전성분 앞쪽 0.87 vs 뒤쪽 0.23으로 미량 성분 억제 |
+| 성분 어휘 확장 | 9종 -> 30종. 구분 안 되는 상품 31개 -> 4개 |
 | 블록별 L2 정규화 | 태그 수가 많은 블록이 지배하지 않음 |
 | `concern`의 교차 추천 | 카테고리가 달라도 고민이 같으면 유사도 0.503 |
 | 속성 항 작동 | 지성/건성 사용자의 1·5위가 완전히 뒤집힘 |
