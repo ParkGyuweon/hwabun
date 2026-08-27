@@ -24,14 +24,14 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
       {description ? (
         <div className="about__prose">
           {description.what_it_is ? (
-            <section>
+            <section data-log-content="what_it_is">
               <h3>What it is</h3>
               <p>{description.what_it_is}</p>
             </section>
           ) : null}
 
           {description.highlighted_ingredients.length > 0 ? (
-            <section>
+            <section data-log-content="ingredient_list" data-log-ref="highlighted">
               <h3>Highlighted Ingredients</h3>
               <ul>
                 {description.highlighted_ingredients.map((line) => (
@@ -42,21 +42,21 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
           ) : null}
 
           {description.ingredient_callouts ? (
-            <section>
+            <section data-log-content="ingredient_callout">
               <h3>Ingredient Callouts</h3>
               <p>{description.ingredient_callouts}</p>
             </section>
           ) : null}
 
           {description.what_else ? (
-            <section>
+            <section data-log-content="what_else">
               <h3>What Else You Need to Know</h3>
               <p>{description.what_else}</p>
             </section>
           ) : null}
 
           {description.clinical_results ? (
-            <section>
+            <section data-log-content="clinical_claim">
               <h3>Clinical Results</h3>
               <p className="about__pre">{description.clinical_results}</p>
             </section>
@@ -65,7 +65,7 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
       ) : null}
 
       <dl className="about__list">
-        <div>
+        <div data-log-content="persona_match" data-log-ref="skin_type">
           <dt>Skin Type</dt>
           <dd>
             {hasSkinTypeInfo ? (
@@ -84,7 +84,7 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
           </dd>
         </div>
 
-        <div>
+        <div data-log-content="persona_match" data-log-ref="concerns">
           <dt>Skincare Concerns</dt>
           <dd>
             {product.skincare_concerns.length > 0 ? (
@@ -101,7 +101,7 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
           </dd>
         </div>
 
-        <div>
+        <div data-log-content="product_meta" data-log-ref="category">
           <dt>Category</dt>
           <dd>
             <p className="about__text">{product.category.join(' › ')}</p>
@@ -109,7 +109,7 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
         </div>
 
         {product.size ? (
-          <div>
+          <div data-log-content="product_meta" data-log-ref="size">
             <dt>Size</dt>
             <dd>
               <p className="about__text">{product.size}</p>

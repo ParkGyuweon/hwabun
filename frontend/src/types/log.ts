@@ -58,6 +58,100 @@ export type LogSection =
   | 'similar_products'
   | 'reviews';
 
+/**
+ * 그 자리에 **무슨 콘텐츠가 있었는지**.
+ *
+ * `section_id` 는 화면 구조상의 이름이라 "About the Product 를 봤다" 까지만 말해준다.
+ * 그런데 그 블록 안에는 개요·성분·임상 근거·사용법이 같이 들어 있고,
+ * 구매 판단에서 각각이 하는 역할이 전혀 다르다.
+ * 레이아웃을 바꿔도 "성분을 오래 봤다" 가 유지되도록 콘텐츠 종류를 따로 남긴다.
+ */
+export type LogContentKind =
+  | 'product_image'
+  | 'price'
+  | 'variant_option'
+  | 'cta'
+  | 'highlight_badge'
+  | 'what_it_is'
+  | 'what_else'
+  | 'ingredient_list'
+  | 'ingredient_callout'
+  | 'clinical_claim'
+  | 'usage_guide'
+  | 'brand_story'
+  /** 내 피부 타입·고민과 맞는지 보여주는 자리 */
+  | 'persona_match'
+  | 'product_meta'
+  | 'user_review'
+  | 'review_stats'
+  | 'review_filter'
+  | 'recommendation_card'
+  | 'navigation';
+
+/**
+ * 이벤트가 **무엇을 뜻하는지**.
+ *
+ * 이벤트 이름만 넘기면 분석하는 쪽이 매번 "이건 관심인가 확인인가" 를 다시 정해야 한다.
+ * 프론트가 발생시킬 때 이미 아는 정보라 로그에 같이 실어 보낸다.
+ *
+ * 노출 → 관심 → 비교 → 확신 → 전환 순서로 좁혀지는 깔때기이고,
+ * friction 은 그 어느 단계에서든 이탈로 새는 구멍이다.
+ */
+export type IntentClass =
+  /** 화면에 떴다 */
+  | 'exposure'
+  /** 들여다봤다 */
+  | 'interest'
+  /** 다른 후보와 견줬다 */
+  | 'comparison'
+  /** 사실을 확인했다 */
+  | 'validation'
+  /** 살까 말까 쟀다 */
+  | 'hesitation'
+  /** 사는 쪽으로 움직였다 */
+  | 'conversion'
+  /** 기대대로 안 됐다 */
+  | 'friction'
+  /** 세션·페이지 경계 */
+  | 'session';
+
+/** 이벤트 → 의미. 로거가 이 표를 보고 envelope 의 intent 를 채운다 */
+export const EVENT_INTENT: Record<EventName, IntentClass> = {
+  session_start: 'session',
+  page_view: 'session',
+  exit_summary: 'session',
+
+  product_impression: 'exposure',
+  recommendation_impression: 'exposure',
+  scroll_depth: 'exposure',
+
+  section_view: 'interest',
+  section_dwell: 'interest',
+  scroll_pause: 'interest',
+  media_view: 'interest',
+
+  scroll_backtrack: 'comparison',
+  variant_select: 'comparison',
+  product_click: 'comparison',
+  recommendation_click: 'comparison',
+
+  accordion_toggle: 'validation',
+  ingredient_view_mode_change: 'validation',
+  review_expand: 'validation',
+  review_filter_apply: 'validation',
+  text_selection: 'validation',
+  text_copy: 'validation',
+
+  hover_dwell: 'hesitation',
+
+  wishlist_toggle: 'conversion',
+  quantity_change: 'conversion',
+  add_to_cart: 'conversion',
+
+  rage_click: 'friction',
+  dead_click: 'friction',
+};
+
 export type PageType = 'product_detail' | 'product_list' | 'cart';
 
 /** 실제 사용자 로그와 부하 테스트용 가상 로그를 반드시 분리한다 */
@@ -67,6 +161,8 @@ export interface LogEnvelope {
   schema_version: string;
   event_id: string;
   event_name: EventName;
+  /** 이벤트의 의미. EVENT_INTENT 에서 자동으로 채운다 */
+  intent: IntentClass;
   /** 클라이언트 발생 시각. 서버 수신 시각과는 별개로 관리한다 */
   occurred_at: string;
 

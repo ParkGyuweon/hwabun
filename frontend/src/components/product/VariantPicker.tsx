@@ -37,7 +37,7 @@ export default function VariantPicker({
   };
 
   return (
-    <div className="variants">
+    <div className="variants" data-log-content="variant_option">
       <p className="variants__label">
         <span>Color</span>
         <strong>{selected.label}</strong>

@@ -54,7 +54,7 @@ export default function ReviewFilterBar({
   };
 
   return (
-    <div className="review-filter">
+    <div className="review-filter" data-log-content="review_filter">
       <div className="review-filter__chips" role="group" aria-label="리뷰 필터">
         {options.map((option) => (
           <button

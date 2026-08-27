@@ -75,7 +75,7 @@ export default function ProductSummary({
         <p className="summary__rating summary__rating--empty">아직 등록된 평점이 없습니다</p>
       )}
 
-      <div className="summary__price">
+      <div className="summary__price" data-log-content="price">
         <strong>{formatPrice(product.price_usd)}</strong>
         {/* size 는 자유 텍스트라 파싱하지 않고 그대로 노출한다 */}
         {product.size ? <span className="summary__size">{product.size}</span> : null}
@@ -88,7 +88,7 @@ export default function ProductSummary({
         onSelect={onVariantSelect}
       />
 
-      <div className="summary__actions">
+      <div className="summary__actions" data-log-content="cta">
         <div className="qty" role="group" aria-label="수량 선택">
           <button
             type="button"

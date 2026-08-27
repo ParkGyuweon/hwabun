@@ -91,8 +91,88 @@ Baymard 는 모바일에서 색상 선택 시 이미지를 보려고 위로 다�
 | 담을까 말까 | Add to Cart | `hover_dwell` | 올려두고 안 누른 시간 |
 | 좌절 → 이탈 | 전 구간 | `rage_click`, `dead_click` | 막힌 지점 |
 
-모든 주목 이벤트는 픽셀 좌표가 아니라 `data-log-section` 의 **의미 단위 값**으로 남긴다
-(`frontend/src/lib/section.ts`). 레이아웃이 바뀌어도 과거 로그를 계속 읽을 수 있어야 해서다.
+## 이벤트 이름만으로는 부족하다
+
+로그를 받는 쪽에서 매번 다시 판단해야 하는 게 두 가지 있었다.
+둘 다 프론트가 발생 시점에 이미 아는 정보라, 이름 옆에 같이 실어 보낸다.
+
+### 1. 이 이벤트가 무슨 뜻인가 — `intent`
+
+`text_copy` 가 관심인지 확인인지, `hover_dwell` 이 관심인지 망설임인지는
+분석하는 사람마다 다르게 잡는다. 그 판단을 한 곳(`EVENT_INTENT`)에 고정했다.
+
+```
+exposure  → interest → comparison → validation → conversion
+                                                      ↕
+                                                  friction
+```
+
+| intent | 뜻 | 해당 이벤트 |
+|---|---|---|
+| `exposure` | 화면에 떴다 | `scroll_depth`, `*_impression` |
+| `interest` | 들여다봤다 | `section_view`, `section_dwell`, `scroll_pause`, `media_view` |
+| `comparison` | 다른 후보와 견줬다 | `variant_select`, `scroll_backtrack`, `recommendation_click`, `product_click` |
+| `validation` | 사실을 확인했다 | `text_selection`, `text_copy`, `review_*`, `ingredient_*`, `accordion_toggle` |
+| `hesitation` | 살까 말까 쟀다 | `hover_dwell` |
+| `conversion` | 사는 쪽으로 움직였다 | `add_to_cart`, `wishlist_toggle`, `quantity_change` |
+| `friction` | 기대대로 안 됐다 | `rage_click`, `dead_click` |
+| `session` | 경계 | `session_start`, `page_view`, `exit_summary` |
+
+`friction` 만 깔때기 밖에 있다. 어느 단계에서든 새는 구멍이라서다.
+
+### 2. 그 자리에 뭐가 있었나 — `content_kind`
+
+`section_id` 는 화면 구조상의 이름이라 거기까지만 말해준다.
+그런데 `about_product` 안에는 개요·성분·임상 근거·사용법이 같이 들어 있고,
+구매 판단에서 하는 역할이 전혀 다르다. **"About the Product 를 40초 봤다"** 로는
+성분을 본 건지 사용법을 본 건지 알 수 없다.
+
+그래서 콘텐츠 종류를 따로 붙였다 (`data-log-content`).
+
+| 값 | 어디 |
+|---|---|
+| `product_image` | 갤러리 |
+| `price` · `variant_option` · `cta` | 구매 영역 |
+| `what_it_is` · `what_else` | 상품 개요 |
+| `ingredient_list` · `ingredient_callout` | 성분 (Highlighted / 전체 목록) |
+| `clinical_claim` | Clinical Results |
+| `usage_guide` | How to Use |
+| `persona_match` | 내 피부 타입·고민과 맞는지 |
+| `product_meta` | 카테고리·용량 |
+| `user_review` · `review_stats` · `review_filter` | 리뷰 |
+| `recommendation_card` | 추천 |
+| `highlight_badge` · `navigation` | 배지, 브레드크럼 |
+
+특정 대상이 있으면 `content_ref` 에 식별자를 같이 남긴다 (리뷰 ID, 추천 상품 ID 등).
+
+체류도 섹션이 아니라 **이 블록 단위로** 잰다. 그래야
+"임상 근거에서 오래 멈췄다" 같은 문장이 나온다.
+
+레이아웃이 바뀌어도 과거 로그를 계속 읽을 수 있어야 하므로,
+어느 값도 픽셀 좌표를 쓰지 않는다 (`frontend/src/lib/section.ts`).
+
+## 화면당 콘텐츠 수를 줄였다
+
+여기까지 해도 문제가 하나 남는다. **한 화면에 블록이 여러 개 겹쳐 보이면
+그 체류가 어느 콘텐츠를 향한 건지 단정할 수 없다.**
+성분과 사용법이 같이 떠 있는 화면에서 10초 머문 기록은 둘 다에 쌓인다.
+
+그래서 두 가지를 했다.
+
+**여백을 넓혔다.** 섹션 사이 `--space-7`(48px) → `--space-9`(104px),
+About 안의 문단 사이 `--space-5`(24px) → `--space-8`(72px).
+PC 기준 한 화면에 들어오는 블록이 줄어 귀속이 그만큼 깨끗해진다.
+스크롤 양은 늘지만, 이 프로젝트는 상품을 파는 게 목적이 아니라
+행동 데이터를 얻는 게 목적이라 그쪽을 택했다.
+
+**남은 모호함은 로그에 적었다.** 여백만으로는 히어로 영역(이미지·가격·옵션·담기)처럼
+좌우로 붙어 있는 구조를 못 없앤다. 그래서 숫자로 남긴다.
+
+- `section_dwell.co_visible_blocks` — 머무는 동안 같이 떠 있던 블록 수의 최대치
+- `scroll_pause.visible_content_kinds` — 멈춘 순간 함께 보이던 콘텐츠 종류
+
+분석할 때 `co_visible_blocks <= 2` 인 건만 골라 쓰면 귀속이 확실한 표본이 된다.
+측정해 보면 페이지 평균 3.9개/화면, 히어로 영역이 4개로 가장 밀집한다.
 
 ## 민감도를 어떻게 잡았나
 

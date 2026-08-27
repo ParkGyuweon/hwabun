@@ -5,7 +5,7 @@ interface BreadcrumbProps {
 
 export default function Breadcrumb({ items }: BreadcrumbProps) {
   return (
-    <nav className="breadcrumb" aria-label="카테고리 경로">
+    <nav className="breadcrumb" aria-label="카테고리 경로" data-log-content="navigation">
       <ol>
         <li>
           <a href="#">Home</a>

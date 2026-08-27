@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION } from '../types/log';
+import { EVENT_INTENT, SCHEMA_VERSION } from '../types/log';
 import type { ActorType, EventName, LogEnvelope, PageType } from '../types/log';
 
 /**
@@ -85,6 +85,8 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     schema_version: SCHEMA_VERSION,
     event_id: createId(),
     event_name: eventName,
+    // 분석하는 쪽이 이벤트 이름마다 의미를 다시 정하지 않도록 발생 시점에 실어 보낸다
+    intent: EVENT_INTENT[eventName],
     occurred_at: new Date().toISOString(),
 
     persona_id: context.personaId,

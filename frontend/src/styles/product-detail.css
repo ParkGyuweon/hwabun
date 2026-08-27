@@ -5,7 +5,7 @@
 .page {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: var(--space-5) var(--space-4) var(--space-7);
+  padding: var(--space-5) var(--space-4) var(--space-9);
 }
 
 .pdp {
@@ -23,7 +23,7 @@
 .pdp__info {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-7);
 }
 
 .pdp__block {
@@ -40,16 +40,20 @@
   color: var(--color-ink-soft);
 }
 
+/*
+ * 섹션 사이를 크게 벌린다. 스크롤 한 번에 섹션 두 개가 함께 들어오면
+ * section_dwell 이 양쪽에 동시에 쌓여 어느 쪽을 본 건지 구분이 안 된다.
+ */
 .pdp__section {
-  margin-top: var(--space-7);
-  padding-top: var(--space-6);
+  margin-top: var(--space-9);
+  padding-top: var(--space-8);
   border-top: 1px solid var(--color-line);
 }
 
 .pdp__section-title {
   font-size: 22px;
   font-weight: 700;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
 }
 
 .pdp__prose {
@@ -606,7 +610,7 @@
 }
 
 .review-card {
-  padding: var(--space-5) 0;
+  padding: var(--space-7) 0;
   border-top: 1px solid var(--color-line-soft);
 }
 
@@ -1006,7 +1010,7 @@
 
 .about__list {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-6);
 }
 
 .about__list dt {
@@ -1024,11 +1028,12 @@
 }
 
 /* 세포라 원문 설명. 항목이 많아 리스트보다 위에 세로로 흐르게 둔다 */
+/* 개요·성분·임상 근거가 각각 별도 로그 대상이라 서로 붙어 보이면 안 된다 */
 .about__prose {
   display: grid;
-  gap: var(--space-5);
-  margin-bottom: var(--space-6);
-  padding-bottom: var(--space-6);
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-8);
   border-bottom: 1px solid var(--color-line-soft);
   max-width: 68ch;
 }

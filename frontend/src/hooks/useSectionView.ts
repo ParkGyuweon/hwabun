@@ -1,58 +1,77 @@
 import { useEffect } from 'react';
 import { track, trackOnce } from '../lib/logger';
-import type { LogSection } from '../types/log';
+import { regionOfNode } from '../lib/section';
+import type { Region } from '../lib/section';
 
 /**
- * 상세 페이지의 각 섹션을 얼마나 봤는지 감지한다.
+ * 화면에 걸린 구역을 얼마나 봤는지 감지한다.
  *
  * - section_view  : 처음으로 "읽었다" 고 볼 만큼 머문 시점 (방문당 1회)
- * - section_dwell : 그 섹션에 실제로 머문 누적 시간 (나갈 때마다)
+ * - section_dwell : 실제로 머문 누적 시간 (나갈 때마다)
  *
- * 체류 시간은 관심도의 대표적인 암묵 신호지만 그것만으로는 노이즈가 크다.
- * (탭만 띄워두고 안 보는 경우) 그래서 스크롤 신호와 함께 해석하도록
- * scroll_pause / scroll_backtrack 과 같은 section_id 를 쓴다.
+ * 구역(`data-log-section`)뿐 아니라 콘텐츠 블록(`data-log-content`)도 각각 따로 잰다.
+ * "About the Product 를 40초 봤다" 로는 성분을 본 건지 사용법을 본 건지 알 수 없다.
+ * 블록 단위로 재야 "임상 근거에서 오래 멈췄다" 같은 문장이 나온다.
+ *
+ * 체류 시간은 관심도의 대표적인 암묵 신호지만 단독으로는 노이즈가 크다
+ * (탭만 띄워두고 안 보는 경우). 그래서 스크롤 신호와 함께 해석하도록
+ * scroll_pause / scroll_backtrack 과 같은 구역 값을 쓴다.
  *
  * IntersectionObserver 의 intersectionRatio 를 쓰지 않는다.
- * ratio 는 "요소 면적 대비" 라서 뷰포트보다 긴 섹션은 값이 절대 0.5 를 못 넘는다.
+ * ratio 는 "요소 면적 대비" 라서 뷰포트보다 긴 구역은 값이 절대 0.5 를 못 넘는다.
  * 리뷰 섹션처럼 긴 구간이 통째로 기록되지 않던 원인이라, 판정을 두 갈래로 바꿨다.
  */
 
-/** 짧은 섹션: 자기 면적의 이만큼이 보이면 인정 */
+/** 짧은 구역: 자기 면적의 이만큼이 보이면 인정 */
 const SECTION_RATIO = 0.4;
-/** 긴 섹션: 화면의 이만큼을 채우면 인정 */
+/** 긴 구역: 화면의 이만큼을 채우면 인정 */
 const VIEWPORT_RATIO = 0.35;
 
 /**
  * 이만큼 머무르면 조회로 인정한다.
- * 1초는 훑어보는 속도보다 길어서 스쳐 간 섹션뿐 아니라 실제로 읽은 섹션까지 놓쳤다.
+ * 1초는 훑어보는 속도보다 길어서 스쳐 간 구역뿐 아니라 실제로 읽은 구역까지 놓쳤다.
  */
 const VIEW_DWELL_MS = 400;
 
 /** 이 미만은 스쳐 간 것으로 보고 dwell 을 남기지 않는다 */
 const MIN_DWELL_EMIT_MS = 700;
 
-/** 한 섹션에 오래 머물 때 중간 저장 주기. 이탈 시 통째로 유실되는 것을 막는다 */
+/** 한 구역에 오래 머물 때 중간 저장 주기. 이탈 시 통째로 유실되는 것을 막는다 */
 const DWELL_CHECKPOINT_MS = 15000;
 
 /** 스크롤 중 재계산 최소 간격 */
 const EVALUATE_THROTTLE_MS = 100;
 
-interface SectionState {
-  id: LogSection;
+interface TargetState {
+  region: Region;
+  /** 중복 방지 및 로그 식별용 키 */
+  key: string;
   visibleSince: number | null;
   /** 아직 로그로 내보내지 않은 체류 시간 */
   pendingMs: number;
+  /** 머무는 동안 화면에 같이 떠 있던 콘텐츠 블록 수의 최대치 */
+  maxCoVisible: number;
 }
 
 export function useSectionView(pageViewKey: string) {
   useEffect(() => {
-    const targets = [...document.querySelectorAll<HTMLElement>('[data-log-section]')];
-    if (targets.length === 0) return;
+    const elements = [
+      ...document.querySelectorAll<HTMLElement>('[data-log-section], [data-log-content]'),
+    ];
+    if (elements.length === 0) return;
 
-    const states = new Map<HTMLElement, SectionState>();
-    for (const element of targets) {
-      const id = element.dataset.logSection as LogSection | undefined;
-      if (id) states.set(element, { id, visibleSince: null, pendingMs: 0 });
+    const states = new Map<HTMLElement, TargetState>();
+    for (const element of elements) {
+      const region = regionOfNode(element);
+      if (region.section_id === null && region.content_kind === null) continue;
+
+      states.set(element, {
+        region,
+        key: `${region.section_id ?? '-'}/${region.content_kind ?? '-'}/${region.content_ref ?? '-'}`,
+        visibleSince: null,
+        pendingMs: 0,
+        maxCoVisible: 0,
+      });
     }
 
     let lastEvaluatedAt = 0;
@@ -61,35 +80,51 @@ export function useSectionView(pageViewKey: string) {
     const isVisible = (element: HTMLElement): boolean => {
       const rect = element.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
-      const visibleHeight = Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0);
-      if (visibleHeight <= 0) return false;
+      const visible = Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0);
+      if (visible <= 0) return false;
 
-      // 짧은 섹션과 긴 섹션 중 어느 한쪽 기준만 넘으면 본 것으로 친다
+      // 짧은 구역과 긴 구역 중 어느 한쪽 기준만 넘으면 본 것으로 친다
       return (
-        visibleHeight / Math.max(1, rect.height) >= SECTION_RATIO ||
-        visibleHeight / viewportHeight >= VIEWPORT_RATIO
+        visible / Math.max(1, rect.height) >= SECTION_RATIO ||
+        visible / viewportHeight >= VIEWPORT_RATIO
       );
     };
 
-    const emitDwell = (state: SectionState, reason: string) => {
+    const emitDwell = (state: TargetState, reason: string) => {
       if (state.pendingMs < MIN_DWELL_EMIT_MS) return;
 
       track('section_dwell', {
-        section_id: state.id,
+        ...state.region,
         dwell_ms: Math.round(state.pendingMs),
+        /**
+         * 이 값이 크면 화면에 여러 블록이 겹쳐 있었다는 뜻이라
+         * 그 체류가 정말 이 콘텐츠를 향한 건지 단정할 수 없다.
+         * 분석에서 1~2 인 건만 골라 쓰면 귀속이 훨씬 깨끗해진다.
+         */
+        co_visible_blocks: state.maxCoVisible,
         reason,
       });
       state.pendingMs = 0;
+      state.maxCoVisible = 0;
     };
 
     const evaluate = () => {
       const now = Date.now();
       lastEvaluatedAt = now;
 
+      // 이번 판정에서 화면에 걸려 있는 콘텐츠 블록 수. 귀속의 모호함을 재는 값이다
+      let coVisible = 0;
+      for (const [element, state] of states) {
+        if (state.region.content_kind !== null && isVisible(element)) coVisible += 1;
+      }
+
       for (const [element, state] of states) {
         const visible = isVisible(element);
 
         if (visible) {
+          // 보이기 시작한 틱에도 채워야, 한 틱 만에 지나간 블록이 0 으로 남지 않는다
+          if (coVisible > state.maxCoVisible) state.maxCoVisible = coVisible;
+
           if (state.visibleSince === null) {
             state.visibleSince = now;
             continue;
@@ -98,8 +133,8 @@ export function useSectionView(pageViewKey: string) {
           const heldMs = now - state.visibleSince;
 
           if (heldMs >= VIEW_DWELL_MS) {
-            trackOnce(`section_view:${pageViewKey}:${state.id}`, 'section_view', {
-              section_id: state.id,
+            trackOnce(`section_view:${pageViewKey}:${state.key}`, 'section_view', {
+              ...state.region,
               visible_duration_ms: heldMs,
             });
           }

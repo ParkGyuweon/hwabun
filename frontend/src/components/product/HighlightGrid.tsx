@@ -16,7 +16,7 @@ export default function HighlightGrid({ highlights }: HighlightGridProps) {
   }
 
   return (
-    <ul className="highlight-grid">
+    <ul className="highlight-grid" data-log-content="highlight_badge">
       {highlights.map((item) => (
         <li key={item}>
           <span className="highlight-grid__icon" aria-hidden="true">

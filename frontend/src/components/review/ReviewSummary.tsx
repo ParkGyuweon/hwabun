@@ -11,7 +11,7 @@ export default function ReviewSummary({ stats, totalReviewCount }: ReviewSummary
   const scores = [5, 4, 3, 2, 1];
 
   return (
-    <div className="review-summary">
+    <div className="review-summary" data-log-content="review_stats">
       <div className="review-summary__score">
         <strong>{stats.average.toFixed(2)}</strong>
         <StarRating value={stats.average} size="lg" />

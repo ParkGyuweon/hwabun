@@ -47,7 +47,7 @@ export default function ReviewCard({ review, persona, otherReviewCount }: Review
   };
 
   return (
-    <article className="review-card">
+    <article className="review-card" data-log-content="user_review" data-log-ref={review.review_id}>
       <header className="review-card__head">
         <div className="review-card__author">
           <span className="review-card__avatar" aria-hidden="true">

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { track, trackOnce } from '../lib/logger';
-import { dominantSection, scrollPercent } from '../lib/section';
+import { dominantRegion, scrollPercent, visibleContentKinds } from '../lib/section';
 
 /**
  * 스크롤 기반 주목 신호.
@@ -62,7 +62,7 @@ export function useScrollDepth(pageViewKey: string) {
         if (reached >= milestone) {
           trackOnce(`scroll_depth:${pageViewKey}:${milestone}`, 'scroll_depth', {
             depth_percent: milestone,
-            section_id: dominantSection(),
+            ...dominantRegion(),
           });
         }
       }
@@ -81,7 +81,12 @@ export function useScrollDepth(pageViewKey: string) {
       const durationMs = Math.max(1, Date.now() - burstStartAt);
 
       track('scroll_pause', {
-        section_id: dominantSection(),
+        ...dominantRegion(),
+        /**
+         * 멈춘 화면에 콘텐츠가 여러 종류 같이 떠 있으면 무엇을 보던 중인지 단정할 수 없다.
+         * 그 모호함 자체를 남겨서, 분석할 때 단독으로 떠 있던 건만 골라 쓸 수 있게 한다.
+         */
+        visible_content_kinds: visibleContentKinds(),
         depth_percent: scrollPercent(),
         direction: window.scrollY >= burstStartY ? 'down' : 'up',
         distance_px: Math.round(distance),
@@ -110,7 +115,7 @@ export function useScrollDepth(pageViewKey: string) {
 
         if (direction === 'up' && reversalDistance >= BACKTRACK_PX) {
           track('scroll_backtrack', {
-            section_id: dominantSection(),
+            ...dominantRegion(),
             depth_percent: scrollPercent(),
             distance_px: Math.round(reversalDistance),
           });

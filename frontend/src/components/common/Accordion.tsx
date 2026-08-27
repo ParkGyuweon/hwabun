@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { track } from '../../lib/logger';
-import type { LogSection } from '../../types/log';
+import type { LogContentKind, LogSection } from '../../types/log';
 
 interface AccordionProps {
   title: string;
@@ -10,6 +10,8 @@ interface AccordionProps {
   defaultOpen?: boolean;
   /** 어느 섹션의 아코디언인지. accordion_toggle 로그에 실린다 */
   sectionId: LogSection;
+  /** 펼쳤을 때 안에 담기는 콘텐츠 종류. 체류·드래그 로그의 귀속에 쓰인다 */
+  contentKind?: LogContentKind;
   children: ReactNode;
 }
 
@@ -23,6 +25,7 @@ export default function Accordion({
   hint,
   defaultOpen = false,
   sectionId,
+  contentKind,
   children,
 }: AccordionProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -30,7 +33,11 @@ export default function Accordion({
   const toggle = () => {
     const next = !open;
     setOpen(next);
-    track('accordion_toggle', { section_id: sectionId, action: next ? 'expand' : 'collapse' });
+    track('accordion_toggle', {
+      section_id: sectionId,
+      content_kind: contentKind ?? null,
+      action: next ? 'expand' : 'collapse',
+    });
   };
 
   return (
@@ -48,7 +55,11 @@ export default function Accordion({
           {open ? '−' : '+'}
         </span>
       </button>
-      {open ? <div className="accordion__body">{children}</div> : null}
+      {open ? (
+        <div className="accordion__body" data-log-content={contentKind}>
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

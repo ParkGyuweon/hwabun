@@ -47,7 +47,7 @@ export default function IngredientsSection({ ingredients, productId }: Ingredien
   };
 
   return (
-    <div className="ingredients">
+    <div className="ingredients" data-log-content="ingredient_list" data-log-ref="full">
       <div className="ingredients__toolbar">
         <span className="ingredients__count">총 {parsed.length}개 성분</span>
         <div className="segmented" role="group" aria-label="성분 표시 방식">

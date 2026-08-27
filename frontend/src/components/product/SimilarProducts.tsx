@@ -114,6 +114,8 @@ export default function SimilarProducts({
             className="similar__item"
             data-product-id={product.product_id}
             data-position={index + 1}
+            data-log-content="recommendation_card"
+            data-log-ref={product.product_id}
           >
             <button
               type="button"

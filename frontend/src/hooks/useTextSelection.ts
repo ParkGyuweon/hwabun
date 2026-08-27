@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { track } from '../lib/logger';
-import { sectionOfNode } from '../lib/section';
+import { regionOfNode } from '../lib/section';
 
 /**
  * 텍스트 드래그 / 복사.
@@ -62,7 +62,7 @@ export function useTextSelection(pageViewKey: string) {
       lastReported = current.text;
 
       track(eventName, {
-        section_id: sectionOfNode(current.anchor),
+        ...regionOfNode(current.anchor),
         text_length: current.text.length,
         text_snippet: current.text.slice(0, SNIPPET_LIMIT),
         truncated: current.text.length > SNIPPET_LIMIT,

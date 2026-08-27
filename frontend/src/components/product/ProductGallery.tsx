@@ -49,7 +49,7 @@ export default function ProductGallery({ imageUrl, images, productName, productI
   const slotCount = Math.max(gallery.length, MIN_THUMB_SLOTS);
 
   return (
-    <div className="gallery">
+    <div className="gallery" data-log-content="product_image">
       <div className="gallery__main">
         <img
           src={sizedImage(mainSrc, IMAGE_WIDTH_MAIN) ?? PLACEHOLDER}

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { flush, track } from '../lib/logger';
-import { dominantSection } from '../lib/section';
+import { dominantRegion } from '../lib/section';
 
 /**
  * 페이지 이탈 요약.
@@ -32,7 +32,7 @@ export function useExitSummary(pageViewKey: string) {
      */
     let maxDepthPercent = 0;
     /** 마지막으로 머물던 섹션. 어디서 끊겼는지 보려고 남긴다 */
-    let lastSection = dominantSection();
+    let lastRegion = dominantRegion();
 
     const measure = () => {
       const doc = document.documentElement;
@@ -44,8 +44,8 @@ export function useExitSummary(pageViewKey: string) {
 
       if (depth > maxDepthPercent) maxDepthPercent = depth;
 
-      const section = dominantSection();
-      if (section !== null) lastSection = section;
+      const region = dominantRegion();
+      if (region.section_id !== null) lastRegion = region;
     };
 
     const send = (reason: string) => {
@@ -60,7 +60,8 @@ export function useExitSummary(pageViewKey: string) {
         reason,
         dwell_ms: dwellMs,
         max_scroll_percent: maxDepthPercent,
-        last_section_id: lastSection,
+        last_section_id: lastRegion.section_id,
+        last_content_kind: lastRegion.content_kind,
       });
 
       flush(true);

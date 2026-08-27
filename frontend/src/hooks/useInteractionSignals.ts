@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { track } from '../lib/logger';
-import { sectionOfNode } from '../lib/section';
+import { regionOfNode } from '../lib/section';
 
 /**
  * 클릭 주변의 망설임 / 마찰 신호.
@@ -56,7 +56,7 @@ export function useInteractionSignals(pageViewKey: string) {
       if (dwellMs < HOVER_DWELL_MS) return;
 
       track('hover_dwell', {
-        section_id: sectionOfNode(target),
+        ...regionOfNode(target),
         action: target.getAttribute('data-log-action'),
         dwell_ms: dwellMs,
       });
@@ -84,7 +84,7 @@ export function useInteractionSignals(pageViewKey: string) {
       if (clickTimes.length >= RAGE_CLICK_COUNT && !rageReported) {
         rageReported = true;
         track('rage_click', {
-          section_id: sectionOfNode(target),
+          ...regionOfNode(target),
           action: target?.closest('[data-log-action]')?.getAttribute('data-log-action') ?? null,
           click_count: clickTimes.length,
         });
@@ -93,7 +93,7 @@ export function useInteractionSignals(pageViewKey: string) {
       // --- 헛클릭 판정 ---
       if (target?.closest(INTERACTIVE) == null) {
         track('dead_click', {
-          section_id: sectionOfNode(target),
+          ...regionOfNode(target),
           // 무엇을 누르려 했는지 좁히기 위해 태그만 남긴다
           target_tag: target?.tagName.toLowerCase() ?? null,
         });

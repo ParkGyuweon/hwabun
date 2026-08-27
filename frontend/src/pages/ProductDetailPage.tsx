@@ -144,7 +144,7 @@ export default function ProductDetailPage({
       </section>
 
       <section className="pdp__section pdp__section--tight" data-log-section="how_to_use">
-        <Accordion title="How to Use" sectionId="how_to_use">
+        <Accordion title="How to Use" sectionId="how_to_use" contentKind="usage_guide">
           {product.description?.suggested_usage ? (
             <p className="pdp__prose pdp__prose--pre">{product.description.suggested_usage}</p>
           ) : (
