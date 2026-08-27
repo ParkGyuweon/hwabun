@@ -227,8 +227,8 @@
     ],
     "source": "리뷰의 사용자 속성 구성비 (highlights 태그 아님)",
     "formula": "clip((share_in_product / share_overall - LO) / (HI - LO), 0, 1)",
-    "LO": 0.8,
-    "HI": 1.2,
+    "LO": 0.6,
+    "HI": 1.6,
     "shrinkage_k": 50,
     "skin_type_base_share": {
       "combination": 0.552656,

@@ -164,41 +164,41 @@ Balancing Force Oil Control Toner의 `concern` 블록을 보면 IDF 효과가 �
 
 | 상품 | combination | dry | normal | oily |
 |---|---:|---:|---:|---:|
-| Balancing Force Oil Control Toner | 0.51 (1.0x) | 0.00 (0.4x) | 0.00 (0.4x) | 1.00 (2.6x) |
-| Cicapair Tiger Grass Cream | 0.17 (0.9x) | 1.00 (2.0x) | 0.00 (0.7x) | 0.00 (0.4x) |
-| Lip Sleeping Mask Intense Hydratio | 0.41 (1.0x) | 0.57 (1.0x) | 0.70 (1.1x) | 0.57 (1.0x) |
-| Greek Yoghurt Foaming Cream Cleans | 0.49 (1.0x) | 0.60 (1.0x) | 0.35 (0.9x) | 0.56 (1.0x) |
-| Smart Clinical Repair Wrinkle Corr | 0.60 (1.0x) | 0.60 (1.0x) | 0.89 (1.2x) | 0.00 (0.6x) |
+| Balancing Force Oil Control Toner | 0.40 (1.0x) | 0.00 (0.4x) | 0.00 (0.4x) | 1.00 (2.6x) |
+| Cicapair Tiger Grass Cream | 0.27 (0.9x) | 1.00 (2.0x) | 0.10 (0.7x) | 0.00 (0.4x) |
+| Lip Sleeping Mask Intense Hydratio | 0.36 (1.0x) | 0.43 (1.0x) | 0.48 (1.1x) | 0.43 (1.0x) |
+| Greek Yoghurt Foaming Cream Cleans | 0.39 (1.0x) | 0.44 (1.0x) | 0.34 (0.9x) | 0.43 (1.0x) |
+| Smart Clinical Repair Wrinkle Corr | 0.44 (1.0x) | 0.44 (1.0x) | 0.55 (1.2x) | 0.00 (0.6x) |
 
 ### skin_tone
 
 | 상품 | fair | light | medium | tan | deep |
 |---|---:|---:|---:|---:|---:|
-| Balancing Force Oil Control Toner | 0.00 (0.8x) | 0.54 (1.0x) | 1.00 (1.3x) | 0.95 (1.2x) | 0.97 (1.2x) |
-| Cicapair Tiger Grass Cream | 1.00 (1.3x) | 0.30 (0.9x) | 0.12 (0.8x) | 0.00 (0.7x) | 0.00 (0.2x) |
-| Lip Sleeping Mask Intense Hydratio | 0.64 (1.1x) | 0.36 (0.9x) | 0.62 (1.0x) | 0.63 (1.1x) | 0.76 (1.1x) |
-| Greek Yoghurt Foaming Cream Cleans | 0.69 (1.1x) | 0.00 (0.6x) | 1.00 (1.6x) | 1.00 (1.9x) | 1.00 (2.7x) |
-| Smart Clinical Repair Wrinkle Corr | 0.63 (1.1x) | 0.74 (1.1x) | 0.00 (0.8x) | 0.00 (0.6x) | 0.00 (0.5x) |
+| Balancing Force Oil Control Toner | 0.19 (0.8x) | 0.42 (1.0x) | 0.66 (1.3x) | 0.58 (1.2x) | 0.59 (1.2x) |
+| Cicapair Tiger Grass Cream | 0.74 (1.3x) | 0.32 (0.9x) | 0.25 (0.8x) | 0.08 (0.7x) | 0.00 (0.2x) |
+| Lip Sleeping Mask Intense Hydratio | 0.46 (1.1x) | 0.34 (0.9x) | 0.45 (1.0x) | 0.45 (1.1x) | 0.50 (1.1x) |
+| Greek Yoghurt Foaming Cream Cleans | 0.48 (1.1x) | 0.01 (0.6x) | 1.00 (1.6x) | 1.00 (1.9x) | 1.00 (2.7x) |
+| Smart Clinical Repair Wrinkle Corr | 0.45 (1.1x) | 0.50 (1.1x) | 0.18 (0.8x) | 0.00 (0.6x) | 0.00 (0.5x) |
 
 ### hair_color
 
 | 상품 | black | blonde | brown | auburn | red | gray |
 |---|---:|---:|---:|---:|---:|---:|
-| Balancing Force Oil Control Toner | 0.99 (1.2x) | 0.20 (0.9x) | 0.54 (1.0x) | 0.00 (0.8x) | 0.00 (0.7x) | 0.00 (0.2x) |
-| Cicapair Tiger Grass Cream | 0.14 (0.9x) | 0.67 (1.1x) | 0.54 (1.0x) | 0.28 (0.9x) | 1.00 (1.3x) | 0.56 (1.0x) |
-| Lip Sleeping Mask Intense Hydratio | 0.41 (1.0x) | 0.51 (1.0x) | 0.55 (1.0x) | 0.30 (0.9x) | 0.47 (1.0x) | 0.54 (1.0x) |
-| Greek Yoghurt Foaming Cream Cleans | 0.29 (0.9x) | 0.40 (1.0x) | 0.59 (1.0x) | 0.94 (1.2x) | 0.80 (1.1x) | 0.04 (0.8x) |
-| Smart Clinical Repair Wrinkle Corr | 1.00 (1.3x) | 1.00 (1.2x) | 0.00 (0.7x) | 1.00 (1.6x) | 1.00 (1.3x) | 1.00 (2.8x) |
+| Balancing Force Oil Control Toner | 0.60 (1.2x) | 0.28 (0.9x) | 0.42 (1.0x) | 0.19 (0.8x) | 0.05 (0.7x) | 0.00 (0.2x) |
+| Cicapair Tiger Grass Cream | 0.26 (0.9x) | 0.47 (1.1x) | 0.42 (1.0x) | 0.31 (0.9x) | 0.72 (1.3x) | 0.42 (1.0x) |
+| Lip Sleeping Mask Intense Hydratio | 0.37 (1.0x) | 0.40 (1.0x) | 0.42 (1.0x) | 0.32 (0.9x) | 0.39 (1.0x) | 0.42 (1.0x) |
+| Greek Yoghurt Foaming Cream Cleans | 0.32 (0.9x) | 0.36 (1.0x) | 0.44 (1.0x) | 0.58 (1.2x) | 0.52 (1.1x) | 0.22 (0.8x) |
+| Smart Clinical Repair Wrinkle Corr | 0.66 (1.3x) | 0.65 (1.2x) | 0.09 (0.7x) | 1.00 (1.6x) | 0.71 (1.3x) | 1.00 (2.8x) |
 
 ### eye_color
 
 | 상품 | brown | blue | green | hazel | gray |
 |---|---:|---:|---:|---:|---:|
-| Balancing Force Oil Control Toner | 0.87 (1.1x) | 0.00 (0.8x) | 0.02 (0.8x) | 0.44 (1.0x) | 0.00 (0.6x) |
-| Cicapair Tiger Grass Cream | 0.20 (0.9x) | 0.87 (1.1x) | 0.81 (1.1x) | 0.80 (1.1x) | 0.55 (1.0x) |
-| Lip Sleeping Mask Intense Hydratio | 0.45 (1.0x) | 0.60 (1.0x) | 0.51 (1.0x) | 0.49 (1.0x) | 1.00 (1.4x) |
-| Greek Yoghurt Foaming Cream Cleans | 0.45 (1.0x) | 0.64 (1.1x) | 0.32 (0.9x) | 0.64 (1.1x) | 0.48 (1.0x) |
-| Smart Clinical Repair Wrinkle Corr | 0.35 (0.9x) | 0.73 (1.1x) | 0.57 (1.0x) | 0.60 (1.0x) | 1.00 (1.6x) |
+| Balancing Force Oil Control Toner | 0.55 (1.1x) | 0.16 (0.8x) | 0.21 (0.8x) | 0.38 (1.0x) | 0.04 (0.6x) |
+| Cicapair Tiger Grass Cream | 0.28 (0.9x) | 0.55 (1.1x) | 0.52 (1.1x) | 0.52 (1.1x) | 0.42 (1.0x) |
+| Lip Sleeping Mask Intense Hydratio | 0.38 (1.0x) | 0.44 (1.0x) | 0.41 (1.0x) | 0.40 (1.0x) | 0.80 (1.4x) |
+| Greek Yoghurt Foaming Cream Cleans | 0.38 (1.0x) | 0.46 (1.1x) | 0.33 (0.9x) | 0.46 (1.1x) | 0.39 (1.0x) |
+| Smart Clinical Repair Wrinkle Corr | 0.34 (0.9x) | 0.49 (1.1x) | 0.43 (1.0x) | 0.44 (1.0x) | 1.00 (1.6x) |
 
 괄호 안이 원래 lift입니다. 읽는 법:
 
@@ -240,20 +240,20 @@ score = w2 x attr_affinity(u, i) + w3 x prior(i)
 
 | 순위 | 상품 | attr_affinity | prior | **최종 점수** |
 |---:|---|---:|---:|---:|
-| 1 | Balancing Force Oil Control Toner | 0.759 | 0.646 | **0.7367** |
-| 2 | Lip Sleeping Mask Intense Hydration wi | 0.471 | 1.000 | **0.5770** |
-| 3 | Greek Yoghurt Foaming Cream Cleanser | 0.330 | 0.506 | **0.3650** |
-| 4 | Smart Clinical Repair Wrinkle Correcti | 0.333 | 0.184 | **0.3030** |
-| 5 | Cicapair Tiger Grass Cream | 0.193 | 0.604 | **0.2748** |
+| 1 | Balancing Force Oil Control Toner | 0.664 | 0.646 | **0.6602** |
+| 2 | Lip Sleeping Mask Intense Hydration wi | 0.389 | 1.000 | **0.5109** |
+| 3 | Greek Yoghurt Foaming Cream Cleanser | 0.255 | 0.506 | **0.3052** |
+| 4 | Cicapair Tiger Grass Cream | 0.197 | 0.604 | **0.2784** |
+| 5 | Smart Clinical Repair Wrinkle Correcti | 0.242 | 0.184 | **0.2304** |
 
 1위 상품의 속성 항 분해:
 
 | 속성 | 세그먼트 | affinity | 가중치 | 기여 |
 |---|---|---:|---:|---:|
 | skin_type | oily | 1.000 | 0.40 | 0.4000 |
-| skin_tone | light | 0.544 | 0.40 | 0.2175 |
-| hair_color | brown | 0.545 | 0.10 | 0.0545 |
-| eye_color | brown | 0.874 | 0.10 | 0.0874 |
+| skin_tone | light | 0.417 | 0.40 | 0.1670 |
+| hair_color | brown | 0.418 | 0.10 | 0.0418 |
+| eye_color | brown | 0.550 | 0.10 | 0.0550 |
 
 ### 건성 / fair 톤
 
@@ -261,20 +261,20 @@ score = w2 x attr_affinity(u, i) + w3 x prior(i)
 
 | 순위 | 상품 | attr_affinity | prior | **최종 점수** |
 |---:|---|---:|---:|---:|
-| 1 | Cicapair Tiger Grass Cream | 0.954 | 0.604 | **0.8837** |
-| 2 | Lip Sleeping Mask Intense Hydration wi | 0.595 | 1.000 | **0.6759** |
-| 3 | Greek Yoghurt Foaming Cream Cleanser | 0.622 | 0.506 | **0.5987** |
-| 4 | Smart Clinical Repair Wrinkle Correcti | 0.665 | 0.184 | **0.5689** |
-| 5 | Balancing Force Oil Control Toner | 0.020 | 0.646 | **0.1452** |
+| 1 | Cicapair Tiger Grass Cream | 0.797 | 0.604 | **0.7583** |
+| 2 | Lip Sleeping Mask Intense Hydration wi | 0.438 | 1.000 | **0.5504** |
+| 3 | Greek Yoghurt Foaming Cream Cleanser | 0.449 | 0.506 | **0.4602** |
+| 4 | Smart Clinical Repair Wrinkle Correcti | 0.471 | 0.184 | **0.4136** |
+| 5 | Balancing Force Oil Control Toner | 0.122 | 0.646 | **0.2267** |
 
 1위 상품의 속성 항 분해:
 
 | 속성 | 세그먼트 | affinity | 가중치 | 기여 |
 |---|---|---:|---:|---:|
 | skin_type | dry | 1.000 | 0.40 | 0.4000 |
-| skin_tone | fair | 1.000 | 0.40 | 0.4000 |
-| hair_color | blonde | 0.668 | 0.10 | 0.0668 |
-| eye_color | blue | 0.869 | 0.10 | 0.0869 |
+| skin_tone | fair | 0.739 | 0.40 | 0.2955 |
+| hair_color | blonde | 0.467 | 0.10 | 0.0467 |
+| eye_color | blue | 0.547 | 0.10 | 0.0547 |
 
 ### 복합성 / deep 톤
 
@@ -284,20 +284,20 @@ score = w2 x attr_affinity(u, i) + w3 x prior(i)
 
 | 순위 | 상품 | attr_affinity | prior | **최종 점수** |
 |---:|---|---:|---:|---:|
-| 1 | Balancing Force Oil Control Toner | 0.966 | 0.646 | **0.9018** |
-| 2 | Greek Yoghurt Foaming Cream Cleanser | 0.875 | 0.506 | **0.8011** |
-| 3 | Lip Sleeping Mask Intense Hydration wi | 0.692 | 1.000 | **0.7534** |
-| 4 | Cicapair Tiger Grass Cream | 0.034 | 0.604 | **0.1479** |
-| 5 | Smart Clinical Repair Wrinkle Correcti | 0.135 | 0.184 | **0.1446** |
+| 1 | Greek Yoghurt Foaming Cream Cleanser | 0.870 | 0.506 | **0.7972** |
+| 2 | Balancing Force Oil Control Toner | 0.586 | 0.646 | **0.5983** |
+| 3 | Lip Sleeping Mask Intense Hydration wi | 0.477 | 1.000 | **0.5814** |
+| 4 | Cicapair Tiger Grass Cream | 0.054 | 0.604 | **0.1636** |
+| 5 | Smart Clinical Repair Wrinkle Correcti | 0.100 | 0.184 | **0.1164** |
 
 1위 상품의 속성 항 분해:
 
 | 속성 | 세그먼트 | affinity | 가중치 | 기여 |
 |---|---|---:|---:|---:|
-| skin_type | combination | 0.512 | 0.00 | 0.0000 |
-| skin_tone | deep | 0.974 | 0.80 | 0.7790 |
-| hair_color | black | 0.995 | 0.10 | 0.0995 |
-| eye_color | brown | 0.874 | 0.10 | 0.0874 |
+| skin_type | combination | 0.395 | 0.00 | 0.0000 |
+| skin_tone | deep | 1.000 | 0.80 | 0.8000 |
+| hair_color | black | 0.318 | 0.10 | 0.0318 |
+| eye_color | brown | 0.382 | 0.10 | 0.0382 |
 
 ### 결과 해석
 

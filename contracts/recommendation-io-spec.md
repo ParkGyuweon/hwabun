@@ -145,7 +145,7 @@ KEY   user:vec:{persona_id}
 TYPE  Hash
 FIELD u_sum      : float[72]  가중 누적합 (JSON 또는 바이너리)
       w_sum      : float      가중치 누적합
-      n_products : int        상호addressed 고유 상품 수 (가중치 스케줄 판정용)
+      n_products : int        상호작용한 고유 상품 수 (가중치 스케줄 판정용)
       seen       : Set        이미 상호작용한 product_id (추천 제외용)
       updated_at : timestamp
 TTL   없음 (시뮬레이션 종료까지 유지)
@@ -183,8 +183,20 @@ user_vector = u_sum / w_sum          # 조회 시 계산
 ```
 share_shrunk = (관측수 + K x 기준비율) / (셀 표본수 + K),   K = 50
 lift         = share_shrunk / 기준비율
-affinity     = clip((lift - 0.80) / 0.40, 0, 1)
+affinity     = clip((lift - CLIP_LO) / (CLIP_HI - CLIP_LO), 0, 1)
+
+CLIP_LO = 0.60,  CLIP_HI = 1.60
 ```
+
+클리핑 구간은 lift 분포의 p5~p95(0.636~1.364)를 담도록 잡았습니다. 초기값 `[0.80, 1.20]`은 범위가 좁아 **4,000셀 중 23.5%가 0 또는 1로 포화**되어 상위권 서열이 사라졌습니다. `[0.60, 1.60]`으로 넓혀 포화율을 **6.4%**로 낮췄습니다.
+
+| 구간 | 총 포화율 |
+|---|---:|
+| `[0.80, 1.20]` (초기값) | 23.5% |
+| **`[0.60, 1.60]` (채택)** | **6.4%** |
+| `[0.50, 2.00]` | 3.2% |
+
+더 넓히면 포화는 줄지만 값이 0.5 근처로 몰려 상품 간 격차가 작아집니다. p99가 1.907이므로 상위 1%만 상단에서 잘립니다.
 
 평점 평균을 쓰지 않는 이유는 리뷰의 **63.4%가 5점**이라 판별력이 노이즈 수준(η² < 0.004)이기 때문입니다. 근거는 [`recommendation-design.md`](./recommendation-design.md) 6-1절 참조.
 
