@@ -539,7 +539,7 @@ CREATE TABLE product_feature (
 
 1. **`highlights` 결측 19개 (9.5%)** — `concern`·`ingredient`·`clean` 블록이 비어 카테고리·가격·`skin_fit`만으로 벡터가 구성됩니다. 그 결과 같은 카테고리 상품과 유사도가 과도하게 높아집니다(최고 유사도 평균 0.922 vs 0.864). `ingredients` 원본 문자열에서 `Hyaluronic Acid`, `Niacinamide` 등 키워드를 매칭해 `ingredient` 블록을 보완하는 방안이 있습니다. 미적용.
 
-2. **`attr_affinity`의 `hair_color` / `eye_color`** — lift 기준 판별력이 4개 속성 중 최하위(유의 셀 16.1% / 19.8%)이고, `hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것으로 **연령 대리변수**로 보입니다. 가중치 0.10씩 유지할지 제외할지 결정 필요.
+2. **`attr_affinity`의 `hair_color` / `eye_color`** — lift 기준 판별력이 4개 속성 중 최하위(유의 셀 16.0% / 19.4%)이고, `hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것으로 **연령 대리변수**로 보입니다. **가중치 0.10 유지로 확정.** 기여가 작아 위험이 제한적이고, 사용자 속성 4개를 모두 반영하는 것이 설계 전제입니다. 로그 축적 후 실제 지표로 재평가합니다.
 
 3. **`rating` 유지 여부** — 변동계수 0.057. 성능 검증 후 제외를 검토합니다.
 
