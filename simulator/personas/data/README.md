@@ -4,18 +4,18 @@
 |---|---|---|
 | `personas_100_agent.json` | 에이전트 구동용 100명 (0.4MB) | O |
 | `persona_sampling_report.json` | 추출 파라미터·분포 검증 결과 | O |
-| `personas_9900.json` | 코드 생성용 9,900명 (**36MB**) | **X — .gitignore** |
+| `personas_9900.json` | 코드 생성용 9,900명 (36MB) | O |
 
-## personas_9900.json 재생성
+## 재생성
 
-36MB로 저장소가 무거워지므로 커밋하지 않습니다. `seed=42` 고정이라 **누가 돌려도 동일한 9,900명**이 나옵니다.
+`seed=42` 고정이라 **누가 돌려도 동일한 결과**가 나옵니다.
 
 ```
 cd <Research 폴더>
 python build_personas.py
 ```
 
-산출물을 `simulator/personas/data/`로 복사하면 됩니다.
+`personas_9900.json`은 36MB입니다. 내용을 바꿀 때는 파일 전체가 새 blob으로 저장되므로, 잦은 재생성·커밋은 저장소 용량을 빠르게 늘립니다. 추출 기준이 확정된 뒤에만 갱신하는 것을 권합니다.
 
 ## 추출 기준
 

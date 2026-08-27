@@ -1,6 +1,3 @@
-# 대용량 생성 데이터 (재생성 가능하므로 커밋하지 않음)
-simulator/personas/data/personas_9900.json
-
 # 원본 데이터셋
 **/dataset/sephora/
 
