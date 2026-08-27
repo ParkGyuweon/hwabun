@@ -79,7 +79,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 - 콘텐츠 벡터는 상품당 1개로 고정되므로 **사용자별 분기가 불가능**합니다. 복합성 사용자에게 이 항을 끄는 처리를 할 수 없습니다
 - 테이블은 사용자 속성으로 조회하므로 분기가 가능합니다
 
-관련 설계는 `Research/recommendation_design.md` 6장·7-4절 참조.
+관련 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절 참조.
 
 ---
 
@@ -145,7 +145,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 중복이 있는 만큼 secondary 가중치를 tertiary보다 낮게(0.13 vs 0.20) 둡니다.
 
-> **주의:** `tertiary_category`는 12개 상품에서 원본이 비어 있어 `secondary_category` 값으로 채운 결과입니다. 상세 기준은 `Research/DATA_CLEANING.md` 5-2 참조.
+> **주의:** `tertiary_category`는 12개 상품에서 원본이 비어 있어 `secondary_category` 값으로 채운 결과입니다. 상세 기준은 `Research/DATA_CLEANING.md`(개인 폴더) 5-2 참조.
 
 ### 2-2. highlights
 
@@ -228,7 +228,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 리뷰 구성비는 **누가 이 제품을 샀는가**를 나타냅니다. 지성용으로 마케팅된 제품에 지성 사용자가 몰리는 선택 효과가 포함됩니다. 추천 근거로는 자연스럽지만 **"이 제품이 지성 피부에 효과가 있다"는 의학적 주장으로 사용해서는 안 됩니다.**
 
-상세 설계는 `Research/recommendation_design.md` 6장·7-4절, 테이블은 `Research/artifacts/affinity_lift.csv` 참조.
+상세 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절, 테이블은 `batch/ingest/data/affinity_lift.csv` 참조.
 
 #### ingredient — 9종 / 보유 110개 (55.0%) / 가중치 0.15
 
@@ -551,7 +551,7 @@ CREATE TABLE product_feature (
 |---|---|
 | `Research/DATA_CLEANING.md` | 상품 200개 선정·병합·결측 보완 기준 |
 | `Research/PERSONA_SAMPLING.md` | 페르소나 10,000명 층화추출 기준 |
-| `Research/recommendation_design.md` | 추천 점수 설계 (이 벡터의 소비처) |
+| [`recommendation-design.md`](./recommendation-design.md) | 추천 점수 설계 (이 벡터의 소비처) |
 
 **재현**
 
