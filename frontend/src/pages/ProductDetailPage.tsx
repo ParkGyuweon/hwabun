@@ -17,7 +17,7 @@ import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useExitSummary } from '../hooks/useExitSummary';
 import type { PersonaProfile } from '../types/persona';
-import type { Product } from '../types/product';
+import type { Product, ProductVariant } from '../types/product';
 import type { Review } from '../types/review';
 
 interface ProductDetailPageProps {
@@ -39,6 +39,7 @@ export default function ProductDetailPage({
 }: ProductDetailPageProps) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [sort, setSort] = useState<ReviewSort>('recent');
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const reviewSectionRef = useRef<HTMLElement>(null);
 
   // 상품이 바뀌면 새 페이지 방문이므로 트리거 상태도 함께 초기화된다
@@ -51,7 +52,12 @@ export default function ProductDetailPage({
   useEffect(() => {
     setFilter('all');
     setSort('recent');
+    setSelectedVariant(null);
   }, [product.product_id]);
+
+  /** 옵션을 고르면 그 옵션 이미지가 대표 이미지 자리를 대신한다 */
+  const heroImageUrl = selectedVariant?.image_url ?? product.image_url;
+  const selectedSkuId = selectedVariant?.sku_id ?? product.sku_id;
 
   /** 샘플 전체 기준 작성자별 리뷰 수. "이 리뷰어의 다른 리뷰" 노출 판단에 쓴다 */
   const authorReviewCounts = useMemo(() => {
@@ -92,7 +98,8 @@ export default function ProductDetailPage({
       <section className="pdp" data-log-section="product_hero">
         <div className="pdp__media">
           <ProductGallery
-            imageUrl={product.image_url}
+            imageUrl={heroImageUrl}
+            images={product.images}
             productName={product.product_name}
             productId={product.product_id}
           />
@@ -101,6 +108,8 @@ export default function ProductDetailPage({
         <div className="pdp__info">
           <ProductSummary
             product={product}
+            selectedSkuId={selectedSkuId}
+            onVariantSelect={setSelectedVariant}
             onReviewLinkClick={() => {
               track('review_expand', { product_id: product.product_id, target: 'jump_to_reviews' });
               reviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -131,9 +140,11 @@ export default function ProductDetailPage({
 
       <section className="pdp__section pdp__section--tight" data-log-section="how_to_use">
         <Accordion title="How to Use" sectionId="how_to_use">
-          <p className="pdp__prose">
-            데이터셋에 사용 방법 필드가 없습니다. 백엔드 연동 시 채워질 영역입니다.
-          </p>
+          {product.description?.suggested_usage ? (
+            <p className="pdp__prose pdp__prose--pre">{product.description.suggested_usage}</p>
+          ) : (
+            <p className="pdp__prose">등록된 사용 방법 정보가 없습니다.</p>
+          )}
         </Accordion>
       </section>
 

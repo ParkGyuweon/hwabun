@@ -26,6 +26,7 @@ export type P0EventName =
 export type P1EventName =
   | 'scroll_depth'
   | 'media_view'
+  | 'variant_select'
   | 'quantity_change'
   | 'review_filter_apply'
   | 'review_expand'

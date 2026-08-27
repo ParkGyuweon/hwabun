@@ -11,6 +11,10 @@
   --color-accent: #d0021b;
   --color-star: #111111;
 
+  /* 세포라 상단 프로모 바 라벤더 */
+  --color-promo: #ecd9f5;
+  --color-promo-ink: #1c1719;
+
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-pill: 999px;

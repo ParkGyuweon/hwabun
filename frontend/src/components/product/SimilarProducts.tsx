@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import StarRating from '../common/StarRating';
 import { formatCount, formatPrice } from '../../lib/format';
+import { IMAGE_WIDTH_SWATCH, sizedImage } from '../../lib/image';
 import { track, trackOnce } from '../../lib/logger';
 import type { Product } from '../../types/product';
 
@@ -121,7 +122,12 @@ export default function SimilarProducts({
               onClick={() => select(product, index + 1)}
             >
               <span className="similar__thumb">
-                <img src={product.image_url ?? PLACEHOLDER} alt="" aria-hidden="true" />
+                <img
+                  src={sizedImage(product.image_url, IMAGE_WIDTH_SWATCH) ?? PLACEHOLDER}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                />
               </span>
               <span className="similar__brand">{product.brand_name}</span>
               <span className="similar__name">{product.product_name}</span>

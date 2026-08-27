@@ -16,7 +16,12 @@ interface SiteHeaderProps {
 export default function SiteHeader({ personas, persona, onPersonaChange }: SiteHeaderProps) {
   return (
     <header className="site-header">
-      <div className="site-header__promo">Get 20% off · Use code SCOREMORE · Terms apply</div>
+      <div className="site-header__promo">
+        <strong>Get up to 3 Free* Trial Sizes</strong> with min. spend.{' '}
+        <strong>Use code SCOREMORE.</strong>{' '}
+        <span className="site-header__promo-terms">*Terms apply. APP ONLY.</span>{' '}
+        <strong>LEARN MORE ›</strong>
+      </div>
 
       <div className="site-header__main">
         <span className="site-header__logo">SEPHORA</span>

@@ -12,24 +12,56 @@ interface AboutProductProps {
 /**
  * 세포라의 About the Product 영역.
  *
- * 원본에는 설명 문단 + Skin Type + Skincare Concerns 가 들어간다.
- * 데이터셋에 설명 문단이 없어서 그 자리는 비워두고,
- * 대신 이 프로젝트의 목적인 "내 피부와 맞는가" 판정을 앞에 세운다.
+ * 설명 문단은 세포라 원문(영문)을 그대로 싣고,
+ * 그 아래에 이 프로젝트의 목적인 "내 피부와 맞는가" 판정용 속성을 붙인다.
  */
 export default function AboutProduct({ product, persona }: AboutProductProps) {
   const hasSkinTypeInfo = product.suitable_skin_types.length > 0;
-  const matched = persona !== null && product.suitable_skin_types.includes(persona.skin_type);
+  const description = product.description;
 
   return (
     <div className="about">
-      {persona ? (
-        <p className={`about__match${matched ? ' is-matched' : ''}`}>
-          {!hasSkinTypeInfo
-            ? `상품에 피부 타입 표기가 없어 ${skinTypeLabel(persona.skin_type)} 적합 여부를 판단할 수 없습니다`
-            : matched
-              ? `내 피부 타입(${skinTypeLabel(persona.skin_type)})에 적합한 상품입니다`
-              : `내 피부 타입(${skinTypeLabel(persona.skin_type)})은 적합 대상에 포함되어 있지 않습니다`}
-        </p>
+      {description ? (
+        <div className="about__prose">
+          {description.what_it_is ? (
+            <section>
+              <h3>What it is</h3>
+              <p>{description.what_it_is}</p>
+            </section>
+          ) : null}
+
+          {description.highlighted_ingredients.length > 0 ? (
+            <section>
+              <h3>Highlighted Ingredients</h3>
+              <ul>
+                {description.highlighted_ingredients.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {description.ingredient_callouts ? (
+            <section>
+              <h3>Ingredient Callouts</h3>
+              <p>{description.ingredient_callouts}</p>
+            </section>
+          ) : null}
+
+          {description.what_else ? (
+            <section>
+              <h3>What Else You Need to Know</h3>
+              <p>{description.what_else}</p>
+            </section>
+          ) : null}
+
+          {description.clinical_results ? (
+            <section>
+              <h3>Clinical Results</h3>
+              <p className="about__pre">{description.clinical_results}</p>
+            </section>
+          ) : null}
+        </div>
       ) : null}
 
       <dl className="about__list">

@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import StarRating from '../common/StarRating';
+import VariantPicker from './VariantPicker';
 import { formatCount, formatPrice } from '../../lib/format';
 import { track } from '../../lib/logger';
-import type { Product } from '../../types/product';
+import type { Product, ProductVariant } from '../../types/product';
 
 interface ProductSummaryProps {
   product: Product;
+  /** 선택된 옵션의 SKU. 옵션이 없는 상품이면 null */
+  selectedSkuId: string | null;
+  onVariantSelect: (variant: ProductVariant) => void;
   /** 리뷰 섹션으로 스크롤 이동 */
   onReviewLinkClick: () => void;
 }
@@ -15,7 +19,12 @@ interface ProductSummaryProps {
  *
  * 찜과 장바구니는 관심 강도가 가장 높은 신호라 여기 트리거가 몰려 있다.
  */
-export default function ProductSummary({ product, onReviewLinkClick }: ProductSummaryProps) {
+export default function ProductSummary({
+  product,
+  selectedSkuId,
+  onVariantSelect,
+  onReviewLinkClick,
+}: ProductSummaryProps) {
   const [quantity, setQuantity] = useState(1);
   const [loved, setLoved] = useState(false);
   const [addedAt, setAddedAt] = useState<number | null>(null);
@@ -38,6 +47,7 @@ export default function ProductSummary({ product, onReviewLinkClick }: ProductSu
     setAddedAt(Date.now());
     track('add_to_cart', {
       product_id: product.product_id,
+      sku_id: selectedSkuId,
       quantity,
       price_usd: product.price_usd,
     });
@@ -70,6 +80,13 @@ export default function ProductSummary({ product, onReviewLinkClick }: ProductSu
         {/* size 는 자유 텍스트라 파싱하지 않고 그대로 노출한다 */}
         {product.size ? <span className="summary__size">{product.size}</span> : null}
       </div>
+
+      <VariantPicker
+        productId={product.product_id}
+        variants={product.variants}
+        selectedSkuId={selectedSkuId}
+        onSelect={onVariantSelect}
+      />
 
       <div className="summary__actions">
         <div className="qty" role="group" aria-label="수량 선택">
