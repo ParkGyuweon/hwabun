@@ -1,31 +1,46 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { track } from '../../lib/logger';
+import type { LogSection } from '../../types/log';
 
 interface AccordionProps {
   title: string;
   /** 접힌 상태에서 제목 옆에 보여줄 보조 텍스트 */
   hint?: string;
   defaultOpen?: boolean;
+  /** 어느 섹션의 아코디언인지. accordion_toggle 로그에 실린다 */
+  sectionId: LogSection;
   children: ReactNode;
 }
 
 /**
- * 성분처럼 길이가 긴 섹션을 접어두기 위한 컴포넌트.
+ * 성분·사용법처럼 접어두는 섹션.
  *
- * 펼침 동작은 이후 로그 수집 대상이 된다.
- * 이벤트 이름과 payload 는 [정의] UX 행동 로그 이벤트 명세 확정 이슈에서 결정하므로
- * 지금은 onToggle 이라는 확장 지점만 열어둔다.
+ * 펼치는 행동은 단순 스크롤보다 훨씬 강한 관심 신호라서 열고 닫음을 구분해 기록한다.
  */
-export default function Accordion({ title, hint, defaultOpen = false, children }: AccordionProps) {
+export default function Accordion({
+  title,
+  hint,
+  defaultOpen = false,
+  sectionId,
+  children,
+}: AccordionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    track('accordion_toggle', { section_id: sectionId, action: next ? 'expand' : 'collapse' });
+  };
+
   return (
-    <section className="accordion">
+    <div className="accordion">
       <button
         type="button"
         className="accordion__head"
         aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
+        data-log-action="accordion_toggle"
+        onClick={toggle}
       >
         <span className="accordion__title">{title}</span>
         {hint ? <span className="accordion__hint">{hint}</span> : null}
@@ -34,6 +49,6 @@ export default function Accordion({ title, hint, defaultOpen = false, children }
         </span>
       </button>
       {open ? <div className="accordion__body">{children}</div> : null}
-    </section>
+    </div>
   );
 }
