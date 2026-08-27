@@ -6,9 +6,9 @@
   "pool_size": 67414,
   "min_products": 2,
   "n_strata": 80,
-  "inconsistent_attr_users": 7782,
+  "inconsistent_attr_users": 6305,
   "attr_rule": "latest_review",
-  "differs_from_mode": 3456,
+  "differs_from_mode": 2854,
   "distribution": [
     {
       "field": "skin_type",

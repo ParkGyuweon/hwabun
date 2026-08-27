@@ -22,6 +22,7 @@ python build_personas.py
 - 모집단: 상위 200개 상품 중 **2개 이상**에 리뷰를 단 사용자 **67,414명**
 - 층화추출: `skin_type`(4) × `skin_tone`(5버킷) × 리뷰개수구간(4) = **80개 층**, 비례배분 + 최대잔여법
 - 사용자 속성: 리뷰마다 다를 경우 **가장 최신 리뷰** 기준 (`submission_time` 정렬 후 마지막)
+- 표기 정규화: `skin_tone` 5버킷, `hair_color` `brunette`→`brown` 병합(6종), `eye_color` `Grey`→`gray` 병합(5종)
 - 에이전트 100명만 균등배분 (`skin_type` × `skin_tone` 20셀 × 5명) — 소수 세그먼트 검증용
 
 분포 검증 결과 모집단 대비 전 항목 **0.03%p 이내**입니다. 상세 기준은 개인 폴더의 `PERSONA_SAMPLING.md` 참조.
