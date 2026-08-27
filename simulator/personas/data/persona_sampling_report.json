@@ -1,0 +1,96 @@
+{
+  "seed": 42,
+  "n_total": 10000,
+  "n_agent": 100,
+  "n_code": 9900,
+  "pool_size": 67414,
+  "min_products": 2,
+  "n_strata": 80,
+  "inconsistent_attr_users": 6305,
+  "attr_rule": "latest_review",
+  "differs_from_mode": 2854,
+  "distribution": [
+    {
+      "field": "skin_type",
+      "value": "combination",
+      "population_pct": 55.084,
+      "sample_pct": 55.1
+    },
+    {
+      "field": "skin_type",
+      "value": "dry",
+      "population_pct": 19.595,
+      "sample_pct": 19.57
+    },
+    {
+      "field": "skin_type",
+      "value": "normal",
+      "population_pct": 13.155,
+      "sample_pct": 13.17
+    },
+    {
+      "field": "skin_type",
+      "value": "oily",
+      "population_pct": 12.167,
+      "sample_pct": 12.16
+    },
+    {
+      "field": "skin_tone",
+      "value": "light",
+      "population_pct": 50.279,
+      "sample_pct": 50.29
+    },
+    {
+      "field": "skin_tone",
+      "value": "fair",
+      "population_pct": 29.221,
+      "sample_pct": 29.24
+    },
+    {
+      "field": "skin_tone",
+      "value": "medium",
+      "population_pct": 14.426,
+      "sample_pct": 14.42
+    },
+    {
+      "field": "skin_tone",
+      "value": "tan",
+      "population_pct": 3.406,
+      "sample_pct": 3.38
+    },
+    {
+      "field": "skin_tone",
+      "value": "deep",
+      "population_pct": 2.669,
+      "sample_pct": 2.67
+    },
+    {
+      "field": "review_bucket",
+      "value": "3-4",
+      "population_pct": 42.982,
+      "sample_pct": 42.98
+    },
+    {
+      "field": "review_bucket",
+      "value": "2",
+      "population_pct": 37.989,
+      "sample_pct": 38.01
+    },
+    {
+      "field": "review_bucket",
+      "value": "5-9",
+      "population_pct": 16.372,
+      "sample_pct": 16.37
+    },
+    {
+      "field": "review_bucket",
+      "value": "10+",
+      "population_pct": 2.657,
+      "sample_pct": 2.64
+    }
+  ],
+  "population_avg_rating": 4.3234,
+  "sample_avg_rating": 4.3224,
+  "population_avg_reviews": 3.5561,
+  "sample_avg_reviews": 3.5501
+}
