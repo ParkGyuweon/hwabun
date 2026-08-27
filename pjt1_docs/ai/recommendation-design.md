@@ -1,6 +1,6 @@
 # 추천 시스템 설계안 (CBF)
 
-> 관련 문서: [`product-feature-spec.md`](./product-feature-spec.md) (상품 벡터 명세), [`product-feature-sample.md`](./product-feature-sample.md) (실제 계산 샘플), [`recommendation-io-spec.md`](./recommendation-io-spec.md) (입출력 구조)
+> 관련 문서: [`product-feature-spec.md`](../../contracts/product-feature-spec.md) (상품 벡터 명세), [`product-feature-sample.md`](product-feature-sample.md) (실제 계산 샘플), [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md) (입출력 구조)
 
 > 세포라 데이터셋 기반 · 2026-08-27
 > 전제: 상품 200개 / 페르소나 10,000명 / 리뷰 844,865건(4개 속성 전부 채워진 것)
@@ -151,21 +151,21 @@ D 속성점수 = 0.4×0.70 + 0.4×0.85 + 0.16 = 0.78
 3. **둘은 마지막 덧셈에서만 만난다** → 추천 결과를 항별로 분해해 설명 가능
 
 
-## 4. 상품 벡터 `v_i` — 72차원
+## 4. 상품 벡터 `v_i` — 93차원
 
-확정된 구성입니다. 상세 명세는 [`product-feature-spec.md`](./product-feature-spec.md), 어휘집은 [`product-feature-vocab.json`](./product-feature-vocab.json)에 있습니다.
+확정된 구성입니다. 상세 명세는 [`product-feature-spec.md`](../../contracts/product-feature-spec.md), 어휘집은 [`product-feature-vocab.json`](../../contracts/product-feature-vocab.json)에 있습니다.
 
 | 블록 | 소스 | 인코딩 | 차원 | 가중치 |
 |---|---|---|---:|---:|
-| `concern` | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 0.29 |
-| `tertiary_category` | `tertiary_category` | 원핫 | 19 | 0.24 |
-| `ingredient` | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | 0.18 |
-| `secondary_category` | `secondary_category` | 원핫 | 8 | 0.15 |
+| `concern` | `highlights` `Good for:` | 멀티핫 + IDF | 9 | **0.42** |
+| `tertiary_category` | `tertiary_category` | 원핫 | 19 | 0.11 |
+| `ingredient` | `highlights` 태그 + 전성분 파싱 | 멀티핫 + IDF + 위치가중 | 30 | **0.27** |
+| `secondary_category` | `secondary_category` | 원핫 | 8 | 0.06 |
 | `clean` | `highlights` 클린뷰티 | 멀티핫 + IDF | 16 | 0.06 |
 | `price_bin` | `price_usd` | 5구간 원핫 | 5 | 0.04 |
 | `rating` | `rating` | 스칼라 | 1 | 0.02 |
 | `texture` | `highlights` 제형·마감 | 멀티핫 + IDF | 5 | 0.02 |
-| **합계** | | | **72** | **1.00** |
+| **합계** | | | **93** | **1.00** |
 
 블록별 L2 정규화 → 블록 가중치 → 전체 L2 정규화 순서로 결합합니다. 블록마다 차원 수가 달라 그대로 이어붙이면 큰 블록이 유사도를 지배하기 때문입니다.
 
@@ -178,7 +178,7 @@ D 속성점수 = 0.4×0.70 + 0.4×0.85 + 0.16 = 0.78
 | popularity 태그 | `Community Favorite`, allure 수상 — 인기 신호 |
 | **피부타입 적합도** | **6장 속성 친화도 테이블이 담당.** 콘텐츠 벡터는 상품당 1개로 고정되어 사용자별 분기가 불가능하기 때문 |
 
-`ingredients` 원본 컬럼의 TF-IDF는 **1차 범위에서 제외**합니다. 원본이 성분 배열이 아니라 1,000자짜리 통짜 문자열이라 분리·정규화 품질이 결과를 좌우하고, 차원이 수천 개로 튑니다. `highlights`의 성분 태그 9종으로 주요 활성 성분은 이미 커버됩니다.
+`ingredient` 블록은 `highlights` 태그(보유율 55%)만으로는 부족하므로 **전성분 문자열을 파싱**해 어휘 30종을 채웁니다. 전성분은 함량 순 나열이므로 **등장 위치로 감쇠**해 미량 성분 과대평가를 막습니다. 상세는 `product-feature-spec.md` 2-2절 참조.
 
 ## 5. 사용자 벡터 `v_u` — 행동 기반
 
@@ -215,9 +215,9 @@ CBF의 약점인 "취향 변화 대응 지연"을 완화합니다.
 
 ## 6. 속성 친화도 `attr_affinity` — 4개 속성 기반
 
-실시간 계산이 아니라 **오프라인에서 만든 조회 테이블**입니다. 리뷰 458,614건(상위 200개 상품)으로 상품 × 세그먼트별 통계를 미리 뽑아둡니다. 서빙 시 딕셔너리 조회 한 번이라 비용이 사실상 0입니다.
+실시간 계산이 아니라 **오프라인에서 만든 조회 테이블**입니다. 리뷰 458,180건(상위 200개 상품)으로 상품 × 세그먼트별 통계를 미리 뽑아둡니다. 서빙 시 딕셔너리 조회 한 번이라 비용이 사실상 0입니다.
 
-테이블: `batch/ingest/data/affinity_lift.csv` (4,000행 = 200상품 × 21세그먼트)
+테이블: `batch/ingest/data/affinity_lift.csv` (4,000행 = 200상품 × 20세그먼트)
 
 ### 6-1. 평점 평균이 아니라 구성비 lift를 씁니다
 
@@ -292,7 +292,10 @@ lift를 0~1로 변환할 때의 구간입니다. 초기값 `[0.80, 1.20]`은 범
 
 lift로 바꾸자 `skin_type`이 4위에서 1위로 올라왔습니다.
 
-`hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것인데, 이는 머리색이 아니라 **연령의 대리변수**로 작동하는 것입니다. `eye_color`는 극단 사례에 공통점이 없어 해석되지 않습니다. **두 속성의 존치 여부는 미결정 사항입니다.**
+`hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것인데, 이는 머리색이 아니라 **연령의 대리변수**로 작동하는 것입니다. `eye_color`는 극단 사례에 공통점이 없어 해석되지 않습니다.
+
+**`hair_color` / `eye_color`는 유지하기로 결정했습니다.** 가중치가 0.10씩(합 20%)이라 잘못된 신호가 순위를 뒤집을 위험이 작고, 사용자 속성 4개를 모두 반영하는 것이 설계 전제입니다. 제거해도 얻는 것이 차원 축소뿐이며 실제 성능 이득은 측정되지 않았습니다. 로그가 쌓이면 실제 지표로 재평가합니다.
+
 
 ### 6-4. `hair_color`의 `brunette` — 데이터 오류 발견
 
@@ -556,5 +559,6 @@ Redis에 `(u_sum, w_sum)`만 보관. **10,000명 × 170차원 float32 = 6.5MB**(
 - MMR의 λ 값 (0.7은 초기값, 튜닝 필요)
 - 시간 감쇠 τ = 30일 (생성 로그의 시간 범위에 따라 조정)
 - `ingredients` TF-IDF 추가 시점
-- `hair_color` / `eye_color`를 속성 항에 유지할지 (판별력 최하위, `hair_color`는 연령 대리변수로 의심)
-- 콘텐츠 벡터의 블록 가중치 (측정 결과 같은 카테고리 이웃 91.1%로 과도, 중간안 A 권고)
+- ~~`hair_color` / `eye_color` 존치 여부~~ → **유지 확정** (가중치 0.10 유지). 기여가 작아 위험이 제한적이고 사용자 속성 4개 반영이 설계 전제. 로그 축적 후 재평가
+- ~~콘텐츠 벡터의 블록 가중치~~ → 어휘집 `0.2`에서 카테고리 39%→17%로 확정 (`cbf-technical-review.md` 4장)
+- 사용자 벡터 엣지 케이스 처리 규칙 (`w_sum==0` 0.5%, 전부 음수 1.8%, 노름 0.098) — `cbf-technical-review.md` 3-2장
