@@ -15,6 +15,8 @@ import { calcReviewStats, splitIngredients } from '../lib/format';
 import { track } from '../lib/logger';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
+import { useTextSelection } from '../hooks/useTextSelection';
+import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, ProductVariant } from '../types/product';
@@ -45,8 +47,11 @@ export default function ProductDetailPage({
   // 상품이 바뀌면 새 페이지 방문이므로 트리거 상태도 함께 초기화된다
   const pageViewKey = `${product.product_id}:${persona?.persona_id ?? 'anonymous'}`;
 
+  // 클릭 로그만으로는 구매까지 안 간 방문이 빈 세션으로 남아서, 주목 신호를 함께 남긴다
   useSectionView(pageViewKey);
   useScrollDepth(pageViewKey);
+  useTextSelection(pageViewKey);
+  useInteractionSignals(pageViewKey);
   useExitSummary(pageViewKey);
 
   useEffect(() => {

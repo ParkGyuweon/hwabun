@@ -6,7 +6,7 @@
  */
 
 /** 팀과 스키마를 합의할 때마다 올린다 */
-export const SCHEMA_VERSION = '0.1.0-draft';
+export const SCHEMA_VERSION = '0.2.0-draft';
 
 /** 우선순위 P0. 추천과 마케팅 분석에 반드시 필요한 이벤트 */
 export type P0EventName =
@@ -15,6 +15,7 @@ export type P0EventName =
   | 'product_impression'
   | 'product_click'
   | 'section_view'
+  | 'section_dwell'
   | 'accordion_toggle'
   | 'recommendation_impression'
   | 'recommendation_click'
@@ -30,7 +31,20 @@ export type P1EventName =
   | 'quantity_change'
   | 'review_filter_apply'
   | 'review_expand'
-  | 'ingredient_view_mode_change';
+  | 'ingredient_view_mode_change'
+  /**
+   * 아래는 클릭이 아닌 "주목" 신호다.
+   * 클릭 이벤트만으로는 구매까지 안 간 방문이 전부 빈 세션으로 남아서,
+   * 무엇을 들여다보다 이탈했는지 설명할 수 없다.
+   * 설계 근거는 docs/analytics/behavior-log-design.md 참고.
+   */
+  | 'scroll_pause'
+  | 'scroll_backtrack'
+  | 'text_selection'
+  | 'text_copy'
+  | 'hover_dwell'
+  | 'rage_click'
+  | 'dead_click';
 
 export type EventName = P0EventName | P1EventName;
 

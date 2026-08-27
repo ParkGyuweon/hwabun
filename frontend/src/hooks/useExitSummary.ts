@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { flush, track } from '../lib/logger';
+import { dominantSection } from '../lib/section';
 
 /**
  * 페이지 이탈 요약.
@@ -16,12 +17,36 @@ import { flush, track } from '../lib/logger';
 const MIN_DWELL_MS = 300;
 
 export function useExitSummary(pageViewKey: string) {
-  const enteredAtRef = useRef(Date.now());
+  // 렌더 중에는 Date.now() 를 부르지 않는다. 실제 진입 시각은 이펙트에서 채운다
+  const enteredAtRef = useRef(0);
   const sentRef = useRef(false);
 
   useEffect(() => {
     enteredAtRef.current = Date.now();
     sentRef.current = false;
+
+    /**
+     * 도달한 최대 깊이를 따로 들고 있는다.
+     * 이탈 순간의 스크롤 위치로 계산하면, 끝까지 읽고 맨 위로 올려둔 채 나간 방문이
+     * "조금 보다 나갔다" 로 기록된다.
+     */
+    let maxDepthPercent = 0;
+    /** 마지막으로 머물던 섹션. 어디서 끊겼는지 보려고 남긴다 */
+    let lastSection = dominantSection();
+
+    const measure = () => {
+      const doc = document.documentElement;
+      const scrollable = doc.scrollHeight - window.innerHeight;
+      const depth =
+        scrollable > 0
+          ? Math.min(100, Math.round(((window.scrollY + window.innerHeight) / doc.scrollHeight) * 100))
+          : 100;
+
+      if (depth > maxDepthPercent) maxDepthPercent = depth;
+
+      const section = dominantSection();
+      if (section !== null) lastSection = section;
+    };
 
     const send = (reason: string) => {
       if (sentRef.current) return;
@@ -29,15 +54,13 @@ export function useExitSummary(pageViewKey: string) {
       if (dwellMs < MIN_DWELL_MS) return;
       sentRef.current = true;
 
-      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
-      const maxDepth = scrollable > 0
-        ? Math.min(100, Math.round(((window.scrollY + window.innerHeight) / document.documentElement.scrollHeight) * 100))
-        : 100;
+      measure();
 
       track('exit_summary', {
         reason,
         dwell_ms: dwellMs,
-        max_scroll_percent: maxDepth,
+        max_scroll_percent: maxDepthPercent,
+        last_section_id: lastSection,
       });
 
       flush(true);
@@ -49,11 +72,17 @@ export function useExitSummary(pageViewKey: string) {
       }
     };
 
+    const onPageHide = () => send('page_hide');
+
+    window.addEventListener('scroll', measure, { passive: true });
     document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('pagehide', () => send('page_hide'));
+    window.addEventListener('pagehide', onPageHide);
+    measure();
 
     return () => {
+      window.removeEventListener('scroll', measure);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
       // 상품을 바꿔 다른 상세로 이동하는 것도 이 페이지에서의 이탈이다
       send('navigate');
     };
