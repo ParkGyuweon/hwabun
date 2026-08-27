@@ -1,6 +1,6 @@
 # Product Feature 샘플 — 실제 상품 5개
 
-> 어휘집 버전 `0.1-draft` · 콘텐츠 벡터 72차원 · 2026-08-27
+> 어휘집 버전 `0.2` · 콘텐츠 벡터 72차원 · 2026-08-27
 > 원본 데이터: `artifacts/feature_sample.json` (72차원 벡터 전체 값 포함)
 
 명세([`product-feature-spec.md`](./product-feature-spec.md))가 실제로 어떤 값을 만들어내는지 확인하기 위한 샘플입니다. 각 속성의 신호를 보여줄 수 있는 극단 사례 5개를 골랐습니다.
@@ -69,12 +69,12 @@
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
-| secondary_category | Cleansers | 0.15 |
-| tertiary_category | Toners | 0.24 |
-| concern | Pores | 0.1572 |
-|  | Acne/Blemishes | 0.2437 |
-| ingredient | AHA/Glycolic Acid | 0.1273 |
-|  | Salicylic Acid | 0.1273 |
+| secondary_category | Cleansers | 0.06 |
+| tertiary_category | Toners | 0.11 |
+| concern | Pores | 0.2276 |
+|  | Acne/Blemishes | 0.353 |
+| ingredient | AHA/Glycolic Acid | 0.1909 |
+|  | Salicylic Acid | 0.1909 |
 | clean | Vegan | 0.0353 |
 |  | Without Parabens | 0.0485 |
 | price_bin | 35-50 | 0.04 |
@@ -86,10 +86,10 @@
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
-| secondary_category | Moisturizers | 0.15 |
-| tertiary_category | Moisturizers | 0.24 |
-| concern | Dryness | 0.121 |
-|  | Redness | 0.2635 |
+| secondary_category | Moisturizers | 0.06 |
+| tertiary_category | Moisturizers | 0.11 |
+| concern | Dryness | 0.1753 |
+|  | Redness | 0.3817 |
 | price_bin | 35-50 | 0.04 |
 | rating | rating | 0.02 |
 
@@ -99,10 +99,10 @@
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
-| secondary_category | Lip Balms & Treatments | 0.15 |
-| tertiary_category | Lip Balms & Treatments | 0.24 |
-| concern | Dryness | 0.29 |
-| ingredient | Vitamin C | 0.18 |
+| secondary_category | Lip Balms & Treatments | 0.06 |
+| tertiary_category | Lip Balms & Treatments | 0.11 |
+| concern | Dryness | 0.42 |
+| ingredient | Vitamin C | 0.27 |
 | clean | Without Parabens | 0.06 |
 | texture | Hydrating | 0.02 |
 | price_bin | 20-35 | 0.04 |
@@ -114,10 +114,10 @@
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
-| secondary_category | Cleansers | 0.15 |
-| tertiary_category | Face Wash & Cleansers | 0.24 |
-| concern | Dryness | 0.121 |
-|  | Redness | 0.2635 |
+| secondary_category | Cleansers | 0.06 |
+| tertiary_category | Face Wash & Cleansers | 0.11 |
+| concern | Dryness | 0.1753 |
+|  | Redness | 0.3817 |
 | clean | Clean at Sephora | 0.06 |
 | price_bin | 20-35 | 0.04 |
 | rating | rating | 0.02 |
@@ -128,11 +128,11 @@
 
 | 블록 | 항목 | 값 |
 |---|---|---:|
-| secondary_category | Treatments | 0.15 |
-| tertiary_category | Face Serums | 0.24 |
-| concern | Anti-Aging | 0.29 |
-| ingredient | Hyaluronic Acid | 0.0804 |
-|  | Retinol | 0.161 |
+| secondary_category | Treatments | 0.06 |
+| tertiary_category | Face Serums | 0.11 |
+| concern | Anti-Aging | 0.42 |
+| ingredient | Hyaluronic Acid | 0.1206 |
+|  | Retinol | 0.2416 |
 | clean | Fragrance Free | 0.0299 |
 |  | Oil Free | 0.0345 |
 |  | Without Sulfates SLS & SLES | 0.039 |
@@ -214,11 +214,11 @@ Balancing Force Oil Control Toner의 `concern` 블록을 보면 IDF 효과가 �
 
 | | (1) | (2) | (3) | (4) | (5) |
 |---|---:|---:|---:|---:|---:|
-| (1) Balancing Force Oil Control Toner | 1.000 | 0.011 | 0.016 | 0.124 | 0.002 |
-| (2) Cicapair Tiger Grass Cream | 0.011 | 1.000 | 0.193 | 0.503 | 0.002 |
-| (3) Lip Sleeping Mask Intense Hydratio | 0.016 | 0.193 | 1.000 | 0.200 | 0.002 |
-| (4) Greek Yoghurt Foaming Cream Cleans | 0.124 | 0.503 | 0.200 | 1.000 | 0.002 |
-| (5) Smart Clinical Repair Wrinkle Corr | 0.002 | 0.002 | 0.002 | 0.002 | 1.000 |
+| (1) Balancing Force Oil Control Toner | 1.000 | 0.009 | 0.012 | 0.017 | 0.001 |
+| (2) Cicapair Tiger Grass Cream | 0.009 | 1.000 | 0.323 | 0.903 | 0.002 |
+| (3) Lip Sleeping Mask Intense Hydratio | 0.012 | 0.323 | 1.000 | 0.327 | 0.001 |
+| (4) Greek Yoghurt Foaming Cream Cleans | 0.017 | 0.903 | 0.327 | 1.000 | 0.002 |
+| (5) Smart Clinical Repair Wrinkle Corr | 0.001 | 0.002 | 0.001 | 0.002 | 1.000 |
 
 - **(2) Cicapair ↔ (4) Greek Yoghurt = 0.503** — 카테고리가 다른데(모이스처라이저 vs 클렌저) 유사도가 높습니다. `concern` 태그가 `Dryness`·`Redness`로 완전히 겹치기 때문입니다. **`concern`이 카테고리를 넘나드는 추천을 만든다**는 근거입니다
 - **(5) Smart Clinical Repair는 모든 상품과 0.002** — 유일한 `Anti-Aging` 제품이고 카테고리·성분도 겹치지 않습니다

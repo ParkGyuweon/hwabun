@@ -1,5 +1,5 @@
 {
-  "version": "0.1-draft",
+  "version": "0.2",
   "generated_from": "artifacts/products_200.json",
   "n_products": 200,
   "min_tag_freq": 3,
@@ -9,7 +9,7 @@
     {
       "name": "secondary_category",
       "encoding": "one_hot",
-      "block_weight": 0.15,
+      "block_weight": 0.06,
       "dim": 8,
       "vocab": [
         "Cleansers",
@@ -26,7 +26,7 @@
     {
       "name": "tertiary_category",
       "encoding": "one_hot",
-      "block_weight": 0.24,
+      "block_weight": 0.11,
       "dim": 19,
       "vocab": [
         "BB & CC Creams",
@@ -54,7 +54,7 @@
     {
       "name": "concern",
       "encoding": "multi_hot_idf",
-      "block_weight": 0.29,
+      "block_weight": 0.42,
       "dim": 9,
       "vocab": [
         "Dullness/Uneven Texture",
@@ -82,7 +82,7 @@
     {
       "name": "ingredient",
       "encoding": "multi_hot_idf",
-      "block_weight": 0.18,
+      "block_weight": 0.27,
       "dim": 9,
       "vocab": [
         "Hyaluronic Acid",

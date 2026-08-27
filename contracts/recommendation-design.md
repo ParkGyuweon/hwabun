@@ -157,10 +157,10 @@ D 속성점수 = 0.4×0.70 + 0.4×0.85 + 0.16 = 0.78
 
 | 블록 | 소스 | 인코딩 | 차원 | 가중치 |
 |---|---|---|---:|---:|
-| `concern` | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 0.29 |
-| `tertiary_category` | `tertiary_category` | 원핫 | 19 | 0.24 |
-| `ingredient` | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | 0.18 |
-| `secondary_category` | `secondary_category` | 원핫 | 8 | 0.15 |
+| `concern` | `highlights` `Good for:` | 멀티핫 + IDF | 9 | **0.42** |
+| `tertiary_category` | `tertiary_category` | 원핫 | 19 | 0.11 |
+| `ingredient` | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | **0.27** |
+| `secondary_category` | `secondary_category` | 원핫 | 8 | 0.06 |
 | `clean` | `highlights` 클린뷰티 | 멀티핫 + IDF | 16 | 0.06 |
 | `price_bin` | `price_usd` | 5구간 원핫 | 5 | 0.04 |
 | `rating` | `rating` | 스칼라 | 1 | 0.02 |
@@ -557,4 +557,5 @@ Redis에 `(u_sum, w_sum)`만 보관. **10,000명 × 170차원 float32 = 6.5MB**(
 - 시간 감쇠 τ = 30일 (생성 로그의 시간 범위에 따라 조정)
 - `ingredients` TF-IDF 추가 시점
 - `hair_color` / `eye_color`를 속성 항에 유지할지 (판별력 최하위, `hair_color`는 연령 대리변수로 의심)
-- 콘텐츠 벡터의 블록 가중치 (측정 결과 같은 카테고리 이웃 91.1%로 과도, 중간안 A 권고)
+- ~~콘텐츠 벡터의 블록 가중치~~ → 어휘집 `0.2`에서 카테고리 39%→17%로 확정 (`cbf-technical-review.md` 4장)
+- 사용자 벡터 엣지 케이스 처리 규칙 (`w_sum==0` 0.5%, 전부 음수 1.8%, 노름 0.098) — `cbf-technical-review.md` 3-2장
