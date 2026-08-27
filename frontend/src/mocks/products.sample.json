@@ -92,7 +92,7 @@
       "ingredient_callouts": null,
       "what_else": null,
       "clinical_results": null,
-      "suggested_usage": "Suggested Usage:\n-Apply generously to the lips in the evening and leave on overnight.\n-Gently wipe off excess in the morning as needed.",
+      "suggested_usage": "-Apply generously to the lips in the evening and leave on overnight.\n-Gently wipe off excess in the morning as needed.",
       "brand_story": "In the Laneige labs, we’ve spent over 25 years studying Water Science. Why water, you ask? Well, we’re a skin hydration brand! As the true Hydration Experts, we created Advanced Water Complexes dedicated to create smarter skincare solutions for you. So drink up and hydrate with Laneige!"
     },
     "price_usd": 24,
@@ -176,7 +176,7 @@
       "ingredient_callouts": null,
       "what_else": null,
       "clinical_results": null,
-      "suggested_usage": "Suggested Usage:\n-Apply morning and night to clean, dry skin for a vital dose of protein and replenishing moisture the skin needs to retain its youthful appearance.\n- Tip: Think of ProtiniTM in your Drunk Elephant skincare routine like adding a shot of protein to your smoothie everyday.\nSmoothie Tips:\nTry our “Own Your Power Smoothie” for firmer, hydrated, younger-looking skin. In the palm of your hand mix one pump of B-Hydra, one pump of Protini Serum , and one pump of Protini™ and apply to skin.\n\nHow To Refill:\n1. Remove cap and unscrew pump.\n2. Remove empty inner jar.\n3. Insert refill pod into outer jar and remove film seal.\n4. Immediately screw pump back on tightly.\nDo not touch product or underside of pump to avoid contamination.\nHow To Recycle Refill:\nWait! Don’t throw me away—I’m recyclable!",
+      "suggested_usage": "-Apply morning and night to clean, dry skin for a vital dose of protein and replenishing moisture the skin needs to retain its youthful appearance.\n- Tip: Think of ProtiniTM in your Drunk Elephant skincare routine like adding a shot of protein to your smoothie everyday.\nSmoothie Tips:\nTry our “Own Your Power Smoothie” for firmer, hydrated, younger-looking skin. In the palm of your hand mix one pump of B-Hydra, one pump of Protini Serum , and one pump of Protini™ and apply to skin.\n\nHow To Refill:\n1. Remove cap and unscrew pump.\n2. Remove empty inner jar.\n3. Insert refill pod into outer jar and remove film seal.\n4. Immediately screw pump back on tightly.\nDo not touch product or underside of pump to avoid contamination.\nHow To Recycle Refill:\nWait! Don’t throw me away—I’m recyclable!",
       "brand_story": "Since 2012, Drunk Elephant has pioneered a skin- and hair-care philosophy that is as radical as it is simple. Get rid of anything that is irritating, sensitizing, disruptive, or inflammatory, and replace it with smart, biocompatible ingredients the skin recognizes and embraces. We call the culprits the Suspicious 6—essential oils, drying alcohols, silicones, chemical sunscreens, fragrances/dyes, and SLS—and you will never find any of them in our line. Instead, we formulate our products with powerful, safe, biocompatible ingredients that bring skin and scalp back to their healthiest, most balanced, most radiant state. That’s our ingredient-elimination philosophy for a total skin reset."
     },
     "price_usd": 68,
@@ -207,11 +207,21 @@
       "Cleansers",
       "Face Wash & Cleansers"
     ],
-    "image_url": null,
-    "sku_id": null,
+    "image_url": "https://www.sephora.com/productimages/sku/s2339554-main-zoom.jpg",
+    "sku_id": "2339554",
     "images": [],
     "variants": [],
-    "description": null,
+    "description": {
+      "what_it_is": "An all-in-one award-winning face cleanser that is clinically proven to remove over 99% of SPF, long wear foundation, and waterproof mascara while improving texture + hydration after one use.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness, Dullness, and Uneven Texture",
+      "highlighted_ingredients": [],
+      "ingredient_callouts": null,
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "-Scoop out product with included spatula.\n-Gently massage onto dry skin.\n-For eye-makeup removal, apply to closed eyes.\n-Rinse with warm water or wipe off with a damp washcloth.\n\nRecycling Instructions:\n-Rinse out any remaining product.\n-Recycle jar, inner lid, and outer packaging.\n-Send cap and spatula to Farmacy to be recycled via TerraCycle®. Email recycle@farmacybeauty.com for a free prepaid shipping label.",
+      "brand_story": null
+    },
     "price_usd": 60,
     "size": "6.8 oz/ 200 mL",
     "rating": 4.5,
@@ -447,7 +457,7 @@
       "ingredient_callouts": "This product is vegan, cruelty-free, reef-safe, and gluten-free.",
       "what_else": null,
       "clinical_results": null,
-      "suggested_usage": "Suggested Usage:\n-Apply generously and evenly as the last step in your skincare routine, before makeup and 15 minutes before sun exposure.\n-Reapply at least every two hours or after 40 minutes of swimming or sweating.",
+      "suggested_usage": "-Apply generously and evenly as the last step in your skincare routine, before makeup and 15 minutes before sun exposure.\n-Reapply at least every two hours or after 40 minutes of swimming or sweating.",
       "brand_story": "SPF is the #1 thing you can do for your skin. So we put it first in all we do. That means adding SPF to your favorite skincare and beauty essentials, and making sure each one is highly personalized to work with your skin and your life. Each formula is clean, reef safe and feels amazing, so you can live bright and let us take care of the rest."
     },
     "price_usd": 48,
@@ -534,7 +544,7 @@
       "ingredient_callouts": null,
       "what_else": "The lightweight, clean, concentrated formula easily mixes with your moisturizer or serum for a naturally bronzed, streak-free, long-lasting tan in one application. For a flawless skin base, you can also mix drops with your favorite foundation. Color-correcting actives minimize",
       "clinical_results": null,
-      "suggested_usage": "Suggested Usage:\n-Mix drops to your moisturizer or serum, spreading evenly over the entire face and neck, avoiding the eye area.\n-More drops = deeper tan.\n-Wash hands after application.\n-Tan develops within four to six hours.\n-Pro tip: Blend into hairline and down neck and chest with a fluffy blending brush.",
+      "suggested_usage": "-Mix drops to your moisturizer or serum, spreading evenly over the entire face and neck, avoiding the eye area.\n-More drops = deeper tan.\n-Wash hands after application.\n-Tan develops within four to six hours.\n-Pro tip: Blend into hairline and down neck and chest with a fluffy blending brush.",
       "brand_story": "Own Your Glow with Isle of Paradise, the world’s first color-correcting, customizable and clean self-tanning collection. Vegan and cruelty-free, our self-tanners promise self-love, self-care and self-tan for everyBODY. Each IoP shade is formulated with unique color-correcting complexes to brighten, reduce redness & balance skin tone. Infused with organic ingredients such as coconut, avocado, grapefruit and chia seed, as well as relaxing scents of eucalyptus and peppermint for skin-loving benefits plus no streaks, smells or orange tones. Isle of Paradise delivers a 100% customizable, natural glow while celebrating inclusivity, diversity and body positivity. Jules Von Hep, philanthropist, motivational master and self-tanner to the stars, founded Isle of Paradise, revolutionizing the self-tanning industry through diversity and body confidence. Always on the lookout for the next best thing, Jules was the first to combine color-correcting theory with self-tan. Isle of Paradise products help achieve a skin perfecting, long-lasting tan that will have you glowing from the inside out. In 2019, Jules wrote Get Body Posi, a 4-step guide to self-acceptance. You can download a copy for free here and add a little glow to your everyday.  https://theisleofparadise.com/wp-content/uploads/2019/07/Get-Body-Posi_JVH-1.pdf    Real glow. Real results. Real easy."
     },
     "price_usd": 32,
@@ -589,7 +599,7 @@
       "ingredient_callouts": null,
       "what_else": "No flavor",
       "clinical_results": "Four weeks",
-      "suggested_usage": "Suggested Usage:\n-Take two capsules per day, with or without food.\n-Can be taken at any time of the day.\n-Can be taken at the same time or separately.",
+      "suggested_usage": "-Take two capsules per day, with or without food.\n-Can be taken at any time of the day.\n-Can be taken at the same time or separately.",
       "brand_story": "HUM is an all-natural line of vitamins and supplements with clinically proven ingredients that are pure and potent, gluten-free, non-GMO and sustainably sourced. Their wide range of science-backed formulas address ultra-specific beauty and wellness concerns—hair, body and mood. HUM is here help you look and feel your absolute best, and is a great addition to any beauty routine."
     },
     "price_usd": 40,
