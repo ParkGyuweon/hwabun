@@ -1,0 +1,7 @@
+# 원본 데이터셋
+**/dataset/sephora/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
