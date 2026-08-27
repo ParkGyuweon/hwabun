@@ -1,7 +1,7 @@
 # CBF 기술 검토서 — Cosine Similarity 계산 구조
 
 > 2026-08-27 · 어휘집 버전 `0.3`
-> 관련: [`recommendation-design.md`](./recommendation-design.md) · [`recommendation-io-spec.md`](./recommendation-io-spec.md) · [`product-feature-spec.md`](./product-feature-spec.md)
+> 관련: [`recommendation-design.md`](recommendation-design.md) · [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md) · [`product-feature-spec.md`](../../contracts/product-feature-spec.md)
 
 Product Vector와 행동 기반 User Vector의 코사인 유사도 계산 구조를 실측으로 검증한 문서입니다. 상품 200개와 페르소나 데이터를 실제로 인코딩해 돌려본 결과를 근거로 합니다.
 

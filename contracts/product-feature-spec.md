@@ -3,7 +3,7 @@
 > 버전 `0.1-draft` · 2026-08-27
 > 대상: 상위 200개 Sephora 스킨케어 상품
 > 소비처: `batch/jobs/product_feature_job.py` → MySQL → `backend/recommend/RankingService`
-> 어휘집: [`product-feature-vocab.json`](./product-feature-vocab.json)
+> 어휘집: [`product-feature-vocab.json`](product-feature-vocab.json)
 
 `category`, `highlights`, `price_usd`, `rating`, `loves_count` 5개 필드를 실측 분석하고 상품 벡터 Encoding 방식을 정의한 초안입니다. 모든 수치는 상위 200개 상품 전수 기준입니다.
 
@@ -24,7 +24,7 @@
 | 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
 | 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 28.0% | 0.02 |
 
-> **주의:** 위 가중치는 어휘집 `0.2` 확정값입니다. 카테고리 쏠림 측정에 따라 카테고리 두 블록을 실효 39% → 22.4%로 하향하고 그만큼을 `concern`·`ingredient`로 이관했습니다. 근거는 [`cbf-technical-review.md`](./cbf-technical-review.md) 4장 참조.
+> **주의:** 위 가중치는 어휘집 `0.2` 확정값입니다. 카테고리 쏠림 측정에 따라 카테고리 두 블록을 실효 39% → 22.4%로 하향하고 그만큼을 `concern`·`ingredient`로 이관했습니다. 근거는 [`cbf-technical-review.md`](../pjt1_docs/ai/cbf-technical-review.md) 4장 참조.
 
 ### 제외한 것
 
@@ -80,7 +80,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 - 콘텐츠 벡터는 상품당 1개로 고정되므로 **사용자별 분기가 불가능**합니다. 복합성 사용자에게 이 항을 끄는 처리를 할 수 없습니다
 - 테이블은 사용자 속성으로 조회하므로 분기가 가능합니다
 
-관련 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절 참조.
+관련 설계는 [`recommendation-design.md`](../pjt1_docs/ai/recommendation-design.md) 6장·7-4절 참조.
 
 ---
 
@@ -229,7 +229,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 리뷰 구성비는 **누가 이 제품을 샀는가**를 나타냅니다. 지성용으로 마케팅된 제품에 지성 사용자가 몰리는 선택 효과가 포함됩니다. 추천 근거로는 자연스럽지만 **"이 제품이 지성 피부에 효과가 있다"는 의학적 주장으로 사용해서는 안 됩니다.**
 
-상세 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절, 테이블은 `batch/ingest/data/affinity_lift.csv` 참조.
+상세 설계는 [`recommendation-design.md`](../pjt1_docs/ai/recommendation-design.md) 6장·7-4절, 테이블은 `batch/ingest/data/affinity_lift.csv` 참조.
 
 #### ingredient — 30종 / 보유 196개 (98.0%) / 가중치 0.27
 
@@ -438,7 +438,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 ### 3-5. 어휘집 파일
 
-인코딩에 필요한 어휘·문서빈도·가중치는 [`product-feature-vocab.json`](./product-feature-vocab.json)에 정의되어 있습니다. `batch/jobs/product_feature_job.py`가 이 파일을 읽어 인코딩합니다.
+인코딩에 필요한 어휘·문서빈도·가중치는 [`product-feature-vocab.json`](product-feature-vocab.json)에 정의되어 있습니다. `batch/jobs/product_feature_job.py`가 이 파일을 읽어 인코딩합니다.
 
 ```json
 {
@@ -463,7 +463,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 ## 4. 가중치 검증
 
-블록 가중치가 실제 추천 결과에 어떤 영향을 주는지는 [`cbf-technical-review.md`](./cbf-technical-review.md) 4장에서 페르소나 1,000명으로 측정했습니다. 그 결과에 따라 카테고리 두 블록을 하향하고 어휘집을 `0.2`로 확정했습니다. 여기서는 요약만 둡니다.
+블록 가중치가 실제 추천 결과에 어떤 영향을 주는지는 [`cbf-technical-review.md`](../pjt1_docs/ai/cbf-technical-review.md) 4장에서 페르소나 1,000명으로 측정했습니다. 그 결과에 따라 카테고리 두 블록을 하향하고 어휘집을 `0.2`로 확정했습니다. 여기서는 요약만 둡니다.
 
 ### 4-1. 보유율이 100%가 아닌 블록의 영향
 
@@ -504,7 +504,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 1.0000  The True Cream Aqua Bomb  |  Greek Yoghurt Nourishing Gel-Cream
 ```
 
-`ingredients` 원본 문자열에서 성분 키워드를 매칭해 `ingredient` 블록을 채우는 방안이 권고되어 있습니다. 상세는 [`cbf-technical-review.md`](./cbf-technical-review.md) 5장 참조.
+`ingredients` 원본 문자열에서 성분 키워드를 매칭해 `ingredient` 블록을 채우는 방안이 권고되어 있습니다. 상세는 [`cbf-technical-review.md`](../pjt1_docs/ai/cbf-technical-review.md) 5장 참조.
 
 ### 4-4. `highlights` 결측 상품은 밀리지 않고 뭉칩니다
 
@@ -547,7 +547,7 @@ CREATE TABLE product_feature (
 
 5. **`ingredients` TF-IDF 미적용** — 통짜 문자열 분리·정규화가 선행되어야 합니다. V2 과제.
 
-6. **~~블록 가중치 미확정~~** → 어휘집 `0.2`에서 확정. 카테고리 실효 39% → 22.4%, 상위 5개 추천의 카테고리 종류 1.90 → 3.13개. 근거는 [`cbf-technical-review.md`](./cbf-technical-review.md) 4장
+6. **~~블록 가중치 미확정~~** → 어휘집 `0.2`에서 확정. 카테고리 실효 39% → 22.4%, 상위 5개 추천의 카테고리 종류 1.90 → 3.13개. 근거는 [`cbf-technical-review.md`](../pjt1_docs/ai/cbf-technical-review.md) 4장
 
 ---
 
@@ -557,7 +557,7 @@ CREATE TABLE product_feature (
 |---|---|
 | `Research/DATA_CLEANING.md` | 상품 200개 선정·병합·결측 보완 기준 |
 | `Research/PERSONA_SAMPLING.md` | 페르소나 10,000명 층화추출 기준 |
-| [`recommendation-design.md`](./recommendation-design.md) | 추천 점수 설계 (이 벡터의 소비처) |
+| [`recommendation-design.md`](../pjt1_docs/ai/recommendation-design.md) | 추천 점수 설계 (이 벡터의 소비처) |
 
 **재현**
 

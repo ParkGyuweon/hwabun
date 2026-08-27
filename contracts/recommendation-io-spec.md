@@ -1,7 +1,7 @@
 # 추천 입출력 데이터 구조
 
 > 2026-08-27 · 어휘집 버전 `0.1-draft`
-> 관련: [`recommendation-design.md`](./recommendation-design.md) (계산 설계) · [`product-feature-spec.md`](./product-feature-spec.md) (상품 벡터 명세) · [`product-feature-sample.md`](./product-feature-sample.md) (실제 계산 샘플)
+> 관련: [`recommendation-design.md`](../pjt1_docs/ai/recommendation-design.md) (계산 설계) · [`product-feature-spec.md`](product-feature-spec.md) (상품 벡터 명세) · [`product-feature-sample.md`](../pjt1_docs/ai/product-feature-sample.md) (실제 계산 샘플)
 
 추천 점수를 구성하는 4개 요소의 **입력 → 처리 → 출력 스키마 → 저장소 → 소비처**를 정의합니다.
 
@@ -70,7 +70,7 @@ reviews_*.csv                                │
 5. 전체 이어붙인 후 L2 정규화
 ```
 
-블록 구성과 가중치는 [`product-feature-spec.md`](./product-feature-spec.md) 3장 참조.
+블록 구성과 가중치는 [`product-feature-spec.md`](product-feature-spec.md) 3장 참조.
 
 ### 출력 스키마
 
@@ -199,7 +199,7 @@ CLIP_LO = 0.60,  CLIP_HI = 1.60
 
 더 넓히면 포화는 줄지만 값이 0.5 근처로 몰려 상품 간 격차가 작아집니다. p99가 1.907이므로 상위 1%만 상단에서 잘립니다.
 
-평점 평균을 쓰지 않는 이유는 리뷰의 **63.4%가 5점**이라 판별력이 노이즈 수준(η² < 0.004)이기 때문입니다. 근거는 [`recommendation-design.md`](./recommendation-design.md) 6-1절 참조.
+평점 평균을 쓰지 않는 이유는 리뷰의 **63.4%가 5점**이라 판별력이 노이즈 수준(η² < 0.004)이기 때문입니다. 근거는 [`recommendation-design.md`](../pjt1_docs/ai/recommendation-design.md) 6-1절 참조.
 
 ### 출력 스키마
 

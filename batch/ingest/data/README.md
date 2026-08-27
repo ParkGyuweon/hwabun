@@ -90,7 +90,7 @@ dry                71    6.7%     19.2%     0.38    0.000   -10.35
 
 리뷰의 **63.4%가 5점**이라 평점 기반 친화도는 판별력이 없었습니다(η² < 0.004). 같은 상품의 `rating_affinity`를 보면 4개 세그먼트가 0.831~0.881로 거의 같습니다. 구성비로 바꾸자 상품 내 편차가 10배 커졌습니다.
 
-상세 근거는 [`contracts/cbf-technical-review.md`](../../../contracts/cbf-technical-review.md), 스키마는 [`contracts/recommendation-io-spec.md`](../../../contracts/recommendation-io-spec.md) 3장 참조.
+상세 근거는 [`pjt1_docs/ai/cbf-technical-review.md`](../../../pjt1_docs/ai/cbf-technical-review.md), 스키마는 [`contracts/recommendation-io-spec.md`](../../../contracts/recommendation-io-spec.md) 3장 참조.
 
 ---
 

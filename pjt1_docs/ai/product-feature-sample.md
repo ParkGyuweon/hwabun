@@ -3,7 +3,7 @@
 > 어휘집 버전 `0.3` · 콘텐츠 벡터 93차원 · 2026-08-27
 > 원본 데이터: `artifacts/feature_sample.json` (93차원 벡터 전체 값 포함)
 
-명세([`product-feature-spec.md`](./product-feature-spec.md))가 실제로 어떤 값을 만들어내는지 확인하기 위한 샘플입니다. 각 속성의 신호를 보여줄 수 있는 극단 사례 5개를 골랐습니다.
+명세([`product-feature-spec.md`](../../contracts/product-feature-spec.md))가 실제로 어떤 값을 만들어내는지 확인하기 위한 샘플입니다. 각 속성의 신호를 보여줄 수 있는 극단 사례 5개를 골랐습니다.
 
 | 상품 | 순위 | 선정 이유 |
 |---|---:|---|

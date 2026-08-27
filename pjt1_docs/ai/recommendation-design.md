@@ -1,6 +1,6 @@
 # 추천 시스템 설계안 (CBF)
 
-> 관련 문서: [`product-feature-spec.md`](./product-feature-spec.md) (상품 벡터 명세), [`product-feature-sample.md`](./product-feature-sample.md) (실제 계산 샘플), [`recommendation-io-spec.md`](./recommendation-io-spec.md) (입출력 구조)
+> 관련 문서: [`product-feature-spec.md`](../../contracts/product-feature-spec.md) (상품 벡터 명세), [`product-feature-sample.md`](product-feature-sample.md) (실제 계산 샘플), [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md) (입출력 구조)
 
 > 세포라 데이터셋 기반 · 2026-08-27
 > 전제: 상품 200개 / 페르소나 10,000명 / 리뷰 844,865건(4개 속성 전부 채워진 것)
@@ -153,7 +153,7 @@ D 속성점수 = 0.4×0.70 + 0.4×0.85 + 0.16 = 0.78
 
 ## 4. 상품 벡터 `v_i` — 93차원
 
-확정된 구성입니다. 상세 명세는 [`product-feature-spec.md`](./product-feature-spec.md), 어휘집은 [`product-feature-vocab.json`](./product-feature-vocab.json)에 있습니다.
+확정된 구성입니다. 상세 명세는 [`product-feature-spec.md`](../../contracts/product-feature-spec.md), 어휘집은 [`product-feature-vocab.json`](../../contracts/product-feature-vocab.json)에 있습니다.
 
 | 블록 | 소스 | 인코딩 | 차원 | 가중치 |
 |---|---|---|---:|---:|
