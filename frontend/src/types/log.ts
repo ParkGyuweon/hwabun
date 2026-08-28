@@ -45,8 +45,8 @@ export type P1EventName =
    * 무엇을 눌렀는지보다 **무엇으로 좁혔는지**가 취향을 말해준다.
    * (가격으로 좁히는 사람 / 고민으로 좁히는 사람)
    */
-  | 'list_sort_change'
-  | 'list_filter_apply'
+  | 'sort_change'
+  | 'filter_change'
   /**
    * 아래는 클릭이 아닌 "주목" 신호다.
    * 클릭 이벤트만으로는 구매까지 안 간 방문이 전부 빈 세션으로 남아서,
@@ -172,8 +172,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   ingredient_view_mode_change: 'validation',
   review_expand: 'validation',
   review_filter_apply: 'validation',
-  list_filter_apply: 'comparison',
-  list_sort_change: 'comparison',
+  filter_change: 'comparison',
+  sort_change: 'comparison',
   text_selection: 'validation',
   text_copy: 'validation',
 
@@ -220,8 +220,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   review_expand: 1.5,
   accordion_toggle: 1.5,
   review_filter_apply: 1.0,
-  list_filter_apply: 1.0,
-  list_sort_change: 0.5,
+  filter_change: 1.0,
+  sort_change: 0.5,
   text_selection: 0.5,
   text_copy: 1.0,
 
