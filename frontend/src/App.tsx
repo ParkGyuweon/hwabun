@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
 import LogPanel from './components/devtools/LogPanel';
 import Breadcrumb from './components/product/Breadcrumb';
@@ -20,6 +20,9 @@ const personas = buildPersonas(reviews);
 
 /** 상세 페이지에서 유사·추천 자리에 올릴 개수 */
 const SIMILAR_SIZE = 6;
+
+/** 스크롤 복원을 기다려주는 최대 시간. 이미지 배치가 늦어도 이 안에는 자리를 잡는다 */
+const RESTORE_TIMEOUT_MS = 1500;
 
 /**
  * 헤더 메뉴에 걸 카테고리.
@@ -58,6 +61,22 @@ export default function App() {
   const [listCategory, setListCategory] = useState('all');
   /** 다음 page_view 가 어떻게 발생했는지. 뒤로가기와 화면 안 이동을 구분한다 */
   const navigationSourceRef = useRef('in_app');
+
+  /**
+   * 화면별로 마지막 스크롤 위치를 기억한다.
+   *
+   * 브라우저는 문서 이동일 때 이걸 알아서 해주지만, 이 앱은 주소만 바꾸고
+   * 같은 문서를 다시 그리는 구조라 아무도 안 해준다.
+   * 그대로 두면 목록 중간에서 상품을 열었을 때 그 상품도 중간부터 보인다.
+   */
+  const scrollPositionsRef = useRef(new Map<string, number>());
+  /** 이번 화면 전환이 뒤로가기인지. 맞으면 맨 위가 아니라 이전 위치로 되돌린다 */
+  const restoreScrollRef = useRef(false);
+  /** 복원을 기다리는 도중 사용자가 직접 스크롤했는지. 그러면 복원을 포기한다 */
+  const userScrolledRef = useRef(false);
+
+  /** 목록과 상세를 구분하는 키. 상품이 다르면 다른 화면으로 본다 */
+  const viewKey = productId ?? 'list';
 
   const persona = useMemo(
     () => personas.find((item) => item.persona_id === personaId) ?? null,
@@ -118,6 +137,8 @@ export default function App() {
     const onPop = (event: PopStateEvent) => {
       const next = (event.state?.productId as string | null | undefined) ?? null;
       navigationSourceRef.current = 'history_back';
+      // 뒤로 온 화면은 보던 자리에서 이어봐야 한다
+      restoreScrollRef.current = true;
       setProductId(next);
     };
     window.addEventListener('popstate', onPop);
@@ -127,6 +148,112 @@ export default function App() {
   useEffect(() => {
     setLoggerContext({ actorType: 'user', environment: 'local' });
   }, []);
+
+  /**
+   * 스크롤 복원을 브라우저에서 가져온다.
+   *
+   * 기본값('auto')이면 뒤로가기 때 브라우저가 복원을 시도하는데,
+   * 그 시점에는 아직 새 화면이 그려지기 전이라 문서가 짧아서 엉뚱한 곳에 멈춘다.
+   * 우리가 직접 하는 편이 정확하다.
+   *
+   * 첫 진입 상태도 여기서 심는다. `?product=` 로 바로 들어온 뒤 뒤로가기를 눌렀을 때
+   * state 가 비어 있으면 목록으로 못 돌아간다.
+   */
+  useEffect(() => {
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    window.history.replaceState({ productId: initialProductId() }, '', window.location.href);
+
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  /**
+   * 스크롤할 때마다 현재 화면의 위치를 기록해 둔다.
+   *
+   * 화면을 떠날 때 한 번만 읽으면 될 것 같지만 안 된다.
+   * React 는 useLayoutEffect 의 정리 함수를 DOM 을 이미 바꾼 뒤에 실행해서,
+   * 그 시점의 `window.scrollY` 는 새 화면 높이에 맞춰 잘려 있다.
+   * 긴 상세에서 짧은 목록으로 갈 때 2500 이 1499 로 줄어든 채 저장됐다.
+   */
+  useEffect(() => {
+    const positions = scrollPositionsRef.current;
+    const key = viewKey;
+
+    const remember = () => positions.set(key, window.scrollY);
+    remember();
+
+    window.addEventListener('scroll', remember, { passive: true });
+    return () => window.removeEventListener('scroll', remember);
+  }, [viewKey]);
+
+  /**
+   * 새 화면은 맨 위에서, 뒤로 온 화면은 보던 자리에서 시작한다.
+   * 그리기 전에 옮겨야 중간 위치가 한 프레임 비쳤다 사라지는 일이 없다.
+   */
+  useLayoutEffect(() => {
+    if (!restoreScrollRef.current) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    restoreScrollRef.current = false;
+
+    const target = scrollPositionsRef.current.get(viewKey) ?? 0;
+    window.scrollTo(0, target);
+    if (target === 0) return;
+
+    /**
+     * 한 번으로는 모자란다.
+     *
+     * 이 시점의 문서는 아직 이미지 자리가 잡히기 전이라 실제보다 짧다.
+     * 브라우저는 문서 끝을 넘는 스크롤을 잘라내므로 원하는 위치보다 위에 멈춘다.
+     * 문서가 그 위치를 담을 만큼 길어질 때까지 계속 시도한다.
+     */
+    const deadline = Date.now() + RESTORE_TIMEOUT_MS;
+    let raf = 0;
+
+    const canReach = () =>
+      document.documentElement.scrollHeight - window.innerHeight >= target - 1;
+
+    const retry = () => {
+      // 기다리는 동안 사용자가 직접 스크롤했으면 그쪽을 존중한다
+      if (userScrolledRef.current) return;
+
+      if (canReach()) {
+        window.scrollTo(0, target);
+        return;
+      }
+      // 문서가 아직 짧으면 일단 갈 수 있는 데까지 가 두고 계속 늘어나길 기다린다
+      window.scrollTo(0, target);
+      if (Date.now() < deadline) raf = requestAnimationFrame(retry);
+    };
+
+    userScrolledRef.current = false;
+    const onUserScroll = (event: Event) => {
+      // 우리가 부른 scrollTo 가 아니라 사용자가 굴린 것만 잡는다
+      if (event.isTrusted) userScrolledRef.current = true;
+    };
+    window.addEventListener('wheel', onUserScroll, { passive: true });
+    window.addEventListener('touchmove', onUserScroll, { passive: true });
+    window.addEventListener('keydown', onUserScroll);
+
+    raf = requestAnimationFrame(retry);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('wheel', onUserScroll);
+      window.removeEventListener('touchmove', onUserScroll);
+      window.removeEventListener('keydown', onUserScroll);
+    };
+  }, [viewKey]);
+
+  /** 탭 제목. 히스토리 목록에도 이 값이 남는다 */
+  useEffect(() => {
+    document.title = product
+      ? `${product.product_name} - ${product.brand_name} | SEPHORA`
+      : 'SEPHORA';
+  }, [product]);
 
   // 페르소나가 바뀌면 새 방문으로 본다
   useEffect(() => {

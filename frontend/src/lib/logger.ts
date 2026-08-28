@@ -35,6 +35,12 @@ const HISTORY_LIMIT = 200;
 const COLLECT_ENDPOINT = '/api/events';
 
 /**
+ * 한 요청에 담는 최대 건수. 수집 서버가 100건으로 막고 있어 거기에 맞춘다.
+ * BATCH_SIZE 는 "이만큼 쌓이면 보낸다" 는 기준이고, 이 값은 넘지 말아야 할 상한이다.
+ */
+const MAX_BATCH_SIZE = 100;
+
+/**
  * 재시도 큐 상한.
  * 수집 서버가 죽어 있어도 브라우저 메모리를 계속 먹지 않도록 막는다.
  * 방문당 100~160건이라 넉넉잡아 몇 분치다.
@@ -158,8 +164,8 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     listener(event);
   }
 
-  // 수집 API 연결 전까지의 임시 싱크
-  console.info(`[log] ${eventName}`, event);
+  // 개발 중 확인용. 화면에서는 LogPanel 이 같은 내용을 보여준다
+  if (import.meta.env.DEV) console.info(`[log] ${eventName}`, event);
 
   if (queue.length >= BATCH_SIZE) {
     flush();
@@ -202,12 +208,22 @@ function scheduleFlush(): void {
 export function flush(useBeacon = false): void {
   if (queue.length === 0) return;
 
-  const batch = queue.splice(0, queue.length);
+  /**
+   * 한 번에 보내는 건수를 서버 상한에 맞춘다.
+   *
+   * 큐 전체를 통째로 보내면, 수집 서버가 잠깐 죽었다 살아났을 때
+   * 그 사이 쌓인 배치가 상한을 넘어 계속 거절당한다.
+   * 거절 → 재시도 → 다시 거절 로 자력 복구가 안 된다.
+   */
+  const batch = queue.splice(0, Math.min(queue.length, MAX_BATCH_SIZE));
 
   if (flushTimer !== undefined) {
     window.clearTimeout(flushTimer);
     flushTimer = undefined;
   }
+
+  // 상한에 걸려 남은 것이 있으면 이어서 보낸다
+  if (queue.length > 0) scheduleFlush();
 
   const body = JSON.stringify({ schema_version: SCHEMA_VERSION, events: batch });
 
