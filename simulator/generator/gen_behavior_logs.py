@@ -348,8 +348,13 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO):
 BATCH = 100          # 백엔드 EventBatchRequest 의 @Size(max = 100)
 
 
-def post_events(base_url, events, rps=0, timeout=10):
-    """수집 API 로 배치 전송. (성공 건수, 실패 건수, 초) 를 돌려준다"""
+def post_events(base_url, events, rps=0, timeout=40):
+    """수집 API 로 배치 전송. (성공 건수, 실패 건수, 초) 를 돌려준다
+
+    타임아웃이 넉넉한 이유 — Kafka 가 안 떠 있으면 백엔드가 발행을 기다리다
+    25초쯤 뒤에 503 을 준다. 짧게 잡으면 클라이언트가 먼저 끊어져서
+    "타임아웃" 으로만 보이고 진짜 원인(503)을 못 본다.
+    """
     import urllib.request
     import urllib.error
 
@@ -493,10 +498,11 @@ def main(limit, show, out, post=None, rps=0):
             log(f"  {i+1:,}명 / 이벤트 {len(sink):,}건")
     log(f"이벤트 {len(sink):,}건 — {time.time()-t0:.1f}초")
 
-    with open(out, "w", encoding="utf-8") as f:
-        for x in sink:
-            f.write(json.dumps(x, ensure_ascii=False) + "\n")
-    log(f"저장 {out}  ({os.path.getsize(out)/1024/1024:.1f}MB)")
+    if out:
+        with open(out, "w", encoding="utf-8") as f:
+            for x in sink:
+                f.write(json.dumps(x, ensure_ascii=False) + chr(10))
+        log(f"저장 {out}  ({os.path.getsize(out)/1024/1024:.1f}MB)")
 
     c, ci = Counter(x["event_name"] for x in sink), Counter(x["intent"] for x in sink)
     seed_n = sum(1 for x in sink if x["session_id"] == "seed")
@@ -531,7 +537,8 @@ def main(limit, show, out, post=None, rps=0):
               f"  ({ok/max(sec,1e-9):,.0f}건/초)")
         print("=" * 64)
         if fail:
-            print("  실패가 있으면 백엔드 로그와 위의 첫 HTTP 응답을 함께 보세요.")
+            print("  400 이면 계약 불일치, 503 이면 Kafka 미기동입니다.")
+            print("  첫 실패의 HTTP 응답 본문을 위에 출력했습니다.")
 
     if show:
         pid = sink[0]["persona_id"]
