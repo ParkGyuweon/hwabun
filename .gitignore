@@ -34,3 +34,6 @@ venv/
 
 # 세포라 이미지 로컬 캐시 (npm run warm-images 로 채운다)
 frontend/.image-cache/
+
+# 생성기 산출물 — 커밋하지 않는다
+simulator/generator/*.jsonl
