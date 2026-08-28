@@ -200,9 +200,9 @@ v_u = Σ(wₖ · decay(tₖ) · v_iₖ) / Σ(wₖ · decay(tₖ))
 | `recommendation_click` | 1.5 | |
 | `media_view` · `review_expand` · `accordion_toggle` · `ingredient_view_mode_change` | 1.5 | 능동적 확인 |
 | `page_view` · `product_click` | **1.0** | 기준선 |
-| `review_filter_apply` · `list_filter_apply` · `text_copy` | 1.0 | |
+| `review_filter_apply` · `filter_change` · `text_copy` | 1.0 | |
 | `section_dwell` | 1.0 × 섹션 계수 | 아래 참조 |
-| `list_sort_change` · `text_selection` | 0.5 | |
+| `sort_change` · `text_selection` | 0.5 | |
 | `scroll_pause` · `hover_dwell` · `section_view` | 0.3 | |
 | `product_impression` · `recommendation_impression` | **0** | 노출은 사용자 의지가 아님. **분모로만** 사용해 클릭률을 계산 |
 | `session_start` · `exit_summary` | 0 | 메타 |

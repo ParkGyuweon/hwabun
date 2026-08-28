@@ -41,8 +41,6 @@
 
 ### 2.3 데이터 파트 핵심 책임
 
-역할 분담 문서 기준 이은솔 담당 범위는 다음이다.
-
 | 범위 | 산출물 |
 | --- | --- |
 | Activity Log 종류 정의 | Event Taxonomy, Trigger 정의 |
@@ -117,10 +115,10 @@ Event는 기업 사용자의 질문에서 출발해야 한다. 이번 프로젝�
 | --- | --- | --- |
 | `session` | 세션/페이지 경계 | `session_start`, `page_view`, `product_view`, `exit_summary` |
 | `exposure` | 화면에 노출됨 | `product_impression`, `recommendation_impression`, `scroll_depth` |
-| `interest` | 사용자가 들여다봄 | `section_view`, `section_dwell`, `scroll_pause`, `media_view` |
+| `interest` | 사용자가 들여다봄 | `section_view`, `section_dwell`, `scroll_pause`, `media_view`, `quick_look`, `quick_look_close` |
 | `comparison` | 후보 비교/탐색 | `product_click`, `recommendation_click`, `variant_select`, `scroll_backtrack`, `compare_products` |
 | `validation` | 구매 판단 근거 확인 | `accordion_toggle`, `review_filter_apply`, `review_expand`, `text_selection`, `text_copy` |
-| `hesitation` | 전환 전 망설임 | `hover_dwell` |
+| `hesitation` | 전환 전 망설임 | `hover_dwell`, `remove_from_cart` |
 | `conversion` | 구매 의도/전환 | `wishlist_toggle`, `add_to_cart`, `view_cart`, `begin_checkout`, `purchase` |
 | `friction` | 사용성 마찰/좌절 | `rage_click`, `dead_click` |
 
@@ -129,8 +127,8 @@ Event는 기업 사용자의 질문에서 출발해야 한다. 이번 프로젝�
 | 우선순위 | 기준 | Event |
 | --- | --- | --- |
 | P0 | Dashboard 필수 KPI/Funnel 계산에 반드시 필요 | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `accordion_toggle`, `add_to_cart`, `view_cart`, `begin_checkout`, `purchase`, `exit_summary` |
-| P1 | 프로젝트 차별화와 해석력을 높임 | `recommendation_impression`, `recommendation_click`, `scroll_depth`, `scroll_pause`, `scroll_backtrack`, `media_view`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `wishlist_toggle`, `quantity_change`, `text_selection`, `text_copy` |
-| P2 | 확장 기능 또는 구현 후순위 | `search`, `filter_change`, `sort_change`, `compare_products`, `remove_from_cart`, `rage_click`, `dead_click`, `hover_dwell` |
+| P1 | 프로젝트 차별화와 해석력을 높임 | `recommendation_impression`, `recommendation_click`, `scroll_depth`, `scroll_pause`, `scroll_backtrack`, `media_view`, `quick_look`, `quick_look_close`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `wishlist_toggle`, `quantity_change`, `remove_from_cart`, `text_selection`, `text_copy` |
+| P2 | 확장 기능 또는 구현 후순위 | `search`, `filter_change`, `sort_change`, `compare_products`, `rage_click`, `dead_click`, `hover_dwell` |
 
 P2에 둔 Event라도 이미 프론트에 구현된 항목은 수집 가능하다. 다만 MVP Dashboard 산식의 필수 분모/분자로 쓰지 않는다는 의미다.
 
@@ -140,9 +138,9 @@ P2에 둔 Event라도 이미 프론트에 구현된 항목은 수집 가능하�
 
 | 상태 | Event |
 | --- | --- |
-| 현재 프론트에 구현됨 | `session_start`, `page_view`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `product_click`, `wishlist_toggle`, `add_to_cart`, `exit_summary`, `scroll_depth`, `media_view`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
+| FE 전달 기준 구현됨 | `session_start`, `page_view`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `product_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `remove_from_cart`, `quick_look`, `quick_look_close`, `exit_summary`, `scroll_depth`, `media_view`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
 | 설계상 필요하지만 보강 필요 | `product_view`, `ingredient_view_mode_change` |
-| 후속 화면 구현 후 확정 | `product_impression`, `search`, `filter_change`, `sort_change`, `compare_products`, `view_cart`, `remove_from_cart`, `begin_checkout`, `purchase` |
+| 후속 화면 구현 후 확정 | `product_impression`, `search`, `filter_change`, `sort_change`, `compare_products`, `begin_checkout`, `purchase` |
 
 `wishlist_toggle`은 `action=add/remove`로 찜 추가와 해제를 모두 표현한다. 별도 `remove_from_wishlist` Event는 두지 않는다.
 
@@ -157,8 +155,8 @@ P2에 둔 Event라도 이미 프론트에 구현된 항목은 수집 가능하�
 | `select_item` | `product_click` | 일부 구현됨 | 상품 카드 또는 추천 상품 클릭 |
 | `add_to_wishlist` | `wishlist_toggle(action=add)` | 구현됨 | 찜 추가 |
 | `add_to_cart` | `add_to_cart` | 구현됨 | 장바구니 담기 |
-| `view_cart` | `view_cart` | 후속 화면 구현 후 확정 | 장바구니 조회 |
-| `remove_from_cart` | `remove_from_cart` | 후속 화면 구현 후 확정 | 장바구니 제거 |
+| `view_cart` | `view_cart` | 구현됨 | 장바구니 조회 |
+| `remove_from_cart` | `remove_from_cart` | 구현됨 | 장바구니 제거 |
 | `begin_checkout` | `begin_checkout` | 후속 화면 구현 후 확정 | 구매 진행 시작 |
 | `purchase` | `purchase` | 후속 화면 구현 후 확정 | 테스트 구매 완료 |
 | `add_shipping_info` | 범위 제외 | 제외 | 실제 배송 정보 입력은 MVP 범위 밖 |
@@ -177,7 +175,7 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | `product_view` | `session` | 상품 상세 페이지 진입 완료 | 상품 상세 조회 수, 상세 진입률, Funnel 시작점 |
 | `exit_summary` | `session` | 페이지 이탈 시점의 요약 | 상세페이지 이탈률, 마지막 관심 영역 |
 
-`product_view`는 현재 프론트에서 `page_view` + `page_type=product_detail` + `product_id`로 대체 가능하다. 하지만 Dashboard와 Funnel에서 가장 중요한 분모이므로 Frontend에서 별도 Raw Event로 직접 전송하는 것을 권장한다. 이 방식이 어렵다면 Collector/Spark가 `page_view`에서 파생할 수 있지만, 이 경우에도 Kafka Raw Event Schema 자체를 다른 구조로 바꾸지는 않는다.
+`product_view`는 `page_view(page_type=product_detail)`와 별도 Raw Event로 직접 전송한다. `page_view`는 페이지 경계, `product_view`는 상품 Funnel 분모로 역할이 다르므로 동일 상세 진입에서 두 Event가 모두 발생하되 같은 `page_view_id`를 공유한다.
 
 ### 6.2 Product Exposure / Exploration
 
@@ -187,10 +185,14 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | `product_click` | `comparison` | 상품 카드 또는 추천 상품 클릭 | 상품 클릭 수, CTR 분자 |
 | `recommendation_impression` | `exposure` | 추천/유사 상품 카드 유효 노출 | 추천 영역 CTR, CBF 노출 품질 |
 | `recommendation_click` | `comparison` | 추천/유사 상품 클릭 | 추천 클릭률, 추천 기반 상세 진입 |
+| `quick_look` | `interest` | 목록에서 상품 요약 창 열림 | 상세 진입 전 관심, select_item 이전 단계 |
+| `quick_look_close` | `interest` | 상품 요약 창 닫힘 | 요약 창 체류/행동 요약 |
 | `search` | `comparison` | 검색 실행 | 검색 키워드, 검색 후 클릭률 |
 | `filter_change` | `comparison` | 상품 목록 필터 적용/해제/초기화 | 필터별 관심, 고객군별 탐색 기준 |
 | `sort_change` | `comparison` | 상품 목록 정렬 변경 | 인기순/가격순/평점순 선호 |
 | `compare_products` | `comparison` | 상품 비교 기능 실행 | 경쟁 상품군 분석 |
+
+`recommendation_impression`과 `recommendation_click`은 상세 페이지의 유사 상품뿐 아니라 목록/기획전의 `promo_pick` 리스트에서도 발생할 수 있다. `promo_pick`이 페르소나 맞춤 추천(`skin_match_v0`)으로 구성되어도 추천 CTR 산식은 `recommendation_click_count / recommendation_impression_count`로 동일하게 유지한다.
 
 ### 6.3 Product Detail Engagement
 
@@ -234,9 +236,9 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | --- | --- | --- | --- |
 | `wishlist_toggle` | `conversion` | 찜 추가/해제 | 관심 상품, 구매 전 약한 전환 |
 | `add_to_cart` | `conversion` | 장바구니 담기 성공 | 장바구니 전환율 |
-| `remove_from_cart` | `conversion` | 장바구니 상품 제거 | 장바구니 제거율, 전환 마찰 |
 | `view_cart` | `conversion` | 장바구니 화면 진입 | Cart 확인율 |
 | `quantity_change` | `conversion` | 수량 변경 | 구매 의도 강도 |
+| `remove_from_cart` | `hesitation` | 장바구니 상품 제거 | 장바구니 제거율, add_to_cart 과대평가 검증 |
 | `begin_checkout` | `conversion` | 구매 진행 시작 | Checkout 전환율 |
 | `purchase` | `conversion` | 테스트 구매 완료 | 구매 전환율 |
 
@@ -255,11 +257,17 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | 규칙 | 내용 |
 | --- | --- |
 | 발생 시각 | 클라이언트에서 행동이 발생한 시각을 `occurred_at`에 담고, 서버 수신 시각은 `received_at`으로 별도 저장 |
-| 중복 방지 | `event_id`를 기준으로 중복 제거하고, 노출/스크롤/섹션 조회는 `dedupe_key`를 추가로 사용 |
+| 중복 제거 책임 | Backend Collector는 Redis/DB로 중복 차단하지 않아도 된다. Raw는 중복 수신을 허용하고, Data/Spark Processed 단계에서 `event_id` 기준으로 중복 제거한다 |
+| 재시도 조건 | Front가 `sendBeacon`, keepalive, 재시도로 같은 Event를 다시 보낼 때는 같은 `event_id`를 유지한다 |
+| 노출 중복 | 노출/스크롤/섹션 조회는 `event_id` 외에 `dedupe_key`를 추가로 사용할 수 있다 |
 | 세션 연결 | 같은 쇼핑 흐름은 동일 `session_id`, 같은 페이지 방문은 동일 `page_view_id`를 사용 |
 | 순서 복원 | 클라이언트 전송 순서가 바뀔 수 있으므로 `sequence_no`를 저장 |
 | 비동기 전송 | 화면 동작은 로그 저장을 기다리지 않고, Front Logger가 batch 전송 |
 | 이탈 flush | 페이지 이탈/탭 숨김 시 `sendBeacon` 또는 keepalive로 잔여 버퍼 전송 |
+
+`sendBeacon`은 성공 여부를 알 수 없으므로 같은 batch/Event가 재전송될 수 있다. 이 중복은 정상적인 at-least-once 전송 특성으로 보고, Backend가 요청 시점에 막지 않고 Data/Spark가 `cleaned_events` 생성 전 `event_id` 기준으로 멱등 처리한다.
+
+`session_start`도 공통 필드 규칙상 `page_view_id`를 가진다. Front는 첫 페이지의 `page_view_id`를 발급한 뒤 `session_start`와 첫 `page_view`가 같은 `page_view_id`를 공유하도록 전송한다.
 
 ### 7.2 Event별 Trigger
 
@@ -267,12 +275,14 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | --- | --- | --- |
 | `session_start` | Persona/User가 새 쇼핑 세션을 시작하거나 Persona가 변경될 때 | `session_id` 새로 발급 |
 | `page_view` | 라우트 진입 또는 상품 상세 상품 변경이 완료될 때 | `page_view_id` 새로 발급 |
-| `product_view` | 상품 상세 데이터 렌더링이 완료되고 `product_id`가 확정될 때 | 현재는 `page_view`에서 파생 가능 |
+| `product_view` | 상품 상세 데이터 렌더링이 완료되고 `product_id`가 확정될 때 | `page_view`와 별도 전송, 같은 `page_view_id` 공유 |
 | `exit_summary` | `visibilitychange=hidden`, `pagehide`, 상품/페이지 이동 시 | 최소 체류 300ms 미만은 제외 가능 |
 | `product_impression` | 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 | `page_view_id + list_id + product_id + position` 최초 1회 |
 | `product_click` | 상품 카드 클릭 후 상세 이동이 시작될 때 | `impression_event_id`가 있으면 함께 전달 |
 | `recommendation_impression` | 추천/유사 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 | `recommendation_id + product_id` 최초 1회 |
 | `recommendation_click` | 추천/유사 상품 카드 클릭 | `recommendation_id`, `algorithm`, `position` 필수 |
+| `quick_look` | 목록/기획전 상품 카드에서 요약 창이 열릴 때 | 상세 진입 전 관심 신호. `select_item` 이전 단계 |
+| `quick_look_close` | 상품 요약 창이 닫힐 때 | `dwell_ms`와 창 안 행동 요약을 함께 해석 |
 | `section_view` | 섹션/콘텐츠가 유효 노출 기준을 만족하고 400ms 이상 유지될 때 | `section_id/content_kind/content_ref` 방문당 최초 1회 |
 | `section_dwell` | 유효 노출된 섹션이 viewport를 벗어나거나 page hidden/leave, 또는 15초 checkpoint 도달 시 | 700ms 미만 체류는 제외 |
 | `scroll_depth` | 상세 페이지에서 10% 단위 milestone 최초 도달 시 | Dashboard는 25/50/75/100으로 재집계 가능 |
@@ -287,8 +297,8 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | `text_copy` | 페이지 텍스트 복사 | 원문 저장 여부는 개인정보/보존 정책 확정 필요 |
 | `wishlist_toggle` | 찜 추가 또는 해제 성공 | action으로 add/remove 구분 |
 | `add_to_cart` | 장바구니 추가 API 또는 프론트 상태 반영 성공 | 실패 시 성공 로그 전송 금지 |
-| `remove_from_cart` | 장바구니 삭제 성공 | 상품/수량 필요 |
-| `view_cart` | 장바구니 페이지 진입 | 장바구니 항목 수 선택 |
+| `remove_from_cart` | 장바구니 삭제 성공 | `quantity`, `cart_size_after` 필요 |
+| `view_cart` | 장바구니 페이지 진입 | `item_count`, `distinct_products`, `cart_value` 권장 |
 | `quantity_change` | 수량 변경 성공 | 최종 수량 저장 |
 | `begin_checkout` | 구매 진행 화면 진입 또는 Checkout 시작 버튼 성공 | items 배열 필요 |
 | `purchase` | 테스트 주문 완료 확정 | `order_id` 기준 중복 제거 |
@@ -318,11 +328,11 @@ Frontend LogEnvelope
 
 ### 8.2 Raw Event Schema
 
-프론트가 Collector로 보내는 LogEnvelope는 아래 구조를 기준으로 한다. 서버 메타 필드인 `received_at`, `source`, `request_id`는 Collector가 검증 후 추가한다.
+프론트가 Collector로 보내는 LogEnvelope는 아래 구조를 기준으로 한다. 서버 메타 필드인 `received_at`은 Collector가 검증 후 Kafka payload에 추가한다.
 
 ```json
 {
-  "schema_version": "1.0.0-draft",
+  "schema_version": "0.2.0-draft",
   "event_id": "uuid",
   "event_name": "add_to_cart",
   "intent": "conversion",
@@ -335,9 +345,9 @@ Frontend LogEnvelope
   "product_id": "P342",
   "actor_type": "synthetic",
   "environment": "local",
-  "scenario_id": "normal_day",
-  "simulation_run_id": "run_20260828_001",
   "properties": {
+    "scenario_id": "normal_day",
+    "simulation_run_id": "run_20260828_001",
     "sku_id": "SKU342-01",
     "quantity": 1,
     "price_usd": 32
@@ -345,7 +355,7 @@ Frontend LogEnvelope
 }
 ```
 
-현재 프론트 구현은 `schema_version=0.2.0-draft`이며, 팀 합의 후 `1.0.0-draft` 또는 확정 버전으로 올린다.
+E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`로 둔다. `1.0.0-draft`는 JSON Schema와 구현 계약을 확정한 뒤 올릴 후보 버전이다. 요청 body의 top-level `schema_version`과 각 Event의 `schema_version`이 함께 존재하면 값은 같아야 한다.
 
 ### 8.3 Collector Enriched Fields
 
@@ -353,7 +363,7 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 
 ```json
 {
-  "schema_version": "1.0.0-draft",
+  "schema_version": "0.2.0-draft",
   "event_id": "uuid",
   "event_name": "add_to_cart",
   "intent": "conversion",
@@ -367,8 +377,6 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
   "actor_type": "user",
   "environment": "local",
   "received_at": "2026-08-28T01:13:12.420Z",
-  "source": "web",
-  "request_id": "req_20260828_000001",
   "properties": {
     "sku_id": "SKU342-01",
     "quantity": 1,
@@ -382,8 +390,8 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 | field | 설명 |
 | --- | --- |
 | `received_at` | Collector가 Event를 받은 서버 시각 |
-| `source` | Event 유입 경로. 예: `web`, `simulator`, `server` |
-| `request_id` | 한 번의 batch 요청을 묶는 식별자 |
+| `request_id` | 한 번의 batch 요청을 묶는 식별자. 현재는 HTTP 응답/Header 기준 |
+| `source` | Event 유입 경로. 현재 Kafka payload 필드가 아니라 Processed 단계 파생값 |
 | `collector_version` | Collector 배포 버전. 선택 |
 
 ### 8.4 공통 필드 정의
@@ -395,22 +403,24 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 | `event_name` | string | Y | Event Taxonomy에 정의된 이름 |
 | `intent` | string | Y | `session/exposure/interest/comparison/validation/hesitation/conversion/friction` |
 | `occurred_at` | timestamp | Y | 행동 발생 시각 |
-| `received_at` | timestamp | Server | Collector 수신 시각 |
-| `source` | string | Server | `web`, `simulator`, `server` |
-| `request_id` | string | Server | batch 요청 단위 식별자 |
+| `received_at` | timestamp | Server | Collector 수신 시각. Kafka payload 포함 |
+| `source` | string | Derived | `web`, `simulator`, `server`. Processed 단계에서 파생 |
+| `request_id` | string | Response | batch 요청 단위 식별자. 현재는 HTTP 응답/Header 기준 |
 | `persona_id` | string/null | 조건부 | Persona 기반 이벤트일 때 사용 |
 | `actor_type` | string | Y | `user`, `synthetic` |
 | `session_id` | string | Y | 쇼핑 세션 ID |
 | `page_view_id` | string | Y | 페이지 방문 1회 ID |
 | `sequence_no` | integer | Y | 세션 내 Event 순서 |
-| `page_type` | string | Y | `home`, `product_list`, `product_detail`, `cart`, `checkout`, `dashboard` |
+| `page_type` | string | Y | MVP 기준 `product_list`, `product_detail`, `cart` |
 | `environment` | string | Y | `local`, `dev`, `staging`, `prod`, `loadtest` |
-| `scenario_id` | string/null | N | 시뮬레이션 조건. 예: `normal_day`, `sale_burst` |
-| `simulation_run_id` | string/null | N | 시뮬레이션 실행 1회 식별자 |
+| `scenario_id` | string/null | N | 시뮬레이션 조건. 현재 API에는 top-level 필드가 없으므로 `properties.scenario_id` 또는 후속 DTO 확장으로 처리 |
+| `simulation_run_id` | string/null | N | 시뮬레이션 실행 1회 식별자. 현재 API에는 top-level 필드가 없으므로 `properties.simulation_run_id` 또는 후속 DTO 확장으로 처리 |
 | `experiment_id` | string/null | N | A/B 테스트 또는 추천 정책 실험 |
 | `ab_variant` | string/null | N | A/B 그룹 |
-| `product_id` | string/null | Event별 | 상품 대상 Event일 때 필수 |
+| `product_id` | string/null | Event별 | 상품 대상 Event일 때 필수. 값은 보고 있는 상품이 아니라 Event 대상 상품 기준 |
 | `properties` | object | Y | Event별 세부 속성 |
+
+`product_id`는 Event의 대상 상품을 의미한다. 예를 들어 A 상품 상세에서 추천 상품 B를 클릭하면 top-level `product_id`는 B이고, A는 `properties.context_product_id`로 보낸다. 컨텍스트가 없거나 대상과 같으면 `context_product_id`는 생략한다. 섹션 체류·스크롤처럼 화면 자체를 대상으로 하는 Event는 보고 있는 상품을 `product_id`로 둔다.
 
 ### 8.5 Processed / DW 정규화 예시
 
@@ -422,6 +432,7 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | `session_id`, `page_view_id`, `sequence_no` | session 차원 |
 | `page_type`, `environment`, `scenario_id`, `simulation_run_id`, `experiment_id`, `ab_variant` | context 차원 |
 | `product_id`, `properties.sku_id` | target/product 차원 |
+| `properties.context_product_id` | Event가 발생한 배경 상품. 추천 클릭처럼 대상 상품과 보고 있던 상품이 다를 때 사용 |
 | `properties` | Event별 세부 속성 또는 별도 fact 컬럼 |
 
 ### 8.6 주요 Enum
@@ -430,12 +441,11 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 
 | value | 설명 |
 | --- | --- |
-| `home` | 테스트 쇼핑몰 홈 |
 | `product_list` | 상품 목록/검색/필터 결과 |
 | `product_detail` | 상품 상세 |
 | `cart` | 장바구니 |
-| `checkout` | 구매 진행 |
-| `dashboard` | 기업 Dashboard |
+
+후속 화면에서 `home`, `checkout`, `dashboard`를 별도 page_type으로 둘 수 있지만, 현재 Backend validation 기준에는 포함되어 있지 않다.
 
 #### section_id
 
@@ -450,6 +460,10 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | `how_to_use` | 사용법 Accordion |
 | `similar_products` | 유사/추천 상품 |
 | `reviews` | 리뷰 요약, 필터, 리뷰 목록 |
+| `promo_row` | 목록 상단 기획전/추천 상품 행 |
+| `list_controls` | 목록 필터/정렬 조작 영역 |
+| `product_grid` | 상품 목록 그리드 |
+| `cart_items` | 장바구니 상품 목록 |
 
 #### content_kind
 
@@ -473,7 +487,18 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | `review_stats` | 평점/리뷰 요약 |
 | `review_filter` | 리뷰 필터/정렬 |
 | `recommendation_card` | 추천/유사 상품 카드 |
+| `product_card` | 목록/기획전 상품 카드 |
 | `navigation` | Breadcrumb, 링크 이동 |
+
+#### entry_source
+
+| value | 설명 |
+| --- | --- |
+| `list_grid` | 일반 상품 목록에서 진입 |
+| `promo_pick` | 기획전/추천 상품 행에서 진입 |
+| `similar_products` | 상세 페이지 유사/추천 상품에서 진입 |
+| `quick_look` | 요약 창 내부 CTA에서 진입 또는 장바구니 담기 |
+| `cart` | 장바구니에서 수량 변경/재진입 |
 
 ## 9. Event별 Required Properties
 
@@ -485,7 +510,7 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | --- | --- | --- |
 | `session_start` | 없음 | `entry_page`, `referrer`, `utm_source`, `utm_medium`, `utm_campaign` |
 | `page_view` | 없음 | `referrer`, `route` |
-| `product_view` | 없음 | `entry_source`, `list_id`, `position`, `recommendation_id` |
+| `product_view` | 없음 | `entry_source`, `list_id`, `position`, `recommendation_id`, `context_product_id` |
 | `exit_summary` | `dwell_ms`, `max_scroll_percent` | `last_section_id`, `last_content_kind`, `reason` |
 
 ### 9.2 Product Exposure / Exploration
@@ -493,9 +518,11 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | event_name | required properties | optional properties |
 | --- | --- | --- |
 | `product_impression` | `list_id`, `position` | `visible_ratio`, `impression_area`, `dedupe_key` |
-| `product_click` | 없음 | `list_id`, `position`, `entry_source`, `impression_event_id` |
-| `recommendation_impression` | `recommendation_id`, `list_id`, `position`, `algorithm` | `section_id`, `visible_ratio` |
-| `recommendation_click` | `recommendation_id`, `list_id`, `position`, `algorithm` | `section_id`, `impression_event_id` |
+| `product_click` | 없음 | `list_id`, `position`, `entry_source`, `impression_event_id`, `context_product_id` |
+| `recommendation_impression` | `recommendation_id`, `list_id`, `position`, `algorithm` | `section_id`, `visible_ratio`, `context_product_id` |
+| `recommendation_click` | `recommendation_id`, `list_id`, `position`, `algorithm` | `section_id`, `impression_event_id`, `context_product_id` |
+| `quick_look` | 없음 | `list_id`, `position`, `entry_source`, `recommendation_id`, `algorithm`, `context_product_id` |
+| `quick_look_close` | `dwell_ms` | `variants_viewed`, `added_to_cart`, `wishlisted`, `list_id`, `position`, `entry_source` |
 | `search` | `query_text` | `result_count`, `normalized_query` |
 | `filter_change` | `filter_name`, `filter_action`, `filter_values` | `result_count` |
 | `sort_change` | `sort_key`, `sort_direction` | `result_count` |
@@ -528,9 +555,9 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | event_name | required properties | optional properties |
 | --- | --- | --- |
 | `wishlist_toggle` | `action` | `sku_id` |
-| `add_to_cart` | `quantity` | `sku_id`, `price_usd`, `unit_price`, `currency` |
-| `remove_from_cart` | `quantity` | `sku_id`, `reason` |
-| `view_cart` | 없음 | `item_count`, `cart_value` |
+| `add_to_cart` | `quantity` | `sku_id`, `price_usd`, `unit_price`, `currency`, `entry_source`, `context_product_id` |
+| `remove_from_cart` | `quantity`, `cart_size_after` | `sku_id`, `reason`, `cart_value` |
+| `view_cart` | 없음 | `item_count`, `distinct_products`, `cart_value` |
 | `quantity_change` | `quantity` | `sku_id` |
 | `variant_select` | `variant_name` 또는 `option_name`, `selected_value` | `previous_value`, `sku_id`, `variant_group` |
 | `begin_checkout` | `items` | `cart_value`, `currency` |
@@ -540,6 +567,8 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | `dead_click` | `target_tag` | `section_id`, `content_kind` |
 
 `section_dwell.dwell_ms`는 누적값이 아니라 이번 Event가 나타내는 구간 체류시간(delta)이다. 15초 checkpoint 또는 이탈 시 여러 건이 발생하면 Processed에서 delta 값을 합산한다.
+
+`quick_look_close.dwell_ms`는 요약 창 안에서 머문 시간이다. 체류시간 단독으로 구매 의도를 해석하지 않고, `variants_viewed`, `added_to_cart`, `wishlisted`와 함께 창 내부 행동 요약으로 해석한다.
 
 `begin_checkout`, `purchase`의 `items[]`는 Raw에서는 Event 1건 안에 배열로 보관하고, Processed의 `product_event_fact`에서는 Spark가 `items explode`를 수행해 상품별 row로 변환한다.
 
@@ -710,17 +739,18 @@ interest_score =
 
 이 문서는 Event Schema가 중심이지만, 데이터 파트 진행을 위해 최소 적재 구조도 함께 둔다.
 Processed Dataset의 상세 컬럼과 생성 기준은 `processed-schema.md`에 분리한다.
+Dashboard 조회용 DW/Mart 상세 구조는 `dw-schema.md`에 분리한다.
 
 | 데이터셋 | Grain | 설명 |
 | --- | --- | --- |
 | `raw_events` | received event record | Collector가 검증한 원본 Event. `event_id`는 dedup key |
 | `bad_events` | received record | Schema 검증 실패, 필수값 누락, 파싱 실패 |
 | `session_event_ordered` | session_id + sequence_no | 순서 복원 및 세션 분석용 |
-| `product_event_fact` | event_id + item_index + product_id | 상품별 Event 집계용 |
+| `product_event_fact` | event_id + item_index + product_id | 상품별 Event 집계용. `context_product_id`, `item_revenue` 보존 |
 | `product_daily_kpi` | date + product_id | Dashboard 상품 KPI |
-| `content_interest_fact` | date + product_id + section/content | 성분/리뷰/콘텐츠 관심도 |
-| `funnel_session_fact` | session_id + product_id | Funnel 단계 도달 여부 |
-| `persona_behavior_feature` | persona_id + window | CBF/고객군 분석용 Behavior Feature |
+| `content_interest_fact` | date + product_id + section/content | 성분/리뷰/콘텐츠 관심도. `event_date_kst`, `actor_type`, `source` 보존 |
+| `funnel_session_fact` | session_id + product_id | Funnel 단계 도달 여부. `funnel_date_kst`로 일간 귀속 |
+| `persona_behavior_feature_delta` | event_id + user_id + product_id | CBF/고객군 분석용 Behavior Feature delta |
 
 ## 13. 검증 규칙 초안
 
@@ -769,9 +799,11 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 상태 | 안건 | 결정 내용 |
 | --- | --- | --- |
 | 합의 | Raw Event Schema 기준 | Front JSON 구조를 유지하고, Backend는 큰 가공 없이 검증과 서버 메타 필드만 추가 |
-| 합의 | Event 수집 API | `POST /api/events/batch`, body는 `{ "events": [ ...LogEnvelope ] }` |
+| 합의 | Event 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
+| 합의 | E2E Schema Version | 현재 구현 기준 `0.2.0-draft` 사용. `1.0.0-draft`는 추후 계약 확정 후 전환 |
 | 합의 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트 결과로 조정 |
-| 합의 | 서버 메타 필드 | `received_at`, `source`, `request_id` |
+| 합의 | 서버/파생 메타 필드 | Kafka payload에는 `received_at` 포함. `request_id`는 HTTP 응답/Header, `source`는 Processed 단계 파생 기준 |
+| 합의 | `source` 파생 | MVP는 `actor_type=user → web`, `actor_type=synthetic → simulator`, 서버 내부 Event는 `server` |
 | 합의 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리하는 방향. 정확한 응답 포맷은 Backend 구현 시 확정 |
 | 합의 | `product_view` 생성 위치 | Front에서 별도 Event로 직접 전송 |
 | 합의 | `section_dwell` 합산 위치 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
@@ -779,14 +811,17 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
 | 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
 | 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
-| 구현 후 재검증 | 후속 화면 Trigger | `product_impression`, `search`, `filter_change`, `view_cart`, `begin_checkout`, `purchase` Trigger |
-| 미확정 | Kafka 세부 설정 | topic, message 단위, partition key는 Kafka/Spark 담당자와 합의 필요 |
+| 초안 | DW 집계 방식 | 서로 다른 grain의 Fact는 목표 Mart grain으로 먼저 집계한 뒤 Join |
+| 초안 | 상품별 매출 | `items[]` explode 후 상품별 매출은 `item_revenue`, 주문 총액 검증은 `order_value` |
+| 구현 후 재검증 | 후속 화면 Trigger | `product_impression`, `search`, `filter_change`, `begin_checkout`, `purchase` Trigger |
+| 현재 구현 | Kafka 기본값 | topic 기본값은 `activity-events`, message는 Event 1건 단위, key는 `persona_id` |
+| 미확정 | Kafka fallback | 실제 Web Event에서 `persona_id=NULL`일 때 partition key fallback은 Kafka/Spark 담당자와 합의 필요 |
 | 확장 | 관심도 가중치/비정상 행동 | MVP 이후 샘플 데이터와 QA 결과로 조정 |
 
 ## 15. MVP 구현 순서 제안
 
 1. Frontend `LogEnvelope`와 이 문서의 필수 필드 차이를 정리한다.
-2. Collector `/events/batch`에서 배열 수신, Schema 검증, bad event 격리를 구현한다.
+2. Collector `POST /api/events`에서 배열 수신, Schema 검증, bad event 격리를 구현한다.
 3. `product_view`, `section_view`, `section_dwell`, `add_to_cart` 4종을 우선 Kafka까지 전달한다.
 4. Spark에서 Raw 적재와 `product_daily_kpi`, `content_interest_fact`, `funnel_session_fact`를 만든다.
 5. Dashboard Overview에 상세 조회 수, 성분 열람률, 리뷰 열람률, 장바구니 전환율을 먼저 연결한다.

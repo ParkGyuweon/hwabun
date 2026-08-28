@@ -24,6 +24,8 @@ interface ProductCardProps {
    */
   contentKind?: LogContentKind;
   onSelect: (productId: string) => void;
+  /** 있으면 이미지 위에 Quick Look 버튼이 뜬다 */
+  onQuickLook?: (productId: string) => void;
 }
 
 /**
@@ -37,6 +39,7 @@ export default function ProductCard({
   position,
   contentKind = 'product_card',
   onSelect,
+  onQuickLook,
 }: ProductCardProps) {
   const badges = product.badges ?? [];
 
@@ -83,6 +86,23 @@ export default function ProductCard({
           <span className="card__rating card__rating--empty" aria-hidden="true" />
         )}
       </button>
+
+      {onQuickLook ? (
+        /*
+         * 카드 전체가 이미 button 이라 안에 버튼을 중첩할 수 없다.
+         * 형제로 두고 이미지 영역(정사각형) 위에만 겹친다.
+         */
+        <span className="card__hover">
+          <button
+            type="button"
+            className="card__quicklook"
+            data-log-action="quick_look"
+            onClick={() => onQuickLook(product.product_id)}
+          >
+            Quick Look
+          </button>
+        </span>
+      ) : null}
     </li>
   );
 }

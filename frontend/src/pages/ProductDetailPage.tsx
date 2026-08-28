@@ -20,6 +20,7 @@ import { useExitSummary } from '../hooks/useExitSummary';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, ProductVariant } from '../types/product';
 import type { Review } from '../types/review';
+import type { CartItem } from '../types/cart';
 
 interface ProductDetailPageProps {
   product: Product;
@@ -28,6 +29,7 @@ interface ProductDetailPageProps {
   similar: Product[];
   persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
+  onAddToCart: (item: CartItem) => void;
 }
 
 export default function ProductDetailPage({
@@ -37,6 +39,7 @@ export default function ProductDetailPage({
   similar,
   persona,
   onSelectProduct,
+  onAddToCart,
 }: ProductDetailPageProps) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [sort, setSort] = useState<ReviewSort>('recent');
@@ -113,6 +116,7 @@ export default function ProductDetailPage({
             product={product}
             selectedSkuId={selectedSkuId}
             onVariantSelect={setSelectedVariant}
+            onAddToCart={onAddToCart}
             onReviewLinkClick={() => {
               track('review_expand', { product_id: product.product_id, target: 'jump_to_reviews' });
               reviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -132,6 +132,25 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
   sequenceNo += 1;
 
+  /**
+   * top-level `product_id` 는 **이벤트 대상 상품**이다 (데이터 계약).
+   *
+   * 페이지 컨텍스트 상품과 대상이 다를 수 있다. A 상세에서 추천 B 를 클릭하면
+   * 대상은 B 이고, A 는 properties.context_product_id 로 따로 남긴다.
+   * 호출부가 properties 에 product_id 를 실으면 그것이 대상이고,
+   * 안 실으면(섹션 체류·스크롤 등 화면 자체 이벤트) 보고 있는 상품이 곧 대상이다.
+   */
+  const hasTarget = Object.prototype.hasOwnProperty.call(properties, 'product_id');
+  const targetProductId = hasTarget
+    ? ((properties.product_id as string | null | undefined) ?? null)
+    : context.productId;
+
+  const { product_id: _lifted, ...restProperties } = properties;
+  const finalProperties: Record<string, unknown> = hasTarget ? restProperties : { ...properties };
+  if (hasTarget && context.productId !== null && context.productId !== targetProductId) {
+    finalProperties.context_product_id = context.productId;
+  }
+
   const event: LogEnvelope = {
     schema_version: SCHEMA_VERSION,
     event_id: createId(),
@@ -146,11 +165,11 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     sequence_no: sequenceNo,
 
     page_type: context.pageType,
-    product_id: context.productId,
+    product_id: targetProductId,
     actor_type: context.actorType,
     environment: context.environment,
 
-    properties,
+    properties: finalProperties,
   };
 
   queue.push(event);

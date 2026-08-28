@@ -1,29 +1,36 @@
 /* 상품 목록 홈 스타일 */
 
+/* 헤더 바로 아래에서 시작하면 답답하다. 첫 화면에 여백부터 보이게 한다 */
+.page.list {
+  padding-top: var(--space-7);
+}
+
 .list {
+  /* 목록은 상세보다 넓게 쓴다. 세포라 목록이 이 폭이다 */
+  max-width: 1400px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-9);
 }
 
 /* ---------- 기획전 ---------- */
 
 .list__promo {
-  background: var(--color-surface-soft);
-  border-radius: var(--radius-md);
-  padding: var(--space-5) var(--space-5) var(--space-4);
+  /* 박스 없이 흰 바탕에 그대로 둔다. 박스에 가두면 광고 배너처럼 읽힌다 */
+  padding: 0;
 }
 
 .list__promo-head {
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .list__promo-head h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 28px;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
@@ -40,8 +47,8 @@
 .list__row {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 180px;
-  gap: var(--space-4);
+  grid-auto-columns: 224px;
+  gap: var(--space-6);
   margin: 0;
   padding: 0 0 var(--space-2);
   list-style: none;
@@ -59,7 +66,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding-bottom: var(--space-4);
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--color-line);
 }
 
@@ -68,7 +75,7 @@
   border: 1px solid var(--color-line);
   background: var(--color-surface);
   border-radius: var(--radius-pill);
-  padding: 7px 14px;
+  padding: 9px 18px;
   font: inherit;
   font-size: 13px;
   color: var(--color-ink-soft);
@@ -104,7 +111,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) 0;
+  padding: var(--space-5) 0;
 }
 
 .list__filters {
@@ -163,7 +170,7 @@
 }
 
 .list__count {
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-6);
   font-size: 13px;
   color: var(--color-ink-faint);
   font-variant-numeric: tabular-nums;
@@ -173,8 +180,9 @@
 
 .list__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-6) var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  /* 세로를 가로의 두 배 이상 띄운다. 행 사이가 좁으면 밀린 재고 진열대처럼 보인다 */
+  gap: var(--space-8) var(--space-6);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -200,15 +208,29 @@
 
 /* ---------- 상품 카드 ---------- */
 
+/*
+ * 세포라 에딧 페이지의 카드 문법.
+ * 흰 카드 + 얇은 테두리 + 넉넉한 내부 여백으로 카드 하나하나가 분리되어 보인다.
+ */
 .card {
   min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-4) var(--space-5);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card:hover {
+  border-color: var(--color-ink-faint);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
 .card__link {
   appearance: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 6px;
   width: 100%;
   padding: 0;
   border: 0;
@@ -223,9 +245,9 @@
   position: relative;
   display: block;
   aspect-ratio: 1 / 1;
-  margin-bottom: var(--space-2);
-  background: var(--color-surface-soft);
-  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-3);
+  /* 원본 상품 사진이 흰 배경이다. 회색 박스에 담으면 스톡 이미지처럼 보인다 */
+  background: var(--color-surface);
   overflow: hidden;
 }
 
@@ -234,10 +256,21 @@
   height: 100%;
   object-fit: contain;
   display: block;
+  transition: transform 0.25s ease;
 }
 
-.card__link:hover .card__thumb {
-  outline: 1px solid var(--color-line);
+.card__link:hover .card__thumb img {
+  transform: scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card__thumb img {
+    transition: none;
+  }
+
+  .card__link:hover .card__thumb img {
+    transform: none;
+  }
 }
 
 .card__badges {
@@ -289,19 +322,20 @@
 
 /* 상품명은 두 줄로 고정한다. 줄 수가 다르면 카드마다 평점 위치가 어긋난다 */
 .card__name {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--color-ink-soft);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-ink);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: calc(1.4em * 2);
+  min-height: calc(1.45em * 2);
 }
 
 .card__price {
-  font-size: 14px;
-  font-weight: 600;
+  margin-top: var(--space-2);
+  font-size: 15px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -365,5 +399,278 @@
   .list__controls {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* ---------- Quick Look ---------- */
+
+
+.card {
+  position: relative;
+}
+
+.card__link:hover .card__name {
+  text-decoration: underline;
+}
+
+/*
+ * 이미지(정사각형) 영역 위에만 겹치는 호버 레이어.
+ * 카드 전체가 button 이라 버튼을 중첩할 수 없어 형제로 띄운다.
+ */
+.card__hover {
+  position: absolute;
+  /* 카드 내부 패딩만큼 들여서 이미지(정사각형) 영역에 정확히 겹친다 */
+  inset: var(--space-4) var(--space-4) auto;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+
+.card:hover .card__hover,
+.card:focus-within .card__hover {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.18s ease;
+}
+
+/* 세포라의 Quicklook: 이미지 하단에 붙는 반투명 회색 바 */
+.card__quicklook {
+  pointer-events: auto;
+  appearance: none;
+  border: 0;
+  width: 100%;
+  padding: 11px 0;
+  background: rgba(72, 72, 72, 0.85);
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transform: translateY(8px);
+  transition: transform 0.18s ease;
+}
+
+.card:hover .card__quicklook,
+.card:focus-within .card__quicklook {
+  transform: translateY(0);
+}
+
+.card__quicklook:hover {
+  background: rgba(48, 48, 48, 0.92);
+}
+
+.qlook {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.qlook__dialog {
+  position: relative;
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  padding: var(--space-7);
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--space-7);
+  animation: qlook-in 0.18s ease;
+}
+
+@keyframes qlook-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.qlook__close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: var(--space-1);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.qlook__media img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  display: block;
+}
+
+.qlook__meta {
+  margin: var(--space-3) 0 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+.qlook__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.qlook__brand {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.qlook__name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  /* 닫기 버튼과 겹치지 않게 */
+  padding-right: var(--space-6);
+}
+
+.qlook__item {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+.qlook__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+.qlook__details {
+  align-self: flex-start;
+}
+
+.qlook__size {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.qlook__buy {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.qlook__price {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.qlook__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.qlook__qty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+.qlook__qty select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+/* 세포라의 빨간 CTA. --color-accent 가 이미 그 빨강이다 */
+.qlook__cta {
+  appearance: none;
+  border: 0;
+  background: var(--color-accent);
+  color: #ffffff;
+  border-radius: var(--radius-pill);
+  padding: 12px 32px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.qlook__cta:hover {
+  filter: brightness(0.92);
+}
+
+.qlook__lists {
+  appearance: none;
+  border: 1px solid var(--color-ink);
+  background: var(--color-surface);
+  border-radius: var(--radius-pill);
+  padding: 11px 20px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qlook__lists.is-active {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.qlook__toast {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+@media (max-width: 720px) {
+  .qlook__dialog {
+    grid-template-columns: 1fr;
+    padding: var(--space-5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card__hover,
+  .card__quicklook {
+    transition: none;
+  }
+
+  .card__quicklook {
+    transform: none;
+  }
+
+  .qlook__dialog {
+    animation: none;
   }
 }

@@ -4,14 +4,17 @@ import LogPanel from './components/devtools/LogPanel';
 import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
+import CartPage from './pages/CartPage';
 import { buildPersonas } from './lib/persona';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import productsData from './mocks/products.sample.json';
 import reviewsData from './mocks/reviews.sample.json';
 import type { Product } from './types/product';
 import type { Review } from './types/review';
+import type { CartItem } from './types/cart';
 import './styles/product-detail.css';
 import './styles/product-list.css';
+import './styles/cart.css';
 
 // JSON 목업은 리터럴 타입으로 추론되므로 unknown 을 거쳐 캐스팅한다.
 const products = productsData as unknown as Product[];
@@ -59,6 +62,13 @@ export default function App() {
   const [personaId, setPersonaId] = useState(personas[0]?.persona_id ?? '');
   // 헤더 메뉴와 목록 탭이 같은 값을 바꾸므로 여기서 소유한다
   const [listCategory, setListCategory] = useState('all');
+  /** 장바구니 화면이 열려 있는지. 상품 상태와 별개로 겹쳐 둔다 */
+  const [cartOpen, setCartOpen] = useState(false);
+  /**
+   * 장바구니. 서버가 없어 메모리에만 산다.
+   * 이 화면의 목적은 view_cart / remove_from_cart 신호다 (조사 7-2).
+   */
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   /** 다음 page_view 가 어떻게 발생했는지. 뒤로가기와 화면 안 이동을 구분한다 */
   const navigationSourceRef = useRef('in_app');
 
@@ -75,8 +85,8 @@ export default function App() {
   /** 복원을 기다리는 도중 사용자가 직접 스크롤했는지. 그러면 복원을 포기한다 */
   const userScrolledRef = useRef(false);
 
-  /** 목록과 상세를 구분하는 키. 상품이 다르면 다른 화면으로 본다 */
-  const viewKey = productId ?? 'list';
+  /** 목록·상세·장바구니를 구분하는 키. 스크롤 위치 저장에 쓴다 */
+  const viewKey = cartOpen ? 'cart' : (productId ?? 'list');
 
   const persona = useMemo(
     () => personas.find((item) => item.persona_id === personaId) ?? null,
@@ -106,23 +116,86 @@ export default function App() {
   }, [product]);
 
   const openProduct = useCallback((nextId: string) => {
-    window.history.pushState({ productId: nextId }, '', `?product=${nextId}`);
+    window.history.pushState({ productId: nextId, cart: false }, '', `?product=${nextId}`);
+    setCartOpen(false);
     setProductId(nextId);
   }, []);
 
   const goHome = useCallback(() => {
     track('product_click', { product_id: null, entry_source: 'breadcrumb_home' });
-    window.history.pushState({ productId: null }, '', '/');
+    window.history.pushState({ productId: null, cart: false }, '', '/');
+    setCartOpen(false);
     setProductId(null);
   }, []);
 
   /** 헤더 메뉴로 카테고리를 고르면 목록으로 돌아가 그 카테고리를 펼친다 */
   const selectCategory = useCallback((category: string) => {
-    track('list_filter_apply', { filter_kind: 'category', filter_value: category, from: 'header' });
+    track('filter_change', { filter_kind: 'category', filter_value: category, from: 'header' });
     setListCategory(category);
-    window.history.pushState({ productId: null }, '', '/');
+    window.history.pushState({ productId: null, cart: false }, '', '/');
+    setCartOpen(false);
     setProductId(null);
   }, []);
+
+  /**
+   * 장바구니 열기. GA4 표준 퍼널의 view_cart 를 여기서 남긴다.
+   * effect 에서 남기면 StrictMode 가 두 번 실행한다. 명시적 행동 지점에서만 찍는다.
+   */
+  const openCart = useCallback(() => {
+    track('view_cart', {
+      item_count: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+      distinct_products: cartItems.length,
+      cart_value: cartItems.reduce((sum, item) => sum + item.price_usd * item.quantity, 0),
+    });
+    window.history.pushState({ productId, cart: true }, '', '?cart=1');
+    setCartOpen(true);
+  }, [cartItems, productId]);
+
+  /** 같은 상품·옵션이면 수량을 합친다 */
+  const addToCart = useCallback((item: CartItem) => {
+    setCartItems((prev) => {
+      const at = prev.findIndex(
+        (p) => p.product_id === item.product_id && p.sku_id === item.sku_id,
+      );
+      if (at === -1) return [...prev, item];
+      const next = [...prev];
+      next[at] = { ...next[at], quantity: Math.min(99, next[at].quantity + item.quantity) };
+      return next;
+    });
+  }, []);
+
+  const changeCartQuantity = useCallback((item: CartItem, quantity: number) => {
+    track('quantity_change', {
+      product_id: item.product_id,
+      quantity,
+      entry_source: 'cart',
+    });
+    setCartItems((prev) =>
+      prev.map((p) =>
+        p.product_id === item.product_id && p.sku_id === item.sku_id ? { ...p, quantity } : p,
+      ),
+    );
+  }, []);
+
+  /** 조사 7-2: 담았다 뺀 것은 상품을 특정하는 가장 명확한 부정 신호다 */
+  const removeFromCart = useCallback(
+    (item: CartItem) => {
+      // track 을 setState 업데이터 안에서 부르면 StrictMode 가 업데이터를
+      // 두 번 실행할 때 이벤트도 두 번 나간다. 반드시 밖에서 계산한다
+      const next = cartItems.filter(
+        (p) => !(p.product_id === item.product_id && p.sku_id === item.sku_id),
+      );
+      track('remove_from_cart', {
+        product_id: item.product_id,
+        sku_id: item.sku_id,
+        quantity: item.quantity,
+        price_usd: item.price_usd,
+        cart_size_after: next.length,
+      });
+      setCartItems(next);
+    },
+    [cartItems],
+  );
 
   /**
    * 브라우저 뒤로/앞으로.
@@ -136,9 +209,14 @@ export default function App() {
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
       const next = (event.state?.productId as string | null | undefined) ?? null;
+      const nextCart = Boolean(event.state?.cart);
       navigationSourceRef.current = 'history_back';
       // 뒤로 온 화면은 보던 자리에서 이어봐야 한다
       restoreScrollRef.current = true;
+      if (nextCart) {
+        track('view_cart', { navigation_source: 'history_back' });
+      }
+      setCartOpen(nextCart);
       setProductId(next);
     };
     window.addEventListener('popstate', onPop);
@@ -262,10 +340,13 @@ export default function App() {
 
   // 목록과 상세는 다른 page_type 이다. 화면이 바뀔 때마다 새 페이지 조회로 남긴다
   useEffect(() => {
-    setLoggerContext({ pageType: productId ? 'product_detail' : 'product_list' });
-    startPageView(productId, navigationSourceRef.current);
+    setLoggerContext({
+      pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',
+    });
+    // 장바구니는 특정 상품의 화면이 아니다
+    startPageView(cartOpen ? null : productId, navigationSourceRef.current);
     navigationSourceRef.current = 'in_app';
-  }, [productId]);
+  }, [productId, cartOpen]);
 
   return (
     <>
@@ -276,9 +357,19 @@ export default function App() {
         onHome={goHome}
         categories={HEADER_CATEGORIES}
         onCategorySelect={selectCategory}
+        cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+        onCart={openCart}
       />
 
-      {product ? (
+      {cartOpen ? (
+        <CartPage
+          items={cartItems}
+          onQuantityChange={changeCartQuantity}
+          onRemove={removeFromCart}
+          onSelectProduct={openProduct}
+          onContinue={goHome}
+        />
+      ) : product ? (
         <>
           <Breadcrumb items={product.category} onHome={goHome} />
           <ProductDetailPage
@@ -288,12 +379,16 @@ export default function App() {
             similar={similar}
             persona={persona}
             onSelectProduct={openProduct}
+            onAddToCart={addToCart}
           />
         </>
       ) : (
         <ProductListPage
           products={products}
+          reviews={reviews}
+          persona={persona}
           onSelectProduct={openProduct}
+          onAddToCart={addToCart}
           category={listCategory}
           onCategoryChange={setListCategory}
         />

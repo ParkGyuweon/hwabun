@@ -21,12 +21,20 @@ export type P0EventName =
   | 'recommendation_click'
   | 'wishlist_toggle'
   | 'add_to_cart'
+  /** 장바구니 화면 진입. GA4 표준 퍼널 단계 */
+  | 'view_cart'
   | 'exit_summary';
 
 /** 우선순위 P1. 관심 강도를 보조하는 이벤트 */
 export type P1EventName =
   | 'scroll_depth'
   | 'media_view'
+  /** 목록에서 상세로 가지 않고 요약 창을 연 것. 세포라 Quicklook */
+  | 'quick_look'
+  /** 요약 창을 닫음. 체류·닫은 방법을 담는 요약 이벤트 */
+  | 'quick_look_close'
+  /** 담았던 상품을 뺌. 조사 7-2: 상품 특정 부정 신호 중 가장 명확하다 */
+  | 'remove_from_cart'
   | 'variant_select'
   | 'quantity_change'
   | 'review_filter_apply'
@@ -37,8 +45,8 @@ export type P1EventName =
    * 무엇을 눌렀는지보다 **무엇으로 좁혔는지**가 취향을 말해준다.
    * (가격으로 좁히는 사람 / 고민으로 좁히는 사람)
    */
-  | 'list_sort_change'
-  | 'list_filter_apply'
+  | 'sort_change'
+  | 'filter_change'
   /**
    * 아래는 클릭이 아닌 "주목" 신호다.
    * 클릭 이벤트만으로는 구매까지 안 간 방문이 전부 빈 세션으로 남아서,
@@ -73,7 +81,9 @@ export type LogSection =
   | 'ingredients'
   | 'how_to_use'
   | 'similar_products'
-  | 'reviews';
+  | 'reviews'
+  /** 장바구니 화면 */
+  | 'cart_items';
 
 /**
  * 그 자리에 **무슨 콘텐츠가 있었는지**.
@@ -105,6 +115,8 @@ export type LogContentKind =
   | 'recommendation_card'
   /** 목록·기획전의 상품 카드. 추천 카드와 구분해야 추천 성과를 따로 볼 수 있다 */
   | 'product_card'
+  /** 장바구니 행. ref = product_id */
+  | 'cart_item'
   | 'navigation';
 
 /**
@@ -148,6 +160,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   section_dwell: 'interest',
   scroll_pause: 'interest',
   media_view: 'interest',
+  quick_look: 'interest',
+  quick_look_close: 'interest',
 
   scroll_backtrack: 'comparison',
   variant_select: 'comparison',
@@ -158,8 +172,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   ingredient_view_mode_change: 'validation',
   review_expand: 'validation',
   review_filter_apply: 'validation',
-  list_filter_apply: 'comparison',
-  list_sort_change: 'comparison',
+  filter_change: 'comparison',
+  sort_change: 'comparison',
   text_selection: 'validation',
   text_copy: 'validation',
 
@@ -168,6 +182,9 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   wishlist_toggle: 'conversion',
   quantity_change: 'conversion',
   add_to_cart: 'conversion',
+  view_cart: 'conversion',
+  // 담았다 뺀 것은 재고(再考)다. 좌절(friction)이 아니라 망설임 축에 둔다
+  remove_from_cart: 'hesitation',
 
   rage_click: 'friction',
   dead_click: 'friction',
@@ -188,6 +205,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
 export const EVENT_WEIGHT: Record<EventName, number> = {
   // 전환 — 구매 데이터가 없는 환경에서 가장 강한 신호
   add_to_cart: 4.0,
+  // 장바구니를 열어본 것 자체가 구매 검토 신호다
+  view_cart: 1.0,
   wishlist_toggle: 3.0,
   quantity_change: 2.0,
 
@@ -201,13 +220,17 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   review_expand: 1.5,
   accordion_toggle: 1.5,
   review_filter_apply: 1.0,
-  list_filter_apply: 1.0,
-  list_sort_change: 0.5,
+  filter_change: 1.0,
+  sort_change: 0.5,
   text_selection: 0.5,
   text_copy: 1.0,
 
   // 관심
   media_view: 1.5,
+  // 요약 창을 여는 것은 카드 클릭과 같은 무게의 능동 행동이다
+  quick_look: 1.5,
+  // 닫힘은 exit_summary 처럼 요약 전달용이다. 열림(1.5)에 이미 가중했다
+  quick_look_close: 0,
   section_dwell: 1.0, // 섹션에 따라 SECTION_DWELL_WEIGHT 로 다시 조정한다
   scroll_pause: 0.3,
   hover_dwell: 0.3,
@@ -233,6 +256,11 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
    * 음수를 분모에 넣으면 분모가 0 에 가까워질 수 있어서,
    * 긍정 벡터와 부정 벡터를 따로 만들고 최종 점수에서 뺀다.
    */
+  /**
+   * 담았다 뺀 상품. UI 좌절 3종과 달리 **상품을 특정하는** 부정 신호라
+   * 조사(7-2)가 가장 명확한 감점으로 꼽았다. add_to_cart 4.0 의 과대평가 검증에도 쓴다.
+   */
+  remove_from_cart: -2.0,
   rage_click: -2.0,
   dead_click: -1.5,
   scroll_backtrack: -1.0,
@@ -240,6 +268,7 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
 
 /** 감점 축으로 보내는 이벤트. 긍정 벡터와 분리해서 누적한다 */
 export const NEGATIVE_EVENTS: ReadonlySet<EventName> = new Set<EventName>([
+  'remove_from_cart',
   'rage_click',
   'dead_click',
   'scroll_backtrack',
@@ -261,6 +290,9 @@ export const SECTION_DWELL_WEIGHT: Record<LogSection, number> = {
   product_grid: 0.5,
   promo_row: 0.5,
   list_controls: 0.3,
+
+  // 장바구니 체류는 구매 검토 시간이다
+  cart_items: 1.0,
 
   ingredients: 1.5,
   reviews: 1.5,

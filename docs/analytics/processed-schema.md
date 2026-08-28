@@ -26,9 +26,10 @@ Frontend
 | 항목 | 반영 내용 |
 | --- | --- |
 | Raw 전달 방식 | Front JSON 구조를 유지하고 Backend는 큰 가공 없이 검증과 서버 메타 필드만 추가 |
-| 수집 API | `POST /api/events/batch`, body는 `{ "events": [ ...LogEnvelope ] }` |
+| 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
+| E2E Schema Version | 현재 구현 기준 `0.2.0-draft` 사용. `1.0.0-draft`는 추후 계약 확정 후 전환 |
 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트로 조정 |
-| 서버 메타 필드 | `received_at`, `source`, `request_id` |
+| 서버/파생 메타 필드 | Kafka payload에는 `received_at` 포함. `request_id`는 HTTP 응답/Header 기준, `source`는 Processed 단계에서 파생 |
 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리 |
 | `product_view` | Front에서 별도 Event로 직접 전송 |
 | `section_dwell` | Front는 여러 건을 보내고 Spark/DW에서 합산 |
@@ -45,7 +46,7 @@ Processed Schema는 최종 Dashboard와 실험 분석에 필요한 지표를 만
 | 추천 영역 CTR | `recommendation_impression`, `recommendation_click` | `recommendation_id`, `list_id`, `position`, `algorithm`, `product_id`, `session_id`, `event_time`. `section_id`는 있으면 보조 분석에 사용 |
 | 검색 → 상품 클릭 전환율 | `search`, `product_click` | `search_id` 또는 session fallback, `search_query`, `result_count`, `product_id`, `position`, `session_id` |
 | 상품 조회 → 장바구니 전환율 | `product_view`, `add_to_cart` | `session_id`, `product_id`, `event_time`, `category_id`, `brand_id` |
-| 장바구니 → 구매 전환율 | `add_to_cart`, `begin_checkout`, `purchase` | `session_id`, `cart_id` 또는 session fallback, `order_id`, `product_id`, `quantity`, `order_value`, `currency` |
+| 장바구니 → 구매 전환율 | `add_to_cart`, `begin_checkout`, `purchase` | `session_id`, `cart_id` 또는 session fallback, `order_id`, `product_id`, `quantity`, `item_revenue`, `order_value`, `currency` |
 | 사용자별 관심 카테고리 | 조회/체류/장바구니/구매 Event | `user_id`, `persona_id`, `category_id`, `event_weight`, `event_time` |
 | 상품별 관심도 | 조회/정보 열람/체류/찜/장바구니/구매 Event | `product_id`, `section_id`, `content_kind`, `dwell_ms`, `event_weight` |
 | 시나리오별 행동 차이 | 모든 주요 Event | `scenario_id`, `simulation_run_id`, `user_id`, `persona_id`, `actor_type`, `source` |
@@ -110,8 +111,9 @@ processed_at = 12:00:05
 | Raw 보존 | 원본 Event는 `raw_events`에 그대로 남긴다 |
 | Base Event grain | `cleaned_events`, `sessionized_events`의 논리 단위는 Event 1건이다 |
 | Derived grain | `funnel_session_fact`, `content_interest_fact` 등 파생 Dataset은 각 목적에 맞는 grain을 가진다 |
-| Batch 분리 | Kafka message가 batch 단위여도 Spark 초입에서 Event 단위로 펼친다 |
-| 중복 제거 | `event_id` 기준으로 최초 1건만 사용한다 |
+| Kafka message 단위 | 현재 Backend 구현은 Event 1건 단위 발행이다. 후속에 batch message로 바뀌면 Spark 초입에서 Event 단위로 펼친다 |
+| 중복 제거 책임 | Backend Collector는 Redis/DB로 중복 차단하지 않아도 된다. Raw는 중복 수신을 허용하고, Processed 단계에서 `event_id` 기준으로 최초 1건만 사용한다 |
+| 재시도 전제 | Front가 같은 Event를 재전송할 때는 같은 `event_id`를 유지해야 한다 |
 | 순서 복원 | `session_id + sequence_no`, 보조로 `event_time`을 사용한다 |
 | 시간 분리 | `event_time`, `received_at`, `processed_at`을 분리 저장한다 |
 | 타입 정규화 | Processed부터 timestamp, int, decimal, boolean, array 타입을 강하게 보장한다 |
@@ -119,6 +121,26 @@ processed_at = 12:00:05
 | JSON properties | Raw에서는 JSON으로 유지하고, Processed에서 자주 쓰는 필드만 컬럼으로 승격한다 |
 | Synthetic 분리 | 모든 집계는 `actor_type`, `source`, `simulation_run_id` 필터가 가능해야 한다 |
 | 상품 차원 | `product_id`는 필수 축으로 두고, `category_id`, `brand_id`, `unit_price`는 Fact에 스냅샷으로 승격한다 |
+| Mart 입력 규칙 | 서로 다른 grain의 Processed Dataset은 row-level로 직접 Join하지 않고 목표 Mart grain으로 먼저 집계한 뒤 Join한다 |
+
+### 5.1 중복 Event 처리 계약
+
+프론트는 이탈 시점에 `sendBeacon` 또는 keepalive 전송을 사용할 수 있고, 이 방식은 성공 여부를 확실히 알 수 없다. 따라서 유실을 줄이기 위해 같은 batch/Event를 재시도할 수 있으며, 이때 Raw 단계에는 같은 `event_id`가 2건 이상 들어올 수 있다.
+
+중복 처리는 아래 기준으로 확정한다.
+
+| 항목 | 처리 기준 |
+| --- | --- |
+| Backend Collector | Redis/DB를 붙여 실시간 중복 차단하지 않아도 된다 |
+| Kafka/Raw | 같은 `event_id` 중복 수신을 정상 가능성으로 본다 |
+| Data/Spark | `cleaned_events` 생성 전 `event_id` 기준으로 deduplication 한다 |
+| Dedup 기준 | 같은 `event_id` 중 가장 먼저 수신/적재된 1건을 대표 Event로 사용한다 |
+| 대표 Event 선택 정렬 | `received_at ASC`, 보조로 `kafka_partition`, `kafka_offset` 또는 Raw 적재 순서를 사용한다 |
+| Fact/Mart 입력 | `product_event_fact`, `content_interest_fact`, `funnel_session_fact`, DW Mart는 중복 제거 후 Dataset만 입력으로 사용한다 |
+| 중복 원본 | `raw_events`에는 보존한다. 필요하면 후속으로 `duplicate_events` 또는 audit view를 만들 수 있다 |
+| Front 필수 전제 | 같은 행동을 재전송할 때 `event_id`를 새로 만들면 안 된다 |
+
+`event_id`가 없거나 파싱 불가능한 Event는 deduplication 자체가 불가능하므로 `bad_events.error_code='missing_required_field'` 또는 `invalid_properties`로 격리한다.
 
 ## 6. 전체 처리 흐름
 
@@ -143,7 +165,7 @@ raw_events
 | dataset | layer | grain | 목적 |
 | --- | --- | --- | --- |
 | `raw_events` | Raw | received event record | Collector가 검증/보강한 원본 Event. 중복 수신 가능 |
-| `bad_events` | Raw/Error | `request_id + event_index` | Schema 검증 실패 Event 격리 |
+| `bad_events` | Raw/Error | error record 또는 Kafka metadata | Schema 검증 실패 Event 격리 |
 | `cleaned_events` | Processed | `event_id` | 유효 Event, 중복 제거, 기본 타입 정리 |
 | `sessionized_events` | Processed | `event_id` | 세션 내 순서 복원, late/sequence 품질 표시 |
 | `product_event_fact` | Processed/Derived | `event_id + item_index + product_id` | 상품별 Event 분석 기준 |
@@ -175,8 +197,8 @@ Processed Dataset에서 반복적으로 사용하는 공통 필드는 아래 기
 | `event_time` | timestamp | N | `occurred_at`을 정규화한 행동 발생 시각 |
 | `received_at` | timestamp | N | Collector 수신 시각 |
 | `processed_at` | timestamp | N | Spark 처리 시각 |
-| `request_id` | string | N | batch 요청 ID |
-| `source` | string | N | `web`, `simulator`, `server` 등 |
+| `request_id` | string/null | Y | batch 요청 ID. 현재 Backend Kafka payload에는 없으므로 NULL 가능 |
+| `source` | string | N | MVP 기준 `web`, `simulator`, `server`. `actor_type`, `environment`, ingest 경로로 파생 |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `is_synthetic` | boolean | N | `actor_type='synthetic'` 또는 `source='simulator'` |
 | `user_id` | string/null | Y | 분석용 사용자 ID. synthetic이면 `persona_id`와 동일, 실제 Web은 ID 정책 확정 전까지 NULL 가능 |
@@ -187,6 +209,7 @@ Processed Dataset에서 반복적으로 사용하는 공통 필드는 아래 기
 | `page_type` | string | N | 화면 유형 |
 | `scenario_id` | string/null | Y | 시나리오 ID. 시뮬레이션 분석에서는 필수 |
 | `simulation_run_id` | string/null | Y | 시뮬레이션 실행 ID. synthetic에서는 필수 |
+| `generator_type` | string/null | Y | synthetic 생성 방식. 예: `python_batch`, `agent_realtime` |
 | `environment` | string | N | `local`, `dev`, `loadtest` 등 |
 | `product_id` | string/null | Y | 상품 대상 Event에서 필수 |
 | `category_id` | string/null | Y | 상품 카테고리. 상품 대상 Event에서는 권장 |
@@ -204,12 +227,18 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | Processed column | Raw source | 비고 |
 | --- | --- | --- |
 | `event_time` | `occurred_at` | timestamp 정규화 |
+| `request_id` | HTTP 응답/Header 또는 Backend payload 확장 | 현재 Kafka payload에는 없으므로 Raw/Processed에서 NULL 가능 |
+| `source` | `actor_type`, `environment`, ingest 경로 | MVP 기본값은 `actor_type='user' → web`, `actor_type='synthetic' → simulator`, 서버 생성 Event는 `server` |
+| `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` 또는 후속 top-level 확장 | 현재 Backend API에는 top-level 필드가 없으므로 synthetic 생성기 구현 시 기준 재확인 |
+| `generator_type` | `properties.generator_type` 또는 synthetic 생성기 메타 | 100명 agent와 9,900명 Python batch 구분이 필요하면 `source`가 아니라 이 필드로 분리 |
 | `user_id` | `persona_id` 또는 추후 실제 사용자 ID | synthetic은 `persona_id`, 실제 Web은 ID 정책 확정 전까지 NULL 가능 |
-| `product_id` | top-level `product_id` | 상품 대상 Event의 공통 대상 ID |
+| `product_id` | top-level `product_id` | 상품 대상 Event의 공통 대상 ID. 보고 있는 상품이 아니라 Event 대상 상품 |
+| `context_product_id` | `properties.context_product_id` | 대상 상품과 이벤트 발생 배경 상품이 다를 때의 배경 상품 ID |
 | `section_id` | `properties.section_id` | 없으면 `content_kind`로 보조 해석 가능 |
 | `content_kind` | `properties.content_kind` | section 기반 Event에서 사용 |
 | `content_ref` | `properties.content_ref` | 리뷰 ID, 추천 상품 ID 등 |
 | `position` | `properties.position` | 목록/추천/검색 결과 위치 |
+| `entry_source` | `properties.entry_source` | 목록, 추천, quick look, 장바구니 등 진입/행동 경로 |
 | `list_id` | `properties.list_id` | 상품 목록/추천/검색 결과 영역 |
 | `recommendation_id` | `properties.recommendation_id` | 추천 영역 식별자 |
 | `algorithm` | `properties.algorithm` | 추천 알고리즘/룰 식별자 |
@@ -217,8 +246,13 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `quantity` | `properties.quantity` | int 정규화 |
 | `unit_price` | `properties.unit_price` 또는 `properties.price_usd` | decimal 정규화 |
 | `order_value` | `properties.order_value` 또는 `sum(items.quantity * items.unit_price)` | purchase에서 없으면 items로 파생 가능 |
+| `item_revenue` | `items[].quantity * items[].unit_price` 또는 `quantity * unit_price` | `items[]` explode 이후 상품별 매출 합산 기준 |
 | `currency` | `properties.currency` | 없으면 주문 금액 확정 KPI에서는 제외 |
 | `cart_id` | `properties.cart_id` | Raw에 없으면 NULL. 구현 전 필수 아님 |
+| `cart_value` | `properties.cart_value` | 장바구니/Checkout 금액. decimal 정규화 |
+| `item_count` | `properties.item_count` | 장바구니 전체 item 수. int 정규화 |
+| `distinct_products` | `properties.distinct_products` | 장바구니 내 서로 다른 상품 수. int 정규화 |
+| `cart_size_after` | `properties.cart_size_after` | 장바구니 제거 후 item 또는 상품 수. int 정규화 |
 | `order_id` | `properties.order_id` | purchase에서는 필수 |
 | `search_id` | `properties.search_id` 또는 Spark 파생 | 검색 구현 전에는 NULL/provisional |
 | `search_query` | `properties.query_text` | Raw 검색어를 Processed에서 `search_query`로 정규화. 저장 정책에 따라 hash만 보관 가능 |
@@ -229,11 +263,27 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `review_filter` | `properties.filter` | `review_filter_apply`에서 사용 |
 | `review_sort` | `properties.sort` | `review_filter_apply`에서 사용 |
 | `sort_key` | `properties.sort_key` 또는 `properties.sort` | sort Event에서 사용 |
+| `sort_direction` | `properties.sort_direction` | `sort_change`에서 사용. 예: `asc`, `desc` |
 | `category_id` | `dim_product.product_id` Join | 상품 속성 보강 |
 | `brand_id` | `dim_product.product_id` Join | 상품 속성 보강 |
 | `matched_ingredients` | `properties.matched_ingredients` | array<string> |
 | `matched_keywords` | `properties.matched_keywords` | array<string> |
 | `vocab_version` | `properties.vocab_version` | 텍스트/성분 매칭 기준 버전 |
+| `variants_viewed` | `properties.variants_viewed` | quick look 창 안에서 옵션을 본 횟수 또는 목록 |
+| `added_to_cart` | `properties.added_to_cart` | quick look 창 안에서 장바구니 담기가 발생했는지 |
+| `wishlisted` | `properties.wishlisted` | quick look 창 안에서 찜이 발생했는지 |
+
+### 8.2 `source` 파생 규칙
+
+Raw payload에 `source`가 없으므로 E2E MVP에서는 Processed 단계에서 아래 규칙으로 파생한다.
+
+| 조건 | source |
+| --- | --- |
+| `actor_type='user'` | `web` |
+| `actor_type='synthetic'` | `simulator` |
+| Backend 또는 Batch가 서버 내부 Event를 생성 | `server` |
+
+100명 agent 기반 생성과 9,900명 Python batch 생성은 `source`로 나누지 않고 `generator_type` 또는 Persona/Scenario 메타데이터에서 구분한다. Producer가 별도 원천값을 보내기로 합의하면 `properties.generator_type`을 우선 사용한다.
 
 ## 9. `raw_events`
 
@@ -243,31 +293,37 @@ Raw는 중복 제거 전 데이터이므로 같은 `event_id`가 재전송으로
 
 ```text
 grain = received event record
-unique key 후보 = request_id + event_index
+unique key 후보 = kafka_topic + kafka_partition + kafka_offset
 event_id = business dedup key
 ```
 
+현재 Backend는 batch 요청을 받더라도 Event를 Kafka에 한 건씩 발행한다. `request_id`, `event_index`가 Kafka payload에 포함되지 않으면 Raw record 식별은 Kafka metadata를 우선 사용한다.
+
 | column | type | 설명 |
 | --- | --- | --- |
-| `request_id` | string | batch 요청 ID |
-| `event_index` | int | batch 안 Event 순서 |
+| `kafka_topic` | string/null | Kafka topic. Raw 저장 시 metadata로 보강 |
+| `kafka_partition` | int/null | Kafka partition. Raw 저장 시 metadata로 보강 |
+| `kafka_offset` | bigint/null | Kafka offset. Raw 저장 시 metadata로 보강 |
+| `request_id` | string/null | batch 요청 ID. 현재 Kafka payload에는 없음 |
+| `event_index` | int/null | batch 안 Event 순서. 현재 Kafka payload에는 없음 |
 | `schema_version` | string | Event Schema 버전 |
 | `event_id` | string | Event 고유 ID |
 | `event_name` | string | Event 이름 |
 | `intent` | string | Event 의미 |
 | `occurred_at` | timestamp/string | 클라이언트 행동 발생 시각 원본 |
 | `received_at` | timestamp | Collector 수신 시각 |
-| `source` | string | `web`, `simulator`, `server` 등 |
+| `source` | string/null | `web`, `simulator`, `server`. Raw payload에 없으면 Processed에서 파생 |
 | `persona_id` | string/null | Persona ID |
 | `session_id` | string | 쇼핑 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
 | `sequence_no` | int/string | 세션 내 Event 순서 원본 |
-| `page_type` | string | `product_detail`, `product_list`, `cart`, `checkout` 등 |
+| `page_type` | string | MVP 기준 `product_detail`, `product_list`, `cart` |
 | `product_id` | string/null | 상품 대상 Event의 상품 ID |
 | `actor_type` | string | `user`, `synthetic` |
 | `environment` | string | `local`, `dev`, `loadtest` 등 |
-| `scenario_id` | string/null | 시나리오 ID |
-| `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `scenario_id` | string/null | 시나리오 ID. 현재 API에는 top-level 필드가 없으므로 `properties.scenario_id` 또는 후속 DTO 확장으로 처리 |
+| `simulation_run_id` | string/null | 시뮬레이션 실행 ID. 현재 API에는 top-level 필드가 없으므로 `properties.simulation_run_id` 또는 후속 DTO 확장으로 처리 |
+| `generator_type` | string/null | synthetic 생성 방식. 있으면 `properties.generator_type`에서 승격 |
 | `properties` | json | Event별 원본 properties |
 
 ## 10. `bad_events`
@@ -276,8 +332,11 @@ event_id = business dedup key
 
 | column | type | 설명 |
 | --- | --- | --- |
-| `request_id` | string | batch 요청 ID |
-| `event_index` | int | batch 안 Event 순서 |
+| `request_id` | string/null | batch 요청 ID. 현재 Kafka payload에는 없음 |
+| `event_index` | int/null | batch 안 Event 순서. 현재 Kafka payload에는 없음 |
+| `kafka_topic` | string/null | Kafka topic. Spark에서 판정한 bad event면 metadata 보강 가능 |
+| `kafka_partition` | int/null | Kafka partition |
+| `kafka_offset` | bigint/null | Kafka offset |
 | `event_id` | string/null | 파싱 가능한 경우 저장 |
 | `received_at` | timestamp | 서버 수신 시각 |
 | `processed_at` | timestamp | 오류 판정 시각 |
@@ -321,14 +380,15 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 | `processed_at` | timestamp | Spark 처리 시각 |
 | `latency_ms` | bigint | `received_at - event_time` |
 | `processing_lag_ms` | bigint | `processed_at - received_at` |
-| `request_id` | string | batch 요청 ID |
-| `source` | string | 유입 경로 |
+| `request_id` | string/null | batch 요청 ID. 현재 Kafka payload에는 없음 |
+| `source` | string | 유입 경로. `actor_type`, `environment`, ingest 경로로 파생 |
 | `actor_type` | string | `user`, `synthetic` |
 | `is_synthetic` | boolean | `actor_type='synthetic'` 또는 `source='simulator'` |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `session_id` | string | 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
 | `sequence_no` | int | 세션 내 순서 |
@@ -346,14 +406,14 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 
 | 처리 | 기준 |
 | --- | --- |
-| 중복 제거 | 같은 `event_id`는 최초 1건만 사용 |
+| 중복 제거 | 같은 `event_id`는 최초 1건만 사용. 중복 원본은 `raw_events`에만 남고, downstream Fact/Mart에는 전달하지 않음 |
 | 타입 정리 | timestamp, int, decimal, boolean 파싱 |
 | 사용자 ID 생성 | synthetic이면 `user_id=persona_id`, 실제 Web은 로그인/익명 ID 정책 확정 전까지 NULL 허용 |
 | 지연 계산 | `latency_ms = received_at - event_time` |
 | 처리 지연 계산 | `processing_lag_ms = processed_at - received_at` |
 | synthetic 표시 | `actor_type/source/simulation_run_id` 기준 |
 | 상품 속성 보강 | `product_id` 기준 `dim_product` Join 또는 Event snapshot에서 `category_id`, `brand_id`, `unit_price` 승격 |
-| 구현 전 Event 처리 | `search`, `view_cart`, `begin_checkout`, `purchase`는 후속 화면 구현 전까지 provisional로 두고 semantic validation을 느슨하게 적용 |
+| 구현 전 Event 처리 | `search`, `begin_checkout`, `purchase`는 후속 화면 구현 전까지 provisional로 두고 semantic validation을 느슨하게 적용 |
 
 ## 12. `sessionized_events`
 
@@ -369,6 +429,7 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
 | `product_id` | string/null | 상품 ID |
+| `context_product_id` | string/null | 이벤트 발생 배경 상품 ID. 대상 상품과 같거나 없으면 NULL |
 | `category_id` | string/null | 카테고리 ID |
 | `brand_id` | string/null | 브랜드 ID |
 | `event_name` | string | Event 이름 |
@@ -410,25 +471,35 @@ session_id
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `session_id` | string | 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
 | `item_index` | int | `items[]` explode 시 item 순서. 단일 상품 Event는 0 |
 | `product_id` | string | 상품 ID |
+| `context_product_id` | string/null | 이벤트 발생 배경 상품 ID. 추천 클릭 등에서 사용 |
 | `category_id` | string/null | 카테고리 ID |
 | `brand_id` | string/null | 브랜드 ID |
 | `sku_id` | string/null | `properties.sku_id` |
 | `list_id` | string/null | 목록/추천/검색 결과 영역 ID |
+| `entry_source` | string/null | 상품 진입 또는 장바구니 행동 경로 |
 | `recommendation_id` | string/null | 추천 영역/실험 식별자 |
 | `algorithm` | string/null | 추천 알고리즘/룰 식별자 |
 | `search_id` | string/null | 검색 결과 클릭과 검색 Event 연결용 |
 | `section_id` | string/null | 섹션 ID |
 | `position` | int/null | 노출/클릭 위치 |
 | `quantity` | int/null | 수량 |
+| `purchase_quantity` | int/null | 구매/Checkout item 수량. `purchase` 상품별 수량 집계용 |
+| `cart_size_after` | int/null | 장바구니 제거 후 크기. `remove_from_cart`에서 사용 |
 | `unit_price` | decimal(18,2)/null | 단가 |
-| `order_value` | decimal(18,2)/null | 주문 금액 |
+| `order_value` | decimal(18,2)/null | 주문 전체 금액. 상품별 매출 합산에는 직접 사용하지 않음 |
+| `item_revenue` | decimal(18,2)/null | 상품 row 기준 매출. `quantity * unit_price` |
+| `cart_value` | decimal(18,2)/null | 장바구니 금액 |
 | `currency` | string/null | 통화 |
 | `cart_id` | string/null | 장바구니 ID |
 | `order_id` | string/null | 주문 ID |
+| `variants_viewed` | int/null | quick look 창 안에서 옵션을 본 횟수. 배열로 오면 집계 수로 정규화 |
+| `added_to_cart` | boolean/null | quick look 창 안에서 장바구니 담기가 발생했는지 |
+| `wishlisted` | boolean/null | quick look 창 안에서 찜이 발생했는지 |
 | `actor_type` | string | user/synthetic |
 | `source` | string | 유입 경로 |
 
@@ -448,6 +519,10 @@ items[0], items[1], items[2]
 → product_event_fact 3 rows
 ```
 
+`order_value`는 주문 전체 금액이므로 `items[]` explode 후 상품 row마다 그대로 합산하면 매출이 과대계산된다. 상품별 매출은 `item_revenue = quantity * unit_price`를 사용하고, `order_value`는 주문 총액 검증/참고값으로만 사용한다.
+
+DW의 매출 KPI는 `event_name='purchase'`인 row의 `item_revenue`만 합산한다. `add_to_cart`나 `begin_checkout`에도 수량과 가격이 있을 수 있지만, 해당 단계의 `item_revenue`는 잠재 금액 또는 검증용으로만 본다.
+
 대상 Event:
 
 ```text
@@ -459,12 +534,16 @@ recommendation_click
 wishlist_toggle
 add_to_cart
 remove_from_cart
+quick_look
+quick_look_close
 begin_checkout
 purchase
 media_view
 variant_select
 quantity_change
 ```
+
+`view_cart`는 장바구니 화면 진입 Event이지만 `product_id/items`가 없는 cart-level Event이므로 `product_event_fact` 대상에서 제외한다. 장바구니 열람 수는 `cleaned_events` 또는 별도 cart-level Mart에서 집계한다.
 
 ## 14. `search_event_fact`
 
@@ -473,6 +552,7 @@ quantity_change
 | column | type | 설명 |
 | --- | --- | --- |
 | `event_id` | string | Event ID |
+| `event_date_kst` | date | KST 기준 집계일 |
 | `search_id` | string/null | 검색 1회를 식별하는 ID. 검색 구현 전에는 NULL/provisional |
 | `event_time` | timestamp | 검색 또는 검색 결과 클릭 시각 |
 | `processed_at` | timestamp | 처리 시각 |
@@ -480,6 +560,7 @@ quantity_change
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `session_id` | string | 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
 | `search_query` | string/null | Raw `properties.query_text`를 정규화한 검색어. 개인정보/원문 저장 정책에 따라 hash로 대체 가능 |
@@ -489,9 +570,12 @@ quantity_change
 | `clicked_position` | int/null | 검색 결과 클릭 위치 |
 | `category_id` | string/null | 클릭 상품 카테고리 |
 | `brand_id` | string/null | 클릭 상품 브랜드 |
+| `actor_type` | string | user/synthetic |
 | `source` | string | 유입 경로 |
 
 검색 → 상품 클릭 전환율은 같은 `session_id + search_id` 안에서 `search` 이후 `product_click`이 발생했는지로 계산한다. 검색 구현 전 또는 `search_id`가 없는 로그는 같은 `session_id`에서 가장 최근 `search` 이후 발생한 `product_click`으로 임시 연결하고, E2E 후 `search_id` 필수 여부를 재검토한다.
+
+`search_query_hash`는 검색 구현 전까지 provisional이다. 구현 시에는 `normalized_query`가 있으면 이를 기준으로, 없으면 trim/lowercase 등 최소 정규화한 `search_query`를 기준으로 hash를 생성한다.
 
 ## 15. `section_dwell_agg`
 
@@ -507,12 +591,14 @@ session_id + page_view_id + product_id + section_id + content_kind + content_ref
 
 | column | type | 설명 |
 | --- | --- | --- |
+| `event_date_kst` | date | KST 기준 집계일 |
 | `session_id` | string | 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `product_id` | string/null | 상품 ID |
 | `category_id` | string/null | 카테고리 ID |
 | `brand_id` | string/null | 브랜드 ID |
@@ -540,12 +626,14 @@ session_id + page_view_id + product_id + section_id + content_kind + content_ref
 
 | column | type | 설명 |
 | --- | --- | --- |
+| `event_date_kst` | date | KST 기준 집계일 |
 | `session_id` | string | 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `product_id` | string/null | 상품 ID |
 | `category_id` | string/null | 카테고리 ID |
 | `brand_id` | string/null | 브랜드 ID |
@@ -563,6 +651,8 @@ session_id + page_view_id + product_id + section_id + content_kind + content_ref
 | `vocab_version` | string/null | 매칭 어휘집 버전 |
 | `content_interest_score` | double | 콘텐츠 관심도 초안 점수 |
 | `processed_at` | timestamp | 처리 시각 |
+| `actor_type` | string | user/synthetic |
+| `source` | string | 유입 경로 |
 
 주요 파생 조건:
 
@@ -578,11 +668,13 @@ session_id + page_view_id + product_id + section_id + content_kind + content_ref
 
 | column | type | 설명 |
 | --- | --- | --- |
+| `funnel_date_kst` | date | Funnel 일간 귀속일. 최초 non-null Funnel 단계 시각의 KST 날짜 |
 | `session_id` | string | 세션 ID |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `product_id` | string | 상품 ID |
 | `category_id` | string/null | 카테고리 ID |
 | `brand_id` | string/null | 브랜드 ID |
@@ -628,6 +720,20 @@ or review_expand
 or text_selection/text_copy with matched_ingredients or matched_keywords
 ```
 
+`funnel_date_kst`는 아래 순서로 최초 non-null timestamp를 찾아 `Asia/Seoul` 날짜로 변환한다.
+
+```text
+first_impression_at
+→ first_click_at
+→ first_product_view_at
+→ first_information_view_at
+→ first_add_to_cart_at
+→ first_checkout_at
+→ first_purchase_at
+```
+
+이 기준은 Funnel 전체를 최초 진입일에 귀속한다. 구매 발생일 기준 매출 분석이 필요하면 `product_event_fact.event_date_kst` 기반 Mart를 별도로 사용한다.
+
 ## 18. `persona_behavior_feature_delta`
 
 Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하기 위한 입력 delta다. Product Vector 생성 자체는 AI/Product Feature 담당 범위이며, 이 테이블은 Event와 Product Vector를 연결하기 위한 행동 가중치만 만든다.
@@ -635,10 +741,12 @@ Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하�
 | column | type | 설명 |
 | --- | --- | --- |
 | `event_id` | string | Event ID |
+| `event_date_kst` | date | KST 기준 집계일 |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 시뮬레이션 실행 ID |
+| `generator_type` | string/null | synthetic 생성 방식 |
 | `product_id` | string | 상품 ID |
 | `category_id` | string/null | 카테고리 ID |
 | `brand_id` | string/null | 브랜드 ID |
@@ -648,6 +756,7 @@ Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하�
 | `event_weight` | double | 행동 가중치 |
 | `decay_weight` | double | 시간 감쇠 |
 | `final_weight` | double | `event_weight * decay_weight` |
+| `actor_type` | string | user/synthetic |
 | `source` | string | web/simulator/server |
 
 초기 Event Weight `[추정]`:
@@ -704,13 +813,15 @@ Processed에서는 단순히 nullable 여부만 보지 않고 Event별로 정상
 | --- | --- | --- |
 | `session_start` | `session_id`, `event_time` | `user_id`는 실제 Web에서 NULL 가능. `product_id`, `order_id`, `order_value` |
 | `page_view` | `page_view_id`, `page_type`, `session_id`, `event_time` | `product_id`는 목록/홈/장바구니에서 NULL 가능 |
-| `product_impression` | `product_id`, `session_id` | `list_id`, `position`, `order_id`, `order_value` |
-| `product_click` | `product_id`, `session_id` | `list_id`, `position`, `order_id`, `order_value` |
-| `recommendation_impression` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `section_id`, `order_id`, `order_value` |
-| `recommendation_click` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `section_id`, `order_id`, `order_value` |
+| `product_impression` | `product_id`, `list_id`, `position`, `session_id` | `order_id`, `order_value` |
+| `product_click` | `product_id`, `session_id` | `context_product_id`, `list_id`, `position`, `order_id`, `order_value` |
+| `recommendation_impression` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `context_product_id`, `section_id`, `order_id`, `order_value` |
+| `recommendation_click` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `context_product_id`, `section_id`, `order_id`, `order_value` |
+| `quick_look` | `product_id`, `session_id` | `context_product_id`, `list_id`, `position`, `entry_source`, `recommendation_id`, `algorithm`, `order_id`, `order_value` |
+| `quick_look_close` | `product_id`, `dwell_ms`, `session_id` | `variants_viewed`, `added_to_cart`, `wishlisted`, `list_id`, `position`, `entry_source`, `order_id`, `order_value` |
 | `search` | `search_query`, `session_id` | `result_count`, `search_id`는 구현 전 NULL 가능. `product_id`, `position`, `order_value` |
 | `filter_change` | `filter_name`, `filter_action`, `filter_values`, `session_id` | `product_id`, `order_value` |
-| `sort_change` | `sort_key`, `session_id` | `product_id`, `order_value` |
+| `sort_change` | `sort_key`, `sort_direction`, `session_id` | `product_id`, `order_value` |
 | `product_view` | `product_id`, `session_id`, `page_view_id` | `order_id`, `order_value` |
 | `section_view` | `section_id` 또는 `content_kind`, `session_id`, `page_view_id` | `order_id`, `order_value` |
 | `section_dwell` | `section_id` 또는 `content_kind`, `dwell_ms`, `session_id`, `page_view_id` | `order_id`, `order_value` |
@@ -719,9 +830,9 @@ Processed에서는 단순히 nullable 여부만 보지 않고 Event별로 정상
 | `text_selection` | `text_length`, `session_id` | `section_id`, `content_kind`, `product_id`는 공통 페이지에서는 NULL 가능 |
 | `text_copy` | `text_length`, `session_id` | `section_id`, `content_kind`, `product_id`는 공통 페이지에서는 NULL 가능 |
 | `add_to_cart` | `product_id`, `quantity`, `session_id` | `order_id`, `order_value` |
-| `remove_from_cart` | `product_id`, `quantity`, `session_id` | `order_id`, `order_value` |
-| `variant_select` | `product_id`, `selected_value`, `session_id` | `variant_name`, `option_name`, `previous_value`, `sku_id` |
-| `view_cart` | `session_id` | `cart_id`는 Raw에 없으면 NULL 가능. `product_id`, `order_value` |
+| `remove_from_cart` | `product_id`, `quantity`, `cart_size_after`, `session_id` | `order_id`, `order_value` |
+| `variant_select` | `product_id`, `variant_name` 또는 `option_name`, `selected_value`, `session_id` | `previous_value`, `sku_id` |
+| `view_cart` | `session_id` | `cart_id`는 Raw에 없으면 NULL 가능. `product_id`, `order_value`, `item_count`, `distinct_products`, `cart_value` |
 | `begin_checkout` | `items`, `session_id` | `cart_id`, `product_id`, `order_value`는 NULL 가능 |
 | `purchase` | `order_id`, `items`, `session_id` | `order_value`, `currency`는 Raw 선택값. 없으면 items 합산 또는 unknown 처리 |
 
@@ -730,12 +841,14 @@ Processed에서는 단순히 nullable 여부만 보지 않고 Event별로 정상
 | 상황 | 처리 |
 | --- | --- |
 | `product_click.product_id`가 NULL | 잘못된 로그로 보고 `bad_events` 격리 |
+| `context_product_id`가 NULL | 정상. 컨텍스트가 없거나 대상 상품과 같으면 생략될 수 있음 |
 | `search.product_id`가 NULL | 정상. 검색 자체는 상품 대상 Event가 아님 |
 | `search.search_id`가 NULL | 검색 구현 전에는 정상. 구현 후에는 경고 또는 Spark 파생 |
 | `add_to_cart.order_value`가 NULL | 정상. 구매 전 단계라 주문 금액 없음 |
 | `purchase.order_value`가 NULL | Raw 기준으로는 정상 가능. `items[]`에서 합산 가능하면 파생, 불가능하면 금액 KPI에서 제외 |
 | `page_view.product_id`가 NULL | 목록/홈/장바구니면 정상, 상세페이지면 오류 또는 경고 |
 | `view_cart.cart_id`가 NULL | 현재 Raw 계약에서는 정상. 장바구니 구현 후 재검토 |
+| `quick_look_close.dwell_ms`만 있음 | 정상. 단독 구매 의도 대신 창 내부 행동 요약과 함께 해석 |
 
 ## 21. 타입 정규화 규칙
 
@@ -749,15 +862,24 @@ Frontend JSON에서는 같은 값이 문자열/숫자로 섞일 수 있으므로
 | `sequence_no` | int | `"12"` → `12` |
 | `position` | int | `"3"` → `3` |
 | `quantity` | int | `"2"` → `2` |
+| `purchase_quantity` | int | `items[].quantity` 또는 `quantity` |
+| `cart_size_after` | int | `"3"` → `3` |
+| `item_count` | int | `"5"` → `5` |
+| `distinct_products` | int | `"4"` → `4` |
 | `result_count` | int | `"42"` → `42` |
 | `dwell_ms` | bigint | `"1200"` → `1200` |
 | `unit_price` | decimal(18,2) | `"20000"` → `20000.00` |
 | `order_value` | decimal(18,2) | `"58000"` → `58000.00` |
+| `item_revenue` | decimal(18,2) | `quantity * unit_price` |
+| `cart_value` | decimal(18,2) | `"58000"` → `58000.00` |
 | `currency` | string | `"KRW"` |
 | `is_synthetic` | boolean | actor/source 기준 파생 |
+| `added_to_cart` | boolean | `"true"` → `true` |
+| `wishlisted` | boolean | `"false"` → `false` |
 | `quality_flags` | array<string> | `["late_event", "sequence_gap"]` |
 | `matched_ingredients` | array<string> | `["Niacinamide", "Squalane"]` |
 | `matched_keywords` | array<string> | `["trouble", "hydration"]` |
+| `variants_viewed` | int | 배열로 들어오면 길이, 숫자로 들어오면 int로 정규화 |
 | `properties_json` | string | Raw `properties`를 JSON 문자열로 보존 |
 | `items` | array<struct> | `purchase`, `begin_checkout`의 상품 목록 |
 
@@ -791,10 +913,11 @@ Frontend JSON에서는 같은 값이 문자열/숫자로 섞일 수 있으므로
 ## 23. DW/Mart로 넘길 후보
 
 Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
+각 Mart의 grain, 입력 Dataset, 주요 컬럼, nullable 주의사항은 `dw-schema.md`에 상세 분리한다.
 
 | DW/Mart 후보 | 입력 Processed Dataset | Dashboard 활용 |
 | --- | --- | --- |
-| `product_daily_kpi` | `product_event_fact`, `funnel_session_fact` | 상품별 조회/장바구니/구매/CTR |
+| `product_daily_kpi` | `product_event_fact`, `funnel_session_fact`, `persona_behavior_feature_delta` | 상품별 조회/장바구니/구매/CTR/관심도 |
 | `recommendation_daily_kpi` | `product_event_fact` | 추천 영역 CTR, 추천 위치별 성과 |
 | `search_daily_kpi` | `search_event_fact` | 검색량, 검색 후 클릭 전환율 |
 | `content_daily_kpi` | `content_interest_fact` | 성분/리뷰 열람률, 콘텐츠 관심도 |
@@ -807,12 +930,12 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 
 | 항목 | 영향 |
 | --- | --- |
-| Kafka topic 이름 | Spark 입력 설정 |
-| Kafka message 단위 | batch message면 Spark 초입에서 explode 필요 |
-| Kafka partition key | 세션/Persona 순서 보존과 병렬 처리 |
+| Kafka topic 이름 | 현재 Backend 기본값은 `activity-events`. 환경별 override 가능성은 Kafka/Spark 담당자와 확인 |
+| Kafka message 단위 | 현재 Backend 구현은 Event 1건 단위 발행 |
+| Kafka partition key | 현재 key는 `persona_id`. 실제 Web Event에서 `persona_id=NULL`일 때 fallback key는 Kafka/Spark 담당자와 합의 필요 |
 | 물리 저장소 | Parquet/MySQL/ClickHouse 등에 따라 타입과 파티션 방식 변경 |
 | bad event 응답 포맷 | 프론트 재시도/디버깅 방식 |
-| 목록/장바구니/구매 화면 Trigger | `product_impression`, `view_cart`, `begin_checkout`, `purchase` 생성 기준 |
+| 목록/구매 화면 Trigger | `product_impression`, `begin_checkout`, `purchase` 생성 기준 |
 | 상품 Dimension 원천 | 상품 데이터가 어떤 테이블/파일에서 들어오는지 확정 필요 |
 | 실제 사용자 ID 정책 | 로그인/비로그인 사용자를 `user_id`로 어떻게 식별할지 확정 필요 |
 | `search_id` 생성 정책 | 검색 구현 전에는 nullable/session fallback, 구현 후 Raw 추가 또는 Spark 파생 중 선택 |
@@ -825,7 +948,7 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 E2E 이후 확인할 것:
 
 1. `product_view`가 실제로 들어오는지
-2. `product_impression`, `search`, `view_cart`, `begin_checkout`, `purchase` Trigger가 실제 화면에서 발생하는지
+2. `product_impression`, `search`, `begin_checkout`, `purchase` Trigger가 실제 화면에서 발생하는지
 3. `section_dwell` 합산 grain이 맞는지
 4. batch 실패 Event 분리가 실제로 가능한지
 5. `actor_type/source/scenario_id/simulation_run_id` 필터가 정상 동작하는지

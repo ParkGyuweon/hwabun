@@ -49,11 +49,18 @@ class EventValidationTest {
     void validatesRequiredFieldsInsideEachEvent() {
         ActivityEvent invalidEvent = new ActivityEvent(
                 "",
-                "product.click",
+                "",
+                "product_click",
+                "",
                 Instant.parse("2026-08-27T14:30:00Z"),
-                "persona-001",
+                null,
+                "",
                 "",
                 null,
+                "",
+                null,
+                "",
+                "",
                 null
         );
         EventBatchRequest request = new EventBatchRequest("draft", List.of(invalidEvent));
@@ -62,7 +69,17 @@ class EventValidationTest {
 
         assertThat(violations)
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("events[0].eventId", "events[0].sessionId");
+                .contains(
+                        "events[0].schemaVersion",
+                        "events[0].eventId",
+                        "events[0].intent",
+                        "events[0].sessionId",
+                        "events[0].pageViewId",
+                        "events[0].sequenceNo",
+                        "events[0].pageType",
+                        "events[0].actorType",
+                        "events[0].environment"
+                );
     }
 
     @Test
@@ -76,14 +93,47 @@ class EventValidationTest {
                 .containsExactlyInAnyOrder("schemaVersion", "events");
     }
 
-    private ActivityEvent validEvent() {
-        return new ActivityEvent(
+    @Test
+    void rejectsValuesOutsideTheFrontendContract() {
+        ActivityEvent invalidEvent = new ActivityEvent(
+                "0.2.0-draft",
                 "evt-001",
                 "product.click",
+                "unknown",
                 Instant.parse("2026-08-27T14:30:00Z"),
-                "persona-001",
+                null,
                 "session-001",
+                "page-view-001",
+                0,
+                "home",
                 "product-001",
+                "bot",
+                "local",
+                null
+        );
+
+        Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(invalidEvent);
+
+        assertThat(violations)
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .containsExactlyInAnyOrder("eventName", "intent", "sequenceNo", "pageType", "actorType");
+    }
+
+    private ActivityEvent validEvent() {
+        return new ActivityEvent(
+                "0.2.0-draft",
+                "evt-001",
+                "product_click",
+                "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"),
+                null,
+                "session-001",
+                "page-view-001",
+                1,
+                "product_list",
+                "product-001",
+                "user",
+                "local",
                 null
         );
     }

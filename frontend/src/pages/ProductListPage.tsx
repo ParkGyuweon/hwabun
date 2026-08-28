@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import ProductCard from '../components/product/ProductCard';
+import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useSectionView } from '../hooks/useSectionView';
@@ -8,10 +9,14 @@ import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { track } from '../lib/logger';
-import type { Product } from '../types/product';
+import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
+import type { PersonaProfile } from '../types/persona';
+import type { Product, SkinType } from '../types/product';
+import type { Review } from '../types/review';
+import type { CartItem } from '../types/cart';
 
-/** 기획전에 올리는 상품 수. 한 화면에 다 보이는 만큼만 */
-const PROMO_SIZE = 6;
+/** 기획전에 올리는 상품 수 */
+const PROMO_SIZE = 10;
 /** 한 번에 그리는 카드 수. 200개를 한 번에 그리면 노출 로그가 의미를 잃는다 */
 const PAGE_SIZE = 24;
 
@@ -38,7 +43,11 @@ type PriceKey = (typeof PRICE_BANDS)[number]['key'];
 
 interface ProductListPageProps {
   products: Product[];
+  /** 페르소나 맞춤 추천 근거로 쓴다 */
+  reviews: Review[];
+  persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
+  onAddToCart: (item: CartItem) => void;
   /** 헤더 메뉴에서도 카테고리를 바꾸므로 소유권을 App 에 둔다 */
   category: string;
   onCategoryChange: (category: string) => void;
@@ -56,7 +65,10 @@ interface ProductListPageProps {
  */
 export default function ProductListPage({
   products,
+  reviews,
+  persona,
   onSelectProduct,
+  onAddToCart,
   category,
   onCategoryChange,
 }: ProductListPageProps) {
@@ -64,6 +76,8 @@ export default function ProductListPage({
   const [concern, setConcern] = useState('all');
   const [price, setPrice] = useState<PriceKey>('all');
   const [shown, setShown] = useState(PAGE_SIZE);
+  /** 요약 창에 띄운 상품. 세포라 Quicklook */
+  const [quickLook, setQuickLook] = useState<Product | null>(null);
 
   /** 카테고리 탭. 실제 데이터에 있는 값만 쓰고 개수를 함께 보여준다 */
   const categories = useMemo(() => {
@@ -85,15 +99,54 @@ export default function ProductListPage({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [products]);
 
-  /** 기획전. 신제품·한정판·단독 상품을 인기순으로 올린다 */
-  const promo = useMemo(
-    () =>
-      products
+  /**
+   * 상품별 리뷰어 피부 타입. 원본 표기(suitable_skin_types)가 없는 132개 상품의
+   * 매칭 근거로 쓴다 (AboutProduct 의 파생 표시와 같은 계산이다).
+   */
+  const reviewSkinTypes = useMemo(() => {
+    const byProduct = new Map<string, Review[]>();
+    for (const review of reviews) {
+      const bucket = byProduct.get(review.product_id) ?? [];
+      bucket.push(review);
+      byProduct.set(review.product_id, bucket);
+    }
+    const result = new Map<string, SkinType[]>();
+    for (const [pid, list] of byProduct) result.set(pid, deriveSkinTypesFromReviews(list).types);
+    return result;
+  }, [reviews]);
+
+  /**
+   * 기획전. 페르소나가 있으면 그 피부 타입에 맞는 상품을 올린다.
+   *
+   * 추천 API 가 붙기 전까지의 규칙 기반 대체다. 점수는 설명 가능한 두 축만 쓴다.
+   *   피부 타입 일치 +2 (원본 표기 우선, 없으면 리뷰어 분포)
+   *   품질 사전확률: 평점(0~1) + 리뷰 수 로그 스케일(0~1)
+   * 페르소나가 없으면 이전처럼 신제품·한정판·단독을 인기순으로 올린다.
+   */
+  const promo = useMemo(() => {
+    if (!persona) {
+      return products
         .filter((p) => (p.badges ?? []).length > 0)
         .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
-        .slice(0, PROMO_SIZE),
-    [products],
-  );
+        .slice(0, PROMO_SIZE);
+    }
+
+    const score = (p: Product): number => {
+      const types = p.suitable_skin_types.length
+        ? p.suitable_skin_types
+        : (reviewSkinTypes.get(p.product_id) ?? []);
+      const match = types.includes(persona.skin_type) ? 2 : 0;
+      const quality =
+        (p.rating ?? 0) / 5 + Math.min(1, Math.log10((p.review_count ?? 0) + 1) / 5);
+      return match + quality;
+    };
+
+    return [...products].sort((a, b) => score(b) - score(a)).slice(0, PROMO_SIZE);
+  }, [products, persona, reviewSkinTypes]);
+
+  /** 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름 */
+  const promoAlgorithm = persona ? 'skin_match_v0' : 'badge_rank_v0';
+  const promoRecommendationId = persona ? `rec-promo-${persona.persona_id}` : undefined;
 
   const filtered = useMemo(() => {
     const band = PRICE_BANDS.find((b) => b.key === price) ?? PRICE_BANDS[0];
@@ -149,9 +202,12 @@ export default function ProductListPage({
 
   // 목록이 바뀌면 노출을 처음부터 다시 센다
   const promoRef = useImpression({
-    pageViewKey: 'promo',
-    eventName: 'product_impression',
+    // 페르소나가 바뀌면 다른 추천이므로 노출을 다시 센다
+    pageViewKey: `promo:${persona?.persona_id ?? 'anonymous'}`,
+    eventName: persona ? 'recommendation_impression' : 'product_impression',
     listId: 'promo_pick',
+    algorithm: promoAlgorithm,
+    recommendationId: promoRecommendationId,
   });
   const gridRef = useImpression({
     pageViewKey,
@@ -159,10 +215,41 @@ export default function ProductListPage({
     listId: 'list_grid',
   });
 
+  /** 카드 위 Quick Look 버튼. 어느 목록의 몇 번째에서 열었는지 함께 남긴다 */
+  const quickLookFrom = (listId: string) => (productId: string) => {
+    const source = listId === 'promo_pick' ? promo : visible;
+    const position = source.findIndex((p) => p.product_id === productId);
+    track('quick_look', {
+      product_id: productId,
+      entry_source: listId,
+      position: position + 1,
+    });
+    setQuickLook(products.find((p) => p.product_id === productId) ?? null);
+  };
+
+  /** 요약 창에서 상세로. 카드 클릭과 같은 이벤트를 남기되 출처만 다르다 */
+  const openDetailFromQuickLook = (productId: string) => {
+    track('product_click', { product_id: productId, entry_source: 'quick_look' });
+    setQuickLook(null);
+    onSelectProduct(productId);
+  };
+
   const selectFrom = (listId: string) => (productId: string) => {
     const position = (listId === 'promo_pick' ? promo : visible).findIndex(
       (p) => p.product_id === productId,
     );
+
+    // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
+    if (listId === 'promo_pick' && promoRecommendationId) {
+      track('recommendation_click', {
+        recommendation_id: promoRecommendationId,
+        list_id: listId,
+        algorithm: promoAlgorithm,
+        product_id: productId,
+        position: position + 1,
+      });
+    }
+
     track('product_click', {
       product_id: productId,
       entry_source: listId,
@@ -173,7 +260,7 @@ export default function ProductListPage({
 
   /** 무엇으로 좁혔는지가 취향을 말해준다. 필터 종류를 함께 남긴다 */
   const applyFilter = (kind: string, value: string, reset = true) => {
-    track('list_filter_apply', { filter_kind: kind, filter_value: value });
+    track('filter_change', { filter_kind: kind, filter_value: value });
     if (reset) setShown(PAGE_SIZE);
   };
 
@@ -182,7 +269,11 @@ export default function ProductListPage({
       <section className="list__promo" data-log-section="promo_row">
         <header className="list__promo-head">
           <h2>지금 주목할 상품</h2>
-          <p>신제품 · 한정판 · 세포라 단독</p>
+          <p>
+            {persona
+              ? `${skinTypeLabel(persona.skin_type)} 피부에 맞춘 추천`
+              : '신제품 · 한정판 · 세포라 단독'}
+          </p>
         </header>
         <ul className="list__row" ref={promoRef as React.Ref<HTMLUListElement>}>
           {promo.map((product, index) => (
@@ -192,6 +283,7 @@ export default function ProductListPage({
               position={index + 1}
               contentKind="product_card"
               onSelect={selectFrom('promo_pick')}
+              onQuickLook={quickLookFrom('promo_pick')}
             />
           ))}
         </ul>
@@ -269,7 +361,7 @@ export default function ProductListPage({
                 const next = event.target.value as SortKey;
                 setSort(next);
                 setShown(PAGE_SIZE);
-                track('list_sort_change', { sort_key: next });
+                track('sort_change', { sort_key: next });
               }}
             >
               {Object.entries(SORT_LABEL).map(([key, label]) => (
@@ -295,6 +387,7 @@ export default function ProductListPage({
                 product={product}
                 position={index + 1}
                 onSelect={selectFrom('list_grid')}
+                onQuickLook={quickLookFrom('list_grid')}
               />
             ))}
           </ul>
@@ -310,6 +403,15 @@ export default function ProductListPage({
           </button>
         ) : null}
       </section>
+
+      {quickLook ? (
+        <QuickLook
+          product={quickLook}
+          onAddToCart={onAddToCart}
+          onClose={() => setQuickLook(null)}
+          onOpenDetail={openDetailFromQuickLook}
+        />
+      ) : null}
     </main>
   );
 }
