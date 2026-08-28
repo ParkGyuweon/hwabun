@@ -34,6 +34,9 @@ type PriceKey = (typeof PRICE_BANDS)[number]['key'];
 interface ProductListPageProps {
   products: Product[];
   onSelectProduct: (productId: string) => void;
+  /** 헤더 메뉴에서도 카테고리를 바꾸므로 소유권을 App 에 둔다 */
+  category: string;
+  onCategoryChange: (category: string) => void;
 }
 
 /**
@@ -46,8 +49,12 @@ interface ProductListPageProps {
  * 기능은 데이터가 받쳐주는 것만 넣었다.
  * 할인·재고·배송은 원본에 값이 없어서 만들지 않는다.
  */
-export default function ProductListPage({ products, onSelectProduct }: ProductListPageProps) {
-  const [category, setCategory] = useState('all');
+export default function ProductListPage({
+  products,
+  onSelectProduct,
+  category,
+  onCategoryChange,
+}: ProductListPageProps) {
   const [sort, setSort] = useState<SortKey>('popular');
   const [concern, setConcern] = useState('all');
   const [price, setPrice] = useState<PriceKey>('all');
@@ -169,7 +176,7 @@ export default function ProductListPage({ products, onSelectProduct }: ProductLi
             type="button"
             className={category === 'all' ? 'is-active' : ''}
             onClick={() => {
-              setCategory('all');
+              onCategoryChange('all');
               applyFilter('category', 'all');
             }}
           >
@@ -181,7 +188,7 @@ export default function ProductListPage({ products, onSelectProduct }: ProductLi
               type="button"
               className={category === name ? 'is-active' : ''}
               onClick={() => {
-                setCategory(name);
+                onCategoryChange(name);
                 applyFilter('category', name);
               }}
             >

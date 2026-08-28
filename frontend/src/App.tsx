@@ -21,6 +21,21 @@ const personas = buildPersonas(reviews);
 /** 상세 페이지에서 유사·추천 자리에 올릴 개수 */
 const SIMILAR_SIZE = 6;
 
+/**
+ * 헤더 메뉴에 걸 카테고리.
+ * 데이터에 실제로 있는 중분류만 쓴다. 상품 수가 많은 순서.
+ */
+const HEADER_CATEGORIES = (() => {
+  const counts = new Map<string, number>();
+  for (const p of products) {
+    const key = p.category[1];
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name]) => name);
+})();
+
 /** 첫 진입 주소에 상품이 있으면 그 상세로 시작한다 */
 function initialProductId(): string | null {
   const requested = new URLSearchParams(window.location.search).get('product');
@@ -39,6 +54,8 @@ export default function App() {
   // page_view 가 목록·상세 두 번 찍힌다. 처음부터 올바른 값으로 시작한다.
   const [productId, setProductId] = useState<string | null>(initialProductId);
   const [personaId, setPersonaId] = useState(personas[0]?.persona_id ?? '');
+  // 헤더 메뉴와 목록 탭이 같은 값을 바꾸므로 여기서 소유한다
+  const [listCategory, setListCategory] = useState('all');
 
   const persona = useMemo(
     () => personas.find((item) => item.persona_id === personaId) ?? null,
@@ -78,6 +95,14 @@ export default function App() {
     setProductId(null);
   }, []);
 
+  /** 헤더 메뉴로 카테고리를 고르면 목록으로 돌아가 그 카테고리를 펼친다 */
+  const selectCategory = useCallback((category: string) => {
+    track('list_filter_apply', { filter_kind: 'category', filter_value: category, from: 'header' });
+    setListCategory(category);
+    window.history.pushState({ productId: null }, '', '/');
+    setProductId(null);
+  }, []);
+
   // 브라우저 뒤로/앞으로. 화면 안 클릭과 구분해서 남긴다
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
@@ -111,6 +136,8 @@ export default function App() {
         persona={persona}
         onPersonaChange={setPersonaId}
         onHome={goHome}
+        categories={HEADER_CATEGORIES}
+        onCategorySelect={selectCategory}
       />
 
       {product ? (
@@ -126,7 +153,12 @@ export default function App() {
           />
         </>
       ) : (
-        <ProductListPage products={products} onSelectProduct={openProduct} />
+        <ProductListPage
+          products={products}
+          onSelectProduct={openProduct}
+          category={listCategory}
+          onCategoryChange={setListCategory}
+        />
       )}
 
       <LogPanel />

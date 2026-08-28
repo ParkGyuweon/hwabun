@@ -318,6 +318,28 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- 헤더 카테고리 메뉴 ---------- */
+
+/*
+ * span 이던 것을 button 으로 바꿨다 (누를 수 없는 메뉴가 dead_click 을 만들었다).
+ * 생김새는 그대로 두고 버튼 기본 스타일만 지운다.
+ */
+.site-header__nav button {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.site-header__nav button:hover {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-ink);
+}
+
 /* ---------- 홈 이동 버튼 ---------- */
 
 .site-header__logo,
