@@ -29,7 +29,7 @@
 
 .list__promo-head h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -208,8 +208,22 @@
 
 /* ---------- 상품 카드 ---------- */
 
+/*
+ * 세포라 에딧 페이지의 카드 문법.
+ * 흰 카드 + 얇은 테두리 + 넉넉한 내부 여백으로 카드 하나하나가 분리되어 보인다.
+ */
 .card {
   min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-4) var(--space-5);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card:hover {
+  border-color: var(--color-ink-faint);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
 .card__link {
@@ -390,13 +404,6 @@
 
 /* ---------- Quick Look ---------- */
 
-/* 기획전 카드는 세포라 K-Beauty Edit 처럼 테두리 있는 카드로 */
-.list__row .card {
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-3) var(--space-4);
-  background: var(--color-surface);
-}
 
 .card {
   position: relative;
@@ -412,44 +419,49 @@
  */
 .card__hover {
   position: absolute;
-  inset: 0 0 auto 0;
+  /* 카드 내부 패딩만큼 들여서 이미지(정사각형) 영역에 정확히 겹친다 */
+  inset: var(--space-4) var(--space-4) auto;
   aspect-ratio: 1 / 1;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: var(--space-3);
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.18s ease;
 }
 
-.list__row .card .card__hover {
-  /* 테두리 카드에서는 내부 패딩만큼 이미지가 안쪽에 있다 */
-  inset: var(--space-3) var(--space-3) auto;
-}
 
 .card:hover .card__hover,
 .card:focus-within .card__hover {
   opacity: 1;
 }
 
+/* 세포라의 Quicklook: 이미지 하단에 붙는 반투명 회색 바 */
 .card__quicklook {
   pointer-events: auto;
   appearance: none;
-  border: 1px solid var(--color-line);
-  background: var(--color-surface);
-  border-radius: var(--radius-pill);
-  padding: 9px 20px;
+  border: 0;
+  width: 100%;
+  padding: 11px 0;
+  background: rgba(72, 72, 72, 0.85);
+  color: #ffffff;
+  border-radius: var(--radius-sm);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  transform: translateY(8px);
+  transition: transform 0.18s ease;
+}
+
+.card:hover .card__quicklook,
+.card:focus-within .card__quicklook {
+  transform: translateY(0);
 }
 
 .card__quicklook:hover {
-  border-color: var(--color-ink);
+  background: rgba(48, 48, 48, 0.92);
 }
 
 .qlook {
@@ -646,8 +658,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card__hover {
+  .card,
+  .card__hover,
+  .card__quicklook {
     transition: none;
+  }
+
+  .card__quicklook {
+    transform: none;
   }
 
   .qlook__dialog {
