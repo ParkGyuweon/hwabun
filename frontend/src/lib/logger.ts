@@ -23,8 +23,26 @@ type Listener = (event: LogEnvelope) => void;
 
 const BATCH_SIZE = 20;
 const FLUSH_INTERVAL_MS = 5000;
-/** 개발용 패널에서 되돌아볼 최근 이벤트 보관 개수 */
+/** 개발용 패널에서 되돌아볼 최근 이벤트 보관 개수. 전송량과는 무관하다 */
 const HISTORY_LIMIT = 200;
+
+/**
+ * 수집 API.
+ *
+ * 백엔드가 프론트 계약에 맞추기로 해서 이 형태가 기준이다.
+ * 자세한 값은 docs/analytics/log-transport-contract.md 참고.
+ */
+const COLLECT_ENDPOINT = '/api/events';
+
+/**
+ * 재시도 큐 상한.
+ * 수집 서버가 죽어 있어도 브라우저 메모리를 계속 먹지 않도록 막는다.
+ * 방문당 100~160건이라 넉넉잡아 몇 분치다.
+ */
+const QUEUE_LIMIT = 1000;
+
+/** 전송 실패 경고를 매번 찍으면 콘솔이 묻힌다. 한 번만 알린다 */
+let retryWarned = false;
 
 function createId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -178,8 +196,8 @@ function scheduleFlush(): void {
 /**
  * 배치 전송 지점.
  *
- * 수집 API 가 확정되면 이 함수 안에서 POST /events/batch 를 호출하면 된다.
- * 게임/화면 응답이 로그 저장을 기다리지 않도록 반드시 비동기로 유지한다.
+ * 화면 응답이 로그 저장을 기다리지 않도록 반드시 비동기로 유지한다.
+ * 실패해도 화면에는 아무 영향이 없어야 한다. 로그는 부가 기능이다.
  */
 export function flush(useBeacon = false): void {
   if (queue.length === 0) return;
@@ -191,11 +209,53 @@ export function flush(useBeacon = false): void {
     flushTimer = undefined;
   }
 
-  // TODO: 수집 API 확정 후 교체
-  // const body = JSON.stringify({ events: batch });
-  // if (useBeacon) navigator.sendBeacon('/api/events/batch', body);
-  // else fetch('/api/events/batch', { method: 'POST', body, keepalive: true });
-  console.debug(`[log] flush ${batch.length}건${useBeacon ? ' (beacon)' : ''}`, batch);
+  const body = JSON.stringify({ schema_version: SCHEMA_VERSION, events: batch });
+
+  if (useBeacon) {
+    /**
+     * 이탈 시점에는 일반 요청이 취소될 수 있어 sendBeacon 을 쓴다.
+     * 대신 성공 여부를 알 수 없어서 재시도도 못 한다.
+     * 서버가 event_id 로 멱등 처리하기로 했으므로 유실보다 중복이 낫다.
+     */
+    navigator.sendBeacon(COLLECT_ENDPOINT, new Blob([body], { type: 'application/json' }));
+    return;
+  }
+
+  fetch(COLLECT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: true,
+  })
+    .then((response) => {
+      if (!response.ok) requeue(batch, `HTTP ${response.status}`);
+    })
+    .catch((error: unknown) => {
+      requeue(batch, error instanceof Error ? error.message : '네트워크 오류');
+    });
+}
+
+/**
+ * 실패한 배치를 큐 앞에 되돌린다.
+ *
+ * 서버가 `event_id` 기준으로 중복을 걸러주기로 해서 재시도가 안전하다.
+ * 다만 수집 서버가 계속 죽어 있으면 큐가 무한히 커지므로 상한을 둔다.
+ * 오래된 것부터 버린다. 최근 행동이 분석에 더 쓸모가 있다.
+ */
+function requeue(batch: LogEnvelope[], reason: string): void {
+  if (!retryWarned) {
+    retryWarned = true;
+    console.warn(`[log] 전송 실패, 재시도 큐에 넣음 (${reason})`);
+  }
+
+  queue.unshift(...batch);
+  if (queue.length > QUEUE_LIMIT) {
+    const dropped = queue.length - QUEUE_LIMIT;
+    queue.splice(0, dropped);
+    console.warn(`[log] 큐가 넘쳐 오래된 ${dropped}건을 버렸다`);
+  }
+
+  scheduleFlush();
 }
 
 export function subscribe(listener: Listener): () => void {
