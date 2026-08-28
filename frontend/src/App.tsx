@@ -130,7 +130,7 @@ export default function App() {
 
   /** 헤더 메뉴로 카테고리를 고르면 목록으로 돌아가 그 카테고리를 펼친다 */
   const selectCategory = useCallback((category: string) => {
-    track('list_filter_apply', { filter_kind: 'category', filter_value: category, from: 'header' });
+    track('filter_change', { filter_kind: 'category', filter_value: category, from: 'header' });
     setListCategory(category);
     window.history.pushState({ productId: null, cart: false }, '', '/');
     setCartOpen(false);

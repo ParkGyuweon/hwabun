@@ -260,7 +260,7 @@ export default function ProductListPage({
 
   /** 무엇으로 좁혔는지가 취향을 말해준다. 필터 종류를 함께 남긴다 */
   const applyFilter = (kind: string, value: string, reset = true) => {
-    track('list_filter_apply', { filter_kind: kind, filter_value: value });
+    track('filter_change', { filter_kind: kind, filter_value: value });
     if (reset) setShown(PAGE_SIZE);
   };
 
@@ -361,7 +361,7 @@ export default function ProductListPage({
                 const next = event.target.value as SortKey;
                 setSort(next);
                 setShown(PAGE_SIZE);
-                track('list_sort_change', { sort_key: next });
+                track('sort_change', { sort_key: next });
               }}
             >
               {Object.entries(SORT_LABEL).map(([key, label]) => (
