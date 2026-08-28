@@ -1,0 +1,126 @@
+# Log Connector
+
+프론트엔드의 활동 로그를 배치로 받아 검증하고 Kafka로 비동기 발행하는 Spring Boot 애플리케이션입니다.
+
+현재 이벤트 상세 스키마가 확정되지 않았으므로 공통 식별 필드만 검증하고 `properties`는 자유로운 JSON 객체로 받습니다.
+
+## IntelliJ에서 실행
+
+1. IntelliJ에서 이 폴더의 `build.gradle`을 엽니다.
+2. Gradle 프로젝트로 불러옵니다.
+3. Project SDK와 Gradle JVM을 IntelliJ가 관리하는 JDK 21로 선택합니다.
+4. `LogConnectorApplication`의 `main()`을 실행합니다.
+
+별도의 JDK를 추가 설치할 필요는 없습니다. 실제 이벤트 발행에는 로컬 또는 팀 개발 Kafka 주소가 필요하며, 기본 주소는 `localhost:9092`입니다.
+
+터미널에서 실행하려면 다음 명령을 사용할 수도 있습니다.
+
+```powershell
+$env:JAVA_HOME='C:\Users\SSAFY\.jdks\ms-21.0.11'
+./gradlew.bat bootRun
+```
+
+Kafka 주소나 Topic을 변경하려면 환경변수를 사용합니다.
+
+```powershell
+$env:KAFKA_BOOTSTRAP_SERVERS='localhost:9092'
+$env:ACTIVITY_EVENTS_TOPIC='activity-events'
+$env:ACTIVITY_EVENTS_PARTITIONS='3'
+$env:KAFKA_PUBLISHER_CORE_POOL_SIZE='4'
+$env:KAFKA_PUBLISHER_MAX_POOL_SIZE='16'
+$env:KAFKA_PUBLISHER_QUEUE_CAPACITY='0'
+./gradlew.bat bootRun
+```
+
+Topic은 기본적으로 인프라에서 미리 생성한다고 가정합니다. 로컬 개발 중 애플리케이션이 Topic을 생성하게 하려면 Kafka를 먼저 실행한 뒤 `CREATE_ACTIVITY_EVENTS_TOPIC=true`를 설정합니다.
+
+Kafka가 실행되지 않아도 애플리케이션은 시작되지만, 이벤트 발행 요청은 `503 Service Unavailable`로 실패합니다.
+
+`KafkaTemplate.send()` 호출은 Tomcat 요청 스레드가 아니라 `kafka-publisher-*` 전용 스레드에서 실행합니다. 기본 전용 풀은 core 4개, 최대 16개이며 대기열을 사용하지 않습니다. Kafka 장애로 전용 풀이 모두 막히면 새 발행 요청을 쌓아두지 않고 `503 Service Unavailable`로 빠르게 거절합니다. HTTP 응답은 요청 스레드를 점유하지 않은 상태로 Kafka ACK 또는 실패 결과를 기다립니다.
+
+## Swagger
+
+애플리케이션 실행 후 다음 주소에서 API 명세와 테스트 화면을 확인할 수 있습니다.
+
+```text
+Swagger UI: http://localhost:8080/swagger-ui.html
+OpenAPI JSON: http://localhost:8080/v3/api-docs
+```
+
+Swagger UI는 Spring 서버가 직접 제공하므로 별도의 CORS 설정이 필요하지 않습니다.
+
+## 이벤트 전송
+
+```powershell
+$body = @{
+  schema_version = 'draft'
+  events = @(
+    @{
+      event_id = 'evt-001'
+      event_type = 'product.click'
+      event_time = '2026-08-27T14:30:00Z'
+      persona_id = 'persona-001'
+      session_id = 'session-001'
+      product_id = 'product-001'
+      properties = @{ position = 1 }
+    }
+  )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri 'http://localhost:8080/api/events' `
+  -ContentType 'application/json' `
+  -Body $body
+```
+
+성공하면 Kafka가 모든 이벤트를 확인한 후 `202 Accepted`와 다음 형태의 응답을 반환합니다.
+
+```json
+{
+  "request_id": "생성된 UUID",
+  "accepted": 1,
+  "rejected": 0
+}
+```
+
+## 상태 및 Metric
+
+```text
+GET http://localhost:8080/actuator/health
+GET http://localhost:8080/actuator/metrics/collector.events.received
+GET http://localhost:8080/actuator/metrics/collector.events.published
+GET http://localhost:8080/actuator/metrics/collector.events.publish.failures
+```
+
+## 테스트
+
+```powershell
+$env:JAVA_HOME='C:\Users\SSAFY\.jdks\ms-21.0.11'
+./gradlew.bat test
+```
+
+단위 테스트에서는 실제 Kafka가 필요하지 않습니다.
+
+현재 테스트는 다음 동작을 검증합니다.
+
+```text
+EventControllerTest       HTTP 202/400/503와 잘못된 JSON
+EventValidationTest       필수 필드, 빈 배열, 최대 100개 제한
+EventJsonContractTest     snake_case JSON 계약
+KafkaEventPublisherTest   Kafka Key, 배치 성공, 전송 실패, 전용 스레드 격리와 포화 거절
+KafkaEventMessageTest     Kafka 메시지 변환과 received_at
+CollectorMetricsTest      수신/성공/실패 Counter
+KafkaTopicConfigTest      Topic 이름과 Partition 설정
+OpenApiConfigTest         Swagger 기본 정보
+```
+
+## 아직 확정하지 않은 부분
+
+- 최종 Event Taxonomy
+- 이벤트별 `properties` 검증 규칙
+- Persona와 Session 생성 정책
+- DLQ 정책
+- 운영 Kafka의 Partition/Replication 설정
+
+팀의 로그 스키마가 확정되면 `ActivityEvent`와 검증 규칙을 계약에 맞춰 보완합니다.
