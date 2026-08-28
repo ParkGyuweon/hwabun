@@ -3,7 +3,7 @@
 > 버전 `0.1-draft` · 2026-08-27
 > 대상: 상위 200개 Sephora 스킨케어 상품
 > 소비처: `batch/jobs/product_feature_job.py` → MySQL → `backend/recommend/RankingService`
-> 어휘집: [`product-feature-vocab.json`](./product-feature-vocab.json)
+> 어휘집: [`product-feature-vocab.json`](product-feature-vocab.json)
 
 `category`, `highlights`, `price_usd`, `rating`, `loves_count` 5개 필드를 실측 분석하고 상품 벡터 Encoding 방식을 정의한 초안입니다. 모든 수치는 상위 200개 상품 전수 기준입니다.
 
@@ -11,20 +11,20 @@
 
 ## 0. 한눈에 보기
 
-**콘텐츠 벡터 72차원 · 블록 가중치 합계 1.00**
+**콘텐츠 벡터 93차원 · 블록 가중치 합계 1.00**
 
 | 순 | Feature | 담는 내용 | 원본 | 인코딩 | 차원 | 보유율 | 가중치 |
 |---:|---|---|---|---|---:|---:|---:|
-| 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.29** |
-| 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.24 |
-| 3 | `ingredient` | 핵심 성분 9종 | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | 55.0% | 0.18 |
-| 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.15 |
+| 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.42** |
+| 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
+| 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
+| 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
 | 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.0% | 0.06 |
 | 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
 | 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
 | 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 28.0% | 0.02 |
 
-> **주의:** 위 가중치는 명목값입니다. 보유율을 곱한 **실효 비중**에서는 `tertiary_category`(28.9%)가 `concern`(27.1%)을 역전하고, 카테고리 두 블록 합계가 47.0%로 가장 큽니다. 측정 결과 상위 5 이웃의 **91.1%가 같은 세부 카테고리**로 쏠려 있어 가중치 조정이 권고됩니다. 상세는 4장 참조.
+> **주의:** 위 가중치는 어휘집 `0.2` 확정값입니다. 카테고리 쏠림 측정에 따라 카테고리 두 블록을 실효 39% → 22.4%로 하향하고 그만큼을 `concern`·`ingredient`로 이관했습니다. 근거는 [`cbf-technical-review.md`](../docs/ai/cbf-technical-review.md) 4장 참조.
 
 ### 제외한 것
 
@@ -41,18 +41,19 @@
 |---|---|
 | `concern` | Dullness/Uneven Texture, Dryness, Anti-Aging, Pores, Loss of firmness, Dark Circles, Acne/Blemishes, Redness, Dark spots |
 | `tertiary_category` | Moisturizers, Face Serums, Face Wash & Cleansers, Eye Creams & Treatments, Face Masks, Lip Balms & Treatments, Face Sunscreen, Toners, Face Oils, Exfoliators, Facial Peels, Makeup Removers, Mists & Essences, BB & CC Creams, Blemish & Acne Treatments, For Face, Night Creams, Face Wipes, Eye Masks |
-| `ingredient` | Hyaluronic Acid, Vitamin C, AHA/Glycolic Acid, Salicylic Acid, Niacinamide, SPF, Retinol, Lactic Acid, Collagen |
+| `ingredient` | Hyaluronic Acid, Silicone, Vitamin C, Squalane, Probiotic/Ferment, Green Tea, Peptides, Aloe, Lactic Acid, Licorice, Shea Butter, Panthenol(B5), Niacinamide, Jojoba, AHA/Glycolic Acid, Salicylic Acid, Ceramide, Rosehip/Rose, Caffeine, Urea, Adenosine, Allantoin, Retinol, Zinc, Alcohol Denat, SPF, Centella(Cica), Willow Bark, Collagen, Mineral Oil/Petrolatum |
 | `secondary_category` | Moisturizers, Treatments, Cleansers, Eye Care, Masks, Lip Balms & Treatments, Sunscreen, Self Tanners |
 | `clean` | Clean at Sephora, Vegan, Without Parabens, Cruelty-Free, Clean + Planet Positive, Fragrance Free, Oil Free, Without Sulfates SLS & SLES, Without Silicones, Refill Available, Without Phthalates, Alcohol Free, Without Mineral Oil, Gluten Free, Hypoallergenic, Without Oxybenzone |
 | `price_bin` | ~$20, $20-35, $35-50, $50-80, $80+ |
 | `texture` | Hydrating, Plumping, Radiant Finish, Natural Finish, High Shine Finish |
 
-### 인코딩 방식 2가지
+### 인코딩 방식
 
 | 방식 | 뜻 | 예시 |
 |---|---|---|
 | **원핫** (one-hot) | 여러 칸 중 **하나만** 1 | 한 상품은 클렌저이거나 수분크림. 둘 다일 수 없음 |
 | **멀티핫 + IDF** (multi-hot) | **여러 칸이 동시에** 1. 흔한 값은 약하게 반영 | 비건이면서 파라벤 프리이면서 크루얼티프리일 수 있음 |
+| **+ 위치 가중** | `ingredient` 전용. 전성분 앞쪽일수록 큰 값 | 히알루론산이 2번째면 0.9, 40번째면 0.2 |
 
 **IDF가 필요한 이유**
 
@@ -79,7 +80,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 - 콘텐츠 벡터는 상품당 1개로 고정되므로 **사용자별 분기가 불가능**합니다. 복합성 사용자에게 이 항을 끄는 처리를 할 수 없습니다
 - 테이블은 사용자 속성으로 조회하므로 분기가 가능합니다
 
-관련 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절 참조.
+관련 설계는 [`recommendation-design.md`](../docs/ai/recommendation-design.md) 6장·7-4절 참조.
 
 ---
 
@@ -87,16 +88,16 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 | # | Feature | 담는 내용 | 원본 | 인코딩 | 차원 | 보유율 | 가중치 |
 |---:|---|---|---|---|---:|---:|---:|
-| 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.29** |
-| 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.24 |
-| 3 | `ingredient` | 핵심 성분 9종 | `highlights` 성분 태그 | 멀티핫 + IDF | 9 | 55.0% | 0.18 |
-| 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.15 |
+| 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.42** |
+| 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
+| 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
+| 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
 | 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.0% | 0.06 |
 | 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
 | 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
 | 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 28.0% | 0.02 |
 
-**콘텐츠 벡터 총 72차원**
+**콘텐츠 벡터 총 93차원**
 
 ---
 
@@ -143,7 +144,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 계층 정보를 유지하기 위해서입니다. `Face Serums`와 `Toners`는 tertiary가 다르지만 둘 다 `Treatments`에 속합니다. secondary를 함께 인코딩하면 **같은 대분류 안의 다른 소분류 상품끼리 부분 유사도**가 생깁니다. tertiary만 쓰면 두 상품의 카테고리 유사도가 0이 됩니다.
 
-중복이 있는 만큼 secondary 가중치를 tertiary보다 낮게(0.13 vs 0.20) 둡니다.
+중복이 있는 만큼 secondary 가중치를 tertiary보다 낮게(0.06 vs 0.11) 둡니다.
 
 > **주의:** `tertiary_category`는 12개 상품에서 원본이 비어 있어 `secondary_category` 값으로 채운 결과입니다. 상세 기준은 `Research/DATA_CLEANING.md`(개인 폴더) 5-2 참조.
 
@@ -153,7 +154,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 62종을 성격별로 6개 블록으로 분리했습니다. 하나의 멀티핫으로 묶지 않는 이유는 **블록마다 추천 근거로서의 무게가 다르기** 때문입니다. "지성 피부에 좋다"와 "비건이다"를 같은 가중치로 둘 수 없습니다.
 
-#### concern — 9종 / 보유 155개 (77.5%) / 가중치 0.25
+#### concern — 9종 / 보유 155개 (77.5%) / 가중치 0.42
 
 `"Good for: X"` → `X` 추출.
 
@@ -228,9 +229,9 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 리뷰 구성비는 **누가 이 제품을 샀는가**를 나타냅니다. 지성용으로 마케팅된 제품에 지성 사용자가 몰리는 선택 효과가 포함됩니다. 추천 근거로는 자연스럽지만 **"이 제품이 지성 피부에 효과가 있다"는 의학적 주장으로 사용해서는 안 됩니다.**
 
-상세 설계는 [`recommendation-design.md`](./recommendation-design.md) 6장·7-4절, 테이블은 `batch/ingest/data/affinity_lift.csv` 참조.
+상세 설계는 [`recommendation-design.md`](../docs/ai/recommendation-design.md) 6장·7-4절, 테이블은 `batch/ingest/data/affinity_lift.csv` 참조.
 
-#### ingredient — 9종 / 보유 110개 (55.0%) / 가중치 0.15
+#### ingredient — 30종 / 보유 196개 (98.0%) / 가중치 0.27
 
 | 값 | 개수 | | 값 | 개수 |
 |---|---:|---|---|---:|
@@ -240,7 +241,37 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 | Salicylic Acid | 16 | | Collagen | 3 |
 | Niacinamide | 12 | | | |
 
-**`ingredients` 원본 컬럼의 TF-IDF는 이번 초안에서 제외합니다.** 원본이 성분 배열이 아니라 전 성분을 쉼표로 이어붙인 1,000자 내외 통짜 문자열이라, 분리·정규화 품질이 결과를 좌우하고 차원이 수천 개로 증가합니다. `highlights`의 성분 태그 9종만으로 **주요 활성 성분은 이미 커버**됩니다.
+**`highlights` 태그만 쓰면 보유율이 55%뿐이어서, 전성분 문자열까지 파싱합니다.**
+
+`highlights`는 세포라 마케팅 태그라 상품마다 있고 없습니다. 반면 `ingredients`(전성분)는 200/200 채워져 있고, 그 안에 성분명이 실제로 들어 있습니다.
+
+```
+highlights:  []
+ingredients: ["Water, Glycerin, Sodium Hyaluronate, Niacinamide, ..."]
+```
+
+동의어 패턴으로 매칭합니다 (`Hyaluronic Acid` ← `hyaluronic acid` / `sodium hyaluronate` / `hyaluronate`). 태그가 붙은 성분의 **91.5%** 를 전성분에서 재발견했고, 태그에 없던 **159건**을 새로 찾았습니다.
+
+**어휘 30종은 데이터로 선별했습니다.** 상위 200개 중 **5~120개 상품 보유** 구간만 채택했습니다. `Vitamin E`는 127개(63.5%)가 보유해 변별력이 없어 제외했고, `Bakuchiol`·`Mandelic Acid`는 각 2개뿐이라 제외했습니다.
+
+**위치 가중이 필수입니다.** 전성분은 함량 순 나열이므로 뒤쪽 성분은 미량입니다.
+
+```
+태그로 표시됨        -> 1.0    (브랜드가 핵심이라고 표시)
+전성분에서만 발견     -> max(1 - 등장위치/전체성분수, 0.10)
+```
+
+Cicapair Tiger Grass Cream(전성분 62개)의 실제 값입니다.
+
+| 성분 | 값 | 해석 |
+|---|---:|---|
+| Shea Butter | 0.871 | 앞쪽 = 주요 성분 |
+| Niacinamide | 0.855 | 앞쪽 |
+| Centella (Cica) | 0.661 | 중간. 제품명의 핵심 성분 |
+| Adenosine | 0.355 | 뒤쪽 = 미량 |
+| Panthenol (B5) | 0.226 | 뒤쪽 = 미량 |
+
+이 처리가 없으면 히알루론산 세럼과 히알루론산이 0.01% 들어간 클렌저가 같은 값을 받습니다.
 
 #### clean — 16종 / 보유 170개 (85.0%) / 가중치 0.05
 
@@ -347,9 +378,9 @@ prior(i) = (log1p(loves_count) - log_min) / (log_max - log_min)
 
 ```
 [secondary_category  8] [tertiary_category 19] [concern 9]
-[ingredient 9] [clean 16] [texture 5] [price_bin 5] [rating 1]
+[ingredient 30] [clean 16] [texture 5] [price_bin 5] [rating 1]
 
-총 72차원
+총 93차원
 ```
 
 ### 3-2. IDF 가중
@@ -382,16 +413,16 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 | 블록 | 가중치 | 근거 |
 |---|---:|---|
-| `concern` | 0.29 | 사용자가 해결하려는 문제와 직결 |
-| `tertiary_category` | 0.24 | 가장 정밀한 제품 종류 |
-| `ingredient` | 0.18 | 효능 근거. 성분 기반 설명 가능 |
-| `secondary_category` | 0.15 | 계층 상위. tertiary와 중복 있어 낮춤 |
+| `concern` | 0.42 | 사용자가 해결하려는 문제와 직결 |
+| `tertiary_category` | 0.11 | 가장 정밀한 제품 종류. 카테고리 쏠림 방지를 위해 하향 |
+| `ingredient` | 0.27 | 효능 근거. 전성분 파싱으로 보유율 98% |
+| `secondary_category` | 0.06 | 계층 상위. tertiary와 중복 있어 낮춤 |
 | `clean` | 0.06 | 보유율 높으나 변별력 낮음 |
 | `price_bin` | 0.04 | 보조 신호 |
 | `rating` | 0.02 | 변동계수 0.057, 최소 유지 |
 | `texture` | 0.02 | 보유율 28%, 마케팅 문구 성격 |
 
-`skin_fit` 제외로 확보된 0.15는 위 8개 블록에 비례 재분배했습니다.
+`skin_fit` 제외로 확보된 0.15를 8개 블록에 비례 재분배한 뒤, 카테고리 쏠림 측정에 따라 카테고리 두 블록을 하향하고 그만큼을 `concern`·`ingredient`로 이관했습니다 (어휘집 `0.2`).
 
 > 이 가중치는 **초안**입니다. 최종 값은 프론트 담당자가 1차 조정 후 확정합니다.
 
@@ -399,7 +430,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 | 상황 | 처리 |
 |---|---|
-| `highlights` 전체 없음 (19개 상품) | `concern`·`ingredient`·`clean`·`texture` 4개 블록이 0 |
+| `highlights` 전체 없음 (19개 상품) | `concern`·`clean`·`texture` 3개 블록이 0. `ingredient`는 전성분 파싱으로 채워짐 |
 | 블록 하나만 없음 | 해당 블록만 0. 나머지 블록 가중치는 재분배하지 않음 |
 | `rating` 결측 | 전체 평균으로 대체 (상위 200개에는 없음) |
 
@@ -407,7 +438,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 ### 3-5. 어휘집 파일
 
-인코딩에 필요한 어휘·문서빈도·가중치는 [`product-feature-vocab.json`](./product-feature-vocab.json)에 정의되어 있습니다. `batch/jobs/product_feature_job.py`가 이 파일을 읽어 인코딩합니다.
+인코딩에 필요한 어휘·문서빈도·가중치는 [`product-feature-vocab.json`](product-feature-vocab.json)에 정의되어 있습니다. `batch/jobs/product_feature_job.py`가 이 파일을 읽어 인코딩합니다.
 
 ```json
 {
@@ -430,80 +461,55 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 ---
 
-## 4. 가중치 검증 — 이웃 쏠림 측정
+## 4. 가중치 검증
 
-블록 가중치가 실제 추천 결과에 어떤 영향을 주는지 인코더를 구현해 측정했습니다. (`Research/encode_products.py`)
+블록 가중치가 실제 추천 결과에 어떤 영향을 주는지는 [`cbf-technical-review.md`](../docs/ai/cbf-technical-review.md) 4장에서 페르소나 1,000명으로 측정했습니다. 그 결과에 따라 카테고리 두 블록을 하향하고 어휘집을 `0.2`로 확정했습니다. 여기서는 요약만 둡니다.
 
-### 4-1. 보유율이 100%가 아닌 블록의 실제 영향
+### 4-1. 보유율이 100%가 아닌 블록의 영향
 
-**결론: 구조적으로 문제 없습니다.** 블록별 L2 정규화 → 가중치 → 전체 L2 정규화 순서이므로, 비어 있는 블록의 몫은 소실되지 않고 **남은 블록에 자동 재분배**됩니다. `concern`이 없는 상품은 카테고리·성분·가격 성분이 그만큼 커지고, 벡터 길이는 여전히 1입니다.
+**구조적으로 문제 없습니다.** 블록별 L2 정규화 → 가중치 → 전체 L2 정규화 순서이므로, 비어 있는 블록의 몫은 소실되지 않고 **남은 블록에 자동 재분배**됩니다. 벡터 길이는 항상 1입니다.
 
-다만 **기대 기여도**(`가중치 × 보유율`)로 보면 명목 가중치와 순위가 달라집니다.
+다만 **기대 기여도**(`가중치 × 보유율`)는 명목 가중치와 다릅니다.
 
 | 블록 | 가중치 | 보유율 | 기대 기여 | 실효 비중 |
 |---|---:|---:|---:|---:|
-| `tertiary_category` | 0.24 | 100% | 0.240 | **28.9%** |
-| `concern` | 0.29 | 77.5% | 0.225 | 27.1% |
-| `secondary_category` | 0.15 | 100% | 0.150 | 18.1% |
-| `ingredient` | 0.18 | 55.0% | 0.099 | 11.9% |
-| `clean` | 0.06 | 85.0% | 0.051 | 6.1% |
-| `price_bin` | 0.04 | 100% | 0.040 | 4.8% |
-| `rating` | 0.02 | 100% | 0.020 | 2.4% |
-| `texture` | 0.02 | 26.0% | 0.005 | 0.6% |
-| **합계** | 1.00 | | 0.830 | 100% |
+| `concern` | 0.42 | 77.5% | 0.326 | **42.8%** |
+| `ingredient` | 0.27 | 98.0% | 0.265 | 27.8% |
+| `tertiary_category` | 0.11 | 100.0% | 0.110 | 14.5% |
+| `secondary_category` | 0.06 | 100.0% | 0.060 | 7.9% |
+| `clean` | 0.06 | 85.0% | 0.051 | 6.7% |
+| `price_bin` | 0.04 | 100.0% | 0.040 | 5.3% |
+| `rating` | 0.02 | 100.0% | 0.020 | 2.6% |
+| `texture` | 0.02 | 26.0% | 0.005 | 0.7% |
+| **합계** | 1.00 | | 0.760 | 100% |
 
-명목상 1위인 `concern`이 실효 비중에서는 `tertiary_category`에 역전됩니다. **카테고리 두 블록 합계가 47.0%** 로 가장 큽니다.
+카테고리 두 블록의 실효 비중은 **22.4%** 입니다. (명목 17%)
 
-### 4-2. 상위 5 이웃의 카테고리 쏠림
+### 4-2. 조정 근거 요약
 
-각 상품의 코사인 유사도 상위 5개가 같은 카테고리인지 측정했습니다.
+| 지표 | 조정 전 | 조정 후 |
+|---|---:|---:|
+| 상위 5개 추천의 카테고리 종류 | 1.90개 | **3.13개** |
+| 상위 5개 평균 코사인 (관련성) | 0.614 | **0.632** |
+| `concern` 겹침률 | 77.6% | **86.7%** |
 
-| 시나리오 | 같은 `tertiary` | 같은 `secondary` | 이웃 5개의 카테고리 종류 |
-|---|---:|---:|---:|
-| 카테고리 상향 | 93.5% | 99.2% | 1.16개 |
-| **현재안** | **91.1%** | **97.2%** | **1.28개** |
-| 중간안 A | 71.7% | 79.9% | 2.03개 |
-| 중간안 B | 58.1% | 66.6% | 2.50개 |
-| 카테고리 최소 | 44.9% | 53.9% | 2.89개 |
+다양성을 올렸는데 관련성도 함께 올라갔습니다. 카테고리 원핫이 유사도를 독점하고 있었기 때문입니다.
 
-**현재안에서 이미 이웃의 91.1%가 같은 세부 카테고리입니다.** 이웃 5개의 카테고리 종류가 1.28개이므로 사실상 "같은 카테고리 상품 목록"에 가깝습니다.
+### 4-3. 부작용 — 구분되지 않는 상품 31개
 
-```
-LANEIGE 립 슬리핑 마스크의 이웃 4개
-  0.900  Brazilian Kiss Cupuaçu Lip Butter  (Lip Balms & Treatments)
-  0.896  The Kissu Lip Mask                 (Lip Balms & Treatments)
-  0.896  Lip Butter Balm                    (Lip Balms & Treatments)
-  0.896  Lip Glowy Balm                     (Lip Balms & Treatments)
-```
-
-### 4-3. 카테고리 가중치를 올려서는 안 되는 이유
-
-보유율 100%라는 이유로 카테고리 가중치를 올리면 같은 카테고리 비율이 **93.5%** 가 되어, 추천이 **카테고리 필터로 퇴화**합니다. 클렌저를 보던 사용자에게 클렌저만 5개 제시하는 것은 추천의 가치가 없습니다.
-
-카테고리를 넘나드는 추천을 만드는 블록이 `concern`입니다. "건조함 개선"으로 묶이면 세럼·크림·마스크가 함께 후보에 오릅니다. 이 블록을 낮추면 그 능력이 사라집니다.
-
-### 4-4. 권고안 — 중간안 A
+`concern`과 `ingredient` 가중치가 47% → 69%로 올라간 대가로, **두 블록이 모두 빈 상품 31개(15.5%)** 는 서로 벡터가 거의 같아졌습니다. 코사인 0.99 이상인 쌍이 19쌍 존재합니다.
 
 ```
-tertiary_category 0.19   secondary_category 0.11
-concern 0.33   ingredient 0.21
-(clean 0.06 / price_bin 0.04 / rating 0.02 / texture 0.02 유지)
+1.0000  The True Cream Aqua Bomb  |  The True Cream Moisturizing Bomb
+1.0000  The True Cream Aqua Bomb  |  Greek Yoghurt Nourishing Gel-Cream
 ```
 
-같은 카테고리 비율 71.7%, 이웃 카테고리 종류 2.03개. 화장품 추천에 필요한 카테고리 일관성은 유지하면서 교차 추천 여지를 확보합니다.
+`ingredients` 원본 문자열에서 성분 키워드를 매칭해 `ingredient` 블록을 채우는 방안이 권고되어 있습니다. 상세는 [`cbf-technical-review.md`](../docs/ai/cbf-technical-review.md) 5장 참조.
 
-> **어휘집(`product-feature-vocab.json`)의 현재 값은 "현재안"입니다.** 중간안 A로의 변경은 가중치 결정 권한이 있는 담당자 확정 후 반영합니다. (미해결 과제 6번)
+### 4-4. `highlights` 결측 상품은 밀리지 않고 뭉칩니다
 
-### 4-5. `highlights` 결측 상품은 밀리지 않고 뭉칩니다
+블록이 적을수록 남은 블록에 집중되어, **같은 카테고리 상품과 과도하게 유사**해집니다. 추천 후보에서 밀리는 것이 아니라 카테고리 내부로 뭉치는 방향으로 작용합니다.
 
-| 그룹 | 최고 유사도 평균 |
-|---|---:|
-| `highlights` 결측 19개 | **0.922** |
-| `highlights` 보유 181개 | 0.864 |
-
-블록이 적을수록 남은 카테고리 블록에 집중되어, **같은 카테고리 상품과 과도하게 유사**해집니다. 추천 후보에서 밀리는 것이 아니라 카테고리 내부로 뭉치는 방향으로 작용합니다.
-
----
 
 ## 5. MySQL 테이블 초안
 
@@ -511,7 +517,7 @@ concern 0.33   ingredient 0.21
 CREATE TABLE product_feature (
     product_id      VARCHAR(16)  NOT NULL,
     vocab_version   VARCHAR(16)  NOT NULL,
-    vector          JSON         NOT NULL,   -- float[72]
+    vector          JSON         NOT NULL,   -- float[93]
     prior_score     DECIMAL(6,5) NOT NULL,   -- log 정규화 loves_count
     secondary_category VARCHAR(64) NOT NULL, -- 필터·디버깅용 원본 보존
     tertiary_category  VARCHAR(64) NOT NULL,
@@ -525,7 +531,7 @@ CREATE TABLE product_feature (
 
 `vocab_version`을 PK에 포함해 어휘집 변경 시 **구버전 벡터와 공존**할 수 있게 합니다. 롤백과 A/B 테스트에 필요합니다.
 
-200개 × 72차원 float32 = **58KB**입니다. `RankingService`가 기동 시 전량 메모리에 적재해도 무방합니다.
+200개 × 93차원 float32 = **73KB**입니다. `RankingService`가 기동 시 전량 메모리에 적재해도 무방합니다.
 
 ---
 
@@ -533,7 +539,7 @@ CREATE TABLE product_feature (
 
 1. **`highlights` 결측 19개 (9.5%)** — `concern`·`ingredient`·`clean` 블록이 비어 카테고리·가격·`skin_fit`만으로 벡터가 구성됩니다. 그 결과 같은 카테고리 상품과 유사도가 과도하게 높아집니다(최고 유사도 평균 0.922 vs 0.864). `ingredients` 원본 문자열에서 `Hyaluronic Acid`, `Niacinamide` 등 키워드를 매칭해 `ingredient` 블록을 보완하는 방안이 있습니다. 미적용.
 
-2. **`attr_affinity`의 `hair_color` / `eye_color`** — lift 기준 판별력이 4개 속성 중 최하위(유의 셀 16.1% / 19.8%)이고, `hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것으로 **연령 대리변수**로 보입니다. 가중치 0.10씩 유지할지 제외할지 결정 필요.
+2. **`attr_affinity`의 `hair_color` / `eye_color`** — lift 기준 판별력이 4개 속성 중 최하위(유의 셀 16.0% / 19.4%)이고, `hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것으로 **연령 대리변수**로 보입니다. **가중치 0.10 유지로 확정.** 기여가 작아 위험이 제한적이고, 사용자 속성 4개를 모두 반영하는 것이 설계 전제입니다. 로그 축적 후 실제 지표로 재평가합니다.
 
 3. **`rating` 유지 여부** — 변동계수 0.057. 성능 검증 후 제외를 검토합니다.
 
@@ -541,7 +547,7 @@ CREATE TABLE product_feature (
 
 5. **`ingredients` TF-IDF 미적용** — 통짜 문자열 분리·정규화가 선행되어야 합니다. V2 과제.
 
-6. **블록 가중치 미확정** — 어휘집의 현재 값은 "현재안"이며, 측정 결과 같은 카테고리 이웃 비율이 91.1%로 과도합니다. **중간안 A(71.7%)로의 변경을 권고**하나, 가중치 결정 권한이 있는 담당자 확정을 대기합니다. 근거는 4장 참조.
+6. **~~블록 가중치 미확정~~** → 어휘집 `0.2`에서 확정. 카테고리 실효 39% → 22.4%, 상위 5개 추천의 카테고리 종류 1.90 → 3.13개. 근거는 [`cbf-technical-review.md`](../docs/ai/cbf-technical-review.md) 4장
 
 ---
 
@@ -551,7 +557,7 @@ CREATE TABLE product_feature (
 |---|---|
 | `Research/DATA_CLEANING.md` | 상품 200개 선정·병합·결측 보완 기준 |
 | `Research/PERSONA_SAMPLING.md` | 페르소나 10,000명 층화추출 기준 |
-| [`recommendation-design.md`](./recommendation-design.md) | 추천 점수 설계 (이 벡터의 소비처) |
+| [`recommendation-design.md`](../docs/ai/recommendation-design.md) | 추천 점수 설계 (이 벡터의 소비처) |
 
 **재현**
 

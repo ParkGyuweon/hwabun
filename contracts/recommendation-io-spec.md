@@ -1,7 +1,7 @@
 # 추천 입출력 데이터 구조
 
 > 2026-08-27 · 어휘집 버전 `0.1-draft`
-> 관련: [`recommendation-design.md`](./recommendation-design.md) (계산 설계) · [`product-feature-spec.md`](./product-feature-spec.md) (상품 벡터 명세) · [`product-feature-sample.md`](./product-feature-sample.md) (실제 계산 샘플)
+> 관련: [`recommendation-design.md`](../docs/ai/recommendation-design.md) (계산 설계) · [`product-feature-spec.md`](product-feature-spec.md) (상품 벡터 명세) · [`product-feature-sample.md`](../docs/ai/product-feature-sample.md) (실제 계산 샘플)
 
 추천 점수를 구성하는 4개 요소의 **입력 → 처리 → 출력 스키마 → 저장소 → 소비처**를 정의합니다.
 
@@ -40,10 +40,10 @@ reviews_*.csv                                │
 
 | 요소 | 갱신 주기 | 저장소 | 크기 |
 |---|---|---|---|
-| Product Vector | 일 1회 배치 | MySQL | 200행 × 72차원 = 58KB |
+| Product Vector | 일 1회 배치 | MySQL | 200행 × 93차원 = 73KB |
 | Attribute Affinity | 일 1회 배치 | MySQL | 4,000행 = 약 500KB |
 | Product Prior | 일 1회 배치 | MySQL | 200행 |
-| User Behavior Vector | **이벤트마다 증분** | Redis | 10,000명 × 72차원 = 2.8MB |
+| User Behavior Vector | **이벤트마다 증분** | Redis | 10,000명 × 93차원 = 3.6MB |
 
 **앞의 3개는 사용자와 무관한 오프라인 산출물**이고, 마지막 하나만 실시간입니다.
 
@@ -51,7 +51,7 @@ reviews_*.csv                                │
 
 ## 1. Product Vector
 
-상품의 콘텐츠를 72차원 벡터로 표현합니다.
+상품의 콘텐츠를 93차원 벡터로 표현합니다.
 
 ### 입력
 
@@ -63,13 +63,14 @@ reviews_*.csv                                │
 ### 처리
 
 ```
-1. highlights 62종을 4개 블록으로 분류 (concern / ingredient / clean / texture)
-2. 블록별 인코딩 (원핫 또는 멀티핫 + IDF)
-3. 블록별 L2 정규화 -> 블록 가중치 곱
-4. 전체 이어붙인 후 L2 정규화
+1. highlights 를 concern / clean / texture 3개 블록으로 분류
+2. ingredient 는 태그 + 전성분 문자열 파싱으로 값 생성 (위치 가중)
+3. 블록별 인코딩 (원핫 또는 멀티핫 + IDF)
+4. 블록별 L2 정규화 -> 블록 가중치 곱
+5. 전체 이어붙인 후 L2 정규화
 ```
 
-블록 구성과 가중치는 [`product-feature-spec.md`](./product-feature-spec.md) 3장 참조.
+블록 구성과 가중치는 [`product-feature-spec.md`](product-feature-spec.md) 3장 참조.
 
 ### 출력 스키마
 
@@ -77,7 +78,7 @@ reviews_*.csv                                │
 CREATE TABLE product_feature (
     product_id      VARCHAR(16)  NOT NULL,
     vocab_version   VARCHAR(16)  NOT NULL,
-    vector          JSON         NOT NULL,   -- float[72], L2 정규화 완료
+    vector          JSON         NOT NULL,   -- float[93], L2 정규화 완료
     prior_score     DECIMAL(6,5) NOT NULL,
     secondary_category VARCHAR(64) NOT NULL,
     tertiary_category  VARCHAR(64) NOT NULL,
@@ -138,12 +139,12 @@ v_u = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))
 
 ### 출력 스키마 (Redis)
 
-전체 재계산 없이 O(72)로 증분 갱신하기 위해 **누적합과 누적가중치만** 보관합니다.
+전체 재계산 없이 O(93)로 증분 갱신하기 위해 **누적합과 누적가중치만** 보관합니다.
 
 ```
 KEY   user:vec:{persona_id}
 TYPE  Hash
-FIELD u_sum      : float[72]  가중 누적합 (JSON 또는 바이너리)
+FIELD u_sum      : float[93]  가중 누적합 (JSON 또는 바이너리)
       w_sum      : float      가중치 누적합
       n_products : int        상호작용한 고유 상품 수 (가중치 스케줄 판정용)
       seen       : Set        이미 상호작용한 product_id (추천 제외용)
@@ -152,7 +153,7 @@ TTL   없음 (시뮬레이션 종료까지 유지)
 ```
 
 ```python
-# 이벤트 1건당 O(72)
+# 이벤트 1건당 O(93)
 u_sum += w * decay * v_item
 w_sum += w * decay
 n_products = |seen|
@@ -175,7 +176,7 @@ user_vector = u_sum / w_sum          # 조회 시 계산
 
 | 소스 | 내용 |
 |---|---|
-| `reviews_*.csv` | 458,614건 (상위 200개 상품, 속성 4개 전부 채워진 건) |
+| `reviews_*.csv` | 458,180건 (상위 200개 상품, 속성 4개 전부 채워진 건) |
 | 정규화 규칙 | `skin_tone` 5버킷, `hair_color` `brunette`→`brown`, `eye_color` `Grey`→`gray` |
 
 ### 처리 — 평점 평균이 아니라 구성비 lift
@@ -198,7 +199,7 @@ CLIP_LO = 0.60,  CLIP_HI = 1.60
 
 더 넓히면 포화는 줄지만 값이 0.5 근처로 몰려 상품 간 격차가 작아집니다. p99가 1.907이므로 상위 1%만 상단에서 잘립니다.
 
-평점 평균을 쓰지 않는 이유는 리뷰의 **63.4%가 5점**이라 판별력이 노이즈 수준(η² < 0.004)이기 때문입니다. 근거는 [`recommendation-design.md`](./recommendation-design.md) 6-1절 참조.
+평점 평균을 쓰지 않는 이유는 리뷰의 **63.4%가 5점**이라 판별력이 노이즈 수준(η² < 0.004)이기 때문입니다. 근거는 [`recommendation-design.md`](../docs/ai/recommendation-design.md) 6-1절 참조.
 
 ### 출력 스키마
 
@@ -333,13 +334,13 @@ GET /api/recommend?persona_id={id}&size=10
 
 ### 성능 실측
 
-상품 200개 × 72차원 기준, numpy 싱글 코어:
+상품 200개 × 93차원 기준, numpy 싱글 코어:
 
 | 항목 | 값 |
 |---|---:|
-| 추천 1건 (점수 계산 + 상위 10개 추출) | **8.8 μs** |
-| 싱글 코어 처리량 | 113,000 RPS |
-| 사용자 10,000명 전원 일괄 재계산 | 4.6 ms |
+| 추천 1건 (점수 계산 + 상위 10개 추출) | **6.8 μs** |
+| 싱글 코어 처리량 | 146,000 RPS |
+| 사용자 10,000명 전원 일괄 재계산 | 3.8 ms |
 
 FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서는 numpy 행렬곱 한 줄이 더 빠릅니다.
 
