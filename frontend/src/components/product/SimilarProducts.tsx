@@ -1,12 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
+import { useImpression } from '../../hooks/useImpression';
 import StarRating from '../common/StarRating';
 import { formatCount, formatPrice } from '../../lib/format';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
-import { track, trackOnce } from '../../lib/logger';
+import { track } from '../../lib/logger';
 import type { Product } from '../../types/product';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
-const IMPRESSION_RATIO = 0.5;
 const IMPRESSION_DWELL_MS = 1000;
 
 interface SimilarProductsProps {
@@ -33,59 +33,34 @@ export default function SimilarProducts({
   algorithm,
   onSelect,
 }: SimilarProductsProps) {
-  const trackRef = useRef<HTMLUListElement>(null);
 
+  /**
+   * 노출은 공용 훅에 맡긴다. 판정 기준(hold_ms·visible_ratio)을 한 곳에서
+   * 관리해야 목록(300ms)과 추천(1000ms)의 분모 차이를 로그로 설명할 수 있다.
+   */
+  const trackRef = useImpression({
+    pageViewKey: recommendationId,
+    eventName: 'recommendation_impression',
+    listId,
+    holdMs: IMPRESSION_DWELL_MS,
+    algorithm,
+    recommendationId,
+  });
+
+  /**
+   * 목록이 다시 그려질 때마다 정렬 결과를 남긴다.
+   * 추천이 갱신되면서 순위가 어떻게 움직이는지 실제 화면 기준으로 추적할 수 있다.
+   * 노출·클릭과 같은 recommendation_id 로 묶인다.
+   */
   useEffect(() => {
-    const root = trackRef.current;
-    if (!root) return;
-
-    const timers = new Map<Element, number>();
-    const cards = root.querySelectorAll<HTMLElement>('[data-product-id]');
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const element = entry.target as HTMLElement;
-          const productId = element.dataset.productId;
-          const position = Number(element.dataset.position);
-          if (!productId) continue;
-
-          if (!entry.isIntersecting || entry.intersectionRatio < IMPRESSION_RATIO) {
-            const pending = timers.get(element);
-            if (pending !== undefined) {
-              window.clearTimeout(pending);
-              timers.delete(element);
-            }
-            continue;
-          }
-
-          if (timers.has(element)) continue;
-
-          const timer = window.setTimeout(() => {
-            timers.delete(element);
-            trackOnce(
-              `rec_impression:${recommendationId}:${productId}`,
-              'recommendation_impression',
-              { recommendation_id: recommendationId, list_id: listId, algorithm, product_id: productId, position },
-            );
-          }, IMPRESSION_DWELL_MS);
-
-          timers.set(element, timer);
-        }
-      },
-      { threshold: [IMPRESSION_RATIO] },
-    );
-
-    for (const card of cards) {
-      observer.observe(card);
-    }
-
-    return () => {
-      observer.disconnect();
-      for (const timer of timers.values()) {
-        window.clearTimeout(timer);
-      }
-    };
+    if (products.length === 0) return;
+    track('recommendation_snapshot', {
+      recommendation_id: recommendationId,
+      list_id: listId,
+      algorithm,
+      size: products.length,
+      ranking: products.map((p, index) => ({ product_id: p.product_id, position: index + 1 })),
+    });
   }, [recommendationId, listId, algorithm, products]);
 
   if (products.length === 0) {
@@ -107,7 +82,7 @@ export default function SimilarProducts({
 
   return (
     <div className="similar">
-      <ul className="similar__track" ref={trackRef}>
+      <ul className="similar__track" ref={trackRef as React.Ref<HTMLUListElement>}>
         {products.map((product, index) => (
           <li
             key={product.product_id}
