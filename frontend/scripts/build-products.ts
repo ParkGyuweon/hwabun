@@ -3,7 +3,8 @@
  *
  * 입력
  *   batch/ingest/data/products_200.json  데이터 담당자가 정제한 상품 200개
- *   scratchpad/skus.json                 아카이브에서 찾아낸 세포라 SKU (이미지 URL 조립 키)
+ *   scratchpad/skus.json                 아카이브에서 찾아낸 세포라 SKU (대표 이미지 키)
+ *   scratchpad/gallery.json              CDN 조회로 찾아낸 갤러리 이미지 (상품 ID 기준)
  *   src/mocks/products.collected.json    손으로 모은 이미지·옵션·설명 (상품 ID 기준)
  *
  * 출력
@@ -24,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
 
-const CDN = 'https://www.sephora.com/productimages/sku';
+const SKU_CDN = 'https://www.sephora.com/productimages/sku';
 
 interface RawProduct {
   rank: number;
@@ -54,6 +55,18 @@ const raw = JSON.parse(
 const skuPath = process.argv[2];
 const skus: Record<string, { sku: string | null }> = skuPath
   ? JSON.parse(readFileSync(skuPath, 'utf8'))
+  : {};
+
+/**
+ * 갤러리 이미지.
+ *
+ * 대표 이미지는 `sku/s{SKU}-main-zoom.jpg` 인데 갤러리는
+ * `product/p{PID}-av-{NN}-zoom.jpg` 로 **상품 ID 기준**이다.
+ * 그래서 SKU 를 못 찾은 상품도 갤러리는 확보된다.
+ */
+const galleryPath = process.argv[3];
+const gallery: Record<string, string[]> = galleryPath
+  ? JSON.parse(readFileSync(galleryPath, 'utf8'))
   : {};
 
 const mockPath = join(here, '..', 'src', 'mocks', 'products.sample.json');
@@ -129,6 +142,8 @@ function deriveCategory(p: RawProduct): string[] {
 
 let withImage = 0;
 let keptRich = 0;
+let mainFromGallery = 0;
+let withGallery = 0;
 
 const products = raw.map((p) => {
   const highlights = p.highlights ?? [];
@@ -136,9 +151,30 @@ const products = raw.map((p) => {
 
   // 이미 수집해 둔 상품이면 그 SKU 를 그대로 쓴다
   const skuId = prev?.sku_id ?? skus[p.product_id]?.sku ?? null;
-  const imageUrl = prev?.image_url ?? (skuId ? `${CDN}/s${skuId}-main-zoom.jpg` : null);
+  const probed = gallery[p.product_id] ?? [];
+
+  /**
+   * 수집해 둔 갤러리가 있으면 그것을 쓰고, 없으면 CDN 조회 결과를 쓴다.
+   * 수집본은 아카이브 JSON 에서 나온 것이라 조립으로 못 찾는 긴 ID 이미지까지 들어 있다.
+   */
+  const collectedGallery = prev?.images?.length ? prev.images : probed;
+
+  let imageUrl = prev?.image_url ?? (skuId ? `${SKU_CDN}/s${skuId}-main-zoom.jpg` : null);
+  let images = collectedGallery;
+
+  /**
+   * SKU 를 못 찾아 대표 이미지가 없으면 갤러리 첫 장을 대표로 올린다.
+   * 제품 컷이 아닌 경우도 있지만, 그 상품의 실제 사진이므로 회색 플레이스홀더보다 낫다.
+   * 대표로 쓴 장은 갤러리에서 빼서 같은 사진이 두 번 나오지 않게 한다.
+   */
+  if (imageUrl === null && images.length > 0) {
+    imageUrl = images[0];
+    images = images.slice(1);
+    mainFromGallery += 1;
+  }
 
   if (imageUrl) withImage += 1;
+  if (images.length) withGallery += 1;
   if (prev?.images?.length) keptRich += 1;
 
   return {
@@ -150,7 +186,7 @@ const products = raw.map((p) => {
     image_url: imageUrl,
     sku_id: skuId,
     // 수집해 둔 상세 이미지·옵션·설명은 절대 덮어쓰지 않는다
-    images: prev?.images ?? [],
+    images,
     variants: prev?.variants ?? [],
     description: prev?.description ?? null,
 
@@ -178,8 +214,9 @@ const skinTyped = products.filter((p) => p.suitable_skin_types.length).length;
 const concerned = products.filter((p) => p.skincare_concerns.length).length;
 
 console.log(`상품 ${products.length}개 작성 → src/mocks/products.sample.json`);
-console.log(`  대표 이미지 확보   ${withImage}`);
-console.log(`  상세까지 수집된 것 ${keptRich}`);
+console.log(`  대표 이미지 확보   ${withImage}  (그중 갤러리 첫 장 대체 ${mainFromGallery})`);
+console.log(`  갤러리 있는 상품   ${withGallery}`);
+console.log(`  손으로 수집한 것   ${keptRich}`);
 console.log(`  피부타입 파생      ${skinTyped}`);
 console.log(`  고민 파생          ${concerned}`);
 
