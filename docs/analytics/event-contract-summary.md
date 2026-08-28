@@ -118,11 +118,11 @@ Frontend LogEnvelope
 → Processed/DW 테이블
 ```
 
-Collector는 Event 구조를 바꾸지 않고, `received_at`, `source`, `ingest_id`처럼 서버에서만 알 수 있는 필드만 추가한다. 분석용 테이블 구조는 Spark 이후에 바뀐다.
+Collector는 Event 구조를 바꾸지 않고, `received_at`, `source`, `request_id`처럼 서버에서만 알 수 있는 필드만 추가한다. 분석용 테이블 구조는 Spark 이후에 바뀐다.
 
 ### 5.2 Raw Event Schema
 
-프론트가 Collector로 보내고, Collector가 Kafka에 넣는 Raw Event는 아래 flat 구조를 기준으로 한다.
+Collector가 Kafka에 넣는 최종 Raw Event는 아래 flat 구조를 기준으로 한다. 프론트는 이 중 서버 메타 필드인 `received_at`, `source`, `request_id`를 제외한 LogEnvelope를 보낸다.
 
 ```json
 {
@@ -141,6 +141,7 @@ Collector는 Event 구조를 바꾸지 않고, `received_at`, `source`, `ingest_
   "environment": "local",
   "received_at": "2026-08-28T01:13:12.420Z",
   "source": "web",
+  "request_id": "req_20260828_000001",
   "properties": {
     "sku_id": "SKU342-01",
     "quantity": 1,
@@ -162,6 +163,7 @@ Collector는 Event 구조를 바꾸지 않고, `received_at`, `source`, `ingest_
 | `occurred_at` | Y | 클라이언트 발생 시각 |
 | `received_at` | Server | Collector 수신 시각 |
 | `source` | Server | `web`, `simulator`, `server` 등 |
+| `request_id` | Server | 한 번의 batch 요청을 묶는 ID |
 | `persona_id` | 조건부 | Persona 기반 행동이면 필요 |
 | `session_id` | Y | 쇼핑 세션 ID |
 | `page_view_id` | Y | 페이지 방문 ID |
@@ -174,21 +176,31 @@ Collector는 Event 구조를 바꾸지 않고, `received_at`, `source`, `ingest_
 
 ### 5.4 Event별 주요 properties
 
+`product_id`는 상품 대상 Event에서 공통 top-level 필드로 보낸다. 아래 표는 `properties` 객체에 들어가는 주요 세부 값이다.
+
 | event_name | 주요 properties |
 | --- | --- |
-| `product_view` | `product_id`, `entry_source`, `list_id`, `position` |
-| `product_impression` | `product_id`, `list_id`, `position`, `visible_ratio` |
-| `product_click` | `product_id`, `list_id`, `position`, `impression_event_id` |
+| `product_view` | `entry_source`, `list_id`, `position` |
+| `product_impression` | `list_id`, `position`, `visible_ratio` |
+| `product_click` | `list_id`, `position`, `impression_event_id` |
+| `recommendation_impression` | `recommendation_id`, `list_id`, `position`, `algorithm`, `visible_ratio` |
+| `recommendation_click` | `recommendation_id`, `list_id`, `position`, `algorithm`, `impression_event_id` |
+| `search` | `query_text`, `result_count`, `normalized_query` |
 | `section_view` | `section_id`, `content_kind`, `content_ref`, `visible_duration_ms` |
 | `section_dwell` | `section_id`, `content_kind`, `content_ref`, `dwell_ms`, `co_visible_blocks` |
 | `scroll_depth` | `depth_percent`, `section_id`, `content_kind` |
 | `accordion_toggle` | `section_id`, `content_kind`, `action` |
 | `review_filter_apply` | `filter`, `sort`, `result_count` |
-| `wishlist_toggle` | `product_id`, `action` |
-| `add_to_cart` | `product_id`, `sku_id`, `quantity`, `price_usd` |
+| `variant_select` | `variant_name`, `option_name`, `selected_value`, `previous_value`, `sku_id` |
+| `wishlist_toggle` | `action` |
+| `add_to_cart` | `sku_id`, `quantity`, `price_usd` |
 | `begin_checkout` | `items`, `cart_value` |
 | `purchase` | `order_id`, `items`, `order_value` |
 | `exit_summary` | `dwell_ms`, `max_scroll_percent`, `last_section_id`, `last_content_kind`, `reason` |
+
+`section_dwell.dwell_ms`는 누적값이 아니라 구간 체류시간(delta)이다.
+
+`begin_checkout`, `purchase`의 `items[]`는 Processed 단계에서 상품별 row로 펼쳐서 집계한다.
 
 ## 6. 주요 Enum
 
@@ -284,39 +296,44 @@ product_impression
 | 보강 필요 | `product_view`, `ingredient_view_mode_change` |
 | 후속 화면 구현 후 확정 | `product_impression`, `search`, `filter_change`, `sort_change`, `compare_products`, `view_cart`, `remove_from_cart`, `begin_checkout`, `purchase` |
 
-## 10. 팀 합의 필요 사항
+## 10. 팀 합의 현황
 
-합의사항은 모두 같은 급이 아니다. 아래 `필수` 항목은 공식 Raw Event Schema 확정 전에 먼저 정해야 한다.
+프론트/백 확인 결과, 공식 Raw Event Schema 작성에 필요한 핵심 방향은 아래처럼 정리한다.
 
-| 우선순위 | 안건 | 결정 필요 내용 | 추천안 |
-| --- | --- | --- | --- |
-| 필수 | Raw Event Schema 기준 | Front → Collector → Kafka 구간에서 flat Raw Schema를 공식으로 둘지 | flat Raw Schema 유지 |
-| 필수 | `product_view` 생성 위치 | Front가 직접 보낼지, Collector/Spark가 `page_view`에서 파생할지 | Front에서 직접 전송 권장 |
-| 필수 | `section_dwell` 합산 | Front에서 합산할지, Spark/DW에서 합산할지 | Spark/DW 합산 권장 |
-| 필수 | Synthetic/Web Event 분리 | 같은 Raw 테이블에 둘지 물리 분리할지 | 같은 테이블 + `actor_type/source` 분리 |
-| 필수 | `text_snippet` 저장 | 선택/복사 텍스트 원문 저장 여부 | MVP는 원문보다 해시/성분 매칭 결과 권장 |
-| MVP 범위 | Dashboard 기본 산식 | session/product 기준으로 먼저 만들지 | session/product 기준 우선 |
-| MVP 범위 | 집계 기간 | 실시간/일간/최근 7일 중 MVP 범위 | 일간 + 최근 7일 우선 |
-| 구현 후 재검증 | 목록/장바구니/구매 Trigger | 후속 화면 구현 후 Trigger 확정 | 화면 구현 직후 재검증 |
-| 확장 | 관심도 가중치 | 초기 가중치 확정 여부 | `[추정]`으로 두고 샘플 데이터로 조정 |
-| 확장 | 비정상 행동 | 감점할지 별도 UX 지표로 둘지 | MVP는 별도 품질 지표, 이후 감점 |
+| 상태 | 안건 | 결정 내용 |
+| --- | --- | --- |
+| 합의 | Raw Event Schema 기준 | Front JSON 구조를 유지하고, Backend는 큰 가공 없이 검증과 서버 메타 필드만 추가 |
+| 합의 | Event 수집 API | `POST /api/events/batch`, body는 `{ "events": [ ...LogEnvelope ] }` |
+| 합의 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트 결과로 조정 |
+| 합의 | 서버 메타 필드 | `received_at`, `source`, `request_id` |
+| 합의 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리하는 방향 |
+| 합의 | `product_view` 생성 위치 | Front에서 별도 Event로 직접 전송 |
+| 합의 | `section_dwell` 합산 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
+| 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
+| 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
+| 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
+| 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
+| 구현 후 재검증 | 목록/장바구니/구매 Trigger | 후속 화면 구현 직후 재검증 |
+| 미확정 | Kafka 세부 설정 | topic, message 단위, partition key는 Kafka/Spark 담당자와 합의 필요 |
+| 확장 | 관심도 가중치/비정상 행동 | MVP 이후 샘플 데이터와 QA 결과로 조정 |
 
 ## 11. 현재 문서와 추후 분리 기준
 
-현재 작성된 Event 관련 문서는 2개다.
+현재 작성된 Event 관련 문서는 3개다.
 
 | 현재 문서 | 목적 |
 | --- | --- |
 | `event-contract-summary.md` | 팀 공유 및 합의용 요약 |
 | `event-taxonomy-trigger-schema.md` | Event Taxonomy, Trigger, Schema 상세 초안 |
+| `processed-schema.md` | Raw Event 이후 Spark 처리/Processed Dataset 초안 |
 
 추후 구현이 진행되면 아래 문서를 별도로 분리할 수 있다.
 
 | 추후 문서 | 담을 내용 |
 | --- | --- |
 | `contracts/event-schema.json` | Backend Collector가 검증할 실제 JSON Schema |
-| DW 설계 문서 | `raw_events`, `product_daily_kpi`, `content_interest_fact`, `funnel_session_fact` 등 테이블 정의 |
+| DW 설계 문서 | `product_daily_kpi`, `content_daily_kpi`, `funnel_daily_kpi` 등 Mart 테이블 정의 |
 | Dashboard 산식 문서 | 화면별 KPI, 필터, 집계 기준 |
 | Front 구현 문서 | 실제 컴포넌트/훅별 Trigger 위치 |
 
-회의에서는 이 요약 문서로 합의하고, 합의 결과를 상세 문서와 추후 `contracts/event-schema.json`에 반영한다.
+회의에서는 이 요약 문서로 합의하고, 합의 결과를 상세 문서, Processed Schema 문서, 추후 `contracts/event-schema.json`에 반영한다.
