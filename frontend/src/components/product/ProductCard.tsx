@@ -1,0 +1,88 @@
+import StarRating from '../common/StarRating';
+import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
+import { formatCount, formatPrice } from '../../lib/format';
+import type { Product } from '../../types/product';
+import type { LogContentKind } from '../../types/log';
+
+const PLACEHOLDER = '/images/product-placeholder.svg';
+
+/** 원본 플래그를 그대로 옮긴 배지. 할인율은 데이터가 없어 만들지 않는다 */
+const BADGE_LABEL: Record<string, string> = {
+  new: '신제품',
+  limited: '한정판',
+  exclusive: '세포라 단독',
+  online_only: '온라인 전용',
+};
+
+interface ProductCardProps {
+  product: Product;
+  /** 목록 안에서의 순번. 1부터. 노출·클릭 로그에 실린다 */
+  position: number;
+  /**
+   * 이 카드가 어떤 자리에 있는지.
+   * 목록 카드와 추천 카드를 구분해야 추천 성과를 따로 집계할 수 있다.
+   */
+  contentKind?: LogContentKind;
+  onSelect: (productId: string) => void;
+}
+
+/**
+ * 목록·기획전 공용 상품 카드.
+ *
+ * `data-product-id` 와 `data-position` 을 노출한다.
+ * `useImpression` 이 이 속성을 읽어 노출 로그를 남기므로 이름을 바꾸면 안 된다.
+ */
+export default function ProductCard({
+  product,
+  position,
+  contentKind = 'product_card',
+  onSelect,
+}: ProductCardProps) {
+  const badges = product.badges ?? [];
+
+  return (
+    <li
+      className="card"
+      data-product-id={product.product_id}
+      data-position={position}
+      data-log-content={contentKind}
+      data-log-ref={product.product_id}
+    >
+      <button type="button" className="card__link" onClick={() => onSelect(product.product_id)}>
+        <span className="card__thumb">
+          <img
+            src={sizedImage(product.image_url, IMAGE_WIDTH_CARD) ?? PLACEHOLDER}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+          />
+          {badges.length > 0 ? (
+            <span className="card__badges">
+              {badges.map((badge) => (
+                <span key={badge} className={`card__badge card__badge--${badge}`}>
+                  {BADGE_LABEL[badge] ?? badge}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </span>
+
+        <span className="card__brand">{product.brand_name}</span>
+        <span className="card__name">{product.product_name}</span>
+        <span className="card__price">{formatPrice(product.price_usd)}</span>
+
+        {product.rating !== null ? (
+          <span className="card__rating">
+            <StarRating value={product.rating} size="sm" />
+            {product.review_count !== null ? (
+              <span className="card__count">{formatCount(product.review_count)}</span>
+            ) : null}
+          </span>
+        ) : (
+          // 평점이 없어도 카드 높이가 흔들리지 않게 자리를 잡아둔다
+          <span className="card__rating card__rating--empty" aria-hidden="true" />
+        )}
+      </button>
+    </li>
+  );
+}

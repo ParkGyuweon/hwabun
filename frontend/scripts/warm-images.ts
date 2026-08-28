@@ -19,7 +19,11 @@ import {
   IMAGE_WIDTH_THUMB,
 } from '../src/lib/image-widths.ts';
 
-const CDN_ORIGIN = 'https://www.sephora.com/productimages/sku/';
+/**
+ * 하위 경로(sku / product)까지 포함해서 자른다.
+ * 갤러리 이미지는 상품 ID 기준 `product/` 경로라 sku 만 보면 통째로 빠진다.
+ */
+const CDN_ORIGIN = 'https://www.sephora.com/productimages/';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const products = JSON.parse(
@@ -35,8 +39,9 @@ const wanted = new Set<string>();
 
 function want(url: string | null, ...widths: number[]) {
   if (!url || !url.startsWith(CDN_ORIGIN)) return;
-  const file = url.slice(CDN_ORIGIN.length);
-  for (const width of widths) wanted.add(`${file}|imwidth=${width}`);
+  // `sku/s123-main-zoom.jpg` 또는 `product/p123-av-01-zoom.jpg`
+  const path = url.slice(CDN_ORIGIN.length);
+  for (const width of widths) wanted.add(`${path}|imwidth=${width}`);
 }
 
 for (const product of products) {
@@ -66,12 +71,12 @@ async function worker() {
     const job = jobs.shift();
     if (job === undefined) return;
 
-    const [file, query] = job.split('|');
-    const body = await fetchToCache(file, query);
+    const [path, query] = job.split('|');
+    const body = await fetchToCache(path, query);
 
     if (body === null) {
       failed += 1;
-      console.warn(`  실패 ${file}?${query}`);
+      console.warn(`  실패 ${path}?${query}`);
     } else {
       done += 1;
       if (done % 25 === 0) console.log(`  ${done}장`);
