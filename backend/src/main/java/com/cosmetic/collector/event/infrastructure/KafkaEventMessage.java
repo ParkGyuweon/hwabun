@@ -22,10 +22,18 @@ public record KafkaEventMessage(
         String productId,
         String actorType,
         String environment,
-        JsonNode properties,
-        Instant receivedAt
+        Instant receivedAt,
+        String source,
+        String requestId,
+        int eventIndex,
+        JsonNode properties
 ) {
-    static KafkaEventMessage from(ActivityEvent event, Instant receivedAt) {
+    static KafkaEventMessage from(
+            ActivityEvent event,
+            Instant receivedAt,
+            String requestId,
+            int eventIndex
+    ) {
         return new KafkaEventMessage(
                 event.schemaVersion(),
                 event.eventId(),
@@ -40,8 +48,15 @@ public record KafkaEventMessage(
                 event.productId(),
                 event.actorType(),
                 event.environment(),
-                event.properties(),
-                receivedAt
+                receivedAt,
+                sourceOf(event),
+                requestId,
+                eventIndex,
+                event.properties()
         );
+    }
+
+    private static String sourceOf(ActivityEvent event) {
+        return "synthetic".equals(event.actorType()) ? "simulator" : "web";
     }
 }

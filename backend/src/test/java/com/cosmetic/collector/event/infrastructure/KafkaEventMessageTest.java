@@ -30,7 +30,7 @@ class KafkaEventMessageTest {
         );
         Instant receivedAt = Instant.parse("2026-08-27T14:30:01Z");
 
-        KafkaEventMessage message = KafkaEventMessage.from(event, receivedAt);
+        KafkaEventMessage message = KafkaEventMessage.from(event, receivedAt, "request-001", 3);
 
         assertThat(message.schemaVersion()).isEqualTo("0.2.0-draft");
         assertThat(message.eventId()).isEqualTo("evt-001");
@@ -44,6 +44,9 @@ class KafkaEventMessageTest {
         assertThat(message.actorType()).isEqualTo("user");
         assertThat(message.environment()).isEqualTo("local");
         assertThat(message.receivedAt()).isEqualTo(receivedAt);
+        assertThat(message.source()).isEqualTo("web");
+        assertThat(message.requestId()).isEqualTo("request-001");
+        assertThat(message.eventIndex()).isEqualTo(3);
     }
 
     @Test
@@ -67,7 +70,9 @@ class KafkaEventMessageTest {
 
         String json = new ObjectMapper().writeValueAsString(KafkaEventMessage.from(
                 event,
-                Instant.parse("2026-08-28T04:08:58Z")
+                Instant.parse("2026-08-28T04:08:58Z"),
+                "request-001",
+                0
         ));
 
         assertThat(json)
@@ -80,6 +85,39 @@ class KafkaEventMessageTest {
                 .contains("\"page_type\":\"product_list\"")
                 .contains("\"actor_type\":\"user\"")
                 .contains("\"environment\":\"local\"")
+                .contains("\"received_at\":\"2026-08-28T04:08:58Z\"")
+                .contains("\"source\":\"web\"")
+                .contains("\"request_id\":\"request-001\"")
+                .contains("\"event_index\":0")
                 .doesNotContain("event_type", "event_time");
+    }
+
+    @Test
+    void marksSyntheticEventsAsSimulatorSource() {
+        ActivityEvent event = new ActivityEvent(
+                "0.2.0-draft",
+                "evt-001",
+                "section_view",
+                "interest",
+                Instant.parse("2026-08-28T04:08:57.156Z"),
+                "persona-001",
+                "session-001",
+                "page-view-001",
+                1,
+                "product_list",
+                null,
+                "synthetic",
+                "loadtest",
+                null
+        );
+
+        KafkaEventMessage message = KafkaEventMessage.from(
+                event,
+                Instant.parse("2026-08-28T04:08:58Z"),
+                "request-001",
+                0
+        );
+
+        assertThat(message.source()).isEqualTo("simulator");
     }
 }

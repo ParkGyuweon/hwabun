@@ -58,7 +58,7 @@ public class EventController {
         String requestId = UUID.randomUUID().toString();
         metrics.recordReceived(request.events().size());
 
-        return eventPublisher.publish(request)
+        return eventPublisher.publish(requestId, request)
                 .thenApply(summary -> accepted(requestId, summary));
     }
 

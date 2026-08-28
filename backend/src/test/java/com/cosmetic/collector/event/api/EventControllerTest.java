@@ -15,6 +15,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import java.util.concurrent.CompletableFuture;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -49,7 +50,8 @@ class EventControllerTest {
 
     @Test
     void acceptsAValidBatchAfterPublishing() throws Exception {
-        when(publisher.publish(any())).thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+        when(publisher.publish(anyString(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -84,7 +86,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.rejected").value(0));
 
         verify(metrics).recordReceived(1);
-        verify(publisher).publish(any());
+        verify(publisher).publish(anyString(), any());
     }
 
     @Test
@@ -123,7 +125,7 @@ class EventControllerTest {
 
     @Test
     void returnsServiceUnavailableWhenKafkaPublishingFails() throws Exception {
-        when(publisher.publish(any())).thenReturn(CompletableFuture.failedFuture(
+        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
                 new EventPublishException("publish failed", new RuntimeException("Kafka unavailable"))
         ));
 
