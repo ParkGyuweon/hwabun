@@ -422,6 +422,16 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 
 `product_id`는 Event의 대상 상품을 의미한다. 예를 들어 A 상품 상세에서 추천 상품 B를 클릭하면 top-level `product_id`는 B이고, A는 `properties.context_product_id`로 보낸다. 컨텍스트가 없거나 대상과 같으면 `context_product_id`는 생략한다. 섹션 체류·스크롤처럼 화면 자체를 대상으로 하는 Event는 보고 있는 상품을 `product_id`로 둔다.
 
+`actor_type='synthetic'`인 Event는 아래 runtime metadata를 `properties`에 포함해야 한다. 실제 Web Event에는 적용하지 않는다.
+
+| property | required | 설명 |
+| --- | --- | --- |
+| `scenario_id` | Y | 시뮬레이션 상황 ID. 예: `normal_day`, `sale_burst` |
+| `simulation_run_id` | Y | 시뮬레이션 실행 1회 식별자 |
+| `generator_type` | Y | 생성 방식. 예: `python_batch`, `agent_realtime` |
+
+`persona_source`는 Event에 반복 저장하지 않고 `persona_id`로 Persona Dimension을 Join해 확인한다.
+
 ### 8.5 Processed / DW 정규화 예시
 
 Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 정규화할 수 있다. 이 구조는 Kafka Raw Event Schema가 아니라 DW/분석 편의를 위한 형태다.
@@ -431,7 +441,7 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | `persona_id`, `actor_type` | actor 차원 |
 | `session_id`, `page_view_id`, `sequence_no` | session 차원 |
 | `page_type`, `environment` | context 차원 |
-| `properties.scenario_id`, `properties.simulation_run_id` | simulation context 차원. Processed/DW에서 `scenario_id`, `simulation_run_id` 컬럼으로 승격 |
+| `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type` | simulation context 차원. Processed/DW에서 `scenario_id`, `simulation_run_id`, `generator_type` 컬럼으로 승격 |
 | `properties.experiment_id`, `properties.ab_variant` 또는 후속 top-level 확장 | experiment context 차원 |
 | `product_id`, `properties.sku_id` | target/product 차원 |
 | `properties.context_product_id` | Event가 발생한 배경 상품. 추천 클릭처럼 대상 상품과 보고 있던 상품이 다를 때 사용 |
@@ -768,6 +778,16 @@ Dashboard 조회용 DW/Mart 상세 구조는 `dw-schema.md`에 분리한다.
 | 중복 `event_id` | 최초 1건만 사용 |
 | 너무 늦게 도착한 Event | watermark 정책에 따라 late event 처리 |
 | `actor_type=synthetic` | 실제 사용자와 분리 집계 가능하도록 필수 저장 |
+| `actor_type=synthetic`인데 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type` 중 누락 | Spark semantic validation에서 `invalid_properties`로 bad event 격리. 실행 단위 Dimension Join이 끊기고 표본 필터가 무효가 되기 때문 |
+| `actor_type=user`인데 위 runtime metadata가 들어옴 | 무시하고 경고 flag. Web Event에는 적용하지 않는 계약이다 |
+
+synthetic runtime metadata의 강제 지점은 아래처럼 나눈다. Collector는 `properties`를 구조 변경 없이 통과시키므로, Collector에 이 검증을 추가하는 것은 선택 사항이다.
+
+| 지점 | 책임 |
+| --- | --- |
+| Simulator(Producer) | Event 생성 시 3개 값을 항상 채운다. 1차 책임 |
+| Spark semantic validation | 누락 Event를 bad event로 격리한다. 실질적 강제 지점 |
+| Collector | 현재는 `properties` 통과. 강제하려면 별도 구현이 필요하며 E2E 필수는 아니다 |
 
 ### 13.1 신뢰도 / 비정상 로그 감점 기준 초안
 
@@ -811,6 +831,8 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 합의 | `section_dwell` 합산 위치 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
+| 초안 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. 강제 지점은 Simulator + Spark, Collector 검증은 선택 |
+| 초안 | `persona_source` 위치 | Event에 싣지 않는다. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인 |
 | 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
 | 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
 | 초안 | DW 집계 방식 | 서로 다른 grain의 Fact는 목표 Mart grain으로 먼저 집계한 뒤 Join |

@@ -182,6 +182,18 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 `scenario_id`, `simulation_run_id`는 분석 논리 필드다. 현재 API DTO에는 top-level 필드가 없으므로 E2E 기준 물리 위치는 `properties.scenario_id`, `properties.simulation_run_id`로 보고, Processed 단계에서 컬럼으로 승격한다.
 
+`actor_type='synthetic'`인 Event는 아래 3개를 `properties`에 반드시 포함한다. 실제 Web Event(`actor_type='user'`)에는 적용하지 않으므로 프론트 구현에는 영향이 없다.
+
+| property | 설명 |
+| --- | --- |
+| `scenario_id` | 시뮬레이션 상황 ID. 예: `normal_day`, `sale_burst` |
+| `simulation_run_id` | 실행 1회 식별자. 같은 시나리오를 여러 번 돌린 결과를 분리 |
+| `generator_type` | 생성 방식. `python_batch`, `agent_realtime` |
+
+강제 지점은 Simulator(생성 시)와 Spark semantic validation이다. Collector는 `properties`를 구조 변경 없이 통과시키므로 별도 검증 구현은 선택 사항이다.
+
+`persona_source`(`agent_sample`/`batch_sample`)는 Persona의 정적 속성이라 **Event에 싣지 않는다.** Dashboard에서 표본을 나눠 봐야 하면 `simulation_run_id → dim_simulation_run.persona_source`로 Join한다.
+
 `session_start.page_view_id`는 첫 `page_view`와 같은 값을 공유한다. 세션의 첫 `page_view`는 `properties.navigation_source='session_start'`로 구분한다.
 
 ### 5.4 Event별 주요 properties
@@ -341,6 +353,8 @@ product_impression
 | 합의 | `product_view` 생성 위치 | Front에서 별도 Event로 직접 전송 |
 | 합의 | `section_dwell` 합산 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
+| 초안 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. Web Event에는 미적용 |
+| 초안 | `persona_source` 위치 | Event 미포함. `simulation_run_id → dim_simulation_run` Join으로 표본 필터 |
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
 | 합의 | `session_start.page_view_id` | `session_start` 발생 시점에 첫 `page_view_id`를 발급하고 첫 `page_view`와 공유 |
 | 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
@@ -354,7 +368,7 @@ product_impression
 
 ## 11. 현재 문서와 추후 분리 기준
 
-현재 작성된 Analytics 관련 문서는 4개다.
+현재 작성된 Analytics 관련 문서는 6개다.
 
 | 현재 문서 | 목적 |
 | --- | --- |
@@ -362,6 +376,8 @@ product_impression
 | `event-taxonomy-trigger-schema.md` | Event Taxonomy, Trigger, Schema 상세 초안 |
 | `processed-schema.md` | Raw Event 이후 Spark 처리/Processed Dataset 초안 |
 | `dw-schema.md` | Processed Dataset 이후 Dashboard 조회용 DW/Mart 초안 |
+| `persona-schema.md` | Persona 원천, seed/holdout, segment, simulation run 규칙 |
+| `persona-attribute-preprocessing.md` | 사용자 속성 4종의 정규화·결측 처리·허용값 기준 |
 
 추후 구현이 진행되면 아래 문서를 별도로 분리할 수 있다.
 

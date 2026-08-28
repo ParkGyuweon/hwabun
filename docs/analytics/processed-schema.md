@@ -229,8 +229,9 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `event_time` | `occurred_at` | timestamp 정규화 |
 | `request_id` | HTTP 응답/Header 또는 Backend payload 확장 | 현재 Kafka payload에는 없으므로 Raw/Processed에서 NULL 가능 |
 | `source` | `actor_type`, `environment`, ingest 경로 | MVP 기본값은 `actor_type='user' → web`, `actor_type='synthetic' → simulator`, 서버 생성 Event는 `server` |
-| `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` | E2E 기준 Raw 물리 위치는 `properties` 내부이고, Processed에서 컬럼으로 승격한다 |
-| `generator_type` | `properties.generator_type` 또는 synthetic 생성기 메타 | 100명 agent와 9,900명 Python batch 구분이 필요하면 `source`가 아니라 이 필드로 분리 |
+| `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` | E2E 기준 Raw 물리 위치는 `properties` 내부이고, Processed에서 컬럼으로 승격한다. `actor_type='synthetic'`이면 필수 |
+| `generator_type` | `properties.generator_type` | `actor_type='synthetic'`이면 필수 승격 대상이다. 100명 agent와 9,900명 Python batch의 생성 방식 구분은 `source`가 아니라 이 필드로 한다. Producer가 값을 보내지 않으면 `simulation_run_id`로 run 메타데이터를 Join해 보정하고, 그것도 없으면 NULL로 두고 품질 flag를 남긴다 |
+| `persona_source` | Raw에 없음. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join | Persona 정적 속성이므로 Event에 반복 저장하지 않는다. Processed Fact에도 승격하지 않고 DW Dimension Join으로 해석한다 |
 | `user_id` | `persona_id` 또는 추후 실제 사용자 ID | synthetic은 `persona_id`, 실제 Web은 ID 정책 확정 전까지 NULL 가능 |
 | `product_id` | top-level `product_id` | 상품 대상 Event의 공통 대상 ID. 보고 있는 상품이 아니라 Event 대상 상품 |
 | `context_product_id` | `properties.context_product_id` | 대상 상품과 이벤트 발생 배경 상품이 다를 때의 배경 상품 ID |
@@ -284,7 +285,19 @@ Raw payload에 `source`가 없으므로 E2E MVP에서는 Processed 단계에서 
 | `actor_type='synthetic'` | `simulator` |
 | Backend 또는 Batch가 서버 내부 Event를 생성 | `server` |
 
-100명 agent 기반 생성과 9,900명 Python batch 생성은 `source`로 나누지 않고 `generator_type` 또는 Persona/Scenario 메타데이터에서 구분한다. Producer가 별도 원천값을 보내기로 합의하면 `properties.generator_type`을 우선 사용한다.
+100명 agent 기반 생성과 9,900명 Python batch 생성은 `source`로 나누지 않는다. 생성 방식은 `properties.generator_type`, Persona 표본 구분은 `simulation_run_id → dim_simulation_run.persona_source`를 기준으로 한다.
+
+### 8.3 synthetic Event 검증 규칙
+
+`actor_type='synthetic'`인 Event는 실행 단위 메타데이터가 있어야 Dimension Join과 표본 필터가 성립한다. Collector는 `properties`를 검증 없이 통과시키므로 실질적인 강제 지점은 Spark다.
+
+| 조건 | 처리 | error_code |
+| --- | --- | --- |
+| `actor_type='synthetic'`이고 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type` 중 하나라도 누락 | `bad_events`로 격리 | `invalid_properties` |
+| `actor_type='user'`인데 위 값이 들어옴 | 승격하지 않고 무시. 품질 flag만 남김 | 없음 |
+| `actor_type='synthetic'`이고 `persona_id`가 NULL | `bad_events`로 격리. synthetic Event는 Persona 기반이므로 `persona_id`가 반드시 있다 | `missing_required_field` |
+
+`error_stage`는 `spark_semantic_validation`이다. 이 규칙은 실제 Web Event에는 적용하지 않으므로 프론트 구현에 영향을 주지 않는다.
 
 ## 9. `raw_events`
 
@@ -770,8 +783,10 @@ Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하�
 
 주의:
 
-- 이 가중치는 외부 플랫폼 공식값이 아니라 프로젝트용 초기값이다.
-- 추천 품질 검증은 synthetic 행동 로그가 아니라 실제 리뷰 데이터 holdout 기준으로 해야 한다.
+- 이 가중치는 외부 플랫폼 공식값이 아니라 프로젝트용 초기값이며, **현재 프론트 구현값과 다르다.** 단일 출처는 `frontend/src/types/log.ts`의 `EVENT_WEIGHT`, `SECTION_DWELL_WEIGHT`, `scrollDepthWeight()`이므로 구현 시 위 표가 아니라 log.ts 기준으로 맞추고, 이 표는 그때 함께 갱신한다.
+- 추천 품질 검증은 synthetic 행동 로그가 아니라 실제 리뷰 데이터 holdout 기준으로 해야 한다. holdout 판정 순서와 누수 방지 규칙은 `persona-schema.md` §6.1, §5.2를 따른다.
+- `product_id`가 필수이므로, 상품과 연결되지 않는 friction Event(`rage_click`, `dead_click` 등)는 이 Dataset에 들어오지 않는다. 해당 Event는 UX/Dashboard 지표로만 사용한다.
+- `final_weight`가 음수인 row는 User Behavior Vector의 negative 축에 **절대값으로** 누적한다. 감점은 최종 추천 점수 계산에서 한 번만 적용한다. 상세 공식은 `persona-schema.md` §12.1을 따른다.
 - Product Vector는 `contracts/product-feature-spec.md`, 추천 입출력은 `contracts/recommendation-io-spec.md`를 따른다.
 
 ## 19. `dim_product`
@@ -937,6 +952,8 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 | 실제 사용자 ID 정책 | 로그인/비로그인 사용자를 `user_id`로 어떻게 식별할지 확정 필요 |
 | `search_id` 생성 정책 | 검색 구현 전에는 nullable/session fallback, 구현 후 Raw 추가 또는 Spark 파생 중 선택 |
 | `cart_id` 생성 정책 | Raw에 없으므로 현재는 nullable, 장바구니 구현 후 Raw 추가 여부 결정 |
+| Event weight 단일 출처 | §18 초안 표와 `frontend/src/types/log.ts`의 `EVENT_WEIGHT` 값이 다르다. log.ts 기준으로 통일한 뒤 §18을 갱신 |
+| Collector 필드 정렬 브랜치 병합 | `event_name`, `actor_type`, `page_view_id`, `sequence_no` 승격은 정렬 브랜치가 `dev`에 병합된 뒤에만 성립 |
 
 ## 25. E2E 이후 확인할 것
 

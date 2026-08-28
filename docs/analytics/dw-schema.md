@@ -2,7 +2,7 @@
 
 작성일: 2026-08-28  
 상태: Draft, E2E 테스트 전 논리 Mart 초안  
-관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`, `processed-schema.md`
+관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`, `processed-schema.md`, `persona-schema.md`
 
 ## 1. 문서 목적
 
@@ -25,6 +25,7 @@ Processed Schema와 DW Schema의 차이는 다음과 같다.
 | --- | --- | --- |
 | 프로젝트 구조 | `frontend`, `backend`, `batch`, `simulator`, `contracts`, `docs/analytics` 폴더 존재 | 데이터 원천과 Event 문서가 분리되어 있음 |
 | Backend Collector | `S15P21A306-29-be-post-events-api-v0-1` 기준 API는 `POST /api/events`, batch 최대 100건 | Event 수집 경로는 현재 구현 기준으로 확정 |
+| Backend 브랜치 상태 | 위 필드 정렬은 `S15P21A306-29-be-post-events-api-v0-1`에만 있고 `dev`에는 아직 병합되지 않았다. `dev`의 Collector는 `event_type`/`event_time` 기준 구버전이다 | E2E 전에 병합이 선행되어야 한다. 이 문서의 필드 전제는 정렬된 브랜치 기준이다 |
 | Kafka topic | 기본값 `activity-events` | 실제 Spark 입력 topic으로 사용할 수 있음. 환경별 override 가능성은 Kafka/Spark 담당자와 확인 |
 | Backend Event 필드 | `schema_version`, `event_id`, `event_name`, `intent`, `occurred_at`, `persona_id`, `session_id`, `page_view_id`, `sequence_no`, `page_type`, `product_id`, `actor_type`, `environment`, `properties`, `received_at` | 주요 Event 필드는 문서 계약과 맞음. `event_id`는 dedup 기준 |
 | Backend Kafka message | Event 단위 발행, key는 `persona_id`, payload에는 `received_at` 포함 | Raw 중복 수신은 가능하며, dedup은 Data/Spark `cleaned_events` 생성 단계에서 수행 |
@@ -65,6 +66,10 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 | `persona_behavior_feature_delta` | `event_id + user_id + product_id` | Persona별 관심 feature 변화 |
 | `dim_product` | `product_id` | 상품/브랜드/카테고리/가격/성분 속성 Join |
 | `bridge_persona_segment` | `persona_id + segment_type + segment_value` | Persona와 segment 연결 |
+| `dim_scenario` | `scenario_id` | 시나리오 메타데이터 |
+| `dim_simulation_run` | `simulation_run_id` | 실행 단위 메타데이터. `persona_source`, 재현 version 필터 |
+
+`bridge_persona_segment`, `dim_scenario`, `dim_simulation_run`의 원천 정의는 `persona-schema.md`다. 세 테이블의 컬럼과 허용값은 그 문서와 동일하게 유지한다.
 
 ## 5. 공통 필드 규칙
 
@@ -85,7 +90,7 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 
 `simulation_run_id`는 synthetic 분석에서는 분리에 가깝게 필수지만, 실제 Web Event에서는 NULL이 정상이다. Dashboard 기본 조회에서는 전체 합산을 보여줄 수 있고, 실험 분석에서는 `scenario_id`, `simulation_run_id`로 필터링한다.
 
-100명 agent 기반 생성과 9,900명 Python batch 생성을 구분해야 하면 `source`를 늘리기보다 `generator_type` 또는 Persona/Scenario 메타데이터를 사용한다. Producer가 별도 값을 제공하지 않으면 E2E MVP에서는 모든 synthetic Event를 `source='simulator'`로 본다.
+100명 agent 기반 생성과 9,900명 Python batch 생성을 구분해야 하면 `source`를 늘리지 않는다. 생성 방식은 `generator_type`, 표본 구분은 `simulation_run_id → dim_simulation_run.persona_source`로 본다. E2E MVP에서는 모든 synthetic Event를 `source='simulator'`로 둔다.
 
 ## 6. Dimension 초안
 
@@ -122,31 +127,34 @@ source = batch/ingest/data/products_200.json, Processed dim_product
 
 ### 6.2 `dim_persona_segment`
 
-Persona를 개별 사용자 단위가 아니라 Dashboard 분석용 segment로 묶는 Dimension이다. 상세 Persona Schema는 별도 문서에서 확정한다.
+Persona를 개별 사용자 단위가 아니라 Dashboard 분석용 segment로 묶는 Dimension이다. segment 값 자체의 표시명과 모집단 크기만 관리한다. 상세 Persona 정의는 `persona-schema.md`를 따른다.
 
 ```text
 grain = segment_type + segment_value
-source = simulator persona data, batch/ingest/data/affinity_lift.csv
+source = simulator persona data (persona_profile / bridge_persona_segment)
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
-| `segment_type` | string | N | `skin_type`, `skin_tone`, `hair_color`, `eye_color`, `concern`, `persona_source` 등 |
+| `segment_type` | string | N | `skin_type`, `skin_tone`, `hair_color`, `eye_color`, `review_bucket`, `persona_source` |
 | `segment_value` | string | N | segment 값 |
 | `display_name` | string | Y | Dashboard 표시명 |
 | `source` | string | Y | segment 원천 |
 | `population_count` | bigint/null | Y | 해당 segment Persona 수 |
-| `affinity_feature_name` | string/null | Y | 친화도 feature 이름 |
-| `affinity_lift` | double/null | Y | 평균 대비 lift |
+| `persona_source` | string/null | Y | `population_count`를 계산한 표본. 기본 `batch_sample` |
 | `updated_at` | timestamp | Y | Dimension 갱신 시각 |
 
 주의사항:
 
-- `affinity_lift.csv`가 한 segment에 여러 `affinity_feature_name`을 가진다면 grain을 `segment_type + segment_value + affinity_feature_name`으로 확장한다.
+- **Attribute Affinity는 이 Dimension에 넣지 않는다.** `affinity_lift.csv`의 grain은 `attribute + segment + product_id`(4,000행 = 200상품 × 20세그먼트)이므로, segment 단위 Dimension에 `affinity`/`lift`를 담으면 상품 축이 사라져 값이 뭉개진다. 상품×segment 친화도가 Dashboard에 필요하면 `product_segment_affinity`(grain `product_id + segment_type + segment_value`)를 별도 Fact/Dimension으로 둔다.
+- `population_count`는 표본에 따라 값이 달라진다. agent 100명은 균등배분이라 모집단 분포가 아니므로, 기본값은 `persona_source='batch_sample'` 기준으로 계산하고 어떤 표본인지 컬럼으로 남긴다.
+- 상품 단위 segment 집계를 `products_200.json`의 `_review_stats.segment_counts`에서 가져올 경우, 해당 필드의 `hair_color`에는 `brunette`가 병합되지 않은 채 남아 있다. 읽는 쪽에서 `brown`에 합산해야 한다. 근거는 `persona-attribute-preprocessing.md` §11.1.
+- `segment_type` 목록은 `persona-schema.md`의 `bridge_persona_segment`와 동일해야 한다. 현재 Persona 원천(`simulator/personas/data/personas_*.json`)에는 피부 고민 필드가 없으므로 **`concern`은 segment_type에서 제외한다.** 상품 속성인 `dim_product.concern_tags`는 다른 축이므로 그대로 유지한다.
+- Persona 생성기에 고민 속성이 추가되면 Persona Schema와 이 Dimension에 동시에 다시 넣는다.
 
 ### 6.3 `bridge_persona_segment`
 
-개별 Persona와 Dashboard segment를 연결하는 bridge table이다. `dim_persona_segment`는 segment 값 자체만 관리하므로, Persona별 피부 타입/고민/생성 원천을 분석하려면 이 연결 테이블이 필요하다.
+개별 Persona와 Dashboard segment를 연결하는 bridge table이다. `dim_persona_segment`는 segment 값 자체만 관리하므로, Persona별 피부 타입/리뷰 활동량/생성 원천을 분석하려면 이 연결 테이블이 필요하다.
 
 ```text
 grain = persona_id + segment_type + segment_value
@@ -156,7 +164,7 @@ source = Persona Schema, simulator persona data
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `persona_id` | string | N | Persona ID |
-| `segment_type` | string | N | `skin_type`, `skin_tone`, `hair_color`, `eye_color`, `concern`, `persona_source` 등 |
+| `segment_type` | string | N | `skin_type`, `skin_tone`, `hair_color`, `eye_color`, `review_bucket`, `persona_source` |
 | `segment_value` | string | N | segment 값 |
 | `valid_from` | date/null | Y | segment 적용 시작일 |
 | `valid_to` | date/null | Y | segment 적용 종료일 |
@@ -199,24 +207,68 @@ source = event-taxonomy-trigger-schema.md
 
 ### 6.6 `dim_scenario`
 
-시뮬레이션 실행과 시나리오 메타데이터를 관리한다.
+시나리오 자체의 메타데이터를 관리한다. 같은 시나리오를 여러 번 실행할 수 있으므로 실행 단위는 §6.7의 `dim_simulation_run`으로 분리한다. `persona-schema.md`의 `scenario` 구조와 같은 grain이다.
 
 ```text
-grain = simulation_run_id + scenario_id
+grain = scenario_id
+source = persona-schema.md scenario
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `scenario_id` | string | N | 시나리오 ID. 예: `normal_day`, `sale_burst` |
+| `scenario_name` | string/null | Y | 표시명 |
+| `description` | string/null | Y | 시나리오 설명 |
+| `traffic_pattern` | string/null | Y | 평시, 급증, 감쇠 등 트래픽 형태 |
+| `recommendation_policy` | string/null | Y | 기본 추천/기획전 정책. 예: `skin_match_v0` |
+| `created_at` | timestamp/null | Y | 생성 시각 |
+| `updated_at` | timestamp/null | Y | Dimension 갱신 시각 |
+
+`scenario_id`는 트래픽/프로모션/상황 조건이다. 추천 로직 자체를 뜻하는 값은 `recommendation_policy` 또는 Event의 `properties.algorithm`으로 기록한다.
+
+### 6.7 `dim_simulation_run`
+
+시뮬레이션 실행 1회의 메타데이터를 관리한다. `persona-schema.md`의 `simulation_run`과 같은 grain이며, Dashboard의 표본/버전 필터가 이 Dimension을 통해 이루어진다.
+
+```text
+grain = simulation_run_id
+source = persona-schema.md simulation_run
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `simulation_run_id` | string | N | 시뮬레이션 실행 ID |
-| `scenario_id` | string | N | 시나리오 ID |
-| `scenario_name` | string | Y | 표시명 |
+| `scenario_id` | string | N | 시나리오 ID. `dim_scenario` Join key |
 | `source` | string | Y | MVP 기준 `simulator` |
 | `generator_type` | string/null | Y | `python_batch`, `agent_realtime` 등 synthetic 생성 방식 |
+| `persona_source` | string/null | Y | `batch_sample`, `agent_sample`. Dashboard 모집단 필터 기준 |
 | `started_at` | timestamp | Y | 실행 시작 시각 |
 | `ended_at` | timestamp | Y | 실행 종료 시각 |
 | `persona_count` | bigint/null | Y | 실행 대상 Persona 수 |
 | `event_count` | bigint/null | Y | 실행 Event 수 |
+| `seed` | int/null | Y | 재현용 난수 seed |
+| `persona_profile_version` | string/null | Y | 사용한 Persona `profile_version` |
+| `product_feature_version` | string/null | Y | 사용한 Product Vector `vocab_version` |
+| `affinity_version` | string/null | Y | 사용한 Attribute Affinity 버전 |
+| `recommendation_policy` | string/null | Y | 실제 실행에 사용한 추천 정책 버전 |
+| `event_schema_version` | string/null | Y | 생성 Event의 `schema_version` |
 | `note` | string/null | Y | 실행 조건 메모 |
+
+주의사항:
+
+- **`persona_source`는 Event payload에 넣지 않는다.** Persona 정적 속성을 Event마다 반복 저장하면 값이 어긋날 위험이 있으므로, Mart의 `simulation_run_id`로 이 Dimension을 Join해 필터한다.
+
+```text
+product_daily_kpi / funnel_daily_kpi / persona_segment_daily_kpi / scenario_daily_kpi
+→ simulation_run_id
+→ dim_simulation_run
+→ persona_source = 'batch_sample'
+```
+
+- Dashboard 모집단 통계 기본값은 `persona_source='batch_sample'`이다. agent 100명은 분포가 의도적으로 왜곡된 표본이라 무보정 합산을 금지한다.
+- 한 run 안의 Persona는 모두 같은 `persona_source`여야 이 필터가 성립한다. 섞어야 하면 run을 나누거나 `persona_source='mixed'`로 두고 `analysis_weight` 정의 후에만 합산한다.
+- 실제 Web Event는 `simulation_run_id=NULL`이므로 이 Dimension의 대상이 아니다. `actor_type='user'`로 먼저 분리한다.
+- version 컬럼은 E2E에서 NULL이어도 동작한다. 운영/실험 비교 단계에서는 "왜 지난 run과 결과가 다른가"를 추적하기 위해 채운다.
 
 ## 7. Fact / Mart 초안
 
@@ -437,7 +489,7 @@ input = funnel_session_fact
 
 ### 7.6 `persona_segment_daily_kpi`
 
-피부 타입, 피부 톤, 고민 등 Persona segment별 상품 반응을 계산하는 Mart다.
+피부 타입, 피부 톤, 리뷰 활동량 등 Persona segment별 상품 반응을 계산하는 Mart다. segment 종류는 `bridge_persona_segment`의 `segment_type` 목록을 그대로 따른다.
 
 ```text
 grain = event_date_kst + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
@@ -471,7 +523,9 @@ input = funnel_session_fact, persona_behavior_feature_delta, bridge_persona_segm
 
 - 실제 Web Event에서 segment 원천이 없으면 이 Mart는 synthetic 중심으로 먼저 만든다.
 - Persona와 segment는 `bridge_persona_segment`를 통해 연결한다.
-- 약 100명의 실시간 agent 로그와 9,900명의 Python 생성 로그를 함께 볼 경우 `generator_type`, `simulation_run_id`로 분리한다.
+- 약 100명의 실시간 agent 로그와 9,900명의 Python 생성 로그를 함께 볼 경우 `generator_type`, `simulation_run_id`로 분리한다. 표본 기준 필터는 `simulation_run_id → dim_simulation_run.persona_source`를 사용하며 기본값은 `batch_sample`이다.
+- `segment_type='concern'`은 현재 Persona 원천에 고민 필드가 없어 생성되지 않는다. 고민 축 분석은 상품 속성인 `dim_product.concern_tags` 기준으로만 가능하다.
+- 이 Mart의 `affinity_lift`는 **행동 로그에서 계산한 값**이다. `batch/ingest/data/affinity_lift.csv`(리뷰 구성비 기반, 추천 입력)와 이름은 같지만 원천과 의미가 다르므로 같은 지표로 비교하지 않는다.
 
 ### 7.7 `scenario_daily_kpi`
 
@@ -506,6 +560,7 @@ input = cleaned_events, product_event_fact, funnel_session_fact, content_interes
 주의사항:
 
 - 실제 Web Event는 `scenario_id`, `simulation_run_id`가 NULL일 수 있으므로 이 Mart의 주 대상은 synthetic 실행이다.
+- 시나리오 표시명/설명은 `dim_scenario`, 실행 조건(`persona_source`, seed, version)은 `dim_simulation_run`에서 Join한다. 같은 `scenario_id`를 여러 run으로 돌린 결과 비교가 이 Mart의 기본 사용 방식이다.
 
 ### 7.8 `realtime_event_stats`
 
@@ -571,7 +626,7 @@ input = bad_events
 | 사용자 행동 분석 | 사용자가 어느 단계에서 이탈하는가 | `funnel_daily_kpi`, `realtime_event_stats` |
 | 리뷰 분석 | 리뷰 콘텐츠 관심도와 자극/트러블 관련 반응은 어떤가 | `content_daily_kpi`, `dim_product` |
 | 성분 분석 | 성분 정보가 얼마나 열람되고 어떤 상품에서 관심이 높은가 | `content_daily_kpi`, `dim_product` |
-| Persona/Scenario 분석 | 고객군/시나리오별 행동 차이는 어떤가 | `persona_segment_daily_kpi`, `scenario_daily_kpi`, `dim_persona_segment`, `dim_scenario` |
+| Persona/Scenario 분석 | 고객군/시나리오별 행동 차이는 어떤가 | `persona_segment_daily_kpi`, `scenario_daily_kpi`, `dim_persona_segment`, `dim_scenario`, `dim_simulation_run` |
 
 ## 9. KPI 산식
 
@@ -614,6 +669,9 @@ rate = numerator / NULLIF(denominator, 0)
 | 상품 속성 원천 | Raw에 `category_id`, `brand_id`가 없을 수 있음 | `dim_product` Join을 기본으로 사용 |
 | synthetic/Web 혼합 | 실제 사용자 KPI와 부하 테스트 KPI가 섞일 수 있음 | Dashboard 기본 필터에 `actor_type`, `source`, `simulation_run_id` 포함 |
 | Persona segment 연결 누락 | `persona_id`에서 segment로 Join할 수 없음 | `bridge_persona_segment`를 통해 `dim_persona_segment`와 연결 |
+| Event에 `persona_source` 없음 | agent 100명/batch 9,900명을 Mart에서 직접 구분할 수 없음 | Event에 추가하지 않고 `simulation_run_id → dim_simulation_run.persona_source`로 필터. 이를 위해 synthetic Event는 `simulation_run_id`가 항상 있어야 한다 |
+| Persona 원천에 `concern` 없음 | 존재하지 않는 segment를 Mart가 기대하게 됨 | `segment_type`에서 `concern` 제외. 상품 축 고민 분석은 `dim_product.concern_tags` 사용 |
+| synthetic runtime metadata 누락 | `scenario_id`, `simulation_run_id`, `generator_type`이 없으면 실행 단위 Dimension Join이 끊김 | Simulator 생성 시 필수 포함, Spark semantic validation에서 누락 Event를 `invalid_properties`로 격리 |
 | Collector reject 관측 불가 | Kafka 전송 전 거부된 Event는 Spark/DW에서 볼 수 없음 | Backend metric으로 관리하거나 별도 bad-event topic/storage가 있을 때만 DW에 포함 |
 | 물리 저장소 미정 | 타입, 파티션, 인덱스 전략 확정 불가 | 이 문서에서는 논리 타입만 정의하고 DDL은 작성하지 않음 |
 
@@ -633,6 +691,10 @@ rate = numerator / NULLIF(denominator, 0)
 12. `bad_events`에서 Collector validation error와 Spark semantic/type error를 구분할 수 있는지 확인한다. Collector reject가 Kafka 전에 끝난다면 Backend metric 또는 별도 저장소 필요 여부를 확인한다.
 13. Dashboard 비율 산식에서 분모 0이 `0`이 아니라 `NULL`로 처리되는지 확인한다.
 14. 상품별 매출 집계가 `order_value`가 아니라 `event_name='purchase'`의 `item_revenue` 기준으로 계산되는지 확인한다.
+15. Collector 필드 정렬 브랜치가 `dev`에 병합되었는지 확인한다. 병합 전에는 `event_name`, `actor_type`, `page_view_id`, `sequence_no`가 Kafka payload에 없다.
+16. synthetic Event에 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type`이 모두 들어오는지 확인한다.
+17. `dim_simulation_run`에 run별 `persona_source`가 채워지고, Dashboard 기본 필터가 `batch_sample`로 동작하는지 확인한다.
+18. `dim_persona_segment`/`bridge_persona_segment`에 `segment_type='concern'` row가 생성되지 않는지 확인한다.
 
 ## 12. 후속 문서 분리 기준
 
@@ -641,7 +703,7 @@ rate = numerator / NULLIF(denominator, 0)
 | `contracts/event-schema.json` | Backend Collector가 검증할 실제 JSON Schema |
 | 물리 DW DDL 문서 | 선택한 저장소 기준 파티션, 인덱스, 타입, DDL |
 | Dashboard 산식 문서 | 화면별 필터, 기간 비교, 정렬/랭킹 기준 |
-| Persona Schema 문서 | Persona 원천, feature, segment, synthetic 생성 규칙 |
+| Persona Schema 문서 | `persona-schema.md`로 작성됨. Persona 원천, seed/holdout, segment, simulation run 규칙은 그 문서가 원천이다 |
 | Front 구현 문서 | 실제 컴포넌트/훅별 Trigger 위치 |
 
 이 문서는 E2E 테스트 전 Draft다. 다음 주 E2E에서는 구조 실패를 찾기보다 API 경로, 필드명, nullable, Trigger 발생 여부, 집계 grain이 실제 로그와 맞는지를 검증한다.
