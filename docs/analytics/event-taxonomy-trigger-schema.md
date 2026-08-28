@@ -318,7 +318,7 @@ Frontend LogEnvelope
 
 ### 8.2 Raw Event Schema
 
-프론트가 Collector로 보내고, Collector가 검증한 뒤 Kafka에 넣는 Raw Event는 아래 구조를 기준으로 한다.
+프론트가 Collector로 보내는 LogEnvelope는 아래 구조를 기준으로 한다. 서버 메타 필드인 `received_at`, `source`, `request_id`는 Collector가 검증 후 추가한다.
 
 ```json
 {
@@ -368,7 +368,7 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
   "environment": "local",
   "received_at": "2026-08-28T01:13:12.420Z",
   "source": "web",
-  "ingest_id": "ingest_20260828_000001",
+  "request_id": "req_20260828_000001",
   "properties": {
     "sku_id": "SKU342-01",
     "quantity": 1,
@@ -383,7 +383,7 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 | --- | --- |
 | `received_at` | Collector가 Event를 받은 서버 시각 |
 | `source` | Event 유입 경로. 예: `web`, `simulator`, `server` |
-| `ingest_id` | Collector 처리 단위 식별자 |
+| `request_id` | 한 번의 batch 요청을 묶는 식별자 |
 | `collector_version` | Collector 배포 버전. 선택 |
 
 ### 8.4 공통 필드 정의
@@ -397,6 +397,7 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 | `occurred_at` | timestamp | Y | 행동 발생 시각 |
 | `received_at` | timestamp | Server | Collector 수신 시각 |
 | `source` | string | Server | `web`, `simulator`, `server` |
+| `request_id` | string | Server | batch 요청 단위 식별자 |
 | `persona_id` | string/null | 조건부 | Persona 기반 이벤트일 때 사용 |
 | `actor_type` | string | Y | `user`, `synthetic` |
 | `session_id` | string | Y | 쇼핑 세션 ID |
@@ -476,23 +477,25 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 
 ## 9. Event별 Required Properties
 
+`product_id`는 상품 대상 Event에서 공통 top-level 필드로 보낸다. 아래 표의 `required properties`는 `properties` 객체 안에 들어가는 Event별 세부 값만 적는다.
+
 ### 9.1 Session / Page
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
 | `session_start` | 없음 | `entry_page`, `referrer`, `utm_source`, `utm_medium`, `utm_campaign` |
-| `page_view` | 없음 | `referrer`, `route`, `product_id` |
-| `product_view` | `product_id` | `entry_source`, `list_id`, `position`, `recommendation_id` |
+| `page_view` | 없음 | `referrer`, `route` |
+| `product_view` | 없음 | `entry_source`, `list_id`, `position`, `recommendation_id` |
 | `exit_summary` | `dwell_ms`, `max_scroll_percent` | `last_section_id`, `last_content_kind`, `reason` |
 
 ### 9.2 Product Exposure / Exploration
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `product_impression` | `product_id`, `list_id`, `position` | `visible_ratio`, `impression_area`, `dedupe_key` |
-| `product_click` | `product_id` | `list_id`, `position`, `entry_source`, `impression_event_id` |
-| `recommendation_impression` | `product_id`, `recommendation_id`, `list_id`, `position`, `algorithm` | `visible_ratio` |
-| `recommendation_click` | `product_id`, `recommendation_id`, `list_id`, `position`, `algorithm` | `impression_event_id` |
+| `product_impression` | `list_id`, `position` | `visible_ratio`, `impression_area`, `dedupe_key` |
+| `product_click` | 없음 | `list_id`, `position`, `entry_source`, `impression_event_id` |
+| `recommendation_impression` | `recommendation_id`, `list_id`, `position`, `algorithm` | `section_id`, `visible_ratio` |
+| `recommendation_click` | `recommendation_id`, `list_id`, `position`, `algorithm` | `section_id`, `impression_event_id` |
 | `search` | `query_text` | `result_count`, `normalized_query` |
 | `filter_change` | `filter_name`, `filter_action`, `filter_values` | `result_count` |
 | `sort_change` | `sort_key`, `sort_direction` | `result_count` |
@@ -509,8 +512,8 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | `scroll_backtrack` | `depth_percent`, `distance_px` | `section_id`, `content_kind` |
 | `media_view` | `media_type`, `media_index` | `media_id`, `image_url_hash` |
 | `accordion_toggle` | `section_id`, `action` | `content_kind` |
-| `text_selection` | `text_length` | `section_id`, `content_kind`, `content_ref`, `text_snippet`, `truncated` |
-| `text_copy` | `text_length` | `section_id`, `content_kind`, `content_ref`, `text_snippet`, `truncated` |
+| `text_selection` | `text_length` | `section_id`, `content_kind`, `content_ref`, `matched_ingredients`, `matched_keywords`, `vocab_version` |
+| `text_copy` | `text_length` | `section_id`, `content_kind`, `content_ref`, `matched_ingredients`, `matched_keywords`, `vocab_version` |
 
 ### 9.4 Review / Ingredient
 
@@ -524,16 +527,21 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `wishlist_toggle` | `product_id`, `action` | `sku_id` |
-| `add_to_cart` | `product_id`, `quantity` | `sku_id`, `price_usd`, `unit_price`, `currency` |
-| `remove_from_cart` | `product_id`, `quantity` | `sku_id`, `reason` |
+| `wishlist_toggle` | `action` | `sku_id` |
+| `add_to_cart` | `quantity` | `sku_id`, `price_usd`, `unit_price`, `currency` |
+| `remove_from_cart` | `quantity` | `sku_id`, `reason` |
 | `view_cart` | 없음 | `item_count`, `cart_value` |
-| `quantity_change` | `product_id`, `quantity` | `sku_id` |
+| `quantity_change` | `quantity` | `sku_id` |
+| `variant_select` | `variant_name` 또는 `option_name`, `selected_value` | `previous_value`, `sku_id`, `variant_group` |
 | `begin_checkout` | `items` | `cart_value`, `currency` |
 | `purchase` | `order_id`, `items` | `order_value`, `currency` |
 | `hover_dwell` | `action`, `dwell_ms` | `section_id`, `content_kind` |
 | `rage_click` | `click_count` | `action`, `section_id`, `content_kind` |
 | `dead_click` | `target_tag` | `section_id`, `content_kind` |
+
+`section_dwell.dwell_ms`는 누적값이 아니라 이번 Event가 나타내는 구간 체류시간(delta)이다. 15초 checkpoint 또는 이탈 시 여러 건이 발생하면 Processed에서 delta 값을 합산한다.
+
+`begin_checkout`, `purchase`의 `items[]`는 Raw에서는 Event 1건 안에 배열로 보관하고, Processed의 `product_event_fact`에서는 Spark가 `items explode`를 수행해 상품별 row로 변환한다.
 
 ## 10. Dashboard KPI 산식
 
@@ -701,13 +709,14 @@ interest_score =
 ## 12. Raw / Processed 적재 초안
 
 이 문서는 Event Schema가 중심이지만, 데이터 파트 진행을 위해 최소 적재 구조도 함께 둔다.
+Processed Dataset의 상세 컬럼과 생성 기준은 `processed-schema.md`에 분리한다.
 
 | 데이터셋 | Grain | 설명 |
 | --- | --- | --- |
-| `raw_events` | event_id | Collector가 검증한 원본 Event |
+| `raw_events` | received event record | Collector가 검증한 원본 Event. `event_id`는 dedup key |
 | `bad_events` | received record | Schema 검증 실패, 필수값 누락, 파싱 실패 |
 | `session_event_ordered` | session_id + sequence_no | 순서 복원 및 세션 분석용 |
-| `product_event_fact` | event_id + product_id | 상품별 Event 집계용 |
+| `product_event_fact` | event_id + item_index + product_id | 상품별 Event 집계용 |
 | `product_daily_kpi` | date + product_id | Dashboard 상품 KPI |
 | `content_interest_fact` | date + product_id + section/content | 성분/리뷰/콘텐츠 관심도 |
 | `funnel_session_fact` | session_id + product_id | Funnel 단계 도달 여부 |
@@ -753,22 +762,26 @@ interest_score =
 
 MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 분리를 먼저 구현한다. `trust_penalty`는 관심도 점수나 인기 상품 랭킹을 만들 때 확장한다.
 
-## 14. 남은 합의 사항
+## 14. 합의 현황 및 남은 미확정 사항
 
-합의사항은 모두 같은 급이 아니다. 공식 Raw Event Schema를 만들기 전에 반드시 정해야 하는 항목과, 구현 후 재검증해도 되는 항목을 나눈다.
+프론트/백 확인 결과, 공식 Raw Event Schema 작성에 필요한 핵심 방향은 아래처럼 정리한다.
 
-| 우선순위 | 안건 | 결정 필요 내용 | 추천안 |
-| --- | --- | --- | --- |
-| 필수 | Raw Event Schema 기준 | Front → Collector → Kafka 구간에서 flat Raw Schema를 공식으로 둘지 | flat Raw Schema 유지 |
-| 필수 | `product_view` 생성 위치 | Front가 직접 보낼지, Collector/Spark가 `page_view`에서 파생할지 | Front에서 직접 전송 권장 |
-| 필수 | `section_dwell` 합산 위치 | Front에서 합산할지, Spark/DW에서 합산할지 | Spark/DW 합산 권장 |
-| 필수 | Synthetic/Web Event 분리 | 같은 Raw 테이블에 둘지 물리 분리할지 | 같은 테이블 + `actor_type/source/simulation_run_id` 분리 |
-| 필수 | `text_snippet` 저장 | 선택/복사 텍스트 원문 저장 여부 | MVP는 원문보다 해시/성분 매칭 결과 권장 |
-| MVP 범위 | Dashboard 기본 산식 | session/product 기준으로 먼저 만들지 | session/product 기준 우선 |
-| MVP 범위 | 집계 기간 | 실시간/일간/최근 7일 중 어디까지 MVP에 포함할지 | 일간 + 최근 7일 우선 |
-| 구현 후 재검증 | 후속 화면 Trigger | `product_impression`, `search`, `filter_change`, `view_cart`, `begin_checkout`, `purchase` Trigger | 화면 구현 직후 재검증 |
-| 확장 | 관심도 가중치 | 초기 가중치를 `[추정]`으로 유지할지, 데이터 분포를 보고 조정할지 | `[추정]`으로 시작 후 조정 |
-| 확장 | 비정상 행동 처리 | 관심도 점수에서 감점할지, 별도 UX/품질 지표로 둘지 | MVP는 별도 품질 지표, 이후 감점 |
+| 상태 | 안건 | 결정 내용 |
+| --- | --- | --- |
+| 합의 | Raw Event Schema 기준 | Front JSON 구조를 유지하고, Backend는 큰 가공 없이 검증과 서버 메타 필드만 추가 |
+| 합의 | Event 수집 API | `POST /api/events/batch`, body는 `{ "events": [ ...LogEnvelope ] }` |
+| 합의 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트 결과로 조정 |
+| 합의 | 서버 메타 필드 | `received_at`, `source`, `request_id` |
+| 합의 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리하는 방향. 정확한 응답 포맷은 Backend 구현 시 확정 |
+| 합의 | `product_view` 생성 위치 | Front에서 별도 Event로 직접 전송 |
+| 합의 | `section_dwell` 합산 위치 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
+| 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
+| 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
+| 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
+| 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
+| 구현 후 재검증 | 후속 화면 Trigger | `product_impression`, `search`, `filter_change`, `view_cart`, `begin_checkout`, `purchase` Trigger |
+| 미확정 | Kafka 세부 설정 | topic, message 단위, partition key는 Kafka/Spark 담당자와 합의 필요 |
+| 확장 | 관심도 가중치/비정상 행동 | MVP 이후 샘플 데이터와 QA 결과로 조정 |
 
 ## 15. MVP 구현 순서 제안
 
