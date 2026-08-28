@@ -25,6 +25,15 @@ export interface Product {
   size: string | null;
   rating: number | null;
   review_count: number | null;
+  /** 데이터셋의 인기 순위. 목록 기본 정렬에 쓴다 */
+  rank?: number;
+  /** 세포라 좋아요 수. 인기도 정렬 보조 */
+  loves_count?: number | null;
+  /**
+   * 화면 배지. 원본 플래그를 그대로 옮긴 값이다.
+   * 할인율 배지는 만들지 않는다 — `sale_price_usd` 가 200개 중 198개 비어 있다.
+   */
+  badges?: ProductBadge[];
   highlights: string[];
   /** 원소 1개에 전 성분이 쉼표로 이어붙은 통짜 문자열인 경우가 대부분 */
   ingredients: string[];
@@ -34,6 +43,9 @@ export interface Product {
 }
 
 export type SkinType = 'combination' | 'dry' | 'normal' | 'oily';
+
+/** 원본 플래그에서 그대로 옮긴 배지 종류 */
+export type ProductBadge = 'new' | 'limited' | 'exclusive' | 'online_only';
 
 /** 구매 옵션 하나. 세포라는 옵션마다 SKU 와 이미지가 따로 있다 */
 export interface ProductVariant {

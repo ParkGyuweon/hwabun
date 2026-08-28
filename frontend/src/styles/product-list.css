@@ -1,0 +1,347 @@
+/* 상품 목록 홈 스타일 */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* ---------- 기획전 ---------- */
+
+.list__promo {
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+}
+
+.list__promo-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.list__promo-head h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+}
+
+.list__promo-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-faint);
+}
+
+/*
+ * 기획전은 가로 스크롤. 세로로 쌓으면 목록 그리드와 구분이 안 되고,
+ * 그러면 노출 로그에서 두 자리를 나눠 볼 수 없다.
+ */
+.list__row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 180px;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+
+.list__row > .card {
+  scroll-snap-align: start;
+}
+
+/* ---------- 카테고리 탭 ---------- */
+
+.list__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.list__tabs button {
+  appearance: none;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+}
+
+.list__tabs button span {
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--color-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.list__tabs button:hover {
+  border-color: var(--color-ink-faint);
+}
+
+.list__tabs button.is-active {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: #ffffff;
+}
+
+.list__tabs button.is-active span {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---------- 정렬·필터 ---------- */
+
+.list__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.list__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.list__filters label,
+.list__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+.list__filters select,
+.list__sort select {
+  font: inherit;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-ink);
+  padding: 6px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  max-width: 240px;
+}
+
+.list__bands {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.list__bands button {
+  appearance: none;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+}
+
+.list__bands button.is-active {
+  border-color: var(--color-ink);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.list__count {
+  margin: 0 0 var(--space-4);
+  font-size: 13px;
+  color: var(--color-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 그리드 ---------- */
+
+.list__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-6) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list__more {
+  appearance: none;
+  display: block;
+  margin: var(--space-7) auto 0;
+  padding: 12px 28px;
+  border: 1px solid var(--color-ink);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.list__more:hover {
+  background: var(--color-ink);
+  color: #ffffff;
+}
+
+/* ---------- 상품 카드 ---------- */
+
+.card {
+  min-width: 0;
+}
+
+.card__link {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.card__thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  margin-bottom: var(--space-2);
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.card__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.card__link:hover .card__thumb {
+  outline: 1px solid var(--color-line);
+}
+
+.card__badges {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.card__badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  color: var(--color-ink-soft);
+}
+
+.card__badge--new {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: #ffffff;
+}
+
+.card__badge--limited {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+}
+
+.card__badge--exclusive {
+  background: var(--color-promo);
+  border-color: var(--color-promo);
+  color: var(--color-promo-ink);
+}
+
+.card__brand {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+}
+
+/* 상품명은 두 줄로 고정한다. 줄 수가 다르면 카드마다 평점 위치가 어긋난다 */
+.card__name {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.4em * 2);
+}
+
+.card__price {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.card__rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 18px;
+}
+
+.card__count {
+  font-size: 11px;
+  color: var(--color-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 홈 이동 버튼 ---------- */
+
+.site-header__logo,
+.breadcrumb__home {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.breadcrumb__home {
+  text-decoration: underline;
+}
+
+@media (max-width: 720px) {
+  .list__grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .list__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

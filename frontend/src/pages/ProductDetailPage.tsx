@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Breadcrumb from '../components/product/Breadcrumb';
 import ProductGallery from '../components/product/ProductGallery';
 import ProductSummary from '../components/product/ProductSummary';
 import HighlightGrid from '../components/product/HighlightGrid';
@@ -98,7 +97,6 @@ export default function ProductDetailPage({
 
   return (
     <main className="page">
-      <Breadcrumb items={product.category} />
 
       <section className="pdp" data-log-section="product_hero">
         <div className="pdp__media">
