@@ -13,6 +13,7 @@ import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
 import type { Review } from '../types/review';
+import type { CartItem } from '../types/cart';
 
 /** 기획전에 올리는 상품 수 */
 const PROMO_SIZE = 10;
@@ -46,6 +47,7 @@ interface ProductListPageProps {
   reviews: Review[];
   persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
+  onAddToCart: (item: CartItem) => void;
   /** 헤더 메뉴에서도 카테고리를 바꾸므로 소유권을 App 에 둔다 */
   category: string;
   onCategoryChange: (category: string) => void;
@@ -66,6 +68,7 @@ export default function ProductListPage({
   reviews,
   persona,
   onSelectProduct,
+  onAddToCart,
   category,
   onCategoryChange,
 }: ProductListPageProps) {
@@ -404,6 +407,7 @@ export default function ProductListPage({
       {quickLook ? (
         <QuickLook
           product={quickLook}
+          onAddToCart={onAddToCart}
           onClose={() => setQuickLook(null)}
           onOpenDetail={openDetailFromQuickLook}
         />

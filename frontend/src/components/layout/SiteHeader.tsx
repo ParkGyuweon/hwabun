@@ -10,6 +10,9 @@ interface SiteHeaderProps {
   /** 데이터에 실제로 존재하는 카테고리. 없는 메뉴를 걸어두지 않는다 */
   categories: string[];
   onCategorySelect: (category: string) => void;
+  /** 장바구니에 담긴 총 수량 */
+  cartCount: number;
+  onCart: () => void;
 }
 
 /**
@@ -33,6 +36,8 @@ export default function SiteHeader({
   onHome,
   categories,
   onCategorySelect,
+  cartCount,
+  onCart,
 }: SiteHeaderProps) {
   return (
     <header className="site-header">
@@ -57,6 +62,15 @@ export default function SiteHeader({
         </nav>
 
         <div className="site-header__account">
+          <button
+            type="button"
+            className="site-header__basket"
+            data-log-action="view_cart"
+            onClick={onCart}
+          >
+            Basket
+            <span className="site-header__basket-count">{cartCount}</span>
+          </button>
           <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
         </div>
       </div>

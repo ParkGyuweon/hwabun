@@ -5,12 +5,14 @@ import { IMAGE_WIDTH_MAIN, sizedImage } from '../../lib/image';
 import { formatCount, formatPrice } from '../../lib/format';
 import { track } from '../../lib/logger';
 import type { Product, ProductVariant } from '../../types/product';
+import type { CartItem } from '../../types/cart';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
 
 interface QuickLookProps {
   product: Product;
   onClose: () => void;
+  onAddToCart: (item: CartItem) => void;
   /** 상세로 이동. 닫기와 클릭 로그는 호출한 쪽이 처리한다 */
   onOpenDetail: (productId: string) => void;
 }
@@ -25,7 +27,7 @@ interface QuickLookProps {
  * 열림 이벤트는 여는 쪽(목록)에서 남긴다. 여기서 effect 로 남기면
  * StrictMode 가 두 번 실행해 중복이 생긴다.
  */
-export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookProps) {
+export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail }: QuickLookProps) {
   const [variant, setVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [addedAt, setAddedAt] = useState<number | null>(null);
@@ -102,6 +104,16 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
       quantity,
       price_usd: product.price_usd,
       entry_source: 'quick_look',
+    });
+    onAddToCart({
+      product_id: product.product_id,
+      sku_id: skuId,
+      variant_label: variant?.label ?? null,
+      brand_name: product.brand_name,
+      product_name: product.product_name,
+      image_url: imageUrl,
+      price_usd: product.price_usd,
+      quantity,
     });
   };
 

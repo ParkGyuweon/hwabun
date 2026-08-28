@@ -4,12 +4,15 @@ import VariantPicker from './VariantPicker';
 import { formatCount, formatPrice } from '../../lib/format';
 import { track } from '../../lib/logger';
 import type { Product, ProductVariant } from '../../types/product';
+import type { CartItem } from '../../types/cart';
 
 interface ProductSummaryProps {
   product: Product;
   /** 선택된 옵션의 SKU. 옵션이 없는 상품이면 null */
   selectedSkuId: string | null;
   onVariantSelect: (variant: ProductVariant) => void;
+  /** 실제 장바구니에 넣는다. 로그는 여기서 남기고 담기는 App 이 한다 */
+  onAddToCart: (item: CartItem) => void;
   /** 리뷰 섹션으로 스크롤 이동 */
   onReviewLinkClick: () => void;
 }
@@ -23,6 +26,7 @@ export default function ProductSummary({
   product,
   selectedSkuId,
   onVariantSelect,
+  onAddToCart,
   onReviewLinkClick,
 }: ProductSummaryProps) {
   const [quantity, setQuantity] = useState(1);
@@ -50,6 +54,17 @@ export default function ProductSummary({
       sku_id: selectedSkuId,
       quantity,
       price_usd: product.price_usd,
+    });
+    onAddToCart({
+      product_id: product.product_id,
+      sku_id: selectedSkuId,
+      variant_label:
+        product.variants.find((v) => v.sku_id === selectedSkuId)?.label ?? null,
+      brand_name: product.brand_name,
+      product_name: product.product_name,
+      image_url: product.image_url,
+      price_usd: product.price_usd,
+      quantity,
     });
   };
 
