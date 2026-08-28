@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react';
 import ProductCard from '../components/product/ProductCard';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
+import { useSectionView } from '../hooks/useSectionView';
+import { useScrollDepth } from '../hooks/useScrollDepth';
+import { useTextSelection } from '../hooks/useTextSelection';
+import { useInteractionSignals } from '../hooks/useInteractionSignals';
+import { useExitSummary } from '../hooks/useExitSummary';
 import { track } from '../lib/logger';
 import type { Product } from '../types/product';
 
@@ -121,6 +126,27 @@ export default function ProductListPage({
 
   const visible = filtered.slice(0, shown);
 
+  /**
+   * 목록 조건이 바뀌면 새 화면으로 본다.
+   * 필터를 바꾸면 목록 길이와 내용이 달라지므로 스크롤 도달 깊이와 섹션 노출을
+   * 처음부터 다시 세야 한다.
+   */
+  const pageViewKey = `list:${category}|${concern}|${price}|${sort}`;
+
+  /**
+   * 상세 페이지와 같은 훅을 붙인다.
+   *
+   * 목록은 사용자가 가장 오래 머무는 화면인데 여기에 훅이 없으면
+   * **200개를 훑어보는 구간이 로그에서 통째로 빈다.**
+   * 어디까지 내려갔는지(scroll_depth), 기획전과 그리드 중 어디에 머물렀는지
+   * (section_dwell), 목록에서 막혔는지(dead_click) 를 남긴다.
+   */
+  useSectionView(pageViewKey);
+  useScrollDepth(pageViewKey);
+  useTextSelection(pageViewKey);
+  useInteractionSignals(pageViewKey);
+  useExitSummary(pageViewKey);
+
   // 목록이 바뀌면 노출을 처음부터 다시 센다
   const promoRef = useImpression({
     pageViewKey: 'promo',
@@ -128,7 +154,7 @@ export default function ProductListPage({
     listId: 'promo_pick',
   });
   const gridRef = useImpression({
-    pageViewKey: `${category}|${concern}|${price}|${sort}`,
+    pageViewKey,
     eventName: 'product_impression',
     listId: 'list_grid',
   });
@@ -153,7 +179,7 @@ export default function ProductListPage({
 
   return (
     <main className="page list">
-      <section className="list__promo" data-log-section="highlights">
+      <section className="list__promo" data-log-section="promo_row">
         <header className="list__promo-head">
           <h2>지금 주목할 상품</h2>
           <p>신제품 · 한정판 · 세포라 단독</p>
@@ -164,13 +190,14 @@ export default function ProductListPage({
               key={product.product_id}
               product={product}
               position={index + 1}
+              contentKind="product_card"
               onSelect={selectFrom('promo_pick')}
             />
           ))}
         </ul>
       </section>
 
-      <section className="list__catalog" data-log-section="about_product">
+      <section className="list__catalog" data-log-section="product_grid">
         <nav className="list__tabs" aria-label="카테고리">
           <button
             type="button"
@@ -197,7 +224,7 @@ export default function ProductListPage({
           ))}
         </nav>
 
-        <div className="list__controls">
+        <div className="list__controls" data-log-section="list_controls">
           <div className="list__filters">
             <label>
               고민

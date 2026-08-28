@@ -2,6 +2,7 @@ import StarRating from '../common/StarRating';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
 import { formatCount, formatPrice } from '../../lib/format';
 import type { Product } from '../../types/product';
+import type { LogContentKind } from '../../types/log';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
 
@@ -17,6 +18,11 @@ interface ProductCardProps {
   product: Product;
   /** 목록 안에서의 순번. 1부터. 노출·클릭 로그에 실린다 */
   position: number;
+  /**
+   * 이 카드가 어떤 자리에 있는지.
+   * 목록 카드와 추천 카드를 구분해야 추천 성과를 따로 집계할 수 있다.
+   */
+  contentKind?: LogContentKind;
   onSelect: (productId: string) => void;
 }
 
@@ -26,7 +32,12 @@ interface ProductCardProps {
  * `data-product-id` 와 `data-position` 을 노출한다.
  * `useImpression` 이 이 속성을 읽어 노출 로그를 남기므로 이름을 바꾸면 안 된다.
  */
-export default function ProductCard({ product, position, onSelect }: ProductCardProps) {
+export default function ProductCard({
+  product,
+  position,
+  contentKind = 'product_card',
+  onSelect,
+}: ProductCardProps) {
   const badges = product.badges ?? [];
 
   return (
@@ -34,7 +45,7 @@ export default function ProductCard({ product, position, onSelect }: ProductCard
       className="card"
       data-product-id={product.product_id}
       data-position={position}
-      data-log-content="recommendation_card"
+      data-log-content={contentKind}
       data-log-ref={product.product_id}
     >
       <button type="button" className="card__link" onClick={() => onSelect(product.product_id)}>

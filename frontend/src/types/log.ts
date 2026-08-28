@@ -55,8 +55,18 @@ export type P1EventName =
 
 export type EventName = P0EventName | P1EventName;
 
-/** 상세 페이지 안의 의미 단위 구역. 픽셀 위치가 아니라 이 값으로 로그를 남긴다 */
+/**
+ * 화면 안의 의미 단위 구역. 픽셀 위치가 아니라 이 값으로 로그를 남긴다.
+ *
+ * **목록과 상세의 구역 이름은 반드시 다르게 둔다.**
+ * 같은 이름을 쓰면 `section_dwell` 이 어느 화면에서 나온 것인지 구분할 수 없다.
+ */
 export type LogSection =
+  // 목록 화면
+  | 'promo_row'
+  | 'list_controls'
+  | 'product_grid'
+  // 상세 화면
   | 'product_hero'
   | 'highlights'
   | 'about_product'
@@ -93,6 +103,8 @@ export type LogContentKind =
   | 'review_stats'
   | 'review_filter'
   | 'recommendation_card'
+  /** 목록·기획전의 상품 카드. 추천 카드와 구분해야 추천 성과를 따로 볼 수 있다 */
+  | 'product_card'
   | 'navigation';
 
 /**
@@ -241,6 +253,15 @@ export const NEGATIVE_EVENTS: ReadonlySet<EventName> = new Set<EventName>([
  * 관심이 아니라 **다른 것을 찾고 있다는 신호**에 가깝다.
  */
 export const SECTION_DWELL_WEIGHT: Record<LogSection, number> = {
+  /**
+   * 목록 화면.
+   * 그리드 체류는 "고르는 중" 이라 상품 하나에 귀속시킬 수 없다.
+   * 그래서 상품 선호도 가중이 아니라 **탐색 노력의 크기**로만 쓴다.
+   */
+  product_grid: 0.5,
+  promo_row: 0.5,
+  list_controls: 0.3,
+
   ingredients: 1.5,
   reviews: 1.5,
   about_product: 1.0,
