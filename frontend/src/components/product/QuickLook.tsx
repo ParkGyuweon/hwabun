@@ -32,6 +32,45 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
   const [loved, setLoved] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
 
+  /** 얼마나 보다가 닫았는지 남기기 위한 진입 시각. StrictMode 중복을 피해 ref 로 든다 */
+  const openedAtRef = useRef(Date.now());
+  /** 창 안에서 살펴본 옵션 수 */
+  const viewedSkusRef = useRef(new Set<string>());
+  const closedRef = useRef(false);
+  /**
+   * state 대신 ref 로도 든다. 담기 직후 같은 틱에 닫히면(연타 등)
+   * 리렌더 전 클로저가 잡혀 added_to_cart 가 false 로 나간다.
+   */
+  const addedRef = useRef(false);
+  const lovedRef = useRef(false);
+
+  /**
+   * 닫힘 요약. 열림(quick_look)과 짝이다.
+   * 창이 떠 있는 동안은 섹션 체류 훅의 사정권 밖이라, 여기서 직접 재서 보낸다.
+   * 체류만으로는 자리 비움과 구분이 안 되므로 창 안에서 한 행동을 같이 싣는다.
+   */
+  const emitClose = (reason: string) => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    track('quick_look_close', {
+      product_id: product.product_id,
+      close_reason: reason,
+      dwell_ms: Date.now() - openedAtRef.current,
+      variants_viewed: viewedSkusRef.current.size,
+      added_to_cart: addedRef.current,
+      wishlisted: lovedRef.current,
+    });
+  };
+
+  const handleClose = (reason: string) => {
+    emitClose(reason);
+    onClose();
+  };
+
+  // ESC 핸들러가 최신 상태를 보게 한다
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
+
   const skuId = variant?.sku_id ?? product.sku_id;
   const imageUrl = variant?.image_url ?? product.image_url;
 
@@ -39,7 +78,7 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
     closeRef.current?.focus();
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') handleCloseRef.current('escape');
     };
     document.addEventListener('keydown', onKey);
 
@@ -55,6 +94,7 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
 
   const addToCart = () => {
     // 장바구니 API 가 붙으면 성공 응답 뒤로 옮긴다 (ProductSummary 와 동일)
+    addedRef.current = true;
     setAddedAt(Date.now());
     track('add_to_cart', {
       product_id: product.product_id,
@@ -67,6 +107,7 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
 
   const toggleWishlist = () => {
     const next = !loved;
+    lovedRef.current = next;
     setLoved(next);
     track('wishlist_toggle', {
       product_id: product.product_id,
@@ -81,7 +122,7 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
       data-log-action="quick_look_close"
       onClick={(event) => {
         // 흐린 배경을 누르면 닫는다. 창 안쪽 클릭은 여기까지 안 올라온다
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) handleClose('backdrop');
       }}
     >
       <div
@@ -96,7 +137,7 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
           className="qlook__close"
           aria-label="닫기"
           data-log-action="quick_look_close"
-          onClick={onClose}
+          onClick={() => handleClose('close_button')}
         >
           ×
         </button>
@@ -127,7 +168,10 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
             type="button"
             className="qlook__details link-button"
             data-log-action="quick_look_detail"
-            onClick={() => onOpenDetail(product.product_id)}
+            onClick={() => {
+              emitClose('open_detail');
+              onOpenDetail(product.product_id);
+            }}
           >
             상세 페이지 보기
           </button>
@@ -138,7 +182,10 @@ export default function QuickLook({ product, onClose, onOpenDetail }: QuickLookP
             productId={product.product_id}
             variants={product.variants}
             selectedSkuId={skuId}
-            onSelect={setVariant}
+            onSelect={(next) => {
+              viewedSkusRef.current.add(next.sku_id);
+              setVariant(next);
+            }}
           />
 
           <div className="qlook__buy">

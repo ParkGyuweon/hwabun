@@ -434,6 +434,8 @@
 .card:hover .card__hover,
 .card:focus-within .card__hover {
   opacity: 1;
+  visibility: visible;
+  transition: opacity 0.18s ease;
 }
 
 /* 세포라의 Quicklook: 이미지 하단에 붙는 반투명 회색 바 */
