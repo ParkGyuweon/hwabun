@@ -1,0 +1,153 @@
+package com.cosmetic.collector.event.api;
+
+import com.cosmetic.collector.common.GlobalExceptionHandler;
+import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublisher;
+import com.cosmetic.collector.event.application.PublishSummary;
+import com.cosmetic.collector.event.observability.CollectorMetrics;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+import java.util.concurrent.CompletableFuture;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
+
+class EventControllerTest {
+
+    private EventPublisher publisher;
+    private CollectorMetrics metrics;
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        publisher = mock(EventPublisher.class);
+        metrics = mock(CollectorMetrics.class);
+
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+
+        mockMvc = standaloneSetup(new EventController(publisher, metrics))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .setValidator(validator)
+                .build();
+    }
+
+    @Test
+    void acceptsAValidBatchAfterPublishing() throws Exception {
+        when(publisher.publish(any())).thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "draft",
+                                  "events": [{
+                                    "event_id": "evt-001",
+                                    "event_type": "product.click",
+                                    "event_time": "2026-08-27T14:30:00Z",
+                                    "persona_id": "persona-001",
+                                    "session_id": "session-001",
+                                    "product_id": "product-001",
+                                    "properties": {"position": 1}
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(header().exists("X-Request-Id"))
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(0));
+
+        verify(metrics).recordReceived(1);
+        verify(publisher).publish(any());
+    }
+
+    @Test
+    void rejectsAnEmptyBatch() throws Exception {
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "draft",
+                                  "events": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
+    }
+
+    @Test
+    void rejectsAnEventWithoutRequiredIdentifiers() throws Exception {
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "draft",
+                                  "events": [{
+                                    "event_type": "product.click",
+                                    "event_time": "2026-08-27T14:30:00Z",
+                                    "persona_id": "persona-001"
+                                  }]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenKafkaPublishingFails() throws Exception {
+        when(publisher.publish(any())).thenReturn(CompletableFuture.failedFuture(
+                new EventPublishException("publish failed", new RuntimeException("Kafka unavailable"))
+        ));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "draft",
+                                  "events": [{
+                                    "event_id": "evt-001",
+                                    "event_type": "product.click",
+                                    "event_time": "2026-08-27T14:30:00Z",
+                                    "persona_id": "persona-001",
+                                    "session_id": "session-001"
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("KAFKA_UNAVAILABLE"));
+    }
+
+    @Test
+    void rejectsMalformedJsonBeforeCallingThePublisher() throws Exception {
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not-valid-json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_JSON"));
+
+        verifyNoInteractions(publisher, metrics);
+    }
+}

@@ -1,0 +1,63 @@
+# Gradle build cache and outputs
+.gradle/
+build/
+out/
+bin/
+
+# Java compiler and JVM crash artifacts
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.hprof
+hs_err_pid*
+replay_pid*
+.attach_pid*
+
+# Keep the Gradle Wrapper JAR tracked
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse / Spring Tool Suite
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# VS Code
+.vscode/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example
+local.properties
+src/main/resources/application-local.yml
+src/main/resources/application-secret.yml
+src/main/resources/application-secrets.yml
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
