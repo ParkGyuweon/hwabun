@@ -14,7 +14,7 @@ import java.util.List;
 @Schema(description = "활동 이벤트 배치 요청")
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record EventBatchRequest(
-        @Schema(description = "이벤트 계약 버전", example = "draft")
+        @Schema(description = "배치 전송 계약 버전", example = "0.2.0-draft")
         @NotBlank String schemaVersion,
 
         @ArraySchema(

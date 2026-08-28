@@ -6,7 +6,10 @@ import json, os, re
 import numpy as np
 
 BD = os.path.dirname(os.path.abspath(__file__))
-ART = os.path.join(BD, "artifacts")
+ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
+# 어휘집은 계약, 상품 카탈로그는 수집 결과라 서로 다른 곳에 있다
+VOCAB = os.path.join(ROOT, "contracts", "product-feature-vocab.json")
+PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
 
 _PAREN = re.compile(r"\([^)]*\)")
 _NOISE = re.compile(r"^(water|aqua|eau)$|^\d|^and$|^or$|^may contain")
@@ -19,8 +22,8 @@ ORDER = ["secondary_category", "tertiary_category", "concern",
 
 class Encoder:
     def __init__(self, vocab_path=None, products_path=None):
-        vocab_path = vocab_path or os.path.join(ART, "product_feature_vocab.json")
-        products_path = products_path or os.path.join(ART, "products_200.json")
+        vocab_path = vocab_path or VOCAB
+        products_path = products_path or PRODUCTS
         self.V = json.load(open(vocab_path, encoding="utf-8"))
         self.products = json.load(open(products_path, encoding="utf-8"))
         self.blk = {b["name"]: b for b in self.V["blocks"]}

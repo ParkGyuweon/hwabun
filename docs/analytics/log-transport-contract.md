@@ -100,8 +100,8 @@ e × T < B  →  시간 트리거.  전송 간격 = T 초
 | 배치 크기 | 20건 | 실사용자 |
 | 전송 주기 | 5초 | 실사용자 |
 | 전송 조건 | 크기 또는 시간 중 먼저 | |
-| 엔드포인트 | `POST /api/events/batch` | 백엔드 확정 필요 |
-| 요청 본문 | `{ "events": [ ...LogEnvelope ] }` | |
+| 엔드포인트 | `POST /api/events` | 프론트/백엔드 확정 |
+| 요청 본문 | `{ "schema_version": "0.2.0-draft", "events": [ ...LogEnvelope ] }` | 배치와 Event 각각 버전을 보존 |
 | 이탈 시 | `visibilitychange`(hidden) · `pagehide` 에서 `sendBeacon` | 마지막 배치 유실 방지 |
 | 최대 본문 크기 | 미정 | **백엔드 한계 확인 필요** |
 

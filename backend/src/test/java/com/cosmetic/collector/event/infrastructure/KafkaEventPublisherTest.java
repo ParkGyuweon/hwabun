@@ -6,6 +6,7 @@ import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -26,20 +27,21 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class KafkaEventPublisherTest {
 
     @Test
-    void publishesEachEventUsingPersonaIdAsTheKafkaKey() {
+    void publishesEachEventUsingSessionIdAsTheKafkaKey() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
         CollectorMetrics metrics = mock(CollectorMetrics.class);
         ObjectMapper objectMapper = new ObjectMapper();
         Clock clock = Clock.fixed(Instant.parse("2026-08-27T15:00:00Z"), ZoneOffset.UTC);
 
-        when(kafkaTemplate.send(eq("activity-events"), eq("persona-001"), anyString()))
+        when(kafkaTemplate.send(eq("activity-events"), eq("session-001"), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
         KafkaEventPublisher publisher = new KafkaEventPublisher(
@@ -54,26 +56,33 @@ class KafkaEventPublisherTest {
         EventBatchRequest request = new EventBatchRequest(
                 "draft",
                 List.of(new ActivityEvent(
+                        "0.2.0-draft",
                         "evt-001",
-                        "product.click",
+                        "product_click",
+                        "comparison",
                         Instant.parse("2026-08-27T14:30:00Z"),
                         "persona-001",
                         "session-001",
+                        "page-view-001",
+                        1,
+                        "product_list",
                         "product-001",
+                        "user",
+                        "local",
                         objectMapper.createObjectNode().put("position", 1)
                 ))
         );
 
-        PublishSummary result = publisher.publish(request).join();
+        PublishSummary result = publisher.publish("request-001", request).join();
 
         assertThat(result.publishedCount()).isEqualTo(1);
-        verify(kafkaTemplate).send(eq("activity-events"), eq("persona-001"), anyString());
+        verify(kafkaTemplate).send(eq("activity-events"), eq("session-001"), anyString());
         verify(metrics).recordPublished(1);
         verify(metrics, never()).recordPublishFailure(any(Integer.class));
     }
 
     @Test
-    void publishesDifferentPersonasUsingDifferentKafkaKeys() {
+    void publishesDifferentSessionsUsingDifferentKafkaKeys() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
         CollectorMetrics metrics = mock(CollectorMetrics.class);
@@ -93,16 +102,96 @@ class KafkaEventPublisherTest {
         );
 
         EventBatchRequest request = new EventBatchRequest("draft", List.of(
-                event("evt-001", "persona-001"),
-                event("evt-002", "persona-002")
+                event("evt-001", "persona-001", "session-001"),
+                event("evt-002", "persona-002", "session-002")
         ));
 
-        PublishSummary result = publisher.publish(request).join();
+        PublishSummary result = publisher.publish("request-001", request).join();
 
         assertThat(result.publishedCount()).isEqualTo(2);
-        verify(kafkaTemplate).send(eq("activity-events"), eq("persona-001"), anyString());
-        verify(kafkaTemplate).send(eq("activity-events"), eq("persona-002"), anyString());
+        verify(kafkaTemplate).send(eq("activity-events"), eq("session-001"), anyString());
+        verify(kafkaTemplate).send(eq("activity-events"), eq("session-002"), anyString());
         verify(metrics).recordPublished(2);
+    }
+
+    @Test
+    void addsTheSameRequestMetadataAndSequentialEventIndexesToTheBatch() throws Exception {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        Clock clock = Clock.fixed(Instant.parse("2026-08-27T15:00:00Z"), ZoneOffset.UTC);
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                clock,
+                "activity-events",
+                Runnable::run
+        );
+
+        publisher.publish("request-001", new EventBatchRequest("0.2.0-draft", List.of(
+                event("evt-001", null),
+                event("evt-002", null)
+        ))).join();
+
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate, times(2)).send(
+                eq("activity-events"),
+                eq("session-001"),
+                payloadCaptor.capture()
+        );
+
+        KafkaEventMessage first = objectMapper.readValue(
+                payloadCaptor.getAllValues().get(0),
+                KafkaEventMessage.class
+        );
+        KafkaEventMessage second = objectMapper.readValue(
+                payloadCaptor.getAllValues().get(1),
+                KafkaEventMessage.class
+        );
+
+        assertThat(first.requestId()).isEqualTo("request-001");
+        assertThat(second.requestId()).isEqualTo("request-001");
+        assertThat(first.receivedAt()).isEqualTo(Instant.parse("2026-08-27T15:00:00Z"));
+        assertThat(second.receivedAt()).isEqualTo(Instant.parse("2026-08-27T15:00:00Z"));
+        assertThat(first.eventIndex()).isZero();
+        assertThat(second.eventIndex()).isEqualTo(1);
+        assertThat(first.source()).isEqualTo("web");
+        assertThat(second.source()).isEqualTo("web");
+    }
+
+    @Test
+    void publishesAnEventWithANullPersonaId() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        Clock clock = Clock.fixed(Instant.parse("2026-08-27T15:00:00Z"), ZoneOffset.UTC);
+
+        when(kafkaTemplate.send(eq("activity-events"), eq("session-001"), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                clock,
+                "activity-events",
+                Runnable::run
+        );
+
+        PublishSummary result = publisher.publish("request-001", new EventBatchRequest(
+                "0.2.0-draft",
+                List.of(event("evt-001", null))
+        )).join();
+
+        assertThat(result.publishedCount()).isEqualTo(1);
+        verify(kafkaTemplate).send(eq("activity-events"), eq("session-001"), anyString());
     }
 
     @Test
@@ -129,7 +218,7 @@ class KafkaEventPublisherTest {
                 event("evt-002", "persona-002")
         ));
 
-        assertThatThrownBy(() -> publisher.publish(request).join())
+        assertThatThrownBy(() -> publisher.publish("request-001", request).join())
                 .hasCauseInstanceOf(EventPublishException.class);
 
         verify(metrics).recordPublishFailure(2);
@@ -160,7 +249,7 @@ class KafkaEventPublisherTest {
                 List.of(event("evt-001", "persona-001"))
         );
 
-        CompletableFuture<PublishSummary> result = publisher.publish(request);
+        CompletableFuture<PublishSummary> result = publisher.publish("request-001", request);
 
         assertThatThrownBy(result::join)
                 .hasCauseInstanceOf(EventPublishException.class);
@@ -195,7 +284,7 @@ class KafkaEventPublisherTest {
         );
 
         try {
-            publisher.publish(new EventBatchRequest(
+            publisher.publish("request-001", new EventBatchRequest(
                     "draft",
                     List.of(event("evt-001", "persona-001"))
             )).join();
@@ -225,7 +314,7 @@ class KafkaEventPublisherTest {
                 }
         );
 
-        CompletableFuture<PublishSummary> result = publisher.publish(new EventBatchRequest(
+        CompletableFuture<PublishSummary> result = publisher.publish("request-001", new EventBatchRequest(
                 "draft",
                 List.of(event("evt-001", "persona-001"))
         ));
@@ -238,13 +327,24 @@ class KafkaEventPublisherTest {
     }
 
     private ActivityEvent event(String eventId, String personaId) {
+        return event(eventId, personaId, "session-001");
+    }
+
+    private ActivityEvent event(String eventId, String personaId, String sessionId) {
         return new ActivityEvent(
+                "0.2.0-draft",
                 eventId,
-                "product.click",
+                "product_click",
+                "comparison",
                 Instant.parse("2026-08-27T14:30:00Z"),
                 personaId,
-                "session-001",
+                sessionId,
+                "page-view-001",
+                1,
+                "product_list",
                 "product-001",
+                "user",
+                "local",
                 null
         );
     }

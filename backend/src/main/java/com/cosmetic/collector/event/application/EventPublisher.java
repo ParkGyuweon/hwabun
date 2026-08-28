@@ -6,5 +6,5 @@ import java.util.concurrent.CompletableFuture;
 
 public interface EventPublisher {
 
-    CompletableFuture<PublishSummary> publish(EventBatchRequest request);
+    CompletableFuture<PublishSummary> publish(String requestId, EventBatchRequest request);
 }
