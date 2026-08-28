@@ -293,6 +293,8 @@ export default function App() {
       ) : (
         <ProductListPage
           products={products}
+          reviews={reviews}
+          persona={persona}
           onSelectProduct={openProduct}
           category={listCategory}
           onCategoryChange={setListCategory}

@@ -21,6 +21,8 @@ interface UseImpressionOptions {
   listId: string;
   /** 추천 목록이면 어떤 알고리즘이 뽑았는지 */
   algorithm?: string;
+  /** 노출과 클릭을 같은 추천 요청으로 묶는 식별자 */
+  recommendationId?: string;
 }
 
 /**
@@ -40,6 +42,7 @@ export function useImpression({
   eventName,
   listId,
   algorithm,
+  recommendationId,
 }: UseImpressionOptions) {
   const containerRef = useRef<HTMLElement | null>(null);
 
@@ -80,6 +83,7 @@ export function useImpression({
               list_id: listId,
               position: Number(el.dataset.position) || null,
               ...(algorithm ? { algorithm } : {}),
+              ...(recommendationId ? { recommendation_id: recommendationId } : {}),
             });
           }, HOLD_MS);
 
@@ -109,7 +113,7 @@ export function useImpression({
       timers.forEach((id) => window.clearTimeout(id));
       timers.clear();
     };
-  }, [pageViewKey, eventName, listId, algorithm]);
+  }, [pageViewKey, eventName, listId, algorithm, recommendationId]);
 
   return containerRef;
 }
