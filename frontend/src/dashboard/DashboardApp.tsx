@@ -1,0 +1,107 @@
+import { useState } from 'react';
+import OverviewScreen from './screens/OverviewScreen';
+import ProductsScreen from './screens/ProductsScreen';
+import BehaviorScreen from './screens/BehaviorScreen';
+import ReviewsScreen from './screens/ReviewsScreen';
+import IngredientsScreen from './screens/IngredientsScreen';
+
+type ScreenKey = 'overview' | 'products' | 'behavior' | 'reviews' | 'ingredients';
+
+const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
+  { key: 'overview', label: 'Overview', title: 'Overview', desc: '전체 성과와 핵심 KPI' },
+  { key: 'products', label: '상품 분석', title: '상품 분석', desc: '상품별 관심도와 전환 성과' },
+  {
+    key: 'behavior',
+    label: '행동 분석',
+    title: '사용자 행동 분석',
+    desc: '의도 퍼널·이탈 구간·마찰 신호',
+  },
+  { key: 'reviews', label: '리뷰 분석', title: '리뷰 분석', desc: '소비자 평가와 자극·트러블' },
+  {
+    key: 'ingredients',
+    label: '성분 분석',
+    title: '성분 분석',
+    desc: '성분 구성과 성분 정보 관심',
+  },
+];
+
+/**
+ * 브랜드 담당자용 대시보드 v0.1.
+ *
+ * 쇼핑몰과 진입점이 분리되어 있다 (/dashboard.html — 쇼핑몰 어디에서도 링크하지 않는다).
+ * 실제 접근 제어(계정·권한)는 백엔드 범위이고, 여기서는 화면과 지표 정의를 확정한다.
+ *
+ * 흑백 단색으로 유지한다. 지표 화면에서 색은 판단을 앞지른다.
+ */
+export default function DashboardApp() {
+  const [screen, setScreen] = useState<ScreenKey>('overview');
+  const [days, setDays] = useState(14);
+  /** 리뷰·성분 화면이 공유하는 상품 선택 */
+  const [productId, setProductId] = useState<string | null>(null);
+
+  const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
+
+  return (
+    <div className="console">
+      <aside className="sidebar">
+        <div className="sidebar__brand">
+          <strong>Insight Console</strong>
+          <span>화장품 소비 행동 분석</span>
+        </div>
+
+        <nav className="sidebar__nav" aria-label="대시보드 화면">
+          {SCREENS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              className={s.key === screen ? 'is-active' : ''}
+              onClick={() => setScreen(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+
+        <p className="sidebar__foot">
+          v0.1 · 이벤트 32종 기준
+          <br />
+          행동 지표는 수집 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.
+        </p>
+      </aside>
+
+      <main className="main">
+        <header className="main__head">
+          <h1>{active.title}</h1>
+          <p>{active.desc}</p>
+
+          <div className="main__controls">
+            {screen === 'overview' ? (
+              <select
+                value={days}
+                onChange={(e) => setDays(Number(e.target.value))}
+                aria-label="기간"
+              >
+                <option value={7}>최근 7일</option>
+                <option value={14}>최근 14일</option>
+                <option value={30}>최근 30일</option>
+              </select>
+            ) : null}
+          </div>
+        </header>
+
+        {screen === 'overview' ? <OverviewScreen days={days} /> : null}
+        {screen === 'products' ? <ProductsScreen /> : null}
+        {screen === 'behavior' ? <BehaviorScreen /> : null}
+        {screen === 'reviews' ? (
+          <ReviewsScreen productId={productId} onProductChange={setProductId} />
+        ) : null}
+        {screen === 'ingredients' ? (
+          <IngredientsScreen
+            productId={productId}
+            onProductChange={setProductId}
+          />
+        ) : null}
+      </main>
+    </div>
+  );
+}
