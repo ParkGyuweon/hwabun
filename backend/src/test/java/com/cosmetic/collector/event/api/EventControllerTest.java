@@ -55,14 +55,21 @@ class EventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "schema_version": "draft",
+                                  "schema_version": "0.2.0-draft",
                                   "events": [{
+                                    "schema_version": "0.2.0-draft",
                                     "event_id": "evt-001",
-                                    "event_type": "product.click",
-                                    "event_time": "2026-08-27T14:30:00Z",
-                                    "persona_id": "persona-001",
+                                    "event_name": "product_click",
+                                    "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "persona_id": null,
                                     "session_id": "session-001",
+                                    "page_view_id": "page-view-001",
+                                    "sequence_no": 1,
+                                    "page_type": "product_list",
                                     "product_id": "product-001",
+                                    "actor_type": "user",
+                                    "environment": "local",
                                     "properties": {"position": 1}
                                   }]
                                 }
@@ -100,11 +107,13 @@ class EventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "schema_version": "draft",
+                                  "schema_version": "0.2.0-draft",
                                   "events": [{
-                                    "event_type": "product.click",
-                                    "event_time": "2026-08-27T14:30:00Z",
-                                    "persona_id": "persona-001"
+                                    "schema_version": "0.2.0-draft",
+                                    "event_name": "product_click",
+                                    "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "persona_id": null
                                   }]
                                 }
                                 """))
@@ -122,13 +131,22 @@ class EventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "schema_version": "draft",
+                                  "schema_version": "0.2.0-draft",
                                   "events": [{
+                                    "schema_version": "0.2.0-draft",
                                     "event_id": "evt-001",
-                                    "event_type": "product.click",
-                                    "event_time": "2026-08-27T14:30:00Z",
-                                    "persona_id": "persona-001",
-                                    "session_id": "session-001"
+                                    "event_name": "product_click",
+                                    "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "persona_id": null,
+                                    "session_id": "session-001",
+                                    "page_view_id": "page-view-001",
+                                    "sequence_no": 1,
+                                    "page_type": "product_list",
+                                    "product_id": "product-001",
+                                    "actor_type": "user",
+                                    "environment": "local",
+                                    "properties": {}
                                   }]
                                 }
                                 """))

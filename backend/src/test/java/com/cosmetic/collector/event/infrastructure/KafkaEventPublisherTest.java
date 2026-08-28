@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,12 +55,19 @@ class KafkaEventPublisherTest {
         EventBatchRequest request = new EventBatchRequest(
                 "draft",
                 List.of(new ActivityEvent(
+                        "0.2.0-draft",
                         "evt-001",
-                        "product.click",
+                        "product_click",
+                        "comparison",
                         Instant.parse("2026-08-27T14:30:00Z"),
                         "persona-001",
                         "session-001",
+                        "page-view-001",
+                        1,
+                        "product_list",
                         "product-001",
+                        "user",
+                        "local",
                         objectMapper.createObjectNode().put("position", 1)
                 ))
         );
@@ -103,6 +111,35 @@ class KafkaEventPublisherTest {
         verify(kafkaTemplate).send(eq("activity-events"), eq("persona-001"), anyString());
         verify(kafkaTemplate).send(eq("activity-events"), eq("persona-002"), anyString());
         verify(metrics).recordPublished(2);
+    }
+
+    @Test
+    void publishesAnEventWithANullPersonaId() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        Clock clock = Clock.fixed(Instant.parse("2026-08-27T15:00:00Z"), ZoneOffset.UTC);
+
+        when(kafkaTemplate.send(eq("activity-events"), isNull(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                clock,
+                "activity-events",
+                Runnable::run
+        );
+
+        PublishSummary result = publisher.publish(new EventBatchRequest(
+                "0.2.0-draft",
+                List.of(event("evt-001", null))
+        )).join();
+
+        assertThat(result.publishedCount()).isEqualTo(1);
+        verify(kafkaTemplate).send(eq("activity-events"), isNull(), anyString());
     }
 
     @Test
@@ -239,12 +276,19 @@ class KafkaEventPublisherTest {
 
     private ActivityEvent event(String eventId, String personaId) {
         return new ActivityEvent(
+                "0.2.0-draft",
                 eventId,
-                "product.click",
+                "product_click",
+                "comparison",
                 Instant.parse("2026-08-27T14:30:00Z"),
                 personaId,
                 "session-001",
+                "page-view-001",
+                1,
+                "product_list",
                 "product-001",
+                "user",
+                "local",
                 null
         );
     }

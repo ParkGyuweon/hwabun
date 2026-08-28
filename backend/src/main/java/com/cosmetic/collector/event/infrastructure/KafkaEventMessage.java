@@ -11,23 +11,35 @@ import java.time.Instant;
 public record KafkaEventMessage(
         String schemaVersion,
         String eventId,
-        String eventType,
-        Instant eventTime,
+        String eventName,
+        String intent,
+        Instant occurredAt,
         String personaId,
         String sessionId,
+        String pageViewId,
+        Integer sequenceNo,
+        String pageType,
         String productId,
+        String actorType,
+        String environment,
         JsonNode properties,
         Instant receivedAt
 ) {
-    static KafkaEventMessage from(String schemaVersion, ActivityEvent event, Instant receivedAt) {
+    static KafkaEventMessage from(ActivityEvent event, Instant receivedAt) {
         return new KafkaEventMessage(
-                schemaVersion,
+                event.schemaVersion(),
                 event.eventId(),
-                event.eventType(),
-                event.eventTime(),
+                event.eventName(),
+                event.intent(),
+                event.occurredAt(),
                 event.personaId(),
                 event.sessionId(),
+                event.pageViewId(),
+                event.sequenceNo(),
+                event.pageType(),
                 event.productId(),
+                event.actorType(),
+                event.environment(),
                 event.properties(),
                 receivedAt
         );

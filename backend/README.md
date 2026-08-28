@@ -2,7 +2,7 @@
 
 프론트엔드의 활동 로그를 배치로 받아 검증하고 Kafka로 비동기 발행하는 Spring Boot 애플리케이션입니다.
 
-현재 이벤트 상세 스키마가 확정되지 않았으므로 공통 식별 필드만 검증하고 `properties`는 자유로운 JSON 객체로 받습니다.
+프론트엔드의 `LogEnvelope` 공통 필드를 검증하고, 이벤트별 `properties`는 자유로운 JSON 객체로 받습니다.
 
 ## IntelliJ에서 실행
 
@@ -53,15 +53,22 @@ Swagger UI는 Spring 서버가 직접 제공하므로 별도의 CORS 설정이 �
 
 ```powershell
 $body = @{
-  schema_version = 'draft'
+  schema_version = '0.2.0-draft'
   events = @(
     @{
+      schema_version = '0.2.0-draft'
       event_id = 'evt-001'
-      event_type = 'product.click'
-      event_time = '2026-08-27T14:30:00Z'
-      persona_id = 'persona-001'
+      event_name = 'product_click'
+      intent = 'comparison'
+      occurred_at = '2026-08-27T14:30:00Z'
+      persona_id = $null
       session_id = 'session-001'
+      page_view_id = 'page-view-001'
+      sequence_no = 1
+      page_type = 'product_list'
       product_id = 'product-001'
+      actor_type = 'user'
+      environment = 'local'
       properties = @{ position = 1 }
     }
   )
@@ -123,4 +130,4 @@ OpenApiConfigTest         Swagger 기본 정보
 - DLQ 정책
 - 운영 Kafka의 Partition/Replication 설정
 
-팀의 로그 스키마가 확정되면 `ActivityEvent`와 검증 규칙을 계약에 맞춰 보완합니다.
+이벤트별 `properties`와 중복 제거 정책이 확정되면 세부 검증 및 적재 규칙을 보완합니다.

@@ -96,13 +96,13 @@ public class KafkaEventPublisher implements EventPublisher {
 
     private CompletableFuture<?>[] initiateSends(EventBatchRequest request, Instant receivedAt) {
         return request.events().stream()
-                .map(event -> send(request.schemaVersion(), event, receivedAt))
+                .map(event -> send(event, receivedAt))
                 .toArray(CompletableFuture[]::new);
     }
 
-    private CompletableFuture<?> send(String schemaVersion, ActivityEvent event, Instant receivedAt) {
+    private CompletableFuture<?> send(ActivityEvent event, Instant receivedAt) {
         try {
-            KafkaEventMessage message = KafkaEventMessage.from(schemaVersion, event, receivedAt);
+            KafkaEventMessage message = KafkaEventMessage.from(event, receivedAt);
             String payload = objectMapper.writeValueAsString(message);
             return kafkaTemplate.send(topic, event.personaId(), payload);
         } catch (Exception exception) {
