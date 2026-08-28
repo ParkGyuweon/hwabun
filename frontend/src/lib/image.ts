@@ -14,9 +14,20 @@ export {
   IMAGE_WIDTH_THUMB,
 } from './image-widths';
 
-const CDN_ORIGIN = 'https://www.sephora.com/productimages/sku/';
+/**
+ * 세포라 이미지 CDN.
+ *
+ * 하위 경로가 두 종류다. 둘 다 다뤄야 한다.
+ *   /productimages/sku/s{SKU}-main-zoom.jpg        대표 이미지
+ *   /productimages/product/p{PID}-av-{NN}-zoom.jpg 갤러리 이미지
+ *
+ * 갤러리는 SKU 가 아니라 **상품 ID** 로 조립된다.
+ * 처음에 sku 경로만 처리해서, 갤러리 이미지가 리사이즈도 로컬 캐시도 타지 않고
+ * 원본을 직접 받고 있었다.
+ */
+const CDN_ORIGIN = 'https://www.sephora.com/productimages/';
 /** dev 서버가 대신 받아 디스크에 캐시해 주는 경로 (frontend/plugins/image-cache.ts) */
-const LOCAL_PROXY = '/cdn/sku/';
+const LOCAL_PROXY = '/cdn/';
 
 export function sizedImage(url: string | null, width: number): string | null {
   if (!url) return null;

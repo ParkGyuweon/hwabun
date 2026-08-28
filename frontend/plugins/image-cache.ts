@@ -19,10 +19,17 @@ import type { Plugin } from 'vite';
  * 실험 전에 미리 다 받아두려면 `npm run warm-images` 를 쓴다.
  */
 
-const UPSTREAM = 'https://www.sephora.com/productimages/sku';
+const UPSTREAM = 'https://www.sephora.com/productimages';
 
 /** 이 경로로 온 요청만 가로챈다 */
-export const CDN_PREFIX = '/cdn/sku';
+export const CDN_PREFIX = '/cdn';
+
+/**
+ * 허용하는 하위 경로.
+ * 대표 이미지는 SKU 기준, 갤러리 이미지는 상품 ID 기준으로 경로가 갈린다.
+ * 임의 경로를 프록시하지 않도록 화이트리스트로 둔다.
+ */
+const ALLOWED_DIRS = new Set(['sku', 'product']);
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const CACHE_DIR = join(here, '..', '.image-cache');
@@ -39,15 +46,27 @@ function cachePath(file: string, query: string): string {
   return join(CACHE_DIR, `${file.replace(/[^A-Za-z0-9._-]/g, '_')}__${suffix}.jpg`);
 }
 
+/** `sku/s123-main-zoom.jpg` 를 디렉터리와 파일명으로 나눈다 */
+export function splitCdnPath(path: string): { dir: string; file: string } | null {
+  const slash = path.indexOf('/');
+  if (slash <= 0) return null;
+
+  const dir = path.slice(0, slash);
+  const file = path.slice(slash + 1);
+  if (!ALLOWED_DIRS.has(dir) || !SAFE_FILE.test(file)) return null;
+
+  return { dir, file };
+}
+
 /**
  * 원본을 받아 디스크에 저장한다. 이미 있으면 그대로 쓴다.
  * @returns 저장된 파일 내용, 실패하면 null
  */
-export async function fetchToCache(file: string, query: string): Promise<Buffer | null> {
-  const target = cachePath(file, query);
+export async function fetchToCache(path: string, query: string): Promise<Buffer | null> {
+  const target = cachePath(path, query);
   if (existsSync(target)) return readFileSync(target);
 
-  const url = `${UPSTREAM}/${file}${query === '' ? '' : `?${query}`}`;
+  const url = `${UPSTREAM}/${path}${query === '' ? '' : `?${query}`}`;
 
   try {
     const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -73,16 +92,16 @@ export function imageCache(): Plugin {
         const raw = req.url ?? '';
         if (!raw.startsWith(`${CDN_PREFIX}/`)) return next();
 
-        const [path, query = ''] = raw.slice(`${CDN_PREFIX}/`.length).split('?');
-        const file = decodeURIComponent(path);
+        const [rawPath, query = ''] = raw.slice(`${CDN_PREFIX}/`.length).split('?');
+        const parts = splitCdnPath(decodeURIComponent(rawPath));
 
-        if (!SAFE_FILE.test(file)) {
+        if (parts === null) {
           res.statusCode = 400;
-          res.end('bad image name');
+          res.end('bad image path');
           return;
         }
 
-        const body = await fetchToCache(file, query);
+        const body = await fetchToCache(`${parts.dir}/${parts.file}`, query);
 
         if (body === null) {
           res.statusCode = 404;
