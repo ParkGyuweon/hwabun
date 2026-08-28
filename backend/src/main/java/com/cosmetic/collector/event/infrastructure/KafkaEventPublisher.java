@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.stream.IntStream;
 
 @Component
 @Slf4j
@@ -60,13 +61,13 @@ public class KafkaEventPublisher implements EventPublisher {
     }
 
     @Override
-    public CompletableFuture<PublishSummary> publish(EventBatchRequest request) {
+    public CompletableFuture<PublishSummary> publish(String requestId, EventBatchRequest request) {
         Instant receivedAt = clock.instant();
         CompletableFuture<CompletableFuture<?>[]> dispatch;
 
         try {
             dispatch = CompletableFuture.supplyAsync(
-                    () -> initiateSends(request, receivedAt),
+                    () -> initiateSends(requestId, request, receivedAt),
                     kafkaPublisherExecutor
             );
         } catch (RejectedExecutionException exception) {
@@ -83,8 +84,9 @@ public class KafkaEventPublisher implements EventPublisher {
                     Throwable failure = unwrap(cause);
                     metrics.recordPublishFailure(request.events().size());
                     log.error(
-                            "Kafka 이벤트 배치 발행에 실패했습니다. topic={}, batchSize={}",
+                            "Kafka 이벤트 배치 발행에 실패했습니다. topic={}, requestId={}, batchSize={}",
                             topic,
+                            requestId,
                             request.events().size(),
                             failure
                     );
@@ -94,17 +96,31 @@ public class KafkaEventPublisher implements EventPublisher {
                 });
     }
 
-    private CompletableFuture<?>[] initiateSends(EventBatchRequest request, Instant receivedAt) {
-        return request.events().stream()
-                .map(event -> send(request.schemaVersion(), event, receivedAt))
+    private CompletableFuture<?>[] initiateSends(
+            String requestId,
+            EventBatchRequest request,
+            Instant receivedAt
+    ) {
+        return IntStream.range(0, request.events().size())
+                .mapToObj(eventIndex -> send(
+                        request.events().get(eventIndex),
+                        receivedAt,
+                        requestId,
+                        eventIndex
+                ))
                 .toArray(CompletableFuture[]::new);
     }
 
-    private CompletableFuture<?> send(String schemaVersion, ActivityEvent event, Instant receivedAt) {
+    private CompletableFuture<?> send(
+            ActivityEvent event,
+            Instant receivedAt,
+            String requestId,
+            int eventIndex
+    ) {
         try {
-            KafkaEventMessage message = KafkaEventMessage.from(schemaVersion, event, receivedAt);
+            KafkaEventMessage message = KafkaEventMessage.from(event, receivedAt, requestId, eventIndex);
             String payload = objectMapper.writeValueAsString(message);
-            return kafkaTemplate.send(topic, event.personaId(), payload);
+            return kafkaTemplate.send(topic, event.sessionId(), payload);
         } catch (Exception exception) {
             return CompletableFuture.failedFuture(exception);
         }

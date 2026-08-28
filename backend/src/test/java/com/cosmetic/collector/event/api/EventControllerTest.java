@@ -15,6 +15,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import java.util.concurrent.CompletableFuture;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -49,20 +50,28 @@ class EventControllerTest {
 
     @Test
     void acceptsAValidBatchAfterPublishing() throws Exception {
-        when(publisher.publish(any())).thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+        when(publisher.publish(anyString(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "schema_version": "draft",
+                                  "schema_version": "0.2.0-draft",
                                   "events": [{
+                                    "schema_version": "0.2.0-draft",
                                     "event_id": "evt-001",
-                                    "event_type": "product.click",
-                                    "event_time": "2026-08-27T14:30:00Z",
-                                    "persona_id": "persona-001",
+                                    "event_name": "product_click",
+                                    "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "persona_id": null,
                                     "session_id": "session-001",
+                                    "page_view_id": "page-view-001",
+                                    "sequence_no": 1,
+                                    "page_type": "product_list",
                                     "product_id": "product-001",
+                                    "actor_type": "user",
+                                    "environment": "local",
                                     "properties": {"position": 1}
                                   }]
                                 }
@@ -77,7 +86,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.rejected").value(0));
 
         verify(metrics).recordReceived(1);
-        verify(publisher).publish(any());
+        verify(publisher).publish(anyString(), any());
     }
 
     @Test
@@ -100,11 +109,13 @@ class EventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "schema_version": "draft",
+                                  "schema_version": "0.2.0-draft",
                                   "events": [{
-                                    "event_type": "product.click",
-                                    "event_time": "2026-08-27T14:30:00Z",
-                                    "persona_id": "persona-001"
+                                    "schema_version": "0.2.0-draft",
+                                    "event_name": "product_click",
+                                    "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "persona_id": null
                                   }]
                                 }
                                 """))
@@ -114,7 +125,7 @@ class EventControllerTest {
 
     @Test
     void returnsServiceUnavailableWhenKafkaPublishingFails() throws Exception {
-        when(publisher.publish(any())).thenReturn(CompletableFuture.failedFuture(
+        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
                 new EventPublishException("publish failed", new RuntimeException("Kafka unavailable"))
         ));
 
@@ -122,13 +133,22 @@ class EventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "schema_version": "draft",
+                                  "schema_version": "0.2.0-draft",
                                   "events": [{
+                                    "schema_version": "0.2.0-draft",
                                     "event_id": "evt-001",
-                                    "event_type": "product.click",
-                                    "event_time": "2026-08-27T14:30:00Z",
-                                    "persona_id": "persona-001",
-                                    "session_id": "session-001"
+                                    "event_name": "product_click",
+                                    "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "persona_id": null,
+                                    "session_id": "session-001",
+                                    "page_view_id": "page-view-001",
+                                    "sequence_no": 1,
+                                    "page_type": "product_list",
+                                    "product_id": "product-001",
+                                    "actor_type": "user",
+                                    "environment": "local",
+                                    "properties": {}
                                   }]
                                 }
                                 """))

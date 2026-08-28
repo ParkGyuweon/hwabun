@@ -2,7 +2,7 @@
 
 프론트엔드의 활동 로그를 배치로 받아 검증하고 Kafka로 비동기 발행하는 Spring Boot 애플리케이션입니다.
 
-현재 이벤트 상세 스키마가 확정되지 않았으므로 공통 식별 필드만 검증하고 `properties`는 자유로운 JSON 객체로 받습니다.
+프론트엔드의 `LogEnvelope` 공통 필드를 검증하고, 이벤트별 `properties`는 자유로운 JSON 객체로 받습니다.
 
 ## IntelliJ에서 실행
 
@@ -38,6 +38,8 @@ Kafka가 실행되지 않아도 애플리케이션은 시작되지만, 이벤트
 
 `KafkaTemplate.send()` 호출은 Tomcat 요청 스레드가 아니라 `kafka-publisher-*` 전용 스레드에서 실행합니다. 기본 전용 풀은 core 4개, 최대 16개이며 대기열을 사용하지 않습니다. Kafka 장애로 전용 풀이 모두 막히면 새 발행 요청을 쌓아두지 않고 `503 Service Unavailable`로 빠르게 거절합니다. HTTP 응답은 요청 스레드를 점유하지 않은 상태로 Kafka ACK 또는 실패 결과를 기다립니다.
 
+HTTP batch는 Kafka에서 Event 1건당 메시지 1개로 펼쳐집니다. Kafka key는 필수값인 `session_id`를 사용하며, Collector는 각 메시지에 `received_at`, `source`, `request_id`, `event_index`를 추가합니다. `source`는 `actor_type=user`이면 `web`, `actor_type=synthetic`이면 `simulator`로 기록합니다. Raw Event의 중복은 허용하고 Spark Processed 단계에서 `event_id` 기준으로 제거합니다.
+
 ## Swagger
 
 애플리케이션 실행 후 다음 주소에서 API 명세와 테스트 화면을 확인할 수 있습니다.
@@ -53,15 +55,22 @@ Swagger UI는 Spring 서버가 직접 제공하므로 별도의 CORS 설정이 �
 
 ```powershell
 $body = @{
-  schema_version = 'draft'
+  schema_version = '0.2.0-draft'
   events = @(
     @{
+      schema_version = '0.2.0-draft'
       event_id = 'evt-001'
-      event_type = 'product.click'
-      event_time = '2026-08-27T14:30:00Z'
-      persona_id = 'persona-001'
+      event_name = 'product_click'
+      intent = 'comparison'
+      occurred_at = '2026-08-27T14:30:00Z'
+      persona_id = $null
       session_id = 'session-001'
+      page_view_id = 'page-view-001'
+      sequence_no = 1
+      page_type = 'product_list'
       product_id = 'product-001'
+      actor_type = 'user'
+      environment = 'local'
       properties = @{ position = 1 }
     }
   )
@@ -108,8 +117,8 @@ $env:JAVA_HOME='C:\Users\SSAFY\.jdks\ms-21.0.11'
 EventControllerTest       HTTP 202/400/503와 잘못된 JSON
 EventValidationTest       필수 필드, 빈 배열, 최대 100개 제한
 EventJsonContractTest     snake_case JSON 계약
-KafkaEventPublisherTest   Kafka Key, 배치 성공, 전송 실패, 전용 스레드 격리와 포화 거절
-KafkaEventMessageTest     Kafka 메시지 변환과 received_at
+KafkaEventPublisherTest   session_id Kafka Key, 배치 성공, 전송 실패, 전용 스레드 격리와 포화 거절
+KafkaEventMessageTest     Kafka 메시지 변환과 서버 메타 필드
 CollectorMetricsTest      수신/성공/실패 Counter
 KafkaTopicConfigTest      Topic 이름과 Partition 설정
 OpenApiConfigTest         Swagger 기본 정보
@@ -123,4 +132,4 @@ OpenApiConfigTest         Swagger 기본 정보
 - DLQ 정책
 - 운영 Kafka의 Partition/Replication 설정
 
-팀의 로그 스키마가 확정되면 `ActivityEvent`와 검증 규칙을 계약에 맞춰 보완합니다.
+이벤트별 `properties`와 중복 제거 정책이 확정되면 세부 검증 및 적재 규칙을 보완합니다.
