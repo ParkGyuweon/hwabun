@@ -34,8 +34,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
   const [loved, setLoved] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  /** 얼마나 보다가 닫았는지 남기기 위한 진입 시각. StrictMode 중복을 피해 ref 로 든다 */
-  const openedAtRef = useRef(Date.now());
+  // 렌더 중에는 Date.now() 를 부르지 않는다. 실제 진입 시각은 이펙트에서 채운다 (useExitSummary 와 동일)
+  const openedAtRef = useRef(0);
   /** 창 안에서 살펴본 옵션 수 */
   const viewedSkusRef = useRef(new Set<string>());
   const closedRef = useRef(false);
@@ -69,14 +69,17 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
     onClose();
   };
 
-  // ESC 핸들러가 최신 상태를 보게 한다
+  // ESC 핸들러가 최신 상태를 보게 한다. 렌더 중 ref 할당은 lint 가 막으므로 이펙트에서 한다
   const handleCloseRef = useRef(handleClose);
-  handleCloseRef.current = handleClose;
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  });
 
   const skuId = variant?.sku_id ?? product.sku_id;
   const imageUrl = variant?.image_url ?? product.image_url;
 
   useEffect(() => {
+    openedAtRef.current = Date.now();
     closeRef.current?.focus();
 
     const onKey = (event: KeyboardEvent) => {
