@@ -65,7 +65,10 @@
 /* ---------- 브레드크럼 ---------- */
 
 .breadcrumb {
-  margin-bottom: var(--space-5);
+  /* 헤더·본문과 같은 컨테이너를 준다. 없으면 뷰포트 왼쪽 끝에 붙는다 */
+  max-width: var(--page-max);
+  margin: 0 auto var(--space-5);
+  padding: 0 var(--space-4);
   font-size: 12px;
   color: var(--color-ink-faint);
 }
@@ -786,7 +789,8 @@
 }
 
 .site-header__main {
-  max-width: var(--page-max);
+  /* 가장 넓은 화면(목록 1400px)에 맞춘다. 본문보다 좁으면 로고가 떠 보인다 */
+  max-width: 1400px;
   margin: 0 auto;
   padding: var(--space-4);
   display: flex;
