@@ -3,7 +3,6 @@
 | 파일 | 내용 | 커밋 |
 |---|---|---|
 | `personas_100_agent.json` | 에이전트 구동용 100명 (0.4MB) | O |
-| `persona_sampling_report.json` | 추출 파라미터·분포 검증 결과 | O |
 | `personas_9900.json` | 코드 생성용 9,900명 (36MB) | O |
 
 ## 재생성
@@ -25,6 +24,6 @@ python build_personas.py
 - 표기 정규화: `skin_tone` 5버킷, `hair_color` `brunette`→`brown` 병합(6종), `eye_color` `Grey`→`gray` 병합(5종)
 - 에이전트 100명만 균등배분 (`skin_type` × `skin_tone` 20셀 × 5명) — 소수 세그먼트 검증용
 
-분포 검증 결과 모집단 대비 전 항목 **0.03%p 이내**입니다. 상세 기준은 개인 폴더의 `PERSONA_SAMPLING.md` 참조.
+분포 검증 결과 모집단 대비 전 항목 **0.03%p 이내**입니다. 상세 기준과 추출 파라미터·검증 원본(`persona_sampling_report.json`)은 개인 폴더의 `PERSONA_SAMPLING.md`·`artifacts/`에 있습니다. 팀원이 직접 열어볼 일이 없는 기계 판독용 파일이라 레포에서는 제외했습니다.
 
 > 에이전트 100명은 분포가 의도적으로 왜곡되어 있습니다. 9,900명과 통계를 합산하려면 셀별 가중치 보정이 필요합니다.
