@@ -23,62 +23,74 @@
       {
         "sku_id": "2371367",
         "label": "Gummy Bear",
-        "image_url": "https://www.sephora.com/productimages/sku/s2371367+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2371367-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2371367+sw-62.jpg"
       },
       {
         "sku_id": "2133528",
         "label": "Vanilla",
-        "image_url": "https://www.sephora.com/productimages/sku/s2133528+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2133528-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2133528+sw-62.jpg"
       },
       {
         "sku_id": "2273639",
         "label": "Sweet Candy",
-        "image_url": "https://www.sephora.com/productimages/sku/s2273639+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2273639-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2273639+sw-62.jpg"
       },
       {
         "sku_id": "1966258",
         "label": "Berry",
-        "image_url": "https://www.sephora.com/productimages/sku/s1966258+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s1966258-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s1966258+sw-62.jpg"
       },
       {
         "sku_id": "2743243",
         "label": "Watermelon Pop",
-        "image_url": "https://www.sephora.com/productimages/sku/s2743243+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2743243-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2743243+sw-62.jpg"
       },
       {
         "sku_id": "2842474",
         "label": "Grapefruit",
-        "image_url": "https://www.sephora.com/productimages/sku/s2842474+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2842474-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2842474+sw-62.jpg"
       },
       {
         "sku_id": "2842466",
         "label": "Peach Iced Tea",
-        "image_url": "https://www.sephora.com/productimages/sku/s2842466+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2842466-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2842466+sw-62.jpg"
       },
       {
         "sku_id": "2860070",
         "label": "Taro Bubble Tea",
-        "image_url": "https://www.sephora.com/productimages/sku/s2860070+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2860070-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2860070+sw-62.jpg"
       },
       {
         "sku_id": "2859353",
         "label": "Matcha Bubble Tea",
-        "image_url": "https://www.sephora.com/productimages/sku/s2859353+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2859353-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2859353+sw-62.jpg"
       },
       {
         "sku_id": "2895308",
         "label": "Pumpkin Pie",
-        "image_url": "https://www.sephora.com/productimages/sku/s2895308+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2895308-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2895308+sw-62.jpg"
       },
       {
         "sku_id": "2895316",
         "label": "Hot Cocoa",
-        "image_url": "https://www.sephora.com/productimages/sku/s2895316+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2895316-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2895316+sw-62.jpg"
       },
       {
         "sku_id": "2902831",
         "label": "Strawberry Shortcake",
-        "image_url": "https://www.sephora.com/productimages/sku/s2902831+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2902831-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2902831+sw-62.jpg"
       }
     ],
     "description": {
@@ -145,22 +157,26 @@
       {
         "sku_id": "2385748",
         "label": "0.5/15ml",
-        "image_url": "https://www.sephora.com/productimages/sku/s2385748-main-zoom.jpg?imwidth=250&pb=clean-at-sephora"
+        "image_url": "https://www.sephora.com/productimages/sku/s2385748-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "2404739",
         "label": "3.33 oz / 100 mL",
-        "image_url": "https://www.sephora.com/productimages/sku/s2404739-main-zoom.jpg?imwidth=250&pb=clean-at-sephora"
+        "image_url": "https://www.sephora.com/productimages/sku/s2404739-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "2025633",
         "label": "1.69 oz/ 50 mL",
-        "image_url": "https://www.sephora.com/productimages/sku/s2025633-main-zoom.jpg?imwidth=250&pb=clean-at-sephora"
+        "image_url": "https://www.sephora.com/productimages/sku/s2025633-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "2647196",
         "label": "1.69 oz / 50 mL Refill",
-        "image_url": "https://www.sephora.com/productimages/sku/s2647196-main-zoom.jpg?imwidth=250&pb=clean-at-sephora"
+        "image_url": "https://www.sephora.com/productimages/sku/s2647196-main-zoom.jpg",
+        "swatch_url": null
       }
     ],
     "description": {
@@ -259,17 +275,20 @@
       {
         "sku_id": "1499482",
         "label": "30 Treatments + 5 Bonus",
-        "image_url": "https://www.sephora.com/productimages/sku/s1499482-main-zoom.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s1499482-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "1352194",
         "label": "5 Treatments",
-        "image_url": "https://www.sephora.com/productimages/sku/s1352194-main-zoom.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s1352194-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "1491497",
         "label": "60 Treatments",
-        "image_url": "https://www.sephora.com/productimages/sku/s1491497-main-zoom.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s1491497-main-zoom.jpg",
+        "swatch_url": null
       }
     ],
     "description": {
@@ -350,12 +369,14 @@
       {
         "sku_id": "2473361",
         "label": "Standard size - 2.25 oz / 64 g",
-        "image_url": "https://www.sephora.com/productimages/sku/s2473361-main-zoom.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2473361-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "2473379",
         "label": "Mini size - 1 oz / 28 g",
-        "image_url": "https://www.sephora.com/productimages/sku/s2473379-main-zoom.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2473379-main-zoom.jpg",
+        "swatch_url": null
       }
     ],
     "description": {
@@ -437,12 +458,14 @@
       {
         "sku_id": "2315935",
         "label": "1.7 oz/ 50 mL",
-        "image_url": "https://www.sephora.com/productimages/sku/s2315935-main-hero.jpg?pb=2020-03-sephora-clean-2019"
+        "image_url": "https://www.sephora.com/productimages/sku/s2315935-main-zoom.jpg",
+        "swatch_url": null
       },
       {
         "sku_id": "2344307",
         "label": "Limited Edition 2.5 oz/ 73.9 mL",
-        "image_url": "https://www.sephora.com/productimages/sku/s2344307-main-hero.jpg?pb=2020-03-sephora-clean-2019"
+        "image_url": "https://www.sephora.com/productimages/sku/s2344307-main-zoom.jpg",
+        "swatch_url": null
       }
     ],
     "description": {
@@ -504,32 +527,38 @@
       {
         "sku_id": "2078327",
         "label": "Medium",
-        "image_url": "https://www.sephora.com/productimages/sku/s2078327+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2078327-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2078327+sw-62.jpg"
       },
       {
         "sku_id": "2078319",
         "label": "Light",
-        "image_url": "https://www.sephora.com/productimages/sku/s2078319+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2078319-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2078319+sw-62.jpg"
       },
       {
         "sku_id": "2078335",
         "label": "Dark",
-        "image_url": "https://www.sephora.com/productimages/sku/s2078335+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2078335-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2078335+sw-62.jpg"
       },
       {
         "sku_id": "2641603",
         "label": "Light",
-        "image_url": "https://www.sephora.com/productimages/sku/s2641603+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2641603-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2641603+sw-62.jpg"
       },
       {
         "sku_id": "2641611",
         "label": "Medium",
-        "image_url": "https://www.sephora.com/productimages/sku/s2641611+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2641611-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2641611+sw-62.jpg"
       },
       {
         "sku_id": "2641595",
         "label": "Dark",
-        "image_url": "https://www.sephora.com/productimages/sku/s2641595+sw-62.jpg"
+        "image_url": "https://www.sephora.com/productimages/sku/s2641595-main-zoom.jpg",
+        "swatch_url": "https://www.sephora.com/productimages/sku/s2641595+sw-62.jpg"
       }
     ],
     "description": {

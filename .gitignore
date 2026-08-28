@@ -31,3 +31,6 @@ __pycache__/
 venv/
 .venv/
 .claude/
+
+# 세포라 이미지 로컬 캐시 (npm run warm-images 로 채운다)
+frontend/.image-cache/
