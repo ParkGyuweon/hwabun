@@ -27,6 +27,8 @@ export type P0EventName =
 export type P1EventName =
   | 'scroll_depth'
   | 'media_view'
+  /** 목록에서 상세로 가지 않고 요약 창을 연 것. 세포라 Quicklook */
+  | 'quick_look'
   | 'variant_select'
   | 'quantity_change'
   | 'review_filter_apply'
@@ -148,6 +150,7 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   section_dwell: 'interest',
   scroll_pause: 'interest',
   media_view: 'interest',
+  quick_look: 'interest',
 
   scroll_backtrack: 'comparison',
   variant_select: 'comparison',
@@ -208,6 +211,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
 
   // 관심
   media_view: 1.5,
+  // 요약 창을 여는 것은 카드 클릭과 같은 무게의 능동 행동이다
+  quick_look: 1.5,
   section_dwell: 1.0, // 섹션에 따라 SECTION_DWELL_WEIGHT 로 다시 조정한다
   scroll_pause: 0.3,
   hover_dwell: 0.3,

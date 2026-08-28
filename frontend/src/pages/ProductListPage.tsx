@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import ProductCard from '../components/product/ProductCard';
+import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useSectionView } from '../hooks/useSectionView';
@@ -64,6 +65,8 @@ export default function ProductListPage({
   const [concern, setConcern] = useState('all');
   const [price, setPrice] = useState<PriceKey>('all');
   const [shown, setShown] = useState(PAGE_SIZE);
+  /** 요약 창에 띄운 상품. 세포라 Quicklook */
+  const [quickLook, setQuickLook] = useState<Product | null>(null);
 
   /** 카테고리 탭. 실제 데이터에 있는 값만 쓰고 개수를 함께 보여준다 */
   const categories = useMemo(() => {
@@ -159,6 +162,25 @@ export default function ProductListPage({
     listId: 'list_grid',
   });
 
+  /** 카드 위 Quick Look 버튼. 어느 목록의 몇 번째에서 열었는지 함께 남긴다 */
+  const quickLookFrom = (listId: string) => (productId: string) => {
+    const source = listId === 'promo_pick' ? promo : visible;
+    const position = source.findIndex((p) => p.product_id === productId);
+    track('quick_look', {
+      product_id: productId,
+      entry_source: listId,
+      position: position + 1,
+    });
+    setQuickLook(products.find((p) => p.product_id === productId) ?? null);
+  };
+
+  /** 요약 창에서 상세로. 카드 클릭과 같은 이벤트를 남기되 출처만 다르다 */
+  const openDetailFromQuickLook = (productId: string) => {
+    track('product_click', { product_id: productId, entry_source: 'quick_look' });
+    setQuickLook(null);
+    onSelectProduct(productId);
+  };
+
   const selectFrom = (listId: string) => (productId: string) => {
     const position = (listId === 'promo_pick' ? promo : visible).findIndex(
       (p) => p.product_id === productId,
@@ -192,6 +214,7 @@ export default function ProductListPage({
               position={index + 1}
               contentKind="product_card"
               onSelect={selectFrom('promo_pick')}
+              onQuickLook={quickLookFrom('promo_pick')}
             />
           ))}
         </ul>
@@ -295,6 +318,7 @@ export default function ProductListPage({
                 product={product}
                 position={index + 1}
                 onSelect={selectFrom('list_grid')}
+                onQuickLook={quickLookFrom('list_grid')}
               />
             ))}
           </ul>
@@ -310,6 +334,14 @@ export default function ProductListPage({
           </button>
         ) : null}
       </section>
+
+      {quickLook ? (
+        <QuickLook
+          product={quickLook}
+          onClose={() => setQuickLook(null)}
+          onOpenDetail={openDetailFromQuickLook}
+        />
+      ) : null}
     </main>
   );
 }

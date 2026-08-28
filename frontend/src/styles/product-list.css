@@ -387,3 +387,270 @@
     align-items: stretch;
   }
 }
+
+/* ---------- Quick Look ---------- */
+
+/* 기획전 카드는 세포라 K-Beauty Edit 처럼 테두리 있는 카드로 */
+.list__row .card {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+
+.card {
+  position: relative;
+}
+
+.card__link:hover .card__name {
+  text-decoration: underline;
+}
+
+/*
+ * 이미지(정사각형) 영역 위에만 겹치는 호버 레이어.
+ * 카드 전체가 button 이라 버튼을 중첩할 수 없어 형제로 띄운다.
+ */
+.card__hover {
+  position: absolute;
+  inset: 0 0 auto 0;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: var(--space-3);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.list__row .card .card__hover {
+  /* 테두리 카드에서는 내부 패딩만큼 이미지가 안쪽에 있다 */
+  inset: var(--space-3) var(--space-3) auto;
+}
+
+.card:hover .card__hover,
+.card:focus-within .card__hover {
+  opacity: 1;
+}
+
+.card__quicklook {
+  pointer-events: auto;
+  appearance: none;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: var(--radius-pill);
+  padding: 9px 20px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.card__quicklook:hover {
+  border-color: var(--color-ink);
+}
+
+.qlook {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.qlook__dialog {
+  position: relative;
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  padding: var(--space-7);
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--space-7);
+  animation: qlook-in 0.18s ease;
+}
+
+@keyframes qlook-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.qlook__close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: var(--space-1);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.qlook__media img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  display: block;
+}
+
+.qlook__meta {
+  margin: var(--space-3) 0 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+.qlook__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.qlook__brand {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.qlook__name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  /* 닫기 버튼과 겹치지 않게 */
+  padding-right: var(--space-6);
+}
+
+.qlook__item {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+.qlook__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+.qlook__details {
+  align-self: flex-start;
+}
+
+.qlook__size {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.qlook__buy {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.qlook__price {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.qlook__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.qlook__qty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+.qlook__qty select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+/* 세포라의 빨간 CTA. --color-accent 가 이미 그 빨강이다 */
+.qlook__cta {
+  appearance: none;
+  border: 0;
+  background: var(--color-accent);
+  color: #ffffff;
+  border-radius: var(--radius-pill);
+  padding: 12px 32px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.qlook__cta:hover {
+  filter: brightness(0.92);
+}
+
+.qlook__lists {
+  appearance: none;
+  border: 1px solid var(--color-ink);
+  background: var(--color-surface);
+  border-radius: var(--radius-pill);
+  padding: 11px 20px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qlook__lists.is-active {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.qlook__toast {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+@media (max-width: 720px) {
+  .qlook__dialog {
+    grid-template-columns: 1fr;
+    padding: var(--space-5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card__hover {
+    transition: none;
+  }
+
+  .qlook__dialog {
+    animation: none;
+  }
+}
