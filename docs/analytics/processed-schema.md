@@ -169,7 +169,7 @@ raw_events
 | `cleaned_events` | Processed | `event_id` | 유효 Event, 중복 제거, 기본 타입 정리 |
 | `sessionized_events` | Processed | `event_id` | 세션 내 순서 복원, late/sequence 품질 표시 |
 | `product_event_fact` | Processed/Derived | `event_id + item_index + product_id` | 상품별 Event 분석 기준 |
-| `search_event_fact` | Processed/Derived | `event_id` | 검색 성과와 검색 후 클릭 분석 |
+| `search_event_fact` | Processed/Derived | `event_id` | 검색 Event 자체의 검색어/결과 수 분석 |
 | `section_dwell_agg` | Processed/Derived | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 섹션/콘텐츠 체류시간 합산 |
 | `content_interest_fact` | Processed/Derived | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 성분/리뷰/콘텐츠 관심도 계산 |
 | `funnel_session_fact` | Processed/Derived | `session_id + product_id` | Funnel 단계 도달 여부 |
@@ -204,7 +204,7 @@ Processed Dataset에서 반복적으로 사용하는 공통 필드는 아래 기
 | `user_id` | string/null | Y | 분석용 사용자 ID. synthetic이면 `persona_id`와 동일, 실제 Web은 ID 정책 확정 전까지 NULL 가능 |
 | `persona_id` | string/null | Y | Persona ID. 실제 사용자 Event에서는 NULL 가능 |
 | `session_id` | string | N | 쇼핑 세션 ID |
-| `page_view_id` | string | N | 페이지 방문 ID |
+| `page_view_id` | string | N | 페이지 방문 ID. `session_start`와 첫 `page_view`는 같은 값을 공유 |
 | `sequence_no` | int | N | 세션 내 Event 순서 |
 | `page_type` | string | N | 화면 유형 |
 | `scenario_id` | string/null | Y | 시나리오 ID. 시뮬레이션 분석에서는 필수 |
@@ -229,7 +229,7 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `event_time` | `occurred_at` | timestamp 정규화 |
 | `request_id` | HTTP 응답/Header 또는 Backend payload 확장 | 현재 Kafka payload에는 없으므로 Raw/Processed에서 NULL 가능 |
 | `source` | `actor_type`, `environment`, ingest 경로 | MVP 기본값은 `actor_type='user' → web`, `actor_type='synthetic' → simulator`, 서버 생성 Event는 `server` |
-| `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` 또는 후속 top-level 확장 | 현재 Backend API에는 top-level 필드가 없으므로 synthetic 생성기 구현 시 기준 재확인 |
+| `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` | E2E 기준 Raw 물리 위치는 `properties` 내부이고, Processed에서 컬럼으로 승격한다 |
 | `generator_type` | `properties.generator_type` 또는 synthetic 생성기 메타 | 100명 agent와 9,900명 Python batch 구분이 필요하면 `source`가 아니라 이 필드로 분리 |
 | `user_id` | `persona_id` 또는 추후 실제 사용자 ID | synthetic은 `persona_id`, 실제 Web은 ID 정책 확정 전까지 NULL 가능 |
 | `product_id` | top-level `product_id` | 상품 대상 Event의 공통 대상 ID. 보고 있는 상품이 아니라 Event 대상 상품 |
@@ -237,6 +237,7 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `section_id` | `properties.section_id` | 없으면 `content_kind`로 보조 해석 가능 |
 | `content_kind` | `properties.content_kind` | section 기반 Event에서 사용 |
 | `content_ref` | `properties.content_ref` | 리뷰 ID, 추천 상품 ID 등 |
+| `navigation_source` | `properties.navigation_source` | 세션 첫 `page_view`는 `session_start` 값으로 구분 |
 | `position` | `properties.position` | 목록/추천/검색 결과 위치 |
 | `entry_source` | `properties.entry_source` | 목록, 추천, quick look, 장바구니 등 진입/행동 경로 |
 | `list_id` | `properties.list_id` | 상품 목록/추천/검색 결과 영역 |
@@ -321,8 +322,8 @@ event_id = business dedup key
 | `product_id` | string/null | 상품 대상 Event의 상품 ID |
 | `actor_type` | string | `user`, `synthetic` |
 | `environment` | string | `local`, `dev`, `loadtest` 등 |
-| `scenario_id` | string/null | 시나리오 ID. 현재 API에는 top-level 필드가 없으므로 `properties.scenario_id` 또는 후속 DTO 확장으로 처리 |
-| `simulation_run_id` | string/null | 시뮬레이션 실행 ID. 현재 API에는 top-level 필드가 없으므로 `properties.simulation_run_id` 또는 후속 DTO 확장으로 처리 |
+| `scenario_id` | string/null | 시나리오 ID. E2E 기준 Raw 물리 위치는 `properties.scenario_id` |
+| `simulation_run_id` | string/null | 시뮬레이션 실행 ID. E2E 기준 Raw 물리 위치는 `properties.simulation_run_id` |
 | `generator_type` | string/null | synthetic 생성 방식. 있으면 `properties.generator_type`에서 승격 |
 | `properties` | json | Event별 원본 properties |
 
@@ -547,14 +548,14 @@ quantity_change
 
 ## 14. `search_event_fact`
 
-검색 행동과 검색 결과 클릭 전환을 분석하기 위한 fact다.
+검색 Event 자체의 검색어와 결과 수를 분석하기 위한 fact다. 검색 후 상품 클릭은 이 fact에 직접 저장하지 않고, `product_event_fact.search_id` 또는 같은 세션의 최근 검색 fallback으로 연결한다.
 
 | column | type | 설명 |
 | --- | --- | --- |
 | `event_id` | string | Event ID |
 | `event_date_kst` | date | KST 기준 집계일 |
 | `search_id` | string/null | 검색 1회를 식별하는 ID. 검색 구현 전에는 NULL/provisional |
-| `event_time` | timestamp | 검색 또는 검색 결과 클릭 시각 |
+| `event_time` | timestamp | 검색 발생 시각 |
 | `processed_at` | timestamp | 처리 시각 |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
@@ -566,14 +567,10 @@ quantity_change
 | `search_query` | string/null | Raw `properties.query_text`를 정규화한 검색어. 개인정보/원문 저장 정책에 따라 hash로 대체 가능 |
 | `search_query_hash` | string/null | 검색어 해시 |
 | `result_count` | int/null | 검색 결과 수 |
-| `clicked_product_id` | string/null | 검색 결과에서 클릭한 상품 |
-| `clicked_position` | int/null | 검색 결과 클릭 위치 |
-| `category_id` | string/null | 클릭 상품 카테고리 |
-| `brand_id` | string/null | 클릭 상품 브랜드 |
 | `actor_type` | string | user/synthetic |
 | `source` | string | 유입 경로 |
 
-검색 → 상품 클릭 전환율은 같은 `session_id + search_id` 안에서 `search` 이후 `product_click`이 발생했는지로 계산한다. 검색 구현 전 또는 `search_id`가 없는 로그는 같은 `session_id`에서 가장 최근 `search` 이후 발생한 `product_click`으로 임시 연결하고, E2E 후 `search_id` 필수 여부를 재검토한다.
+검색 → 상품 클릭 전환율은 같은 `session_id + search_id` 안에서 `search` 이후 `product_event_fact.event_name='product_click'`이 발생했는지로 계산한다. 검색 구현 전 또는 `search_id`가 없는 로그는 같은 `session_id`에서 가장 최근 `search` 이후 발생한 `product_click`으로 임시 연결하고, E2E 후 `search_id` 필수 여부를 재검토한다.
 
 `search_query_hash`는 검색 구현 전까지 provisional이다. 구현 시에는 `normalized_query`가 있으면 이를 기준으로, 없으면 trim/lowercase 등 최소 정규화한 `search_query`를 기준으로 hash를 생성한다.
 
@@ -811,8 +808,8 @@ Processed에서는 단순히 nullable 여부만 보지 않고 Event별로 정상
 
 | Event | 필수 컬럼 | 정상적으로 NULL 가능 |
 | --- | --- | --- |
-| `session_start` | `session_id`, `event_time` | `user_id`는 실제 Web에서 NULL 가능. `product_id`, `order_id`, `order_value` |
-| `page_view` | `page_view_id`, `page_type`, `session_id`, `event_time` | `product_id`는 목록/홈/장바구니에서 NULL 가능 |
+| `session_start` | `session_id`, `page_view_id`, `event_time` | `user_id`는 실제 Web에서 NULL 가능. `product_id`, `order_id`, `order_value` |
+| `page_view` | `page_view_id`, `page_type`, `session_id`, `event_time` | 세션 첫 `page_view`는 `navigation_source=session_start`. `product_id`는 목록/홈/장바구니에서 NULL 가능 |
 | `product_impression` | `product_id`, `list_id`, `position`, `session_id` | `order_id`, `order_value` |
 | `product_click` | `product_id`, `session_id` | `context_product_id`, `list_id`, `position`, `order_id`, `order_value` |
 | `recommendation_impression` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `context_product_id`, `section_id`, `order_id`, `order_value` |
@@ -917,9 +914,9 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 
 | DW/Mart 후보 | 입력 Processed Dataset | Dashboard 활용 |
 | --- | --- | --- |
-| `product_daily_kpi` | `product_event_fact`, `funnel_session_fact`, `persona_behavior_feature_delta` | 상품별 조회/장바구니/구매/CTR/관심도 |
+| `product_daily_kpi` | `product_event_fact`, `persona_behavior_feature_delta` | 상품별 조회/장바구니/구매/CTR/관심도. Funnel 전환/이탈은 `funnel_daily_kpi`에서 별도 관리 |
 | `recommendation_daily_kpi` | `product_event_fact` | 추천 영역 CTR, 추천 위치별 성과 |
-| `search_daily_kpi` | `search_event_fact` | 검색량, 검색 후 클릭 전환율 |
+| `search_daily_kpi` | `search_event_fact`, `product_event_fact` | 검색량, 검색 후 클릭 전환율 |
 | `content_daily_kpi` | `content_interest_fact` | 성분/리뷰 열람률, 콘텐츠 관심도 |
 | `funnel_daily_kpi` | `funnel_session_fact` | 단계별 전환율/이탈률 |
 | `persona_segment_daily_kpi` | `funnel_session_fact`, Persona dimension | 고객군별 상품 반응 |

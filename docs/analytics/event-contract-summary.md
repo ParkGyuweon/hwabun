@@ -91,6 +91,8 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | `product_view` | 상품 상세 데이터 렌더링 완료 및 `product_id` 확정 시 |
 | `product_impression` | 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 |
 | `product_click` | 상품 카드 클릭 후 상세 이동이 시작될 때 |
+| `recommendation_impression` | 추천/유사 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 |
+| `recommendation_click` | 추천/유사 상품 카드 클릭 시 |
 | `section_view` | 섹션/콘텐츠가 유효 노출 기준을 만족하고 400ms 이상 유지될 때 |
 | `section_dwell` | 섹션/콘텐츠가 화면을 벗어나거나 페이지 이탈/15초 checkpoint 도달 시 |
 | `accordion_toggle` | Accordion 펼침/닫힘 클릭 시 |
@@ -170,7 +172,7 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 | `request_id` | Response | 한 번의 batch 요청을 묶는 ID. 현재는 HTTP 응답/Header 기준 |
 | `persona_id` | 조건부 | Persona 기반 행동이면 필요 |
 | `session_id` | Y | 쇼핑 세션 ID |
-| `page_view_id` | Y | 페이지 방문 ID |
+| `page_view_id` | Y | 페이지 방문 ID. `session_start`와 첫 `page_view`는 같은 값을 공유 |
 | `sequence_no` | Y | 세션 내 Event 순서 |
 | `page_type` | Y | MVP 기준 `product_detail`, `product_list`, `cart` |
 | `product_id` | 조건부 | 상품 관련 Event이면 필요. 값은 보고 있는 상품이 아니라 Event 대상 상품 기준 |
@@ -180,6 +182,8 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 `scenario_id`, `simulation_run_id`는 분석 논리 필드다. 현재 API DTO에는 top-level 필드가 없으므로 E2E 기준 물리 위치는 `properties.scenario_id`, `properties.simulation_run_id`로 보고, Processed 단계에서 컬럼으로 승격한다.
 
+`session_start.page_view_id`는 첫 `page_view`와 같은 값을 공유한다. 세션의 첫 `page_view`는 `properties.navigation_source='session_start'`로 구분한다.
+
 ### 5.4 Event별 주요 properties
 
 `product_id`는 상품 대상 Event에서 공통 top-level 필드로 보내며, 값은 Event 대상 상품을 기준으로 한다. 예를 들어 A 상품 상세에서 추천 상품 B를 클릭하면 top-level `product_id`는 B이고, A는 `properties.context_product_id`로 보낸다. 컨텍스트가 없거나 대상과 같으면 `context_product_id`는 생략한다. 섹션 체류·스크롤처럼 화면 자체를 대상으로 하는 Event는 보고 있는 상품을 `product_id`로 둔다.
@@ -188,6 +192,8 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 | event_name | 주요 properties |
 | --- | --- |
+| `session_start` | `entry_page`, `referrer`, `utm_source`, `utm_medium`, `utm_campaign` |
+| `page_view` | `navigation_source`, `referrer`, `route` |
 | `product_view` | `entry_source`, `list_id`, `position` |
 | `product_impression` | `list_id`, `position`, `visible_ratio` |
 | `product_click` | `list_id`, `position`, `entry_source`, `impression_event_id`, `context_product_id` |
@@ -215,6 +221,8 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 `entry_source`는 상품 진입/장바구니 담기 경로를 나타낸다. 현재 값 후보는 `list_grid`, `promo_pick`, `similar_products`, `quick_look`, `cart` 등이다.
 
 `recommendation_impression/click`은 상세 유사 상품뿐 아니라 목록/기획전의 `promo_pick` 리스트에서도 발생할 수 있다. `promo_pick`이 `skin_match_v0` 기반이어도 추천 CTR 산식은 동일하다.
+
+`recommendation_impression` 중복 판단은 `page_view_id + list_id + recommendation_id + product_id + position` 기준으로 본다.
 
 `begin_checkout`, `purchase`의 `items[]`는 Processed 단계에서 상품별 row로 펼쳐서 집계한다.
 
@@ -334,6 +342,7 @@ product_impression
 | 합의 | `section_dwell` 합산 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
+| 합의 | `session_start.page_view_id` | `session_start` 발생 시점에 첫 `page_view_id`를 발급하고 첫 `page_view`와 공유 |
 | 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
 | 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
 | 초안 | DW 집계 방식 | 서로 다른 grain의 Fact는 목표 Mart grain으로 먼저 집계한 뒤 Join |

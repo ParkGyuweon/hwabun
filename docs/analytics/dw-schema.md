@@ -19,14 +19,14 @@ Processed Schema와 DW Schema의 차이는 다음과 같다.
 
 ## 2. 현재 구현 및 문서 전제
 
-백엔드 확정 브랜치 기준으로 Event 수집 경로와 주요 Event 필드는 문서 계약과 대부분 맞춰졌다. 다만 `request_id`, `event_index`, `source`, `simulation_run_id`처럼 Raw/Processed 분석에 필요한 일부 값은 Kafka payload에 없거나 파생/후속 확장이 필요하다.
+백엔드 확정 브랜치 기준으로 Event 수집 경로와 주요 Event 필드는 문서 계약과 대부분 맞춰졌다. 다만 `request_id`, `event_index`, `source`처럼 Raw/Processed 분석에 필요한 일부 값은 Kafka payload에 없거나 파생/후속 확장이 필요하다. `scenario_id`, `simulation_run_id`는 E2E 기준 Raw payload의 top-level이 아니라 `properties` 내부 값으로 보고, Processed/DW에서 컬럼으로 승격한다.
 
 | 항목 | 현재 확인 내용 | DW 문서 반영 |
 | --- | --- | --- |
 | 프로젝트 구조 | `frontend`, `backend`, `batch`, `simulator`, `contracts`, `docs/analytics` 폴더 존재 | 데이터 원천과 Event 문서가 분리되어 있음 |
 | Backend Collector | `S15P21A306-29-be-post-events-api-v0-1` 기준 API는 `POST /api/events`, batch 최대 100건 | Event 수집 경로는 현재 구현 기준으로 확정 |
 | Kafka topic | 기본값 `activity-events` | 실제 Spark 입력 topic으로 사용할 수 있음. 환경별 override 가능성은 Kafka/Spark 담당자와 확인 |
-| Backend Event 필드 | `schema_version`, `event_name`, `intent`, `occurred_at`, `persona_id`, `session_id`, `page_view_id`, `sequence_no`, `page_type`, `product_id`, `actor_type`, `environment`, `properties`, `received_at` | 주요 Event 필드는 문서 계약과 맞음 |
+| Backend Event 필드 | `schema_version`, `event_id`, `event_name`, `intent`, `occurred_at`, `persona_id`, `session_id`, `page_view_id`, `sequence_no`, `page_type`, `product_id`, `actor_type`, `environment`, `properties`, `received_at` | 주요 Event 필드는 문서 계약과 맞음. `event_id`는 dedup 기준 |
 | Backend Kafka message | Event 단위 발행, key는 `persona_id`, payload에는 `received_at` 포함 | Raw 중복 수신은 가능하며, dedup은 Data/Spark `cleaned_events` 생성 단계에서 수행 |
 | 상품 원천 데이터 | `batch/ingest/data/products_200.json`, `batch/ingest/data/affinity_lift.csv` | `dim_product`, `dim_persona_segment` 후보 원천 |
 | Dashboard 구현 | 별도 Dashboard 구현 폴더는 아직 명확하지 않음 | 화면 구현체가 아니라 기획 KPI와 Processed Schema 기준으로 설계 |
@@ -58,7 +58,7 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 | --- | --- | --- |
 | `cleaned_events` | `event_id` | 실시간 Event 통계, 원본 추적, dedup 이후 Event 수 |
 | `product_event_fact` | `event_id + item_index + product_id` | 상품 노출/클릭/조회/장바구니/구매 집계 |
-| `search_event_fact` | `event_id` | 검색량, 검색 결과 수, 검색 후 상품 클릭 분석 |
+| `search_event_fact` | `event_id` | 검색 Event 자체의 검색어/결과 수 분석 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 섹션별 체류시간 집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 성분/리뷰/텍스트 선택/복사 관심도 |
 | `funnel_session_fact` | `session_id + product_id` | Funnel 단계 도달/이탈 |
@@ -226,7 +226,7 @@ grain = simulation_run_id + scenario_id
 
 ```text
 grain = event_date_kst + product_id + actor_type + source + scenario_id + simulation_run_id
-input = product_event_fact, funnel_session_fact, persona_behavior_feature_delta, dim_product
+input = product_event_fact, persona_behavior_feature_delta, dim_product
 ```
 
 | column | type | 설명 |
@@ -271,6 +271,8 @@ input = product_event_fact, funnel_session_fact, persona_behavior_feature_delta,
 - `purchase`, `begin_checkout`의 `items[]`는 `product_event_fact`에서 `items explode` 후 상품별 row로 집계한다.
 - `order_value`는 주문 전체 금액이므로 상품 row에서 직접 합산하지 않는다. 상품별 매출은 `item_revenue`만 합산한다.
 - `revenue_amount`는 `event_name='purchase'`인 row의 `item_revenue`만 합산한다. 장바구니/Checkout 단계의 금액은 잠재 금액으로 별도 해석한다.
+- `product_daily_kpi`는 실제 Event 발생일인 `event_date_kst` 기준의 상품 일간 성과 Mart다. Funnel 전환/이탈은 최초 Funnel 진입일 기준인 `funnel_daily_kpi`에서 별도로 계산한다.
+- `add_to_cart_rate`, `purchase_rate`를 이 Mart에서 제공할 경우 같은 `event_date_kst` 안의 상품별 세션 지표로만 해석한다. 단계 순서 기반 Funnel 전환율은 `funnel_daily_kpi`를 우선 사용한다.
 - `product_interest_score`는 `persona_behavior_feature_delta.final_weight`를 상품/일자 grain으로 먼저 집계한 뒤 Join한다.
 - `category_id`, `brand_id`는 Raw Event가 아니라 `dim_product` Join으로 보강한다.
 
@@ -341,6 +343,7 @@ input = search_event_fact, product_event_fact
 주의사항:
 
 - Raw `search` Event의 검색어 필드는 `query_text`이고, Processed에서는 `search_query`로 정규화한다.
+- `search_event_fact`는 검색 Event 자체만 담고, 검색 후 상품 클릭은 `product_event_fact.search_id`로 연결한다. 검색 하나 뒤 여러 상품 클릭이 발생해도 클릭 row는 `product_event_fact`에 여러 건으로 남는다.
 - `search_query_hash`는 `normalized_query`가 있으면 이를 기준으로, 없으면 최소 정규화한 `search_query`를 기준으로 생성한다.
 - `result_count`는 Raw에서 optional이므로 `avg_result_count`는 NULL 가능하다.
 - 검색 화면 구현 전까지 이 Mart는 provisional이다.
@@ -583,8 +586,8 @@ rate = numerator / NULLIF(denominator, 0)
 | 상품 CTR | `product_click_count / product_impression_count` | `product_daily_kpi` |
 | 추천 CTR | `recommendation_click_count / recommendation_impression_count` | `recommendation_daily_kpi` |
 | 상세 진입률 | `product_view_count / product_impression_count` | `product_daily_kpi` |
-| 장바구니 전환율 | `add_to_cart_sessions / product_view_sessions` | `product_daily_kpi`, `funnel_daily_kpi` |
-| 구매 전환율 | `purchase_sessions / product_view_sessions` | `product_daily_kpi`, `funnel_daily_kpi` |
+| 장바구니 전환율 | `add_to_cart_sessions / product_view_sessions` | `funnel_daily_kpi` |
+| 구매 전환율 | `purchase_sessions / product_view_sessions` | `funnel_daily_kpi` |
 | 장바구니→구매 전환율 | `purchase_sessions / add_to_cart_sessions` | `funnel_daily_kpi` |
 | 성분 정보 열람률 | `ingredient_view_sessions / product_view_sessions` | `content_daily_kpi` |
 | 리뷰 정보 열람률 | `review_view_sessions / product_view_sessions` | `content_daily_kpi` |
@@ -600,6 +603,7 @@ rate = numerator / NULLIF(denominator, 0)
 | Backend Kafka payload의 메타 필드 부족 | Raw record 추적과 source 필터가 약해질 수 있음 | `request_id/event_index`를 추가할지, Kafka metadata와 Processed 파생값으로 처리할지 E2E 전 결정 |
 | Kafka partition key fallback 미확정 | 실제 Web Event에서 `persona_id=NULL`이면 현재 key 기준이 비어 있을 수 있음 | Kafka/Spark 담당자와 `session_id` 등 fallback key를 합의 |
 | Raw에 `source`가 없음 | source별 Mart가 임의 값으로 생성될 수 있음 | MVP는 `actor_type=user → web`, `actor_type=synthetic → simulator`, 서버 내부 Event → `server`로 파생 |
+| `scenario_id`, `simulation_run_id` 물리 위치 | top-level 필드로 오해하면 E2E 파싱이 어긋날 수 있음 | Raw에서는 `properties.scenario_id`, `properties.simulation_run_id`, Processed/DW에서는 승격 컬럼으로 사용 |
 | 서로 다른 grain Fact 직접 Join | COUNT/SUM이 중복되어 KPI가 과대계산될 수 있음 | 각 Processed Dataset을 목표 Mart grain으로 먼저 집계한 뒤 집계 결과끼리 Join |
 | `user_id` 원천 불완전 | 실제 Web Event의 사용자 단위 지표가 NULL 가능 | synthetic은 `persona_id → user_id`, 실제 Web은 로그인/익명 ID 정책 확정 전까지 nullable |
 | `search_id` 미확정 | 검색 후 클릭 연결이 약해질 수 있음 | 검색 화면 구현 전에는 nullable, 구현 후 Raw 추가 또는 Spark 파생 |
@@ -619,7 +623,7 @@ rate = numerator / NULLIF(denominator, 0)
 2. Kafka message는 백엔드 확정 브랜치 기준 Event 단위다. Spark Raw 적재에서 이 전제를 확인한다.
 3. Kafka partition key는 현재 `persona_id`다. 실제 Web Event에서 `persona_id=NULL`일 때 대체 key가 필요한지 확인한다.
 4. E2E 기준 `schema_version`은 `0.2.0-draft`로 맞추고, `1.0.0-draft` 전환 시 Front/Backend/Spark를 동시에 갱신한다.
-5. `session_start`가 첫 `page_view_id` 발급 이후 같은 `page_view_id`를 공유해 들어오는지 확인한다.
+5. `session_start`와 세션 첫 `page_view`는 같은 `page_view_id`를 공유하고, 첫 `page_view`는 `properties.navigation_source='session_start'`로 들어오는지 확인한다.
 6. `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `add_to_cart`가 실제 화면에서 들어오는지 확인한다.
 7. `search`, `begin_checkout`, `purchase`는 구현 후 Trigger와 required field를 재검증한다.
 8. Checkout이 별도 화면이면 `page_type=checkout`을 Backend enum에 추가할지 확인한다.

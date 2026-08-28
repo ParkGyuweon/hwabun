@@ -267,7 +267,7 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 
 `sendBeacon`은 성공 여부를 알 수 없으므로 같은 batch/Event가 재전송될 수 있다. 이 중복은 정상적인 at-least-once 전송 특성으로 보고, Backend가 요청 시점에 막지 않고 Data/Spark가 `cleaned_events` 생성 전 `event_id` 기준으로 멱등 처리한다.
 
-`session_start`도 공통 필드 규칙상 `page_view_id`를 가진다. Front는 첫 페이지의 `page_view_id`를 발급한 뒤 `session_start`와 첫 `page_view`가 같은 `page_view_id`를 공유하도록 전송한다.
+`session_start`도 공통 필드 규칙상 `page_view_id`를 가진다. Front는 `session_start` 발생 시점에 첫 페이지의 `page_view_id`를 발급하고, `session_start`와 첫 `page_view`가 같은 `page_view_id`를 공유하도록 전송한다. 세션의 첫 `page_view`는 `properties.navigation_source='session_start'`로 구분한다.
 
 ### 7.2 Event별 Trigger
 
@@ -279,8 +279,8 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | `exit_summary` | `visibilitychange=hidden`, `pagehide`, 상품/페이지 이동 시 | 최소 체류 300ms 미만은 제외 가능 |
 | `product_impression` | 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 | `page_view_id + list_id + product_id + position` 최초 1회 |
 | `product_click` | 상품 카드 클릭 후 상세 이동이 시작될 때 | `impression_event_id`가 있으면 함께 전달 |
-| `recommendation_impression` | 추천/유사 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 | `recommendation_id + product_id` 최초 1회 |
-| `recommendation_click` | 추천/유사 상품 카드 클릭 | `recommendation_id`, `algorithm`, `position` 필수 |
+| `recommendation_impression` | 추천/유사 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 | `page_view_id + list_id + recommendation_id + product_id + position` 최초 1회 |
+| `recommendation_click` | 추천/유사 상품 카드 클릭 | `recommendation_id`, `list_id`, `algorithm`, `position` 필수 |
 | `quick_look` | 목록/기획전 상품 카드에서 요약 창이 열릴 때 | 상세 진입 전 관심 신호. `select_item` 이전 단계 |
 | `quick_look_close` | 상품 요약 창이 닫힐 때 | `dwell_ms`와 창 안 행동 요약을 함께 해석 |
 | `section_view` | 섹션/콘텐츠가 유효 노출 기준을 만족하고 400ms 이상 유지될 때 | `section_id/content_kind/content_ref` 방문당 최초 1회 |
@@ -409,12 +409,12 @@ Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 
 | `persona_id` | string/null | 조건부 | Persona 기반 이벤트일 때 사용 |
 | `actor_type` | string | Y | `user`, `synthetic` |
 | `session_id` | string | Y | 쇼핑 세션 ID |
-| `page_view_id` | string | Y | 페이지 방문 1회 ID |
+| `page_view_id` | string | Y | 페이지 방문 1회 ID. `session_start`와 첫 `page_view`는 같은 값을 공유 |
 | `sequence_no` | integer | Y | 세션 내 Event 순서 |
 | `page_type` | string | Y | MVP 기준 `product_list`, `product_detail`, `cart` |
 | `environment` | string | Y | `local`, `dev`, `staging`, `prod`, `loadtest` |
-| `scenario_id` | string/null | N | 시뮬레이션 조건. 현재 API에는 top-level 필드가 없으므로 `properties.scenario_id` 또는 후속 DTO 확장으로 처리 |
-| `simulation_run_id` | string/null | N | 시뮬레이션 실행 1회 식별자. 현재 API에는 top-level 필드가 없으므로 `properties.simulation_run_id` 또는 후속 DTO 확장으로 처리 |
+| `scenario_id` | string/null | N | 시뮬레이션 조건. E2E 기준 Raw 물리 위치는 `properties.scenario_id` |
+| `simulation_run_id` | string/null | N | 시뮬레이션 실행 1회 식별자. E2E 기준 Raw 물리 위치는 `properties.simulation_run_id` |
 | `experiment_id` | string/null | N | A/B 테스트 또는 추천 정책 실험 |
 | `ab_variant` | string/null | N | A/B 그룹 |
 | `product_id` | string/null | Event별 | 상품 대상 Event일 때 필수. 값은 보고 있는 상품이 아니라 Event 대상 상품 기준 |
@@ -430,7 +430,9 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | --- | --- |
 | `persona_id`, `actor_type` | actor 차원 |
 | `session_id`, `page_view_id`, `sequence_no` | session 차원 |
-| `page_type`, `environment`, `scenario_id`, `simulation_run_id`, `experiment_id`, `ab_variant` | context 차원 |
+| `page_type`, `environment` | context 차원 |
+| `properties.scenario_id`, `properties.simulation_run_id` | simulation context 차원. Processed/DW에서 `scenario_id`, `simulation_run_id` 컬럼으로 승격 |
+| `properties.experiment_id`, `properties.ab_variant` 또는 후속 top-level 확장 | experiment context 차원 |
 | `product_id`, `properties.sku_id` | target/product 차원 |
 | `properties.context_product_id` | Event가 발생한 배경 상품. 추천 클릭처럼 대상 상품과 보고 있던 상품이 다를 때 사용 |
 | `properties` | Event별 세부 속성 또는 별도 fact 컬럼 |
@@ -509,7 +511,7 @@ Spark 이후 분석 단계에서는 Raw Event를 아래처럼 논리적으로 �
 | event_name | required properties | optional properties |
 | --- | --- | --- |
 | `session_start` | 없음 | `entry_page`, `referrer`, `utm_source`, `utm_medium`, `utm_campaign` |
-| `page_view` | 없음 | `referrer`, `route` |
+| `page_view` | 없음 | `referrer`, `route`, `navigation_source`. 세션 첫 `page_view`는 `navigation_source=session_start` |
 | `product_view` | 없음 | `entry_source`, `list_id`, `position`, `recommendation_id`, `context_product_id` |
 | `exit_summary` | `dwell_ms`, `max_scroll_percent` | `last_section_id`, `last_content_kind`, `reason` |
 
