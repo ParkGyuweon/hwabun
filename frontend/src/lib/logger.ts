@@ -100,16 +100,31 @@ const NOT_STARTED = Symbol('not-started');
 let startedSessionKey: string | null | typeof NOT_STARTED = NOT_STARTED;
 let startedPageViewKey: string | null | typeof NOT_STARTED = NOT_STARTED;
 
-/** 페르소나가 바뀌면 새 방문으로 취급한다 */
-export function startSession(personaId: string | null): void {
+/**
+ * 페르소나가 바뀌면 새 방문으로 취급한다.
+ *
+ *  는 **세션의 첫 page_view 와 같은 page_view_id** 를 공유한다
+ * (데이터 계약). 그래서 여기서 첫 page_view_id 를 미리 발급하고,
+ * 같은 id 로 첫 page_view 까지 바로 남긴다. 조인 없이 세션의 시작 화면을 알 수 있다.
+ *
+ * 이전에는 session_start 가 직전 화면의 page_view_id 를 들고 나갔고,
+ * 페르소나 교체 시 새 세션의 첫 page_view 가 아예 없었다.
+ */
+export function startSession(personaId: string | null, productId: string | null = null): void {
   if (startedSessionKey === personaId) return;
   startedSessionKey = personaId;
 
   sessionId = createId();
   sequenceNo = 0;
   firedOnceKeys.clear();
-  setLoggerContext({ personaId });
+  setLoggerContext({ personaId, productId });
+
+  // 첫 page_view 몫의 id 를 세션 시작 전에 발급해 둘이 공유한다
+  pageViewId = createId();
+  startedPageViewKey = productId;
+
   track('session_start', { entry_page: context.pageType });
+  track('page_view', { product_id: productId, navigation_source: 'session_start' });
 }
 
 /**

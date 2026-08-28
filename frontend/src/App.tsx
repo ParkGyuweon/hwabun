@@ -333,10 +333,18 @@ export default function App() {
       : 'SEPHORA';
   }, [product]);
 
-  // 페르소나가 바뀌면 새 방문으로 본다
+  /**
+   * 페르소나가 바뀌면 새 방문으로 본다.
+   * 세션의 첫 page_view 가 session_start 와 page_view_id 를 공유해야 해서
+   * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 페르소나면
+   * 아무것도 하지 않으므로 productId 변경으로 다시 실행돼도 무해하다.
+   */
   useEffect(() => {
-    startSession(personaId || null);
-  }, [personaId]);
+    setLoggerContext({
+      pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',
+    });
+    startSession(personaId || null, cartOpen ? null : productId);
+  }, [personaId, productId, cartOpen]);
 
   // 목록과 상세는 다른 page_type 이다. 화면이 바뀔 때마다 새 페이지 조회로 남긴다
   useEffect(() => {
