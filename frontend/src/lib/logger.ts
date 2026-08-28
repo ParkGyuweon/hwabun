@@ -61,8 +61,26 @@ export function setLoggerContext(patch: Partial<LoggerContext>): void {
   context = { ...context, ...patch };
 }
 
+/**
+ * 이미 시작한 세션·페이지 조회의 키.
+ *
+ * StrictMode 는 개발 중 effect 를 두 번 실행한다. 그래서 호출하는 쪽에 가드가 없으면
+ * `session_start` 와 `page_view` 가 각각 두 번 찍힌다. 단순히 로그가 지저분해지는
+ * 문제가 아니다. `startPageView` 가 `firedOnceKeys` 를 비우기 때문에, 두 번째 호출이
+ * 1회성 이벤트의 중복 방지 기록까지 지워서 `scroll_depth` 같은 것도 다시 찍힌다.
+ *
+ * 컴포넌트마다 가드를 두는 대신 여기서 막는다. 호출을 몇 번 하든
+ * **상태가 실제로 바뀔 때만** 이벤트가 나가는 것을 로거가 보장한다.
+ */
+const NOT_STARTED = Symbol('not-started');
+let startedSessionKey: string | null | typeof NOT_STARTED = NOT_STARTED;
+let startedPageViewKey: string | null | typeof NOT_STARTED = NOT_STARTED;
+
 /** 페르소나가 바뀌면 새 방문으로 취급한다 */
 export function startSession(personaId: string | null): void {
+  if (startedSessionKey === personaId) return;
+  startedSessionKey = personaId;
+
   sessionId = createId();
   sequenceNo = 0;
   firedOnceKeys.clear();
@@ -72,6 +90,9 @@ export function startSession(personaId: string | null): void {
 
 /** 페이지(또는 상품)가 바뀔 때마다 호출한다 */
 export function startPageView(productId: string | null): void {
+  if (startedPageViewKey === productId) return;
+  startedPageViewKey = productId;
+
   pageViewId = createId();
   firedOnceKeys.clear();
   setLoggerContext({ productId });
