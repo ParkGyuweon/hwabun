@@ -44,8 +44,8 @@ S15P21A306/
 ├── simulator/                       ★ 부하 발생기 — 현재는 페르소나 데이터만 존재
 │   └── personas/data/
 │       ├── README.md                    페르소나 데이터 설명
-│       ├── personas_9900.json           코드 생성용 페르소나 9,900명 (36MB)
-│       └── personas_100_agent.json      LLM 에이전트 구동용 100명 (0.4MB)
+│       ├── personas_9900.json           코드 생성용 페르소나 9,900명 (52MB)
+│       └── personas_100_agent.json      LLM 에이전트 구동용 100명 (0.5MB)
 │
 ├── frontend/                        React 19 + TypeScript + Vite 8
 │   ├── index.html
