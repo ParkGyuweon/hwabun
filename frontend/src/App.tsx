@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
 import LogPanel from './components/devtools/LogPanel';
 import Breadcrumb from './components/product/Breadcrumb';
@@ -56,6 +56,8 @@ export default function App() {
   const [personaId, setPersonaId] = useState(personas[0]?.persona_id ?? '');
   // 헤더 메뉴와 목록 탭이 같은 값을 바꾸므로 여기서 소유한다
   const [listCategory, setListCategory] = useState('all');
+  /** 다음 page_view 가 어떻게 발생했는지. 뒤로가기와 화면 안 이동을 구분한다 */
+  const navigationSourceRef = useRef('in_app');
 
   const persona = useMemo(
     () => personas.find((item) => item.persona_id === personaId) ?? null,
@@ -103,11 +105,19 @@ export default function App() {
     setProductId(null);
   }, []);
 
-  // 브라우저 뒤로/앞으로. 화면 안 클릭과 구분해서 남긴다
+  /**
+   * 브라우저 뒤로/앞으로.
+   *
+   * 처음에는 이걸 scroll_backtrack 으로 남겼는데 잘못이었다.
+   * 그 이벤트는 가중 -1.0 의 좌절 신호인데, 목록으로 돌아가는 것은
+   * 정상적인 탐색이다. 정상 행동에 감점을 주면 추천이 틀어진다.
+   *
+   * 이동 자체는 page_view 가 이미 남기므로, 어떻게 왔는지만 속성으로 구분한다.
+   */
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
       const next = (event.state?.productId as string | null | undefined) ?? null;
-      track('scroll_backtrack', { reason: 'history_back', to: next ? 'detail' : 'list' });
+      navigationSourceRef.current = 'history_back';
       setProductId(next);
     };
     window.addEventListener('popstate', onPop);
@@ -126,7 +136,8 @@ export default function App() {
   // 목록과 상세는 다른 page_type 이다. 화면이 바뀔 때마다 새 페이지 조회로 남긴다
   useEffect(() => {
     setLoggerContext({ pageType: productId ? 'product_detail' : 'product_list' });
-    startPageView(productId);
+    startPageView(productId, navigationSourceRef.current);
+    navigationSourceRef.current = 'in_app';
   }, [productId]);
 
   return (

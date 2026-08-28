@@ -88,15 +88,21 @@ export function startSession(personaId: string | null): void {
   track('session_start', { entry_page: context.pageType });
 }
 
-/** 페이지(또는 상품)가 바뀔 때마다 호출한다 */
-export function startPageView(productId: string | null): void {
+/**
+ * 페이지(또는 상품)가 바뀔 때마다 호출한다.
+ *
+ * `navigationSource` 로 **어떻게 이 화면에 왔는지**를 남긴다.
+ * 브라우저 뒤로가기로 온 것과 화면 안 링크로 온 것은 다른 신호다.
+ * 다만 뒤로가기 자체는 좌절이 아니라 정상적인 탐색이므로 감점하지 않는다.
+ */
+export function startPageView(productId: string | null, navigationSource = 'in_app'): void {
   if (startedPageViewKey === productId) return;
   startedPageViewKey = productId;
 
   pageViewId = createId();
   firedOnceKeys.clear();
   setLoggerContext({ productId });
-  track('page_view', { product_id: productId });
+  track('page_view', { product_id: productId, navigation_source: navigationSource });
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {

@@ -48,21 +48,35 @@
 GA4 는 이커머스 권장 이벤트 11종을 정의하고, 그중 일부를 퍼널 단계로 인식한다.
 최소 구성은 `view_item` → `add_to_cart` → `begin_checkout` → `purchase` 4종이다.
 
-| 단계 | 이벤트 | 우리 페이지에 있나 |
+| 단계 | 이벤트 | 우리 구현 |
 |---|---|---|
-| 상품 열람 | `view_item` | O |
-| 목록 노출 | `view_item_list` | X (목록 페이지 없음) |
-| 목록 클릭 | `select_item` | X |
-| 찜 | `add_to_wishlist` | O (좋아요) |
-| 장바구니 | `add_to_cart` | O |
-| 장바구니 열람 | `view_cart` | X |
-| 장바구니 제거 | `remove_from_cart` | X |
-| 결제 시작 | `begin_checkout` | X (범위 밖) |
-| 배송정보 입력 | `add_shipping_info` | X |
-| 결제정보 입력 | `add_payment_info` | X |
-| 구매 | `purchase` | X (범위 밖) |
+| 상품 열람 | `view_item` | O `page_view` (`page_type=product_detail`) |
+| 목록 노출 | `view_item_list` | O `product_impression` |
+| 목록 클릭 | `select_item` | O `product_click` (`entry_source=list_grid`) |
+| 찜 | `add_to_wishlist` | O `wishlist_toggle` |
+| 장바구니 | `add_to_cart` | O `add_to_cart` |
+| 장바구니 열람 | `view_cart` | **X — 장바구니 화면이 없다** |
+| 장바구니 제거 | `remove_from_cart` | **X — 장바구니 화면이 없다** |
+| 결제 시작 | `begin_checkout` | 범위 밖 |
+| 배송정보 입력 | `add_shipping_info` | 범위 밖 |
+| 결제정보 입력 | `add_payment_info` | 범위 밖 |
+| 구매 | `purchase` | 범위 밖 |
 
-우리 프로젝트는 **구매 이전 탐색 구간만** 다루므로 퍼널 뒷부분이 비어 있다.
+범위 안 7단계 중 **5단계를 덮었다.** 목록 노출·클릭은 목록 화면을 만들면서 채웠다.
+
+남은 두 개는 장바구니 화면이 없어서 비어 있다. 그중 **`remove_from_cart` 는
+그냥 빠뜨리기 아까운 신호다.**
+
+지금 우리 감점 축은 `rage_click`·`dead_click`·`scroll_backtrack` 세 개뿐이고
+전부 **[추정]** 이다. 근거가 약하고, 상품이 싫다는 뜻이 아니라 화면 문제일 수도 있다.
+반면 장바구니에서 상품을 빼는 것은 **특정 상품에 대한 재고(再考)** 라서
+훨씬 명확한 부정 신호다. 담았다가 뺀 상품과 담아둔 상품을 나누면
+`add_to_cart` 의 4.0 가중이 과대평가인지도 검증할 수 있다.
+
+장바구니 화면은 상품 목록·상세만큼 클 필요가 없다. 담은 상품 목록과 수량 조절,
+삭제만 있으면 `view_cart` 와 `remove_from_cart` 가 나온다.
+
+우리 프로젝트는 **구매 이전 탐색 구간만** 다루므로 퍼널 뒷부분은 비어 있다.
 표준 이벤트만으로는 신호가 너무 적어서 탐색 구간을 촘촘히 봐야 한다.
 이게 우리가 주목·좌절 신호를 따로 만든 이유다.
 
