@@ -1,12 +1,15 @@
 import Chip from '../common/Chip';
 import EmptyState from '../common/EmptyState';
-import { skinTypeLabel } from '../../lib/format';
+import { deriveSkinTypesFromReviews, skinTypeLabel } from '../../lib/format';
 import type { PersonaProfile } from '../../types/persona';
 import type { Product } from '../../types/product';
+import type { Review } from '../../types/review';
 
 interface AboutProductProps {
   product: Product;
   persona: PersonaProfile | null;
+  /** 상품 정보에 피부 타입 표기가 없을 때 분포를 뽑아 쓴다 */
+  reviews: Review[];
 }
 
 /**
@@ -15,8 +18,12 @@ interface AboutProductProps {
  * 설명 문단은 세포라 원문(영문)을 그대로 싣고,
  * 그 아래에 이 프로젝트의 목적인 "내 피부와 맞는가" 판정용 속성을 붙인다.
  */
-export default function AboutProduct({ product, persona }: AboutProductProps) {
+export default function AboutProduct({ product, persona, reviews }: AboutProductProps) {
   const hasSkinTypeInfo = product.suitable_skin_types.length > 0;
+  // 상품 200개 중 132개에 표기가 없다. 그 자리는 리뷰어 분포로 대신한다
+  const derivedSkinTypes = hasSkinTypeInfo
+    ? null
+    : deriveSkinTypesFromReviews(reviews);
   const description = product.description;
 
   return (
@@ -78,8 +85,29 @@ export default function AboutProduct({ product, persona }: AboutProductProps) {
                   </li>
                 ))}
               </ul>
+            ) : derivedSkinTypes && derivedSkinTypes.types.length > 0 ? (
+              /**
+               * 브랜드 표기가 아니라 리뷰어 분포다.
+               * 같은 칩으로 보이면 출처를 착각하므로 근거를 반드시 같이 적는다.
+               */
+              <>
+                <ul className="chip-list">
+                  {derivedSkinTypes.types.map((type) => (
+                    <li key={type}>
+                      <Chip tone={persona?.skin_type === type ? 'accent' : 'default'}>
+                        {skinTypeLabel(type)}{' '}
+                        {Math.round((derivedSkinTypes.shares.get(type) ?? 0) * 100)}%
+                      </Chip>
+                    </li>
+                  ))}
+                </ul>
+                <p className="about__derived-note">
+                  상품 정보에 표기가 없어 리뷰 {derivedSkinTypes.sampleSize}건의 작성자
+                  피부 타입으로 대신 보여줍니다.
+                </p>
+              </>
             ) : (
-              <EmptyState message="상품 정보에 피부 타입 표기가 없습니다. 리뷰 통계로 보완 예정입니다." />
+              <EmptyState message="상품 정보에 피부 타입 표기가 없고, 리뷰에도 피부 타입 정보가 없습니다." />
             )}
           </dd>
         </div>

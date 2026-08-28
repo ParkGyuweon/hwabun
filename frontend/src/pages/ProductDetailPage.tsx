@@ -128,7 +128,7 @@ export default function ProductDetailPage({
 
       <section className="pdp__section" data-log-section="about_product">
         <h2 className="pdp__section-title">About the Product</h2>
-        <AboutProduct product={product} persona={persona} />
+        <AboutProduct product={product} persona={persona} reviews={reviews} />
       </section>
 
       <section className="pdp__section pdp__section--tight" data-log-section="ingredients">

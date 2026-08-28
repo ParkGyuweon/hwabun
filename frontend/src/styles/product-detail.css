@@ -1171,3 +1171,11 @@
     gap: var(--space-5);
   }
 }
+
+/* 리뷰에서 파생한 값이라는 것을 칩 아래에 밝힌다 */
+.about__derived-note {
+  margin-top: var(--space-2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-faint);
+}
