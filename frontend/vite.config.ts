@@ -9,6 +9,8 @@ export default defineConfig({
   plugins: [react(), imageCache()],
 
   server: {
+    // 다른 세션이 5173 을 쓰고 있을 때 PORT 로 비켜 띄울 수 있게 한다
+    port: Number(process.env.PORT) || undefined,
     proxy: {
       // 로그 수집 서버(Spring, 기본 8080)로 넘긴다. 안 떠 있으면 프론트는 재시도만 한다
       '/api': {
