@@ -3,9 +3,7 @@
  *
  * 입력
  *   batch/ingest/data/products_200.json  데이터 담당자가 정제한 상품 200개
- *   scratchpad/skus.json                 아카이브에서 찾아낸 세포라 SKU (대표 이미지 키)
- *   scratchpad/gallery.json              CDN 조회로 찾아낸 갤러리 이미지 (상품 ID 기준)
- *   src/mocks/products.collected.json    손으로 모은 이미지·옵션·설명 (상품 ID 기준)
+ *   src/mocks/products.collected.json    수집한 SKU·이미지·옵션·설명 (상품 ID 기준)
  *
  * 출력
  *   src/mocks/products.sample.json
@@ -16,7 +14,9 @@
  * 실제로 P450271(단종 점보)과 P443349(먹는 보충제)가 200개에서 제외됐다.
  * 자산을 따로 두면 나중에 목록에 다시 들어와도 알아서 붙는다.
  *
- *   npx tsx scripts/build-products.ts <skus.json 경로>
+ * 수집 결과는 전부 자산 파일 하나에 모여 있다. 인수 없이 그대로 돌면 된다.
+ *
+ *   node scripts/build-products.ts
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -52,23 +52,6 @@ const raw = JSON.parse(
   readFileSync(join(root, 'batch', 'ingest', 'data', 'products_200.json'), 'utf8'),
 ) as RawProduct[];
 
-const skuPath = process.argv[2];
-const skus: Record<string, { sku: string | null }> = skuPath
-  ? JSON.parse(readFileSync(skuPath, 'utf8'))
-  : {};
-
-/**
- * 갤러리 이미지.
- *
- * 대표 이미지는 `sku/s{SKU}-main-zoom.jpg` 인데 갤러리는
- * `product/p{PID}-av-{NN}-zoom.jpg` 로 **상품 ID 기준**이다.
- * 그래서 SKU 를 못 찾은 상품도 갤러리는 확보된다.
- */
-const galleryPath = process.argv[3];
-const gallery: Record<string, string[]> = galleryPath
-  ? JSON.parse(readFileSync(galleryPath, 'utf8'))
-  : {};
-
 const mockPath = join(here, '..', 'src', 'mocks', 'products.sample.json');
 
 interface Collected {
@@ -77,6 +60,8 @@ interface Collected {
   images: string[];
   variants: unknown[];
   description: unknown;
+  /** 설명을 어느 아카이브 스냅샷에서 가져왔는지. 화면 데이터에는 넣지 않는다 */
+  description_source?: unknown;
 }
 
 const collected = JSON.parse(
@@ -144,23 +129,17 @@ let withImage = 0;
 let keptRich = 0;
 let mainFromGallery = 0;
 let withGallery = 0;
+let withDescription = 0;
 
 const products = raw.map((p) => {
   const highlights = p.highlights ?? [];
   const prev = collected[p.product_id];
 
   // 이미 수집해 둔 상품이면 그 SKU 를 그대로 쓴다
-  const skuId = prev?.sku_id ?? skus[p.product_id]?.sku ?? null;
-  const probed = gallery[p.product_id] ?? [];
-
-  /**
-   * 수집해 둔 갤러리가 있으면 그것을 쓰고, 없으면 CDN 조회 결과를 쓴다.
-   * 수집본은 아카이브 JSON 에서 나온 것이라 조립으로 못 찾는 긴 ID 이미지까지 들어 있다.
-   */
-  const collectedGallery = prev?.images?.length ? prev.images : probed;
+  const skuId = prev?.sku_id ?? null;
 
   let imageUrl = prev?.image_url ?? (skuId ? `${SKU_CDN}/s${skuId}-main-zoom.jpg` : null);
-  let images = collectedGallery;
+  let images = prev?.images ?? [];
 
   /**
    * SKU 를 못 찾아 대표 이미지가 없으면 갤러리 첫 장을 대표로 올린다.
@@ -175,6 +154,7 @@ const products = raw.map((p) => {
 
   if (imageUrl) withImage += 1;
   if (images.length) withGallery += 1;
+  if (prev?.description) withDescription += 1;
   if (prev?.images?.length) keptRich += 1;
 
   return {
@@ -216,6 +196,7 @@ const concerned = products.filter((p) => p.skincare_concerns.length).length;
 console.log(`상품 ${products.length}개 작성 → src/mocks/products.sample.json`);
 console.log(`  대표 이미지 확보   ${withImage}  (그중 갤러리 첫 장 대체 ${mainFromGallery})`);
 console.log(`  갤러리 있는 상품   ${withGallery}`);
+console.log(`  상세 설명 있는 상품 ${withDescription}`);
 console.log(`  손으로 수집한 것   ${keptRich}`);
 console.log(`  피부타입 파생      ${skinTyped}`);
 console.log(`  고민 파생          ${concerned}`);
