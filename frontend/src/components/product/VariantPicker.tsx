@@ -56,7 +56,7 @@ export default function VariantPicker({
               onClick={() => select(variant)}
             >
               <img
-                src={sizedImage(variant.image_url, IMAGE_WIDTH_SWATCH) ?? PLACEHOLDER}
+                src={sizedImage(variant.swatch_url ?? variant.image_url, IMAGE_WIDTH_SWATCH) ?? PLACEHOLDER}
                 alt=""
                 aria-hidden="true"
                 loading="lazy"

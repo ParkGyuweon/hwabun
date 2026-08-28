@@ -40,7 +40,13 @@ export interface ProductVariant {
   sku_id: string;
   /** 옵션 표기명. 색상명, 향, 용량 등이 그대로 들어온다 */
   label: string;
+  /** 이 옵션을 골랐을 때 갤러리에 뜨는 상품 사진 */
   image_url: string;
+  /**
+   * 옵션 버튼에 들어가는 작은 스와치. 세포라는 상품 사진과 별도로 62px 짜리를 준다.
+   * 이걸 갤러리에 쓰면 확대돼서 뭉개지므로 자리를 나눠 둔다. 없으면 image_url 로 대신한다.
+   */
+  swatch_url: string | null;
 }
 
 /**
