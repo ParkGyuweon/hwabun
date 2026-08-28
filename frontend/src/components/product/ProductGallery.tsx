@@ -34,6 +34,27 @@ export default function ProductGallery({ imageUrl, images, productName, productI
     setFailedSrc(new Set());
   }, [productId]);
 
+  /**
+   * 썸네일을 눌렀을 때 기다리지 않도록 갤러리 전체를 메인 폭으로 미리 받아둔다.
+   *
+   * 클릭한 다음에 처음 받으면 장당 수 초가 걸린다. 행동 로그를 재는 페이지에서
+   * 그 대기 시간은 그대로 체류 시간으로 잡히므로, 느린 정도가 아니라
+   * 측정값이 틀어지는 문제다.
+   *
+   * 우선순위를 낮춰서 지금 보고 있는 메인 이미지 로딩과 경쟁하지 않게 한다.
+   * 이미 받은 주소는 브라우저가 알아서 걸러 주므로 중복 요청은 생기지 않는다.
+   */
+  useEffect(() => {
+    for (const src of gallery) {
+      const sized = sizedImage(src, IMAGE_WIDTH_MAIN);
+      if (!sized) continue;
+
+      const image = new Image();
+      image.fetchPriority = 'low';
+      image.src = sized;
+    }
+  }, [gallery]);
+
   const activeSrc = gallery[activeIndex] ?? null;
   const mainSrc = !activeSrc || failedSrc.has(activeSrc) ? PLACEHOLDER : activeSrc;
 

@@ -11,13 +11,15 @@ import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CACHE_DIR, fetchToCache } from '../plugins/image-cache.ts';
+// 화면과 같은 폭을 받아야 캐시가 실제 요청 주소와 맞는다
+import {
+  IMAGE_WIDTH_CARD,
+  IMAGE_WIDTH_MAIN,
+  IMAGE_WIDTH_SWATCH,
+  IMAGE_WIDTH_THUMB,
+} from '../src/lib/image-widths.ts';
 
 const CDN_ORIGIN = 'https://www.sephora.com/productimages/sku/';
-
-/** src/lib/image.ts 의 상수와 같아야 한다 */
-const WIDTH_MAIN = 1024;
-const WIDTH_THUMB = 160;
-const WIDTH_SWATCH = 128;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const products = JSON.parse(
@@ -38,15 +40,15 @@ function want(url: string | null, ...widths: number[]) {
 }
 
 for (const product of products) {
-  // 대표 이미지는 갤러리 메인·썸네일에 쓰이고, 추천 카드에서는 스와치 크기로도 쓰인다
-  want(product.image_url, WIDTH_MAIN, WIDTH_THUMB, WIDTH_SWATCH);
+  // 대표 이미지는 갤러리 메인·썸네일에 쓰이고, 추천 카드에도 실린다
+  want(product.image_url, IMAGE_WIDTH_MAIN, IMAGE_WIDTH_THUMB, IMAGE_WIDTH_CARD);
 
-  for (const image of product.images) want(image, WIDTH_MAIN, WIDTH_THUMB);
+  for (const image of product.images) want(image, IMAGE_WIDTH_MAIN, IMAGE_WIDTH_THUMB);
 
   for (const variant of product.variants) {
     // 옵션을 고르면 그 이미지가 갤러리 메인 자리로 올라온다
-    want(variant.image_url, WIDTH_MAIN, WIDTH_THUMB);
-    want(variant.swatch_url, WIDTH_SWATCH);
+    want(variant.image_url, IMAGE_WIDTH_MAIN, IMAGE_WIDTH_THUMB);
+    want(variant.swatch_url, IMAGE_WIDTH_SWATCH);
   }
 }
 

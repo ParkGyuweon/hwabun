@@ -6,12 +6,13 @@
  * CDN 이 imwidth 쿼리로 리사이즈를 지원하므로 쓰이는 자리마다 폭을 지정한다.
  */
 
-/** 갤러리 메인 뷰 */
-export const IMAGE_WIDTH_MAIN = 1024;
-/** 갤러리 썸네일 */
-export const IMAGE_WIDTH_THUMB = 160;
-/** 옵션 스와치, 추천 카드 */
-export const IMAGE_WIDTH_SWATCH = 128;
+// 폭 상수는 warm-images 스크립트와 공유한다 (image-widths.ts 주석 참고)
+export {
+  IMAGE_WIDTH_CARD,
+  IMAGE_WIDTH_MAIN,
+  IMAGE_WIDTH_SWATCH,
+  IMAGE_WIDTH_THUMB,
+} from './image-widths';
 
 const CDN_ORIGIN = 'https://www.sephora.com/productimages/sku/';
 /** dev 서버가 대신 받아 디스크에 캐시해 주는 경로 (frontend/plugins/image-cache.ts) */
