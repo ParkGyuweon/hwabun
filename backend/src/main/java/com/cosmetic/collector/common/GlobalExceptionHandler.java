@@ -25,6 +25,16 @@ public class GlobalExceptionHandler {
                 ))
                 .toList();
 
+        if (details.stream().anyMatch(detail -> detail.field().equals("events")
+                && exception.getBindingResult().getFieldErrors().stream()
+                .anyMatch(error -> error.getField().equals("events") && error.getCode().equals("Size")))) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ErrorResponse(
+                    "EVENT_BATCH_TOO_LARGE",
+                    "한 요청에는 이벤트를 최대 100건까지 담을 수 있습니다.",
+                    details
+            ));
+        }
+
         return ResponseEntity.badRequest().body(new ErrorResponse(
                 "INVALID_EVENT_BATCH",
                 "이벤트 요청 형식이 올바르지 않습니다.",

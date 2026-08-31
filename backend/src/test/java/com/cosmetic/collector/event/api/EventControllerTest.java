@@ -105,6 +105,33 @@ class EventControllerTest {
     }
 
     @Test
+    void returnsPayloadTooLargeWhenTheBatchExceedsTheEventLimit() throws Exception {
+        String events = String.join(",", java.util.Collections.nCopies(101, """
+                {
+                  "schema_version": "0.2.0-draft",
+                  "event_id": "evt-001",
+                  "event_name": "product_click",
+                  "intent": "comparison",
+                  "occurred_at": "2026-08-27T14:30:00Z",
+                  "session_id": "session-001",
+                  "page_view_id": "page-view-001",
+                  "sequence_no": 1,
+                  "page_type": "product_list",
+                  "actor_type": "user",
+                  "environment": "local"
+                }
+                """));
+
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"schema_version\":\"0.2.0-draft\",\"events\":[" + events + "]}"))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.code").value("EVENT_BATCH_TOO_LARGE"));
+
+        verifyNoInteractions(publisher, metrics);
+    }
+
+    @Test
     void rejectsAnEventWithoutRequiredIdentifiers() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
