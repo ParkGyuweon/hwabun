@@ -251,7 +251,14 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   section_dwell: 1.0, // 섹션에 따라 SECTION_DWELL_WEIGHT 로 다시 조정한다
   scroll_pause: 0.3,
   hover_dwell: 0.3,
-  section_view: 0.3,
+  /**
+   * 섹션이 화면에 들어온 것 자체는 0 이다.
+   *
+   * 같은 섹션에서 section_dwell 이 함께 발생하고 그쪽이 섹션별 가중을 갖는다.
+   * 둘 다 양수면 같은 행동을 두 번 센다. 여기는 "보여줬다" 는 분모로만 쓰고,
+   * 얼마나 봤는지는 section_dwell 이 담당한다.
+   */
+  section_view: 0,
 
   // 기준선. 상품 단위 조회는 product_view 가 담당하므로 page_view 와 중복 가중하지 않는다
   page_view: 1.0,
