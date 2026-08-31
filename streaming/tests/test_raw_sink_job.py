@@ -25,6 +25,12 @@ from streaming.jobs.build_marts_job import (
     BuildMartsConfig,
     parse_args as parse_mart_args,
 )
+from streaming.jobs.validate_pipeline_job import (
+    DEFAULT_FUNNEL_DAILY_PATH as DEFAULT_VALIDATE_FUNNEL_DAILY_PATH,
+    DEFAULT_PRODUCT_DAILY_PATH as DEFAULT_VALIDATE_PRODUCT_DAILY_PATH,
+    ValidatePipelineConfig,
+    parse_args as parse_validate_args,
+)
 
 
 class RawSinkConfigTest(unittest.TestCase):
@@ -134,6 +140,21 @@ class BuildMartsConfigTest(unittest.TestCase):
     def test_empty_mart_path_is_rejected(self):
         with self.assertRaises(ValueError):
             BuildMartsConfig(funnel_daily_path=" ")
+
+
+class ValidatePipelineConfigTest(unittest.TestCase):
+    def test_defaults_match_pipeline_outputs(self):
+        config = parse_validate_args([])
+
+        self.assertEqual("data/raw_events", config.raw_path)
+        self.assertEqual("data/processed/cleaned_events", config.cleaned_path)
+        self.assertEqual(DEFAULT_VALIDATE_PRODUCT_DAILY_PATH, config.product_daily_path)
+        self.assertEqual(DEFAULT_VALIDATE_FUNNEL_DAILY_PATH, config.funnel_daily_path)
+        self.assertFalse(config.require_events)
+
+    def test_empty_report_path_is_rejected(self):
+        with self.assertRaises(ValueError):
+            ValidatePipelineConfig(report_path=" ")
 
 
 if __name__ == "__main__":

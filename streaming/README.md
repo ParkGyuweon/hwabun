@@ -200,3 +200,29 @@ spark-submit streaming/jobs/build_marts_job.py \
 
 Q4도 전체 snapshot `overwrite` 방식의 MVP다. 실제 운영에서는 입력 변경 범위와
 Mart 재계산 범위를 함께 관리하는 증분 전략을 추가한다.
+
+## 통합 검증과 관측
+
+Spark 실행 환경에서 각 Job을 순서대로 완료한 뒤 파이프라인 불변식을 검사한다.
+
+```bash
+spark-submit streaming/jobs/validate_pipeline_job.py --require-events \
+  --report-path data/validation/pipeline-report.json
+```
+
+검증 Job은 다음을 확인하고 실패 시 종료 코드 1을 반환한다.
+
+- `cleaned_events`의 `event_id` 유일성과 null 여부
+- Raw 건수가 Processed 정상/오류 결과를 수용하는지
+- `duplicate_events`가 실제 canonical Event를 가리키는지
+- `sessionized_events`가 cleaned Event의 1:1 투영인지
+- `product_event_fact`의 product ID와 cleaned Event 참조 무결성
+- Funnel Session, 상품 일간 Mart, Funnel 일간 Mart의 grain 유일성
+
+K01~K16 시나리오에서 예상 Event ID·Kafka 좌표·정본 ID를 먼저 기록하고 이
+검증 결과와 Kafka offset/lag를 함께 보관한다. Q1 Streaming Query의 실시간
+처리율·입력 행 수·batch duration은 Spark UI 또는 `StreamingQuery` progress에서
+확인하고, Collector HTTP 성공/실패와 Kafka Broker 상태는 기존
+`monitoring/` Prometheus/Grafana 구성 및 Kafka 관리 명령으로 별도 확인한다.
+현재 저장소에는 Spark progress를 Prometheus로 변환하는 Exporter가 없으므로
+Spark 지표를 수집했다고 주장하지 않는다.
