@@ -116,7 +116,7 @@ cosmetic-recsys/
 │   ├── collector/                   프론트 로그 수신 → Kafka 투입
 │   │   ├── EventController          POST /api/events (배열 수신)
 │   │   ├── EventValidator           contracts 스키마 검증, 불량 이벤트 격리
-│   │   └── KafkaProducerService     partition_key=persona_id/user_id로 전송. 동기 처리 금지
+│   │   └── KafkaProducerService     partition_key=session_id로 전송. 동기 처리 금지
 │   ├── product/                     상품 조회 API (MySQL)
 │   ├── recommend/
 │   │   ├── RankingService           Redis 유저Feature × MySQL 상품Feature → 정렬
