@@ -21,6 +21,7 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   - rage_click / dead_click 은 생성하지 않는다 (실제 UI 오작동에서만 나오는 신호)
   - scroll_depth 는 프론트와 같은 10% 단위로 남기되, 가중치는 최대 도달 1건만 적용한다
   - actor_type 은 전부 synthetic
+  - 상세 진입은 page_view + product_view 를 함께 남긴다 (프론트와 동일)
 
 실행
   python gen_behavior_logs.py --limit 50                    # 맛보기. 파일로 저장
@@ -232,6 +233,10 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
     e.new_page("product_detail")
     e.tick(300, 1200)
     e.emit("page_view", gid, navigation_source=entry_source)
+    # 프론트가 상세 진입에서 page_view 직후 product_view 를 같은 page_view_id 로 남긴다
+    # (frontend/src/lib/logger.ts 의 trackProductView). 둘 다 가중치 1.0 이라
+    # 하나만 만들면 합성 로그가 실제 로그보다 상품당 1.0 만큼 가볍다.
+    e.emit("product_view", gid, navigation_source=entry_source)
 
     n_sec = max(1, round(len(DETAIL_LAYOUT) * depth_target / 100))
     depth = 0
@@ -426,8 +431,9 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
     for j, g in enumerate(neg):
         e = Emitter(sink, p["persona_id"], base + timedelta(days=step * j), rng)
         e.sid = "seed"
-        e.new_page("product_detail")
-        e.emit("page_view", g, navigation_source="direct", seeded=True)
+        # new_page / page_view 는 visit_detail 이 낸다. 여기서 또 내면 상세 진입 한 번에
+        # page_view 가 2건, page_view_id 가 2개 생겨 프론트와 어긋난다.
+        # 시드 표시는 e.sid = "seed" 로 이미 되어 있다.
         visit_detail(e, g, [], rng,
                      depth_target=int(rng.choice(SC["neg_seed_depth_choices"])),
                      engaged=False, entry_source="direct", SC=SC)
