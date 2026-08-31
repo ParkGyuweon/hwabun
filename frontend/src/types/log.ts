@@ -22,6 +22,12 @@ export type P0EventName =
    */
   | 'product_view'
   | 'product_impression'
+  /**
+   * 화면 이동 클릭. 상품을 지목하지 않는다.
+   * 홈으로 가기처럼 상품과 무관한 이동을 product_click 으로 남기면
+   * product_id 가 null 인 클릭이 섞여 상품별 클릭 수와 노출 대비 클릭률이 어긋난다.
+   */
+  | 'navigation_click'
   | 'product_click'
   | 'section_view'
   | 'section_dwell'
@@ -182,6 +188,7 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
 
   scroll_backtrack: 'comparison',
   variant_select: 'comparison',
+  navigation_click: 'session',
   product_click: 'comparison',
   recommendation_click: 'comparison',
 
@@ -229,6 +236,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
 
   // 비교 — 후보를 좁혔다
   variant_select: 2.0,
+  // 화면 이동이라 상품 선호가 아니다
+  navigation_click: 0,
   product_click: 1.0,
   recommendation_click: 1.5,
 
@@ -260,8 +269,20 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
    */
   section_view: 0,
 
-  // 기준선. 상품 단위 조회는 product_view 가 담당하므로 page_view 와 중복 가중하지 않는다
-  page_view: 1.0,
+  /**
+   * 화면 이동은 0 이다.
+   *
+   * 상세에서 page_view 와 product_view 가 **둘 다 product_id 를 싣는다.**
+   * 집계는 product_id 가 있고 가중이 양수인 이벤트를 전부 그 상품에 귀속시키므로,
+   * 양쪽 다 1.0 이면 상세 진입 한 번을 두 번 센다.
+   * 페르소나 300명 실측에서 두 이벤트의 귀속 가중 합이 1,378 로 정확히 같았다.
+   *
+   * 상품 단위 조회는 product_view 가 담당한다. 여기는 목록·장바구니에서도
+   * 발생하므로 상품 선호의 기준선으로 쓸 수 없다. section_view 를 0 으로 둔 것과
+   * 같은 이유다 — 한 행동을 두 이벤트가 세면 한쪽을 0 으로 둔다.
+   */
+  page_view: 0,
+  /** 상품 단위 조회. **선호도 척도의 기준선**이다 */
   product_view: 1.0,
 
   /**

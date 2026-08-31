@@ -14,6 +14,37 @@ export function SourceBadge({ kind }: { kind: 'real' | 'mock' }) {
   );
 }
 
+/**
+ * 화면 맨 위에 놓는 한 문장.
+ *
+ * 5초 테스트는 화면을 잠깐 보여주고 가린 뒤 "무엇을 봤고 다음에 무엇을 할지" 를
+ * 묻는다. 지표 카드만 늘어놓은 화면은 그 답을 못 준다. 그래서 지표보다 위에
+ * 결론을 문장으로 둔다. 숫자는 아래에서 근거를 댄다.
+ *
+ * 표본 수를 함께 보여준다. 몇 건을 보고 낸 판단인지 모르면 그 판단을 믿을 수 없다.
+ */
+export function VerdictBanner({
+  headline,
+  reason,
+  action,
+  sampleSize,
+}: {
+  headline: string;
+  reason: string;
+  action: string;
+  sampleSize: number;
+}) {
+  return (
+    <section className="verdict">
+      <p className="verdict__eyebrow">지금 손봐야 할 것</p>
+      <h2 className="verdict__headline">{headline}</h2>
+      <p className="verdict__reason">{reason}</p>
+      <p className="verdict__action">{action}</p>
+      <p className="verdict__sample">표본 {sampleSize.toLocaleString()}건</p>
+    </section>
+  );
+}
+
 export function Panel({
   title,
   source,

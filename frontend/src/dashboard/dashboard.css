@@ -1,19 +1,32 @@
 /*
  * Insight Console — 브랜드 담당자용 대시보드.
  *
- * 흑백 단색. 색으로 상태를 구분하지 않고 굵기·크기·명도만 쓴다.
- * 지표 화면에서 색은 판단을 앞질러 버리기 쉽다 — 빨간 숫자는 읽기 전에 나쁜 것이 된다.
- * 판단은 보는 사람이 한다.
+ * HWABUN 브랜드 색을 쓰되 **숫자에는 색을 칠하지 않는다.**
+ * 빨간 숫자는 읽기 전에 나쁜 것이 된다. 좋고 나쁨의 판단은 보는 사람이 한다.
+ * 색은 "어디를 먼저 볼지" 만 알려준다 — 막대와 추세선, 강조 한 곳에만 쓴다.
+ *
+ * 표본이 적어 믿을 수 없는 값은 색이 아니라 투명도로 낮춘다.
+ * 색을 바꾸면 "나쁜 값" 으로 읽히고, 흐리면 "덜 확실한 값" 으로 읽힌다.
  */
 
 :root {
-  --ink: #111111;
-  --ink-soft: #55555a;
-  --ink-faint: #98989e;
-  --line: #e6e6ea;
-  --line-soft: #f0f0f3;
-  --ground: #f5f5f7;
+  /* 본문. Charcoal — 순검정보다 눈이 덜 아프다 */
+  --ink: #2b2b2b;
+  --ink-soft: #6b7280;
+  --ink-faint: #9aa0a6;
+
+  --line: #e9ecef;
+  --line-soft: #f2f4f5;
+  /* Warm Ivory. 흰 바탕보다 오래 봐도 편하다 */
+  --ground: #faf7f1;
   --panel: #ffffff;
+
+  /* 브랜드 색. 강조와 자료 표시에만 쓴다 */
+  --brand: #a8c96e;
+  --brand-soft: #d8e9c3;
+  --accent: #e68fa1;
+  --accent-soft: #f7dfe4;
+  --support: #7a5b43;
 
   --radius: 14px;
   --radius-sm: 8px;
@@ -98,9 +111,11 @@ body {
 }
 
 .sidebar__nav button.is-active {
-  background: var(--ink);
-  color: #ffffff;
+  /* 현재 화면 표시. 지표가 아니라 위치 안내라 브랜드 색을 그대로 쓴다 */
+  background: var(--brand-soft);
+  color: var(--ink);
   font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 
 .sidebar__foot {
@@ -206,6 +221,65 @@ body {
 
 /* ---------- KPI ---------- */
 
+/* ---------- 결론 한 줄 ---------- */
+
+/*
+ * 지표보다 위, 가장 크게. 5초 안에 이것만 읽어도 다음 행동이 정해져야 한다.
+ * 브랜드 보조색을 왼쪽 띠로만 쓴다. 배경을 통째로 칠하면 경고창처럼 읽혀서,
+ * 매번 나오는 이 영역이 매번 사고처럼 보인다.
+ */
+.verdict {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.verdict__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.verdict__headline {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.verdict__reason {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.verdict__action {
+  margin: 6px 0 0;
+  padding: 10px 14px;
+  background: var(--brand-soft);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.verdict__sample {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* 표본이 적어 믿기 어려운 값. 색이 아니라 투명도로 낮춘다 */
+.is-thin {
+  opacity: 0.45;
+}
+
 .kpi {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -294,7 +368,8 @@ body {
 .bars__fill {
   display: block;
   height: 100%;
-  background: var(--ink);
+  /* 자료 표시에만 브랜드 색을 쓴다. 숫자는 계속 Charcoal 하나로 간다 */
+  background: var(--brand);
   border-radius: 999px;
 }
 
@@ -333,10 +408,20 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  background: var(--ink);
-  color: #ffffff;
+  background: var(--brand-soft);
+  color: var(--ink);
   border-radius: 9px;
   padding: 9px 14px;
+}
+
+/*
+ * 가장 크게 새는 구간.
+ * 조사에서 나온 "행동으로 이어지지 않는다" 는 불만에 대한 답이라,
+ * 어디를 손봐야 하는지가 색으로 먼저 보여야 한다.
+ */
+.funnel__row.is-leak .funnel__bar {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .funnel__label {
@@ -367,21 +452,37 @@ body {
 }
 
 .line-chart__area {
-  fill: var(--line-soft);
+  fill: var(--brand-soft);
+  opacity: 0.55;
 }
 
 .line-chart__line {
   fill: none;
-  stroke: var(--ink);
+  stroke: var(--brand);
   stroke-width: 2;
   stroke-linejoin: round;
 }
 
 .line-chart__dot {
-  fill: var(--ink);
+  fill: var(--support);
 }
 
 /* ---------- 표 ---------- */
+
+/* 이벤트 이름 같은 코드 조각. 본문과 톤을 분리해 훑어 읽기를 방해하지 않는다 */
+.table__code {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-left: 6px;
+}
+
+/* 고객군 매트릭스. 농도가 값이므로 칸을 정사각에 가깝게 */
+.table--matrix td.matrix__cell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+}
 
 .table-wrap {
   overflow-x: auto;

@@ -427,7 +427,15 @@
   justify-content: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.18s ease;
+  /*
+   * visibility 까지 꺼야 한다.
+   * 부모의 pointer-events: none 은 자식이 auto 로 되살릴 수 있어서,
+   * 안 보이는 Quick Look 버튼이 이미지 위 클릭을 가로챈다.
+   * 상세로 가려고 이미지를 눌렀는데 요약 창이 뜨고, 없던 quick_look 로그가 남는다.
+   * 사라질 때는 페이드가 끝난 뒤에 꺼지도록 delay 를 준다.
+   */
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;
 }
 
 
@@ -435,7 +443,8 @@
 .card:focus-within .card__hover {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.18s ease;
+  /* 나타날 때는 기다리지 않는다 */
+  transition: opacity 0.18s ease, visibility 0s;
 }
 
 /* 세포라의 Quicklook: 이미지 하단에 붙는 반투명 회색 바 */
