@@ -164,7 +164,7 @@
               },
               "generator_type": {
                 "type": "string",
-                "enum": ["python_batch", "agent_realtime"]
+                "enum": ["python_batch", "agent_llm"]
               }
             }
           }

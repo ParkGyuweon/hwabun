@@ -166,6 +166,44 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "generator_type")
 
+    def test_agent_llm_generator_type_is_allowed(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "actor_type": "synthetic",
+                "source": "simulator",
+                "persona_id": "PA00001",
+                "properties": {
+                    "scenario_id": "normal_day",
+                    "simulation_run_id": "run-20260831-001",
+                    "generator_type": "agent_llm",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assertEqual([], result.errors)
+
+    def test_legacy_agent_realtime_generator_type_is_rejected(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "actor_type": "synthetic",
+                "source": "simulator",
+                "persona_id": "PA00001",
+                "properties": {
+                    "scenario_id": "normal_day",
+                    "simulation_run_id": "run-20260831-001",
+                    "generator_type": "agent_realtime",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[enum] $.properties.generator_type")
+
     def test_jsonl_input(self) -> None:
         second_event = copy.deepcopy(self.user_event)
         second_event["event_id"] = "evt-user-0002"

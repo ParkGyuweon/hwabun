@@ -31,7 +31,7 @@ Frontend
 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트로 조정 |
 | 서버 메타 필드 | Kafka payload에는 `received_at`, `source`, `request_id`, `event_index` 포함. Spark는 수집 시각, 유입 경로, 요청 단위 추적, batch 내 Event 순서 식별 기준으로 사용 |
 | 계층별 중복 처리 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준으로 중복 제거 |
-| 대표 Event 선정 | 동일 `event_id`는 `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건을 정본으로 사용 |
+| 대표 Event 선정 | 동일 `event_id`는 `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건을 정본으로 사용 |
 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리 |
 | `product_view` | MR !24가 `dev`에 반영됨. 상세 진입 시 `page_view` 직후 별도 Event로 직접 전송하며, 목록 클릭 진입과 URL 직접 진입을 모두 포함하고 `product_id` 필수 |
 | `product_view.navigation_source` | `page_view`와 같은 값을 유지. 상품 URL 직접 진입은 `session_start`로 기록 |
@@ -140,7 +140,7 @@ processed_at = 12:00:05
 | Kafka/Raw | 같은 `event_id` 중복 수신을 정상 가능성으로 본다 |
 | Data/Spark | `cleaned_events` 생성 전 `event_id` 기준으로 deduplication 한다 |
 | Dedup 기준 | 같은 `event_id` 중 가장 먼저 수신된 1건을 대표 Event로 사용한다 |
-| 대표 Event 선택 정렬 | `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 순으로 정렬한다 |
+| 대표 Event 선택 정렬 | `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 순으로 정렬한다 |
 | Fact/Mart 입력 | `product_event_fact`, `content_interest_fact`, `funnel_session_fact`, DW Mart는 중복 제거 후 Dataset만 입력으로 사용한다 |
 | 중복 원본 | `raw_events`에는 보존한다. 필요하면 후속으로 `duplicate_events` 또는 audit view를 만들 수 있다 |
 | Front 필수 전제 | 같은 행동을 재전송할 때 `event_id`를 새로 만들면 안 된다 |
@@ -217,7 +217,7 @@ Processed Dataset에서 반복적으로 사용하는 공통 필드는 아래 기
 | `page_type` | string | N | 화면 유형 |
 | `scenario_id` | string/null | Y | 시나리오 ID. 시뮬레이션 분석에서는 필수 |
 | `simulation_run_id` | string/null | Y | 시뮬레이션 실행 ID. synthetic에서는 필수 |
-| `generator_type` | string/null | Y | synthetic 생성 방식. 예: `python_batch`, `agent_realtime` |
+| `generator_type` | string/null | Y | synthetic 생성 방식. 예: `python_batch`, `agent_llm` |
 | `environment` | string | N | `local`, `dev`, `loadtest` 등 |
 | `product_id` | string/null | Y | 상품 대상 Event에서 필수 |
 | `category_id` | string/null | Y | 상품 카테고리. 상품 대상 Event에서는 권장 |
@@ -237,7 +237,7 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `event_time` | `occurred_at` | timestamp 정규화 |
 | `request_id` | Backend payload | Kafka payload에 포함. 과거 Raw/누락 Event는 NULL 가능 |
 | `event_index` | Backend payload | Kafka payload에 포함. batch 안 Event 순서 |
-| `source` | Backend payload 또는 fallback 파생 | Kafka payload 값을 우선 사용. 누락 시 현재 Collector 기준과 맞춰 `actor_type='synthetic' → simulator`, 그 외 → `web`으로 fallback 파생한다. 서버 생성 Event는 후속 필요 시 `server` |
+| `source` | Backend payload 또는 fallback 파생 | Kafka payload 값을 우선 사용. 누락 시 현재 Collector 기준과 맞춰 `actor_type='synthetic' → simulator`, 그 외 → `web`으로 fallback 파생한다. 서버 생성 Event는 후속 도입 시 schema version을 올려 확장한다 |
 | `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` | E2E 기준 Raw 물리 위치는 `properties` 내부이고, Processed에서 컬럼으로 승격한다. `actor_type='synthetic'`이면 필수 |
 | `generator_type` | `properties.generator_type` | `actor_type='synthetic'`이면 필수 승격 대상이다. 100명 agent와 9,900명 Python batch의 생성 방식 구분은 `source`가 아니라 이 필드로 한다. Producer가 값을 보내지 않으면 `simulation_run_id`로 run 메타데이터를 Join해 보정하고, 그것도 없으면 NULL로 두고 품질 flag를 남긴다 |
 | `persona_source` | Raw에 없음. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join | Persona 정적 속성이므로 Event에 반복 저장하지 않는다. Processed Fact에도 승격하지 않고 DW Dimension Join으로 해석한다 |
@@ -299,7 +299,7 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 
 ### 8.3 synthetic Event 검증 규칙
 
-`actor_type='synthetic'`인 Event는 실행 단위 메타데이터가 있어야 Dimension Join과 표본 필터가 성립한다. Collector는 `properties`를 검증 없이 통과시키므로 실질적인 강제 지점은 Spark다.
+`actor_type='synthetic'`인 Event는 실행 단위 메타데이터가 있어야 Dimension Join과 표본 필터가 성립한다. Collector는 누락을 Kafka 전송 전에 거절하고, Spark는 방어적으로 같은 검증을 유지한다.
 
 | 조건 | 처리 | error_code |
 | --- | --- | --- |
@@ -336,7 +336,7 @@ event_id = business dedup key
 | `intent` | string | Event 의미 |
 | `occurred_at` | timestamp/string | 클라이언트 행동 발생 시각 원본 |
 | `received_at` | timestamp | Collector 수신 시각 |
-| `source` | string/null | `web`, `simulator`, `server`. 현재 Kafka payload 포함, 누락 시 Processed에서 fallback 파생 |
+| `source` | string/null | `web`, `simulator`. 현재 Kafka payload 포함, 누락 시 Processed에서 fallback 파생 |
 | `persona_id` | string/null | Persona ID |
 | `session_id` | string | 쇼핑 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
@@ -431,7 +431,7 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 
 | 처리 | 기준 |
 | --- | --- |
-| 중복 제거 | 같은 `event_id`는 `received_at ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 사용. 중복 원본은 `raw_events`에만 남고, downstream Fact/Mart에는 전달하지 않음 |
+| 중복 제거 | 같은 `event_id`는 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 사용. 중복 원본은 `raw_events`에만 남고, downstream Fact/Mart에는 전달하지 않음 |
 | 타입 정리 | timestamp, int, decimal, boolean 파싱 |
 | 사용자 ID 생성 | synthetic이면 `user_id=persona_id`, 실제 Web은 로그인/익명 ID 정책 확정 전까지 NULL 허용 |
 | 지연 계산 | `latency_ms = received_at - event_time` |

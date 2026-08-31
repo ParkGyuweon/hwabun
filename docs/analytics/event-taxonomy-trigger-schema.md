@@ -263,7 +263,7 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | --- | --- |
 | 발생 시각 | 클라이언트에서 행동이 발생한 시각을 `occurred_at`에 담고, 서버 수신 시각은 `received_at`으로 별도 저장 |
 | 중복 제거 책임 | Backend Collector는 Redis/DB로 중복 차단하지 않아도 된다. Raw는 중복 수신을 허용하고, Data/Spark Processed 단계에서 `event_id` 기준으로 중복 제거한다 |
-| 대표 Event 선정 | 같은 `event_id`가 여러 건이면 `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 기준의 최초 1건을 정본으로 사용한다 |
+| 대표 Event 선정 | 같은 `event_id`가 여러 건이면 `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준의 최초 1건을 정본으로 사용한다 |
 | 재시도 조건 | Front가 `sendBeacon`, keepalive, 재시도로 같은 Event를 다시 보낼 때는 같은 `event_id`를 유지한다 |
 | 노출 중복 | 노출/스크롤/섹션 조회는 `event_id` 외에 `dedupe_key`를 추가로 사용할 수 있다 |
 | 세션 연결 | 같은 쇼핑 흐름은 동일 `session_id`, 같은 페이지 방문은 동일 `page_view_id`를 사용 |
@@ -320,7 +320,7 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 
 ### 8.1 Schema 흐름
 
-Front → Collector → Kafka 구간에서는 같은 Raw Event Schema를 유지한다. Collector는 Event 구조를 바꾸지 않고 검증, 수신 시각 추가, Kafka 전송만 담당한다.
+Front → Collector → Kafka 구간에서는 같은 Raw Event Schema를 유지한다. Collector는 Event 구조를 바꾸지 않고 검증, 서버 메타 필드 추가, Kafka 전송을 담당한다.
 
 ```text
 Frontend LogEnvelope
@@ -334,7 +334,7 @@ Frontend LogEnvelope
 
 ### 8.2 Raw Event Schema
 
-프론트가 Collector로 보내는 LogEnvelope는 아래 구조를 기준으로 한다. 서버 메타 필드인 `received_at`, `source`, `request_id`, `event_index`는 Collector가 검증 후 Kafka payload에 추가한다.
+프론트가 Collector로 보내는 LogEnvelope는 아래 구조를 기준으로 한다. 서버 메타 필드인 `received_at`, `source`, `request_id`, `event_index`는 Collector가 검증 후 Kafka payload에 추가한다. Kafka Raw Event 경계는 LogEnvelope 14개 필드와 Collector 부가 4개 필드의 총 18개 필드다. `properties`는 항상 JSON object이며 값이 없으면 `{}`를 사용한다.
 
 ```json
 {
@@ -361,7 +361,7 @@ Frontend LogEnvelope
 }
 ```
 
-E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`로 둔다. `1.0.0-draft`는 JSON Schema와 구현 계약을 확정한 뒤 올릴 후보 버전이다. 요청 body의 top-level `schema_version`과 각 Event의 `schema_version`이 함께 존재하면 값은 같아야 한다.
+E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`로 둔다. `1.0.0-draft`는 JSON Schema와 구현 계약을 확정한 뒤 올릴 후보 버전이다. 요청 body의 top-level `schema_version`과 각 Event의 `schema_version`이 다르면 Collector가 전체 batch를 400으로 거절한다.
 
 Event 계약의 단일 출처는 이 문서와 요약 문서(`event-contract-summary.md`)다. `frontend/src/types/log.ts`는 프론트 구현 미러이며, 변경 MR에서는 문서와 코드의 Event 목록, intent, properties 동기화 여부를 함께 확인한다. 실행 가중치 상수는 `log.ts`를 원본으로 사용한다. `SCHEMA_VERSION` 기준은 Data가 정하고 변경 MR 담당자가 문서와 구현값을 같이 올린다. 계약 확정 전인 이번 변경은 `0.2.0-draft`에 묶되, 이후에는 payload 변경 없는 설명/오탈자 수정은 patch, Event 또는 optional property 추가는 minor, 필드 삭제·이름/타입 변경·필수 전환·enum 의미 변경처럼 하위 호환되지 않는 변경은 major 후보로 본다.
 
@@ -369,7 +369,7 @@ Event 계약의 단일 출처는 이 문서와 요약 문서(`event-contract-sum
 
 Collector는 Raw Event의 의미 구조를 바꾸지 않고 서버에서만 알 수 있는 메타 필드를 추가할 수 있다.
 
-BE 커넥터 담당 확인 결과(2026-08-31), 현재 Kafka payload에 포함되는 `received_at`, `source`, `request_id`, `event_index` 구조를 최종 Raw Kafka 계약으로 사용한다. Spark는 이 네 필드를 수집 시각, 유입 경로, 요청 단위 추적, batch 내 Event 순서 식별 기준으로 사용한다.
+BE 커넥터 담당 확인 결과(2026-08-31), 현재 Kafka payload에 포함되는 `received_at`, `source`, `request_id`, `event_index` 구조를 최종 Raw Kafka 계약으로 사용한다. 네 필드는 Kafka Event마다 항상 생성되며, Spark는 이를 수집 시각, 유입 경로, 요청 단위 추적, batch 내 Event 순서 식별 기준으로 사용한다.
 
 ```json
 {
@@ -403,12 +403,12 @@ BE 커넥터 담당 확인 결과(2026-08-31), 현재 Kafka payload에 포함되
 | field | 설명 |
 | --- | --- |
 | `received_at` | Collector가 Event를 받은 서버 시각 |
-| `source` | Event 유입 경로. 현재 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 기록 |
+| `source` | Event 유입 경로. 현재 Raw Schema는 `web`, `simulator`만 허용하며 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 기록 |
 | `request_id` | 한 번의 batch 요청을 묶는 식별자. Kafka payload와 HTTP 응답에 포함 |
 | `event_index` | batch 안 Event 순서. Collector가 0부터 부여해 Kafka payload에 포함 |
 | `collector_version` | Collector 배포 버전. 선택 |
 
-Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition + kafka_offset`을 우선 사용한다. Processed `cleaned_events`에서 동일 `event_id`를 정리할 때는 `received_at ASC`, `kafka_partition ASC`, `kafka_offset ASC` 순으로 대표 Event를 고른다. 현재 Kafka key가 `session_id`이고 재시도 Event가 같은 `session_id`를 유지하므로, 같은 `event_id` 중복은 보통 같은 partition에 쌓여 offset 순서가 안정적인 보조 기준이 된다.
+Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition + kafka_offset`을 우선 사용한다. Processed `cleaned_events`에서 동일 `event_id`를 정리할 때는 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 순으로 대표 Event를 고른다. 현재 Kafka key가 `session_id`이고 재시도 Event가 같은 `session_id`를 유지하므로, 같은 `event_id` 중복은 보통 같은 partition에 쌓여 topic/offset 순서가 안정적인 보조 기준이 된다.
 
 ### 8.4 공통 필드 정의
 
@@ -420,7 +420,7 @@ Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition 
 | `intent` | string | Y | `session/exposure/interest/comparison/validation/hesitation/conversion/friction` |
 | `occurred_at` | timestamp | Y | 행동 발생 시각 |
 | `received_at` | timestamp | Server | Collector 수신 시각. Kafka payload 포함 |
-| `source` | string | Server | `web`, `simulator`, `server`. 현재 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 포함한다. `server`는 후속 서버 내부 Event용 예약값 |
+| `source` | string | Server | `web`, `simulator`. 현재 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 포함한다. 서버 내부 Event는 후속 도입 시 schema version을 올려 확장한다 |
 | `request_id` | string | Server | batch 요청 단위 식별자. Kafka payload와 HTTP 응답에 포함 |
 | `event_index` | integer | Server | batch 안 Event 순서. Kafka payload 포함 |
 | `persona_id` | string/null | 조건부 | Persona 기반 이벤트일 때 사용 |
@@ -435,7 +435,7 @@ Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition 
 | `experiment_id` | string/null | N | A/B 테스트 또는 추천 정책 실험 |
 | `ab_variant` | string/null | N | A/B 그룹 |
 | `product_id` | string/null | Event별 | 상품 대상 Event일 때 필수. 값은 보고 있는 상품이 아니라 Event 대상 상품 기준 |
-| `properties` | object | Y | Event별 세부 속성 |
+| `properties` | object | Y | Event별 세부 속성. 항상 JSON object이며 값이 없으면 `{}` |
 
 `product_id`는 Event의 대상 상품을 의미한다. 예를 들어 A 상품 상세에서 추천 상품 B를 클릭하면 top-level `product_id`는 B이고, A는 `properties.context_product_id`로 보낸다. 컨텍스트가 없거나 대상과 같으면 `context_product_id`는 생략한다. 섹션 체류·스크롤처럼 화면 자체를 대상으로 하는 Event는 보고 있는 상품을 `product_id`로 둔다.
 
@@ -445,7 +445,7 @@ Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition 
 | --- | --- | --- |
 | `scenario_id` | Y | 시뮬레이션 상황 ID. 예: `normal_day`, `sale_burst` |
 | `simulation_run_id` | Y | 시뮬레이션 실행 1회 식별자 |
-| `generator_type` | Y | 생성 방식. 예: `python_batch`, `agent_realtime` |
+| `generator_type` | Y | 생성 방식. 예: `python_batch`, `agent_llm` |
 
 `persona_source`는 Event에 반복 저장하지 않고 `persona_id`로 Persona Dimension을 Join해 확인한다.
 
@@ -931,19 +931,19 @@ Dashboard 조회용 DW/Mart 상세 구조는 `dw-schema.md`에 분리한다.
 | `session_id/page_view_id` 없음 | bad event 격리 |
 | `sequence_no` 없음 | 경고 후 수신 순서 보조 사용, 가능하면 bad 처리 |
 | 필수 properties 누락 | bad event 격리 |
-| 중복 `event_id` | `received_at ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 `cleaned_events`와 downstream Fact/Mart에 전달 |
+| 중복 `event_id` | `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 `cleaned_events`와 downstream Fact/Mart에 전달 |
 | 너무 늦게 도착한 Event | watermark 정책에 따라 late event 처리 |
 | `actor_type=synthetic` | 실제 사용자와 분리 집계 가능하도록 필수 저장 |
-| `actor_type=synthetic`인데 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type` 중 누락 | Spark semantic validation에서 `invalid_properties`로 bad event 격리. 실행 단위 Dimension Join이 끊기고 표본 필터가 무효가 되기 때문 |
+| `actor_type=synthetic`인데 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type` 중 누락 | Collector validation에서 거절하고, Spark semantic validation에서도 방어적으로 `invalid_properties`로 bad event 격리. 실행 단위 Dimension Join이 끊기고 표본 필터가 무효가 되기 때문 |
 | `actor_type=user`인데 위 runtime metadata가 들어옴 | 무시하고 경고 flag. Web Event에는 적용하지 않는 계약이다 |
 
-synthetic runtime metadata의 강제 지점은 아래처럼 나눈다. Collector는 `properties`를 구조 변경 없이 통과시키므로, Collector에 이 검증을 추가하는 것은 선택 사항이다.
+synthetic runtime metadata의 강제 지점은 아래처럼 나눈다. Collector도 누락을 검증하고, Spark는 방어 목적으로 같은 검증을 유지한다.
 
 | 지점 | 책임 |
 | --- | --- |
 | Simulator(Producer) | Event 생성 시 3개 값을 항상 채운다. 1차 책임 |
-| Spark semantic validation | 누락 Event를 bad event로 격리한다. 실질적 강제 지점 |
-| Collector | 현재는 `properties` 통과. 강제하려면 별도 구현이 필요하며 E2E 필수는 아니다 |
+| Collector | `actor_type='synthetic'` Event의 runtime metadata 3종 누락을 Kafka 전송 전에 거절한다 |
+| Spark semantic validation | 누락 Event를 방어적으로 bad event로 격리한다 |
 
 ### 13.1 신뢰도 / 비정상 로그 감점 기준 초안
 
@@ -983,8 +983,8 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 합의 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트 결과로 조정 |
 | 합의 | 서버 메타 필드 | BE 커넥터 담당 확인 완료(2026-08-31). Kafka payload에는 `received_at`, `source`, `request_id`, `event_index` 포함 |
 | 합의 | 계층별 중복 처리 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준으로 중복 제거 |
-| 합의 | 대표 Event 선정 | 동일 `event_id`는 `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건을 정본으로 사용 |
-| 합의 | `source` 기준 | 현재 Collector는 `actor_type=synthetic → simulator`, 그 외 → `web`으로 기록. 서버 내부 Event는 후속 필요 시 `server` |
+| 합의 | 대표 Event 선정 | 동일 `event_id`는 `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건을 정본으로 사용 |
+| 합의 | `source` 기준 | 현재 Raw Schema는 `web`, `simulator`만 허용한다. 서버 내부 Event는 후속 도입 시 schema version을 올려 확장 |
 | 합의 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리하는 방향. 정확한 응답 포맷은 Backend 구현 시 확정 |
 | 합의 | `session_start.page_view_id` | `session_start` 발생 시점에 첫 `page_view_id`를 발급하고 첫 `page_view`와 공유. 세션 첫 `page_view`는 `navigation_source=session_start`로 구분 |
 | 합의 | `product_view` 생성 위치 | MR !24가 `dev`에 반영됨. 상세 진입 시 `page_view` 직후 별도 Event로 직접 전송하며, 목록 클릭 진입과 URL 직접 진입을 모두 포함하고 `product_id` 필수 |
@@ -993,8 +993,8 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 합의 | `section_dwell` 합산 위치 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
-| 초안 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. 강제 지점은 Simulator + Spark, Collector 검증은 선택 |
-| 초안 | `persona_source` 위치 | Event에 싣지 않는다. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인 |
+| 합의 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. 강제 지점은 Simulator + Collector + Spark |
+| 합의 | `persona_source` 위치 | Event에 싣지 않는다. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인 |
 | 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
 | 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
 | 초안 | DW 집계 방식 | 서로 다른 grain의 Fact는 목표 Mart grain으로 먼저 집계한 뒤 Join |
