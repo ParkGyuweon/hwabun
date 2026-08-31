@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -337,6 +338,7 @@ def main(argv: list[str] | None = None) -> None:
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     print(rendered)
     if config.report_path:
+        Path(config.report_path).parent.mkdir(parents=True, exist_ok=True)
         with open(config.report_path, "w", encoding="utf-8") as report_file:
             report_file.write(rendered + "\n")
     if report["status"] != "passed":

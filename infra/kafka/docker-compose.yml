@@ -26,9 +26,9 @@ services:
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: "1"
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
-      KAFKA_LOG_DIRS: "/tmp/kraft-combined-logs"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
     volumes:
-      - kafka-data:/tmp/kraft-combined-logs
+      - kafka-data:/var/lib/kafka/data
     healthcheck:
       test:
         - CMD-SHELL
