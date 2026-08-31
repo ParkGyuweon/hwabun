@@ -147,3 +147,26 @@ Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하
 현재 Q2는 전체 snapshot을 `overwrite`하는 MVP다. 운영 환경에서 Raw가 커지면
 날짜/offset 범위 증분 처리와 transactional upsert를 도입하되, 정본 비교 규칙과
 출력 grain은 유지한다.
+
+## Q3 세션·상품 Fact
+
+Q3는 Q2의 `cleaned_events`만 입력으로 사용한다. 따라서 Raw의 재전송 중복은
+Q2 정본 선택 이후 downstream fact에 들어오지 않는다.
+
+```bash
+spark-submit streaming/jobs/derive_facts_job.py \
+  --input-path data/processed/cleaned_events \
+  --sessionized-path data/processed/sessionized_events \
+  --product-fact-path data/processed/product_event_fact
+```
+
+`sessionized_events`는 `session_id → sequence_no → event_time → received_at →
+event_id` 순으로 `event_order`를 만들고 앞뒤 Event 이름과 sequence gap을
+기록한다. 이 배치 작업은 Structured Streaming watermark를 사용하지 않으므로
+`is_late_event`는 NULL로 남긴다.
+
+`product_event_fact`는 상품 대상 Event만 남긴다. 일반 Event는
+`item_index=0`으로 저장하고, `purchase`와 `begin_checkout`의 `items[]`는
+`items[].product_id` 기준으로 explode한다. 구매 매출은 `quantity * unit_price`
+인 `item_revenue`만 합산하며 주문 전체 금액 `order_value`를 상품별로 합산하지
+않는다.

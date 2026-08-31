@@ -10,6 +10,13 @@ from streaming.jobs.clean_events_job import (
     CleanEventsConfig,
     parse_args as parse_clean_args,
 )
+from streaming.jobs.derive_facts_job import (
+    DEFAULT_PRODUCT_FACT_PATH,
+    DEFAULT_SESSIONIZED_PATH,
+    PRODUCT_EVENT_NAMES,
+    DeriveFactsConfig,
+    parse_args as parse_derive_args,
+)
 
 
 class RawSinkConfigTest(unittest.TestCase):
@@ -81,6 +88,24 @@ class CleanEventsConfigTest(unittest.TestCase):
     def test_empty_output_path_is_rejected(self):
         with self.assertRaises(ValueError):
             CleanEventsConfig(cleaned_path=" ")
+
+
+class DeriveFactsConfigTest(unittest.TestCase):
+    def test_product_event_scope_matches_processed_contract(self):
+        self.assertIn("product_view", PRODUCT_EVENT_NAMES)
+        self.assertIn("purchase", PRODUCT_EVENT_NAMES)
+        self.assertNotIn("view_cart", PRODUCT_EVENT_NAMES)
+
+    def test_defaults_point_to_q2_and_fact_outputs(self):
+        config = parse_derive_args([])
+
+        self.assertEqual("data/processed/cleaned_events", config.input_path)
+        self.assertEqual(DEFAULT_SESSIONIZED_PATH, config.sessionized_path)
+        self.assertEqual(DEFAULT_PRODUCT_FACT_PATH, config.product_fact_path)
+
+    def test_empty_fact_path_is_rejected(self):
+        with self.assertRaises(ValueError):
+            DeriveFactsConfig(product_fact_path="")
 
 
 if __name__ == "__main__":
