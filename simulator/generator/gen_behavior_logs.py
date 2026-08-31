@@ -23,6 +23,7 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   - scroll_depth 는 프론트와 같은 10% 단위로 남기되, 가중치는 최대 도달 1건만 적용한다
   - actor_type 은 전부 synthetic
   - 상세 진입은 page_view + product_view 를 함께 남긴다 (프론트와 동일)
+  - 장바구니 화면을 방문해 view_cart 를 남기고, 일부는 담았던 이탈 상품을 뺀다
 
 실행
   python gen_behavior_logs.py --limit 50                    # 맛보기. 파일로 저장
@@ -88,6 +89,16 @@ SCENARIO = {
     # [미정] 찜 확률
     "wishlist_p_target": 0.45,
     "wishlist_p_bounce": 0.08,
+
+    # [미정] 장바구니 화면 방문·후회 재현
+    #   p_cart_regret: 이탈 상품 하나를 충동적으로 담았다가 장바구니에서 빼는 확률.
+    #     "담았다 빼기" 는 가장 명확한 부정 신호이고, user_vector 의 UNDO 경로
+    #     (converted 에서 제거 -> v_u- 로 이동) 를 실제로 태우는 유일한 동선이다.
+    #   빼는 대상을 **이탈 상품**으로 고른 이유: 시드는 별점 4~5점을 준 상품이라
+    #     "담았다 뺐다" 가 데이터와 모순된다. 이탈 상품은 평점이 없어 모순이 없다.
+    "p_cart_regret": 0.22,
+    #   장바구니 화면 자체를 열어보는 확률 (후회가 없어도 확인차 들어간다)
+    "p_view_cart": 0.70,
 
     # [미정] 상세 페이지 내 상호작용 확률
     "p_scroll_pause": 0.55,
@@ -452,6 +463,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
                price_usd=catalog[g]["price"])
 
     # 이탈 상품 — 노출 기반(같은 카테고리 -> 인기순). 취향으로 고르지 않는다
+    regret = None          # 담았다 뺄 이탈 상품 (최대 1개)
     cat = catalog[target]["cat"]
     pool = [g for g in by_cat.get(cat, []) if g not in seq]
     pool += [g for g in popular if g not in seq and g not in pool]
@@ -480,14 +492,37 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
             e.tick(); e.emit("add_to_cart", g, quantity=1,
                              price_usd=catalog[g]["price"], content_kind="cta")
+        elif regret is None and rng.random() < SC["p_cart_regret"]:
+            # 충동적으로 담는다. 아래 장바구니 화면에서 도로 뺀다
+            e.tick(); e.emit("add_to_cart", g, quantity=1,
+                             price_usd=catalog[g]["price"], content_kind="cta")
+            regret = g
         elif rng.random() < SC["wishlist_p_bounce"]:
             e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+
+    # ── 장바구니 화면 ────────────────────────────────────────────────────
+    # 프론트는 헤더 장바구니를 누를 때 view_cart 를 남긴다 (App.tsx openCart).
+    # product_id 는 싣지 않는다 — 화면 단위 이벤트라 특정 상품의 증거가 아니다.
+    if regret is not None or rng.random() < SC["p_view_cart"]:
+        cart = [g for g in seeds] + [target] + ([regret] if regret else [])
+        e.new_page("cart")
+        e.tick(); e.emit("page_view", navigation_source="in_app")
+        e.tick(300, 2000)
+        e.emit("view_cart",
+               item_count=len(cart), distinct_products=len(cart),
+               cart_value=round(sum(catalog[g]["price"] for g in cart), 2))
+        if regret is not None:
+            # 담았다 빼기. converted 에서 빠져 v_u- 로 넘어간다
+            e.tick(800, 6000)
+            e.emit("remove_from_cart", regret, quantity=1,
+                   price_usd=catalog[regret]["price"],
+                   cart_size_after=len(cart) - 1)
 
     e.new_page("product_list")
     e.tick(); e.emit("page_view", navigation_source="in_app")
     e.emit("exit_summary", products_viewed=len(bounce) + 1,
            converted=True, wishlisted=liked)
-    return {"seeds": len(seeds), "bounce": len(bounce)}
+    return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
 
 
 def main(limit, show, out, post=None, rps=0, include_agents=False):
