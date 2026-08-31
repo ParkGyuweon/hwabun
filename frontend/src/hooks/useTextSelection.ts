@@ -11,15 +11,14 @@ import { regionOfNode } from '../lib/section';
  * 복사(text_copy)는 페이지 밖으로 들고 나갈 만큼 관심이 있었다는 뜻이라 더 세게 본다.
  *
  * 긁은 구간의 텍스트를 남긴다. 상품 페이지에 이미 노출된 문구이고,
- * 어떤 성분·문장이 걸렸는지 알아야 분석에 쓸 수 있어서다.
- * 다만 사용자가 입력한 값은 절대 남기지 않는다 (입력 요소는 아래에서 제외한다).
+ * 다만 **긁은 원문은 남기지 않는다** (데이터 계약).
+ * 어느 구역에서 얼마나 긴 문장을 긁었는지까지만 남긴다.
+ * 사용자가 입력한 값도 남기지 않는다 (입력 요소는 아래에서 제외한다).
  */
 
 /** 이보다 짧으면 드래그가 아니라 클릭하다 미끄러진 것으로 본다 */
 const MIN_LENGTH = 2;
 
-/** 로그에 남길 최대 길이. 리뷰 전체를 긁는 경우가 있어 잘라 담는다 */
-const SNIPPET_LIMIT = 140;
 
 /** 드래그 도중 selectionchange 가 연달아 오므로 손을 뗀 뒤로 미룬다 */
 const SETTLE_MS = 350;
@@ -61,11 +60,14 @@ export function useTextSelection(pageViewKey: string) {
       if (eventName === 'text_selection' && current.text === lastReported) return;
       lastReported = current.text;
 
+      /*
+       * 원문은 싣지 않는다 (데이터 계약).
+       * 어느 구역에서 얼마나 긴 문장을 긁었는지까지만 남긴다.
+       * 대시보드의 "긁어간 문장" 화면은 이 값으로는 만들 수 없다.
+       */
       track(eventName, {
         ...regionOfNode(current.anchor),
         text_length: current.text.length,
-        text_snippet: current.text.slice(0, SNIPPET_LIMIT),
-        truncated: current.text.length > SNIPPET_LIMIT,
       });
     };
 

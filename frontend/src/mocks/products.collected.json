@@ -3756,7 +3756,12 @@
       "https://www.sephora.com/productimages/product/p54509-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A silky-soft moisturizing toner that gently purifies and immediately rehydrates complexion.",
+      "what_else": "This product is non comedogenic and dermatologist tested for safety.",
+      "suggested_usage": "-Apply to a cotton pad and sweep gently over face and throat after cleansing, avoiding the eye area.\n-Use AM and PM to improve skintone, texture, and clarity.",
+      "brand_story": "Lancôme epitomizes the French Touch with feminine, effortless, Parisian-chic beauty. With luxurious textures, cutting-edge active ingredients, high-potency pigments, and sensual fragrances, every woman can feel unique, empowered, and chic."
+    }
   },
   "P7880": {
     "sku_id": "487694",

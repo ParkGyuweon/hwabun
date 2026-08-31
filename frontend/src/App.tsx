@@ -143,7 +143,12 @@ export default function App() {
   }, []);
 
   const goHome = useCallback(() => {
-    track('product_click', { product_id: null, entry_source: 'breadcrumb_home' });
+    /*
+     * 홈으로 가는 것은 상품 클릭이 아니다.
+     * product_click 으로 남기면 product_id 가 null 인 클릭이 섞여서 상품별
+     * 클릭 수와 노출 대비 클릭률이 어긋난다. 화면 이동으로 분리한다.
+     */
+    track('navigation_click', { target: 'home', entry_source: 'breadcrumb' });
     window.history.pushState({ productId: null, cart: false }, '', '/');
     setCartOpen(false);
     setProductId(null);
@@ -162,15 +167,28 @@ export default function App() {
    * 장바구니 열기. GA4 표준 퍼널의 view_cart 를 여기서 남긴다.
    * effect 에서 남기면 StrictMode 가 두 번 실행한다. 명시적 행동 지점에서만 찍는다.
    */
-  const openCart = useCallback(() => {
-    track('view_cart', {
+  const cartSummary = useCallback(
+    () => ({
       item_count: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       distinct_products: cartItems.length,
       cart_value: cartItems.reduce((sum, item) => sum + item.price_usd * item.quantity, 0),
-    });
+    }),
+    [cartItems],
+  );
+
+  /**
+   * 장바구니 요약은 뒤로가기로 들어올 때도 실어야 한다.
+   * 열기 버튼에만 실으면 같은 view_cart 인데 진입 경로에 따라 필드가 있다 없다
+   * 하게 되고, 분석하는 쪽이 장바구니 규모를 셀 수 없다.
+   */
+  const cartSummaryRef = useRef(cartSummary);
+  cartSummaryRef.current = cartSummary;
+
+  const openCart = useCallback(() => {
+    track('view_cart', cartSummary());
     window.history.pushState({ productId, cart: true }, '', '?cart=1');
     setCartOpen(true);
-  }, [cartItems, productId]);
+  }, [cartSummary, productId]);
 
   /** 같은 상품·옵션이면 수량을 합친다 */
   const addToCart = useCallback((item: CartItem) => {
@@ -235,7 +253,10 @@ export default function App() {
       // 뒤로 온 화면은 보던 자리에서 이어봐야 한다
       restoreScrollRef.current = true;
       if (nextCart) {
-        track('view_cart', { navigation_source: 'history_back' });
+        track('view_cart', {
+          ...cartSummaryRef.current(),
+          navigation_source: 'history_back',
+        });
       }
       setCartOpen(nextCart);
       setProductId(next);

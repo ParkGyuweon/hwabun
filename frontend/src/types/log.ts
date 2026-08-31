@@ -22,6 +22,12 @@ export type P0EventName =
    */
   | 'product_view'
   | 'product_impression'
+  /**
+   * 화면 이동 클릭. 상품을 지목하지 않는다.
+   * 홈으로 가기처럼 상품과 무관한 이동을 product_click 으로 남기면
+   * product_id 가 null 인 클릭이 섞여 상품별 클릭 수와 노출 대비 클릭률이 어긋난다.
+   */
+  | 'navigation_click'
   | 'product_click'
   | 'section_view'
   | 'section_dwell'
@@ -182,6 +188,7 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
 
   scroll_backtrack: 'comparison',
   variant_select: 'comparison',
+  navigation_click: 'session',
   product_click: 'comparison',
   recommendation_click: 'comparison',
 
@@ -229,6 +236,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
 
   // 비교 — 후보를 좁혔다
   variant_select: 2.0,
+  // 화면 이동이라 상품 선호가 아니다
+  navigation_click: 0,
   product_click: 1.0,
   recommendation_click: 1.5,
 
