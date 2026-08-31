@@ -25,7 +25,7 @@
     }
   },
   "P248404": {
-    "sku_id": null,
+    "sku_id": "1217710",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p248404-av-01-zoom.jpg",
@@ -48,7 +48,12 @@
       "https://www.sephora.com/productimages/product/p248404-av-20-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A fragrance-free, gentle cleanser that effectively removes makeup, dirt, and grime, leaving skin soft and supple.",
+      "what_else": "This product is allergy-tested, free of artificial fragrances and colorants, and safe for sensitive skin.",
+      "suggested_usage": "-Dampen the face and dispense a dime-sized portion of cleanser onto fingertips.\n-Gently massage onto all areas of the face.\n-Remove with water or a soft, damp washcloth.\n-Use twice daily, morning and night.",
+      "brand_story": "First Aid Beauty (a.k.a. FAB) provides must-have skin care products for every age and skin type.  FAB was founded by Lilli Gordon, a long-time beauty veteran inspired to elevate the drugstore classics with scientifically advanced formulations and luxurious consistencies. \r\n\r\nGordon—who also believes that hard-working, irritant-free skin care doesn’t have to be greasy or bland—created a comprehensive collection that ranges from everyday essentials to products that provide intense therapy for serious skin problems (including facial redness and eczema)."
+    }
   },
   "P248407": {
     "sku_id": "1217744",
@@ -577,7 +582,11 @@
       "https://www.sephora.com/productimages/product/p406712-av-09-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "An ultra-hydrating, refreshing vitamin B5 gel that replenishes nutrients, visibly brightens, and improves the appearance of skin texture and tone, while delivering intense hydration throughout the day.",
+      "what_else": "D.E. only uses clean, non-toxic ingredients that either directly benefit the skin’s health or support the integrity and effectiveness of our formulations. They never take into account an ingredient’s synthetic or natural status, but instead choose based on its safety and bio-compatibility. You won’t find silicones, chemical screens, sensitizing colorants, perfumes, or fragrant essential oils of any kind in their products, making them appropriate for all skin.\n\nThis product is noncomedogenic, cruelty-free, vegan, and formulated without gluten, while the brand is a Supporter of IEF (International Elephant Foundation).",
+      "suggested_usage": "-A.M. or P.M., apply evenly to clean, dry face, neck, chest, and backs of hands.\n-Vitamins B5 and C work together to deliver skin care benefits, so mix with C-Firma&trade; Day Serum first thing in the morning.\n-When combined with our Virgin Marula Luxury Face Oil, it creates an addictive blend that deeply quenches dry, dehydrated skin.\n-Tip: great for use on airplanes or in dry climates, B-Hydra is the ultimate hydration booster. Mix with any serum, cream, or oil to add an extra shot of hydration and a pro-vitamin B5."
+    }
   },
   "P409800": {
     "sku_id": "1802669",
@@ -588,7 +597,13 @@
       "https://www.sephora.com/productimages/product/p409800-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null,
+    "description": {
+      "what_it_is": "A collection of cleansing and makeup-removing wipes, each with a skin-refreshing benefit.",
+      "what_else": "No need to rinse. These wipes are clinically proven suitable for all skin types. Each pack contains 25 wipes and is ideal for travel.",
+      "clinical_results": "Coconut Water Cleansing Wipes:\nIn a use test on 31 volunteers after first use:\n- 87% said that the wipes left skin feeling soft\n- 71% said that sensations of tightness disappeared\n\nRose Cleansing Wipes:\nIn a use test on 31 volunteers after first use:\n- 100% said that the wipes quenched the skin's thirst\n- 87% said that their faces appeared instantly more radiant\n- 87% said that skin looked more luminous\n\nYuzu Cleansing Wipes:\nIn a use test on 33 volunteers after first use:\n- 94% said that the wipes toned skin\n- 91% said that skin felt softer\n- 82% said that the wipes energized skin\n\nGreen Tea Exfoliating Wipes:\nIn a use test on 29 volunteers after first use:\n- 90% said that the wipes absorbed excess sebum effectively\n\nCharcoal Cleansing Wipes:\nIn a use test on 30 volunteers after first use:\n- 100% said that the wipes detoxified skin\n- 97% said that the wipes purified skin\n- 97% said that the wipes cleansed skin effectively",
+      "suggested_usage": "Cleansing Wipes:\n-Gently wipe over the face and eyes.\n-No need to rinse.\n-Close wipe latch well after each use to avoid drying out.\n\nExfoliating Wipes:\n-To eliminate impurities and dead cells, use the exfoliating side to scrub the face delicately with specific attention to the T zone.\n-To cleanse the face gently and remove makeup, use the smooth side, and gently wipe all over the face.\n-No need to rinse.\n-Close wipe latch well after each use to avoid drying out.\n\n Precautions:\n-Cleansing Wipes:\n-Do not dispose improperly.\n\nExfoliating Wipes:\n-Avoid contact with the eyes. In case of contact, rinse thoroughly.\n-Do not dispose improperly.",
+      "brand_story": "Beauty Uncomplicated\r\n\r\nWhat good are tons of options if you can't figure out how to choose between them? SEPHORA COLLECTION is about formulas that really deliver, paired with bite-sized bits of Sephora expertise that make all those options less overwhelming. Whether you're looking for a new color, a new formula, or even a whole new look, with SEPHORA COLLECTION it's easy to get exactly what you want."
+    },
     "description_source": {
       "slug": "cleansing-exfoliating-wipes-P409800",
       "timestamp": "20180127200854"
@@ -856,7 +871,7 @@
     }
   },
   "P415777": {
-    "sku_id": null,
+    "sku_id": "1912385",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p415777-av-01-zoom.jpg",
@@ -865,7 +880,17 @@
       "https://www.sephora.com/productimages/product/p415777-av-04-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A pro-quality AHA/BHA \"facial\" that resurfaces skin to visibly reveal greater clarity, improved skin texture and tone, and a more youthful-looking appearance.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dark Spots, Fine Lines, and Wrinkles, and Pores",
+      "highlighted_ingredients": [
+        "25% AHA Blend (glycolic + (T) tartaric, (L) lactic, (C) citric acids): Exfoliates dead surface skin cells and revs up surface turnover to smooth and brighten the appearance of skin.- Salicylic Acid (BHA) 2%: Penetrates to exfoliate and unclog inside pores as well as on the surface of the skin, providing greater visible skin clarity while soothing redness.- Chickpea Flour: Balances and brightens skin‘s appearance while combating visible dullness."
+      ],
+      "what_else": "Created with all skin in mind, Babyfacial‘s 25 percent AHA/2 percent BHA blend gently exfoliates the pore lining and resurfaces by removing dead skin cells. With an ideal pH level of 3.5, glycolic, tartaric, lactic, citric, and salicylic acids work together to ensure higher efficacy without visible redness and sensitization.Drunk Elephant is committed to using only ingredients that either directly benefit the health of the skin or support the integrity of their formulations. The brand focuses on healthy pH levels, formulations the skin recognizes, small molecular structure that’s easily absorbed, and effective active ingredients that also support the skin’s acid mantle. All of their products are designed to be mixed together—what Drunk Elephant calls making a smoothie. (This is true for all of their products except their sunscreen, Umbra, which sits on top of the skin, protecting it from UV damage.) The result is skin that is reset to its happiest, healthiest state.\nDrunk Elephant is a supporter of IEF (International Elephant Foundation) and is cruelty-free.Award Wins: -Glamour, 2019 Glamour Beauty Award -Martha Steward Living, 2019 Living Editor's Pick-Harpers Bazaar, 2019 Anti-Aging Award",
+      "clinical_results": "In an independent consumer-testing panel of 104 women ages 25 to 55:- 95% found skin appeared revived- 94% found skin to be deeply cleansed and resurfaced- 93% found skin texture baby-soft and smooth- 93% found skin appeared brighter and radiant- 92% found skin appeared to have a healthy glow and boosted clarity- 91% felt skin appeared fresh and youthful- 90% found skin appeared clearer and more even\nClean at SephoraClean at Sephora is a curation of brands committed to evolving the beauty industry. When you see our Clean seal, you can be sure this brand's products are formulated without certain ingredients that are potentially harmful to human health and the environment and also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Use once weekly.\n-Apply an even layer to clean, dry skin.\n-Leave on for 20 minutes.\n-Rinse thoroughly with lukewarm water and pat dry.\n-Follow immediately with Virgin Marula Luxury Facial Oil (sold separately) for best results.\n-Slight tingling may be experienced.\n-Tip: Think of T.L.C. Framboos™ Glycolic Night Serum (sold separately) as your nightly maintenance and Babyfacial™ as a weekly deep cleaning.\n-Bonus: Drunk Elephant included a mini Virgin Marula Luxury Facial Oil so you get the best results.-A note to new users: To get the most out of this product, Drunk Elephant recommends starting slow and giving your other potent treatments a break. This probably goes without saying, but if your skin is already in a confused state (i.e., sunburn, redness, or sensitized areas), wait until things are on the calm side before using this product. You‘ve made the investment and Drunk Elephant wants you to get the maximum results. Now go have your cells knocked off.-Top your results off with Drunk Elephant‘s Virgin Marula Luxury Facial Oil and Drunk Elephant thinks you‘ll have a very satisfied glow.\nPrecautions:-Babyfacial is not recommended for use by pregnant or nursing mothers. Always check with your doctor before using any new products while pregnant or nursing."
+    }
   },
   "P416341": {
     "sku_id": "1932193",
@@ -1155,7 +1180,13 @@
       "https://www.sephora.com/productimages/product/p421235-av-10-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A two-in-one formula with [20+1] potent plant extracts, including turmeric, for visibly smoother, firmer, more radiant skin.",
+      "what_else": "Made-to-measure application dispenses just the right amount for your skin type and climate. This formula is noncomedogenic and mineral oil-free.",
+      "clinical_results": "In a satisfaction test on 362 women, after 7 days of use:\n- 88% visibly smoother skin\n- 83% more radiant skin\n- 74% visibly firmer skin",
+      "suggested_usage": "-Turn the dial to customize dosage for your skin’s needs, and press the pump.\n-Mix both phases in the palm of your hand.\n-Apply morning and/or evening to clean face and neck.\n-Follow with your regular skincare.",
+      "brand_story": "At Clarins, the world of plants in an endless source of inspiration, innovation, and discovery. Our scientists travel the world in search of the most powerful plant ingredients and harness their natural energy for anti-aging treatments of unrivaled efficacy. Real beauty - made in France."
+    }
   },
   "P421243": {
     "sku_id": "2337673",
@@ -1624,14 +1655,19 @@
     "description": null
   },
   "P427416": {
-    "sku_id": null,
+    "sku_id": "2031409",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p427416-av-01-zoom.jpg",
       "https://www.sephora.com/productimages/product/p427416-av-02-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A concentrated serum with high-solubility caffeine and green tea cathechin to visibly reduce eye-contour pigmentation and puffiness.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dark Circles, Puffiness",
+      "suggested_usage": "Highlighted Ingredients:\n- Caffeine and Epigallocatechin Gallate (EGCG): Help to reduce the look of puffiness and dark circles underneath the eyes.\n\nIngredient Callouts: Free of parabens, formaldehydes, phthalates, mineral oil, oxybenzone, coal tar, and sulfates SLS & SLES. It is also vegan, gluten-free, and cruelty-free.\n\nWhat Else You Need to Know: This product is vegan, cruelty-free, and formulated without oil, alcohol, silicone, nuts, gluten, and fragrance."
+    }
   },
   "P427417": {
     "sku_id": "2031391",
@@ -1800,7 +1836,12 @@
       "https://www.sephora.com/productimages/product/p428819-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A lightweight moisturizer perfect for oily/combo skin, with vitamin-rich watermelon extract, hydrating hyaluronic acid, and soothing botanicals to boost radiance and glow.",
+      "what_else": "Glow Recipe features the best of Korean beauty, founded by beauty industry experts Sarah Lee and Christine Chang. Over the years, Sarah and Christine have met with thousands of customers, and again and again in these conversations, found women whose skincare needs were not met and whose lives simply didn't mesh with complicated, fussy routines. They tasked themselves with creating hybrid skincare that would simplify these needs while bringing life to everything they love about Korean skincare: innovation, excitement, and sensoriality. Glow Recipe skincare pairs the best of Korean technologies with the results-forward backbone of Western beauty. The needs and know-how of two vastly different beauty cultures are at work in these products, creating a Korean-inspired routine that's perfectly distilled.",
+      "suggested_usage": "-Can be used daily, morning and night.\n\nFor oily/combo skin:\n-Use as a moisturizer after treatment products.\n-Dispense one pump onto fingertips and pat onto skin until absorbed.\n\nFor dry skin:\n-as a serum after toning.\n-Dispense one pump onto fingertips and pat into skin until absorbed.",
+      "brand_story": "Glow Recipe was created by beauty industry veterans Sarah Lee and Christine Chang to elevate K-beauty to an everyday luxury. Hybrid textures encapsulate the philosophy of Korean skincare. Natural ingredients work overtime to deliver lasting hydration, building the foundation for visibly healthier skin."
+    }
   },
   "P429242": {
     "sku_id": "2435261",
@@ -2520,7 +2561,19 @@
       "https://www.sephora.com/productimages/product/p443840-av-18-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A hydrating and lightweight under-eye cream that helps to reduce the appearance of puffiness, dark circles, and fine lines.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Puffiness, Fine Lines and Wrinkles, and Dryness",
+      "highlighted_ingredients": [
+        "Caffeine: Reduces the look of puffiness.",
+        "Beautifeye&trade;: Reduces the appearance of dark circles.",
+        "Matrixyl 3000&trade; Peptide: Helps support collagen production."
+      ],
+      "ingredient_callouts": "Free of parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, and triclocarban, and contains less than one percent of synthetic fragrances. This product is also cruelty-free.",
+      "what_else": "A wake-up call for your eyes, this cream works wonders for the under-eye area, helping to reduce the appearance of puffiness and dark circles. The added Matrxyl 3000&trade; peptide can help reduce the appearance of fine lines, while the smooth texture provides a perfect canvas for makeup.",
+      "suggested_usage": "-Use in the AM and the PM.\n-After cleansing, apply a small amount onto finger and gently pat around the contour of the eye.\n-Can be combined with the use of other serums; follow with moisturizers.\n\nPrecautions:\n-Avoid the immediate eye area.\n-External use only.\n-Caffeine is a fantastic way to reduce puffiness and dark circles caused by a number of lifestyle factors such as lack of sleep, travelling, diet, and high salt intake amongst others. However, dark circles and puffiness can be caused by a number of factors. If you are genetically pre-dispositioned to dark circles caused by pigmentation underneath the eye or puffiness under the eye caused by fat deposits, unfortunately caffeine serum is unlikely to help."
+    }
   },
   "P443842": {
     "sku_id": "2211498",
@@ -2707,7 +2760,20 @@
       "https://www.sephora.com/productimages/product/p447791-av-04-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "An eye sleeping mask formulated with avocado, encapsulated retinol, and coffeeberry to help brighten, depuff and treat the appearance of dark circles.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dark Circles and Puffiness, Dryness, and Loss of Firmness and Elasticity",
+      "highlighted_ingredients": [
+        "Encapsulated Retinol: Helps to improve the look of uneven skin tone, and addresses the damage caused by daily exposure to pollutants and other free radicals; encapsulation of the retinol allows it to sit on the surface of the skin longer and release smaller amounts at a time, making it more gentle than traditional retinol treatments.",
+        "Avocado: A nutrient-dense fruit rich in antioxidants such as vitamin E and vitamin C, which are known to fight wrinkles and environmental aggressors; contains both avocado oil and avocado extract for the ultimate soothing and nourishing.",
+        "Coffeeberry: Packed with antioxidants, coffeeberry (the seed of the coffee plant) helps to revitalize, neutralize free radicals, and soothe."
+      ],
+      "ingredient_callouts": "This product is vegan and cruelty-free, and comes in recyclable packaging.",
+      "what_else": "Potent, encapsulated ingredients like retinol, hyaluronic acid, and niacinamide time release throughout all hours of the night, while avocado hydrates and nourishes, and coffeeberry helps to brighten and depuff the delicate under-eye area. The result is brighter, smoother, more awake-looking eyes by morning. This product has been ophthalmologist tested and dermatologist tested.\r\n\nClean at Sephora\r\n When you spot our Clean seal, you can be sure we’ve checked that this brand’s product is made without the ingredients you told us you’d most like to avoid.\n\nClean at Sephora&trade; is formulated without:\nSulfates SLS and SLES, parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, triclocarban. All skincare, hair, and makeup brands with the Clean Seal have less than one percent of synthetic fragrances.",
+      "suggested_usage": "To use as a moisturizing sleeping mask:\r\n-After cleansing, apply a pea-size amount to under eye area and gently pat with ring finger into skin for optimal absorption.\n-Apply nightly.\n-Do not layer with an eye cream.\n-Use after cleansing and toning.\n-Wash off in the morning.\r\n\nTo use as a daytime eye treatment: \r\n-Follow instructions above.\n-If used during the day, layer an SPF that is safe for eye area on top of formula.",
+      "brand_story": "Glow Recipe was created by beauty industry veterans Sarah Lee and Christine Chang to elevate K-beauty to an everyday luxury. Hybrid textures encapsulate the philosophy of Korean skincare. Natural ingredients work overtime to deliver lasting hydration, building the foundation for visibly healthier skin."
+    }
   },
   "P448203": {
     "sku_id": "2246650",
@@ -3031,7 +3097,7 @@
     "description": null
   },
   "P455364": {
-    "sku_id": null,
+    "sku_id": "2335636",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p455364-av-01-zoom.jpg",
@@ -3063,7 +3129,18 @@
       "https://www.sephora.com/productimages/product/p455364-av-30-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A luxurious cleansing balm that gently dissolves makeup and excess oil without stripping sensitive, irritated skin of the moisture it needs.",
+      "skin_type": "Normal",
+      "concerns_text": "Dryness, Redness, and Acne and Blemishes",
+      "highlighted_ingredients": [
+        "Three-Percent Oat Kernel Oil: Gently supports skin’s moisture barrier.",
+        "One-Percent Colloidal Oatmeal: Helps to reduce the appearance of redness and soothe irritation."
+      ],
+      "ingredient_callouts": "This product is vegan and cruelty-free.",
+      "what_else": "This gentle cleanser is the first step in a routine to reduce redness. It combines soothing colloidal oatmeal with ceramides to support skin’s natural protective barrier. It is also formulated with oat kernel oil, a natural antioxidant that fights environmental stress for dewy, even skin with continued use.\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Use AM and PM.\n-Gently massage a small amount onto dampened face and neck.\n-Rinse thoroughly with water.\n-Follow with preferred serums and moisturizer."
+    }
   },
   "P455676": {
     "sku_id": null,
