@@ -1,6 +1,6 @@
 # Event Contract Summary
 
-상태: Draft  
+상태: Draft. Kafka payload 서버 메타 필드 계약은 BE 커넥터 담당 확인 완료(2026-08-31)
 목적: Frontend, Backend, Data, Dashboard 팀이 함께 합의할 Event Taxonomy, Trigger, Event Schema 요약본  
 상세 문서: `docs/analytics/event-taxonomy-trigger-schema.md`
 
@@ -16,9 +16,13 @@
 | 기본 단위 | 모든 행동은 공통 Envelope + Event별 properties로 전송 |
 | 세션 기준 | 하나의 쇼핑 흐름은 `session_id`, 하나의 페이지 방문은 `page_view_id` |
 | 상품 기준 | 상품 관련 Event는 `product_id` 필수 |
+| 상품 상세 조회 기준 | 상세 진입 시 `page_view(page_type=product_detail)` 직후 `product_view`를 별도 전송하고, 두 Event는 같은 `page_view_id`를 공유 |
+| 명세 단일 출처 | Event 계약(이름, 필수 필드, properties, enum)의 원본은 이 문서와 상세 문서(`event-taxonomy-trigger-schema.md`)다. `frontend/src/types/log.ts`는 프론트 구현 기준 미러로 관리한다 |
+| 가중치 단일 출처 | 가중치 **상수**는 예외로 `frontend/src/types/log.ts`가 원본이다. `batch/jobs/behavior_weights.py`가 이 파일을 파싱해 쓰고 파싱 실패 시 예외로 죽으므로, 문서에 숫자를 복사하면 조용히 어긋난다. 문서는 근거와 척도만 적는다 |
 | 성분/리뷰 기준 | 별도 Event를 늘리기보다 `section_id`, `content_kind`로 구분 |
 | 전송 방식 | Front Logger가 batch로 비동기 전송 |
 | 중복 제거 책임 | Backend Collector는 Redis/DB로 중복 차단하지 않아도 된다. Raw는 중복 수신을 허용하고, Data/Spark Processed 단계에서 `event_id` 기준으로 중복 제거한다 |
+| 대표 Event 선정 | 같은 `event_id`가 여러 건이면 `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 기준의 최초 1건을 정본으로 사용한다 |
 | 재시도 조건 | Front가 같은 Event를 재전송할 때는 반드시 같은 `event_id`를 유지한다 |
 | 노출 중복 | 노출/섹션 조회는 `event_id` 외에 별도 `dedupe_key`를 함께 둘 수 있다 |
 
@@ -126,11 +130,11 @@ Frontend LogEnvelope
 → Processed/DW 테이블
 ```
 
-Collector는 Event 구조를 바꾸지 않고 검증, `received_at` 추가, Kafka 전송을 담당한다. `request_id`는 HTTP 응답/Header에서 확인할 수 있고, `source`는 현재 Kafka payload 필드가 아니라 Processed 단계에서 `actor_type`, `environment`, 유입 경로를 기준으로 파생한다. 분석용 테이블 구조는 Spark 이후에 바뀐다.
+Collector는 Event 구조를 바꾸지 않고 검증, 서버 메타 필드 추가, Kafka 전송을 담당한다. BE 커넥터 담당 확인 결과(2026-08-31), 현재 Kafka payload에 포함되는 `received_at`, `source`, `request_id`, `event_index` 구조를 최종 Raw Kafka 계약으로 사용한다. `source`는 Collector가 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 기록한다. Raw 계층은 중복 수신 Event까지 그대로 보존하고, 분석용 테이블 구조와 중복 제거는 Spark 이후에 적용한다.
 
 ### 5.2 Raw Event Schema
 
-Collector가 Kafka에 넣는 최종 Raw Event는 아래 flat 구조를 기준으로 한다. 프론트는 `received_at`을 제외한 LogEnvelope를 보내고, Collector가 Kafka payload에 `received_at`을 추가한다.
+Collector가 Kafka에 넣는 최종 Raw Event는 아래 flat 구조를 기준으로 한다. 프론트는 서버 메타 필드를 제외한 LogEnvelope를 보내고, Collector가 Kafka payload에 서버 메타 필드를 추가한다.
 
 ```json
 {
@@ -148,6 +152,9 @@ Collector가 Kafka에 넣는 최종 Raw Event는 아래 flat 구조를 기준으
   "actor_type": "user",
   "environment": "local",
   "received_at": "2026-08-28T01:13:12.420Z",
+  "source": "web",
+  "request_id": "req_20260828_001",
+  "event_index": 0,
   "properties": {
     "sku_id": "SKU342-01",
     "quantity": 1,
@@ -157,6 +164,8 @@ Collector가 Kafka에 넣는 최종 Raw Event는 아래 flat 구조를 기준으
 ```
 
 E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`로 둔다. `1.0.0-draft`는 JSON Schema와 구현 계약을 확정한 뒤 올릴 후보 버전이다. 요청 body의 top-level `schema_version`과 각 Event의 `schema_version`이 함께 존재하면 값은 같아야 한다.
+
+같은 `event_id`가 Raw에 여러 건 있으면 Processed의 `cleaned_events` 생성 단계에서만 중복 제거한다. 대표 Event는 `received_at ASC`, `kafka_partition ASC`, `kafka_offset ASC` 순으로 정렬했을 때 첫 번째 row다. 현재 Kafka key가 `session_id`이고 재시도 시 같은 `event_id`와 `session_id`를 유지하는 전제라 중복 Event는 보통 같은 partition에 들어가며, offset이 안정적인 tie-breaker가 된다. DW/Mart는 이 중복 제거가 끝난 Dataset만 입력으로 사용한다.
 
 ### 5.3 필수 공통 필드
 
@@ -168,8 +177,9 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 | `intent` | Y | Event의 마케팅 의미 |
 | `occurred_at` | Y | 클라이언트 발생 시각 |
 | `received_at` | Server | Collector 수신 시각. Kafka payload 포함 |
-| `source` | Derived | `web`, `simulator`, `server` 등. 현재는 Processed 단계에서 파생 |
-| `request_id` | Response | 한 번의 batch 요청을 묶는 ID. 현재는 HTTP 응답/Header 기준 |
+| `source` | Server | `web`, `simulator`, `server` 등. 현재 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 포함 |
+| `request_id` | Server | 한 번의 batch 요청을 묶는 ID. Kafka payload와 HTTP 응답에 포함 |
+| `event_index` | Server | batch 안 Event 순서. Kafka payload 포함 |
 | `persona_id` | 조건부 | Persona 기반 행동이면 필요 |
 | `session_id` | Y | 쇼핑 세션 ID |
 | `page_view_id` | Y | 페이지 방문 ID. `session_start`와 첫 `page_view`는 같은 값을 공유 |
@@ -194,7 +204,7 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 `persona_source`(`agent_sample`/`batch_sample`)는 Persona의 정적 속성이라 **Event에 싣지 않는다.** Dashboard에서 표본을 나눠 봐야 하면 `simulation_run_id → dim_simulation_run.persona_source`로 Join한다.
 
-`session_start.page_view_id`는 첫 `page_view`와 같은 값을 공유한다. 세션의 첫 `page_view`는 `properties.navigation_source='session_start'`로 구분한다.
+`session_start.page_view_id`는 첫 `page_view`와 같은 값을 공유한다. 세션의 첫 `page_view`는 `properties.navigation_source='session_start'`로 구분한다. 상품 상세 URL로 직접 진입한 경우에도 첫 `page_view` 직후 같은 `page_view_id`로 `product_view`를 남긴다.
 
 ### 5.4 Event별 주요 properties
 
@@ -206,20 +216,24 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 | --- | --- |
 | `session_start` | `entry_page`, `referrer`, `utm_source`, `utm_medium`, `utm_campaign` |
 | `page_view` | `navigation_source`, `referrer`, `route` |
-| `product_view` | `entry_source`, `list_id`, `position` |
+| `product_view` | `navigation_source`, `list_id`, `position`, `recommendation_id`, `context_product_id` |
 | `product_impression` | `list_id`, `position`, `visible_ratio` |
 | `product_click` | `list_id`, `position`, `entry_source`, `impression_event_id`, `context_product_id` |
 | `recommendation_impression` | `recommendation_id`, `list_id`, `position`, `algorithm`, `visible_ratio`, `context_product_id` |
 | `recommendation_click` | `recommendation_id`, `list_id`, `position`, `algorithm`, `impression_event_id`, `context_product_id` |
+| `impression_dwell` | `list_id`, `position`, `visible_ms`, `recommendation_id`, `algorithm` |
+| `recommendation_snapshot` | `recommendation_id`, `list_id`, `algorithm`, `size`, `ranking[]` |
 | `quick_look` | `list_id`, `position`, `entry_source`, `recommendation_id`, `context_product_id` |
-| `quick_look_close` | `dwell_ms`, `variants_viewed`, `added_to_cart`, `wishlisted` |
+| `quick_look_close` | `close_reason`(`backdrop`/`escape`/`close_button`/`open_detail`), `dwell_ms`, `variants_viewed`, `added_to_cart`, `wishlisted` |
 | `search` | `query_text`, `result_count`, `normalized_query` |
+| `filter_change` | `filter_kind`, `filter_value`, `from`, `result_count` |
+| `sort_change` | `sort_key`, `sort_direction`, `result_count` |
 | `section_view` | `section_id`, `content_kind`, `content_ref`, `visible_duration_ms` |
 | `section_dwell` | `section_id`, `content_kind`, `content_ref`, `dwell_ms`, `co_visible_blocks` |
 | `scroll_depth` | `depth_percent`, `section_id`, `content_kind` |
 | `accordion_toggle` | `section_id`, `content_kind`, `action` |
 | `review_filter_apply` | `filter`, `sort`, `result_count` |
-| `variant_select` | `variant_name`, `option_name`, `selected_value`, `previous_value`, `sku_id` |
+| `variant_select` | `sku_id`, `label`, `previous_sku_id`, `variant_group` |
 | `wishlist_toggle` | `action` |
 | `add_to_cart` | `sku_id`, `quantity`, `price_usd`, `entry_source`, `context_product_id` |
 | `view_cart` | `item_count`, `distinct_products`, `cart_value` |
@@ -231,6 +245,8 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 `section_dwell.dwell_ms`는 누적값이 아니라 구간 체류시간(delta)이다.
 
 `entry_source`는 상품 진입/장바구니 담기 경로를 나타낸다. 현재 값 후보는 `list_grid`, `promo_pick`, `similar_products`, `quick_look`, `cart` 등이다.
+
+`product_view.navigation_source`는 같은 상세 진입의 `page_view.navigation_source`와 동일한 값을 싣는다. 직접 URL 진입처럼 `session_start`가 첫 `page_view`를 남기는 경로는 `product_view.navigation_source='session_start'`로 둔다. 이 값은 유입 경로별 상세 조회 수를 나눌 수 있게 하므로 현재 계약에서는 유지한다.
 
 `recommendation_impression/click`은 상세 유사 상품뿐 아니라 목록/기획전의 `promo_pick` 리스트에서도 발생할 수 있다. `promo_pick`이 `skin_match_v0` 기반이어도 추천 CTR 산식은 동일하다.
 
@@ -244,9 +260,9 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 | intent | 의미 | 예시 |
 | --- | --- | --- |
-| `session` | 세션/페이지 경계 | `session_start`, `page_view`, `product_view` |
+| `session` | 세션/페이지 경계 | `session_start`, `page_view` |
 | `exposure` | 화면에 노출됨 | `product_impression`, `scroll_depth` |
-| `interest` | 관심 있게 봄 | `section_view`, `section_dwell`, `media_view`, `quick_look` |
+| `interest` | 관심 있게 봄 | `product_view`, `section_view`, `section_dwell`, `media_view`, `quick_look` |
 | `comparison` | 비교/탐색 | `product_click`, `variant_select`, `scroll_backtrack` |
 | `validation` | 구매 판단 근거 확인 | `accordion_toggle`, `review_filter_apply`, `text_selection` |
 | `hesitation` | 전환 전 망설임 | `hover_dwell`, `remove_from_cart` |
@@ -333,9 +349,13 @@ product_impression
 
 | 상태 | Event |
 | --- | --- |
-| FE 전달 기준 구현됨 | `session_start`, `page_view`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `product_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `remove_from_cart`, `quick_look`, `quick_look_close`, `exit_summary`, `scroll_depth`, `media_view`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
-| 보강 필요 | `product_view`, `ingredient_view_mode_change` |
-| 후속 화면 구현 후 확정 | `product_impression`, `search`, `filter_change`, `sort_change`, `compare_products`, `begin_checkout`, `purchase` |
+| `dev` 구현 완료(MR !24 포함, 35종) | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `exit_summary`, `scroll_depth`, `impression_dwell`, `recommendation_snapshot`, `media_view`, `quick_look`, `quick_look_close`, `remove_from_cart`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `sort_change`, `filter_change`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
+| 시뮬레이터 미생성(6종) | `ingredient_view_mode_change`, `text_copy`, `hover_dwell`, `dead_click`, `impression_dwell`, `recommendation_snapshot` |
+| 후속 화면 구현 후 확정 | `search`, `compare_products`, `begin_checkout`, `purchase` |
+
+`product_view`, `view_cart`, `remove_from_cart`, `quantity_change`, `recommendation_click`, `quick_look`, `quick_look_close`는 최신 `dev` 생성기에 반영됐다. FE가 언급하지 않은 `impression_dwell`, `recommendation_snapshot`을 포함해 현재 6종이 미생성이다.
+
+`dead_click`은 실제 UI 오작동에서만 나오는 신호라 생성기가 의도적으로 만들지 않는다. 나머지 5종이 실제 보강 대상이다.
 
 ## 10. 팀 합의 현황
 
@@ -343,14 +363,29 @@ product_impression
 
 | 상태 | 안건 | 결정 내용 |
 | --- | --- | --- |
+| 합의 | Event 명세 단일 출처 | Data 문서(`event-contract-summary.md`, `event-taxonomy-trigger-schema.md`)를 계약 원본으로 둔다. `frontend/src/types/log.ts`는 구현 미러이며 변경 MR에서 문서 동기화 여부를 함께 확인한다 |
 | 합의 | Raw Event Schema 기준 | Front JSON 구조를 유지하고, Backend는 큰 가공 없이 검증과 서버 메타 필드만 추가 |
 | 합의 | Event 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
-| 합의 | E2E Schema Version | 현재 구현 기준 `0.2.0-draft` 사용. `1.0.0-draft`는 추후 계약 확정 후 전환 |
+| 합의 | E2E Schema Version | 계약 확정 전인 현재는 `0.2.0-draft` 유지. 이후 payload 변경 없는 설명 수정은 patch, Event/optional property 추가는 minor, 필드 삭제·이름/타입 변경·필수 전환·enum 의미 변경은 major 후보 |
 | 합의 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트 결과로 조정 |
-| 합의 | 서버/파생 메타 필드 | Kafka payload에는 `received_at` 포함. `request_id`는 HTTP 응답/Header, `source`는 Processed 단계 파생 기준 |
-| 합의 | `source` 파생 | MVP는 `actor_type=user → web`, `actor_type=synthetic → simulator`, 서버 내부 Event는 `server` |
+| 합의 | 서버 메타 필드 | BE 커넥터 담당 확인 완료(2026-08-31). Kafka payload에는 `received_at`, `source`, `request_id`, `event_index` 포함 |
+| 합의 | 계층별 중복 처리 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준으로 중복 제거 |
+| 합의 | 대표 Event 선정 | 동일 `event_id`는 `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건을 정본으로 사용 |
+| 합의 | `source` 기준 | 현재 Collector는 `actor_type=synthetic → simulator`, 그 외 → `web`으로 기록. 서버 내부 Event는 후속 필요 시 `server` |
 | 합의 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리하는 방향 |
-| 합의 | `product_view` 생성 위치 | Front에서 별도 Event로 직접 전송 |
+| 합의 | `product_view` 생성 위치 | MR !24가 `dev`에 반영됨. 상세 진입 시 `page_view` 직후 별도 Event로 직접 전송하며, 목록 클릭 진입과 URL 직접 진입을 모두 포함하고 `product_id` 필수 |
+| 합의 | `product_view.navigation_source` | `page_view`와 같은 값을 유지한다. URL 직접 진입은 `session_start`로 기록 |
+| 합의/AI 보강 필요 | `product_view` 가중치 | `EVENT_WEIGHT.product_view=1.0`을 유지한다. 상품 벡터에는 `product_view`만 반영해야 하나 현재 `user_vector.py`가 `page_view=1.0`도 함께 누적하므로 AI 집계 수정이 필요하다 |
+| 합의 | 가중치 상수 단일 출처 | Event **명세**의 원본은 Data 문서지만, **가중치 상수**의 원본은 `frontend/src/types/log.ts`다. `batch/jobs/behavior_weights.py`가 이 파일을 직접 파싱하므로 문서에 숫자를 복사하지 않는다 |
+| 현행 구현 | `close_reason` 값 | `backdrop`, `escape`, `close_button`, `open_detail` 4종 |
+| 합의 | `quick_look` 가중치 | 현재 1.5를 유지한다. `added_to_cart`는 별도 Event로 이미 가산되므로 상향 조건으로 쓰지 않고, `variants_viewed`/짧은 체류 기반 조건부 가중치는 실측 후 별도 합의한다 |
+| 분석 초안 | Quick Look 존치 판단 | 같은 목록에 노출된 `(session_id, product_id)`를 Quick Look 사용/비사용+클릭으로 나눠 장바구니 전환율, 상세 이동률, 짧은 무상호작용 종료율, 창 안 완결률을 비교한다. 실제 사용자 로그의 기술 통계로 판단한다 |
+| 합의 | `product_view` 집계 분모 | 전환율 분모는 `product_view_sessions`(distinct `session_id`+`product_id`). `product_view_count`는 장바구니 왕복 시 재발화한다 |
+| 보강 필요 | 시뮬레이터 최신 Event | FE 35종 중 29종 생성. 미생성 6종이며 `dead_click` 제외 시 보강 후보 5종 |
+| 보강 필요 | 시뮬레이터 properties/enum | 10개 Event가 필수 property 또는 enum 계약과 다르다. Collector가 `properties`를 검증하지 않아 수집 단계에서 안 걸린다 |
+| 확인 요청 | `view_cart` 뒤로가기 경로 | popstate 경로에도 `item_count`, `distinct_products`, `cart_value`를 동일하게 실어 달라고 FE에 요청 |
+| 확인 요청 | breadcrumb 홈 이동 | `product_click(product_id=null)`은 상품 대상 Event 계약에 어긋난다. 상품 클릭 로그에서 제거하거나 navigation Event로 분리 요청 |
+| 확인 요청 | `text_snippet` 전송 | 선택 원문이 Raw Kafka payload에 남으므로 FE에서 제거 요청. Raw 저장이 꼭 필요하면 별도 합의 후 계약을 변경한다 |
 | 합의 | `section_dwell` 합산 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 초안 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. Web Event에는 미적용 |
@@ -362,9 +397,11 @@ product_impression
 | 초안 | DW 집계 방식 | 서로 다른 grain의 Fact는 목표 Mart grain으로 먼저 집계한 뒤 Join |
 | 초안 | 상품별 매출 | `items[]` explode 후 상품별 매출은 `item_revenue`, 주문 총액 검증은 `order_value` |
 | 구현 후 재검증 | 목록/구매 Trigger | 후속 화면 구현 직후 재검증 |
-| 현재 구현 | Kafka 기본값 | topic 기본값은 `activity-events`, message는 Event 1건 단위, key는 `persona_id` |
-| 미확정 | Kafka fallback | 실제 Web Event에서 `persona_id=NULL`일 때 partition key fallback은 Kafka/Spark 담당자와 합의 필요 |
+| 합의 | Kafka 기본값 | topic 기본값은 `activity-events`, message는 Event 1건 단위, key는 `session_id` |
+| 합의 | Kafka key 최종 기준 | `persona_id`가 null일 수 있는 Web Event까지 고려해 `session_id`를 partition key 기준으로 사용 |
 | 확장 | 관심도 가중치/비정상 행동 | MVP 이후 샘플 데이터와 QA 결과로 조정 |
+
+`SCHEMA_VERSION`은 Data가 계약 문서에서 기준을 정하고 해당 변경 MR 담당자가 문서와 `frontend/src/types/log.ts`를 함께 갱신한다. 이번 `product_view`는 계약 확정 전에 병합된 변경이라 `0.2.0-draft`를 유지한다. 이후에는 payload 변경 없는 설명/오탈자 수정은 patch, Event 또는 optional property 추가는 minor, 필드 삭제·이름/타입 변경·필수 전환·enum 의미 변경처럼 하위 호환되지 않는 변경은 major 후보로 본다.
 
 ## 11. 현재 문서와 추후 분리 기준
 
