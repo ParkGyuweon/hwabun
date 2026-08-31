@@ -18,6 +18,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   - 페르소나당 상품 1개를 목표로 떼고 나머지 전부를 시드로 사용
   - 시드는 시뮬레이션 시작 전 상태 (session_id = "seed")
   - 이탈 상품은 취향이 아니라 노출(같은 카테고리 / 인기순)로 고른다
+  - 노출에는 impression_dwell 을, 추천 섹션에는 recommendation_snapshot 을 남긴다
+    (가중 0 이지만 노출 대비 클릭과 위치 편향 보정에 필요하다)
   - dead_click 은 생성하지 않는다 (실제 UI 오작동에서만 나오는 신호).
     rage_click 은 부정 시드에서만 소량 생성한다 (300명 기준 15건)
   - scroll_depth 는 프론트와 같은 10% 단위로 남기되, 가중치는 최대 도달 1건만 적용한다
@@ -121,6 +123,17 @@ SCENARIO = {
     # [미정] Quick Look — 목록 카드에서 요약 창을 여는 동선.
     #   A/B 측정을 위해 **전용 난수 스트림**을 쓴다. 본 동선의 rng 를 건드리면
     #   Quick Look 을 켠 것만으로 이후 궤적이 통째로 달라져 비교가 불가능해진다.
+    # [미정] 성분 표시 방식 전환 — 칩(요약) <-> 원문. 검증 행동의 대표 신호다.
+    #   "성분을 보고 샀나 리뷰를 보고 샀나" 를 가르는 축이라 대시보드 핵심 화면에 쓰인다
+    "p_ingredient_mode": 0.30,
+    # [미정] 선택한 텍스트를 실제로 복사하는 확률 (text_selection 이 난 뒤)
+    #   페이지 밖으로 들고 나갈 만큼 관심이 있었다는 뜻이라 selection 보다 무겁다
+    "p_text_copy": 0.28,
+    # [미정] 담기 직전 버튼 위에서 망설이는 확률
+    "p_hover_before_cart": 0.40,
+    # [미정] 노출된 상품이 화면에 머문 시간을 남길 확률 (분모용, 가중 0)
+    "p_impression_dwell": 0.55,
+
     "p_quick_look": 0.18,     # 노출된 상품 하나를 열어볼 확률
     "p_ql_variant": 0.45,     # 창 안에서 옵션을 바꿔볼 확률
     "p_ql_add": 0.12,         # 창 안에서 바로 담을 확률
@@ -313,13 +326,27 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
             e.emit("section_view", gid, section_id=section, content_kind=kind,
                    content_ref=ref, visible_duration_ms=int(rng.integers(380, 1100)))
         # 유사 상품 섹션에 도달하면 추천 노출
-        if section == "similar_products":
+        if section == "similar_products" and rec_ids:
             rec_batch = "rec-%s-%d" % (gid, int(rng.integers(10**10, 10**11)))
+            # 무엇이 몇 번째로 노출됐는지 통째로 남긴다. 가중 0 이지만
+            # 위치 편향 보정에 필요하다 — 아래 놓인 좋은 상품은 선호와 무관하게
+            # 클릭이 적으므로, 클릭 로그를 그대로 학습에 쓰면 추천이 편향된다
+            e.emit("recommendation_snapshot", None,
+                   recommendation_id=rec_batch, list_id="similar_products",
+                   algorithm="same_category_v0", size=len(rec_ids),
+                   ranking=[{"product_id": r, "position": i}
+                            for i, r in enumerate(rec_ids, 1)])
             for pos, rid in enumerate(rec_ids, 1):
                 e.tick(20, 120)
                 e.emit("recommendation_impression", rid,
                        recommendation_id=rec_batch, list_id="similar_products",
                        algorithm="same_category_v0", position=pos)
+                # 화면에 얼마나 머물렀나. 위쪽일수록 오래 보인다
+                if rng.random() < SC["p_impression_dwell"]:
+                    e.emit("impression_dwell", rid,
+                           recommendation_id=rec_batch, list_id="similar_products",
+                           algorithm="same_category_v0", position=pos,
+                           visible_ms=int(rng.integers(400, 6000) / (1 + 0.15 * (pos - 1))))
             # 다음 상품을 추천으로 들어갈 수 있게 배치를 기억해 둔다.
             # 노출과 클릭이 같은 recommendation_id / position 을 써야 CTR 이 성립한다
             e.last_rec = (rec_batch, list(rec_ids))
@@ -338,9 +365,26 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
                 e.tick(); e.emit("accordion_toggle", gid, section_id=section,
                                  content_kind="ingredient_list", open=True)
             if rng.random() < SC["p_text_selection"]:
+                tlen = int(rng.integers(20, 200))
                 e.tick(); e.emit("text_selection", gid, section_id=section,
                                  content_kind="product_meta", content_ref="category",
-                                 text_length=int(rng.integers(20, 200)), truncated=False)
+                                 text_length=tlen, truncated=False)
+                # 고른 텍스트를 실제로 복사. 프론트는 같은 선택에 대해
+                # text_selection 뒤 copy 이벤트로 남긴다 (useTextSelection)
+                if rng.random() < SC["p_text_copy"]:
+                    e.tick(200, 2000)
+                    e.emit("text_copy", gid, section_id=section,
+                           content_kind="product_meta", content_ref="category",
+                           text_length=tlen, truncated=False)
+        # 성분 표시 방식 전환. 성분을 신경 쓰는 페르소나일수록 자주 바꿔 본다
+        # (SC 의 p_accordion 이 성향 6축의 ingredient 로 이미 조정돼 있다)
+        if engaged and section == "ingredients":
+            if rng.random() < SC["p_ingredient_mode"]:
+                for m in ("raw", "chip")[:int(rng.integers(1, 3))]:
+                    e.tick(300, 3000)
+                    e.emit("ingredient_view_mode_change", gid,
+                           section_id=section, mode=m)
+
         if engaged and section == "product_hero":
             for idx in range(int(rng.integers(2, 8))):
                 e.tick(150, 800)
@@ -388,6 +432,11 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
         e.tick(20, 120)
         e.emit("product_impression", None, product_id=g, position=pos,
                list_id="product_grid")
+        # 노출 대비 클릭을 재려면 "얼마나 보였나" 가 있어야 한다. 가중 0 이다
+        if rng.random() < SC["p_impression_dwell"]:
+            e.emit("impression_dwell", None, product_id=g, position=pos,
+                   list_id="product_grid",
+                   visible_ms=int(rng.integers(400, 5000) / (1 + 0.12 * (pos - 1))))
     # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
     # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
     # qrng 가 None 이면 이 동선 자체가 없다 (A/B 의 대조군)
@@ -597,6 +646,12 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
         if is_target:
             if rng.random() < SC["wishlist_p_target"]:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+            # 담을까 말까 재는 구간. 버튼 위에 올려두고 안 누른 시간이다
+            if rng.random() < SC["p_hover_before_cart"]:
+                e.tick(300, 2500)
+                e.emit("hover_dwell", g, section_id="product_hero",
+                       content_kind="cta", action="add_to_cart",
+                       dwell_ms=int(rng.integers(600, 9000)))
             e.tick(); e.emit("add_to_cart", g, quantity=1,
                              price_usd=catalog[g]["price"], content_kind="cta")
         elif regret is None and rng.random() < SC["p_cart_regret"]:
