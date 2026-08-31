@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>행동 신호 가중치 근거</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=Noto+Serif+KR:wght@500;700&display=swap">
+
+<style>
+  :root {
+    --ground: #fafafb;
+    --raise: #ffffff;
+    --ink: #171b1f;
+    --muted: #67727b;
+    --faint: #949ea6;
+    --line: #e2e6e9;
+    --line-strong: #cdd4d9;
+    --accent: #146a63;
+    --accent-soft: #e4f0ee;
+    --penalty: #a03d2c;
+    --penalty-soft: #f7e8e4;
+    --zero: #8b959d;
+
+    --f-display: "Noto Serif KR", Georgia, serif;
+    --f-body: "IBM Plex Sans KR", system-ui, -apple-system, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #131619;
+      --raise: #191d21;
+      --ink: #e7eaec;
+      --muted: #98a3ab;
+      --faint: #737e86;
+      --line: #262c31;
+      --line-strong: #384047;
+      --accent: #4fb3a8;
+      --accent-soft: #16302e;
+      --penalty: #d97a66;
+      --penalty-soft: #2f1e1a;
+      --zero: #7a848c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #131619;
+    --raise: #191d21;
+    --ink: #e7eaec;
+    --muted: #98a3ab;
+    --faint: #737e86;
+    --line: #262c31;
+    --line-strong: #384047;
+    --accent: #4fb3a8;
+    --accent-soft: #16302e;
+    --penalty: #d97a66;
+    --penalty-soft: #2f1e1a;
+    --zero: #7a848c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-weight: 300;
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px 120px;
+  }
+
+  /* ---------- 머리말 ---------- */
+
+  header.masthead {
+    padding: 84px 0 40px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(30px, 4.6vw, 46px);
+    line-height: 1.24;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    max-width: 62ch;
+    font-size: 16px;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .standfirst strong { color: var(--ink); font-weight: 500; }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--faint);
+    padding-top: 4px;
+  }
+
+  .meta b { color: var(--muted); font-weight: 500; }
+
+  /* ---------- 척도 설명 ---------- */
+
+  .scale-note {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 40px 0 8px;
+  }
+
+  .scale-note > div {
+    background: var(--raise);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .scale-note dt {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .scale-note dd {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  .scale-note dd b {
+    color: var(--ink);
+    font-weight: 500;
+    font-family: var(--f-mono);
+  }
+
+  /* ---------- 축 ---------- */
+
+  section.axis {
+    padding-top: 64px;
+    scroll-margin-top: 20px;
+  }
+
+  .axis-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line-strong);
+    padding-bottom: 12px;
+  }
+
+  .axis-head h2 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: 23px;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .axis-key {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .axis-lede {
+    max-width: 68ch;
+    font-size: 14.5px;
+    color: var(--muted);
+    margin: 16px 0 0;
+  }
+
+  .axis-lede strong { color: var(--ink); font-weight: 500; }
+
+  /* ---------- 행 ---------- */
+
+  .rows { margin-top: 26px; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 218px 96px 190px 1fr;
+    gap: 0 22px;
+    align-items: start;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .row:first-child { border-top: 1px solid var(--line); }
+
+  .behavior {
+    font-size: 14.5px;
+    font-weight: 400;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  .evt {
+    display: block;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 4px;
+    word-break: break-all;
+  }
+
+  /* 가중치 */
+  .w {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 19px;
+    font-weight: 600;
+    text-align: right;
+    line-height: 1.35;
+    padding-top: 1px;
+  }
+
+  .w.pos { color: var(--accent); }
+  .w.neg { color: var(--penalty); }
+  .w.nil { color: var(--zero); font-weight: 400; }
+
+  /* 척도 막대 — 모든 값을 하나의 기준선 위에 놓는다 */
+  .bar {
+    position: relative;
+    height: 10px;
+    margin-top: 11px;
+    background: var(--line);
+  }
+
+  .bar i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: block;
+  }
+
+  .bar .fill { background: var(--accent); }
+  .bar .fill.neg { background: var(--penalty); }
+
+  .bar .zero,
+  .bar .base {
+    width: 1px;
+    top: -3px;
+    bottom: -3px;
+  }
+
+  .bar .zero { background: var(--line-strong); }
+  .bar .base { background: var(--faint); }
+
+  .bar-legend {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--f-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: var(--faint);
+    margin-top: 5px;
+  }
+
+  .why {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.62;
+  }
+
+  .why strong { color: var(--ink); font-weight: 500; }
+
+  /* 근거 칩 */
+  .src {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 9px;
+    align-items: baseline;
+  }
+
+  .tag {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .tag.pub { background: var(--accent-soft); color: var(--accent); }
+  .tag.paper { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .tag.norm { background: var(--line); color: var(--muted); }
+  /* 추정은 의도적으로 약하게 보이게 한다 */
+  .tag.guess { background: none; color: var(--faint); border: 1px dashed var(--line-strong); }
+
+  .src-text { font-size: 12px; color: var(--faint); }
+  .src-text a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+  .src-text a:hover { color: var(--accent); }
+  a:focus-visible, .tag:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* 축별 주석 */
+  .axis-note {
+    margin-top: 22px;
+    padding: 16px 20px;
+    border-left: 2px solid var(--accent);
+    background: var(--raise);
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.65;
+    max-width: 74ch;
+  }
+
+  .axis-note strong { color: var(--ink); font-weight: 500; }
+  .axis-note code {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  /* ---------- 규칙 ---------- */
+
+  .rules { padding-top: 76px; }
+
+  .rules ol {
+    margin: 26px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+
+  .rules li {
+    background: var(--raise);
+    padding: 16px 22px;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .rules li b {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+    padding-top: 2px;
+  }
+
+  .rules li strong { color: var(--ink); font-weight: 500; }
+  .rules li code { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink); }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--faint);
+    line-height: 1.7;
+  }
+
+  footer code { font-family: var(--f-mono); font-size: 12px; }
+
+  @media (max-width: 860px) {
+    .row {
+      grid-template-columns: 1fr 88px;
+      gap: 4px 18px;
+    }
+    .behavior { grid-column: 1; }
+    .w { grid-column: 2; grid-row: 1 / span 2; }
+    .scale-cell { grid-column: 1 / -1; }
+    .why { grid-column: 1 / -1; margin-top: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">행동 로그 설계 근거</p>
+    <h1>어떤 행동을, 왜 그만큼의 무게로 세는가</h1>
+    <p class="standfirst">
+      화장품 커머스에서 수집하는 행동 이벤트 <strong>35종</strong>의 가중치와 그 근거다.
+      값은 전부 <strong>상품 상세 조회 1.0을 기준선</strong>으로 상대 배치했고,
+      외부 조사로 뒷받침되는 것과 우리가 정한 값을 구분해 표기했다.
+    </p>
+    <div class="meta">
+      <span><b>대상</b> PC 쇼핑 전용</span>
+      <span><b>기준</b> frontend/src/types/log.ts</span>
+      <span><b>상세</b> docs/analytics/marketing-signal-research.md</span>
+      <span><b>스키마</b> 0.2.0-draft</span>
+    </div>
+  </header>
+
+  <dl class="scale-note">
+    <div>
+      <dt>기준선</dt>
+      <dd><b>product_view = 1.0</b> · 절대값이 아니라 이 값에 대한 상대 위치가 의미다</dd>
+    </div>
+    <div>
+      <dt>범위</dt>
+      <dd><b>−2.0 … 4.0</b> · 감점은 별도 벡터로 빼고, 분모에 음수를 넣지 않는다</dd>
+    </div>
+    <div>
+      <dt>전제</dt>
+      <dd><b>PC 전용</b> · 포인터 이벤트의 수집률이 균일해 사용자 간 비교가 가능하다</dd>
+    </div>
+    <div>
+      <dt>근거 표기</dt>
+      <dd>
+        <span class="tag pub">공개</span> 출처 있음 ·
+        <span class="tag paper">논문</span> 학술 ·
+        <span class="tag norm">관행</span> 업계 ·
+        <span class="tag guess">추정</span> 우리가 정함
+      </dd>
+    </div>
+  </dl>
+
+  <main id="axes"></main>
+
+  <section class="rules">
+    <div class="axis-head">
+      <h2>값을 정할 때 지킨 규칙</h2>
+      <span class="axis-key">7 rules</span>
+    </div>
+    <ol>
+      <li><b>01</b><span><strong>기준선에 대한 상대 배치.</strong> <code>product_view</code> = 1.0을 놓고 나머지를 그 위아래로 잡는다. 절대값 자체에는 의미를 두지 않는다.</span></li>
+      <li><b>02</b><span><strong>노출은 0.</strong> 사용자의 의지가 아닌 것에 선호를 주지 않는다. 대신 클릭률의 분모로 쓴다.</span></li>
+      <li><b>03</b><span><strong>감점은 별도 벡터.</strong> 사용자 벡터의 분모에 음수를 넣으면 0에 가까워질 수 있다. 긍정·부정을 따로 만들어 최종 점수에서 뺀다.</span></li>
+      <li><b>04</b><span><strong>0.3짜리는 단독 판정 금지.</strong> <code>scroll_pause</code>, <code>hover_dwell</code>은 다른 신호와 함께일 때만 의미를 준다. GA4의 참여 판정이 OR 조건인 것과 같은 이유다.</span></li>
+      <li><b>05</b><span><strong>같은 행동도 대상에 따라 다르다.</strong> <code>content_kind</code>와 <code>section_id</code>를 가중치 조회 키에 포함한다. 성분에 머문 1초와 히어로에 머문 1초는 다르다.</span></li>
+      <li><b>06</b><span><strong>이중 가산 금지.</strong> 한 행동을 두 이벤트가 세면 한쪽을 0으로 둔다. <code>section_view</code>가 0인 이유다.</span></li>
+      <li><b>07</b><span><strong>추정은 추정이라고 쓴다.</strong> 어떤 플랫폼도 자사 가중치를 공개하지 않는다. 남의 값을 빌려 온 척하지 않는다.</span></li>
+    </ol>
+  </section>
+
+  <footer>
+    수치는 가설이므로 Ablation으로 검증한다 — 감점 축 제거, 암묵 신호 제거, 섹션 가중 균일화, 노출 가중 부여.
+    평가는 합성 로그가 아니라 <strong>실제 리뷰 Holdout</strong>으로 한다.<br>
+    출처 전문과 플랫폼별 조사는 <code>docs/analytics/marketing-signal-research.md</code>에 있다.
+  </footer>
+</div>
+
+<script>
+  // 척도: -2.0 … 4.0 을 한 트랙 위에 놓는다. 0 과 기준선 1.0 을 눈금으로 표시한다.
+  var MIN = -2, MAX = 4, SPAN = MAX - MIN;
+  var pct = function (v) { return ((v - MIN) / SPAN) * 100; };
+  var ZERO = pct(0), BASE = pct(1);
+
+  var AXES = [
+    {
+      key: 'conversion', title: '전환', lede:
+        '구매에 가장 가까운 행동. 구매 데이터가 없는 환경이라 <strong>장바구니가 전환의 대리 지표</strong>다.',
+      note: '<code>add_to_cart</code> 4.0과 <code>remove_from_cart</code> −2.0이 대칭이 아니다. 뺀 이유는 "싫어서"만이 아니라 예산·중복 구매일 수 있다. <strong>거부의 확신이 담은 것의 확신보다 약하므로</strong> 절반으로 뒀다.',
+      rows: [
+        ['장바구니에 담았다', 'add_to_cart', 4.0, '구매 데이터가 없는 환경에서 <strong>가장 강한 의도</strong>. 담고 사지 않아도 관심은 확실하다.', [['pub', '공개']], 'AI 추천 설계서 CART'],
+        ['찜했다', 'wishlist_toggle', 3.0, '즉시 구매는 아니지만 <strong>저빈도라 노이즈가 낮다</strong>. 네이버 인기도도 찜 수를 쓴다.', [['pub', '공개']], 'AI 설계서 LIKE · 네이버 인기도'],
+        ['수량을 바꿨다', 'quantity_change', 2.0, '수량을 조정할 만큼 <strong>구매를 구체적으로 검토</strong> 중이다.', [['guess', '추정']], ''],
+        ['장바구니를 열었다', 'view_cart', 1.0, '결제 직전 단계. 다만 담긴 상품 전체에 대한 행동이라 개별 상품 신호로는 약하다.', [['pub', '공개']], 'GA4 view_cart'],
+        ['장바구니에서 뺐다', 'remove_from_cart', -2.0, '<strong>가장 명확한 부정 신호.</strong> 담았다가 뺀 것은 검토를 거친 거부다.', [['guess', '추정']], '']
+      ]
+    },
+    {
+      key: 'validation', title: '검증', lede:
+        '결정을 굳히려고 확인하는 행동. <strong>일반 분석 도구가 답하지 못하는 구간</strong>이고, 우리가 파는 것이 바로 여기다 — 성분을 보고 샀나, 리뷰를 보고 샀나.',
+      note: '화장품은 피부 특성에 따른 <strong>개인 적합성</strong>이 상위 결정 요인이라는 논문 근거가 있다. 그래서 전성분 펼침과 리뷰 필터를 단순 클릭이 아니라 능동적 검증으로 본다.',
+      rows: [
+        ['전성분을 펼쳐 봤다', 'ingredient_view_mode_change', 1.5, '<strong>능동적 적합성 검증.</strong> 화장품 고유의 상위 결정 요인이다.', [['paper', '논문'], ['pub', '공개']], '피부 특성 기반 선호 · AI 설계서 INGREDIENT_VIEW'],
+        ['리뷰를 펼쳤다', 'review_expand', 1.5, '결정이 아니라 <strong>확인</strong> 단계. 리뷰로 판단을 굳힌다.', [['pub', '공개']], 'AI 설계서 REVIEW_VIEW'],
+        ['접힌 정보를 열었다', 'accordion_toggle', 1.5, '일부러 펼쳤다 = 의지. <strong>어느 섹션인지가 의미를 정한다.</strong>', [['guess', '추정']], ''],
+        ['리뷰에 조건을 걸었다', 'review_filter_apply', 1.0, '"나와 같은 피부 타입" 탐색. 개인 적합성 판단이다.', [['norm', '관행']], '리뷰 속성 활용'],
+        ['문장을 복사했다', 'text_copy', 1.0, '<strong>양면 신호.</strong> 관여는 크지만 <strong>여기서 답을 못 찾아</strong> 밖으로 들고 나갔다는 뜻이기도 하다.', [['paper', '논문']], '정보 탐색 이론(Information Scent)'],
+        ['문장을 드래그했다', 'text_selection', 0.5, '읽고 있다는 약한 증거. <strong>드래그는 개인 습관 편차가 크다</strong> — 읽는 줄을 따라 습관적으로 긁는 사람과 전혀 안 긁는 사람이 있다.', [['paper', '논문']], '정보 탐색 이론']
+      ]
+    },
+    {
+      key: 'comparison', title: '비교', lede:
+        '후보를 좁히는 행동. <strong>고른 조건 자체가 사용자 속성</strong>이라, 상품이 아니라 사람 쪽에 쌓아야 하는 신호가 섞여 있다.',
+      note: '<code>sort_change</code>의 <code>sort_key</code>는 상품이 아니라 <strong>사용자 축</strong>에 쌓는다. 가격 정렬을 반복하는 페르소나에게 최고가 상품을 추천하면 그 자체로 실패다. 같은 이유로 <code>filter_change</code>와 <code>sort_change</code>는 <code>product_id</code>가 <code>null</code>이다.',
+      rows: [
+        ['옵션을 골랐다', 'variant_select', 2.0, '특정 옵션까지 좁혔다. 단 <strong>왕복이 잦으면 마찰 신호</strong>라 횟수를 함께 봐야 한다.', [['guess', '추정']], '화장품은 실물을 못 봐 옵션을 오간다'],
+        ['추천을 눌렀다', 'recommendation_click', 1.5, '일반 클릭보다 무겁다. <strong>추천 품질 자체의 피드백</strong>이라 별도 집계도 필요하다.', [['guess', '추정']], ''],
+        ['상품을 눌렀다', 'product_click', 1.0, '노출 대비 선택. 제목·이미지의 매력도를 잰다.', [['pub', '공개']], '네이버 인기도의 클릭수'],
+        ['필터를 걸었다', 'filter_change', 1.0, '<strong>고른 필터 값 자체가 선호 속성.</strong> 검색·필터 사용자가 브라우징만 한 사용자보다 전환율이 크게 높다.', [['pub', '공개']], 'Shopify — 필터와 전환율'],
+        ['정렬을 바꿨다', 'sort_change', 0.5, '상품이 아니라 <strong>판단 기준</strong>에 대한 신호다. 어느 상품도 지목하지 않아 낮게 뒀다.', [['norm', '관행']], '가격 정렬 = 가격 민감도'],
+        ['위로 되돌아갔다', 'scroll_backtrack', -1.0, '원하는 정보를 못 찾아 되돌아 읽었다.', [['guess', '추정']], '']
+      ]
+    },
+    {
+      key: 'interest', title: '관심', lede:
+        '보고 머문 행동. 클릭만으로는 잡히지 않는 구간이라 <strong>주목의 대리 지표</strong>로 쓴다.',
+      note: 'Baymard 사용성 조사에 따르면 Quick View는 <strong>실제 상품 페이지로 착각</strong>되는 경우가 많고 <strong>실수로 열리는 일이 잦다</strong>. 그래서 <code>quick_look</code>을 단독 관심 신호로 쓰지 않는다. 닫을 때의 <code>dwell_ms</code>와 <code>close_reason</code>으로 사후 판정한다 — 짧은 체류 + 배경 클릭 + 상호작용 없음이면 오작동 개방으로 보고 0으로 낮춘다.',
+      rows: [
+        ['갤러리를 넘겼다', 'media_view', 1.5, '화장품은 색·질감을 <strong>이미지로 대체 판단</strong>한다.', [['guess', '추정']], ''],
+        ['Quicklook을 열었다', 'quick_look', 1.5, '<strong>오작동 개방이 잦아 단독 사용 금지.</strong> 닫을 때의 값으로 사후 판정하는 것을 전제로 한 중간값이다.', [['pub', '공개']], 'Baymard — Quick View 사용성'],
+        ['상품 상세에 들어왔다', 'product_view', 1.0, '<strong>기준선.</strong> 모든 값이 이 1.0을 기준으로 상대 배치된다.', [['pub', '공개']], 'AI 설계서 PRODUCT_VIEW = 1.0'],
+        ['섹션에 머물렀다', 'section_dwell', 1.0, '섹션에 따라 0.5–1.5로 재조정한다. 성분·리뷰가 높고 히어로·유사상품이 낮다.', [['pub', '공개']], 'AI 설계서 SCROLL 단계값'],
+        ['스크롤을 멈췄다', 'scroll_pause', 0.3, '멈춘 지점 = 시선이 머문 지점. <strong>단독으로는 매우 약하다.</strong>', [['norm', '관행']], ''],
+        ['섹션이 보였다', 'section_view', 0, '같은 섹션에서 <code>section_dwell</code>이 함께 발생해 <strong>이중 가산이 된다.</strong> 분모로만 쓴다.', [['pub', '공개']], '노출 = 0'],
+        ['Quicklook을 닫았다', 'quick_look_close', 0, '메타 이벤트. 체류 시간과 닫은 방식으로 위 <code>quick_look</code>을 사후 판정한다.', [['pub', '공개']], 'Baymard']
+      ]
+    },
+    {
+      key: 'hesitation', title: '망설임', lede:
+        '담을까 말까 재는 구간. PC 전용이라 <strong>전 사용자에게서 균일하게 수집</strong>된다.',
+      note: 'PC 전용이라는 전제가 여기서 유리하게 작용한다. 포인터가 있어야 발생하는 이벤트라 모바일이 섞이면 기기별 결측이 생겨 사용자 간 비교가 불가능하다. 우리는 <strong>수집률이 균일</strong>해 낮은 가중이라도 비교에 쓸 수 있다. 낮게 둔 이유는 기기가 아니라 <strong>행동 자체의 모호함</strong>이다.',
+      rows: [
+        ['버튼 위에 커서를 뒀다', 'hover_dwell', 0.3, '담을까 말까 잰 시간. <strong>잠깐 자리를 비운 것과 구분되지 않아</strong> 낮게 뒀다.', [['guess', '추정']], '']
+      ]
+    },
+    {
+      key: 'friction', title: '마찰', lede:
+        '막힌 지점. <strong>상품이 싫은 것과 화면이 나쁜 것을 구분해야 한다.</strong>',
+      note: '이 축은 상품 선호와 <strong>같은 자리에 넣지 않는다.</strong> 특정 상품에 <code>rage_click</code>이 몰리면 그 상품이 싫다는 뜻이 아니라 그 페이지의 UI 문제일 가능성을 먼저 본다. <code>dead_click</code>이 상품 이미지에 몰리면 <strong>확대를 기대했는데 안 되는 것</strong>이다.',
+      rows: [
+        ['반응 없는 곳을 연타했다', 'rage_click', -2.0, '명확한 좌절 신호.', [['guess', '추정']], ''],
+        ['못 누르는 것을 눌렀다', 'dead_click', -1.5, 'UI 오해 또는 기대 불일치. 눌릴 거라 기대한 지점을 알려준다.', [['guess', '추정']], '']
+      ]
+    },
+    {
+      key: 'exposure', title: '노출', lede:
+        '전부 가중 0이다. 그런데도 남긴다 — <strong>이게 없으면 추천이 실제로 먹혔는지 측정할 수 없다.</strong>',
+      note: '위치 편향 연구의 요지는 <strong>사용자가 위쪽을 더 많이 보기 때문에 아래 놓인 좋은 상품은 선호와 무관하게 클릭이 적다</strong>는 것이다. 클릭 로그를 그대로 학습에 쓰면 추천이 편향된다. 보정하려면 "몇 번째 자리에 몇 번 노출됐고 실제로 화면에 얼마나 있었나"가 필요하다. 보통은 "위쪽이면 봤을 확률이 높다"고 <strong>가정</strong>하지만, <code>impression_dwell</code>은 그걸 <strong>직접 측정</strong>한다. 가중이 0인 것과 쓸모없는 것은 다르다.',
+      rows: [
+        ['카드가 노출됐다', 'product_impression', 0, '노출은 사용자 의지가 아니다. 클릭률의 <strong>분모</strong>로만 쓴다.', [['pub', '공개']], 'AI 설계서 — 단순 노출 = 0'],
+        ['추천 카드가 노출됐다', 'recommendation_impression', 0, '추천 클릭률의 분모.', [['paper', '논문']], '위치 편향 · Unbiased LTR'],
+        ['노출 카드가 머문 시간', 'impression_dwell', 0, '스쳐 간 카드와 3초 머문 카드를 같은 1노출로 세면 <strong>분모가 부풀어 지표가 못 쓰게 된다.</strong>', [['paper', '논문']], '위치 편향 보정의 관측값'],
+        ['재정렬 시 순위', 'recommendation_snapshot', 0, '<strong>노출 시점의 자리.</strong> 위치 편향 보정의 입력이다.', [['paper', '논문']], 'Joachims 외 — Unbiased LTR'],
+        ['스크롤 깊이', 'scroll_depth', 0, '최대 도달 1건만 Feature로 환산한다. <strong>누적 합산하면</strong> 끝까지 내려간 사용자가 모든 구간을 더해 과대 점수를 받는다.', [['pub', '공개']], 'AI 설계서 단계값']
+      ]
+    },
+    {
+      key: 'session', title: '세션', lede: '메타 이벤트. 선호도가 아니라 <strong>다른 이벤트를 묶는 뼈대</strong>다.',
+      note: '<code>page_view</code>와 <code>product_view</code>를 모두 1.0으로 두되 <strong>상품 벡터에는 <code>product_view</code>만 반영</strong>해 이중 가산을 막는다. <code>page_view</code>는 목록·장바구니에서도 발생하므로 상품 선호의 기준선으로는 부정확하다.',
+      rows: [
+        ['화면을 이동했다', 'page_view', 1.0, '화면 이동과 체류를 표현한다. 상품 단위 집계는 <code>product_view</code>가 담당한다.', [['pub', '공개']], ''],
+        ['방문을 시작했다', 'session_start', 0, '메타 이벤트. 첫 <code>page_view</code>와 같은 식별자를 공유한다.', [['norm', '관행']], ''],
+        ['화면을 떠났다', 'exit_summary', 0, '메타 이벤트. 단 <strong>짧은 체류 이탈은 −1.0</strong>으로 따로 환산한다.', [['pub', '공개']], 'AI 설계서 — 단순 이탈은 낮은 가중']
+      ]
+    }
+  ];
+
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); };
+
+  var barHtml = function (v) {
+    var left, width, cls;
+    if (v >= 0) { left = ZERO; width = pct(v) - ZERO; cls = 'fill'; }
+    else { left = pct(v); width = ZERO - pct(v); cls = 'fill neg'; }
+    return '<div class="scale-cell">' +
+      '<div class="bar" role="img" aria-label="가중치 ' + v.toFixed(1) + ', 범위 -2.0에서 4.0">' +
+      '<i class="' + cls + '" style="left:' + left + '%;width:' + width + '%"></i>' +
+      '<i class="zero" style="left:' + ZERO + '%"></i>' +
+      '<i class="base" style="left:' + BASE + '%"></i>' +
+      '</div>' +
+      '<div class="bar-legend"><span>−2.0</span><span>기준선 1.0</span><span>4.0</span></div>' +
+      '</div>';
+  };
+
+  var html = AXES.map(function (ax) {
+    var rows = ax.rows.map(function (r) {
+      var v = r[2];
+      var wc = v > 0 ? 'pos' : (v < 0 ? 'neg' : 'nil');
+      var shown = v > 0 ? '+' + v.toFixed(1) : v.toFixed(1);
+      var tags = r[4].map(function (t) {
+        return '<span class="tag ' + t[0] + '">' + t[1] + '</span>';
+      }).join('');
+      var srcText = r[5] ? '<span class="src-text">' + esc(r[5]) + '</span>' : '';
+      return '<div class="row">' +
+        '<div class="behavior">' + esc(r[0]) + '<code class="evt">' + esc(r[1]) + '</code></div>' +
+        '<div class="w ' + wc + '">' + shown + '</div>' +
+        barHtml(v) +
+        '<div class="why">' + r[3] + '<div class="src">' + tags + srcText + '</div></div>' +
+        '</div>';
+    }).join('');
+
+    return '<section class="axis" id="' + ax.key + '">' +
+      '<div class="axis-head"><h2>' + ax.title + '</h2>' +
+      '<span class="axis-key">' + ax.key + ' · ' + ax.rows.length + '종</span></div>' +
+      '<p class="axis-lede">' + ax.lede + '</p>' +
+      '<div class="rows">' + rows + '</div>' +
+      (ax.note ? '<div class="axis-note">' + ax.note + '</div>' : '') +
+      '</section>';
+  }).join('');
+
+  document.getElementById('axes').innerHTML = html;
+</script>
+</body>
+</html>
