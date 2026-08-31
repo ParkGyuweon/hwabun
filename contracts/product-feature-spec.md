@@ -1,6 +1,6 @@
 # Product Feature 후보표 및 Encoding 초안
 
-> 버전 `0.1-draft` · 2026-08-27
+> 버전 `0.4` · 2026-08-27 (최종 갱신 2026-08-31)
 > 대상: 상위 200개 Sephora 스킨케어 상품
 > 소비처: `batch/jobs/product_feature_job.py` → MySQL → `backend/recommend/RankingService`
 > 어휘집: [`product-feature-vocab.json`](product-feature-vocab.json)
@@ -11,20 +11,53 @@
 
 ## 0. 한눈에 보기
 
-**콘텐츠 벡터 93차원 · 블록 가중치 합계 1.00**
+**콘텐츠 벡터 148차원 · 블록 가중치 합계 1.60**
 
 | 순 | Feature | 담는 내용 | 원본 | 인코딩 | 차원 | 보유율 | 가중치 |
 |---:|---|---|---|---|---:|---:|---:|
-| 1 | `concern` | 피부 고민 9종 | `highlights` `Good for:` | 멀티핫 + IDF | 9 | 77.5% | **0.42** |
-| 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
-| 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
-| 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
-| 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.0% | 0.06 |
-| 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
-| 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
-| 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 28.0% | 0.02 |
+| 1 | `brand` | 브랜드 55종 | `brand_name` | 원핫 | **55** | 100% | **0.60** |
+| 2 | `concern` | 피부 고민 9종 | `highlights` `Good for:` **+ 리뷰 추출** | 멀티핫 + IDF | 9 | 94.0% | **0.42** |
+| 3 | `ingredient` | 핵심 성분 30종 | `highlights` 태그 + 전성분 파싱 | 멀티핫 + IDF + 위치가중 | 30 | 94.0% | 0.27 |
+| 4 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
+| 5 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
+| 6 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.5% | 0.06 |
+| 7 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
+| 8 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
+| 9 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 26.0% | 0.02 |
 
-> **주의:** 위 가중치는 어휘집 `0.2` 확정값입니다. 카테고리 쏠림 측정에 따라 카테고리 두 블록을 실효 39% → 22.4%로 하향하고 그만큼을 `concern`·`ingredient`로 이관했습니다. 근거는 [`cbf-technical-review.md`](../docs/ai/cbf-technical-review.md) 4장 참조.
+> **가중치 합계가 1.00 이 아닙니다.** `brand` 를 뒤에 추가하면서 1.60 이 됐습니다. 블록마다 L2 정규화 후 가중치를 곱하고 전체를 다시 L2 정규화하므로, 합계가 1 일 필요가 없습니다. 중요한 것은 **블록 간 비율**입니다.
+
+### 왜 `brand` 가 0.60 인가
+
+다음 구매에서 유지되는 속성 중 lift 가 압도적입니다. 리뷰 15만 연속쌍에서 측정했습니다.
+
+| 속성 | 실제 유지율 | 무작위 | lift |
+|---|---:|---:|---:|
+| **`brand`** | **21.4%** | 3.5% | **6.08x** |
+| `price_bin` | 28.9% | 22.2% | 1.30x |
+| `clean` | 41.9% | 34.3% | 1.22x |
+| `concern` | 31.3% | 27.9% | 1.12x |
+| `ingredient` | 54.7% | 53.4% | 1.02x |
+
+이 블록을 추가한 것만으로 Recall@10 이 **11.4% → 23.6%** 가 됐습니다 (+12.28%p, 95% CI [+11.41, +13.10], 대응 부트스트랩 2000회, 페르소나 9,900명).
+
+**차원 순서에서 `brand` 는 맨 뒤입니다.** 앞에 끼워 넣으면 이미 저장된 사용자 벡터의 차원 의미가 통째로 밀려 전부 무효가 됩니다. 뒤에 붙이면 앞 93차원은 그대로입니다.
+
+> **주의:** `brand` 를 뺀 나머지 가중치는 어휘집 `0.2` 확정값입니다. 카테고리 쏠림 측정에 따라 카테고리 두 블록을 실효 39% → 22.4%로 하향하고 그만큼을 `concern`·`ingredient`로 이관했습니다. 근거는 [`cbf-technical-review.md`](../docs/ai/cbf-technical-review.md) 4장 참조.
+
+### 블록별 한계 기여 (ablation)
+
+lift 는 **단독 예측력**이라 가중치의 근거로 쓰면 안 됩니다. 블록을 하나씩 빼서 전체 대비 손해를 재면 순서가 달라집니다.
+
+| 뺀 블록 | 가중치 | Recall@10 | 전체 대비 | 95% CI |
+|---|---:|---:|---:|---|
+| **`brand`** | 0.60 | 12.1% | **−11.54%p** | [−12.33, −10.67] |
+| **`ingredient`** | 0.27 | 22.8% | **−0.82%p** | [−1.10, −0.54] |
+| `concern` | 0.42 | 23.1% | −0.55%p | [−1.05, +0.00] |
+| `clean` / `texture` / `rating` / `price_bin` | 0.02~0.06 | 23.6% | ±0.02%p 이하 | 0 포함 |
+| `secondary_category` / `tertiary_category` | 0.06 / 0.11 | 23.7% | +0.07%p | 0 포함 |
+
+`lift` 상위권(`price_bin`, `clean`, 카테고리)은 **브랜드가 정해지면 따라오는 속성**이라, 브랜드를 넣은 뒤에는 새로 보태는 것이 없습니다. 반대로 `ingredient` 는 lift 가 꼴찌인데 한계 기여는 두 번째입니다.
 
 ### 제외한 것
 
@@ -92,12 +125,13 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 | 2 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
 | 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
 | 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
-| 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.0% | 0.06 |
+| 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.5% | 0.06 |
 | 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
 | 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
-| 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 28.0% | 0.02 |
+| 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 26.0% | 0.02 |
+| 9 | `brand` | 브랜드 55종 | `brand_name` | 원핫 | 55 | 100% | **0.60** |
 
-**콘텐츠 벡터 총 93차원**
+**콘텐츠 벡터 총 148차원**
 
 ---
 
@@ -379,8 +413,12 @@ prior(i) = (log1p(loves_count) - log_min) / (log_max - log_min)
 ```
 [secondary_category  8] [tertiary_category 19] [concern 9]
 [ingredient 30] [clean 16] [texture 5] [price_bin 5] [rating 1]
+[brand 55]
 
-총 93차원
+총 148차원
+
+brand 는 **맨 뒤**다. 앞에 끼워 넣으면 이미 저장된 사용자 벡터의
+차원 의미가 전부 밀려 무효가 된다. 뒤에 붙이면 앞 93차원은 그대로다.
 ```
 
 ### 3-2. IDF 가중
@@ -517,7 +555,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 CREATE TABLE product_feature (
     product_id      VARCHAR(16)  NOT NULL,
     vocab_version   VARCHAR(16)  NOT NULL,
-    vector          JSON         NOT NULL,   -- float[93]
+    vector          JSON         NOT NULL,   -- float[148]
     prior_score     DECIMAL(6,5) NOT NULL,   -- log 정규화 loves_count
     secondary_category VARCHAR(64) NOT NULL, -- 필터·디버깅용 원본 보존
     tertiary_category  VARCHAR(64) NOT NULL,
@@ -531,13 +569,18 @@ CREATE TABLE product_feature (
 
 `vocab_version`을 PK에 포함해 어휘집 변경 시 **구버전 벡터와 공존**할 수 있게 합니다. 롤백과 A/B 테스트에 필요합니다.
 
-200개 × 93차원 float32 = **73KB**입니다. `RankingService`가 기동 시 전량 메모리에 적재해도 무방합니다.
+200개 × 148차원 float32 = **116KB**입니다. `RankingService`가 기동 시 전량 메모리에 적재해도 무방합니다.
 
 ---
 
 ## 6. 미해결 과제
 
-1. **`highlights` 결측 19개 (9.5%)** — `concern`·`ingredient`·`clean` 블록이 비어 카테고리·가격·`skin_fit`만으로 벡터가 구성됩니다. 그 결과 같은 카테고리 상품과 유사도가 과도하게 높아집니다(최고 유사도 평균 0.922 vs 0.864). `ingredients` 원본 문자열에서 `Hyaluronic Acid`, `Niacinamide` 등 키워드를 매칭해 `ingredient` 블록을 보완하는 방안이 있습니다. 미적용.
+1. ~~**`highlights` 결측 19개 (9.5%)**~~ — **해결됨.** 두 가지를 적용했습니다.
+   - `ingredient` 는 전성분 문자열 파싱으로 보완 (어휘 30종, 위치 기반 감쇠). 보유율 98.0% → 94.0%\*
+   - `concern` 은 리뷰 54만건에서 뽑은 상위 2축을 **더합니다**(대체 아님). 보유율 78.0% → 94.0%, Recall@10 +0.71%p (CI [+0.12, +1.28])
+
+   \* 보유율 수치가 내려간 것은 카탈로그가 바뀌어서이지 기능이 약해진 것이 아닙니다.
+   생성 방법은 `batch/jobs/concern_from_reviews.py` 참조.
 
 2. **`attr_affinity`의 `hair_color` / `eye_color`** — lift 기준 판별력이 4개 속성 중 최하위(유의 셀 16.0% / 19.4%)이고, `hair_color`의 유일한 신호는 `gray`가 안티에이징 제품에 몰리는 것으로 **연령 대리변수**로 보입니다. **가중치 0.10 유지로 확정.** 기여가 작아 위험이 제한적이고, 사용자 속성 4개를 모두 반영하는 것이 설계 전제입니다. 로그 축적 후 실제 지표로 재평가합니다.
 
