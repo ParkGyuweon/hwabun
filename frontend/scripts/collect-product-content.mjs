@@ -71,38 +71,68 @@ async function get(url, { tries = 3, timeout = 90_000 } = {}) {
   return null;
 }
 
-/** 상품 ID 로 세포라 상품 URL(슬러그) 을 찾는다 */
-async function findProductUrl(productId) {
+/**
+ * 목록에서 `count` 개를 시간대가 겹치지 않게 고른다.
+ *
+ * 최신 것만 연달아 집으면 며칠 사이에 찍힌 스냅샷을 여러 장 받게 되는데,
+ * 그것들은 대개 같은 페이지라 같이 실패한다. 실제로 최신 세 장이 모두
+ * 껍데기인 상품이 있었다. 시기를 흩어야 다른 렌더링을 만날 수 있다.
+ */
+function pickSpread(rows, count) {
+  if (rows.length <= count) return rows;
+  const step = (rows.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, i) => rows[Math.round(i * step)]);
+}
+
+/**
+ * 상품 ID 로 아카이브에 남은 주소와 시각을 찾는다.
+ *
+ * 시각까지 한 번에 받아서 가용성 API 호출을 없앴다. 상품당 요청이 3번에서
+ * 2번으로 줄고, 아카이브가 흔들릴 기회도 그만큼 줄어든다.
+ *
+ * 부수입이 하나 있다. 광고 유입 주소에 `skuId=` 가 붙어 있는 경우가 있어서,
+ * 스냅샷을 못 읽어도 이미지 URL 은 만들 수 있다.
+ */
+async function findArchived(productId) {
   const low = productId.toLowerCase();
   const cdx =
     'http://web.archive.org/cdx/search/cdx' +
-    `?url=sephora.com/product/*&filter=urlkey:.*${low}.*&limit=25&fl=original&collapse=urlkey`;
+    `?url=sephora.com/product/*&filter=urlkey:.*${low}.*&limit=40&fl=original,timestamp&collapse=urlkey`;
 
-  const body = await get(cdx, { timeout: 60_000 });
+  const body = await get(cdx, { tries: 5, timeout: 60_000 });
   if (!body) return null;
 
-  return (
-    body
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.startsWith('https://www.sephora.com/product/'))
-      // 쿼리스트링이 붙은 것과 미니·트라이얼 사이즈는 본품이 아니다
-      .filter((line) => !line.includes('&') && !line.includes('?'))
-      .filter((line) => !/\b(mini|trial|value-set|travel-size)\b/i.test(line))[0] ?? null
-  );
-}
+  const rows = body
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([url]) => url?.startsWith('https://www.sephora.com/product/'))
+    .map(([url, timestamp]) => ({ url, timestamp }));
 
-async function findSnapshot(productUrl) {
-  const body = await get(
-    `https://archive.org/wayback/available?url=${productUrl.replace(/^https:\/\//, '')}`,
-    { timeout: 45_000 },
-  );
-  if (!body) return null;
-  try {
-    return JSON.parse(body).archived_snapshots?.closest?.url ?? null;
-  } catch {
-    return null;
-  }
+  // 광고 주소에 딸려 온 skuId 는 그 자체로 쓸모가 있다
+  const skuFromUrl = rows.map((row) => row.url.match(/skuId=(\d{6,8})/)?.[1]).find(Boolean) ?? null;
+
+  const clean = rows
+    // 시각이 온전하지 않으면 주소를 만들 수 없다. 없는 채로 만들면 아카이브
+    // 오류 페이지를 받아 놓고 "내용이 없다" 고 잘못 판단하게 된다
+    .filter((row) => /^\d{14}$/.test(row.timestamp ?? ''))
+    .filter((row) => !row.url.includes('?'))
+    .filter((row) => !/\b(mini|trial|value-set|travel-size)\b/i.test(row.url))
+    .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+
+  if (clean.length === 0) return null;
+
+  return {
+    skuFromUrl,
+    /*
+     * 후보를 여러 개 준다.
+     * 스냅샷마다 상세 JSON 이 담긴 것과 껍데기만 있는 것이 섞여 있다.
+     * 하나 실패했다고 그 상품을 포기하면 내용이 있는데도 빈칸으로 남는다.
+     * id_ 는 아카이브가 덧붙이는 배너·스크립트 없이 원본 그대로를 준다.
+     */
+    snapshots: pickSpread(clean, 6).map(
+      (row) => `https://web.archive.org/web/${row.timestamp}id_/${row.url}`,
+    ),
+  };
 }
 
 /**
@@ -304,58 +334,81 @@ console.log(`대상 ${targets.length}개\n`);
 
 let filled = 0;
 let failed = 0;
+let done = 0;
 
-for (const [index, productId] of targets.entries()) {
-  const head = `[${index + 1}/${targets.length}] ${productId}`;
+async function collectOne(productId) {
+  const found = await findArchived(productId);
+  if (!found) return { productId, reason: '주소 못 찾음' };
 
-  const productUrl = await findProductUrl(productId);
-  if (!productUrl) {
-    console.log(`${head}  주소 못 찾음`);
-    failed += 1;
-    await sleep(PAUSE_MS);
-    continue;
+  let parsed = { skuId: null, description: null };
+
+  for (const snapshot of found.snapshots) {
+    const html = await get(snapshot, { tries: 2 });
+    // 상세 JSON 이 없는 스냅샷은 껍데기다. 다음 후보로 넘어간다
+    if (!html || !html.includes('longDescription')) continue;
+
+    parsed = extract(html);
+    if (parsed.description) break;
   }
 
-  const snapshot = await findSnapshot(productUrl);
-  if (!snapshot) {
-    console.log(`${head}  스냅샷 없음`);
-    failed += 1;
-    await sleep(PAUSE_MS);
-    continue;
-  }
+  // 스냅샷을 못 읽어도 광고 주소에서 얻은 sku 는 살린다
+  const skuId = parsed.skuId ?? found.skuFromUrl;
+  if (!skuId && !parsed.description) return { productId, reason: '스냅샷 못 읽음' };
 
-  const html = await get(snapshot);
-  if (!html) {
-    console.log(`${head}  스냅샷 못 읽음`);
-    failed += 1;
-    await sleep(PAUSE_MS);
-    continue;
-  }
-
-  const { skuId, description } = extract(html);
-  const entry = collected[productId] ?? {
-    sku_id: null,
-    image_url: null,
-    images: [],
-    variants: [],
-    description: null,
-  };
-
-  if (skuId && !entry.sku_id) entry.sku_id = skuId;
-  if (description) entry.description = { ...(entry.description ?? {}), ...description };
-
-  collected[productId] = entry;
-
-  // 중단돼도 진행분이 남도록 한 건마다 저장한다
-  writeFileSync(COLLECTED, `${JSON.stringify(collected, null, 2)}\n`);
-
-  const blocks = description ? Object.keys(description).length : 0;
-  console.log(`${head}  sku ${entry.sku_id ?? '없음'} · 블록 ${blocks}개`);
-  if (blocks > 0 || skuId) filled += 1;
-  else failed += 1;
-
-  await sleep(PAUSE_MS);
+  return { productId, skuId, description: parsed.description };
 }
+
+/**
+ * 동시에 몇 건씩 처리한다.
+ *
+ * 한 건씩 돌리면 194개에 열여섯 시간이 걸린다. 대부분이 아카이브 응답을
+ * 기다리는 시간이라 동시에 보내면 그만큼 줄어든다.
+ * 다만 아카이브는 공용 자원이라 무한정 늘리지 않는다.
+ */
+const CONCURRENCY = 4;
+
+const queue = [...targets];
+
+async function worker() {
+  while (queue.length > 0) {
+    const productId = queue.shift();
+    if (!productId) return;
+
+    const result = await collectOne(productId);
+    done += 1;
+    const head = `[${done}/${targets.length}] ${productId}`;
+
+    if (result.reason) {
+      console.log(`${head}  ${result.reason}`);
+      failed += 1;
+    } else {
+      const entry = collected[productId] ?? {
+        sku_id: null,
+        image_url: null,
+        images: [],
+        variants: [],
+        description: null,
+      };
+
+      if (result.skuId && !entry.sku_id) entry.sku_id = result.skuId;
+      if (result.description) {
+        entry.description = { ...(entry.description ?? {}), ...result.description };
+      }
+      collected[productId] = entry;
+
+      // 중단돼도 진행분이 남도록 한 건마다 저장한다
+      writeFileSync(COLLECTED, `${JSON.stringify(collected, null, 2)}\n`);
+
+      const blocks = result.description ? Object.keys(result.description).length : 0;
+      console.log(`${head}  sku ${entry.sku_id ?? '없음'} · 블록 ${blocks}개`);
+      filled += 1;
+    }
+
+    await sleep(PAUSE_MS);
+  }
+}
+
+await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
 console.log(`\n채움 ${filled} · 실패 ${failed}`);
 console.log('이어서 node scripts/build-products.ts 를 돌리면 화면 데이터에 반영된다.');
