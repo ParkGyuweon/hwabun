@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://s15p21a306.local/contracts/event-schema.json",
+  "title": "S15P21A306 Raw Event",
+  "description": "Collector가 서버 메타데이터를 추가해 Kafka에 발행하는 Raw Event 1건의 계약",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_name",
+    "intent",
+    "occurred_at",
+    "persona_id",
+    "session_id",
+    "page_view_id",
+    "sequence_no",
+    "page_type",
+    "product_id",
+    "actor_type",
+    "environment",
+    "received_at",
+    "source",
+    "request_id",
+    "event_index",
+    "properties"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.2.0-draft"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_name": {
+      "type": "string",
+      "enum": [
+        "session_start",
+        "page_view",
+        "product_view",
+        "product_impression",
+        "product_click",
+        "section_view",
+        "section_dwell",
+        "accordion_toggle",
+        "recommendation_impression",
+        "recommendation_click",
+        "wishlist_toggle",
+        "add_to_cart",
+        "view_cart",
+        "exit_summary",
+        "scroll_depth",
+        "impression_dwell",
+        "recommendation_snapshot",
+        "media_view",
+        "quick_look",
+        "quick_look_close",
+        "remove_from_cart",
+        "variant_select",
+        "quantity_change",
+        "review_filter_apply",
+        "review_expand",
+        "ingredient_view_mode_change",
+        "sort_change",
+        "filter_change",
+        "scroll_pause",
+        "scroll_backtrack",
+        "text_selection",
+        "text_copy",
+        "hover_dwell",
+        "rage_click",
+        "dead_click"
+      ]
+    },
+    "intent": {
+      "type": "string",
+      "enum": [
+        "session",
+        "exposure",
+        "interest",
+        "comparison",
+        "validation",
+        "hesitation",
+        "conversion",
+        "friction"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "persona_id": {
+      "type": ["string", "null"]
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "page_view_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence_no": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "page_type": {
+      "type": "string",
+      "enum": ["product_detail", "product_list", "cart"]
+    },
+    "product_id": {
+      "type": ["string", "null"]
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["user", "synthetic"]
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["web", "simulator"]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "properties": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "actor_type": { "const": "synthetic" }
+        },
+        "required": ["actor_type"]
+      },
+      "then": {
+        "properties": {
+          "source": { "const": "simulator" },
+          "properties": {
+            "required": ["scenario_id", "simulation_run_id", "generator_type"],
+            "properties": {
+              "scenario_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "simulation_run_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "generator_type": {
+                "type": "string",
+                "enum": ["python_batch", "agent_realtime"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "actor_type": { "const": "user" }
+        },
+        "required": ["actor_type"]
+      },
+      "then": {
+        "properties": {
+          "source": { "const": "web" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": ["session_start", "page_view", "exit_summary"]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "session" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": [
+              "product_impression",
+              "recommendation_impression",
+              "scroll_depth",
+              "impression_dwell",
+              "recommendation_snapshot"
+            ]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "exposure" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": [
+              "product_view",
+              "section_view",
+              "section_dwell",
+              "scroll_pause",
+              "media_view",
+              "quick_look",
+              "quick_look_close"
+            ]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "interest" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": [
+              "scroll_backtrack",
+              "variant_select",
+              "product_click",
+              "recommendation_click",
+              "filter_change",
+              "sort_change"
+            ]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "comparison" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": [
+              "accordion_toggle",
+              "ingredient_view_mode_change",
+              "review_expand",
+              "review_filter_apply",
+              "text_selection",
+              "text_copy"
+            ]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "validation" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": ["hover_dwell", "remove_from_cart"]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "hesitation" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": ["wishlist_toggle", "quantity_change", "add_to_cart", "view_cart"]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "conversion" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": ["rage_click", "dead_click"]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "friction" }
+        }
+      }
+    }
+  ]
+}
