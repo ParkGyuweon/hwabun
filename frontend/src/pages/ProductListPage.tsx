@@ -48,6 +48,8 @@ interface ProductListPageProps {
   persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
   onAddToCart: (item: CartItem) => void;
+  /** 장바구니에 담긴 상품. 맞춤 기획전(추천)에서 뺀다 */
+  cartProductIds: Set<string>;
   /** 헤더 메뉴에서도 카테고리를 바꾸므로 소유권을 App 에 둔다 */
   category: string;
   onCategoryChange: (category: string) => void;
@@ -69,6 +71,7 @@ export default function ProductListPage({
   persona,
   onSelectProduct,
   onAddToCart,
+  cartProductIds,
   category,
   onCategoryChange,
 }: ProductListPageProps) {
@@ -124,8 +127,11 @@ export default function ProductListPage({
    * 페르소나가 없으면 이전처럼 신제품·한정판·단독을 인기순으로 올린다.
    */
   const promo = useMemo(() => {
+    // 담은 상품은 추천에서 뺀다. 빼면 다음 순위가 올라와 10개는 유지된다
+    const candidates = products.filter((p) => !cartProductIds.has(p.product_id));
+
     if (!persona) {
-      return products
+      return candidates
         .filter((p) => (p.badges ?? []).length > 0)
         .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
         .slice(0, PROMO_SIZE);
@@ -141,8 +147,8 @@ export default function ProductListPage({
       return match + quality;
     };
 
-    return [...products].sort((a, b) => score(b) - score(a)).slice(0, PROMO_SIZE);
-  }, [products, persona, reviewSkinTypes]);
+    return [...candidates].sort((a, b) => score(b) - score(a)).slice(0, PROMO_SIZE);
+  }, [products, persona, reviewSkinTypes, cartProductIds]);
 
   /** 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름 */
   const promoAlgorithm = persona ? 'skin_match_v0' : 'badge_rank_v0';

@@ -104,6 +104,16 @@ export default function App() {
   );
 
   /**
+   * 장바구니에 담긴 상품. 추천 자리에서 뺀다.
+   * 이미 담은 상품을 다시 추천하는 것은 자리 낭비이고, 아는 상품이라
+   * 클릭률이 높게 나와 추천 CTR 지표도 왜곡한다. 빼면 다음 순위가 올라와 채워진다.
+   */
+  const cartProductIds = useMemo(
+    () => new Set(cartItems.map((item) => item.product_id)),
+    [cartItems],
+  );
+
+  /**
    * 유사 상품.
    * 같은 중분류에서 뽑는다. 대분류는 200개가 전부 Skincare 라 구분이 안 된다.
    */
@@ -111,9 +121,14 @@ export default function App() {
     if (!product) return [];
     const key = product.category[1];
     return products
-      .filter((item) => item.product_id !== product.product_id && item.category[1] === key)
+      .filter(
+        (item) =>
+          item.product_id !== product.product_id &&
+          item.category[1] === key &&
+          !cartProductIds.has(item.product_id),
+      )
       .slice(0, SIMILAR_SIZE);
-  }, [product]);
+  }, [product, cartProductIds]);
 
   const openProduct = useCallback((nextId: string) => {
     window.history.pushState({ productId: nextId, cart: false }, '', `?product=${nextId}`);
@@ -397,6 +412,7 @@ export default function App() {
           persona={persona}
           onSelectProduct={openProduct}
           onAddToCart={addToCart}
+          cartProductIds={cartProductIds}
           category={listCategory}
           onCategoryChange={setListCategory}
         />
