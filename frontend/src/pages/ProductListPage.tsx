@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
@@ -17,8 +17,11 @@ import type { CartItem } from '../types/cart';
 
 /** 기획전에 올리는 상품 수 */
 const PROMO_SIZE = 10;
-/** 한 번에 그리는 카드 수. 200개를 한 번에 그리면 노출 로그가 의미를 잃는다 */
-const PAGE_SIZE = 24;
+/**
+ * 한 번에 그리는 카드 수. 200개를 한 번에 그리면 노출 로그가 의미를 잃는다.
+ * 넓은 화면의 열 수(5)의 배수로 둬서 마지막 줄이 꽉 차게 한다.
+ */
+const PAGE_SIZE = 25;
 
 type SortKey = 'popular' | 'rating' | 'reviews' | 'price_asc' | 'price_desc';
 
@@ -79,6 +82,13 @@ export default function ProductListPage({
   const [concern, setConcern] = useState('all');
   const [price, setPrice] = useState<PriceKey>('all');
   const [shown, setShown] = useState(PAGE_SIZE);
+  /**
+   * 그리드 노드와 실제 열 수.
+   * 열 수를 auto-fill 로 잡아서 화면 폭마다 달라진다. 그리는 개수를 고정해 두면
+   * 마지막 줄에 빈 자리가 남아 진열이 끊긴 것처럼 보인다.
+   */
+  const [gridNode, setGridNode] = useState<HTMLUListElement | null>(null);
+  const [columns, setColumns] = useState(1);
   /** 요약 창에 띄운 상품. 세포라 Quicklook */
   const [quickLook, setQuickLook] = useState<Product | null>(null);
 
@@ -183,7 +193,15 @@ export default function ProductListPage({
     return sorted;
   }, [products, category, concern, price, sort]);
 
-  const visible = filtered.slice(0, shown);
+  /**
+   * 마지막 줄을 채우고 끊는다.
+   * 다 보여줄 수 있으면 자르지 않는다. 남는 게 열 수보다 적어도 최소 한 줄은 그린다.
+   */
+  const visibleCount =
+    shown >= filtered.length
+      ? filtered.length
+      : Math.min(filtered.length, Math.max(columns, Math.floor(shown / columns) * columns));
+  const visible = filtered.slice(0, visibleCount);
 
   /**
    * 목록 조건이 바뀌면 새 화면으로 본다.
@@ -215,11 +233,52 @@ export default function ProductListPage({
     algorithm: promoAlgorithm,
     recommendationId: promoRecommendationId,
   });
-  const gridRef = useImpression({
+  const impressionRef = useImpression({
     pageViewKey,
     eventName: 'product_impression',
     listId: 'list_grid',
   });
+
+  /**
+   * 그리드의 실제 열 수.
+   *
+   * 열 수를 auto-fill 로 잡아서 화면 폭마다 달라진다. 그리는 개수를 고정해 두면
+   * 마지막 줄에 빈 자리가 남아 진열이 끊긴 것처럼 보인다. CSS 에서 계산된
+   * 열 수를 직접 읽어서 그 배수만큼만 그린다.
+   */
+  // useImpression 의 ref 와 측정용 상태에 같은 노드를 함께 넘긴다
+  const setGridRef = useCallback(
+    (node: HTMLUListElement | null) => {
+      (impressionRef as React.MutableRefObject<HTMLElement | null>).current = node;
+      setGridNode(node);
+    },
+    [impressionRef],
+  );
+
+  useEffect(() => {
+    if (!gridNode) return;
+
+    const measure = () => {
+      const tracks = window.getComputedStyle(gridNode).gridTemplateColumns;
+      setColumns(Math.max(1, tracks.split(' ').filter(Boolean).length));
+    };
+
+    measure();
+
+    /**
+     * 화면 폭이 바뀌면 열 수도 바뀐다.
+     * ResizeObserver 는 필터를 접었다 펴는 것처럼 창 크기와 무관한 변화까지 잡고,
+     * resize 는 관찰자가 깨어나지 않는 환경을 위한 보완이다.
+     */
+    const observer = new ResizeObserver(measure);
+    observer.observe(gridNode);
+    window.addEventListener('resize', measure);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [gridNode]);
 
   /** 카드 위 Quick Look 버튼. 어느 목록의 몇 번째에서 열었는지 함께 남긴다 */
   const quickLookFrom = (listId: string) => (productId: string) => {
@@ -386,7 +445,7 @@ export default function ProductListPage({
         {visible.length === 0 ? (
           <EmptyState message="조건에 맞는 상품이 없습니다. 필터를 넓혀 보세요." />
         ) : (
-          <ul className="list__grid" ref={gridRef as React.Ref<HTMLUListElement>}>
+          <ul className="list__grid" ref={setGridRef}>
             {visible.map((product, index) => (
               <ProductCard
                 key={product.product_id}
@@ -399,13 +458,13 @@ export default function ProductListPage({
           </ul>
         )}
 
-        {shown < filtered.length ? (
+        {visibleCount < filtered.length ? (
           <button
             type="button"
             className="list__more"
-            onClick={() => setShown((prev) => prev + PAGE_SIZE)}
+            onClick={() => setShown(visibleCount + PAGE_SIZE)}
           >
-            더 보기 ({filtered.length - shown}개 남음)
+            더 보기 ({filtered.length - visibleCount}개 남음)
           </button>
         ) : null}
       </section>

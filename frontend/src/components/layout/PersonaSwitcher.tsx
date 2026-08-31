@@ -22,14 +22,18 @@ export default function PersonaSwitcher({ personas, persona, onPersonaChange }: 
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
 
+  /**
+   * 검색 축을 피부 타입·톤으로 좁혔다.
+   *
+   * eye_color / hair_color 는 실제 리뷰어 분포를 살린 값이라 균등하지 않다
+   * (brown 이 각각 71%, 42%). 이 두 축으로 찾게 두면 선택지가 한쪽으로 쏠려서
+   * 고르는 데 도움이 안 된다. 피부 타입 4종 × 톤 5종은 정확히 균등이다.
+   */
   const filtered = useMemo(() => {
     const needle = keyword.trim().toLowerCase();
     if (!needle) return personas;
     return personas.filter((item) =>
-      [item.persona_id, item.skin_type, item.skin_tone, item.eye_color, item.hair_color]
-        .join(' ')
-        .toLowerCase()
-        .includes(needle),
+      [item.persona_id, item.skin_type, item.skin_tone].join(' ').toLowerCase().includes(needle),
     );
   }, [personas, keyword]);
 
@@ -84,8 +88,7 @@ export default function PersonaSwitcher({ personas, persona, onPersonaChange }: 
                     {skinTypeLabel(item.skin_type)} · {humanizeAttribute(item.skin_tone)}
                   </span>
                   <span className="persona__list-sub">
-                    {humanizeAttribute(item.eye_color)} · {humanizeAttribute(item.hair_color)} · 리뷰{' '}
-                    {item.reviewed_product_count}
+                    {item.persona_id} · 리뷰 {item.n_reviews}
                   </span>
                 </button>
               </li>
