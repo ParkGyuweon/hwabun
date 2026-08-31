@@ -18,7 +18,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   - 페르소나당 상품 1개를 목표로 떼고 나머지 전부를 시드로 사용
   - 시드는 시뮬레이션 시작 전 상태 (session_id = "seed")
   - 이탈 상품은 취향이 아니라 노출(같은 카테고리 / 인기순)로 고른다
-  - rage_click / dead_click 은 생성하지 않는다 (실제 UI 오작동에서만 나오는 신호)
+  - dead_click 은 생성하지 않는다 (실제 UI 오작동에서만 나오는 신호).
+    rage_click 은 부정 시드에서만 소량 생성한다 (300명 기준 15건)
   - scroll_depth 는 프론트와 같은 10% 단위로 남기되, 가중치는 최대 도달 1건만 적용한다
   - actor_type 은 전부 synthetic
   - 상세 진입은 page_view + product_view 를 함께 남긴다 (프론트와 동일)
