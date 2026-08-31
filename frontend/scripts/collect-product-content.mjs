@@ -335,12 +335,22 @@ const catalog = JSON.parse(
   readFileSync(join(root, 'batch', 'ingest', 'data', 'products_200.json'), 'utf8'),
 );
 
-const isBlank = (entry) =>
-  !entry ||
-  !entry.description ||
-  Object.keys(entry.description).length === 0 ||
-  !entry.sku_id ||
-  !entry.image_url;
+/**
+ * 아직 더 받아올 게 남은 상품인가.
+ *
+ * `image_url` 은 여기서 만들지 않는다. build-products.ts 가 sku_id 로 만든다.
+ * 그걸 조건에 넣었더니 다 채운 상품까지 미완으로 보여서, 재시도가 194개를
+ * 통째로 다시 돌렸다.
+ *
+ * 값이 비어 있는 키는 세지 않는다. `{ what_it_is: null }` 처럼 키만 있고
+ * 내용이 없는 항목이 남아 있어서, 키 개수로 세면 채운 것으로 오인한다.
+ */
+const filledBlocks = (entry) =>
+  Object.values(entry?.description ?? {}).filter(
+    (value) => value && (!Array.isArray(value) || value.length > 0),
+  ).length;
+
+const isBlank = (entry) => !entry || !entry.sku_id || filledBlocks(entry) === 0;
 
 const targets = catalog
   .map((p) => p.product_id)

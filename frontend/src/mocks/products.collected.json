@@ -293,7 +293,7 @@
     }
   },
   "P378852": {
-    "sku_id": null,
+    "sku_id": "1449628",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p378852-av-01-zoom.jpg",
@@ -303,7 +303,11 @@
       "https://www.sephora.com/productimages/product/p378852-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A facial cream that hydrates instantly to rev up radiance.",
+      "suggested_usage": "-Use morning and evening.",
+      "brand_story": "The moment you unveil an Origins product, you encounter nature in one of its purest forms. From the first scent to the radiant finish, the brand’s mission is to deliver creative, luxury skin care solutions powered by nature and proven by science."
+    }
   },
   "P379510": {
     "sku_id": "1528066",
@@ -446,7 +450,12 @@
       "https://www.sephora.com/productimages/product/p394639-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null,
+    "description": {
+      "what_it_is": "An ultra-lightweight, oil-free gel-cream that instantly cools and refreshes skin while providing intensive hydration.",
+      "what_else": "This product is dermatologist tested and free of mineral oils, petrolatum, synthetic preservatives, dyes, fragrances, and animal origin ingredients. Belif's The True Cream Aqua Bomb is a 2015 Self Approved Beauty award winner.",
+      "clinical_results": "In clinical tests:\n\n- Provides a +70% increase in skin's hydration levels",
+      "suggested_usage": "-Apply as needed to face and neck.\n\n-Can be used morning and night. For a midday moisture boost, tap gently onto skin.\n-Can be used as a makeup primer to hydrate and prep the skin before applying makeup.\n\n-Can be used as a 10-minute emergency moisture mask: apply generously to skin and tissue off.\n\n Precautions:\n-For external use only.\n\n-Avoid eye contact."
+    },
     "description_source": {
       "slug": "the-true-cream-aqua-bomb-P394639",
       "timestamp": "20180126233553"
@@ -584,7 +593,13 @@
       "https://www.sephora.com/productimages/product/p409800-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null,
+    "description": {
+      "what_it_is": "A collection of cleansing and makeup-removing wipes, each with a skin-refreshing benefit.",
+      "what_else": "No need to rinse. These wipes are clinically proven suitable for all skin types. Each pack contains 25 wipes and is ideal for travel.",
+      "clinical_results": "Coconut Water Cleansing Wipes:\nIn a use test on 31 volunteers after first use:\n- 87% said that the wipes left skin feeling soft\n- 71% said that sensations of tightness disappeared\n\nRose Cleansing Wipes:\nIn a use test on 31 volunteers after first use:\n- 100% said that the wipes quenched the skin's thirst\n- 87% said that their faces appeared instantly more radiant\n- 87% said that skin looked more luminous\n\nYuzu Cleansing Wipes:\nIn a use test on 33 volunteers after first use:\n- 94% said that the wipes toned skin\n- 91% said that skin felt softer\n- 82% said that the wipes energized skin\n\nGreen Tea Exfoliating Wipes:\nIn a use test on 29 volunteers after first use:\n- 90% said that the wipes absorbed excess sebum effectively\n\nCharcoal Cleansing Wipes:\nIn a use test on 30 volunteers after first use:\n- 100% said that the wipes detoxified skin\n- 97% said that the wipes purified skin\n- 97% said that the wipes cleansed skin effectively",
+      "suggested_usage": "Cleansing Wipes:\n-Gently wipe over the face and eyes.\n-No need to rinse.\n-Close wipe latch well after each use to avoid drying out.\n\nExfoliating Wipes:\n-To eliminate impurities and dead cells, use the exfoliating side to scrub the face delicately with specific attention to the T zone.\n-To cleanse the face gently and remove makeup, use the smooth side, and gently wipe all over the face.\n-No need to rinse.\n-Close wipe latch well after each use to avoid drying out.\n\n Precautions:\n-Cleansing Wipes:\n-Do not dispose improperly.\n\nExfoliating Wipes:\n-Avoid contact with the eyes. In case of contact, rinse thoroughly.\n-Do not dispose improperly.",
+      "brand_story": "Beauty Uncomplicated\r\n\r\nWhat good are tons of options if you can't figure out how to choose between them? SEPHORA COLLECTION is about formulas that really deliver, paired with bite-sized bits of Sephora expertise that make all those options less overwhelming. Whether you're looking for a new color, a new formula, or even a whole new look, with SEPHORA COLLECTION it's easy to get exactly what you want."
+    },
     "description_source": {
       "slug": "cleansing-exfoliating-wipes-P409800",
       "timestamp": "20180127200854"
@@ -2078,7 +2093,12 @@
       "https://www.sephora.com/productimages/product/p433443-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "This innovative jelly-pudding sleeping mask replenishes and revives dull, dry skin with explosive hydration for a dewy, radiant glow.",
+      "what_else": "This product is dermatologist-tested and free of mineral oils, petrolatum, synthetic preservatives, dyes, fragrances, and animal origin ingredients.",
+      "clinical_results": "In a 14-day consumer test:\n- 96.7% of people felt that the texture of their skin felt softer and smoother on the following day after applying the Aqua Bomb Sleeping Mask\n-97.8% of people felt immediate cooling effects after applying it\n- 95.6% of people felt that the moisture barrier shields moisture loss\n- 96.7% of people felt that the moisture (in skin) has been replenished overnight",
+      "suggested_usage": "-\n-After or instead of moisturizer, apply a thin layer evenly across your face.\r\n-Leave on overnight and rinse off in the morning for ultra-hydrated, nourished skin.\n\nTips:\r\n-Gently massage into skin for extra deep hydration. Use when you want your skin to be smoother and more makeup-ready in the mornings.\r\n-Use after being exposed to extreme wind, heat, or cold to nourish and hydrate skin.\r\n-Store in refrigerator for extra cooling benefits.\r\n\n Precautions:\n-For external use only.\n-Avoid contact with the eyes."
+    }
   },
   "P433444": {
     "sku_id": null,
@@ -2094,7 +2114,7 @@
     "description": null
   },
   "P433520": {
-    "sku_id": null,
+    "sku_id": "2117109",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p433520-av-01-zoom.jpg",
@@ -2103,7 +2123,11 @@
       "https://www.sephora.com/productimages/product/p433520-av-04-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A highly moisturizing cream with patented anti-aging, hydrating, and youth-boosting ingredients that lift and transform the look of tired skin.",
+      "what_else": "Charlotte Tilbury's Magic Cream was originally used backstage at fashion shows and photoshoots to keep supermodels looking fresh and youthful&#151;no matter how late they were out. It is famed for its ability to rehydrate dull, stressed, and tired skin. This nourishing moisturizer contains a new ingredient, bio-nymph peptide complex, to reduce the appearance of wrinkles and improve elasticity. SPF 15 protects from damaging sun exposure, while vitamin E, rose hip, and camellia oils leave skin dewy and hydrated.",
+      "suggested_usage": "-Apply Magic Cream to your fingertips, and smooth onto skin starting from the lower cheek and moving upward to stimulate circulation.\n-Tap your cheeks and under the eye area to decongest puffiness.\n-Massage into your forehead using circular motions and sweep outward toward the temples.\n-Smooth your fingers under your cheekbones and jawline, sweeping upward to define contours."
+    }
   },
   "P433887": {
     "sku_id": "2105856",
@@ -3709,11 +3733,25 @@
     "description": null
   },
   "P475589": {
-    "sku_id": null,
+    "sku_id": "2499689",
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "This visibly de-puffing cream now has vitamin C and niacinamide to reduce the appearance of dark circles and promote a brighter-, more radiant-looking eye area.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness, Dark Circles, and Puffiness",
+      "highlighted_ingredients": [
+        "Vitamin C: Diminishes the look of dark circles.",
+        "Niacinamide: Visibly brightens under eyes and energizes skin.",
+        "Panax Ginseng and Caffeine: Support natural skin-cell energy, visibly reviving radiance."
+      ],
+      "ingredient_callouts": "This product is vegan, gluten-free, and comes in recyclable packaging.",
+      "what_else": "Enjoy rapid and long-term reduction of visible dark circles plus lightweight hydration that&rsquo;s perfect under makeup. Just a dab quickly de-puffs the appearance of eye bags. Choose between different pearlized, brightening tones to visibly revive tired-looking eyes in a snap.",
+      "clinical_results": "In a clinical test with 66 women, after 12 weeks of use:\n- 86% had visibly reduced dark circles over time\n\nIn consumer testing with 110 women:\nAfter 1 use:\n- 89% said it instantly left their eyes looking well-rested, brighter, and more radiant\n\nAfter 4 weeks of use:\n- 93% said their eye area looked brighter, more radiant, and refreshed\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Gently tap onto your eye area with your fingertips in the AM and PM.\n-GINZING&trade; VITAMIN C EYE CREAM in Original is ideal for fair-to-medium skin tones and cooler undertones.\n-GINZING&trade; VITAMIN C EYE CREAM in Warm is ideal for medium-to-deep skin tones and warmer undertones.\n\nRecycling Instructions:\n-Once your product is all gone, thoroughly clean out the jar and repurpose it for safely storing jewelry when you travel, daily vitamins, and so much more.",
+      "brand_story": "Origins mission is to create safe, high-performance products that deliver visible results powered by nature and proven by science. Because we’re dedicated to helping you make thoughtful decisions—ones that are right for you."
+    }
   },
   "P475908": {
     "sku_id": "2484434",
