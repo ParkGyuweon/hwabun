@@ -19,7 +19,10 @@
     어떤 상품을 보고 담을지에는 관여하지 않는다.
 
 출력
-    artifacts/persona_style.json   { persona_id: {축: 0~1 점수, ...} }
+    simulator/personas/data/persona_style.json   { persona_id: {축: 0~1 점수, ...} }
+
+⚠️ 페르소나 파일(personas_9900.json / personas_100_agent.json)에서 파생된다.
+   build_personas.py 를 다시 돌렸으면 이 스크립트도 반드시 다시 돌려야 한다.
 
 실행
     python build_persona_style.py
@@ -32,7 +35,9 @@ try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass
 
 BD = os.path.dirname(os.path.abspath(__file__))
-ART = os.path.join(BD, "artifacts")
+ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
+# 페르소나 파일과 성향 파일은 같은 폴더에 둔다 (simulator/personas/data)
+ART = os.path.join(ROOT, "simulator", "personas", "data")
 OUT = os.path.join(ART, "persona_style.json")
 
 # concern_discovery_poc.py 의 k=35 군집에서 실제로 나온 축을 골랐다.
