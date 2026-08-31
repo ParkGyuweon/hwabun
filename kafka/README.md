@@ -40,7 +40,7 @@ Kafka는 수집과 처리 사이의 전달·버퍼·재생 구간을 맡는다. 
 | 성공 응답 | 배치의 모든 Kafka 전송 Future가 성공하면 HTTP 202 |
 | 검증 오류 | 현재는 일부 항목만 제외하지 않고 배치 전체 HTTP 400 |
 | 발행 오류 | Kafka 전송 실패 또는 전용 실행기 포화 시 HTTP 503 |
-| Spark 구현 | 현재 저장소에 Raw/Processed Job 구현은 없음 |
+| Spark 구현 | `streaming/jobs/raw_sink_job.py`에 Q1 Kafka → Raw Parquet MVP 구현. Q2 이후 Job은 구현 대상 |
 | 모니터링 | Collector용 Prometheus/Grafana 구성이 있음 |
 
 근거: [Backend README](../backend/README.md), [API 요청 DTO](../backend/src/main/java/com/cosmetic/collector/event/api/EventBatchRequest.java), [Collector API](../backend/src/main/java/com/cosmetic/collector/event/api/EventController.java), [Producer](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventPublisher.java), [Topic 생성 설정](../backend/src/main/java/com/cosmetic/collector/config/KafkaTopicConfig.java), [Front Logger](../frontend/src/lib/logger.ts).
@@ -335,7 +335,7 @@ Watermark를 사용하는 상태 기반 중복 제거는 지연 허용 범위 �
 
 | Job | 입력 | 출력 | 복구 기준 |
 | --- | --- | --- | --- |
-| Q1 Raw Writer | Kafka `activity-events` | `raw_events` | Kafka 범위와 Raw Sink의 멱등 기록 |
+| Q1 Raw Writer | Kafka `activity-events` | `raw_events` Parquet | 동일 checkpoint 기반 재시작. 전체 Replay 좌표 Upsert는 후속 보강 |
 | Q2 Clean Processor | 신규 Raw 범위 | 정본, 오류·감사 기록 | 정본 Upsert 완료와 Job Checkpoint |
 | 후속 집계 | `cleaned_events` 및 파생 Fact | DW/Mart | 처리 버전과 재계산 범위 |
 
@@ -353,6 +353,11 @@ Watermark를 사용하는 상태 기반 중복 제거는 지연 허용 범위 �
 | 수동 Replay | 새 Checkpoint와 분리된 출력으로 검증 후 반영 |
 
 `startingOffsets`는 신규 Query 시작에 적용된다. 재시작 시 설정값만 바꾸어 과거 데이터로 돌아갈 수 있다고 가정하지 않는다. Kafka에서 이미 만료된 데이터는 장기 Raw 저장소에서 재처리한다. [Spark 시작 Offset과 재시작](https://spark.apache.org/docs/latest/streaming/structured-streaming-kafka-integration.html)
+
+현재 Q1 실행 방법과 Raw 출력 컬럼은 [Spark Streaming README](../streaming/README.md)에
+기록한다. Q1은 `raw_value`와 Kafka 좌표를 보존하고 `event_id` 중복 제거는 Q2에
+위임한다. Parquet + checkpoint는 정상 재시작을 위한 MVP이며, checkpoint를
+삭제한 전체 Replay의 좌표 멱등성은 저장 엔진 확정 후 별도로 검증한다.
 
 Replay 절차는 대상 Raw 날짜/Offset, 처리 버전, 예상 Event ID 수를 먼저 기록하고, 별도 출력에서 정본·Fact·Mart 결과를 비교한 후 영향 범위만 반영한다. 정상 운영 중인 Checkpoint를 삭제하거나 Topic을 재생성해서 Replay를 시작하지 않는다.
 
