@@ -206,20 +206,26 @@ FIELD positive_u_sum : float[148]  긍정 축 가중 누적합 (JSON 또는 바�
       positive_w_sum : float       긍정 축 가중치 누적합
       negative_u_sum : float[148]  부정 축 가중 누적합
       negative_w_sum : float       부정 축 가중치 누적합
-      converted      : Set         전환한 product_id  — 하드 제외 + v_u⁺ 판정
-      viewed         : Set         접촉했으나 미전환 product_id — 소프트 강등 + v_u⁻ 판정
-      n_products     : int         |converted ∪ viewed| (가중치 스케줄 판정용)
+      converted      : Set         전환한 product_id — 하드 제외 + v_u⁺ 판정
+      viewed         : Set         접촉한 모든 product_id (converted 포함)
+      n_products     : int         |viewed| (가중치 스케줄 판정용)
       updated_at     : timestamp
 TTL   없음 (시뮬레이션 종료까지 유지)
 ```
 
-**`seen` 을 두 집합으로 나눕니다.** 하드 제외와 소프트 강등은 다른 처리라 단일 집합으로 표현되지 않습니다. 기존 문서의 `seen` 은 `converted ∪ viewed` 에 해당하고, **추천 후보에서 실제로 빼는 것은 `converted` 뿐**입니다.
+**`seen` 을 두 집합으로 나눕니다.** 하드 제외와 소프트 강등은 다른 처리라 단일 집합으로 표현되지 않습니다. 기존 문서의 `seen` 은 `viewed` 에 해당하고, **추천 후보에서 실제로 빼는 것은 `converted` 뿐**입니다.
+
+`converted ⊆ viewed` 입니다. `cart.add` 는 가중치 4.0 이라 `viewed` 에도 들어갑니다. 두 집합은 배타적이지 않습니다.
 
 | 집합 | 등록 조건 | 추천에서의 처리 |
 |---|---|---|
 | `converted` | 위 "전환의 정의" 표에 해당하는 이벤트 발생 | **후보에서 완전히 제외** |
-| `viewed` | `event_weight > 0` 인 이벤트가 1건이라도 발생했고 `converted` 가 아닌 상품 | 후보에 남기되 **상한 2개** (§5) |
+| `viewed` | `event_weight != 0` 인 이벤트가 1건이라도 발생 (감점 이벤트·`scroll_depth` 포함) | 후보에 남기되 **상한 2개** (§5) |
 | (미등록) | `product.impression` 등 `event_weight = 0` 노출 | 두 집합 어디에도 넣지 않는다 |
+
+소프트 강등이 실제로 적용되는 대상은 `converted` 를 먼저 제외한 뒤 남는 **`viewed \ converted`** 입니다. 상한 계산은 이 차집합에 대해 셉니다.
+
+감점 이벤트만 발생한 상품도 `viewed` 에 들어갑니다. `rage_click` 이 찍혔다는 것은 그 상품을 봤다는 뜻이므로 노출 이력으로는 유효합니다.
 
 노출(`impression`)을 넣지 않는 이유는 사용자 의지가 아니기 때문입니다. 넣으면 스크롤 한 번에 후보가 통째로 사라집니다.
 
@@ -228,7 +234,7 @@ TTL   없음 (시뮬레이션 종료까지 유지)
 #  축 결정은 조회 시점의 상품 단위 분기를 따른다 (위 2단계 의사코드)
 u_sum += w * decay * v_item
 w_sum += w * decay
-n_products = |converted ∪ viewed|
+n_products = |viewed|                               # converted ⊆ viewed
 positive_vector = positive_u_sum / positive_w_sum   # positive_w_sum > 0
 negative_vector = negative_u_sum / negative_w_sum   # negative_w_sum > 0
 ```
