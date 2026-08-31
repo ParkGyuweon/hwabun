@@ -1,12 +1,13 @@
 # 추천 입출력 데이터 구조
 
-> 2026-08-27 · 어휘집 버전 `0.1-draft`
+> 2026-08-27 (최종 갱신 2026-08-31) · 어휘집 버전 `0.4` (148차원)
 > 관련: [`recommendation-design.md`](../docs/ai/recommendation-design.md) (계산 설계) · [`product-feature-spec.md`](product-feature-spec.md) (상품 벡터 명세) · [`product-feature-sample.md`](../docs/ai/product-feature-sample.md) (실제 계산 샘플)
 
 추천 점수를 구성하는 4개 요소의 **입력 → 처리 → 출력 스키마 → 저장소 → 소비처**를 정의합니다.
 
 ```
-score(u, i) = w1 x cos(v_u, v_i)        <- Product Vector,  User Behavior Vector
+score(u, i) = w1 x cos(v_u⁺, v_i)       <- Product Vector,  User Behavior Vector (긍정 축)
+            − λ  x cos(v_u⁻, v_i)       <- User Behavior Vector (부정 축), λ = 0.15
             + w2 x attr_affinity(u, i)  <- Attribute Affinity
             + w3 x prior(i)             <- Product Prior
 ```
@@ -40,10 +41,10 @@ reviews_*.csv                                │
 
 | 요소 | 갱신 주기 | 저장소 | 크기 |
 |---|---|---|---|
-| Product Vector | 일 1회 배치 | MySQL | 200행 × 93차원 = 73KB |
+| Product Vector | 일 1회 배치 | MySQL | 200행 × 148차원 = 116KB |
 | Attribute Affinity | 일 1회 배치 | MySQL | 4,000행 = 약 500KB |
 | Product Prior | 일 1회 배치 | MySQL | 200행 |
-| User Behavior Vector | **이벤트마다 증분** | Redis | 10,000명 × 93차원 = 3.6MB |
+| User Behavior Vector | **이벤트마다 증분** | Redis | 10,000명 × 148차원 × 2축 = 11.6MB |
 
 **앞의 3개는 사용자와 무관한 오프라인 산출물**이고, 마지막 하나만 실시간입니다.
 
@@ -51,7 +52,7 @@ reviews_*.csv                                │
 
 ## 1. Product Vector
 
-상품의 콘텐츠를 93차원 벡터로 표현합니다.
+상품의 콘텐츠를 148차원 벡터로 표현합니다. (어휘집 v0.4 — v0.3 의 93차원에 brand 블록 55차원 추가)
 
 ### 입력
 
@@ -78,7 +79,7 @@ reviews_*.csv                                │
 CREATE TABLE product_feature (
     product_id      VARCHAR(16)  NOT NULL,
     vocab_version   VARCHAR(16)  NOT NULL,
-    vector          JSON         NOT NULL,   -- float[93], L2 정규화 완료
+    vector          JSON         NOT NULL,   -- float[148], L2 정규화 완료
     prior_score     DECIMAL(6,5) NOT NULL,
     secondary_category VARCHAR(64) NOT NULL,
     tertiary_category  VARCHAR(64) NOT NULL,
@@ -116,55 +117,145 @@ CREATE TABLE product_feature (
 
 ### 처리
 
+사용자 벡터는 **두 개**입니다. 긍정 축 `v_u⁺` 와 부정 축 `v_u⁻` 입니다.
+
 ```
-v_u = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))
+v_u⁺ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    전환한 상품만
+v_u⁻ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    그 외 접촉 상품 + 감점 이벤트
 ```
 
-**행동 가중치**
+**행동 가중치 — 단일 출처는 `frontend/src/types/log.ts` 입니다**
 
-| `event_type` | 가중치 | 비고 |
-|---|---:|---|
-| `product.impression` | 0 | 목록 노출은 증거가 아님 |
-| `product.click` | 1.0 | 상세 진입 |
-| `scroll.depth` 25% | 0.5 | |
-| `scroll.depth` 50% | 1.5 | |
-| `scroll.depth` 75% | 2.0 | 실질 관심 신호 |
-| `scroll.depth` 100% | 2.5 | |
-| `cart.add` | 4.0 | |
-| `review.submit` | **(rating − 3) × 2** | 범위 −4 ~ +4 |
+> 이 문서에 값을 복사해 두지 않습니다. 복사본은 반드시 갈라집니다.
+> `batch/jobs/behavior_weights.py` 가 `log.ts` 를 **직접 파싱**해 `EVENT_WEIGHT` ·
+> `SECTION_DWELL_WEIGHT` · `scrollDepthWeight()` · `EVENT_INTENT` 를 읽습니다.
+> 프론트가 값을 고치면 배치·시뮬레이터가 자동으로 따라갑니다.
 
-`review.submit`의 중심 3은 **고정**입니다. `rating`을 그대로 쓰면 1점 준 상품도 취향으로 학습됩니다.
+| 원천 (`log.ts`) | 내용 |
+|---|---|
+| `EVENT_WEIGHT` | 이벤트 33종의 가중치 (`add_to_cart` 4.0 ~ `rage_click` −2.0) |
+| `SECTION_DWELL_WEIGHT` | 섹션 11종의 체류 가중치 (`ingredients`·`reviews` 1.5 ~ `list_controls` 0.3) |
+| `scrollDepthWeight()` | 도달률 → 가중치 (25% 0.2 / 50% 0.5 / 75% 1.0 / 100% 1.5) |
+| `EVENT_INTENT` | 이벤트 → intent 8종 (`session` `exposure` `interest` `comparison` `validation` `hesitation` `conversion` `friction`) |
+
+값을 확인하려면 아래를 실행합니다.
+
+```bash
+python batch/jobs/behavior_weights.py
+```
+
+`event_weight = 0` 인 이벤트(`product_impression`, `recommendation_impression`, `impression_dwell`, `recommendation_snapshot`, `scroll_depth`, `session_start`, `exit_summary`, `quick_look_close`)는 두 축 어디에도 누적되지 않습니다. `scroll_depth` 가 0인 이유는 도달률별 가중치를 `scrollDepthWeight()` 로 따로 계산하기 때문입니다(규칙 2).
+
+**리뷰 작성 이벤트는 없습니다.** 프론트에 `review_submit` 이 존재하지 않으며, 시뮬레이터도 생성하지 않습니다. 페르소나의 리뷰 이력은 이벤트가 아니라 **시드 상태**(`session_id = "seed"`)로 들어가고, 추천 단계에서는 "이미 산 상품" 으로 후보에서 제외됩니다(§5).
 
 **시간 감쇠**: `decay(t) = exp(−Δt / τ)`, τ = 30일
 
+### 집계 규칙 (canonical)
+
+`persona-schema.md` §12.1 · §12.3 과 `processed-schema.md` 는 이 절을 참조합니다. 산식을 중복 정의하지 않습니다.
+구현은 `batch/jobs/user_vector.py` 입니다.
+
+| # | 규칙 | 이유 |
+|---|---|---|
+| 1 | `product_id` 가 없는 이벤트는 버린다 | 목록 그리드 체류는 특정 상품에 귀속되지 않는다 |
+| 2 | `scroll_depth` 는 상품별 **최대 도달 1건**만 가중한다 | 누적하면 끝까지 내려간 것이 `cart.add` 보다 무거워진다 |
+| 3 | `section_dwell` / `section_view` 는 **상품 × 섹션당 1건**만 센다 | 스크롤을 오르내릴 때마다 쌓여 `cart.add` 를 압도한다 |
+| 4 | `reason=checkpoint` 인 체류는 버린다 | 화면에 떠 있었다는 뜻이지 봤다는 뜻이 아니다 |
+| 5 | **전환한 상품만 `v_u⁺`. 전환하지 않은 접촉 상품은 양의 가중치까지 통째로 `v_u⁻`** | "보긴 봤다" 는 좋아한다는 뜻이 아니다 |
+| 6 | 감점 이벤트는 전환 여부와 무관하게 항상 `v_u⁻` | `rage_click`, `dead_click`, `scroll_backtrack` |
+
+**전환(conversion)의 정의**
+
+| 이벤트 | 처리 |
+|---|---|
+| `cart.add` (`add_to_cart`), `quantity_change` | `converted` 에 추가 |
+| `wishlist_toggle` (`action != "remove"`) | `converted` 에 추가 |
+| `wishlist_toggle` (`action == "remove"`), `remove_from_cart` | `converted` 에서 제거 → 해당 상품은 `v_u⁻` 로 넘어간다 |
+
+> **`intent` 와 `converted` 는 다른 축입니다.** `log.ts` 의 `EVENT_INTENT` 는 GA4 퍼널 단계 라벨이고, `converted` 는 특정 상품에 대한 선호 판정입니다.
+> `view_cart` 는 `intent = conversion` 이지만 `converted` 에 넣지 않습니다. 장바구니 **화면**을 열었다는 뜻이라 특정 상품의 증거가 아니며, 프론트도 `product_id` 없이 발행하므로 규칙 1에서 걸러집니다. 장바구니에 담긴 상품은 이미 `add_to_cart` 로 `converted` 에 들어가 있습니다.
+
+**부호와 축을 혼동하지 않도록 2단계로 나눕니다.** `final_weight` 의 부호는 1단계에서만 쓰고, 어느 축으로 갈지는 2단계에서 **상품 단위**로 정합니다.
+
+```python
+# 1단계 — 이벤트를 상품별로 누적 (부호 그대로, 규칙 2·3·4 적용 후)
+if final_weight > 0: product_pos[pid] += final_weight
+if final_weight < 0: product_neg[pid] += abs(final_weight)   # 규칙 6
+
+# 2단계 — 조회 시점에 상품 단위로 축을 가른다 (규칙 5)
+for pid, w in product_pos.items():
+    if pid in converted:
+        positive_u_sum += w * v_pid;  positive_w_sum += w
+    else:
+        negative_u_sum += w * v_pid;  negative_w_sum += w
+
+for pid, w in product_neg.items():
+    negative_u_sum += w * v_pid;  negative_w_sum += w
+```
+
+분모는 두 축 모두 절대값 누적이라 0 또는 음수가 되지 않습니다. `positive_w_sum = 0` 이면 `v_u⁺` 를 만들지 않고 속성·인기도 중심 스케줄을 씁니다.
+감점은 벡터 누적 단계가 아니라 **최종 점수에서 한 번만** 적용합니다 (§5).
+
+**측정 근거** — 페르소나 9,900명 시뮬레이션 로그, 부트스트랩 300회. 오프라인 평가 모드 기준입니다.
+
+| 집계 규칙 | Recall@10 | 95% CI | 롱테일 |
+|---|---:|---|---:|
+| 리뷰 시드만으로 만든 벡터 (기준선) | 12.8% | | 19.9% |
+| `final_weight > 0` 을 전부 `v_u⁺` 로 (초안) | 5.9% | [5.1, 6.8] | 6.1% |
+| + 규칙 3 (체류 1건) | 8.3% | [7.3, 9.3] | 10.8% |
+| **+ 규칙 5 (미전환은 `v_u⁻`)** | **12.6%** | [11.4, 13.7] | **19.6%** |
+
+규칙 5 가 없으면 **로그로 만든 벡터가 리뷰 시드만 쓴 벡터보다 나쁩니다.** 눌러보기만 한 상품이 취향 벡터의 대부분을 차지하기 때문입니다.
+
 ### 출력 스키마 (Redis)
 
-전체 재계산 없이 O(93)로 증분 갱신하기 위해 **누적합과 누적가중치만** 보관합니다.
+전체 재계산 없이 O(148)로 증분 갱신하기 위해 **누적합과 누적가중치만** 보관합니다.
 
 ```
 KEY   user:vec:{persona_id}
 TYPE  Hash
-FIELD u_sum      : float[93]  가중 누적합 (JSON 또는 바이너리)
-      w_sum      : float      가중치 누적합
-      n_products : int        상호작용한 고유 상품 수 (가중치 스케줄 판정용)
-      seen       : Set        이미 상호작용한 product_id (추천 제외용)
-      updated_at : timestamp
+FIELD positive_u_sum : float[148]  긍정 축 가중 누적합 (JSON 또는 바이너리)
+      positive_w_sum : float       긍정 축 가중치 누적합
+      negative_u_sum : float[148]  부정 축 가중 누적합
+      negative_w_sum : float       부정 축 가중치 누적합
+      converted      : Set         전환한 product_id — 하드 제외 + v_u⁺ 판정
+      viewed         : Set         접촉한 모든 product_id (converted 포함)
+      n_products     : int         |viewed| (가중치 스케줄 판정용)
+      updated_at     : timestamp
 TTL   없음 (시뮬레이션 종료까지 유지)
 ```
 
+**`seen` 을 두 집합으로 나눕니다.** 하드 제외와 소프트 강등은 다른 처리라 단일 집합으로 표현되지 않습니다. 기존 문서의 `seen` 은 `viewed` 에 해당하고, **추천 후보에서 실제로 빼는 것은 `converted` 뿐**입니다.
+
+`converted ⊆ viewed` 입니다. `cart.add` 는 가중치 4.0 이라 `viewed` 에도 들어갑니다. 두 집합은 배타적이지 않습니다.
+
+| 집합 | 등록 조건 | 추천에서의 처리 |
+|---|---|---|
+| `converted` | 위 "전환의 정의" 표에 해당하는 이벤트 발생 | **후보에서 완전히 제외** |
+| `viewed` | `event_weight != 0` 인 이벤트가 1건이라도 발생 (감점 이벤트·`scroll_depth` 포함) | 후보에 남기되 **상한 2개** (§5) |
+| (미등록) | `product.impression` 등 `event_weight = 0` 노출 | 두 집합 어디에도 넣지 않는다 |
+
+소프트 강등이 실제로 적용되는 대상은 `converted` 를 먼저 제외한 뒤 남는 **`viewed \ converted`** 입니다. 상한 계산은 이 차집합에 대해 셉니다.
+
+감점 이벤트만 발생한 상품도 `viewed` 에 들어갑니다. `rage_click` 이 찍혔다는 것은 그 상품을 봤다는 뜻이므로 노출 이력으로는 유효합니다.
+
+노출(`impression`)을 넣지 않는 이유는 사용자 의지가 아니기 때문입니다. 넣으면 스크롤 한 번에 후보가 통째로 사라집니다.
+
 ```python
-# 이벤트 1건당 O(93)
+# 이벤트 1건당 O(148)
+#  축 결정은 조회 시점의 상품 단위 분기를 따른다 (위 2단계 의사코드)
 u_sum += w * decay * v_item
 w_sum += w * decay
-n_products = |seen|
-user_vector = u_sum / w_sum          # 조회 시 계산
+n_products = |viewed|                               # converted ⊆ viewed
+positive_vector = positive_u_sum / positive_w_sum   # positive_w_sum > 0
+negative_vector = negative_u_sum / negative_w_sum   # negative_w_sum > 0
 ```
 
 `n_products`를 별도로 두는 이유는 가중치 스케줄이 **이벤트 수가 아니라 고유 상품 수**를 기준으로 하기 때문입니다. 스크롤 4단계 때문에 상품 하나만 정독해도 이벤트가 5건 발생합니다.
 
 ### 소비처
 
-`RankingService` — `cos(v_u, v_i)` 계산 및 `seen` 제외
+`RankingService` — `cos(v_u⁺, v_i)` · `cos(v_u⁻, v_i)` 계산, `converted` 제외, `viewed` 상한 적용
 
 ---
 
@@ -286,30 +377,47 @@ GET /api/recommend?persona_id={id}&size=10
 ### 처리
 
 ```
-1. Redis에서 (u_sum, w_sum, n_products, seen) 조회
+1. Redis에서 (positive_*, negative_*, n_products, converted, viewed) 조회
 2. n_products로 가중치 스케줄 결정
-3. user_vector = u_sum / w_sum        (n_products = 0이면 생략)
-4. scores = w1 x (V @ user_vector) + w2 x attr_affinity + w3 x prior
-5. seen 제외
-6. MMR 다양성 보정 (λ = 0.7)
+3. v_u⁺ = positive_u_sum / positive_w_sum   (positive_w_sum = 0이면 생략)
+   v_u⁻ = negative_u_sum / negative_w_sum   (negative_w_sum = 0이면 생략)
+4. scores = w1 x (V @ v_u⁺) − λ x (V @ v_u⁻) + w2 x attr_affinity + w3 x prior
+5. 노출 정책 적용 (아래)
+6. MMR 다양성 보정 (λ_mmr = 0.7)
 7. 상위 size개 반환
 ```
+
+`λ = 0.15` 입니다. **시뮬레이션 로그 기준 잠정값**이며 실제 로그가 쌓이면 재측정합니다.
+§4의 MMR 계수와 이름이 겹치므로 문서에서는 감점 계수를 `λ`, 다양성 계수를 `λ_mmr` 로 구분합니다.
+
+**노출 정책**
+
+| 상품 | 오프라인 평가 | 서빙 |
+|---|---|---|
+| 리뷰 쓴 상품 (이미 구매) | 제외 | 제외 |
+| `converted` (장바구니·위시리스트) | 제외 | 제외 |
+| `viewed` (조회만) | **제외** | **상한 2개까지 포함** |
+
+서빙에서 조회 상품을 전부 빼지 않는 이유는 재고려 리마인드가 유효한 추천이기 때문입니다. 상한을 0~6으로 재봤을 때 **2개에서 포화**했고 비용은 −0.6%p 였습니다.
+
+> ⚠️ **오프라인 평가에서는 `viewed` 까지 전부 제외합니다.** 시드가 결과에 섞이면 자기 자신을 맞히는 셈이라 적중률이 부풀려집니다(leakage). **서빙 수치와 평가 수치를 직접 비교하지 마십시오.** 이 문서의 모든 Recall 수치는 평가 모드 값입니다.
 
 **가중치 스케줄**
 
 | 상호작용 고유 상품 수 | w1 (코사인) | w2 (속성) | w3 (인기도) |
 |---|---:|---:|---:|
-| 0개 | 0.00 | 0.80 | 0.20 |
-| 1~2개 | 0.35 | 0.55 | 0.10 |
-| 3~5개 | 0.60 | 0.35 | 0.05 |
-| 6개 이상 | 0.80 | 0.20 | 0.00 |
+| 0개 | 0.00 | 0.30 | 0.70 |
+| 1~5개 | 0.70 | 0.25 | 0.05 |
+| 6개 이상 | 0.40 | 0.55 | 0.05 |
+
+> ⚠️ **6개 이상 구간은 미확정입니다.** 상품 수가 늘수록 콘텐츠 가중치가 내려가는 형태라 방향이 뒤집혀 있습니다. 현재 `batch/jobs/recommender.py:28` 구현값을 그대로 옮겨 적은 것이며, 재측정 전까지 이 구간의 수치를 근거로 삼지 마십시오. 1~5개 구간(0.70 / 0.25 / 0.05)만 측정으로 뒷받침됩니다.
 
 ### 응답
 
 ```json
 {
   "persona_id": "PC00001",
-  "n_products_seen": 3,
+  "n_products": 3,
   "weights": { "cosine": 0.60, "attr": 0.35, "prior": 0.05 },
   "items": [
     {
@@ -334,7 +442,7 @@ GET /api/recommend?persona_id={id}&size=10
 
 ### 성능 실측
 
-상품 200개 × 93차원 기준, numpy 싱글 코어:
+상품 200개 × 148차원 기준, numpy 싱글 코어:
 
 | 항목 | 값 |
 |---|---:|

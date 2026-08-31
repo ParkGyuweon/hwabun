@@ -1,8 +1,17 @@
 """
 행동 로그 생성기
 
-페르소나 10,000명(코드 9,900 + 에이전트 100)의 탐색 행동을 LogEnvelope 형식으로 생성한다.
+페르소나 PC 9,900명의 탐색 행동을 LogEnvelope 형식으로 생성한다.
 프론트 실제 로그(DevToolbar 관측)의 밀도와 properties 구조를 맞췄다.
+
+PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브 전용이다.
+프론트 페르소나 전환기(드롭다운)와 LLM 에이전트가 이 100명을 직접 조종한다.
+합성 로그를 같이 쏘면 1인당 약 590건이 미리 쌓여, 사람이 10번 클릭해도
+벡터의 1.7% 밖에 못 움직여 "누른 대로 추천이 바뀐다" 를 보여줄 수 없다.
+부하 검증 손실은 590만 건 중 5.9만 건(1%) 이라 무시할 수준이다.
+  PA00001~PA00100  인터랙티브 (프론트 드롭다운 + LLM 에이전트)
+  PC00001~PC09900  합성 로그 (이 스크립트)
+--include-agents 로 필요할 때만 PA 를 포함한다.
 
 합의사항 (BEHAVIOR_SCENARIO.md)
   - 리뷰 작성 이벤트를 만들지 않는다. 리뷰 상품은 add_to_cart 로 환산
@@ -15,7 +24,8 @@
 
 실행
   python gen_behavior_logs.py --limit 50                    # 맛보기. 파일로 저장
-  python gen_behavior_logs.py                               # 전원 10,000명
+  python gen_behavior_logs.py                               # PC 9,900명
+  python gen_behavior_logs.py --include-agents              # PA 100명까지 (기본 제외)
   python gen_behavior_logs.py --post http://localhost:8080  # 수집 API 로 전송
   python gen_behavior_logs.py --post http://localhost:8080 --rps 200 --limit 500
 
@@ -473,7 +483,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
     return {"seeds": len(seeds), "bounce": len(bounce)}
 
 
-def main(limit, show, out, post=None, rps=0):
+def main(limit, show, out, post=None, rps=0, include_agents=False):
     prods = json.load(open(PRODUCTS, encoding="utf-8"))
     catalog = {p["product_id"]: {"cat": p["secondary_category"], "name": p["product_name"],
                                  "price": p["price_usd"], "n": p["_review_stats"]["review_count"]}
@@ -484,9 +494,15 @@ def main(limit, show, out, post=None, rps=0):
     popular = [g for g, _ in sorted(catalog.items(), key=lambda x: -x[1]["n"])]
 
     P = json.load(open(os.path.join(PERSONA_DIR, "personas_9900.json"), encoding="utf-8"))
-    A = json.load(open(os.path.join(PERSONA_DIR, "personas_100_agent.json"), encoding="utf-8"))
+    # PA 100명은 기본 제외 — 프론트 드롭다운과 LLM 에이전트가 직접 조종하는 계정이다.
+    # 합성 로그를 미리 쌓아두면 사람의 행동이 묻혀 시연이 안 된다.
+    A = []
+    if include_agents:
+        A = json.load(open(os.path.join(PERSONA_DIR, "personas_100_agent.json"),
+                           encoding="utf-8"))
     people = (P + A) if not limit else (P[:limit] + A[:2])
-    log(f"페르소나 {len(P):,} + 에이전트 {len(A)} -> 대상 {len(people):,}명")
+    log(f"페르소나 PC {len(P):,}명" + (f" + 에이전트 PA {len(A)}명" if A else " (PA 제외)")
+        + f" -> 대상 {len(people):,}명")
 
     load_style()
     rng = np.random.default_rng(42)
@@ -560,9 +576,11 @@ if __name__ == "__main__":
                     help="jsonl 저장 경로. 생략하면 파일로 안 쓴다")
     ap.add_argument("--post", default=None, metavar="URL",
                     help="수집 API 베이스 URL. 예) http://localhost:8080")
+    ap.add_argument("--include-agents", action="store_true",
+                    help="PA 100명(인터랙티브 전용)도 생성 대상에 넣는다. 기본은 제외")
     ap.add_argument("--rps", type=int, default=0,
                     help="초당 이벤트 수 제한. 0 이면 제한 없음")
     a = ap.parse_args()
     if not a.out and not a.post:
         a.out = os.path.join(BD, "behavior_logs.jsonl")
-    main(a.limit, a.show, a.out, a.post, a.rps)
+    main(a.limit, a.show, a.out, a.post, a.rps, a.include_agents)
