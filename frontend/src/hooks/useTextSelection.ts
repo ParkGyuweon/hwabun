@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { track } from '../lib/logger';
 import { regionOfNode } from '../lib/section';
+import vocab from '../../../contracts/product-feature-vocab.json';
 
 /**
  * 텍스트 드래그 / 복사.
@@ -10,11 +11,40 @@ import { regionOfNode } from '../lib/section';
  * 클릭보다 관심 대상을 정확히 짚어주는 신호다.
  * 복사(text_copy)는 페이지 밖으로 들고 나갈 만큼 관심이 있었다는 뜻이라 더 세게 본다.
  *
- * 긁은 구간의 텍스트를 남긴다. 상품 페이지에 이미 노출된 문구이고,
- * 다만 **긁은 원문은 남기지 않는다** (데이터 계약).
- * 어느 구역에서 얼마나 긴 문장을 긁었는지까지만 남긴다.
+ * **긁은 원문은 남기지 않는다** (데이터 계약).
+ * 대신 긁은 구간에 우리 성분 사전의 성분이 들어 있으면 **그 표준 명칭**을 남긴다.
+ * 사용자가 친 글자가 아니라 우리가 가진 값이라 원문 저장이 아니다.
+ *
+ * 사전은 `contracts/product-feature-vocab.json` 을 그대로 쓴다. AI 파트가 상품
+ * 벡터를 만들 때 쓰는 것과 같은 사전이라, "이 성분을 긁은 사람" 과 "이 성분이 든
+ * 상품" 이 같은 이름으로 조인된다. 프론트가 따로 사전을 만들면 그 조인이 깨진다.
+ *
+ * 이 값으로 어떤 성분이 설명이 부족한지가 드러난다. 반복해서 긁히는 성분은
+ * 상세페이지에서 그 성분을 제대로 설명하지 못하고 있다는 뜻이다.
+ *
  * 사용자가 입력한 값도 남기지 않는다 (입력 요소는 아래에서 제외한다).
  */
+
+/** 표준 성분명 → 실제 표기들. 값이 소문자라 비교 전에 본문도 소문자로 만든다 */
+const INGREDIENT_SYNONYMS = vocab.ingredient_source.synonyms as Record<string, string[]>;
+
+/**
+ * 어느 판 사전으로 맞힌 결과인지 같이 남긴다.
+ * 사전이 바뀌면 같은 문장이 다른 성분으로 걸린다. 판을 모르면 과거 로그와
+ * 지금 로그를 같은 기준으로 비교할 수 없다.
+ */
+const VOCAB_VERSION = vocab.version as string;
+
+/**
+ * 긁은 문장에 들어 있는 성분을 찾는다.
+ * 한 문장에 여러 개가 걸릴 수 있어 전부 남긴다. 없으면 빈 배열이다.
+ */
+function matchIngredients(text: string): string[] {
+  const haystack = text.toLowerCase();
+  return Object.entries(INGREDIENT_SYNONYMS)
+    .filter(([, aliases]) => aliases.some((alias) => haystack.includes(alias)))
+    .map(([standardName]) => standardName);
+}
 
 /** 이보다 짧으면 드래그가 아니라 클릭하다 미끄러진 것으로 본다 */
 const MIN_LENGTH = 2;
@@ -60,14 +90,15 @@ export function useTextSelection(pageViewKey: string) {
       if (eventName === 'text_selection' && current.text === lastReported) return;
       lastReported = current.text;
 
-      /*
-       * 원문은 싣지 않는다 (데이터 계약).
-       * 어느 구역에서 얼마나 긴 문장을 긁었는지까지만 남긴다.
-       * 대시보드의 "긁어간 문장" 화면은 이 값으로는 만들 수 없다.
-       */
+      // 원문 대신 사전에 걸린 성분의 표준 명칭만 싣는다 (데이터 계약)
+      const matched = matchIngredients(current.text);
+
       track(eventName, {
         ...regionOfNode(current.anchor),
         text_length: current.text.length,
+        matched_ingredients: matched,
+        matched_count: matched.length,
+        vocab_version: VOCAB_VERSION,
       });
     };
 

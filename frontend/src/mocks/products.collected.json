@@ -193,7 +193,13 @@
       "https://www.sephora.com/productimages/product/p278317-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A daily treatment pad that contains just the right amount of lactic and glycolic acids to safely and effectively exfoliate, tone, and brighten all skin types, including sensitive.",
+      "what_else": "This product is cruelty-free.",
+      "clinical_results": "In a consumer study after 2 weeks of use:\n\n- 90.7% of participants saw results\n\n- 95% of participants said the product was gentle and non-irritating",
+      "suggested_usage": "-Wipe pad across face, neck and d&#233;collet&#233; after cleansing once or twice daily.",
+      "brand_story": "First Aid Beauty (a.k.a. FAB) provides must-have skin care products for every age and skin type.  FAB was founded by Lilli Gordon, a long-time beauty veteran inspired to elevate the drugstore classics with scientifically advanced formulations and luxurious consistencies. \r\n\r\nGordon—who also believes that hard-working, irritant-free skin care doesn’t have to be greasy or bland—created a comprehensive collection that ranges from everyday essentials to products that provide intense therapy for serious skin problems (including facial redness and eczema)."
+    }
   },
   "P297516": {
     "sku_id": "1375682",
@@ -300,7 +306,7 @@
     "description": null
   },
   "P379510": {
-    "sku_id": null,
+    "sku_id": "1528066",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p379510-av-01-zoom.jpg",
@@ -335,10 +341,15 @@
       "https://www.sephora.com/productimages/product/p379510-av-30-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A fast-acting anti-aging serum that reveals smoother, more radiant skin in as few as seven days.",
+      "what_else": "Over 14 years of research and 197 formulation trials were spent developing Advanced Genifique Serum.",
+      "clinical_results": "Based on self-assessments on 34 women in an 8-week study, after 1 week:\n- 85% of women felt skin appeared more radiant\n\nAfter 2 weeks:\n- 94% of women felt skin appeared smoother\n\nBased on self-assessments of 103 women in an 8-week study, after 4 weeks:\n- 89% of women agreed skin felt softer\n\nBased on self-assessments on 67 women in an 8-week study:\n- 90% of women agreed skin appeared healthy-looking",
+      "brand_story": "Lancôme epitomizes the French Touch with feminine, effortless, Parisian-chic beauty. With luxurious textures, cutting-edge active ingredients, high-potency pigments, and sensual fragrances, every woman can feel unique, empowered, and chic."
+    }
   },
   "P392235": {
-    "sku_id": null,
+    "sku_id": "1673805",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p392235-av-01-zoom.jpg",
@@ -450,7 +461,12 @@
       "https://www.sephora.com/productimages/product/p397890-av-03-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A two-in-one purifying mask that draws out impurities and gently exfoliates to refine skin’s texture and boost radiance.",
+      "what_else": "\"As early as your 20s, skin starts to lose its luster because of everyday environmental stress. A protein change that can lead to dullness and skin needs some extra help to bounce back. Don’t worry! That’s why Origins created Original Skin&trade;. It’s formulated with willowherb to help inhibit that dullness causing protein change and restore your natural, gorgeous glow.",
+      "suggested_usage": "-Wash face with your favorite cleanser.\n-Apply mask to clean skin, avoiding eye area.\n-Leave on for 10 minutes.\n-Wet fingertips and massage face in circular motions to exfoliate.\n-Rinse well and follow with your serum and moisturizer.\n-Use one to two times per week as a boost to your regimen.",
+      "brand_story": "From the moment you twist off the cap and enjoy your first smell of an Origins product, you'll experience nature in one of its most potent and luxurious forms. The mission of Origins is to create problem-solving skin care that's powered by nature and proven by science. Their high-performance natural products, using potent plants, organic ingredients, and 100-percent natural essential oils, is studied by an international team of over 100 scientists for efficacy, safety, and impact on skin. The other cornerstone of the brand is their commitment to protecting the planet. Earth-friendly practices, such as facilities powered by renewable energy and post-consumer recycled cartons, affirm their long-standing promise to use the planet's resources responsibly."
+    }
   },
   "P399623": {
     "sku_id": "1742337",
@@ -502,7 +518,11 @@
       "https://www.sephora.com/productimages/product/p400259-av-08-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A super potent vitamin C day serum packed with a powerful antioxidant complex, essential nutrients, fruit enzymes, and an antiaging chronopeptide to visibly firm, brighten, and diminish the appearance of photo aging.",
+      "what_else": "This product has a pH level of 3.3 to 3.5, which Drunk Elephant believes is the key to a non-irritating, clinically-effective formulation that delivers real results. The unique formula has a reservoir effect, meaning it remains effective for a minimum of 72 hours and cannot be rubbed or washed off. It is noncomedogenic and cruelty-free.\n\nDrunk Elephant only use clean, non-toxic ingredients that either directly benefit the skin’s health or support the integrity and effectiveness of their formulations. They never take into account an ingredient’s synthetic or natural status, but instead choose based on its safety and bio-compatibility. You won’t find silicones, chemical screens, sensitizing colorants, perfumes, or fragrant essential oils of any kind in their products, making them appropriate for every skin type. This is Drunk Elephant’s commitment to you.\n\nDrunk Elephant supports the IEF (International Elephant Foundation).",
+      "suggested_usage": "-In the AM, apply one to two pumps to a clean, dry face, neck, chest, and backs of hands.\n-Immediately follow with our Umbra&trade; Sheer Physical Defense SPF 30 for unsurpassed UV protection.\n-Six-month shelf life; use within six months after opening."
+    }
   },
   "P403818": {
     "sku_id": "1766930",
@@ -531,7 +551,12 @@
       "https://www.sephora.com/productimages/product/p405599-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A daily, vegan gel moisturizer that soothes and refreshes parched skin with electrolyte-packed hydration.",
+      "what_else": "This product is vegan, dermatologist-tested, and formulated without artificial fragrances.\n\nClean at Sephora\n\n When you spot our Clean seal, you can be sure we’ve checked that this brand’s product is made without the ingredients you told us you’d most like to avoid.\n\nClean at Sephora&trade; is formulated without:\nSulfates SLS and SLES, parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, triclocarban. All skincare, hair, and makeup brands with the Clean Seal have less than one percent of synthetic fragrances.",
+      "suggested_usage": "-Apply evenly all over the face and neck after cleansing.\n-For best results, use in the morning and at night.",
+      "brand_story": "Over a decade ago, beauty aficionado Maureen Kelly channeled her entrepreneurial spirit and set out to prove that glamour can be good for you. Launched in the heart of New York City, tarte is a smart, colorful brand offering healthy, eco-chic beauty products that truly work. Tarte’s cruelty-free, high-performance beauty is infused with pure, invigorating ingredients, and all tarte products are formulated without parabens, mineral oil, phthalates, sodium lauryl sulfate, triclosan, and synthetic fragrances. From award-winning blushes and lip tints to the breakthrough Amazonian clay and maracuja complexion products, tarte delivers powerful results for real woman.  Be green, be smart, be tarte."
+    }
   },
   "P406712": {
     "sku_id": "1785856",
@@ -685,7 +710,18 @@
       "https://www.sephora.com/productimages/product/p411539-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A moisturizer for sensitive skin with soothing Centella Asiatica. This face cream instantly reduces visible redness and helps repair damage to the skin barrier. Derm tested.",
+      "skin_type": "Normal, Dry, and Combination",
+      "concerns_text": "Dryness and Redness",
+      "highlighted_ingredients": [
+        "Cica Complex: Deeply soothes skin.- Allantoin: Repairs skin’s barrier."
+      ],
+      "what_else": "This cushiony face cream suitable for sensitive skin is turbocharged with potent ingredients for powerful soothing. The non-sticky, non-greasy moisturizer works on contact to comfort, reduce redness and leave skin visibly calm and healthy. Suitable to use after laser skin treatments.",
+      "clinical_results": "Suitable to use after laser skin treatments*.*Shown to be safe for use following Intense Pulsed Light (IPL) treatment in 2 week clinical usage test.\nClinically shown to: + Instantly soothe visible redness by +22%*+ In 1 hour, repair skin barrier by +36%** *Clinical testing conducted by third-party institute on 33 females, 31-60 years old, after using the product. Effect varies by individual. **Clinical testing conducted by third-party institute on 32 females, 37-60 years old, after using the product for 1 hour. Effect varies by individual.+ 95% said leaves skin feeling soothed*+ 93% said reduces the look of redness* + 93% said it leaves skin feeling less sensitive* + 91% agreed this product is gentle on my skin* + 94% said skin feels moisturized all day**Sensory testing on 108 women, ages 20-50, after using product twice a day for 2 weeks.",
+      "suggested_usage": "-Massage a pea-size amount into clean skin morning and night, after toner and serum.",
+      "brand_story": "At Dr. Jart{+} science joins art to develop innovative products that deliver results. Founded in Korea in 2004, Dr. Jart{+} pioneered the invention of the BB Cream, setting the standard for multifunctional beauty. Dr. Jart{+} is an ever-evolving blend of form and function, creating skincare that works wonders."
+    }
   },
   "P411540": {
     "sku_id": "1855709",
@@ -828,7 +864,7 @@
     "description": null
   },
   "P416341": {
-    "sku_id": null,
+    "sku_id": "1932193",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p416341-av-01-zoom.jpg",
@@ -859,7 +895,12 @@
       "https://www.sephora.com/productimages/product/p416341-av-26-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "An ultra-rich moisturizing cream that creates an instant dewy finish.",
+      "what_else": "The iconic opal jar is hand-filled within eight hours of the Cr&#232;me’s creation.\n\nMiracle Broth is at the heart of La Mer and is infused into every treatment in the collection. This elixir is formulated with hand-harvested sea kelp and other nutrients and minerals unlocked via a natural fermentation process. Surging with vital energies, it supports the five facets of natural healing: moisture, regeneration, soothing, smoothing, and radiance&#151;which help to bring skin back to its healthiest state.",
+      "suggested_usage": "-To activate the Miracle Broth&trade;, warm between your fingers until it becomes translucent to the eye.\n-Press gently onto cleansed face and neck, morning and night.\n-Pair with your daily La Mer regimen.",
+      "brand_story": "It all started when Dr. Max Huber – unable to find relief from burns suffered in a lab accident – looked to the sea for healing. Twelve years and 6,000 experiments later, the iconic Crème de la Mer was born. At the heart of this formula is the highly potent, nutrient-rich Miracle Broth that's featured throughout every product in the legendary skin care line."
+    }
   },
   "P416563": {
     "sku_id": "2051936",
@@ -889,7 +930,13 @@
       "https://www.sephora.com/productimages/product/p416816-av-01-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A pore-refining toner with salicylic, glycolic, and lactic acids to remove excess oil, clarify, and freshen the complexion without stripping skin.",
+      "what_else": "During his struggle with cystic acne, Ole tried many astringent toners that left his skin feeling stripped. He was challenged to create his own version that delivered powerful results, but with a more comfortable, balanced feel.\r\n\nThis toner features Ole Henriksen’s Green Fusion Complex&trade;, a proprietary blend of potent active botanicals&#151;including  green tea, eucalyptus, algae (kelp), and Irish moss extracts&#151;with natural antiseptic properties to help absorb excess oil and refine pores.\r\n\nThis product is noncomedogenic. It is a 2018 Teen Vogue Acne Award winner in the toner category.",
+      "clinical_results": "In a consumer study on 36 women after 4 weeks:  \r\n\n- 100% said it removes residual dirt, makeup, and impurities\r\n\n- 100% said it removes oil\r\n\n- 100% said it purifies skin\r\n\n- 100% said it purifies pores\r\n\n- 100% said it refines pores\r\n\n- 100% said it gently clarifies skin\r\n\n- 100% said it balances skin\r\n\n- 100% said it absorbs excess oil\r\n\n- 100% said it controls excess oil  \r\n\n- 100% said it mattifies",
+      "suggested_usage": "-After using Ole Henriksen&reg; Find Your Balance&trade; Oil Control Cleanser, pour Balancing \r\n\n-Force Oil Control Toner onto a cotton pad. \r\n\n-Swipe over clean, dry face, in a circular motion. \r\n\n-Follow with Counter Balance&trade; Oil Control Hydrator.\r\n\n\r\n\n Precautions:\r\n\n-For external use only. \r\n\n-Use as directed.",
+      "brand_story": "Fall in love with your skin. Expertly blending the power of nature and science, OLEHENRIKSEN skincare rituals indulge your senses while transforming your skin to reveal the radiant healthy beauty you didn’t know was possible. \"Here's a toast to your natural beauty!\" - Cheers, Ole"
+    }
   },
   "P417238": {
     "sku_id": "1899103",
@@ -1198,7 +1245,12 @@
       "https://www.sephora.com/productimages/product/p421277-av-11-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A vegan, collagen-based formula to maintain skin’s youthful vitality.",
+      "what_else": "Collagen is the most abundant protein in your body, responsible for giving skin it's strength and elasticity. Collagen is the key structural element needed to help skin maintain its youthful appearance. It starts to break down as early as your 20’s, allowing visible signs of aging to creep in. Unlock healthy, youthful, radiant skin with GENIUS Liquid Collagen.",
+      "suggested_usage": "-After cleansing and toning, apply to entire face, neck, and d&#233;collet&#233;.\n-For optimal results, follow with moisturizer.\r\n\nTo unlock GENIUS Liquid Collagen to its full potential, use the following steps:\r\n\n-Unscrew cap and remove dropper from bottle.\r\n\n-Push dropper button fully a couple of times.\r\n\n-Hold down on button while inserting back into bottle.\r\n\n-Release button to allow dropper to fill up fully.\r\n\n-Remove and push down to dispense.\r\n\r\n\n Precautions:\n-Use only as directed.",
+      "brand_story": "It started out as a renewable energy project—and turned into an unexpected antiaging discovery. Algenist comes from a team of biotechnology scientists based in San Francisco."
+    }
   },
   "P421996": {
     "sku_id": "2663763",
@@ -1372,7 +1424,20 @@
       "https://www.sephora.com/productimages/product/p423259-av-12-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A potent face serum with soothing cica complex and allantoin to quickly soothe the skin barrier and reduce redness for healthier-looking skin.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness and Redness",
+      "highlighted_ingredients": [
+        "Cica Complex (Centella Asiatica): Deeply soothes skin.",
+        "Allantoin: Supports skin’s barrier."
+      ],
+      "ingredient_callouts": "Free of parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, sulfates SLS & SLES, triclocarban, triclosan, and contains less than one percent synthetic fragrance. It is also gluten-free.",
+      "what_else": "This fragrance-free, lightweight face serum was formulated with sensitive skin in mind. It gently penetrates skin to quickly soothe visible redness and boost skin’s barrier. Skin feels comfortable, looks healthy, and is more resilient to external aggressors that may irritate skin.",
+      "clinical_results": "Clinical testing conducted by third-part institute on 32 females, 25-59 years old, 1 hour after using the product once:\n- Boosts skin barrier repair by 126% in 1 hour\n- Instantly reduces visible redness",
+      "suggested_usage": "-In the morning and evening, cleanse and tone skin before applying Cicapair Sensitive Skin Serum for Redness and Barrier Repair.\n-Apply an even layer of serum to skin and gently press into skin until fully absorbed.\n-For skin that needs more intensive soothing care, follow with Cicapair&trade; Sensitive Skin Moisturizer Cream (sold separately).\n-For a lighter moisturizer option, try Cicapair Cooling Gel Moisturizer for Sensitive Skin and Redness (sold separately).\n-At night, add on an intensive treatment to seal in moisturizer such as Cicapair&trade; Sleepair Intensive Repair Night Mask (sold separately).",
+      "brand_story": "At Dr. Jart{+} science joins art to develop innovative products that deliver results. Founded in Korea in 2004, Dr. Jart{+} pioneered the invention of the BB Cream, setting the standard for multifunctional beauty. Dr. Jart{+} is an ever-evolving blend of form and function, creating skincare that works wonders."
+    }
   },
   "P423688": {
     "sku_id": "2385532",
@@ -1449,7 +1514,7 @@
     "variants": []
   },
   "P426707": {
-    "sku_id": null,
+    "sku_id": "2020501",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p426707-av-01-zoom.jpg",
@@ -1460,7 +1525,13 @@
       "https://www.sephora.com/productimages/product/p426707-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "An oil-free, refreshingly light water cream infused with skin nourishing coconut water that hydrocharges your skin with a burst of electrolyte-rich moisture.",
+      "what_else": "This product is oil-free, noncomedogenic, allergy tested, and suitable for all skin types, even sensitive. It is artificial fragrance-free, vegan, gluten-free, and soy-free",
+      "clinical_results": "In a consumer perception test completed by 38 participants, after immediate use:\n- 100% of panelists reported their skin felt immediately hydrated.\n- 97% of panelists reported their complexion appeared softer, smoother and more plumped.\n- 97% of panelists reported their skin looked and felt nourished and healthier.\n- 100% of panelists reported the product did not clog their pores.",
+      "suggested_usage": "-Apply evenly over clean face.\n-Follow with makeup or wear alone.",
+      "brand_story": "First Aid Beauty (a.k.a. FAB) provides must-have skin care products for every age and skin type.  FAB was founded by Lilli Gordon, a long-time beauty veteran inspired to elevate the drugstore classics with scientifically advanced formulations and luxurious consistencies. \r\n\r\nGordon—who also believes that hard-working, irritant-free skin care doesn’t have to be greasy or bland—created a comprehensive collection that ranges from everyday essentials to products that provide intense therapy for serious skin problems (including facial redness and eczema)."
+    }
   },
   "P426836": {
     "sku_id": "2022598",
@@ -1488,7 +1559,12 @@
       "https://www.sephora.com/productimages/product/p427397-av-04-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A hydrating recovery sleeping mask that balances skin’s naturally occurring flora and locks in moisture overnight to reduce redness and soothe the signs of irritation.",
+      "what_else": "Diet, stress, aging, antibiotics, and even harsh beauty products can strip away beneficial microorganisms, upsetting your complexion’s perfectly balanced ecosystem, resulting in breakouts, blemishes, dry patches and other imperfections. With the Biotic Balancing Complex, Dr. Brandt Skincare developed a technology that supports the skin’s natural bioshield for optimum skin health.",
+      "suggested_usage": "-Apply mask to clean, dry skin before bedtime.\n-Do not rinse.\n-Use nightly.",
+      "brand_story": "With over 20 years in practice translated into a hugely popular skincare line, Dr. Brandt fuses cutting-edge science with active botanicals and remains always in search of state-of-the-art ingredients and technologically advanced delivery systems."
+    }
   },
   "P427406": {
     "sku_id": "2031508",
@@ -1677,7 +1753,11 @@
       "https://www.sephora.com/productimages/product/p428095-av-04-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A toner that provides a daily dose of clean bio active extracts to help the skin exfoliate and give your skin a balanced glow, naturally.",
+      "what_else": "Did you know your skin only needs to reach a pH of 3.5 to 4 to achieve its natural glow? This tonic provides a \"quality over quantity\" formula to deliver the optimum pH your skin needs to trigger its natural exfoliation process and provide a balanced pH of 3.5 to 4. Result: skin is naturally exfoliated smoothed and toned, and pore size is reduced, giving your skin a bright skin tone for the perfect glow.\n\n This product is vegan and free of gluten and nuts. REN never tests on animals. REN uses responsibly sourced board and recycles its packaging. REN only uses natural inks and natural fragrances.\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Press down on well-pump with cotton pads until saturated.\n-Swipe onto clean skin over the face and neck, day and night, avoiding the eye area.\n-Follow with your regular skincare routine.\n\n Precautions:\n-Do not use on irritated skin. Discontinue if irritation occurs.\n-Consult doctor if irritation persists.\n-Avoid contact with eyes. If eye contact occurs rinse well with warm water.\n-This product may make your skin more sensitive to the sun, use adequate sunscreen protection while using this product and for a week after you discontinue use."
+    }
   },
   "P428250": {
     "sku_id": null,
@@ -1917,7 +1997,11 @@
       "https://www.sephora.com/productimages/product/p431181-av-02-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A self-tanning water with color-correcting actives and either a peach (light), green (medium), or violet (dark) base for a natural-looking, bronzed glow with no streaks, smells, or orange tones.",
+      "what_else": "Isle of Paradise’s products are made with color-correcting technologies to help even out skin tone for the most real looking, natural tan ever. This product is cruelty-free, 100 percent vegan, organic, and made using certified organic ingredients, actives at low pH levels, non-sensitizing ingredients, hypoallergenic ingredients, and pure oils. It does not contain mineral oils, petrolatum, gluten, GMO, or toxins.\r\n\r\n\nClean at Sephora\n When you spot our Clean seal, you can be sure we’ve checked that this brand’s product is made without the ingredients you told us you’d most like to avoid. \n\nClean at Sephora&trade; is formulated without: \nSulfates SLS and SLES, parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, triclocarban. All skincare, hair, and makeup brands with the Clean Seal have less than one percent of synthetic fragrances.",
+      "suggested_usage": "-Exfoliate 24 hours before tanning. Moisturize dry areas such as hands, feet, knees, ankles, and elbows prior to application.\n-Mist until skin is totally saturated, covering face. Leave hands and feet until last before blending with a tanning mitt using sweeping motions.\n-Thoroughly wash palms after use.\n-Your tan will develop in four to six hours.\n\n Precautions:\n-Carry out a patch test 24 hours prior to application. Do not apply to broken, irritated, or hyper sensitive skin.\n-This product does not contain sunscreen and does not protect against sunburn. Repeated exposure of unprotected skin while tanning may increase the risk of skin aging, skin cancer, and other harmful effects to the skin even if you do not burn."
+    }
   },
   "P431848": {
     "sku_id": "2073237",
@@ -2430,7 +2514,7 @@
     "description": null
   },
   "P443842": {
-    "sku_id": null,
+    "sku_id": "2211498",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p443842-av-02-zoom.jpg",
@@ -2727,7 +2811,20 @@
       "https://www.sephora.com/productimages/product/p449175-av-16-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A lightweight toner that provides a refreshing splash of hydration to help nurture skin for a healthy-looking glow.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness, Pores, and Dullness and Uneven Texture",
+      "highlighted_ingredients": [
+        "Honeysuckle: Helps to sooth and calm the skin.",
+        "Baobab: Helps lock in moisture and prevent water loss.",
+        "Sodium Hyaluronate: Helps keeps skin hydrated."
+      ],
+      "ingredient_callouts": "Free of sulfates SLS and SLES, parabens, formaldehydes, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, and triclocarban, and contains less than one percent of synthetic fragrances. This product is also vegan and comes in recyclable packaging.",
+      "what_else": "This water-based, super-hydrating toner is formulated with sodium hyaluronate, soothing honeysuckle, and moisture-locking baobab.The lightweight formula also has a satisfying satin finish for a smoother, softer, and healthier-looking complexion.",
+      "clinical_results": "In a consumer testing panel of 45 women age 25 to 39:\n- 100% agreed their skin felt moist and calmer after using both Aqua Bomb Hydrating Toner and The True Cream - Aqua Bomb together\n- 97.8% agreed that dryness disappeared after using both Aqua Bomb Hydrating Toner and The True Cream - Aqua Bomb together\n- 95.6% agreed their skin feels hydrated and moist after only using Aqua Bomb Hydrating Toner",
+      "suggested_usage": "-After cleansing, moisten a cotton pad and gently sweep across the face or dispense a dime-size amount into palm and gently press into the face.\n-Use twice daily, morning and evening, after cleansing the face and before moisturizer."
+    }
   },
   "P450271": {
     "sku_id": "2339554",
@@ -2797,7 +2894,7 @@
     "description": null
   },
   "P454120": {
-    "sku_id": null,
+    "sku_id": "2313005",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p454120-av-01-zoom.jpg",
@@ -2810,10 +2907,22 @@
       "https://www.sephora.com/productimages/product/p454120-av-08-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A cooling, hydrating overnight mask that plumps with an electrolyte cocktail while supporting the skin’s natural acid mantle.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Loss of Firmness and Elasticity, Dryness, Dullness and Uneven Skin Tone",
+      "highlighted_ingredients": [
+        "4-Electrolyte Blend: Antioxidant-rich and powerful humectant ingredients (coconut water, sodium PCA, magnesium PCA, and prickly pear extract), electrolytes are vital to helping maintain hydration levels in skin, improving barrier strength and lipid content, calming redness, and protecting against environmental dehydration.",
+        "Vitamin F: Soothing fatty acids (linolenic and linoleic) play a vital role in maintaining hydration levels, improving skin texture and suppleness, reducing redness, and improving acid-mantle strength.",
+        "Niacinamide: AKA vitamin B3, niacinamide has a wide range of benefits, most notably its ability to improve signs of aging (fine lines, wrinkles, loss of firmness) as well as uneven tone and texture; research has demonstrated that niacinamide, even in low concentrations, can help strengthen a compromised skin barrier, boost skin’s synthesis of ceramides and cholesterol&#151;both essential substances in barrier health and elasticity&#151;and improve skin’s defenses against water loss."
+      ],
+      "ingredient_callouts": "This product is vegan and cruelty-free, and comes in recyclable packaging.",
+      "what_else": "Barrier-supporting ingredients niacinamide, sodium PCA, plant squalane, ceramides, omega fatty acids, and antioxidants rehydrate hungover, parched skin, making it soft and supple, improving signs of damage and uneven texture and tone. Vitamin F beads deliver extra emollience and soothing hydration.\n\n This product is free of essential oils, silicones, fragrance and PEGs. Irritant-free.\n\n Drunk Elephant difference:\n Drunk Elephant is clean, but in their opinion, \"clean\" is not enough when it comes to caring for skin. They make \"Clean Compatible\" skincare. Drunk Elephant is committed to using only ingredients that either directly benefit the skin’s health or support the integrity and effectiveness of their formulations. They never take into account an ingredient’s synthetic or natural status, but instead choose based on biocompatibility. You won’t find what they call the \"Suspicious 6\" in their products (essential oils, drying alcohols, silicones, chemical sunscreens, fragrances/dyes, and SLS) making them, in their opinion, appropriate for all skin. They believe that these six ubiquitous ingredients are at the root of almost every skin issue we see, and when entirely removed from one’s routine, (\"a clean break\"), skin can reset and return to a healthy, balanced state. It is equally, if not more, important what they leave out of the products as what they put in. This ingredient-elimination diet (think Whole30 for your face) inspired the #barewithus Instagram movement, a collection of bare-faced selfies chronicling the Drunk Elephant journeys of people who have found success using the line and renewed confidence in their own skin. When formulating their products, Drunk Elephant focuses on biocompatibility, pH levels, and safety, always making sure that the active ingredients are at efficacious levels and remain respectful and always supportive of skin’s acid mantle.\n\nDrunk Elephant is a supporter of IEF (International Elephant Foundation) and is cruelty-free.\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Apply four or five pumps of F-Balm&trade; as the last step in your nighttime routine.\n-May be worn to bed as an overnight mask.\n­-Also can be layered over Virgin Marula Oil for an extra shot of absorbable moisture.\n-Tip: Try using F-Balm&trade; on top of T.L.C. Framboos&trade; for a gentle, chemical exfoliation while you sleep."
+    }
   },
   "P454378": {
-    "sku_id": null,
+    "sku_id": "2534675",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p454378-av-01-zoom.jpg",
@@ -2824,7 +2933,18 @@
       "https://www.sephora.com/productimages/product/p454378-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A daily lightweight moisturizer that helps smooth texture and the look of fine lines while boosting hydration for radiant, youthful-looking skin.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Fine Lines and Wrinkles, Dryness, and Dullness",
+      "highlighted_ingredients": [
+        "Super Lotus: Smooths lines & helps to boost radiance.- Star Fruit Leaf Extract: Smooths while helping to reduce visible wrinkles- Vitamin E: Helps protect & soothe."
+      ],
+      "what_else": "This newly upgraded antioxidant formula is clinically proven to smooth visible wrinkles and texture for supple, radiant skin that’s prepped for makeup. Ethically-sourced* Super Lotus protects from daily stressors, while star fruit leaf extract reduces the looks of lines and polyglutamic acid locks in moisture. \nThis product is an Allure Best of Beauty award winner.",
+      "clinical_results": "\"Clinically proven to smooth texture & fine lines*+19% radiance observed**97% agreed it created a smooth canvas for makeup***+14% smoother skin after 1 application****24hr hydration****+17% smoother skin observed after 4 weeks***clinical assessment by dermatologist, 30 subjects, 4 weeks**self-assessment by scoring, 30 subjects, 4 weeks***self-assessment, 104 subjects, 4 weeks****instrumental test, 30 subjects\"\n\nCLEAN at Sephora is our commitment to offering formulas that go beyond regulatory standards to avoid controversial ingredients without sacrificing on effectiveness.",
+      "suggested_usage": "-Apply to clean skin twice a day, morning and night.",
+      "brand_story": "By combining potent natural ingredients, ancient rituals, and modern science, fresh creates products that perform with experiences that transform. Discovery drives innovation. fresh’s Founders travel the world uncovering the highest quality natural ingredients and time-honored cultural traditions. But the real journey is using science to harness and heighten nature—developing effective formulas that look, smell, and feel as good as they work—to bring you the most beautiful skin and sensations."
+    }
   },
   "P454380": {
     "sku_id": "2315935",
@@ -3387,11 +3507,23 @@
     }
   },
   "P468658": {
-    "sku_id": null,
+    "sku_id": "2443240",
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A deep-cleansing creamy clay mask&#151;formulated with absorbent Jeju Super Volcanic Clusters&trade; and AHA&#151;that helps clear pores while it exfoliates.",
+      "skin_type": "Normal, Combination, and Oily",
+      "concerns_text": "Pores, Oiliness, Dullness, and uneven texture",
+      "highlighted_ingredients": [
+        "Jeju Volcanic Clusters&trade;: Finely ground hardened volcanic lava that helps absorb excess sebum.",
+        "Lactic Acid: Helps exfoliate dead skin cells and minimize appearance of pores."
+      ],
+      "ingredient_callouts": "Free of sulfates SLS and SLES, parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, and triclocarban, and contains less than one percent of synthetic fragrances. This product comes in recyclable packaging.",
+      "what_else": "Exfoliate and purify pores with this volcanic clay mask. AHA helps remove dead skin cells, while Super Volcanic Clusters&trade; from Jeju Island, Korea help draw excess oils and impurities from pores&#151;for skin that feels cleaner and smoother and pores that appear smaller.",
+      "clinical_results": "Based on the results of a 2018 independent clinical study of 31 Korean women between 20 to 40 years old:\n- 90% reported a reduction in excessive oil and sebum after use\n- 90% reported that their skin felt cleaner after use\n- 90% reported that their complexion looked better after use",
+      "suggested_usage": "-Use one to two times a week\n-Smooth onto clean, dry skin, avoiding the eye and lip areas.\nLeave on for 15 to 20 minutes, until dry.\nRinse with lukewarm water."
+    }
   },
   "P469502": {
     "sku_id": "2421360",
@@ -3610,7 +3742,20 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A hydrating, skin-balancing, whipped gel cream in a refillable jar, packed with polyglutamic acid, hyaluronic acid, and plum for visibly plump, glowing skin.\n\nSkin Type: Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness, Dullness, and Loss of Firmness and Elasticity",
+      "highlighted_ingredients": [
+        "Polyglutamic Acid: A hydrating peptide to boost the efficacy of hyaluronic acid and lock in moisture.",
+        "Hyaluronic Acid: A blend of multi-weight hyaluronic acids to hydrate skin and to keep it looking plump and bouncy.",
+        "Plum and Ice Willowherb: Plum brightens and hydrates while Ice Willowherb visibly balances skin."
+      ],
+      "ingredient_callouts": "This product is vegan, gluten-free, cruelty-free, and comes in recyclable packaging.",
+      "what_else": "This lightweight whipped gel cream hydrates and visibly balances unpredictable skin and delivers a dewy-looking glow. It features plum, multi-molecular-weight hyaluronic acid and polyglutamic acid for long-lasting, visibly skin-balancing hydration. Plus, ice willowherb helps to balance oil and support the microbiome. Best for combination skin.",
+      "clinical_results": "In a consumer use study on 33 subjects, after 3 days:\n- 100% agree that this moisturizer keeps them hydrated all day\n- 96% agree that their skin looks healthy and refreshed\n- 96% agree that their skin feels replenished and nourished\n- 93% agree that this moisturizer hydrated their skin, without making it oily\n- 93% agree that their skin feels soft and supple after use\n- 93% agree that this moisturizer does not clog their pores after use\n- 93% agree that this moisturizer has improved the overall appearance of their skin\n- 90% agree that their skin feels balanced after using this product\n\nClean at Sephora\nClean at Sephora is a curation of brands committed to evolving the beauty industry. When you see our Clean seal, you can be sure this brand's products are formulated without certain ingredients that are potentially harmful to human health and the environment and also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-After serum, smooth a dime-size amount onto clean skin morning and night.\n-Gently pat into skin until fully absorbed.\n\nTo insert the refill:\n-Place the pod into the jar and press down until it clicks to lock into place.\n-Remove foil from the refillable pod.\n-Additional pods sold separately.",
+      "brand_story": "Glow Recipe was created by beauty industry veterans Sarah Lee and Christine Chang to elevate K-beauty to an everyday luxury. Hybrid textures encapsulate the philosophy of Korean skincare. Natural ingredients work overtime to deliver lasting hydration, building the foundation for visibly healthier skin."
+    }
   },
   "P479734": {
     "sku_id": "2531697",
@@ -3729,7 +3874,20 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A wrinkle-fighting cream supplying fortifying nourishment for smoother, younger-looking skin.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Fine Lines and Wrinkles and Dryness",
+      "highlighted_ingredients": [
+        "CL1870 Peptide Complex&trade;: Targets the look of wrinkles.",
+        "Hyaluronic Acid: Floods skin with hydration.",
+        "Soybean Seed Extract: Nourishes and fortifies skin."
+      ],
+      "ingredient_callouts": "Free of parabens and phthalates.",
+      "what_else": "This ultra-nourishing moisturizer is designed to visibly reduce lines and wrinkles for young-, supple-looking skin. The cutting-edge formula supports natural collagen with CL1870 Peptide Complex&trade;, fortifying the dermal structure and leaving skin feeling stronger and looking smoother.",
+      "clinical_results": "In a consumer test on 148 women:\nAfter 1 use:\n- 91% said skin felt nourished\n\nAfter 1 week of use:\n- 95% said skin felt hydrated throughout the day\n- 95% said skin felt hydrated throughout the night\n\nIn a consumer test on 143 women, after 4 weeks of use:\n- 85% saw reduced lines and wrinkles\n\nIn a consumer test on 146 women, after 4 weeks of use:\n- 92% said skin looked rejuvenated\n- 93% said neck felt smoother\n- 94% said skin looked healthier",
+      "suggested_usage": "-Use twice a day, morning and night.\n-Apply to your face and neck after using CLINIQUE&rsquo;s Smart Clinical Repair&trade; Wrinkle Correcting Serum (sold separately).\n-Follow with Smart Clinical Repair&trade; Wrinkle Correcting Eye Cream (sold separately) for the ultimate visibly age-defying routine.\n-Always apply SPF as the last step in your AM regimen."
+    }
   },
   "P500757": {
     "sku_id": "2613255",
@@ -3743,7 +3901,18 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A 24hr hydrating lip balm powered by sugar from beet root and sugar cane that offers sheer, buildable color with a smooth, buttery texture..",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness",
+      "highlighted_ingredients": [
+        "Sugar: Scientifically shown to have a long-lasting hydrating effect.- Cranberry Seed Oil: Smooths.- Grapeseed Oil: Softens."
+      ],
+      "what_else": "The #1 Lip Treatment Brand in the US*, Fresh now offers a new & improved Sugar lip balm with 24hr hydration and sheer-to-buildable color that complements different skin tones for soft, smooth lips. Infused with sugar and plant-based fruit oils, this clear or tinted lip balm leaves lips feeling and looking healthy.",
+      "clinical_results": "*Source: The NPD Group/U.S. Prestige Beauty Total Department/Specialty, Skincare Dollar Sales, Jan-May 2022-24hr proven hydration even as color wears**-95% agreed it moisturized, softened & protected against dryness***-97% agreed lips looked and felt smoother*****instrumental test, 11 subjects ***self-assessment, 62 subjects, 4 weeks\n\nCLEAN at Sephora is our commitment to offering formulas that go beyond regulatory standards to avoid controversial ingredients without sacrificing on effectiveness.",
+      "suggested_usage": "-Apply on lips as needed",
+      "brand_story": "By combining potent natural ingredients, ancient rituals, and modern science, fresh creates products that perform with experiences that transform. Discovery drives innovation. fresh’s Founders travel the world uncovering the highest quality natural ingredients and time-honored cultural traditions. But the real journey is using science to harness and heighten nature—developing effective formulas that look, smell, and feel as good as they work—to bring you the most beautiful skin and sensations."
+    }
   },
   "P54509": {
     "sku_id": "1559079",
