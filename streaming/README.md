@@ -170,3 +170,33 @@ event_id` 순으로 `event_order`를 만들고 앞뒤 Event 이름과 sequence g
 `items[].product_id` 기준으로 explode한다. 구매 매출은 `quantity * unit_price`
 인 `item_revenue`만 합산하며 주문 전체 금액 `order_value`를 상품별로 합산하지
 않는다.
+
+## Q4 Funnel·DW Mart
+
+Processed Fact에서 Dashboard용 세션 Funnel과 일간 KPI Mart를 만든다.
+
+```bash
+spark-submit streaming/jobs/build_marts_job.py \
+  --sessionized-path data/processed/sessionized_events \
+  --product-fact-path data/processed/product_event_fact \
+  --funnel-session-path data/processed/funnel_session_fact \
+  --product-daily-path data/marts/product_daily_kpi \
+  --funnel-daily-path data/marts/funnel_daily_kpi
+```
+
+생성 결과는 다음 세 가지다.
+
+| Dataset | Grain | 역할 |
+| --- | --- | --- |
+| `funnel_session_fact` | `session_id + product_id` | 노출 → 클릭 → 상세 → 정보 확인 → 장바구니 → Checkout → 구매 도달 시각 |
+| `product_daily_kpi` | `event_date_kst + product_id + actor/source/run 축` | 상품 Event 수, 세션 수, CTR, 상세 진입률, 매출 |
+| `funnel_daily_kpi` | `funnel_date_kst + product_id + actor/source/run 축` | 세션 기반 Funnel 전환·이탈률 |
+
+정보 확인 단계는 성분/리뷰 Section·Content, Accordion 펼침, 리뷰 필터/상세,
+매칭 성분·키워드가 있는 텍스트 선택/복사 Event로 파생한다. 상품 매출은
+`purchase`의 `item_revenue`만 합산한다. `product_interest_score`는
+`persona_behavior_feature_delta` 연결 전까지 NULL로 두어 단순 Event count를
+최종 관심도 점수로 오해하지 않도록 했다.
+
+Q4도 전체 snapshot `overwrite` 방식의 MVP다. 실제 운영에서는 입력 변경 범위와
+Mart 재계산 범위를 함께 관리하는 증분 전략을 추가한다.

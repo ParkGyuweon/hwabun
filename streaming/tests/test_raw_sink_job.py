@@ -17,6 +17,14 @@ from streaming.jobs.derive_facts_job import (
     DeriveFactsConfig,
     parse_args as parse_derive_args,
 )
+from streaming.jobs.build_marts_job import (
+    DEFAULT_FUNNEL_DAILY_PATH,
+    DEFAULT_FUNNEL_SESSION_PATH,
+    DEFAULT_PRODUCT_DAILY_PATH,
+    FUNNEL_PRODUCT_EVENTS,
+    BuildMartsConfig,
+    parse_args as parse_mart_args,
+)
 
 
 class RawSinkConfigTest(unittest.TestCase):
@@ -106,6 +114,26 @@ class DeriveFactsConfigTest(unittest.TestCase):
     def test_empty_fact_path_is_rejected(self):
         with self.assertRaises(ValueError):
             DeriveFactsConfig(product_fact_path="")
+
+
+class BuildMartsConfigTest(unittest.TestCase):
+    def test_funnel_scope_contains_product_and_checkout_stages(self):
+        self.assertIn("product_view", FUNNEL_PRODUCT_EVENTS)
+        self.assertIn("purchase", FUNNEL_PRODUCT_EVENTS)
+        self.assertNotIn("view_cart", FUNNEL_PRODUCT_EVENTS)
+
+    def test_defaults_chain_q3_inputs_to_mart_outputs(self):
+        config = parse_mart_args([])
+
+        self.assertEqual("data/processed/sessionized_events", config.sessionized_path)
+        self.assertEqual("data/processed/product_event_fact", config.product_fact_path)
+        self.assertEqual(DEFAULT_FUNNEL_SESSION_PATH, config.funnel_session_path)
+        self.assertEqual(DEFAULT_PRODUCT_DAILY_PATH, config.product_daily_path)
+        self.assertEqual(DEFAULT_FUNNEL_DAILY_PATH, config.funnel_daily_path)
+
+    def test_empty_mart_path_is_rejected(self):
+        with self.assertRaises(ValueError):
+            BuildMartsConfig(funnel_daily_path=" ")
 
 
 if __name__ == "__main__":

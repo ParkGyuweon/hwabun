@@ -40,7 +40,7 @@ Kafka는 수집과 처리 사이의 전달·버퍼·재생 구간을 맡는다. 
 | 성공 응답 | 배치의 모든 Kafka 전송 Future가 성공하면 HTTP 202 |
 | 검증 오류 | 현재는 일부 항목만 제외하지 않고 배치 전체 HTTP 400 |
 | 발행 오류 | Kafka 전송 실패 또는 전용 실행기 포화 시 HTTP 503 |
-| Spark 구현 | Q1 Raw, Q2 정본/오류, Q3 세션·상품 Fact 생성 MVP 구현 |
+| Spark 구현 | Q1 Raw, Q2 정본/오류, Q3 세션·상품 Fact, Q4 Funnel/DW Mart 생성 MVP 구현 |
 | 모니터링 | Collector용 Prometheus/Grafana 구성이 있음 |
 
 근거: [Backend README](../backend/README.md), [API 요청 DTO](../backend/src/main/java/com/cosmetic/collector/event/api/EventBatchRequest.java), [Collector API](../backend/src/main/java/com/cosmetic/collector/event/api/EventController.java), [Producer](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventPublisher.java), [Topic 생성 설정](../backend/src/main/java/com/cosmetic/collector/config/KafkaTopicConfig.java), [Front Logger](../frontend/src/lib/logger.ts).
