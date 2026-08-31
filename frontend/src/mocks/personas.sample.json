@@ -1,0 +1,802 @@
+[
+  {
+    "persona_id": "PA00001",
+    "skin_type": "combination",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00002",
+    "skin_type": "combination",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00003",
+    "skin_type": "combination",
+    "skin_tone": "light",
+    "eye_color": "green",
+    "hair_color": "blonde",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00004",
+    "skin_type": "combination",
+    "skin_tone": "fair",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00005",
+    "skin_type": "combination",
+    "skin_tone": "fair",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00006",
+    "skin_type": "combination",
+    "skin_tone": "fair",
+    "eye_color": "brown",
+    "hair_color": "red",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00007",
+    "skin_type": "combination",
+    "skin_tone": "fair",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00008",
+    "skin_type": "combination",
+    "skin_tone": "light",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 8
+  },
+  {
+    "persona_id": "PA00009",
+    "skin_type": "combination",
+    "skin_tone": "light",
+    "eye_color": "blue",
+    "hair_color": "blonde",
+    "n_reviews": 6
+  },
+  {
+    "persona_id": "PA00010",
+    "skin_type": "dry",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00011",
+    "skin_type": "dry",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00012",
+    "skin_type": "dry",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00013",
+    "skin_type": "combination",
+    "skin_tone": "fair",
+    "eye_color": "hazel",
+    "hair_color": "blonde",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00014",
+    "skin_type": "combination",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00015",
+    "skin_type": "combination",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00016",
+    "skin_type": "dry",
+    "skin_tone": "fair",
+    "eye_color": "blue",
+    "hair_color": "red",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00017",
+    "skin_type": "normal",
+    "skin_tone": "light",
+    "eye_color": "hazel",
+    "hair_color": "blonde",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00018",
+    "skin_type": "normal",
+    "skin_tone": "light",
+    "eye_color": "green",
+    "hair_color": "blonde",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00019",
+    "skin_type": "dry",
+    "skin_tone": "light",
+    "eye_color": "blue",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00020",
+    "skin_type": "dry",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00021",
+    "skin_type": "combination",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00022",
+    "skin_type": "combination",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00023",
+    "skin_type": "dry",
+    "skin_tone": "fair",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00024",
+    "skin_type": "dry",
+    "skin_tone": "fair",
+    "eye_color": "blue",
+    "hair_color": "blonde",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00025",
+    "skin_type": "dry",
+    "skin_tone": "fair",
+    "eye_color": "blue",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00026",
+    "skin_type": "normal",
+    "skin_tone": "fair",
+    "eye_color": "blue",
+    "hair_color": "brown",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00027",
+    "skin_type": "normal",
+    "skin_tone": "fair",
+    "eye_color": "hazel",
+    "hair_color": "brown",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00028",
+    "skin_type": "normal",
+    "skin_tone": "fair",
+    "eye_color": "green",
+    "hair_color": "blonde",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00029",
+    "skin_type": "oily",
+    "skin_tone": "light",
+    "eye_color": "green",
+    "hair_color": "blonde",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00030",
+    "skin_type": "oily",
+    "skin_tone": "light",
+    "eye_color": "hazel",
+    "hair_color": "blonde",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00031",
+    "skin_type": "oily",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00032",
+    "skin_type": "dry",
+    "skin_tone": "fair",
+    "eye_color": "blue",
+    "hair_color": "brown",
+    "n_reviews": 8
+  },
+  {
+    "persona_id": "PA00033",
+    "skin_type": "combination",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 6
+  },
+  {
+    "persona_id": "PA00034",
+    "skin_type": "normal",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 9
+  },
+  {
+    "persona_id": "PA00035",
+    "skin_type": "normal",
+    "skin_tone": "light",
+    "eye_color": "blue",
+    "hair_color": "brown",
+    "n_reviews": 6
+  },
+  {
+    "persona_id": "PA00036",
+    "skin_type": "oily",
+    "skin_tone": "fair",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00037",
+    "skin_type": "oily",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 7
+  },
+  {
+    "persona_id": "PA00038",
+    "skin_type": "normal",
+    "skin_tone": "fair",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00039",
+    "skin_type": "normal",
+    "skin_tone": "fair",
+    "eye_color": "brown",
+    "hair_color": "auburn",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00040",
+    "skin_type": "dry",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00041",
+    "skin_type": "dry",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00042",
+    "skin_type": "dry",
+    "skin_tone": "medium",
+    "eye_color": "blue",
+    "hair_color": "brown",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00043",
+    "skin_type": "oily",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00044",
+    "skin_type": "oily",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00045",
+    "skin_type": "oily",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "blonde",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00046",
+    "skin_type": "normal",
+    "skin_tone": "medium",
+    "eye_color": "hazel",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00047",
+    "skin_type": "normal",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "auburn",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00048",
+    "skin_type": "oily",
+    "skin_tone": "fair",
+    "eye_color": "hazel",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00049",
+    "skin_type": "oily",
+    "skin_tone": "fair",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00050",
+    "skin_type": "combination",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00051",
+    "skin_type": "combination",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "blonde",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00052",
+    "skin_type": "combination",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00053",
+    "skin_type": "combination",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00054",
+    "skin_type": "combination",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00055",
+    "skin_type": "combination",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00056",
+    "skin_type": "oily",
+    "skin_tone": "fair",
+    "eye_color": "brown",
+    "hair_color": "blonde",
+    "n_reviews": 9
+  },
+  {
+    "persona_id": "PA00057",
+    "skin_type": "oily",
+    "skin_tone": "fair",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 8
+  },
+  {
+    "persona_id": "PA00058",
+    "skin_type": "dry",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00059",
+    "skin_type": "oily",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00060",
+    "skin_type": "oily",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00061",
+    "skin_type": "normal",
+    "skin_tone": "medium",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00062",
+    "skin_type": "normal",
+    "skin_tone": "medium",
+    "eye_color": "green",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00063",
+    "skin_type": "normal",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00064",
+    "skin_type": "normal",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 11
+  },
+  {
+    "persona_id": "PA00065",
+    "skin_type": "oily",
+    "skin_tone": "light",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 10
+  },
+  {
+    "persona_id": "PA00066",
+    "skin_type": "combination",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 7
+  },
+  {
+    "persona_id": "PA00067",
+    "skin_type": "combination",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00068",
+    "skin_type": "combination",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 9
+  },
+  {
+    "persona_id": "PA00069",
+    "skin_type": "oily",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00070",
+    "skin_type": "oily",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00071",
+    "skin_type": "oily",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00072",
+    "skin_type": "oily",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00073",
+    "skin_type": "dry",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00074",
+    "skin_type": "oily",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00075",
+    "skin_type": "oily",
+    "skin_tone": "tan",
+    "eye_color": "hazel",
+    "hair_color": "auburn",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00076",
+    "skin_type": "dry",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00077",
+    "skin_type": "normal",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00078",
+    "skin_type": "normal",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00079",
+    "skin_type": "normal",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00080",
+    "skin_type": "oily",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 6
+  },
+  {
+    "persona_id": "PA00081",
+    "skin_type": "oily",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00082",
+    "skin_type": "oily",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00083",
+    "skin_type": "normal",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00084",
+    "skin_type": "normal",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00085",
+    "skin_type": "normal",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 4
+  },
+  {
+    "persona_id": "PA00086",
+    "skin_type": "normal",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 5
+  },
+  {
+    "persona_id": "PA00087",
+    "skin_type": "dry",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00088",
+    "skin_type": "dry",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00089",
+    "skin_type": "dry",
+    "skin_tone": "tan",
+    "eye_color": "blue",
+    "hair_color": "gray",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00090",
+    "skin_type": "dry",
+    "skin_tone": "medium",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 11
+  },
+  {
+    "persona_id": "PA00091",
+    "skin_type": "normal",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00092",
+    "skin_type": "dry",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00093",
+    "skin_type": "dry",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00094",
+    "skin_type": "normal",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 7
+  },
+  {
+    "persona_id": "PA00095",
+    "skin_type": "dry",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 8
+  },
+  {
+    "persona_id": "PA00096",
+    "skin_type": "dry",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 8
+  },
+  {
+    "persona_id": "PA00097",
+    "skin_type": "combination",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "brown",
+    "n_reviews": 11
+  },
+  {
+    "persona_id": "PA00098",
+    "skin_type": "normal",
+    "skin_tone": "deep",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 3
+  },
+  {
+    "persona_id": "PA00099",
+    "skin_type": "dry",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 10
+  },
+  {
+    "persona_id": "PA00100",
+    "skin_type": "oily",
+    "skin_tone": "tan",
+    "eye_color": "brown",
+    "hair_color": "black",
+    "n_reviews": 19
+  }
+]

@@ -5,10 +5,11 @@ import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
-import { buildPersonas } from './lib/persona';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import productsData from './mocks/products.sample.json';
 import reviewsData from './mocks/reviews.sample.json';
+import personasData from './mocks/personas.sample.json';
+import type { PersonaProfile } from './types/persona';
 import type { Product } from './types/product';
 import type { Review } from './types/review';
 import type { CartItem } from './types/cart';
@@ -19,7 +20,12 @@ import './styles/cart.css';
 // JSON 목업은 리터럴 타입으로 추론되므로 unknown 을 거쳐 캐스팅한다.
 const products = productsData as unknown as Product[];
 const reviews = reviewsData as unknown as Review[];
-const personas = buildPersonas(reviews);
+/**
+ * 데이터 파트가 만든 PA 대역 100명을 그대로 쓴다.
+ * 리뷰에서 파생시키던 예전 방식은 persona_id 가 author_id 라 페르소나 표와
+ * 조인이 되지 않았다. scripts/build-personas.ts 가 이 파일을 만든다.
+ */
+const personas = personasData as unknown as PersonaProfile[];
 
 /** 상세 페이지에서 유사·추천 자리에 올릴 개수 */
 const SIMILAR_SIZE = 6;
