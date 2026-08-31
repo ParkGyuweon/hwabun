@@ -2,6 +2,7 @@ import { BarList, Funnel, Kpi, Panel } from '../components';
 import {
   eventVolumes,
   fmt,
+  frictionByLocation,
   frictionCounts,
   intentFunnel,
   overview,
@@ -68,6 +69,41 @@ export default function BehaviorScreen() {
           source="mock"
         />
       </div>
+
+      <Panel
+        title="마찰 위치 — 어디서 막히는가"
+        source="mock"
+        aside="좌절 신호는 상품이 아니라 화면의 문제일 수 있다"
+      >
+        <table className="table">
+          <thead>
+            <tr>
+              <th>위치</th>
+              <th>신호</th>
+              <th>건수</th>
+              <th>해석</th>
+            </tr>
+          </thead>
+          <tbody>
+            {frictionByLocation.map((f) => (
+              <tr key={f.where + f.event}>
+                <td>{f.where}</td>
+                <td>
+                  <span className="table__code">{f.event}</span>
+                </td>
+                <td>{fmt.int(f.count)}</td>
+                <td>{f.meaning}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="note">
+          위치가 없는 좌절 건수는 할 일이 되지 못한다. dead_click 이 상품 이미지에 몰리면
+          확대 기능을 넣으면 되고, scroll_backtrack 이 성분에 몰리면 성분 설명을 쉽게
+          고치면 된다. 이 신호들은 상품 선호 벡터에 넣지 않는다 — UI 품질과 상품 선호는
+          다른 축이다.
+        </p>
+      </Panel>
 
       <div className="grid grid--2">
         <Panel title="이벤트 발생량 상위" source="mock" aside="32종 중 상위 13">

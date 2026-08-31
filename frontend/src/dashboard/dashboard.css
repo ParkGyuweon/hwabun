@@ -469,6 +469,21 @@ body {
 
 /* ---------- 표 ---------- */
 
+/* 이벤트 이름 같은 코드 조각. 본문과 톤을 분리해 훑어 읽기를 방해하지 않는다 */
+.table__code {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-left: 6px;
+}
+
+/* 고객군 매트릭스. 농도가 값이므로 칸을 정사각에 가깝게 */
+.table--matrix td.matrix__cell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

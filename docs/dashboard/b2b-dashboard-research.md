@@ -10,6 +10,49 @@
 
 ---
 
+## 0. 왜 지금 이 제품인가 — 시장 맥락
+
+이 대시보드는 "있으면 좋은 부가 기능" 이 아니다. 리테일이 행동 데이터를
+브랜드에 파는 사업 모델 자체가 지금 업계에서 가장 빠르게 크는 축이다.
+
+### 리테일 미디어 — 유통이 데이터를 파는 시대 [공개]
+
+미국 리테일 미디어 광고비는 2024년 **548.5억 달러**에서 2026년
+**763.9억 달러**로 가는 궤도에 있고, 글로벌 시장은 2033년까지
+**연평균 18.9%** 성장이 전망된다. 그중 뷰티·퍼스널케어는
+**연평균 9.39%** 로 빠르게 크는 버티컬로 꼽힌다.
+
+2025년 광고주의 **60% 이상**이 리테일 미디어 파트너를 고를 때
+**유통사가 보유한 고객 데이터**를 최상위 기준으로 꼽았다.
+즉 브랜드가 유통 플랫폼에 돈을 내는 이유가 광고 지면이 아니라
+**로그인된 고객의 행동 데이터** 그 자체다.
+
+우리 프로젝트는 이 구조의 축소판이다 — 쇼핑몰(수집) → 행동 로그(자산) →
+브랜드 대시보드(수익화). 이 화면이 그 수익화 지점이다.
+
+### 서드파티 쿠키 이후 — 퍼스트파티 데이터의 가치 [공개]
+
+쿠키 규제가 확대되면서 마케터의 **74%** 가 퍼스트파티 데이터의 가치가
+더 커졌다고 답했다. 리테일 환경은 로그인·장바구니·결제가 한 곳에 있어
+**쿠키 없이 광고 노출과 구매를 확정적으로 연결할 수 있는 유일한 디지털
+채널**로 평가된다.
+
+우리 로그가 정확히 이 구조다. persona_id 로 로그인된 사용자의 노출
+(`recommendation_impression`)부터 전환(`add_to_cart`)까지 한 파이프라인에서
+잇는다. 추정 매칭이 아니라 확정 매칭이다.
+
+### 개인화의 값 [공개]
+
+McKinsey 조사에서 소비자의 **71%** 가 개인화된 경험을 기대하고,
+개인화를 잘하는 기업은 매출의 **40%를 더** 개인화에서 얻으며,
+개인화는 통상 **매출 10~15% 상승**(기업별 5~25%)을 만든다.
+
+④ 고객군 화면이 이 값을 만드는 입구다. "건성은 성분을, 지성은 임상
+근거를 본다" 는 데이터가 있어야 브랜드가 고객군별로 다른 소재를 만들 수
+있고, 그 차이가 위 수치로 돌아온다.
+
+---
+
 ## 1. 조사에서 나온 것 — 고객은 데이터가 부족한 게 아니다
 
 B2B 분석 도구를 쓰는 브랜드가 실제로 겪는 문제를 먼저 봤다.
@@ -103,6 +146,9 @@ B2B 분석 도구를 쓰는 브랜드가 실제로 겪는 문제를 먼저 봤�
 페르소나 100명이 4종 × 5종으로 균등해서 어느 조합을 골라도 비교가 된다.
 
 ## 4. 화면 구성
+
+구현 상태: ①~⑤ 전부 화면으로 존재한다 (frontend/src/dashboard/screens/).
+지표는 수집 파이프라인 연결 전이라 시드 고정 모의값이고, 화면마다 배지로 표시한다.
 
 ```
 ① 개요        지금 손봐야 할 것은 무엇인가        ← 5초 규칙
@@ -248,6 +294,10 @@ PC 쇼핑이라 한 화면에 블록이 여러 개 들어가서 이 조건이 �
 - 성분 중심 세분화와 트렌드 추적 — [Cosmetic Index: Segmenting Your Market for a Skincare Brand](https://www.cosmeticindex.com/segmenting-your-market-skincare-brand-p2321.php)
 - 피부 타입·기후 세분화 — [BO International: Skincare Market Segmentation](https://www.bointernational.net/blogs/skincare-market-segmentation)
 - B2B 뷰티 데이터 공유와 실시간 대응 — [Shopify: B2B Beauty Guide](https://www.shopify.com/enterprise/blog/b2b-beauty)
+- 리테일 미디어 시장 규모·성장률 — [Improvado: Top Retail Media Networks](https://improvado.io/blog/top-retail-media-networks) · [Persistence Market Research: Retail Media Networks Market](https://www.persistencemarketresearch.com/market-research/retail-media-networks-market.asp)
+- 퍼스트파티 데이터 가치 상승(마케터 74%)·확정 측정 — [Osmos: First-Party Shopper Data in Retail Media](https://www.osmos.ai/blog/first-party-data-in-retail-media-the-complete-targeting-guide)
+- 광고주의 유통사 데이터 중시(60%+) — [Tinuiti: Top Retail Media Networks](https://tinuiti.com/blog/ecommerce/retail-media-networks/)
+- 개인화 기대(71%)·매출 기여(40%)·상승폭(10~15%) — [McKinsey: The value of getting personalization right](https://www.mckinsey.com/capabilities/growth-marketing-and-sales/our-insights/the-value-of-getting-personalization-right-or-wrong-is-multiplying)
 
 ### 조사 한계
 
@@ -256,3 +306,6 @@ PC 쇼핑이라 한 화면에 블록이 여러 개 들어가서 이 조건이 �
   강조하는 편향이 있다. 불만 자체는 여러 출처에서 반복되므로 채택했다.
 - 화장품 성분 트렌드 자료는 시장 보고서 요약이라 원 데이터를 확인하지 못했다.
 - 5절의 색 배치는 브랜드 색을 받아 우리가 정한 것이다. 사용성 검증 전이다.
+- 0절의 시장 수치는 각 조사기관 추정치로, 기관마다 시장 정의가 달라 수치가
+  갈린다. 방향(고성장·퍼스트파티 중심)은 여러 출처에서 일치한다.
+- 개인화 수치는 업종 전체 평균이다. 화장품 단독 수치는 확인하지 못했다.
