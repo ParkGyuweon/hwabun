@@ -137,11 +137,14 @@ source = simulator/personas/data/personas_100_agent.json,
 | `skin_type` | string | N | `combination`, `dry`, `normal`, `oily` |
 | `skin_tone` | string | N | `fair`, `light`, `medium`, `tan`, `deep` |
 | `eye_color` | string | Y | `brown`, `blue`, `green`, `hazel`, `gray` |
-| `hair_color` | string | Y | `brown`, `black`, `blonde`, `gray`, `red`, 기타 정규화 값 |
-| `stratum` | string | N | 층화추출 key. 예: `combination\|light\|4-5` |
-| `review_bucket` | string | N | `3`, `4-5`, `6-9`, `10+` |
+| `hair_color` | string | Y | `auburn`, `black`, `blonde`, `brown`, `gray`, `red` |
+| `stratum` | string | N | `skin_type\|skin_tone\|review_bucket`. 예: `combination\|light\|4` |
+| `review_bucket` | string | N | 긍정 상품 수 구간: `3`, `4`, `5-6`, `7+` |
 | `n_reviews` | int | N | Persona 원천 리뷰 수 |
 | `n_products` | int | N | Persona가 리뷰한 고유 상품 수 |
+| `n_positive` | int | N | 상품별 평균 평점 기준 긍정 상품 수. 모집단·층화 기준 |
+| `n_negative` | int | N | 상품별 평균 평점 기준 부정 상품 수 |
+| `n_neutral` | int | N | 상품별 평균 평점 기준 중립 상품 수 |
 | `avg_rating` | double/null | Y | Persona 평균 평점 |
 | `profile_version` | string | N | Persona 생성/정규화 버전. E2E 초안값 `0.1-draft` |
 | `profile_scope` | string | N | `full`. 원천 리뷰 전체 기준 Profile임을 표시. 평가용은 §5.2의 `eval` |
@@ -158,8 +161,10 @@ source = simulator/personas/data/personas_100_agent.json,
 | `skin_tone` | 원본 14종을 5버킷으로 정규화. `notSureST`는 결측 처리 |
 | `hair_color` | `brunette`는 `brown`으로 병합. 결과 6종(`auburn` 포함) |
 | `eye_color` | `Grey`는 `gray`로 병합. 결과 5종 |
-| 모집단 조건 | 사용자 속성 4개가 모두 채워진 리뷰만 사용 |
+| 리뷰 입력 조건 | 사용자 속성 4개가 모두 채워진 리뷰만 사용 |
 | 대표 속성 | 리뷰마다 속성이 다르면 최신 리뷰 기준 |
+| 모집단 조건 | 상위 200개 상품 중 긍정 상품 3개 이상 보유. 같은 상품의 중복 리뷰는 평점 평균으로 합침 |
+| 층화 기준 | `skin_type` × `skin_tone` × 긍정 상품 수 구간(`3`/`4`/`5-6`/`7+`) |
 | 100명 agent | `skin_type x skin_tone` 20셀 균등배분. Dashboard 기본 모집단 통계에서는 제외하고 실시간/정성 실험용으로 분리 |
 | 9,900명 batch | 모집단 분포에 맞춘 층화추출. 대규모 Dashboard 통계 기본 집단 |
 
@@ -353,7 +358,7 @@ grain = persona_id + segment_type + segment_value
 ```text
 PA00001 | skin_type      | combination
 PA00001 | skin_tone      | light
-PA00001 | review_bucket  | 4-5
+PA00001 | review_bucket  | 4
 PA00001 | persona_source | agent_sample
 ```
 
@@ -588,6 +593,8 @@ Persona 단위로 표본을 확인해야 하면 `bridge_persona_segment`의 `seg
 | 필수 속성 | `skin_type`, `skin_tone`, `stratum`, `review_bucket` 존재 | bad persona |
 | 정규화 enum | `skin_type`, `skin_tone`, `hair_color`, `eye_color`는 정규화 값 사용 | 경고 또는 bad persona |
 | 리뷰 수 | `n_reviews >= 3` | 샘플링 기준 위반 |
+| 긍정 상품 수 | `n_positive >= 3` | 모집단 조건 위반 |
+| 층화 구간 | `review_bucket`이 `n_positive`에 대응하는 `3`/`4`/`5-6`/`7+` 중 하나 | bad persona |
 | 상품 수 | `n_products >= 3` 권장 | seed/holdout 품질 경고 |
 | Canonical product join | `canonical_product_id`가 Product Feature/Product Data에 존재 | 없는 경우 seed/holdout 제외 또는 join 경고 |
 | Holdout 판정 순서 | §6.1의 1~7단계 순서대로 판정 | 순서를 바꿔 구현하면 평가 모집단이 달라지므로 재구현 |
