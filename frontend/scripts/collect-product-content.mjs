@@ -36,6 +36,20 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
 const COLLECTED = join(here, '..', 'src', 'mocks', 'products.collected.json');
 
+/**
+ * 상품 ID → 세포라 상품 주소.
+ *
+ * 아카이브에 남아 있는 세포라 사이트맵에서 뽑아 둔 것이다.
+ * 이게 없으면 상품 하나를 찾을 때마다 `sephora.com/product/*` 전체 색인을
+ * 정규식으로 훑게 하는 수밖에 없는데, 그 쿼리는 서버가 60초에서 잘라
+ * 504 를 준다. 정확한 주소로 물으면 3초대다.
+ *
+ * 갱신: scripts/build-product-urls.mjs
+ */
+const URL_MAP = JSON.parse(
+  readFileSync(join(here, 'data', 'sephora-product-urls.json'), 'utf8'),
+);
+
 const UA = 'Mozilla/5.0';
 /** 아카이브에 부담을 주지 않도록 한 건마다 쉰다 */
 const PAUSE_MS = 1500;
@@ -95,9 +109,16 @@ function pickSpread(rows, count) {
  */
 async function findArchived(productId) {
   const low = productId.toLowerCase();
-  const cdx =
-    'http://web.archive.org/cdx/search/cdx' +
-    `?url=sephora.com/product/*&filter=urlkey:.*${low}.*&limit=40&fl=original,timestamp&collapse=urlkey`;
+
+  /*
+   * 주소를 아는 상품은 그 주소만 묻는다. 색인 전체를 훑을 이유가 없다.
+   * 모르는 상품만 어쩔 수 없이 와일드카드로 찾는다.
+   * http 는 쓰지 않는다 — 포트 80 연결이 거부된다.
+   */
+  const known = URL_MAP[productId];
+  const cdx = known
+    ? `https://web.archive.org/cdx/search/cdx?url=${known.replace(/^https?:\/\//, '')}&limit=60&fl=original,timestamp&collapse=timestamp:8`
+    : `https://web.archive.org/cdx/search/cdx?url=sephora.com/product/*&filter=urlkey:.*${low}.*&limit=40&fl=original,timestamp&collapse=urlkey`;
 
   /*
    * CDX 가 200 에 빈 본문을 주는 일이 잦다. 실패가 아니라 "결과 없음" 처럼 보여서
@@ -392,7 +413,7 @@ async function collectOne(productId) {
  * 기다리는 시간이라 동시에 보내면 그만큼 줄어든다.
  * 다만 아카이브는 공용 자원이라 무한정 늘리지 않는다.
  */
-const CONCURRENCY = 4;
+const CONCURRENCY = 3;
 
 const queue = [...targets];
 

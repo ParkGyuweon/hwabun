@@ -852,7 +852,11 @@
       "https://www.sephora.com/productimages/product/p415747-av-01-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A lip butter infused with nourishing cupuaçu, açaí, and coconut oil, leaving them soft with a dewy sheen that intensifies your natural lip color.",
+      "what_else": "This product is formulated without PEG’s, synthetic colors, and propylene glycol.\n\nSol de Janeiro came together with a mutual love of the distinctly Brazilian attitude towards beauty, their secrets, and their know-how. This product supports the Brazilian philosophy that beauty isn’t a standard to reach, it’s an attitude to take. A head-to-toe sensuality that comes through in a smile, a saunter, a samba. Based in the USA, Sol de Janeiro is excited to be able to bring you the most effective, transformative, and fun beauty care experiencesincorporating the latest and greatest super ingredients from the Amazon.\n\nLOVE IT. FLAUNT IT. YOU’VE GOT IT.™",
+      "suggested_usage": "Simply swipe on for soft, comfortable lips. Wear alone or as a base for lip stains and lipsticks to protect and deeply hydrate lips without compromising your color.\n\nBrazilian Babe Tip: This amazing multi-tasker also nourishes dry spots like cuticles and elbows. Also, perfect as a sheer highlighter when you apply to cheek bones and high planes of the face for a translucent, radiant glow.”"
+    }
   },
   "P415771": {
     "sku_id": "1890904",
@@ -2220,7 +2224,20 @@
       "https://www.sephora.com/productimages/product/p436359-av-03-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A gentle cleanser and makeup remover, packed with antioxidant-rich blueberries, hyaluronic acid, and gentle AHAs.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Pores, Oiliness, and Acne and Blemishes",
+      "highlighted_ingredients": [
+        "Blueberry Extract: Packed with antioxidants to protect skin against environmental stressors.",
+        "Hyaluronic Acid: Hydrates skin by holding up to 1,000 times its weight in moisture.",
+        "AHA: A blend of lactic acid (derived from plants) and glycolic acid that gently exfoliates and hydrates to reveal smoother, brighter skin over time by removing dead surface skin cells."
+      ],
+      "ingredient_callouts": "This product is vegan and gluten-free.",
+      "what_else": "This cleanser delivers all the antioxidant-rich benefits of blueberries. The gentle formula is packed with nourishing oils to remove makeup with minimal rubbing, while hyaluronic acid and AHAs help improve the look of pores. Skin is left clear, radiant, and glowy.\n\nClean at Sephora\n When you spot our Clean seal, you can be sure we’ve checked that this brand’s product is made without the ingredients you told us you’d most like to avoid. \n\nClean at Sephora&trade; is formulated without: \nSulfates SLS and SLES, parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, triclocarban. All skincare, hair, and makeup brands with the Clean Seal have less than one percent of synthetic fragrances.",
+      "suggested_usage": "To use as a cleanser:\n-Dispense one pump into wet palms and rub hands to create a lather.\n-Massage gently onto skin.\n-Rinse thoroughly with water.\n-Follow with your usual skincare regimen.\n\nTo use as a makeup remover:\n-Dispense two pumps into wet palms and gently massage into face and neck in small circular motions for a full minute to eliminate all traces of makeup.\n-Rinse thoroughly with water.\n-Follow with your usual skincare regimen.\n\nTo use as a mask:\n-Apply a generous layer to clean, dry skin.\n-After five minutes, rinse thoroughly with lukewarm water.\n-Follow with your usual skincare regimen.",
+      "brand_story": "Glow Recipe was created by beauty industry veterans Sarah Lee and Christine Chang to elevate K-beauty to an everyday luxury. Hybrid textures encapsulate the philosophy of Korean skincare. Natural ingredients work overtime to deliver lasting hydration, building the foundation for visibly healthier skin."
+    }
   },
   "P439055": {
     "sku_id": "2170827",
@@ -2966,7 +2983,21 @@
       "https://www.sephora.com/productimages/product/p454018-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A concentrated treatment and touch-up balm packed with 80% squalane, hyaluronic acid, and Japanese lemon balm to target dryness and signs of aging.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Fine lines and wrinkles, Dryness, Dullness and uneven texture.",
+      "highlighted_ingredients": [
+        "Japanese Lemon Balm: Reduces the appearance of lines, creases, and crepiness from dehydration and helps minimize UV damage that can cause these signs of aging.",
+        "80% PurifIed Squalane: Richly moisturizes and supports natural skin barrier function to help lock in moisture and minimize dryness all day.",
+        "Tatcha's Signature Hadasei-3: Restores a healthy-looking, youthful radiance with nourishing green tea, rice, and algae."
+      ],
+      "ingredient_callouts": "This product is cruelty-free.",
+      "what_else": "This moisturizing formula visibly smooths, softens, and improves skin texture and radiance immediately and over time. Use under makeup to improve blendability or over makeup to refresh skin's natural glow.\n\nNicknamed &quot;caring for others,&quot; Japanese lemon balm has been used to calm and cure for centuries.",
+      "clinical_results": "In a Expert Graded Clinical study of 20 women:\n- 96% demonstrated an instant improvement in dryness immediately\n- 91% demonstrated an improvement in skin radiance immediately\n- 96% demonstrated an improvement in skin texture over a 2 week period\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Glide on anytime, anywhere you desire to add smoothness and moisture.\n-Press with fingers to set.",
+      "brand_story": "For over 300 years, Japan’s geisha have been held in awe for their enduring wisdom and breathtakingly beautiful, porcelain skin. Perfected through centuries, it’s widely believed that their beauty secrets were passed down from one generation of geisha to the next by word of mouth alone. TATCHA rediscovered these coveted daily regimes in a 200-year-old manuscript. In homage to these icons of Eastern beauty, a proprietary process was developed with scientists, scholars, and geisha themselves, involving the very best green teas, Okinawa red algae, and rice bran. The secrets of the geisha live on in TATCHA."
+    }
   },
   "P454120": {
     "sku_id": "2313005",
@@ -3308,7 +3339,19 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A moisturizer with a fragrance-free formula that delivers lightweight, lasting hydration while helping to visibly clear pores, reduce shine, and balance oil.",
+      "skin_type": "Normal, Combination, and Oily",
+      "concerns_text": "Pores, Dryness, and Oiliness",
+      "highlighted_ingredients": [
+        "Hyaluronic Acid and Polyglutamic Acid: Act as powerful moisture magnets that work in synergy to optimize skin hydration.",
+        "Galacturonic Acid and Niacinamide: Absorb and balance oil and combat visible shine.",
+        "Moringa and Papaya: Nourish, visibly cleanse, and refresh skin by removing the look of impurities caused by pollution."
+      ],
+      "ingredient_callouts": "This product is vegan, gluten-free, cruelty-free, and comes in recyclable packaging.",
+      "what_else": "This fragrance-free, lightweight daily moisturizer hydrates, reduces the look of shine, and helps balance oil. It is formulated with hyaluronic acid and polyglutamic acid, two powerful moisture magnets that support skin hydration while niacinamide and galacturonic acid absorb excess oil and visibly combat shine. It also contains moringa and papaya to nourish and refresh skin, leaving long-lasting hydration without ever feeling greasy.\n\nCLEAN at Sephora is our commitment to offering formulas that go beyond regulatory standards to avoid controversial ingredients without sacrificing on effectiveness.",
+      "suggested_usage": "-Apply to clean face. Use AM and PM.\n-Avoid contact with eyes."
+    }
   },
   "P458219": {
     "sku_id": "2348431",
@@ -3489,11 +3532,23 @@
     "description": null
   },
   "P466142": {
-    "sku_id": null,
+    "sku_id": "2869642",
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A refreshing, exfoliating scrub that quickly and visibly retexturizes, polishes, and reduces the size of pores with AHAs, lemon peel, and sugar.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Fine Lines and Wrinkles, Dullness, and Uneven Texture",
+      "highlighted_ingredients": [
+        "AHAs 10% (Glycolic and Lactic Acids): Chemically exfoliate and visibly even texture.- Ultra-Fine Sugar Exfoliants and Lemon Peel Extract: Physically exfoliate and visibly polish skin.- Holy Basil and Chamomile Extracts: Soothe and calm skin."
+      ],
+      "ingredient_callouts": "Free of parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, sulfates SLS & SLES, triclocarban, triclosan, and contains less than one percent synthetic fragrance. It is also vegan, gluten-free, and cruelty-free.",
+      "what_else": "Refresh your skin with a slush. This dual-action retexturizing scrub physically and chemically exfoliates. High-potency AHAs help loosen and lift dead skin cells, while lemon peel powder and sugar exfoliants gently sweep away rough skin. Plus holy basil and chamomile help calm and soothe your skin.",
+      "clinical_results": "In a clinical study on 37 women, after 1 use:- 100% of users agree this product polishes and retexturizes skin- 100% of users agree this product creates an even looking complexion​- 100% of users agree this product creates healthier-looking skin\n\nClean at Sephora is our commitment to offering effective products without certain ingredients, such as parabens, sulfates, phthalates, and mineral oils. Learn more here.",
+      "suggested_usage": "-Apply to wet skin and gently massage in.\n-Leave on for up to two minutes before rinsing or rinse right away.\n-Use two to three times per week.\n\nPrecautions:\n-For external use only. Use as directed.\n-This product contains active ingredients; OLEHENRIKSEN suggests testing a small amount on forearm.\n-Sunburn alert: This product contains an alpha hydroxy acid (AHA) that may increase your skin's sensitivity to the sun and particularly the possibility of sunburn. Use a sunscreen, wear protective clothing, and limit sun exposure while using this product and for a week afterward.\n-Avoid eye area. In case of contact with eyes, rinse immediately.",
+      "brand_story": "Fall in love with your skin. Expertly blending the power of nature and science, OLEHENRIKSEN skincare rituals indulge your senses while transforming your skin to reveal the radiant healthy beauty you didn’t know was possible. Here's a toast to your natural beauty! Cheers, Ole"
+    }
   },
   "P466155": {
     "sku_id": "2406858",
