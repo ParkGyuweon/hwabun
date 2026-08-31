@@ -285,13 +285,15 @@ source = persona_review_history where evaluation_role='seed'
 | `source_review_ids` | array<string> | N | 이 seed를 만든 리뷰 ID 목록 |
 | `last_reviewed_at` | date/null | Y | 가장 최근 seed 리뷰일 |
 | `avg_seed_rating` | double/null | Y | 해당 상품 seed 리뷰 평균 |
-| `is_positive_seed` | boolean/null | Y | 평점/추천 여부 기준 긍정 seed |
+| `is_positive_seed` | boolean/null | Y | 평점/추천 여부 기준 긍정 seed 여부. 오프라인 평가에서 별점 1~2점 상품은 긍정 seed에 섞지 않고 `v_u⁻`로 보낸다 |
 | `initial_event_weight` | double/null | Y | 초기 User Behavior Vector 반영 시 사용할 가중치 |
 | `is_seen` | boolean | N | seed 리뷰 상품의 추천 후보 하드 제외 여부 |
 
 초기 E2E에서는 `is_seen=true`인 상품을 리뷰 상품 제외 집합(`review_products` 또는 equivalent structure)에 반영한다. 리뷰 상품은 이미 구매한 상품으로 보고 추천 후보에서 하드 제외하지만, 행동 Event로 접촉한 상품은 아니므로 `viewed`와 `n_products`에는 넣지 않는다. 시뮬레이션의 목표가 "처음 방문한 사용자 행동 생성"이면 실제 클릭/조회 Event는 별도로 발생시킨다. 행동 집합의 canonical 정의는 `contracts/recommendation-io-spec.md` §2를 따른다.
 
 오프라인 평가에서 seed 상품은 `persona_profile_eval`과 같은 입력 범위를 사용한다. 즉 holdout 대상 리뷰에서 파생된 상품은 seed에 포함되지 않는다.
+
+오프라인 평가의 리뷰 seed 극성 처리는 `contracts/recommendation-io-spec.md` §2 "리뷰 극성의 처리"를 따른다. 별점 1~2점 상품은 리뷰 기반 부정 상품으로 분류해 `v_u⁻`에 반영하고, 긍정 seed에 섞지 않는다. 여기서 리뷰 기반 부정은 **별점 1~2점 상품**을 뜻한다. 행동 로그의 `v_u⁻`가 뜻하는 **조회했으나 전환하지 않은 상품**과는 발생 근거가 다르므로 문서와 평가 결과에서 둘을 구분해 표기한다. 구체적인 벡터 산식과 감점 계수는 canonical 계약에만 둔다.
 
 ## 8. `persona_holdout_target`
 
@@ -439,8 +441,8 @@ persona_id
 | --- | --- | --- |
 | `positive_u_sum` | Redis Hash 또는 equivalent store | 전환 상품의 양수 행동 가중 Product Vector 누적합 |
 | `positive_w_sum` | Redis Hash 또는 equivalent store | 전환 상품의 양수 행동 누적 가중치 |
-| `negative_u_sum` | Redis Hash 또는 equivalent store | 미전환 접촉 상품의 양수 행동과 감점 행동을 합친 Product Vector 누적합 |
-| `negative_w_sum` | Redis Hash 또는 equivalent store | negative 축의 절대값 누적 가중치 합 |
+| `negative_u_sum` | Redis Hash 또는 equivalent store | canonical 계약에 따라 계산한 미전환 상품의 부정 강도와 friction 감점을 반영한 Product Vector 누적합 |
+| `negative_w_sum` | Redis Hash 또는 equivalent store | negative 축에 반영한 양수 가중치의 누적합 |
 | `converted` | Redis Set 또는 equivalent set | 전환 상품. 서빙 후보 하드 제외와 positive 축 판정에 사용 |
 | `viewed` | Redis Set 또는 equivalent set | 유효 가중치가 있는 Event로 접촉한 상품 전체. `scroll_depth`의 별도 도달률 가중치를 포함하고 `converted`를 포함하며, 서빙에서 소프트 강등에 사용 |
 | `n_products` | Redis Hash | `|viewed|`. 가중치 스케줄 판정용 고유 상품 수 |
@@ -448,7 +450,7 @@ persona_id
 
 `converted ⊆ viewed`이며 `n_products`는 Event 수가 아니라 `viewed`의 고유 상품 수다. 스크롤/섹션 Event가 여러 번 발생해도 같은 상품 하나를 본 것은 고유 상품 1개로 계산한다.
 
-User Behavior Vector의 두 분모는 모두 절대값으로 누적한다. 미전환 상품의 양수 행동과 `rage_click`, `dead_click`, `scroll_backtrack`, `remove_from_cart` 같은 감점 신호는 negative 축에 누적한 뒤 최종 추천 점수에서 감점 신호로 사용한다. 이렇게 해야 음수 weight 때문에 분모가 0 또는 음수가 되는 문제를 막을 수 있다.
+User Behavior Vector의 두 분모에는 각 축에 반영한 양수 가중치만 누적한다. 음수 `event_weight`를 모두 negative 축에 직접 넣지 않는다. `intent=friction`인 `rage_click`, `dead_click`만 절대값 그대로 negative 축에 반영하고, `intent=hesitation`인 `remove_from_cart`와 `intent=comparison`인 `scroll_backtrack`은 절대값을 상품 관여도에 더한다. 미전환 상품의 negative 축 가중치는 관여도를 그대로 사용하지 않고 canonical 계약의 규칙 7에 따라 관여도에 반비례하도록 변환한다.
 
 기존 `contracts/recommendation-io-spec.md`와 `docs/ai/recommendation-design.md`의 `u_sum`, `w_sum` 표현은 양수 행동 벡터 기준으로 해석한다. 실제 Redis 필드명을 그대로 유지할 경우에도 문서상 의미는 `positive_u_sum`, `positive_w_sum`과 동일하다.
 
@@ -456,26 +458,28 @@ User Behavior Vector의 두 분모는 모두 절대값으로 누적한다. 미�
 
 집계 공식과 Event별 전환 판정의 canonical 정의는 `contracts/recommendation-io-spec.md` §2 "집계 규칙 (canonical)"을 따른다. 구현 기준은 `batch/jobs/user_vector.py`다. 이 문서에는 산식을 중복 정의하지 않는다.
 
-`final_weight`는 `processed-schema.md`의 `persona_behavior_feature_delta.final_weight`(`event_weight × decay_weight`)다. 먼저 상품별 양수/감점 가중치를 모은 뒤, 조회 시점의 `converted` 여부로 상품 단위 축을 정한다. **전환 상품의 양수 가중치만 positive 축으로 가고, 미전환 접촉 상품의 양수 가중치는 negative 축으로 간다.** 감점 가중치는 전환 여부와 무관하게 negative 축에 절대값으로 누적하며 최종 점수에서 한 번만 감점한다.
+`final_weight`는 `processed-schema.md`의 `persona_behavior_feature_delta.final_weight`(`event_weight × decay_weight`)다. 먼저 상품별 관여도와 friction 감점을 분리해 모은 뒤, 조회 시점의 `converted` 여부로 상품 단위 축을 정한다. **전환 상품의 관여도는 positive 축으로 가고, 미전환 접촉 상품은 관여도에 반비례하도록 변환한 부정 강도가 negative 축으로 간다.** friction 감점은 전환 여부와 무관하게 negative 축에 절대값으로 누적하며 최종 점수에서 한 번만 감점한다. `remove_from_cart`와 `scroll_backtrack`의 절대값은 friction 감점이 아니라 관여도에 포함한다.
 
 | 항목 | 기준 |
 | --- | --- |
-| 분모 | 항상 양수. `positive_w_sum`, `negative_w_sum` 모두 절대값 누적이므로 0 또는 음수가 되지 않는다 |
+| 분모 | 항상 양수. `positive_w_sum`, `negative_w_sum`에는 각 축에 반영한 양수 가중치만 누적하므로 0 또는 음수가 되지 않는다 |
 | 분모 0 | `positive_w_sum=0`이면 user vector를 만들지 않고 `n_products=0` 구간의 가중치 스케줄(속성/인기도 중심)을 사용한다 |
 | 감점 적용 위치 | 벡터 누적 단계가 아니라 최종 추천 점수 단계에서 `- λ × cos(negative_vector, v_i)` 형태로 한 번만 적용한다 |
 | 감점 계수 | canonical 계약의 `λ`를 사용한다. 현재 `batch/jobs/recommender.py` 기준 잠정값은 `0.15`이며 실제 로그 적재 후 재측정한다 |
 | `event_weight` 원천 | 실행 상수는 `frontend/src/types/log.ts`의 `EVENT_WEIGHT`, `SECTION_DWELL_WEIGHT`, `scrollDepthWeight()`를 사용하고 Data 문서는 의미와 근거를 관리한다 |
 
-### 12.2 부정 Event 적용 범위
+### 12.2 negative 축 관련 Event 적용 범위
 
 `persona_behavior_feature_delta`는 `product_id`가 필수다. 따라서 상품과 연결되지 않는 Event는 User Behavior Vector에 반영할 수 없다.
 
 | Event 조건 | 처리 |
 | --- | --- |
-| `product_id`가 있는 부정 Event (`remove_from_cart`, 상품 카드/상세에서 발생한 `rage_click`, `dead_click`, `scroll_backtrack`) | negative 축에 반영 |
+| `product_id`가 있는 friction Event (`rage_click`, `dead_click`) | 전환 여부와 무관하게 절대값을 negative 축에 직접 반영 |
+| `product_id`가 있는 hesitation Event (`remove_from_cart`) | 절대값을 상품 관여도에 더한다. `converted`에서 제거된 미전환 상품의 부정 강도는 규칙 7에 따라 약해진다 |
+| `product_id`가 있는 comparison Event (`scroll_backtrack`) | 절대값을 상품 관여도에 더한다. negative 축 직접 감점으로 사용하지 않는다 |
 | `product_id`가 없는 friction Event (목록 조작 영역, 장바구니 화면 전체, 네비게이션 등) | Behavior Vector에 반영하지 않고 UX/Dashboard 지표(`realtime_event_stats`, friction 집계)로만 사용 |
 
-이 규칙 때문에 Dashboard의 friction Event 수와 추천에 반영된 부정 신호 수는 일치하지 않는다. 이는 정상이며, 두 값을 같은 KPI로 비교하지 않는다.
+이 규칙 때문에 Dashboard의 friction Event 수와 추천에 직접 반영된 friction 감점 수는 일치하지 않는다. 이는 정상이며, 두 값을 같은 KPI로 비교하지 않는다.
 
 ### 12.3 `converted` / `viewed` / `n_products` 갱신 기준
 
@@ -637,7 +641,7 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 | `profile_version` 값 | Data / AI-Product Feature | Persona 생성 기준 버전명을 어떻게 둘지 |
 | `persona_source` 값 | Data / Simulator | `agent_sample`, `batch_sample` 명칭 확정 |
 | `generator_type` 값 | Data / Kafka-Spark | `agent_realtime`, `python_batch` 명칭 확정 |
-| seed 초기화 정책 | Data / AI-Product Feature | seed 리뷰를 User Behavior Vector 초기값에 반영할지, 리뷰 상품 하드 제외에만 쓸지 |
+| 실시간·시뮬레이션 seed 초기화 정책 | Data / AI-Product Feature | 오프라인 평가는 리뷰 극성별 축 반영을 사용한다. 실시간·시뮬레이션 시작 상태에서 seed 리뷰를 User Behavior Vector 초기값에 반영할지, 리뷰 상품 하드 제외에만 쓸지는 별도 확정 |
 | Holdout positive 기준 | Data / AI-Product Feature | 초안은 `rating >= 4` 또는 `is_recommended=true`. 추천 평가 정의에 따라 조정 가능 |
 | User Behavior Vector 감점 계수 | Data / AI-Product Feature | canonical 계약의 잠정값 `λ=0.15`를 실제 로그 적재 후 재측정 |
 | Attribute Affinity neutral | Data / AI-Product Feature | 본 문서는 `neutral_lift=1.0` 기준(현재 `0.40`). `contracts/recommendation-io-spec.md`의 `0.5` 표기와 통일 필요 |
@@ -662,4 +666,4 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 | Affinity neutral | `neutral_lift=1.0` → 현재 `0.40` | `contracts/recommendation-io-spec.md`는 `0.5` 표기. 통일 대상 |
 | `persona_id` 발급 | 표본별 prefix. agent `PA00001~PA00100`, batch `PC00001~PC09900`. `author_id`와 분리 | 프론트 `frontend/src/lib/persona.ts`는 `persona_id = author_id`를 사용 중. 실제 Web Event(`actor_type='user'`)에만 해당하며 synthetic 경로에는 영향 없음 |
 
-이 문서는 Persona 원천과 분석/추천 연결 기준을 정의하는 초안이다. 실제 생성기 구현 후 `persona_source`, `generator_type`, seed 초기화 정책, holdout 평가 기준을 E2E 결과와 추천 평가 결과에 맞춰 확정한다. 행동 집계와 `converted`/`viewed`/`n_products` 기준은 `contracts/recommendation-io-spec.md`를 canonical로 사용한다.
+이 문서는 Persona 원천과 분석/추천 연결 기준을 정의하는 초안이다. 실제 생성기 구현 후 `persona_source`, `generator_type`, 실시간·시뮬레이션 seed 초기화 정책, holdout 평가 기준을 E2E 결과와 추천 평가 결과에 맞춰 확정한다. 행동 집계와 오프라인 평가의 리뷰 극성 처리, `converted`/`viewed`/`n_products` 기준은 `contracts/recommendation-io-spec.md`를 canonical로 사용한다.
