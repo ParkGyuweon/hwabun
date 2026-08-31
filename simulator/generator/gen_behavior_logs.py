@@ -24,6 +24,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   - actor_type 은 전부 synthetic
   - 상세 진입은 page_view + product_view 를 함께 남긴다 (프론트와 동일)
   - 장바구니 화면을 방문해 view_cart 를 남기고, 일부는 담았던 이탈 상품을 뺀다
+  - 직전 상세의 추천에 다음 상품이 있으면 recommendation_click 으로 넘어간다
+    (노출과 같은 recommendation_id / position 을 실어 CTR 이 성립하게 한다)
 
 실행
   python gen_behavior_logs.py --limit 50                    # 맛보기. 파일로 저장
@@ -99,6 +101,20 @@ SCENARIO = {
     "p_cart_regret": 0.22,
     #   장바구니 화면 자체를 열어보는 확률 (후회가 없어도 확인차 들어간다)
     "p_view_cart": 0.70,
+    #   장바구니에서 수량을 조절하는 확률
+    "p_quantity_change": 0.18,
+
+    # [미정] 유사 상품 추천을 눌러 다음 상세로 넘어가는 확률.
+    #   직전 상세의 추천 노출과 같은 recommendation_id / position 을 실어야
+    #   CTR 을 계산할 수 있다 (SimilarProducts.tsx 와 동일).
+    "p_rec_click": 0.55,
+
+    # [미정] 이탈 상품을 끝까지 훑어보는 확률 ("진지하게 봤지만 안 샀다").
+    #   similar_products 는 7개 섹션 중 6번째라 스크롤 79% 이상이어야 도달한다.
+    #   기본 이탈 깊이(20~50%)로는 추천이 노출조차 되지 않아
+    #   recommendation_click 이 구조적으로 발생할 수 없다.
+    "p_deep_bounce": 0.30,
+    "deep_bounce_depth": 90,
 
     # [미정] 상세 페이지 내 상호작용 확률
     "p_scroll_pause": 0.55,
@@ -211,6 +227,7 @@ class Emitter:
         self.pvid = ""
         self.n = 0
         self.page = "product_list"
+        self.last_rec = None      # 직전 상세에서 노출한 (recommendation_id, [상품])
 
     def tick(self, lo=200, hi=1500):
         self.t += timedelta(milliseconds=int(self.rng.integers(lo, hi)))
@@ -287,6 +304,9 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
                 e.emit("recommendation_impression", rid,
                        recommendation_id=rec_batch, list_id="similar_products",
                        algorithm="same_category_v0", position=pos)
+            # 다음 상품을 추천으로 들어갈 수 있게 배치를 기억해 둔다.
+            # 노출과 클릭이 같은 recommendation_id / position 을 써야 CTR 이 성립한다
+            e.last_rec = (rec_batch, list(rec_ids))
         # 섹션 이탈 시 체류 시간 확정
         for kind, ref, pos in expanded:
             e.tick(30, 250)
@@ -473,19 +493,52 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
     e = Emitter(sink, p["persona_id"], NOW - timedelta(days=float(rng.random() * 5)), rng)
     promo = popular[:6]
     liked = False
-    for i, g in enumerate(list(bounce) + [target]):
-        grid = list(rng.choice([x for x in pool if x != g] or pool,
-                               size=min(12, len(pool)), replace=False))
-        grid = [g] + [x for x in grid if x != g]
-        browse_list(e, promo, grid[:12], rng,
-                    dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0), SC=SC)
-        e.tick(); e.emit("product_click", g,
-                         entry_source="grid" if rng.random() < 0.8 else "promo_pick",
-                         position=1)
+    route = list(bounce) + [target]
+    visited = set()
+    for i in range(len(route)):
+        g = route[i]
+        # 직전 상세에서 추천이 노출됐다면, 목록으로 돌아가는 대신 그 추천을 눌러
+        # 다음 상품으로 넘어간다. 이때 다음 상품을 **추천 목록에서 고른다** —
+        # 이탈 상품은 원래 노출로 고르기로 한 것이고, 추천도 노출이다.
+        # 목표 상품은 반드시 마지막에 와야 하므로 바꾸지 않는다.
+        via_rec = False
+        if (e.last_rec is not None and g != target
+                and rng.random() < SC["p_rec_click"]):
+            cand = [x for x in e.last_rec[1]
+                    if x not in seq and x not in visited and x != target]
+            if cand:
+                g = cand[0]          # 추천 목록 상위부터 (위치 편향을 그대로 재현)
+                route[i] = g
+                via_rec = True
+        visited.add(g)
+        if via_rec:
+            rec_batch, rec_list = e.last_rec
+            e.tick(); e.emit("recommendation_click", g,
+                             recommendation_id=rec_batch, list_id="similar_products",
+                             algorithm="same_category_v0",
+                             position=rec_list.index(g) + 1)
+            e.tick(); e.emit("product_click", g, entry_source="similar_products",
+                             position=rec_list.index(g) + 1)
+        else:
+            grid = list(rng.choice([x for x in pool if x != g] or pool,
+                                   size=min(12, len(pool)), replace=False))
+            grid = [g] + [x for x in grid if x != g]
+            browse_list(e, promo, grid[:12], rng,
+                        dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0), SC=SC)
+            e.tick(); e.emit("product_click", g,
+                             entry_source="grid" if rng.random() < 0.8 else "promo_pick",
+                             position=1)
         rec_ids = [x for x in by_cat.get(catalog[g]["cat"], []) if x != g][:6]
         is_target = g == target
-        visit_detail(e, g, rec_ids, rng,
-                     depth_target=100 if is_target else int(rng.choice(SC["bounce_depth_choices"])),
+        # 이탈 상품 일부는 끝까지 훑는다. 그래야 추천 섹션이 노출되고,
+        # "진지하게 봤지만 안 샀다" 는 v_u- 의 가장 강한 재료가 된다.
+        if is_target:
+            depth = 100
+        elif rng.random() < SC["p_deep_bounce"]:
+            depth = SC["deep_bounce_depth"]
+        else:
+            depth = int(rng.choice(SC["bounce_depth_choices"]))
+        visit_detail(e, g, rec_ids, rng, depth_target=depth,
                      engaged=is_target, entry_source="in_app", SC=SC)
         if is_target:
             if rng.random() < SC["wishlist_p_target"]:
@@ -511,6 +564,11 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
         e.emit("view_cart",
                item_count=len(cart), distinct_products=len(cart),
                cart_value=round(sum(catalog[g]["price"] for g in cart), 2))
+        # 수량 조절. 프론트는 entry_source="cart" 를 싣는다 (App.tsx)
+        if rng.random() < SC["p_quantity_change"]:
+            q = int(rng.integers(2, 4))
+            e.tick(500, 4000)
+            e.emit("quantity_change", target, quantity=q, entry_source="cart")
         if regret is not None:
             # 담았다 빼기. converted 에서 빠져 v_u- 로 넘어간다
             e.tick(800, 6000)
@@ -520,7 +578,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
 
     e.new_page("product_list")
     e.tick(); e.emit("page_view", navigation_source="in_app")
-    e.emit("exit_summary", products_viewed=len(bounce) + 1,
+    e.emit("exit_summary", products_viewed=len(route),
            converted=True, wishlisted=liked)
     return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
 
