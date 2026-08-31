@@ -103,7 +103,7 @@ let startedPageViewKey: string | null | typeof NOT_STARTED = NOT_STARTED;
 /**
  * 페르소나가 바뀌면 새 방문으로 취급한다.
  *
- *  는 **세션의 첫 page_view 와 같은 page_view_id** 를 공유한다
+ * `session_start` 는 **세션의 첫 page_view 와 같은 page_view_id** 를 공유한다
  * (데이터 계약). 그래서 여기서 첫 page_view_id 를 미리 발급하고,
  * 같은 id 로 첫 page_view 까지 바로 남긴다. 조인 없이 세션의 시작 화면을 알 수 있다.
  *
@@ -125,6 +125,23 @@ export function startSession(personaId: string | null, productId: string | null 
 
   track('session_start', { entry_page: context.pageType });
   track('page_view', { product_id: productId, navigation_source: 'session_start' });
+  trackProductView(productId, 'session_start');
+}
+
+/**
+ * 상품 상세를 열었을 때 `product_view` 를 남긴다 (데이터 계약).
+ *
+ * page_view 는 화면 이동과 체류를 표현하고, product_view 는 **상품 단위 조회 수**와
+ * Funnel 의 기준이다. page_view 만 쓰면 상품 조회 집계가 화면 구조에 종속돼서,
+ * 상세를 모달이나 탭 같은 다른 형태로 바꾸면 과거 수치와 이어지지 않는다.
+ *
+ * 상세로 들어오는 경로가 세션 시작과 화면 이동 두 갈래라 함수로 묶어 둔다.
+ * 한쪽에만 넣으면 상품 URL 로 바로 들어온 방문이 통째로 빠진다.
+ * 같은 page_view_id 를 쓰므로 page_view 와 이어 붙일 수 있다.
+ */
+function trackProductView(productId: string | null, navigationSource: string): void {
+  if (productId === null) return;
+  track('product_view', { product_id: productId, navigation_source: navigationSource });
 }
 
 /**
@@ -142,6 +159,7 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
   firedOnceKeys.clear();
   setLoggerContext({ productId });
   track('page_view', { product_id: productId, navigation_source: navigationSource });
+  trackProductView(productId, navigationSource);
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {

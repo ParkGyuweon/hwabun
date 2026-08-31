@@ -12,6 +12,15 @@ export const SCHEMA_VERSION = '0.2.0-draft';
 export type P0EventName =
   | 'session_start'
   | 'page_view'
+  /**
+   * 상품 상세 조회.  와 별도로 둔다.
+   *
+   * page_view 는 화면 이동과 체류를 표현하고, product_view 는 **상품 단위 조회 수**와
+   * Funnel 의 기준이다. page_view 만 쓰면 상품 조회 집계가 화면 구조에 종속돼서,
+   * 나중에 상세를 모달·탭 같은 다른 형태로 바꾸면 과거 수치와 이어지지 않는다.
+   *  가 반드시 실린다.
+   */
+  | 'product_view'
   | 'product_impression'
   | 'product_click'
   | 'section_view'
@@ -154,6 +163,8 @@ export type IntentClass =
 export const EVENT_INTENT: Record<EventName, IntentClass> = {
   session_start: 'session',
   page_view: 'session',
+  // 상품을 열어본 것 자체가 관심의 시작이다
+  product_view: 'interest',
   exit_summary: 'session',
 
   product_impression: 'exposure',
@@ -242,8 +253,9 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   hover_dwell: 0.3,
   section_view: 0.3,
 
-  // 기준선
+  // 기준선. 상품 단위 조회는 product_view 가 담당하므로 page_view 와 중복 가중하지 않는다
   page_view: 1.0,
+  product_view: 1.0,
 
   /**
    * 노출은 사용자 의지가 아니다. 가중 0 으로 두고 **분모**로만 쓴다.
