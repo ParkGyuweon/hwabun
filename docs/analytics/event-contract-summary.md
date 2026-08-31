@@ -350,12 +350,10 @@ product_impression
 | 상태 | Event |
 | --- | --- |
 | `dev` 구현 완료(MR !24 포함, 35종) | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `exit_summary`, `scroll_depth`, `impression_dwell`, `recommendation_snapshot`, `media_view`, `quick_look`, `quick_look_close`, `remove_from_cart`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `sort_change`, `filter_change`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
-| 시뮬레이터 미생성(6종) | `ingredient_view_mode_change`, `text_copy`, `hover_dwell`, `dead_click`, `impression_dwell`, `recommendation_snapshot` |
+| 시뮬레이터 정책상 제외(1종) | `dead_click` |
 | 후속 화면 구현 후 확정 | `search`, `compare_products`, `begin_checkout`, `purchase` |
 
-`product_view`, `view_cart`, `remove_from_cart`, `quantity_change`, `recommendation_click`, `quick_look`, `quick_look_close`는 최신 `dev` 생성기에 반영됐다. FE가 언급하지 않은 `impression_dwell`, `recommendation_snapshot`을 포함해 현재 6종이 미생성이다.
-
-`dead_click`은 실제 UI 오작동에서만 나오는 신호라 생성기가 의도적으로 만들지 않는다. 나머지 5종이 실제 보강 대상이다.
+최신 `dev` 생성기는 FE 35종 중 34종을 만든다. `ingredient_view_mode_change`, `text_copy`, `hover_dwell`, `impression_dwell`, `recommendation_snapshot`은 `bcc9c51`에서 반영됐다. 남은 `dead_click`은 실제 UI 오작동에서만 나오는 신호라 의도적으로 생성하지 않는다.
 
 ## 10. 팀 합의 현황
 
@@ -381,7 +379,7 @@ product_impression
 | 합의 | `quick_look` 가중치 | 현재 1.5를 유지한다. `added_to_cart`는 별도 Event로 이미 가산되므로 상향 조건으로 쓰지 않고, `variants_viewed`/짧은 체류 기반 조건부 가중치는 실측 후 별도 합의한다 |
 | 분석 초안 | Quick Look 존치 판단 | 같은 목록에 노출된 `(session_id, product_id)`를 Quick Look 사용/비사용+클릭으로 나눠 장바구니 전환율, 상세 이동률, 짧은 무상호작용 종료율, 창 안 완결률을 비교한다. 실제 사용자 로그의 기술 통계로 판단한다 |
 | 합의 | `product_view` 집계 분모 | 전환율 분모는 `product_view_sessions`(distinct `session_id`+`product_id`). `product_view_count`는 장바구니 왕복 시 재발화한다 |
-| 보강 필요 | 시뮬레이터 최신 Event | FE 35종 중 29종 생성. 미생성 6종이며 `dead_click` 제외 시 보강 후보 5종 |
+| 현행 구현 | 시뮬레이터 최신 Event | FE 35종 중 34종 생성. 남은 `dead_click`은 실제 UI 오작동 신호라 정책상 생성하지 않음 |
 | 보강 필요 | 시뮬레이터 properties/enum | 10개 Event가 필수 property 또는 enum 계약과 다르다. Collector가 `properties`를 검증하지 않아 수집 단계에서 안 걸린다 |
 | 확인 요청 | `view_cart` 뒤로가기 경로 | popstate 경로에도 `item_count`, `distinct_products`, `cart_value`를 동일하게 실어 달라고 FE에 요청 |
 | 확인 요청 | breadcrumb 홈 이동 | `product_click(product_id=null)`은 상품 대상 Event 계약에 어긋난다. 상품 클릭 로그에서 제거하거나 navigation Event로 분리 요청 |

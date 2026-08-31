@@ -139,20 +139,13 @@ P2에 둔 Event라도 이미 프론트에 구현된 항목은 수집 가능하�
 | 상태 | Event |
 | --- | --- |
 | `dev` 구현 완료(MR !24 포함, 35종) | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `exit_summary`, `scroll_depth`, `impression_dwell`, `recommendation_snapshot`, `media_view`, `quick_look`, `quick_look_close`, `remove_from_cart`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `sort_change`, `filter_change`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
-| 시뮬레이터 생성 완료(29종) | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `scroll_depth`, `scroll_pause`, `scroll_backtrack`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `media_view`, `quick_look`, `quick_look_close`, `variant_select`, `quantity_change`, `review_expand`, `review_filter_apply`, `text_selection`, `filter_change`, `sort_change`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `remove_from_cart`, `rage_click`, `exit_summary` |
-| 시뮬레이터 미생성(6종) | `ingredient_view_mode_change`, `text_copy`, `hover_dwell`, `dead_click`, `impression_dwell`, `recommendation_snapshot` |
+| 시뮬레이터 생성 완료(34종) | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `scroll_depth`, `scroll_pause`, `scroll_backtrack`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `media_view`, `quick_look`, `quick_look_close`, `variant_select`, `quantity_change`, `review_expand`, `review_filter_apply`, `text_selection`, `text_copy`, `ingredient_view_mode_change`, `hover_dwell`, `impression_dwell`, `recommendation_snapshot`, `filter_change`, `sort_change`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `remove_from_cart`, `rage_click`, `exit_summary` |
+| 시뮬레이터 정책상 제외(1종) | `dead_click` |
 | 후속 화면 구현 후 확정 | `search`, `compare_products`, `begin_checkout`, `purchase` |
 
 `wishlist_toggle`은 `action=add/remove`로 찜 추가와 해제를 모두 표현한다. 별도 `remove_from_wishlist` Event는 두지 않는다.
 
-시뮬레이터 현황은 `dev`의 `simulator/generator/gen_behavior_logs.py` 기준이다. `product_view`는 `be6d678`, `view_cart`/`remove_from_cart`는 `c13a31c`, `quantity_change`/`recommendation_click`은 `6bf4ee7`, `quick_look`/`quick_look_close`는 `46e4efb`에서 반영됐다. 현재 FE 35종 중 29종을 만들며 6종이 남아 있다. `dead_click`은 실제 UI 오작동에서만 나오는 신호라 의도적으로 생성하지 않으므로 실제 보강 후보는 5종이다.
-
-우선순위는 아래 순서로 둔다.
-
-| 순위 | Event | 없을 때 비는 것 |
-| --- | --- | --- |
-| 1 | `ingredient_view_mode_change`, `text_copy`, `hover_dwell` | 관심도 가중치 표의 해당 항목이 합성 로그에서 항상 0이 되어 가중치 Ablation에 들어가지 못한다 |
-| 2 | `impression_dwell`, `recommendation_snapshot` | 노출 기준 재집계와 추천 순위 변동 추적을 합성 로그로 검증할 수 없다 |
+시뮬레이터 현황은 `dev`의 `simulator/generator/gen_behavior_logs.py` 기준이다. `product_view`는 `be6d678`, `view_cart`/`remove_from_cart`는 `c13a31c`, `quantity_change`/`recommendation_click`은 `6bf4ee7`, `quick_look`/`quick_look_close`는 `46e4efb`, `ingredient_view_mode_change`/`text_copy`/`hover_dwell`/`impression_dwell`/`recommendation_snapshot`은 `bcc9c51`에서 반영됐다. 현재 FE 35종 중 34종을 만들며, `dead_click`은 실제 UI 오작동 신호라 의도적으로 생성하지 않는다.
 
 `remove_from_cart`가 추가되어 `user_vector.py`의 `UNDO` 경로(`converted.discard`)와 `-2.0` 감점 Event를 합성 로그로 검증할 수 있다. "전환 안 한 상품은 음수 벡터로" 규칙은 이 Event와 별개로 `weights()`가 전환 집합에 없는 상품을 `v_u⁻`로 보내는 방식으로 계속 적용된다.
 
@@ -163,8 +156,8 @@ P2에 둔 Event라도 이미 프론트에 구현된 항목은 수집 가능하�
 | GA4 Event | 우리 Event | 현재 상태 | 설명 |
 | --- | --- | --- | --- |
 | `view_item` | `product_view` | `dev` 반영 완료 | 상품 상세 조회 |
-| `view_item_list` | `product_impression` | 후속 화면 구현 후 확정 | 목록/검색/추천 영역 상품 노출 |
-| `select_item` | `product_click` | 일부 구현됨 | 상품 카드 또는 추천 상품 클릭 |
+| `view_item_list` | `product_impression` | `dev` 반영 완료 | 목록/검색/추천 영역 상품 노출 |
+| `select_item` | `product_click` | `dev` 반영 완료 | 상품 카드 또는 추천 상품 클릭 |
 | `add_to_wishlist` | `wishlist_toggle(action=add)` | 구현됨 | 찜 추가 |
 | `add_to_cart` | `add_to_cart` | 구현됨 | 장바구니 담기 |
 | `view_cart` | `view_cart` | 구현됨 | 장바구니 조회 |
@@ -305,7 +298,7 @@ GA4 표준 Event만으로는 구매 전 탐색 구간을 설명하기 어렵다.
 | `accordion_toggle` | 성분/사용법 등 Accordion 펼침/닫힘 | `action=expand/collapse` |
 | `review_expand` | 평점/리뷰 링크 클릭, 리뷰 상세 펼침 | 리뷰 섹션 점프도 포함 |
 | `review_filter_apply` | 리뷰 필터 또는 정렬 조건 변경 | 검색 입력 중이 아니라 적용 완료 시점만 |
-| `ingredient_view_mode_change` | 주요/전체/주의 성분 탭 또는 보기 모드 변경 | 구현 시 추가 |
+| `ingredient_view_mode_change` | 성분 영역에서 칩 보기와 원문 보기 모드를 변경 | `mode=chip/raw` |
 | `text_selection` | 페이지 텍스트 선택 후 350ms 안정화 | input/textarea/contenteditable 제외 |
 | `text_copy` | 페이지 텍스트 복사 | 원문 저장 여부는 개인정보/보존 정책 확정 필요 |
 | `wishlist_toggle` | 찜 추가 또는 해제 성공 | action으로 add/remove 구분 |
@@ -1006,12 +999,12 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 초안 | 집계 기간 | 일간 + 최근 7일 우선 |
 | 초안 | DW 집계 방식 | 서로 다른 grain의 Fact는 목표 Mart grain으로 먼저 집계한 뒤 Join |
 | 초안 | 상품별 매출 | `items[]` explode 후 상품별 매출은 `item_revenue`, 주문 총액 검증은 `order_value` |
-| 구현 후 재검증 | 후속 화면 Trigger | `product_impression`, `search`, `filter_change`, `begin_checkout`, `purchase` Trigger |
+| E2E 재검증 | 화면 Trigger | 구현된 `product_impression`/`filter_change`와 후속 `search`/`begin_checkout`/`purchase` Trigger |
 | 합의 | 가중치 상수 단일 출처 | Event **명세**의 원본은 이 문서지만, **가중치 상수**의 원본은 `frontend/src/types/log.ts`다. `behavior_weights.py`가 이 파일을 파싱해 쓰므로 값을 문서에 복사하지 않는다. §11.1 참조 |
 | 현행 구현 | `close_reason` 값 | `backdrop`, `escape`, `close_button`, `open_detail` 4종 |
 | 합의 | `product_view` 집계 분모 | Funnel과 전환율의 분모는 `product_view_sessions`(distinct `session_id`+`product_id`)를 쓴다. `product_view_count`는 장바구니 왕복 시 재발화하므로 분모로 쓰지 않는다 |
 | 합의 | `review_expand.target` 분리 | `ingredients`가 같은 Event를 쓰므로 리뷰 열람률은 `target in ('review_text','jump_to_reviews')`로 좁힌다 |
-| 보강 필요 | 시뮬레이터 최신 Event | FE 35종 중 29종 생성. 미생성 6종이며 정책상 제외하는 `dead_click`을 빼면 보강 후보 5종. §5.4 참조 |
+| 현행 구현 | 시뮬레이터 최신 Event | FE 35종 중 34종 생성. 남은 `dead_click`은 실제 UI 오작동 신호라 정책상 생성하지 않음. §5.4 참조 |
 | 보강 필요 | 시뮬레이터 properties/enum | 10개 Event가 §9 필수 property 또는 enum 계약과 다르다. Collector가 `properties`를 검증하지 않아 수집 단계에서 안 걸린다. §9.8 |
 | 보강 필요 | Processed 계약 검증 | `cleaned_events` 생성 시 §9 필수 property 검사를 넣고 위반 row를 `bad_events`로 보낸다 |
 | 확인 요청 | `view_cart` 뒤로가기 경로 | popstate 경로의 `view_cart`에 `item_count`, `distinct_products`, `cart_value`가 빠진다. FE 보강 요청 |

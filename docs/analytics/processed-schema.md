@@ -988,7 +988,7 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 | `search_id` 생성 정책 | 검색 구현 전에는 nullable/session fallback, 구현 후 Raw 추가 또는 Spark 파생 중 선택 |
 | `cart_id` 생성 정책 | Raw에 없으므로 현재는 nullable, 장바구니 구현 후 Raw 추가 여부 결정 |
 | Event weight 단일 출처 | 실행 상수는 `frontend/src/types/log.ts`, 의미와 근거는 Data 문서를 기준으로 관리한다 |
-| 시뮬레이터 최신 Event | 최신 `dev` 기준 FE 35종 중 29종 생성. 미생성 6종이며, 정책상 제외하는 `dead_click`을 빼면 실제 보강 후보는 5종 |
+| 시뮬레이터 최신 Event | 최신 `dev` 기준 FE 35종 중 34종 생성. 남은 `dead_click`은 실제 UI 오작동 신호라 정책상 생성하지 않음 |
 | Collector 필드 정렬 브랜치 병합 | `event_name`, `actor_type`, `page_view_id`, `sequence_no` 승격은 정렬 브랜치가 `dev`에 병합된 뒤에만 성립 |
 
 ## 25. E2E 이후 확인할 것
