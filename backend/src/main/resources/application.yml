@@ -28,9 +28,12 @@ collector:
     retention-ms: ${KAFKA_TOPIC_RETENTION_MS:86400000}
     create-topic: ${CREATE_ACTIVITY_EVENTS_TOPIC:false}
     publisher-executor:
-      core-pool-size: ${KAFKA_PUBLISHER_CORE_POOL_SIZE:4}
+      core-pool-size: ${KAFKA_PUBLISHER_CORE_POOL_SIZE:16}
       max-pool-size: ${KAFKA_PUBLISHER_MAX_POOL_SIZE:16}
-      queue-capacity: ${KAFKA_PUBLISHER_QUEUE_CAPACITY:0}
+      queue-capacity: ${KAFKA_PUBLISHER_QUEUE_CAPACITY:200}
+      max-in-flight-batches: ${KAFKA_PUBLISHER_MAX_IN_FLIGHT_BATCHES:232}
+  http:
+    max-event-request-bytes: ${MAX_EVENT_REQUEST_BYTES:262144}
   allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
 
 management:
