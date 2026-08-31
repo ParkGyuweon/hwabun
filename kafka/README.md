@@ -143,13 +143,17 @@ Q1과 Q2를 하나의 Job으로 합칠지는 저장 엔진과 트랜잭션 방�
 
 현재 `received_at`은 배치 전체에 같은 값이 들어간다. HTTP 소켓 도착 시각이나 Kafka Broker 기록 시각과 동일하다고 해석하지 않는다. Collector 여러 대를 운영할 경우 시계 동기화 상태를 확인하고, 시각 비교는 문자열이 아닌 원래 정밀도의 UTC timestamp로 수행한다.
 
+입력 Event의 `occurred_at`과 `received_at`은 RFC 3339의 명시적 offset(`Z`,
+`+09:00` 등)을 허용한다. timezone 없는 값은 거부하고, Raw 원문은 보존하되
+Parsed/Processed timestamp는 UTC로 정규화한다.
+
 `request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. 현재 Collector는 `schema_version`이 비어 있지 않은지만 검사하고, 지원 버전 목록과 배치·Event 버전 일치까지 강제하지는 않는다. 이벤트별 `properties` 의미 검증도 별도로 구현해야 한다.
 
 근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Event 계약](../docs/analytics/event-contract-summary.md).
 
 ## 5. Partition Key와 순서 보장
 
-Key는 실제 구현과 동일하게 `session_id`로 정한다. `persona_id`는 null이 가능하고 한 Persona의 여러 방문을 구분하지 못하므로 이 파이프라인의 Partition Key로 사용하지 않는다.
+Key는 실제 구현과 동일하게 `session_id`로 정한다. `persona_id`는 null이 가능하고 한 Persona의 여러 방문을 구분하지 못하므로 이 파이프라인의 Partition Key로 사용하지 않는다. Synthetic seed는 `seed:{simulation_run_id}:{persona_id}:{product_id}` 형식으로 세션을 분리해 모든 Persona의 seed Event가 하나의 Partition으로 쏠리지 않게 한다.
 
 Partition 수와 Partitioner가 고정된 동일 Topic에서는 같은 Key가 같은 Partition으로 향한다. 서로 다른 세션은 같은 Partition에 배치될 수도 있다. 같은 세션을 하나의 로그에 모으는 목적이지, 세션마다 Partition을 하나씩 만드는 방식은 아니다.
 

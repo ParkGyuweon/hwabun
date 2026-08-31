@@ -418,8 +418,8 @@ Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition 
 | `event_id` | string | Y | Event 고유 ID. 중복 제거 기준 |
 | `event_name` | string | Y | Event Taxonomy에 정의된 이름 |
 | `intent` | string | Y | `session/exposure/interest/comparison/validation/hesitation/conversion/friction` |
-| `occurred_at` | timestamp | Y | 행동 발생 시각 |
-| `received_at` | timestamp | Server | Collector 수신 시각. Kafka payload 포함 |
+| `occurred_at` | timestamp | Y | 행동 발생 시각. RFC 3339 offset(`Z`, `+09:00` 등) 허용 |
+| `received_at` | timestamp | Server | Collector 수신 시각. RFC 3339 offset 허용, Kafka payload 포함, Processed에서 UTC로 정규화 |
 | `source` | string | Server | `web`, `simulator`, `server`. 현재 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 포함한다. `server`는 후속 서버 내부 Event용 예약값 |
 | `request_id` | string | Server | batch 요청 단위 식별자. Kafka payload와 HTTP 응답에 포함 |
 | `event_index` | integer | Server | batch 안 Event 순서. Kafka payload 포함 |
