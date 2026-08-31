@@ -45,6 +45,10 @@ Q1에서 `is_json_parseable=false`인 레코드도 Kafka 좌표와 원문을 가
 `raw_value`가 원본 보존의 기준이다. 파싱 컬럼이 null이어도 Raw를 삭제하거나
 현재 시각으로 보정하지 않는다.
 
+`occurred_at`과 `received_at`은 RFC 3339의 명시적 timezone offset(`Z`, `+09:00`
+등)을 허용한다. timezone 없는 timestamp는 Q2에서 invalid record로 분류하며,
+Raw 원문은 유지하고 파싱된 `event_time`·`received_at`은 UTC timestamp로 저장한다.
+
 ## 실행
 
 Spark 배포판과 Spark-Kafka connector는 실행 환경의 Spark/Scala 버전에 맞춰
@@ -143,6 +147,11 @@ Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하
 `event_id` 기준 정본을 고른다. 같은 `event_id`의 나머지 후보는
 `duplicate_events`에 보존한다. JSON 파싱·공통 필드·enum·sequence·synthetic
 필수 properties 검증에 실패한 row는 원문과 좌표를 `bad_events`에 남긴다.
+
+파이프라인 검증 Job은 synthetic 세션의 Persona 혼합, 세션 내
+`sequence_no` 충돌, `simulation_run_id`별 `scenario_id`·`generator_type` 불일치를
+실패로 판정한다. Raw의 동일 `event_id` 중복은 재전송 가능성을 고려해 warning으로
+기록하고, `cleaned_events`의 중복은 오류로 판정한다.
 
 현재 Q2는 전체 snapshot을 `overwrite`하는 MVP다. 운영 환경에서 Raw가 커지면
 날짜/offset 범위 증분 처리와 transactional upsert를 도입하되, 정본 비교 규칙과
