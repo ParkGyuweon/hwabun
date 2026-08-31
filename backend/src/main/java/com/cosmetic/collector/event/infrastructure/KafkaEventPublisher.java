@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -64,14 +65,20 @@ public class KafkaEventPublisher implements EventPublisher {
     @Override
     public CompletableFuture<PublishSummary> publish(String requestId, EventBatchRequest request) {
         Instant receivedAt = clock.instant();
+        long queuedAtNanos = System.nanoTime();
         CompletableFuture<CompletableFuture<?>[]> dispatch;
 
         try {
             dispatch = CompletableFuture.supplyAsync(
-                    () -> initiateSends(requestId, request, receivedAt),
+                    () -> {
+                        metrics.recordPublishQueueWait(
+                                Duration.ofNanos(System.nanoTime() - queuedAtNanos));
+                        return initiateSends(requestId, request, receivedAt);
+                    },
                     kafkaPublisherExecutor
             );
         } catch (RejectedExecutionException exception) {
+            metrics.recordPublishRejected(request.events().size());
             dispatch = CompletableFuture.failedFuture(new EventPublishOverloadedException(
                     "Kafka 발행 작업 대기열이 가득 찼습니다.",
                     exception

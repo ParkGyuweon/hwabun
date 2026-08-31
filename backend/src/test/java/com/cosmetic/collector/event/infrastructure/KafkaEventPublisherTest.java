@@ -322,6 +322,7 @@ class KafkaEventPublisherTest {
 
         assertThatThrownBy(result::join)
                 .hasCauseInstanceOf(EventPublishOverloadedException.class);
+        verify(metrics).recordPublishRejected(1);
         verify(metrics, never()).recordPublishFailure(any(Integer.class));
         verify(metrics, never()).recordPublished(any(Integer.class));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
