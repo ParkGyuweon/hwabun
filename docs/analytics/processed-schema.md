@@ -104,7 +104,9 @@ processed_at = 12:00:05
 
 | 항목 | 기준 |
 | --- | --- |
+| 입력 timestamp | RFC 3339 offset 형식(`Z`, `+09:00` 등) 허용. timezone 없는 값은 거부 |
 | 저장 기준 | 모든 timestamp는 UTC로 저장 |
+| 정규화 표현 | Processed/DW의 timestamp는 UTC 기준으로 해석하며 외부 문자열 표현은 `Z` suffix로 통일 |
 | Dashboard 일간 기준 | `Asia/Seoul` 기준으로 `event_date_kst`, `event_hour_kst` 파생 |
 | `event_hour` 타입 | `timestamp`, hour truncate 값 |
 | late event 판정 | Spark watermark 기준. 정확한 허용 지연은 E2E 후 조정 |
@@ -139,8 +141,8 @@ processed_at = 12:00:05
 | Backend Collector | Redis/DB를 붙여 실시간 중복 차단하지 않아도 된다 |
 | Kafka/Raw | 같은 `event_id` 중복 수신을 정상 가능성으로 본다 |
 | Data/Spark | `cleaned_events` 생성 전 `event_id` 기준으로 deduplication 한다 |
-| Dedup 기준 | 같은 `event_id` 중 가장 먼저 수신된 1건을 대표 Event로 사용한다 |
-| 대표 Event 선택 정렬 | `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 순으로 정렬한다 |
+| Dedup 기준 | 같은 `event_id` 중 가장 먼저 수신/적재된 1건을 대표 Event로 사용한다 |
+| 대표 Event 선택 정렬 | `received_at ASC → kafka_topic ASC → kafka_partition ASC → kafka_offset ASC` 순으로 결정한다. 동일 topic 기준에서는 partition/offset 순서를 따른다 |
 | Fact/Mart 입력 | `product_event_fact`, `content_interest_fact`, `funnel_session_fact`, DW Mart는 중복 제거 후 Dataset만 입력으로 사용한다 |
 | 중복 원본 | `raw_events`에는 보존한다. 필요하면 후속으로 `duplicate_events` 또는 audit view를 만들 수 있다 |
 | Front 필수 전제 | 같은 행동을 재전송할 때 `event_id`를 새로 만들면 안 된다 |
@@ -148,6 +150,9 @@ processed_at = 12:00:05
 `event_id`가 없거나 파싱 불가능한 Event는 deduplication 자체가 불가능하므로 `bad_events.error_code='missing_required_field'` 또는 `invalid_properties`로 격리한다.
 
 현재 Kafka key는 `session_id`이므로, Front가 재시도 시 같은 `event_id`와 `session_id`를 유지하면 동일 Event의 중복본은 보통 같은 partition에 들어간다. 이 구조에서는 `received_at`이 같은 극단적인 경우에도 partition 내부 offset으로 최초 적재 record를 안정적으로 고를 수 있다. 만약 잘못된 key 변경 등으로 중복본이 서로 다른 partition에 들어오면 Kafka offset만으로 전역 시간 순서를 보장할 수 없으므로, `received_at`을 1차 기준으로 유지하고 partition/offset은 결정론적 tie-breaker로만 사용한다.
+Spark 품질 검증은 synthetic Event에 대해 `(simulation_run_id, session_id)` 안의
+`persona_id` 단일성, `(simulation_run_id, session_id, sequence_no)` 충돌,
+`simulation_run_id`별 `scenario_id`·`generator_type` 일관성을 확인한다.
 
 ## 6. 전체 처리 흐름
 
@@ -377,6 +382,7 @@ event_id = business dedup key
 | `missing_required_field` | 필수 공통 필드 누락 |
 | `unknown_event_name` | Taxonomy에 없는 Event |
 | `invalid_timestamp` | timestamp 파싱 실패 |
+| `invalid_timestamp_format` | timezone offset이 없는 RFC 3339 형식 또는 허용되지 않는 timestamp 표현 |
 | `invalid_type` | Spark 타입 정규화 실패 |
 | `invalid_properties` | Event별 필수 properties 누락 |
 | `unsupported_schema_version` | 지원하지 않는 Schema 버전 |

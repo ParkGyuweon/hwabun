@@ -175,8 +175,8 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 | `event_id` | Y | Event 고유 ID |
 | `event_name` | Y | Event 이름 |
 | `intent` | Y | Event의 마케팅 의미 |
-| `occurred_at` | Y | 클라이언트 발생 시각 |
-| `received_at` | Server | Collector 수신 시각. Kafka payload 포함 |
+| `occurred_at` | Y | 클라이언트 발생 시각. RFC 3339 offset(`Z`, `+09:00` 등) 허용 |
+| `received_at` | Server | Collector 수신 시각. RFC 3339 offset 허용, Kafka payload 포함, Processed에서 UTC로 정규화 |
 | `source` | Server | `web`, `simulator`. 현재 Collector는 `actor_type=synthetic`이면 `simulator`, 그 외에는 `web`으로 Kafka payload에 포함 |
 | `request_id` | Server | 한 번의 batch 요청을 묶는 ID. Kafka payload와 HTTP 응답에 포함 |
 | `event_index` | Server | batch 안 Event 순서. Kafka payload 포함 |

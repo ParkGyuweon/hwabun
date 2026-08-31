@@ -1,3 +1,4 @@
+import re
 import unittest
 
 from streaming.jobs.raw_sink_job import (
@@ -8,6 +9,7 @@ from streaming.jobs.raw_sink_job import (
 from streaming.jobs.clean_events_job import (
     CANONICAL_ORDER_FIELDS,
     CleanEventsConfig,
+    RFC3339_WITH_OFFSET_PATTERN,
     parse_args as parse_clean_args,
 )
 from streaming.jobs.derive_facts_job import (
@@ -102,6 +104,28 @@ class CleanEventsConfigTest(unittest.TestCase):
     def test_empty_output_path_is_rejected(self):
         with self.assertRaises(ValueError):
             CleanEventsConfig(cleaned_path=" ")
+
+    def test_timestamp_contract_accepts_explicit_rfc3339_offsets(self):
+        self.assertIsNotNone(
+            re.fullmatch(
+                RFC3339_WITH_OFFSET_PATTERN,
+                "2026-08-31T10:00:00.123+09:00",
+            )
+        )
+        self.assertIsNotNone(
+            re.fullmatch(
+                RFC3339_WITH_OFFSET_PATTERN,
+                "2026-08-31T01:00:00Z",
+            )
+        )
+
+    def test_timestamp_contract_rejects_timezone_less_values(self):
+        self.assertIsNone(
+            re.fullmatch(
+                RFC3339_WITH_OFFSET_PATTERN,
+                "2026-08-31T10:00:00.123",
+            )
+        )
 
 
 class DeriveFactsConfigTest(unittest.TestCase):

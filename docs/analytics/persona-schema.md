@@ -512,6 +512,11 @@ synthetic Event를 만들 때는 아래 기준으로 Event Schema에 매핑한�
 
 `persona_source`는 Persona 정적 속성이므로 Event payload에 매번 싣지 않는다. 실제 Web Event(`actor_type='user'`)에는 이 runtime metadata를 요구하지 않으므로 프론트 구현에는 영향이 없다.
 
+Synthetic seed Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}`
+형식으로 부여한다. seed 여부는 session ID 문자열에만 의존하지 않고 모든 seed
+Event의 `properties.seeded=true`로도 기록해 세션·퍼널 집계에서 명시적으로 제외하거나
+별도 분석할 수 있게 한다.
+
 ## 14. Scenario / Simulation Run Schema
 
 시뮬레이션 실행 단위를 재현하고 Dashboard에서 비교하기 위한 메타데이터다. 시나리오(무엇을 돌렸는가)와 실행(언제 어떤 조건으로 돌렸는가)은 grain이 다르므로 테이블을 분리한다. `dw-schema.md`의 `dim_scenario`(§6.6), `dim_simulation_run`(§6.7)과 각각 연결된다.

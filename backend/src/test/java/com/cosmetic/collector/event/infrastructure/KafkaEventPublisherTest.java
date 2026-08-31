@@ -3,11 +3,13 @@ package com.cosmetic.collector.event.infrastructure;
 import com.cosmetic.collector.event.api.ActivityEvent;
 import com.cosmetic.collector.event.api.EventBatchRequest;
 import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
@@ -18,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -320,10 +323,76 @@ class KafkaEventPublisherTest {
         ));
 
         assertThatThrownBy(result::join)
-                .hasCauseInstanceOf(EventPublishException.class);
-        verify(metrics).recordPublishFailure(1);
+                .hasCauseInstanceOf(EventPublishOverloadedException.class);
+        verify(metrics).recordPublishRejected(1);
+        verify(metrics, never()).recordPublishFailure(any(Integer.class));
         verify(metrics, never()).recordPublished(any(Integer.class));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void rejectsAnotherBatchWhileThePreviousBatchIsWaitingForKafkaAck() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        CompletableFuture<SendResult<String, String>> kafkaAck = new CompletableFuture<>();
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(kafkaAck);
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                Clock.systemUTC(),
+                "activity-events",
+                Runnable::run,
+                new Semaphore(1)
+        );
+        EventBatchRequest request = new EventBatchRequest("draft", List.of(event("evt-001", "persona-001")));
+
+        CompletableFuture<PublishSummary> first = publisher.publish("request-001", request);
+        CompletableFuture<PublishSummary> second = publisher.publish("request-002", request);
+
+        assertThat(first).isNotDone();
+        assertThatThrownBy(second::join)
+                .hasCauseInstanceOf(EventPublishOverloadedException.class);
+        verify(metrics).recordPublishRejected(1);
+
+        kafkaAck.complete(null);
+        first.join();
+    }
+
+    @Test
+    void releasesTheInFlightSlotAfterKafkaAckCompletes() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        CompletableFuture<SendResult<String, String>> kafkaAck = new CompletableFuture<>();
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(kafkaAck, CompletableFuture.<SendResult<String, String>>completedFuture(null));
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                Clock.systemUTC(),
+                "activity-events",
+                Runnable::run,
+                new Semaphore(1)
+        );
+        EventBatchRequest request = new EventBatchRequest("draft", List.of(event("evt-001", "persona-001")));
+
+        CompletableFuture<PublishSummary> first = publisher.publish("request-001", request);
+        kafkaAck.complete(null);
+        first.join();
+
+        PublishSummary second = publisher.publish("request-002", request).join();
+
+        assertThat(second.publishedCount()).isEqualTo(1);
+        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), anyString());
     }
 
     private ActivityEvent event(String eventId, String personaId) {
