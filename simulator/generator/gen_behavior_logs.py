@@ -16,7 +16,7 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
 합의사항 (BEHAVIOR_SCENARIO.md)
   - 리뷰 작성 이벤트를 만들지 않는다. 리뷰 상품은 add_to_cart 로 환산
   - 페르소나당 상품 1개를 목표로 떼고 나머지 전부를 시드로 사용
-  - 시드는 시뮬레이션 시작 전 상태 (session_id = "seed")
+  - 시드는 시뮬레이션 시작 전 상태 (session_id = "seed-{persona_id}-{product_id}")
   - 이탈 상품은 취향이 아니라 노출(같은 카테고리 / 인기순)로 고른다
   - 노출에는 impression_dwell 을, 추천 섹션에는 recommendation_snapshot 을 남긴다
     (가중 0 이지만 노출 대비 클릭과 위치 편향 보정에 필요하다)
@@ -239,6 +239,26 @@ LIST_LAYOUT = [("promo_row", "product_card"), ("list_controls", None),
 
 
 def log(m): print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
+
+
+SEED_PREFIX = "seed-"
+
+
+def seed_sid(persona_id, product_id):
+    """시드 세션 id. 상품마다 별개 세션으로 나눈다.
+
+    시드는 **서로 다른 시점에 일어난 과거 구매**다. 원본 리뷰의
+    submission_time 이 몇 달씩 벌어져 있고 이 생성기도 날짜를 벌려놓는다.
+    전원이 session_id="seed" 하나를 공유하면 세션당 체류시간·전환율 같은
+    지표가 통째로 왜곡되고, 상품마다 Emitter 를 새로 만들기 때문에
+    sequence_no 도 1 부터 다시 시작해 세션 단위 집계가 깨진다.
+    """
+    return f"{SEED_PREFIX}{persona_id}-{product_id}"
+
+
+def is_seed(ev):
+    """시드 이벤트인가. 접두사로 판별한다"""
+    return str(ev.get("session_id", "")).startswith(SEED_PREFIX)
 
 
 class Emitter:
@@ -564,10 +584,10 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
     # 부정 시드 — 상세를 얕게 보고 이탈. 감점 이벤트가 v_u- 를 채운다
     for j, g in enumerate(neg):
         e = Emitter(sink, p["persona_id"], base + timedelta(days=step * j), rng)
-        e.sid = "seed"
+        e.sid = seed_sid(p["persona_id"], g)
         # new_page / page_view 는 visit_detail 이 낸다. 여기서 또 내면 상세 진입 한 번에
         # page_view 가 2건, page_view_id 가 2개 생겨 프론트와 어긋난다.
-        # 시드 표시는 e.sid = "seed" 로 이미 되어 있다.
+        # 시드 표시는 e.sid = seed_sid(...) 로 이미 되어 있다.
         visit_detail(e, g, [], rng,
                      depth_target=int(rng.choice(SC["neg_seed_depth_choices"])),
                      engaged=False, entry_source="direct", SC=SC)
@@ -579,7 +599,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
 
     for i, g in enumerate(seeds):
         e = Emitter(sink, p["persona_id"], base + timedelta(days=step * (len(neg) + i)), rng)
-        e.sid = "seed"
+        e.sid = seed_sid(p["persona_id"], g)
         e.new_page("product_detail")
         e.emit("add_to_cart", g, seeded=True, quantity=1,
                price_usd=catalog[g]["price"])
@@ -730,7 +750,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         log(f"저장 {out}  ({os.path.getsize(out)/1024/1024:.1f}MB)")
 
     c, ci = Counter(x["event_name"] for x in sink), Counter(x["intent"] for x in sink)
-    seed_n = sum(1 for x in sink if x["session_id"] == "seed")
+    seed_n = sum(1 for x in sink if is_seed(x))
     seed_cart = sum(1 for x in sink if x["properties"].get("seeded")
                     and x["event_name"] == "add_to_cart")
     seed_neg = sum(1 for x in sink if x["properties"].get("seeded")
@@ -772,7 +792,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         print(f"세션 샘플 — {pid} (총 {len(ev)}건 중 앞 {show}건)")
         print("=" * 64)
         for x in ev[:show]:
-            tag = "SEED" if x["session_id"] == "seed" else f"#{x['sequence_no']:<4}"
+            tag = "SEED" if is_seed(x) else f"#{x['sequence_no']:<4}"
             pr = " ".join(f"{k}={v}" for k, v in list(x["properties"].items())[:4])
             print(f"  {tag} {x['event_name']:<24} {x['intent']:<11} {pr[:78]}")
 
