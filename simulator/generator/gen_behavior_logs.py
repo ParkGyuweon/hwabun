@@ -24,6 +24,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   - actor_type 은 전부 synthetic
   - 상세 진입은 page_view + product_view 를 함께 남긴다 (프론트와 동일)
   - 장바구니 화면을 방문해 view_cart 를 남기고, 일부는 담았던 이탈 상품을 뺀다
+  - 목록에서 일부 상품은 Quick Look 으로 열어본다 (--no-quick-look 으로 끈다).
+    전용 난수 스트림을 쓰므로 껐을 때 나머지 궤적이 완전히 동일하다
   - 직전 상세의 추천에 다음 상품이 있으면 recommendation_click 으로 넘어간다
     (노출과 같은 recommendation_id / position 을 실어 CTR 이 성립하게 한다)
 
@@ -39,7 +41,7 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   ActivityEvent 레코드를 그대로 따르고, 필드는 프론트 LogEnvelope 와 같다.
   --rps 로 초당 이벤트 수를 제한해 부하를 조절한다 (0 이면 제한 없음).
 """
-import argparse, json, os, sys, time, uuid
+import argparse, json, os, sys, time, uuid, zlib
 from collections import Counter
 from datetime import datetime, timedelta
 import numpy as np
@@ -115,6 +117,14 @@ SCENARIO = {
     #   recommendation_click 이 구조적으로 발생할 수 없다.
     "p_deep_bounce": 0.30,
     "deep_bounce_depth": 90,
+
+    # [미정] Quick Look — 목록 카드에서 요약 창을 여는 동선.
+    #   A/B 측정을 위해 **전용 난수 스트림**을 쓴다. 본 동선의 rng 를 건드리면
+    #   Quick Look 을 켠 것만으로 이후 궤적이 통째로 달라져 비교가 불가능해진다.
+    "p_quick_look": 0.18,     # 노출된 상품 하나를 열어볼 확률
+    "p_ql_variant": 0.45,     # 창 안에서 옵션을 바꿔볼 확률
+    "p_ql_add": 0.12,         # 창 안에서 바로 담을 확률
+    "p_ql_wish": 0.10,
 
     # [미정] 상세 페이지 내 상호작용 확률
     "p_scroll_pause": 0.55,
@@ -229,8 +239,14 @@ class Emitter:
         self.page = "product_list"
         self.last_rec = None      # 직전 상세에서 노출한 (recommendation_id, [상품])
 
-    def tick(self, lo=200, hi=1500):
-        self.t += timedelta(milliseconds=int(self.rng.integers(lo, hi)))
+    def tick(self, lo=200, hi=1500, rng=None):
+        """시간을 흘린다.
+
+        rng 를 넘기면 그 스트림에서 뽑는다. Quick Look 처럼 A/B 로 켜고 끄는
+        동선은 반드시 전용 스트림을 넘겨야 한다 — 기본 스트림을 소비하면
+        기능을 켠 것만으로 이후 궤적이 통째로 달라져 비교가 불가능해진다.
+        """
+        self.t += timedelta(milliseconds=int((rng or self.rng).integers(lo, hi)))
 
     def new_page(self, page_type):
         self.pvid = uuid.uuid4().hex[:16]
@@ -349,7 +365,7 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
 
 
 # ── 목록 페이지 체류 ──────────────────────────────────────────────────────
-def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO):
+def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
     e.new_page("product_list")
     e.tick(300, 1200)
     if first:
@@ -372,6 +388,38 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO):
         e.tick(20, 120)
         e.emit("product_impression", None, product_id=g, position=pos,
                list_id="product_grid")
+    # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
+    # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
+    # qrng 가 None 이면 이 동선 자체가 없다 (A/B 의 대조군)
+    if qrng is not None:
+        for pos, g in enumerate(grid, 1):
+            if qrng.random() >= SC["p_quick_look"]:
+                continue
+            e.tick(200, 1500, rng=qrng)
+            e.emit("quick_look", g, position=pos, list_id="product_grid")
+            n_var = 0
+            if qrng.random() < SC["p_ql_variant"]:
+                n_var = int(qrng.integers(1, 4))
+                for _ in range(n_var):
+                    e.tick(200, 1200, rng=qrng)
+                    e.emit("variant_select", g, entry_source="quick_look")
+            added = qrng.random() < SC["p_ql_add"]
+            wished = qrng.random() < SC["p_ql_wish"]
+            if added:
+                e.tick(300, 2000, rng=qrng)
+                e.emit("add_to_cart", g, quantity=1, entry_source="quick_look")
+            if wished:
+                e.tick(200, 1200, rng=qrng)
+                e.emit("wishlist_toggle", g, action="add", entry_source="quick_look")
+            dwell = int(qrng.integers(1200, 25000))
+            e.tick(200, 1500, rng=qrng)
+            # 닫는 방식. 프론트는 backdrop / esc / button / navigate 를 남긴다
+            e.emit("quick_look_close", g,
+                   close_reason=str(qrng.choice(["backdrop", "esc", "button", "navigate"],
+                                                p=[0.42, 0.13, 0.35, 0.10])),
+                   dwell_ms=dwell, variants_viewed=n_var,
+                   added_to_cart=bool(added), wishlisted=bool(wished))
+
     if rng.random() < SC["p_list_filter"]:
         e.tick(); e.emit("filter_change", filter_kind="category")
     if rng.random() < SC["p_list_sort"]:
@@ -437,8 +485,13 @@ def post_events(base_url, events, rps=0, timeout=40):
 
 
 # ── 페르소나 1명 ─────────────────────────────────────────────────────────
-def gen_persona(p, catalog, by_cat, popular, rng, sink):
+def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
     SC = persona_style(p)
+    # Quick Look 전용 난수. persona_id 로만 결정되므로 본 동선 rng 와 독립이다.
+    # 덕분에 quick_look=False 로 껐을 때 나머지 궤적이 **완전히 동일**하고,
+    # 두 조건의 차이가 Quick Look 하나로만 설명된다 (대응 설계).
+    qrng = (np.random.default_rng(zlib.crc32(p["persona_id"].encode()))
+            if quick_look else None)
     # 상품별 평점 평균으로 극성을 가른다. 4~5점 긍정 / 1~2점 부정 / 3점 중립
     #   긍정 시드 -> add_to_cart 로 환산해 v_u+ 에 넣는다
     #   부정 시드 -> "들어갔다 그냥 나감" 으로 재현한다. v_u+ 에 넣지 않는다
@@ -524,7 +577,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
                                    size=min(12, len(pool)), replace=False))
             grid = [g] + [x for x in grid if x != g]
             browse_list(e, promo, grid[:12], rng,
-                        dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0), SC=SC)
+                        dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0),
+                        SC=SC, qrng=qrng)
             e.tick(); e.emit("product_click", g,
                              entry_source="grid" if rng.random() < 0.8 else "promo_pick",
                              position=1)
@@ -583,7 +637,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
     return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
 
 
-def main(limit, show, out, post=None, rps=0, include_agents=False):
+def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True):
     prods = json.load(open(PRODUCTS, encoding="utf-8"))
     catalog = {p["product_id"]: {"cat": p["secondary_category"], "name": p["product_name"],
                                  "price": p["price_usd"], "n": p["_review_stats"]["review_count"]}
@@ -608,7 +662,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False):
     rng = np.random.default_rng(42)
     sink, meta, t0 = [], [], time.time()
     for i, p in enumerate(people):
-        r = gen_persona(p, catalog, by_cat, popular, rng, sink)
+        r = gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=quick_look)
         if r: meta.append(r)
         if not limit and (i + 1) % 2000 == 0:
             log(f"  {i+1:,}명 / 이벤트 {len(sink):,}건")
@@ -676,6 +730,8 @@ if __name__ == "__main__":
                     help="jsonl 저장 경로. 생략하면 파일로 안 쓴다")
     ap.add_argument("--post", default=None, metavar="URL",
                     help="수집 API 베이스 URL. 예) http://localhost:8080")
+    ap.add_argument("--no-quick-look", action="store_true",
+                    help="Quick Look 동선을 끈다 (A/B 대조군)")
     ap.add_argument("--include-agents", action="store_true",
                     help="PA 100명(인터랙티브 전용)도 생성 대상에 넣는다. 기본은 제외")
     ap.add_argument("--rps", type=int, default=0,
@@ -683,4 +739,5 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if not a.out and not a.post:
         a.out = os.path.join(BD, "behavior_logs.jsonl")
-    main(a.limit, a.show, a.out, a.post, a.rps, a.include_agents)
+    main(a.limit, a.show, a.out, a.post, a.rps, a.include_agents,
+         quick_look=not a.no_quick_look)
