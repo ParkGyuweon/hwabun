@@ -1,13 +1,15 @@
 # Persona 사용자 속성 전처리 기준
 
-작성일: 2026-08-28  
-상태: 확정된 전처리 결과를 사후 문서화한 기준서  
-원 작업: AI/데이터 파트(박규원). 전처리는 이미 적용되어 `personas_*.json`, `products_200.json`, `affinity_lift.csv`에 반영된 상태다  
+작성일: 2026-08-28
+최종 검증: 2026-08-31
+상태: 현재 Persona 생성 구현과 산출물을 재현하기 위한 전처리 기준서
+기준 구현: `simulator/personas/build_personas.py` (`370b05b`)
+기준 산출물: `personas_*.json`, `persona_sampling_report.json`, `products_200.json`, `affinity_lift.csv`
 관련 문서: `persona-schema.md`, `dw-schema.md`, `docs/ai/recommendation-design.md`, `simulator/personas/data/README.md`, `batch/ingest/data/README.md`
 
 ## 1. 문서 목적
 
-Sephora 원본 리뷰의 사용자 속성 4종(`skin_type`, `skin_tone`, `eye_color`, `hair_color`)에 **실제로 적용된** 정규화·결측 처리 기준을 한 곳에 정리한다.
+Sephora 원본 리뷰에서 Persona 데이터를 만들 때 **실제로 적용하는** 사용자 속성 4종(`skin_type`, `skin_tone`, `eye_color`, `hair_color`)의 정규화·결측 처리와 모집단·층화추출 기준을 한 곳에 정리한다.
 
 이 기준은 이미 세 곳에서 동시에 사용되고 있다.
 
@@ -19,20 +21,22 @@ Sephora 원본 리뷰의 사용자 속성 4종(`skin_type`, `skin_tone`, `eye_co
 
 세 곳이 같은 어휘를 써야 Join이 성립하므로, 값 하나를 바꾸면 세 곳이 동시에 깨진다. 그래서 별도 문서로 고정한다.
 
-이 문서는 새 규칙을 제안하지 않는다. **이미 적용된 규칙의 기록이고, Persona Schema와 어긋나는 곳이 있는지 확인한 결과**다.
+이 문서는 새 추천 Feature를 설계하는 문서가 아니다. 이미 완료된 Persona 데이터 전처리와 표본 생성 규칙을 설명하고, 이후 재생성·검증 시 같은 기준을 적용하기 위한 문서다.
 
 ## 2. 원천과 적용 지점
 
 | 구분 | 위치 | 비고 |
 | --- | --- | --- |
 | 원본 데이터셋 | Kaggle "Sephora Products and Skincare Reviews" | 약 520MB. 레포에 커밋하지 않음 |
-| 전처리 스크립트 | `build_products_json.py`, `build_affinity_lift.py`, `build_personas.py` | 개인 Research 폴더. 레포 외부 |
+| Persona 생성기 | `simulator/personas/build_personas.py` | 모집단, 속성 정규화, 층화추출, PA/PC 분리의 실행 기준 |
+| 상품 전처리 | `batch/ingest/build_products_json.py` | 상품 병합과 `_review_stats.segment_counts` 생성 |
+| Affinity 전처리 | `build_affinity_lift.py` | 현재 레포 외부. 결과 CSV와 계산식은 아래 문서/계약으로 검증 |
 | 전처리 결과 (Persona) | `simulator/personas/data/personas_9900.json`, `personas_100_agent.json` | `seed=42` 고정. 재실행 시 동일 결과 |
-| 전처리 결과 (상품) | `batch/ingest/data/products_200.json` | `_review_stats.segment_counts`가 정규화 후 값 기준 |
+| 전처리 결과 (상품) | `batch/ingest/data/products_200.json` | `_review_stats.segment_counts` 사용 시 §11.1의 `brunette` 예외 적용 |
 | 전처리 결과 (친화도) | `batch/ingest/data/affinity_lift.csv` | `segment` 컬럼이 정규화 후 어휘 |
 | 근거 분석 | `docs/ai/recommendation-design.md` §6-4·6-6·6-7 | 병합/버킷 결정 근거 |
 
-스크립트가 레포 밖에 있으므로, **레포 안에서 기준을 확인할 수 있는 유일한 지점이 이 문서와 위 결과 파일**이다.
+Persona 모집단과 표본 생성은 `build_personas.py`를 실행 기준으로 삼고, `persona_sampling_report.json`과 `personas_*.json`을 결과 검증 기준으로 삼는다. 이 문서는 구현의 의미와 변경 절차를 설명한다. 구현이나 산출물이 바뀌면 같은 변경에서 이 문서와 `persona-schema.md`를 함께 갱신한다.
 
 ## 3. 대상 필드와 원본 상태
 
@@ -77,8 +81,8 @@ combination | dry | normal | oily
 
 버킷팅 이유는 두 가지다.
 
-- 원본 14종은 분포가 치우쳐 상품 200개 × 14종 = 2,800셀 중 하위 셀의 리뷰가 한 자릿수라 통계가 성립하지 않는다. 5버킷이면 가장 작은 `deep`도 상품당 평균 약 130건을 확보한다.
-- `skin_tone`을 `skin_type`과 동등한 가중치(0.40)로 쓰기로 확정했으므로 세그먼트 해상도를 4~5개로 맞출 필요가 있었다.
+- 원본 14종은 분포가 치우쳐 상품 200개 × 14종 = 2,800셀 중 하위 셀의 리뷰가 한 자릿수라 통계가 성립하지 않는다. 5버킷으로 희소 값을 합쳐 개별 원본 값보다 안정적인 세그먼트 표본을 확보한다.
+- `skin_tone`을 5버킷으로 묶어 희소한 원본 값을 합치고, Persona·Affinity·DW가 동일한 어휘로 Join할 수 있게 했다.
 
 ### 4.3 `hair_color` — `brunette` → `brown` 병합
 
@@ -115,7 +119,7 @@ blue | brown | gray | green | hazel
 
 ## 6. 대표 속성 확정 규칙
 
-한 사용자의 리뷰라도 속성이 다르게 기록된 경우가 있다. 모집단 기준 약 9.35%가 여기 해당한다(`brunette`→`brown` 병합 반영 후. 병합 전 11.54%였고 그 차이가 표기 변형이었다).
+한 사용자의 리뷰라도 속성이 다르게 기록된 경우가 있다. 현재 모집단 20,435명 중 2,741명(13.4%)이 이에 해당하며, 최신값과 최빈값의 결과가 다른 사용자는 1,077명이다.
 
 ```text
 1. 사용자의 리뷰를 submission_time 오름차순 정렬
@@ -142,20 +146,21 @@ blue | brown | gray | green | hazel
 
 ## 8. 모집단과 표본 기준
 
-전처리 기준이 바뀌면 모집단 수치도 바뀌므로 함께 기록한다. **현행 기준은 아래이며, 상품 3개 이상으로 상향된 개정본이다.**
+전처리 기준이 바뀌면 모집단 수치도 바뀌므로 함께 기록한다. 아래 값은 `build_personas.py`와 `persona_sampling_report.json`의 현재 기준이다.
 
 | 항목 | 값 |
 | --- | --- |
-| 모집단 | 상위 200개 상품 중 **3개 이상**에 리뷰를 단 사용자 27,114명 |
-| 추출률 | 36.9% |
-| 층화 key | `skin_type`(4) × `skin_tone`(5) × 리뷰개수 구간(`3`, `4-5`, `6-9`, `10+`) = **80층** |
+| 모집단 | 상위 200개 상품 중 **긍정 상품 3개 이상**을 보유한 사용자 20,435명 |
+| 긍정 판정 | 같은 상품의 평점 평균이 3.5 이상. 원본 4~5점 기준을 상품 단위 평균에 적용 |
+| 추출률 | 10,000 / 20,435 = 48.9% |
+| 층화 key | `skin_type`(4) × `skin_tone`(5) × 긍정 상품 수 구간(`3`, `4`, `5-6`, `7+`) = **80층** |
 | 배분 | 비례배분 + 최대잔여법 |
 | 표본 | 코드 생성 9,900명 + 에이전트 100명 |
 | 에이전트 100명 | `skin_type` × `skin_tone` 20셀 × 5명 **균등배분**. 소수 세그먼트 검증용이라 분포가 의도적으로 왜곡되어 있다 |
-| 검증 결과 | 모집단 대비 전 항목 0.02%p 이내. 페르소나당 평균 리뷰 5.21건 / 평균 상품 4.25개(10,000명 합산 기준) |
+| 검증 결과 | 모집단 대비 층화 축별 최대 0.03%p 이내. 페르소나당 평균 리뷰 5.5768건 / 평균 상품 4.5659개(10,000명 합산) |
 | 난수 seed | 42 고정 |
 
-리뷰 3개 하한은 seed/holdout 분리 때문이다. 2개면 seed가 1개만 남아 사용자 벡터가 상품 하나의 복사본이 된다.
+긍정 상품 3개 하한은 seed/좋아요/정답 역할을 나눌 최소 재료를 확보하기 위해서다. 단순 리뷰 건수가 아니라 같은 상품의 중복 리뷰를 합친 뒤의 긍정 상품 수를 사용한다.
 
 ### 8.1 `persona_id` 발급 규칙
 
@@ -180,23 +185,23 @@ blue | brown | gray | green | hazel
 | 속성 NULL | 없음. 9,900명·100명 모두 4개 속성이 전부 채워짐 |
 | `persona_id` 중복 | 없음. 파일 내 유일하고 두 파일 간 교집합 0 |
 | `author_id` 중복 | 두 표본 간 교집합 **0명**. 같은 사람이 양쪽에 들어간 경우 없음 |
-| `n_reviews` | 9,900명 min 3 / max 45 / 평균 5.22, agent min 3 / max 19 / 평균 4.83 |
-| `n_products` | 9,900명 min 3 / max 36 / 평균 4.26, agent min 3 / max 16 / 평균 3.92 |
-| `review_bucket` | `3`, `4-5`, `6-9`, `10+` 4종만 존재 |
-| `stratum` 형식 | `skin_type\|skin_tone\|review_bucket`. 예: `combination\|light\|4-5` |
-| 리뷰의 `group_id` | 483건(agent) 전부 존재하며 NULL 없음. `product_id`와 다른 경우 89건(18.4%) |
+| `n_reviews` | 9,900명 min 3 / max 91 / 평균 5.5763, agent min 3 / max 24 / 평균 5.63 |
+| `n_products` | 9,900명 min 3 / max 71 / 평균 4.5660, agent min 3 / max 20 / 평균 4.56 |
+| `review_bucket` | 긍정 상품 수 기준 `3`, `4`, `5-6`, `7+` 4종만 존재 |
+| `stratum` 형식 | `skin_type\|skin_tone\|review_bucket`. 예: `combination\|light\|4` |
+| 리뷰의 `group_id` | 563건(agent) 전부 존재하며 NULL 없음. `product_id`와 다른 경우 103건(18.3%) |
 | agent 100명 균등배분 | `skin_type` 4종 × 25명, `skin_tone` 5종 × 20명. 20셀 × 5명 성립 |
 
 ### 9.1 표본에 존재하지 않는 층
 
-층은 80개로 정의했지만 **9,900명 표본에 실제로 나타나는 층은 79개**다. 비례배분 결과 `oily|tan|10+`에 배정된 인원이 0명이다.
+층은 80개로 정의했지만 **9,900명 표본에 실제로 나타나는 층은 79개**다. 비례배분 결과 `dry|deep|7+`에 배정된 인원이 0명이다.
 
 | 항목 | 값 |
 | --- | --- |
 | 정의된 층 | 80 (4 × 5 × 4) |
 | 표본에 존재하는 층 | 79 |
-| 빈 층 | `oily\|tan\|10+` |
-| 층별 인원 범위 | 최소 1명(`dry\|deep\|10+`) ~ 최대 1,254명(`combination\|light\|4-5`) |
+| 빈 층 | `dry\|deep\|7+` |
+| 층별 인원 범위 | 최소 1명(`oily\|tan\|7+`, `normal\|deep\|7+`) ~ 최대 1,547명(`combination\|light\|3`) |
 
 층별 집계나 가중치 보정을 할 때 **모든 층에 값이 있다고 가정하면 안 된다.** 빈 층과 1명짜리 층이 실제로 존재한다. 모집단 분포를 그대로 따른 결과이므로 오류가 아니다.
 
@@ -212,8 +217,9 @@ blue | brown | gray | green | hazel
 | `eye_color` 허용값 | `Grey`→`gray` 병합 | 5종 | O |
 | 대표 속성 선정 | 최신 리뷰 기준 | 최신 리뷰 기준(동일자는 `review_id`) | O |
 | nullable 정책 | `eye_color`, `hair_color`만 nullable | 모집단이 4개 전부 채워진 리뷰 기준이므로 실제 결측은 발생하지 않음 | O (스키마가 더 관대) |
-| `review_bucket` | `3`, `4-5`, `6-9`, `10+` | 동일 | O |
-| `stratum` | `skin_type\|skin_tone\|review_bucket` | 동일(예: `combination\|light\|4-5`) | O |
+| 모집단 | 긍정 상품 3개 이상 | 동일. `MIN_POSITIVE=3` | O |
+| `review_bucket` | `3`, `4`, `5-6`, `7+` | 동일 | O |
+| `stratum` | `skin_type\|skin_tone\|review_bucket` | 동일(예: `combination\|light\|4`) | O |
 | agent/batch 분리 | Dashboard 기본은 `batch_sample` | agent 100명은 균등배분이라 합산 불가 | O |
 | segment_type 목록 | `concern` 미포함 | 원천에 고민 필드 없음 | O |
 
@@ -250,7 +256,7 @@ blue | brown | gray | green | hazel
 | 위치 | 내용 | 실제 |
 | --- | --- | --- |
 | `contracts/recommendation-io-spec.md` §3 | "4,000행 = 200상품 × 21세그먼트(4+5+6+5)" | 4+5+6+5 = **20**세그먼트. 행 수 4,000은 맞다 |
-| `1차 평가/parkgyuwon_1546992/주간수행내용_박규원.md` §5 | 모집단 "2개 이상 67,414명", 리뷰 구간 `2/3-4/5-9/10+` | 이후 3개 이상으로 상향(27,114명), 구간도 `3/4-5/6-9/10+`로 개정. 해당 문서는 개정 전 시점의 기록이다 |
+| 과거 수행 기록 | 모집단과 구간이 이전 버전 값일 수 있음 | 현재 기준은 긍정 상품 3개 이상 20,435명, 구간 `3/4/5-6/7+`. 본 문서와 `persona_sampling_report.json`을 사용 |
 | `contracts/recommendation-io-spec.md` §3 | missing affinity 기본값 `0.5` | 변환식 기준 `lift=1.0`의 정규화 값은 `0.40`. `persona-schema.md` §11.1 참조. AI 담당 확인 대기 |
 
 ## 12. 기준 변경 시 절차
@@ -260,7 +266,7 @@ blue | brown | gray | green | hazel
 | 순서 | 작업 |
 | --- | --- |
 | 1 | 이 문서의 §4·§7 갱신 |
-| 2 | `personas_*.json` 재생성 (`seed=42` 유지) |
+| 2 | `simulator/personas/build_personas.py`로 `personas_*.json`, `persona_sampling_report.json` 재생성(`seed=42` 유지) |
 | 3 | `affinity_lift.csv` 재생성. segment 어휘가 바뀌면 필수 |
 | 4 | `products_200.json` 재생성. `_review_stats.segment_counts`가 정규화 어휘를 따라가야 한다(§11.1) |
 | 5 | `persona-schema.md` §5.1 정규화 규칙 표 갱신 |

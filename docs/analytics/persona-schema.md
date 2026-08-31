@@ -53,7 +53,7 @@ persona
 persona raw files
 → persona_profile (full)
 → persona_review_history
-   ├─ seed        → persona_seed_product → 추천 초기 상태 / seen
+   ├─ seed        → persona_seed_product → 추천 초기 상태 / 리뷰 상품 하드 제외
    └─ holdout     → persona_holdout_target → 오프라인 추천 평가
 → synthetic Event 생성 (persona_id × simulation_run_id)
 → processed_schema.persona_behavior_feature_delta
@@ -107,7 +107,7 @@ normal_day 시나리오로
 python_batch 방식으로 행동했다
 ```
 
-`source`는 Event/Processed/DW에서 `actor_type='synthetic' → simulator`로 파생한다. `persona_source`는 Event에 반복 저장하지 않고 `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인한다(§14.3). `generator_type`은 Persona 고유 속성이 아니라 `simulation_run`과 Event 생성 실행 방식으로 관리한다.
+`source`는 Collector가 Kafka payload에 기록하며, `actor_type='synthetic'`이면 `simulator`로 둔다. 과거 Raw나 누락 Event는 Processed/DW에서 같은 기준으로 fallback 파생한다. `persona_source`는 Event에 반복 저장하지 않고 `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인한다(§14.3). `generator_type`은 Persona 고유 속성이 아니라 `simulation_run`과 Event 생성 실행 방식으로 관리한다.
 
 상품 ID는 아래처럼 구분한다.
 
@@ -137,11 +137,14 @@ source = simulator/personas/data/personas_100_agent.json,
 | `skin_type` | string | N | `combination`, `dry`, `normal`, `oily` |
 | `skin_tone` | string | N | `fair`, `light`, `medium`, `tan`, `deep` |
 | `eye_color` | string | Y | `brown`, `blue`, `green`, `hazel`, `gray` |
-| `hair_color` | string | Y | `brown`, `black`, `blonde`, `gray`, `red`, 기타 정규화 값 |
-| `stratum` | string | N | 층화추출 key. 예: `combination\|light\|4-5` |
-| `review_bucket` | string | N | `3`, `4-5`, `6-9`, `10+` |
+| `hair_color` | string | Y | `auburn`, `black`, `blonde`, `brown`, `gray`, `red` |
+| `stratum` | string | N | `skin_type\|skin_tone\|review_bucket`. 예: `combination\|light\|4` |
+| `review_bucket` | string | N | 긍정 상품 수 구간: `3`, `4`, `5-6`, `7+` |
 | `n_reviews` | int | N | Persona 원천 리뷰 수 |
 | `n_products` | int | N | Persona가 리뷰한 고유 상품 수 |
+| `n_positive` | int | N | 상품별 평균 평점 기준 긍정 상품 수. 모집단·층화 기준 |
+| `n_negative` | int | N | 상품별 평균 평점 기준 부정 상품 수 |
+| `n_neutral` | int | N | 상품별 평균 평점 기준 중립 상품 수 |
 | `avg_rating` | double/null | Y | Persona 평균 평점 |
 | `profile_version` | string | N | Persona 생성/정규화 버전. E2E 초안값 `0.1-draft` |
 | `profile_scope` | string | N | `full`. 원천 리뷰 전체 기준 Profile임을 표시. 평가용은 §5.2의 `eval` |
@@ -158,8 +161,10 @@ source = simulator/personas/data/personas_100_agent.json,
 | `skin_tone` | 원본 14종을 5버킷으로 정규화. `notSureST`는 결측 처리 |
 | `hair_color` | `brunette`는 `brown`으로 병합. 결과 6종(`auburn` 포함) |
 | `eye_color` | `Grey`는 `gray`로 병합. 결과 5종 |
-| 모집단 조건 | 사용자 속성 4개가 모두 채워진 리뷰만 사용 |
+| 리뷰 입력 조건 | 사용자 속성 4개가 모두 채워진 리뷰만 사용 |
 | 대표 속성 | 리뷰마다 속성이 다르면 최신 리뷰 기준 |
+| 모집단 조건 | 상위 200개 상품 중 긍정 상품 3개 이상 보유. 같은 상품의 중복 리뷰는 평점 평균으로 합침 |
+| 층화 기준 | `skin_type` × `skin_tone` × 긍정 상품 수 구간(`3`/`4`/`5-6`/`7+`) |
 | 100명 agent | `skin_type x skin_tone` 20셀 균등배분. Dashboard 기본 모집단 통계에서는 제외하고 실시간/정성 실험용으로 분리 |
 | 9,900명 batch | 모집단 분포에 맞춘 층화추출. 대규모 Dashboard 통계 기본 집단 |
 
@@ -282,9 +287,9 @@ source = persona_review_history where evaluation_role='seed'
 | `avg_seed_rating` | double/null | Y | 해당 상품 seed 리뷰 평균 |
 | `is_positive_seed` | boolean/null | Y | 평점/추천 여부 기준 긍정 seed |
 | `initial_event_weight` | double/null | Y | 초기 User Behavior Vector 반영 시 사용할 가중치 |
-| `is_seen` | boolean | N | 추천 후보 제외용 seen 상품 여부 |
+| `is_seen` | boolean | N | seed 리뷰 상품의 추천 후보 하드 제외 여부 |
 
-초기 E2E에서는 `is_seen=true`인 상품을 Redis `seen` 또는 equivalent structure에 반영할 수 있다. 다만 시뮬레이션의 목표가 "처음 방문한 사용자 행동 생성"이면 seed를 추천 제외에만 쓰고, 실제 클릭/조회 Event는 새로 발생시킨다. seed를 `n_products`에도 반영할지는 §12.3의 기준을 따른다.
+초기 E2E에서는 `is_seen=true`인 상품을 리뷰 상품 제외 집합(`review_products` 또는 equivalent structure)에 반영한다. 리뷰 상품은 이미 구매한 상품으로 보고 추천 후보에서 하드 제외하지만, 행동 Event로 접촉한 상품은 아니므로 `viewed`와 `n_products`에는 넣지 않는다. 시뮬레이션의 목표가 "처음 방문한 사용자 행동 생성"이면 실제 클릭/조회 Event는 별도로 발생시킨다. 행동 집합의 canonical 정의는 `contracts/recommendation-io-spec.md` §2를 따른다.
 
 오프라인 평가에서 seed 상품은 `persona_profile_eval`과 같은 입력 범위를 사용한다. 즉 holdout 대상 리뷰에서 파생된 상품은 seed에 포함되지 않는다.
 
@@ -353,7 +358,7 @@ grain = persona_id + segment_type + segment_value
 ```text
 PA00001 | skin_type      | combination
 PA00001 | skin_tone      | light
-PA00001 | review_bucket  | 4-5
+PA00001 | review_bucket  | 4
 PA00001 | persona_source | agent_sample
 ```
 
@@ -425,57 +430,41 @@ User Behavior Vector 자체는 Persona Profile에 저장하지 않는다. Event�
 ```text
 persona_id
 + event.product_id(canonical_product_id)
-+ event_weight
++ final_weight
 + product_feature.vector
-→ positive_u_sum, positive_w_sum, negative_u_sum, negative_w_sum, n_products, seen
+→ positive_u_sum, positive_w_sum, negative_u_sum, negative_w_sum, converted, viewed, n_products
 ```
 
 | 저장 항목 | 위치 | 설명 |
 | --- | --- | --- |
-| `positive_u_sum` | Redis Hash 또는 equivalent store | 양수 행동 가중 Product Vector 누적합 |
-| `positive_w_sum` | Redis Hash 또는 equivalent store | 양수 행동 누적 가중치. 기존 추천 문서의 `w_sum`에 해당 |
-| `negative_u_sum` | Redis Hash 또는 equivalent store | 부정 행동 가중 Product Vector 누적합 |
-| `negative_w_sum` | Redis Hash 또는 equivalent store | 부정 행동 절대값 가중치 합 |
-| `n_products` | Redis Hash | 상호작용한 고유 상품 수 |
-| `seen` | Redis Set 또는 equivalent set | 추천 제외 상품 |
+| `positive_u_sum` | Redis Hash 또는 equivalent store | 전환 상품의 양수 행동 가중 Product Vector 누적합 |
+| `positive_w_sum` | Redis Hash 또는 equivalent store | 전환 상품의 양수 행동 누적 가중치 |
+| `negative_u_sum` | Redis Hash 또는 equivalent store | 미전환 접촉 상품의 양수 행동과 감점 행동을 합친 Product Vector 누적합 |
+| `negative_w_sum` | Redis Hash 또는 equivalent store | negative 축의 절대값 누적 가중치 합 |
+| `converted` | Redis Set 또는 equivalent set | 전환 상품. 서빙 후보 하드 제외와 positive 축 판정에 사용 |
+| `viewed` | Redis Set 또는 equivalent set | 유효 가중치가 있는 Event로 접촉한 상품 전체. `scroll_depth`의 별도 도달률 가중치를 포함하고 `converted`를 포함하며, 서빙에서 소프트 강등에 사용 |
+| `n_products` | Redis Hash | `|viewed|`. 가중치 스케줄 판정용 고유 상품 수 |
 | `updated_at` | Redis Hash | 마지막 갱신 시각 |
 
-`n_products`는 Event 수가 아니라 고유 상품 수 기준이다. 스크롤/섹션 Event가 여러 번 발생해도 같은 상품 하나를 본 것은 고유 상품 1개로 계산한다.
+`converted ⊆ viewed`이며 `n_products`는 Event 수가 아니라 `viewed`의 고유 상품 수다. 스크롤/섹션 Event가 여러 번 발생해도 같은 상품 하나를 본 것은 고유 상품 1개로 계산한다.
 
-User Behavior Vector의 분모는 양수 행동 가중치만 사용한다. `rage_click`, `dead_click`, `scroll_backtrack`, `remove_from_cart`처럼 부정/망설임 신호는 `positive_w_sum`에 넣지 않고 별도 부정 축에 누적한 뒤 최종 추천 점수에서 감점 신호로 사용한다. 이렇게 해야 음수 weight 때문에 분모가 0 또는 음수가 되는 문제를 막을 수 있다.
+User Behavior Vector의 두 분모는 모두 절대값으로 누적한다. 미전환 상품의 양수 행동과 `rage_click`, `dead_click`, `scroll_backtrack`, `remove_from_cart` 같은 감점 신호는 negative 축에 누적한 뒤 최종 추천 점수에서 감점 신호로 사용한다. 이렇게 해야 음수 weight 때문에 분모가 0 또는 음수가 되는 문제를 막을 수 있다.
 
 기존 `contracts/recommendation-io-spec.md`와 `docs/ai/recommendation-design.md`의 `u_sum`, `w_sum` 표현은 양수 행동 벡터 기준으로 해석한다. 실제 Redis 필드명을 그대로 유지할 경우에도 문서상 의미는 `positive_u_sum`, `positive_w_sum`과 동일하다.
 
 ### 12.1 증분 갱신 공식
 
-`final_weight`는 `processed-schema.md`의 `persona_behavior_feature_delta.final_weight`(`event_weight × decay_weight`)다. 부호가 두 번 적용되는 실수를 막기 위해 **negative 축에는 절대값을 누적하고, 감점은 최종 점수 계산에서 한 번만 적용한다.**
+집계 공식과 Event별 전환 판정의 canonical 정의는 `contracts/recommendation-io-spec.md` §2 "집계 규칙 (canonical)"을 따른다. 구현 기준은 `batch/jobs/user_vector.py`다. 이 문서에는 산식을 중복 정의하지 않는다.
 
-```text
-if final_weight > 0:
-    positive_u_sum += final_weight * product_vector
-    positive_w_sum += final_weight
-
-if final_weight < 0:
-    negative_u_sum += abs(final_weight) * product_vector
-    negative_w_sum += abs(final_weight)
-
-final_weight == 0 인 Event는 두 축 모두에 반영하지 않는다.
-```
-
-조회 시점:
-
-```text
-positive_vector = positive_u_sum / positive_w_sum      (positive_w_sum > 0)
-negative_vector = negative_u_sum / negative_w_sum      (negative_w_sum > 0)
-```
+`final_weight`는 `processed-schema.md`의 `persona_behavior_feature_delta.final_weight`(`event_weight × decay_weight`)다. 먼저 상품별 양수/감점 가중치를 모은 뒤, 조회 시점의 `converted` 여부로 상품 단위 축을 정한다. **전환 상품의 양수 가중치만 positive 축으로 가고, 미전환 접촉 상품의 양수 가중치는 negative 축으로 간다.** 감점 가중치는 전환 여부와 무관하게 negative 축에 절대값으로 누적하며 최종 점수에서 한 번만 감점한다.
 
 | 항목 | 기준 |
 | --- | --- |
 | 분모 | 항상 양수. `positive_w_sum`, `negative_w_sum` 모두 절대값 누적이므로 0 또는 음수가 되지 않는다 |
 | 분모 0 | `positive_w_sum=0`이면 user vector를 만들지 않고 `n_products=0` 구간의 가중치 스케줄(속성/인기도 중심)을 사용한다 |
-| 감점 적용 위치 | 벡터 누적 단계가 아니라 최종 추천 점수 단계에서 `- w_neg × cos(negative_vector, v_i)` 형태로 한 번만 적용한다 |
-| 감점 계수 | `w_neg` 값과 감점 공식은 AI/Product Feature 담당 확정 대상이다 |
-| `event_weight` 원천 | Front 구현 기준 단일 출처는 `frontend/src/types/log.ts`의 `EVENT_WEIGHT`, `SECTION_DWELL_WEIGHT`, `scrollDepthWeight()`다. Processed의 초안 표와 값이 다르면 log.ts를 기준으로 맞춘다 |
+| 감점 적용 위치 | 벡터 누적 단계가 아니라 최종 추천 점수 단계에서 `- λ × cos(negative_vector, v_i)` 형태로 한 번만 적용한다 |
+| 감점 계수 | canonical 계약의 `λ`를 사용한다. 현재 `batch/jobs/recommender.py` 기준 잠정값은 `0.15`이며 실제 로그 적재 후 재측정한다 |
+| `event_weight` 원천 | 실행 상수는 `frontend/src/types/log.ts`의 `EVENT_WEIGHT`, `SECTION_DWELL_WEIGHT`, `scrollDepthWeight()`를 사용하고 Data 문서는 의미와 근거를 관리한다 |
 
 ### 12.2 부정 Event 적용 범위
 
@@ -488,18 +477,16 @@ negative_vector = negative_u_sum / negative_w_sum      (negative_w_sum > 0)
 
 이 규칙 때문에 Dashboard의 friction Event 수와 추천에 반영된 부정 신호 수는 일치하지 않는다. 이는 정상이며, 두 값을 같은 KPI로 비교하지 않는다.
 
-### 12.3 `seen` / `n_products` 갱신 기준
+### 12.3 `converted` / `viewed` / `n_products` 갱신 기준
 
-`seen`은 추천 후보에서 상품을 빼는 값이므로, 어떤 Event부터 "봤다"로 볼지에 따라 추천 결과가 크게 달라진다. 기준은 아래 원칙으로 두되 **최종 canonical 정의는 `contracts/recommendation-io-spec.md`를 따른다.** Persona 문서는 산식을 중복 정의하지 않는다.
+단일 `seen` 집합은 더 이상 사용하지 않는다. 등록·해제 Event와 추천 노출 정책의 canonical 정의는 `contracts/recommendation-io-spec.md` §2와 §5를 따른다. Persona 문서에는 산식을 중복 정의하지 않는다.
 
-| 구분 | 초안 기준 | 근거 |
-| --- | --- | --- |
-| `seen`에 등록 | `final_weight > 0`인 상품 대상 Event가 1건이라도 발생한 상품 | 사용자가 능동적으로 접촉한 상품만 제외 대상 |
-| `seen`에 등록하지 않음 | `product_impression`, `recommendation_impression` 등 `event_weight=0`인 노출 | 노출은 사용자 의지가 아니므로 제외하면 추천 후보가 과도하게 줄어든다 |
-| `n_products` 증가 | `seen`에 상품이 새로 추가되는 시점에만 증가. 값은 `seen` 집합의 크기와 같다 | Event 수가 아니라 고유 상품 수 기준. 가중치 스케줄 판정 입력 |
-| seed 상품 | §7의 `is_seen` 정책에 따른다 | seed를 seen 제외에만 쓰고 Behavior Vector 초기값에 넣지 않는 경우, `n_products`도 함께 올릴지 추천 담당과 합의한다 |
+- `converted`: 전환 상품 집합. 서빙과 평가 모두 후보에서 하드 제외하고 positive 축 판정에 사용한다.
+- `viewed`: 유효 가중치가 있는 상품 접촉 집합이며, 별도 도달률 가중치를 계산하는 `scroll_depth`와 `converted`를 포함한다. 서빙에서는 `viewed \ converted`를 후보에 남기되 상한 2개로 소프트 강등하고, 오프라인 평가에서는 leakage 방지를 위해 전부 제외한다.
+- `n_products = |viewed|`: Event 수가 아니라 접촉한 고유 상품 수이며 가중치 스케줄 판정에 사용한다.
+- `event_weight = 0`인 단순 노출은 두 집합 어디에도 넣지 않는다. 감점 Event만 발생한 상품도 `viewed`에는 넣는다.
 
-`seen`/`n_products` 기준이 바뀌면 추천 후보 집합이 바뀌므로, 변경 시 `recommendation_policy`(§14.1)를 함께 올려 run 간 비교가 가능하도록 한다.
+이 기준이나 서빙/평가 노출 정책이 바뀌면 `recommendation_policy`(§14.1)를 함께 올려 run 간 비교가 가능하도록 한다.
 
 ## 13. Event 생성 시 Persona 필드 매핑
 
@@ -515,7 +502,7 @@ synthetic Event를 만들 때는 아래 기준으로 Event Schema에 매핑한�
 | `scenario_id` | `properties.scenario_id` | 필수. 시나리오 ID |
 | `simulation_run_id` | `properties.simulation_run_id` | 필수. 실행 단위 ID |
 | `canonical_product_id` | top-level `product_id` | Event 대상 상품. Event 계약에서는 `product_id` 이름 사용 |
-| `source` | Processed 파생 | `actor_type='synthetic' → simulator` |
+| `source` | Kafka payload | `actor_type='synthetic' → simulator`. 누락 시 Processed fallback 파생 |
 
 `scenario_id`, `simulation_run_id`, `generator_type`은 현재 Backend top-level DTO가 아니라 `properties`에 담고 Processed 단계에서 승격한다. 이 3개는 `actor_type='synthetic'` Event의 **공통 필수 properties**이며, 같은 계약이 `event-taxonomy-trigger-schema.md` §8.4와 `event-contract-summary.md` §5.3에 들어 있다. 누락된 synthetic Event는 Spark semantic validation에서 `invalid_properties`로 격리한다.
 
@@ -606,6 +593,8 @@ Persona 단위로 표본을 확인해야 하면 `bridge_persona_segment`의 `seg
 | 필수 속성 | `skin_type`, `skin_tone`, `stratum`, `review_bucket` 존재 | bad persona |
 | 정규화 enum | `skin_type`, `skin_tone`, `hair_color`, `eye_color`는 정규화 값 사용 | 경고 또는 bad persona |
 | 리뷰 수 | `n_reviews >= 3` | 샘플링 기준 위반 |
+| 긍정 상품 수 | `n_positive >= 3` | 모집단 조건 위반 |
+| 층화 구간 | `review_bucket`이 `n_positive`에 대응하는 `3`/`4`/`5-6`/`7+` 중 하나 | bad persona |
 | 상품 수 | `n_products >= 3` 권장 | seed/holdout 품질 경고 |
 | Canonical product join | `canonical_product_id`가 Product Feature/Product Data에 존재 | 없는 경우 seed/holdout 제외 또는 join 경고 |
 | Holdout 판정 순서 | §6.1의 1~7단계 순서대로 판정 | 순서를 바꿔 구현하면 평가 모집단이 달라지므로 재구현 |
@@ -648,12 +637,11 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 | `profile_version` 값 | Data / AI-Product Feature | Persona 생성 기준 버전명을 어떻게 둘지 |
 | `persona_source` 값 | Data / Simulator | `agent_sample`, `batch_sample` 명칭 확정 |
 | `generator_type` 값 | Data / Kafka-Spark | `agent_realtime`, `python_batch` 명칭 확정 |
-| seed 초기화 정책 | Data / AI-Product Feature | seed 리뷰를 User Behavior Vector 초기값에 반영할지, seen 제외에만 쓸지 |
+| seed 초기화 정책 | Data / AI-Product Feature | seed 리뷰를 User Behavior Vector 초기값에 반영할지, 리뷰 상품 하드 제외에만 쓸지 |
 | Holdout positive 기준 | Data / AI-Product Feature | 초안은 `rating >= 4` 또는 `is_recommended=true`. 추천 평가 정의에 따라 조정 가능 |
-| User Behavior Vector 부정축 | Data / AI-Product Feature | positive/negative 분리 구조와 §12.1의 `abs()` 누적, 최종 감점 계수 `w_neg` 동기화 |
+| User Behavior Vector 감점 계수 | Data / AI-Product Feature | canonical 계약의 잠정값 `λ=0.15`를 실제 로그 적재 후 재측정 |
 | Attribute Affinity neutral | Data / AI-Product Feature | 본 문서는 `neutral_lift=1.0` 기준(현재 `0.40`). `contracts/recommendation-io-spec.md`의 `0.5` 표기와 통일 필요 |
-| `seen`/`n_products` 갱신 Event | Data / AI-Product Feature | 초안은 `final_weight > 0` 기준. canonical 정의는 `contracts/recommendation-io-spec.md`에서 확정 |
-| Event weight 단일 출처 | Data / Frontend / AI | `frontend/src/types/log.ts`의 `EVENT_WEIGHT`와 `processed-schema.md` §18 초안 표의 값이 다르다. log.ts 기준으로 통일 |
+| Event weight 단일 출처 | Data / Frontend / AI | 실행 상수는 `frontend/src/types/log.ts`, 의미와 근거는 Data 문서를 기준으로 관리한다 |
 | Persona ID 네임스페이스 | Data / Frontend | 프론트는 현재 `persona_id = author_id`(원천 리뷰어 ID)를 사용한다. Persona Schema의 `PA#####`와 충돌하고 `author_id` 비노출 원칙에도 어긋나므로 분리 규칙 확정 필요 |
 | Agent 100명 합산 보정 | Data / Dashboard | 기본은 분리. 합산이 필요하면 `analysis_weight`/`sampling_weight` 정의 |
 | `concern` segment 재도입 | Data / Dashboard | 현재 원천에 없어 제외. 생성 로직이 생기면 원천·정규화 규칙과 함께 Persona/DW 양쪽에 동시 추가 |
@@ -674,4 +662,4 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 | Affinity neutral | `neutral_lift=1.0` → 현재 `0.40` | `contracts/recommendation-io-spec.md`는 `0.5` 표기. 통일 대상 |
 | `persona_id` 발급 | 표본별 prefix. agent `PA00001~PA00100`, batch `PC00001~PC09900`. `author_id`와 분리 | 프론트 `frontend/src/lib/persona.ts`는 `persona_id = author_id`를 사용 중. 실제 Web Event(`actor_type='user'`)에만 해당하며 synthetic 경로에는 영향 없음 |
 
-이 문서는 Persona 원천과 분석/추천 연결 기준을 정의하는 초안이다. 실제 생성기 구현 후 `persona_source`, `generator_type`, seed 초기화 정책, holdout 평가 기준, `seen` 갱신 기준을 E2E 결과와 추천 평가 결과에 맞춰 확정한다.
+이 문서는 Persona 원천과 분석/추천 연결 기준을 정의하는 초안이다. 실제 생성기 구현 후 `persona_source`, `generator_type`, seed 초기화 정책, holdout 평가 기준을 E2E 결과와 추천 평가 결과에 맞춰 확정한다. 행동 집계와 `converted`/`viewed`/`n_products` 기준은 `contracts/recommendation-io-spec.md`를 canonical로 사용한다.
