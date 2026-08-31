@@ -219,7 +219,7 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   // 개발 중 확인용. 화면에서는 LogPanel 이 같은 내용을 보여준다
   if (import.meta.env.DEV) console.info(`[log] ${eventName}`, event);
 
-  if (queue.length >= BATCH_SIZE) {
+  if (queue.length >= BATCH_SIZE && Date.now() >= backoffUntil) {
     flush();
   } else {
     scheduleFlush();
@@ -243,13 +243,42 @@ export function trackOnce(
   return true;
 }
 
-function scheduleFlush(): void {
+function scheduleFlush(delayMs = FLUSH_INTERVAL_MS): void {
   if (flushTimer !== undefined) return;
   flushTimer = window.setTimeout(() => {
     flushTimer = undefined;
     flush();
-  }, FLUSH_INTERVAL_MS);
+  }, delayMs);
 }
+
+/**
+ * 한 번에 보내는 건수. 평소에는 서버 상한(MAX_BATCH_SIZE)이고,
+ * 413(본문 과대)을 받으면 반으로 줄여서 다시 보낸다. 같은 크기로 재시도하면
+ * 계속 같은 이유로 거절당해 자력 복구가 안 된다. 성공하면 조금씩 되돌린다.
+ */
+let sendBatchSize = MAX_BATCH_SIZE;
+
+/**
+ * 이 시각 전에는 즉시 전송을 걸지 않는다.
+ *
+ * 전송이 실패해 배치가 큐로 돌아오면 큐는 계속 BATCH_SIZE 를 넘는 상태가 된다.
+ * 그때 track() 이 "쌓였으니 바로 보내자" 를 반복하면, 죽어 있는 수집 서버에
+ * 새 이벤트가 생길 때마다 요청을 쏘는 폭주가 된다 (실측: 13초에 19회).
+ * 실패 후에는 예약된 재시도 시각까지 기다린다.
+ */
+let backoffUntil = 0;
+
+/**
+ * 이 응답이면 다시 보내볼 가치가 있다 (수집 서버와 합의한 기준).
+ *   429  수집 스레드 포화 — Retry-After 를 존중한다
+ *   502 / 503 / 504  게이트웨이·Kafka 장애 — 지나가는 문제다
+ * 400 계열(400/403/404/422)은 요청 자체가 잘못된 것이라 몇 번을 보내도
+ * 똑같이 거절당한다. 재시도하면 같은 배치가 5초마다 영원히 돈다.
+ */
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
+
+/** 버린 배치를 상태 코드마다 한 번만 알린다. 매번 찍으면 콘솔이 묻힌다 */
+const dropWarned = new Set<number>();
 
 /**
  * 배치 전송 지점.
@@ -261,13 +290,24 @@ export function flush(useBeacon = false): void {
   if (queue.length === 0) return;
 
   /**
+   * 백오프 중이면 예약 시각까지 미룬다.
+   * 다른 경로로 걸린 타이머가 먼저 발화해 Retry-After 를 무시하는 일을 막는다.
+   * 이탈 시점(useBeacon)만은 예외다 — 마지막 기회라 기다릴 수 없다.
+   */
+  const waitMs = backoffUntil - Date.now();
+  if (!useBeacon && waitMs > 0) {
+    scheduleFlush(waitMs);
+    return;
+  }
+
+  /**
    * 한 번에 보내는 건수를 서버 상한에 맞춘다.
    *
    * 큐 전체를 통째로 보내면, 수집 서버가 잠깐 죽었다 살아났을 때
    * 그 사이 쌓인 배치가 상한을 넘어 계속 거절당한다.
    * 거절 → 재시도 → 다시 거절 로 자력 복구가 안 된다.
    */
-  const batch = queue.splice(0, Math.min(queue.length, MAX_BATCH_SIZE));
+  const batch = queue.splice(0, Math.min(queue.length, sendBatchSize));
 
   if (flushTimer !== undefined) {
     window.clearTimeout(flushTimer);
@@ -282,10 +322,16 @@ export function flush(useBeacon = false): void {
   if (useBeacon) {
     /**
      * 이탈 시점에는 일반 요청이 취소될 수 있어 sendBeacon 을 쓴다.
-     * 대신 성공 여부를 알 수 없어서 재시도도 못 한다.
-     * 서버가 event_id 로 멱등 처리하기로 했으므로 유실보다 중복이 낫다.
+     * 반환값 false 는 브라우저 전송 큐에 넣지도 못했다는 뜻이므로 배치를
+     * 버리지 않고 되돌린다 — 페이지가 살아 있으면 다음 주기에 다시 나간다.
+     * true 여도 서버 도착이 보장되지는 않지만, 그건 알 방법이 없고
+     * 서버가 event_id 로 멱등 처리하므로 유실보다 중복이 낫다.
      */
-    navigator.sendBeacon(COLLECT_ENDPOINT, new Blob([body], { type: 'application/json' }));
+    const accepted = navigator.sendBeacon(
+      COLLECT_ENDPOINT,
+      new Blob([body], { type: 'application/json' }),
+    );
+    if (!accepted) requeue(batch, 'sendBeacon 큐 거절');
     return;
   }
 
@@ -296,9 +342,46 @@ export function flush(useBeacon = false): void {
     keepalive: true,
   })
     .then((response) => {
-      if (!response.ok) requeue(batch, `HTTP ${response.status}`);
+      if (response.ok) {
+        // 413 으로 줄었던 배치 크기를 천천히 되돌린다
+        if (sendBatchSize < MAX_BATCH_SIZE) {
+          sendBatchSize = Math.min(MAX_BATCH_SIZE, sendBatchSize + 10);
+        }
+        return;
+      }
+
+      if (response.status === 413) {
+        // 같은 크기로 다시 보내면 같은 이유로 거절당한다. 반으로 쪼갠다
+        sendBatchSize = Math.max(1, Math.floor(sendBatchSize / 2));
+        requeue(batch, `HTTP 413 — 배치를 ${sendBatchSize}건으로 축소`);
+        return;
+      }
+
+      if (RETRYABLE_STATUS.has(response.status)) {
+        /**
+         * 429 의 Retry-After(초)를 존중한다.
+         * 서버가 "이만큼 쉬라" 고 말해줬는데 5초마다 두드리면 포화를 키운다.
+         */
+        const retryAfter = Number(response.headers.get('Retry-After'));
+        const delayMs =
+          response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : undefined;
+        requeue(batch, `HTTP ${response.status}`, delayMs);
+        return;
+      }
+
+      /**
+       * 400 / 403 / 404 / 422 등 — 요청 자체가 잘못됐다. 버린다.
+       * 재시도해도 결과가 같아서, 되돌리면 같은 배치가 영원히 돈다.
+       */
+      if (!dropWarned.has(response.status)) {
+        dropWarned.add(response.status);
+        console.error(`[log] HTTP ${response.status} — 재시도하지 않고 ${batch.length}건을 버림`);
+      }
     })
     .catch((error: unknown) => {
+      // 네트워크 오류·타임아웃은 지나가는 문제라 다시 보낸다
       requeue(batch, error instanceof Error ? error.message : '네트워크 오류');
     });
 }
@@ -310,7 +393,7 @@ export function flush(useBeacon = false): void {
  * 다만 수집 서버가 계속 죽어 있으면 큐가 무한히 커지므로 상한을 둔다.
  * 오래된 것부터 버린다. 최근 행동이 분석에 더 쓸모가 있다.
  */
-function requeue(batch: LogEnvelope[], reason: string): void {
+function requeue(batch: LogEnvelope[], reason: string, delayMs?: number): void {
   if (!retryWarned) {
     retryWarned = true;
     console.warn(`[log] 전송 실패, 재시도 큐에 넣음 (${reason})`);
@@ -323,7 +406,20 @@ function requeue(batch: LogEnvelope[], reason: string): void {
     console.warn(`[log] 큐가 넘쳐 오래된 ${dropped}건을 버렸다`);
   }
 
-  scheduleFlush();
+  // 서버가 Retry-After 로 지정한 시간이 있으면 그때까지 기다린다.
+  // 그때까지는 새 이벤트가 와도 즉시 전송을 걸지 않는다
+  backoffUntil = Date.now() + (delayMs ?? FLUSH_INTERVAL_MS);
+
+  /**
+   * 이미 걸려 있는 타이머가 더 이르면 걷어낸다.
+   * flush 가 배치를 쪼개며 미리 걸어둔 5초 타이머가 남아 있으면, 예약이
+   * 그쪽에 막혀 Retry-After 가 무시된다 (실측: 9초 지시에 5초 재시도).
+   */
+  if (delayMs !== undefined && flushTimer !== undefined) {
+    window.clearTimeout(flushTimer);
+    flushTimer = undefined;
+  }
+  scheduleFlush(delayMs);
 }
 
 export function subscribe(listener: Listener): () => void {
