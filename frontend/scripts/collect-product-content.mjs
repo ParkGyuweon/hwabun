@@ -160,19 +160,28 @@ function parseLongDescription(raw) {
   if (!raw) return {};
 
   const parts = [];
-  const re = /<b>\s*([^<:]{3,60}?)\s*:\s*(?:<br\s*\/?>)?\s*<\/b>/gi;
+  // 페이지마다 제목을 <b> 로도 <strong> 으로도 감싼다. 둘 다 받는다
+  const re = /<(b|strong)>\s*([^<:]{3,60}?)\s*:\s*(?:<br\s*\/?>)?\s*<\/\1>/gi;
   let match;
   while ((match = re.exec(raw)) !== null) {
     // start 는 다음 제목이 시작하는 자리. 여기까지가 앞 절의 본문이다.
     // lastIndex 로 자르면 다음 제목 글자가 앞 절 끝에 딸려 들어간다.
-    parts.push({ title: match[1], start: match.index, from: re.lastIndex });
+    parts.push({ title: match[2], start: match.index, from: re.lastIndex });
   }
   if (parts.length === 0) return { what_it_is: stripTags(raw) || null };
 
   const out = {};
   parts.forEach((part, index) => {
     const body = raw.slice(part.from, parts[index + 1]?.start ?? raw.length);
-    const text = stripTags(body);
+    /*
+     * 제목이 본문 안에 한 번 더 들어 있는 페이지가 있다.
+     * <p><strong>What it is: </strong>본문 처럼 태그 밖에 콜론이 남으면
+     * "What it is: 본문" 이 그대로 저장된다. 앞머리에서만 걷어낸다.
+     */
+    const title = part.title.trim().toLowerCase();
+    const text = stripTags(body).replace(/^([^:\n]{3,60}):\s*/, (whole, head) =>
+      head.trim().toLowerCase() === title ? '' : whole,
+    );
     if (!text) return;
 
     const key = HEADINGS.find(([pattern]) => pattern.test(part.title))?.[1];
@@ -194,10 +203,25 @@ function parseLongDescription(raw) {
 }
 
 function extract(html) {
-  // longDescription 은 브랜드 것이 먼저 나오고 상품 것이 뒤에 온다
-  const first = readJsonString(html, 'longDescription');
-  const second = readJsonString(html, 'longDescription', first.end + 1);
-  const productDescription = second.value ?? first.value;
+  /**
+   * longDescription 이 여러 개 나온다. 브랜드 소개가 먼저 오는 페이지도 있고
+   * 상품 설명 하나만 있는 페이지도 있다. 순서로 고르면 페이지마다 틀린다.
+   * "What it is" 같은 절 제목이 들어 있는 쪽이 상품 설명이다.
+   */
+  const candidates = [];
+  let cursor = 0;
+  for (let i = 0; i < 5; i += 1) {
+    const found = readJsonString(html, 'longDescription', cursor);
+    if (found.end < 0) break;
+    if (found.value) candidates.push(found.value);
+    cursor = found.end + 1;
+  }
+
+  const looksLikeProduct = (text) => /what it is|highlighted ingredients|suggested usage/i.test(text);
+  const productDescription =
+    candidates.find(looksLikeProduct) ??
+    candidates.sort((a, b) => b.length - a.length)[0] ??
+    null;
 
   const description = parseLongDescription(productDescription);
 
@@ -217,7 +241,14 @@ function extract(html) {
   if (brandAt > 0) {
     const brand = readJsonString(html, 'description', brandAt);
     const text = brand.value ? stripTags(brand.value) : '';
-    if (text.length > 40) description.brand_story = text;
+    /*
+     * 거리를 제한한다. brandId 뒤 아무 description 이나 집으면 4만 자 떨어진
+     * 사이트 공통 안내문("Shop the best makeup now at Sephora...")을 브랜드
+     * 소개로 저장하게 된다. 브랜드 블록의 description 은 brandId 바로 뒤에 온다.
+     */
+    const near = brand.end > 0 && brand.end - brandAt < 3000;
+    const isBoilerplate = /Beauty Insider|earn points with every purchase|Shop the best/i.test(text);
+    if (near && !isBoilerplate && text.length > 40) description.brand_story = text;
   }
 
   const skuMatch =
