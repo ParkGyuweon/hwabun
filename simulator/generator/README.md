@@ -109,7 +109,7 @@ python simulator/generator/build_persona_style.py
 
 페르소나 한 명당:
 
-1. **시드** (`session_id = "seed"`) — 시뮬레이션 시작 전 상태
+1. **시드** (`seed:{simulation_run_id}:{persona_id}:{product_id}`) — 시뮬레이션 시작 전 상태
    - 별점 4~5점 상품 → `add_to_cart`
    - 별점 1~2점 상품 → 상세에 들어갔다 얕게 보고 이탈 (`scroll_backtrack`, 35% 확률로 `rage_click`)
    - 3점 상품 → 아무 데도 넣지 않는다
@@ -118,3 +118,13 @@ python simulator/generator/build_persona_style.py
 3. **목표 상품** — 끝까지 보고 `add_to_cart`. 45% 확률로 `wishlist_toggle`
 
 리뷰 작성 이벤트는 만들지 않는다. 리뷰는 구매 후 행위라 `add_to_cart` 로 환산했다.
+
+모든 synthetic Event의 `properties`에는 `scenario_id`, `simulation_run_id`,
+`generator_type`이 포함된다. 기본 시나리오는 `normal_day`, 생성 방식은
+`python_batch`이며, 실행 ID는 생략 시 UTC 시각을 기준으로 자동 생성한다.
+
+```bash
+python gen_behavior_logs.py --limit 50 \
+  --scenario-id normal_day \
+  --simulation-run-id run_20260831_001
+```

@@ -29,6 +29,10 @@ DEFAULT_CLEANED_PATH = "data/processed/cleaned_events"
 DEFAULT_BAD_PATH = "data/processed/bad_events"
 DEFAULT_DUPLICATE_PATH = "data/processed/duplicate_events"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
+RFC3339_WITH_OFFSET_PATTERN = (
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$"
+)
 
 CANONICAL_ORDER_FIELDS = (
     "received_at",
@@ -140,12 +144,20 @@ def _properties_column(raw_df: Any, field_name: str) -> Any:
     return F.get_json_object(F.col("properties_json"), f"$.{field_name}")
 
 
+def _rfc3339_with_offset(column: Any) -> Any:
+    """Require an RFC 3339 timestamp that carries an explicit timezone."""
+
+    return _non_blank(column) & column.rlike(RFC3339_WITH_OFFSET_PATTERN)
+
+
 def _validation_columns(raw_df: Any) -> dict[str, Any]:
     """Build validation expressions without mutating the input DataFrame."""
 
     from pyspark.sql import functions as F
 
     c = F.col
+    occurred_at_raw = F.get_json_object(c("raw_value"), "$.occurred_at")
+    received_at_raw = F.get_json_object(c("raw_value"), "$.received_at")
     required_ok = F.lit(True)
     for field in REQUIRED_FIELDS:
         required_ok = required_ok & _non_blank(c(field))
@@ -188,6 +200,10 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         "coordinate_ok": coordinate_ok,
         "required_ok": required_ok,
         "timestamp_ok": c("event_time").isNotNull() & c("received_at").isNotNull(),
+        "timestamp_format_ok": (
+            _rfc3339_with_offset(occurred_at_raw)
+            & _rfc3339_with_offset(received_at_raw)
+        ),
         "sequence_ok": sequence_ok,
         "enum_ok": enum_ok,
         "synthetic_properties_ok": synthetic_properties_ok,
@@ -202,6 +218,7 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         .when(~expressions["coordinate_ok"], F.lit("missing_source_coordinate"))
         .when(~expressions["required_ok"], F.lit("missing_required_field"))
         .when(~expressions["timestamp_ok"], F.lit("invalid_timestamp"))
+        .when(~expressions["timestamp_format_ok"], F.lit("invalid_timestamp_format"))
         .when(~expressions["sequence_ok"], F.lit("invalid_sequence_no"))
         .when(~expressions["enum_ok"], F.lit("invalid_enum"))
         .when(~expressions["synthetic_properties_ok"], F.lit("invalid_properties"))

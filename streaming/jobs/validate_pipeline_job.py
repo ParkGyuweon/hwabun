@@ -136,6 +136,65 @@ def _duplicate_count(df: Any, columns: list[str]) -> int:
     return df.groupBy(*columns).count().where(F.col("count") > 1).count()
 
 
+def _synthetic_session_persona_conflict_count(cleaned: Any) -> int:
+    """Count synthetic sessions that contain more than one Persona."""
+
+    from pyspark.sql import functions as F
+
+    return (
+        cleaned.where(F.col("actor_type") == F.lit("synthetic"))
+        .groupBy("simulation_run_id", "session_id")
+        .agg(F.countDistinct("persona_id").alias("persona_count"))
+        .where(F.col("persona_count") > 1)
+        .count()
+    )
+
+
+def _session_sequence_collision_count(cleaned: Any) -> int:
+    """Count sessions where multiple Event IDs use the same sequence number."""
+
+    from pyspark.sql import functions as F
+
+    return (
+        cleaned.where(F.col("sequence_no").isNotNull())
+        .groupBy("simulation_run_id", "session_id", "sequence_no")
+        .count()
+        .where(F.col("count") > 1)
+        .count()
+    )
+
+
+def _synthetic_run_metadata_conflict_count(cleaned: Any) -> int:
+    """Count synthetic runs with contradictory runtime metadata."""
+
+    from pyspark.sql import functions as F
+
+    return (
+        cleaned.where(F.col("actor_type") == F.lit("synthetic"))
+        .groupBy("simulation_run_id")
+        .agg(
+            F.countDistinct("scenario_id").alias("scenario_count"),
+            F.countDistinct("generator_type").alias("generator_count"),
+        )
+        .where(
+            (F.col("scenario_count") > 1)
+            | (F.col("generator_count") > 1)
+        )
+        .count()
+    )
+
+
+def _raw_event_id_duplicate_group_count(raw: Any) -> int:
+    """Count Raw duplicate groups; this is a warning, not a failure."""
+
+    from pyspark.sql import functions as F
+
+    return _duplicate_count(
+        raw.where(F.col("event_id").isNotNull()),
+        ["event_id"],
+    )
+
+
 def _check(name: str, passed: bool, details: str) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
 
@@ -167,6 +226,17 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "funnel_daily": funnel_daily.count(),
     }
     checks: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+    raw_duplicate_groups = _raw_event_id_duplicate_group_count(raw)
+    if raw_duplicate_groups:
+        warnings.append(
+            {
+                "name": "raw_event_id_duplicates",
+                "count": raw_duplicate_groups,
+                "details": "Raw preserves repeated event_id values; Q2 owns canonicalization",
+            }
+        )
 
     checks.append(
         _check(
@@ -180,6 +250,36 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "cleaned_event_id_is_unique",
             _duplicate_count(cleaned, ["event_id"]) == 0,
             "cleaned_events grain=event_id",
+        )
+    )
+    synthetic_session_persona_conflicts = _synthetic_session_persona_conflict_count(cleaned)
+    checks.append(
+        _check(
+            "synthetic_session_has_one_persona",
+            synthetic_session_persona_conflicts == 0,
+            "conflicting_sessions="
+            f"{synthetic_session_persona_conflicts}; "
+            "grain=(simulation_run_id, session_id) has one persona_id",
+        )
+    )
+    sequence_collisions = _session_sequence_collision_count(cleaned)
+    checks.append(
+        _check(
+            "session_sequence_no_is_unique",
+            sequence_collisions == 0,
+            "conflicting_keys="
+            f"{sequence_collisions}; "
+            "grain=(simulation_run_id, session_id, sequence_no)",
+        )
+    )
+    runtime_metadata_conflicts = _synthetic_run_metadata_conflict_count(cleaned)
+    checks.append(
+        _check(
+            "synthetic_run_metadata_is_consistent",
+            runtime_metadata_conflicts == 0,
+            "conflicting_runs="
+            f"{runtime_metadata_conflicts}; "
+            "one simulation_run_id maps to one scenario_id and generator_type",
         )
     )
     checks.append(
@@ -300,6 +400,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "status": "passed" if not failures else "failed",
         "counts": counts,
         "checks": checks,
+        "warnings": warnings,
         "failure_count": len(failures),
     }
 

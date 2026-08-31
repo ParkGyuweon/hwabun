@@ -16,7 +16,7 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
 합의사항 (BEHAVIOR_SCENARIO.md)
   - 리뷰 작성 이벤트를 만들지 않는다. 리뷰 상품은 add_to_cart 로 환산
   - 페르소나당 상품 1개를 목표로 떼고 나머지 전부를 시드로 사용
-  - 시드는 시뮬레이션 시작 전 상태 (session_id = "seed-{persona_id}-{product_id}")
+  - 시드는 시뮬레이션 시작 전 상태 (Persona·상품·실행 단위별 session_id)
   - 이탈 상품은 취향이 아니라 노출(같은 카테고리 / 인기순)로 고른다
   - 노출에는 impression_dwell 을, 추천 섹션에는 recommendation_snapshot 을 남긴다
     (가중 0 이지만 노출 대비 클릭과 위치 편향 보정에 필요하다)
@@ -30,6 +30,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
     전용 난수 스트림을 쓰므로 껐을 때 나머지 궤적이 완전히 동일하다
   - 직전 상세의 추천에 다음 상품이 있으면 recommendation_click 으로 넘어간다
     (노출과 같은 recommendation_id / position 을 실어 CTR 이 성립하게 한다)
+  - 모든 synthetic Event properties 에 scenario_id / simulation_run_id /
+    generator_type 을 기록한다
 
 실행
   python gen_behavior_logs.py --limit 50                    # 맛보기. 파일로 저장
@@ -37,6 +39,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   python gen_behavior_logs.py --include-agents              # PA 100명까지 (기본 제외)
   python gen_behavior_logs.py --post http://localhost:8080  # 수집 API 로 전송
   python gen_behavior_logs.py --post http://localhost:8080 --rps 200 --limit 500
+  python gen_behavior_logs.py --limit 50 --scenario-id normal_day \
+      --simulation-run-id run_20260831_001
 
 전송 모드
   수집 API(POST /api/events) 로 배치 100건씩 보낸다. 백엔드 계약은
@@ -45,7 +49,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
 """
 import argparse, json, os, sys, time, uuid, zlib
 from collections import Counter
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 import numpy as np
 
 try: sys.stdout.reconfigure(encoding="utf-8")
@@ -60,8 +65,41 @@ import behavior_weights as BW
 
 SCHEMA_VERSION = "0.2.0-draft"
 ENV = "simulation"
+DEFAULT_SCENARIO_ID = "normal_day"
+DEFAULT_GENERATOR_TYPE = "python_batch"
 NOW = datetime(2026, 8, 28, 12, 0, 0)
 CHECKPOINT_MS = 15000                # 목록 체류 중 dwell 재발화 주기
+
+
+def default_simulation_run_id(now=None):
+    """Return a readable execution ID when the caller does not provide one."""
+
+    timestamp = now or datetime.now(timezone.utc)
+    return f"run_{timestamp.strftime('%Y%m%dT%H%M%SZ')}"
+
+
+@dataclass(frozen=True)
+class SimulationContext:
+    """Metadata shared by every synthetic Event in one generator run."""
+
+    scenario_id: str
+    simulation_run_id: str
+    generator_type: str
+
+    def __post_init__(self):
+        for name, value in (
+            ("scenario_id", self.scenario_id),
+            ("simulation_run_id", self.simulation_run_id),
+            ("generator_type", self.generator_type),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{name} must be a non-empty string")
+
+
+def seed_session_id(context, persona_id, product_id):
+    """Build a seed session key that cannot merge personas or products."""
+
+    return f"seed:{context.simulation_run_id}:{persona_id}:{product_id}"
 
 # ══════════════════════════════════════════════════════════════════════════
 #  시나리오 파라미터 — ⚠️ 전부 자리표시자다. 팀 합의 전이므로 튜닝하지 않는다.
@@ -257,16 +295,21 @@ def seed_sid(persona_id, product_id):
 
 
 def is_seed(ev):
-    """시드 이벤트인가. 접두사로 판별한다"""
-    return str(ev.get("session_id", "")).startswith(SEED_PREFIX)
+    """시드 이벤트인가. 명시적인 metadata를 우선하고 legacy prefix도 읽는다."""
+    return (ev.get("properties", {}).get("seeded") is True
+            or str(ev.get("session_id", "")).startswith(SEED_PREFIX)
+            or str(ev.get("session_id", "")).startswith("seed:"))
 
 
 class Emitter:
-    """이벤트 봉투 조립. session_id / page_view_id / sequence_no 를 관리한다"""
+    """이벤트 봉투와 synthetic 실행 메타데이터를 조립한다."""
 
-    def __init__(self, sink, persona_id, start, rng):
+    def __init__(self, sink, persona_id, start, rng, context,
+                 session_id=None, is_seed=False):
         self.sink, self.pid, self.t, self.rng = sink, persona_id, start, rng
-        self.sid = uuid.uuid4().hex[:16]
+        self.context = context
+        self.sid = session_id or f"{context.simulation_run_id}:{uuid.uuid4().hex[:16]}"
+        self.is_seed = is_seed
         self.pvid = ""
         self.n = 0
         self.page = "product_list"
@@ -287,6 +330,21 @@ class Emitter:
 
     def emit(self, name, _pid=None, **props):
         self.n += 1
+        properties = {
+            k: v for k, v in props.items()
+            if v is not None or k in ("content_kind", "content_ref", "section_id")
+        }
+        # These fields are required for every synthetic Event.  Assign rather
+        # than setdefault so an event-specific property cannot contradict the
+        # run metadata carried by its Emitter.
+        properties.update({
+            "scenario_id": self.context.scenario_id,
+            "simulation_run_id": self.context.simulation_run_id,
+            "generator_type": self.context.generator_type,
+        })
+        if self.is_seed:
+            properties["seeded"] = True
+
         self.sink.append({
             "schema_version": SCHEMA_VERSION,
             "event_id": uuid.uuid4().hex,
@@ -301,7 +359,7 @@ class Emitter:
             "product_id": _pid,
             "actor_type": "synthetic",
             "environment": ENV,
-            "properties": {k: v for k, v in props.items() if v is not None or k in ("content_kind", "content_ref", "section_id")},
+            "properties": properties,
         })
 
 
@@ -554,7 +612,8 @@ def post_events(base_url, events, rps=0, timeout=40):
 
 
 # ── 페르소나 1명 ─────────────────────────────────────────────────────────
-def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
+def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
+                quick_look=True):
     SC = persona_style(p)
     # Quick Look 전용 난수. persona_id 로만 결정되므로 본 동선 rng 와 독립이다.
     # 덕분에 quick_look=False 로 껐을 때 나머지 궤적이 **완전히 동일**하고,
@@ -583,11 +642,18 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
 
     # 부정 시드 — 상세를 얕게 보고 이탈. 감점 이벤트가 v_u- 를 채운다
     for j, g in enumerate(neg):
-        e = Emitter(sink, p["persona_id"], base + timedelta(days=step * j), rng)
-        e.sid = seed_sid(p["persona_id"], g)
+        e = Emitter(
+            sink,
+            p["persona_id"],
+            base + timedelta(days=step * j),
+            rng,
+            context,
+            session_id=seed_session_id(context, p["persona_id"], g),
+            is_seed=True,
+        )
         # new_page / page_view 는 visit_detail 이 낸다. 여기서 또 내면 상세 진입 한 번에
         # page_view 가 2건, page_view_id 가 2개 생겨 프론트와 어긋난다.
-        # 시드 표시는 e.sid = seed_sid(...) 로 이미 되어 있다.
+        # 시드 표시는 Emitter가 모든 seed Event에 seeded=true로 남긴다.
         visit_detail(e, g, [], rng,
                      depth_target=int(rng.choice(SC["neg_seed_depth_choices"])),
                      engaged=False, entry_source="direct", SC=SC)
@@ -598,8 +664,15 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
                              click_count=int(rng.integers(3, 6)), seeded=True)
 
     for i, g in enumerate(seeds):
-        e = Emitter(sink, p["persona_id"], base + timedelta(days=step * (len(neg) + i)), rng)
-        e.sid = seed_sid(p["persona_id"], g)
+        e = Emitter(
+            sink,
+            p["persona_id"],
+            base + timedelta(days=step * (len(neg) + i)),
+            rng,
+            context,
+            session_id=seed_session_id(context, p["persona_id"], g),
+            is_seed=True,
+        )
         e.new_page("product_detail")
         e.emit("add_to_cart", g, seeded=True, quantity=1,
                price_usd=catalog[g]["price"])
@@ -612,7 +685,13 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
     n_bounce = int(rng.integers(*SC["bounce_range"]))
     bounce = list(rng.choice(pool, size=min(n_bounce, len(pool)), replace=False))
 
-    e = Emitter(sink, p["persona_id"], NOW - timedelta(days=float(rng.random() * 5)), rng)
+    e = Emitter(
+        sink,
+        p["persona_id"],
+        NOW - timedelta(days=float(rng.random() * 5)),
+        rng,
+        context,
+    )
     promo = popular[:6]
     liked = False
     route = list(bounce) + [target]
@@ -712,7 +791,19 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=True):
     return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
 
 
-def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True):
+def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
+         scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
+         generator_type=DEFAULT_GENERATOR_TYPE):
+    context = SimulationContext(
+        scenario_id=scenario_id,
+        simulation_run_id=simulation_run_id or default_simulation_run_id(),
+        generator_type=generator_type,
+    )
+    log(
+        f"실행 메타데이터 scenario_id={context.scenario_id} "
+        f"simulation_run_id={context.simulation_run_id} "
+        f"generator_type={context.generator_type}"
+    )
     prods = json.load(open(PRODUCTS, encoding="utf-8"))
     catalog = {p["product_id"]: {"cat": p["secondary_category"], "name": p["product_name"],
                                  "price": p["price_usd"], "n": p["_review_stats"]["review_count"]}
@@ -737,7 +828,16 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
     rng = np.random.default_rng(42)
     sink, meta, t0 = [], [], time.time()
     for i, p in enumerate(people):
-        r = gen_persona(p, catalog, by_cat, popular, rng, sink, quick_look=quick_look)
+        r = gen_persona(
+            p,
+            catalog,
+            by_cat,
+            popular,
+            rng,
+            sink,
+            context,
+            quick_look=quick_look,
+        )
         if r: meta.append(r)
         if not limit and (i + 1) % 2000 == 0:
             log(f"  {i+1:,}명 / 이벤트 {len(sink):,}건")
@@ -750,7 +850,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         log(f"저장 {out}  ({os.path.getsize(out)/1024/1024:.1f}MB)")
 
     c, ci = Counter(x["event_name"] for x in sink), Counter(x["intent"] for x in sink)
-    seed_n = sum(1 for x in sink if is_seed(x))
+    seed_n = sum(1 for x in sink if x["properties"].get("seeded") is True)
     seed_cart = sum(1 for x in sink if x["properties"].get("seeded")
                     and x["event_name"] == "add_to_cart")
     seed_neg = sum(1 for x in sink if x["properties"].get("seeded")
@@ -792,7 +892,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         print(f"세션 샘플 — {pid} (총 {len(ev)}건 중 앞 {show}건)")
         print("=" * 64)
         for x in ev[:show]:
-            tag = "SEED" if is_seed(x) else f"#{x['sequence_no']:<4}"
+            tag = "SEED" if x["properties"].get("seeded") is True else f"#{x['sequence_no']:<4}"
             pr = " ".join(f"{k}={v}" for k, v in list(x["properties"].items())[:4])
             print(f"  {tag} {x['event_name']:<24} {x['intent']:<11} {pr[:78]}")
 
@@ -807,6 +907,12 @@ if __name__ == "__main__":
                     help="수집 API 베이스 URL. 예) http://localhost:8080")
     ap.add_argument("--no-quick-look", action="store_true",
                     help="Quick Look 동선을 끈다 (A/B 대조군)")
+    ap.add_argument("--scenario-id", default=DEFAULT_SCENARIO_ID,
+                    help="시뮬레이션 시나리오 ID")
+    ap.add_argument("--simulation-run-id", default=None,
+                    help="실행 단위 ID. 생략하면 UTC 시각 기반으로 생성")
+    ap.add_argument("--generator-type", default=DEFAULT_GENERATOR_TYPE,
+                    help="synthetic 생성 방식 (기본: python_batch)")
     ap.add_argument("--include-agents", action="store_true",
                     help="PA 100명(인터랙티브 전용)도 생성 대상에 넣는다. 기본은 제외")
     ap.add_argument("--rps", type=int, default=0,
@@ -814,5 +920,15 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if not a.out and not a.post:
         a.out = os.path.join(BD, "behavior_logs.jsonl")
-    main(a.limit, a.show, a.out, a.post, a.rps, a.include_agents,
-         quick_look=not a.no_quick_look)
+    main(
+        a.limit,
+        a.show,
+        a.out,
+        a.post,
+        a.rps,
+        a.include_agents,
+        quick_look=not a.no_quick_look,
+        scenario_id=a.scenario_id,
+        simulation_run_id=a.simulation_run_id,
+        generator_type=a.generator_type,
+    )
