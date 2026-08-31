@@ -11,6 +11,7 @@
  * 모의값에 Math.random 을 쓰지 않는다. 새로고침마다 숫자가 바뀌면
  * 화면을 검토하는 사람이 변화의 원인을 찾느라 시간을 버린다.
  */
+import vocab from '../../../../contracts/product-feature-vocab.json';
 import productsData from '../../mocks/products.sample.json';
 import reviewsData from '../../mocks/reviews.sample.json';
 import { EVENT_WEIGHT } from '../../types/log';
@@ -167,6 +168,56 @@ export const standardFunnel = [
   },
   { label: '장바구니', value: totals.addToCart },
 ];
+
+/**
+ * 가장 크게 새는 구간을 찾아 한 문장으로 만든다.
+ *
+ * 조사에서 나온 두 가지에 대한 답이다.
+ *   - 경영진은 5초 안에 핵심을 파악해야 한다. 5초 테스트는 "무엇을 봤고 다음에
+ *     무엇을 할지" 를 묻는데, 지표만 늘어놓은 화면은 그 답을 못 준다.
+ *   - 브랜드가 분석 도구에 갖는 최대 불만이 "수집은 되는데 행동으로 안 이어진다" 다.
+ *
+ * 그래서 화면 맨 위에 지표가 아니라 **문장**을 둔다. 숫자는 그 아래서 근거를 댄다.
+ */
+export interface Verdict {
+  /** 어디가 문제인가 */
+  headline: string;
+  /** 왜 그렇게 판단했나 */
+  reason: string;
+  /** 무엇을 하면 되나 */
+  action: string;
+  /** 이 판단이 몇 건을 보고 나온 것인가 */
+  sampleSize: number;
+}
+
+export function leakVerdict(): Verdict {
+  const steps = standardFunnel;
+
+  // 단계 사이 유지율. 가장 많이 빠지는 구간이 손볼 곳이다
+  const drops = steps.slice(1).map((step, index) => {
+    const before = steps[index];
+    const kept = before.value === 0 ? 0 : step.value / before.value;
+    return { from: before.label, to: step.label, kept, lost: before.value - step.value };
+  });
+
+  const worst = drops.reduce((a, b) => (a.kept <= b.kept ? a : b));
+
+  const ACTION: Record<string, string> = {
+    상품클릭: "목록 카드의 이미지와 제목을 손보세요. 노출은 되는데 눌리지 않습니다.",
+    상세조회: "클릭 후 이탈이 많습니다. 첫 화면 로딩과 히어로 영역을 확인하세요.",
+    정보확인: "상세까지 왔는데 성분·리뷰를 안 봅니다. 정보 위치를 위로 올리세요.",
+    장바구니: "정보까지 봤는데 담지 않습니다. 가격·용량·구매 버튼을 점검하세요.",
+  };
+
+  const key = worst.to.replace(/\s/g, '');
+
+  return {
+    headline: `${worst.from} → ${worst.to} 구간에서 가장 많이 이탈합니다`,
+    reason: `${fmt.int(worst.lost)}명이 이 구간에서 빠졌습니다 (유지율 ${fmt.pct(worst.kept)}).`,
+    action: ACTION[key] ?? "이 구간의 화면 구성을 점검하세요.",
+    sampleSize: steps[0].value,
+  };
+}
 
 /**
  * intent 퍼널 — 이 대시보드의 차별점.
@@ -351,3 +402,172 @@ export const fmt = {
   compact: (n: number) =>
     n >= 10000 ? `${(n / 10000).toFixed(1)}만` : n >= 1000 ? `${(n / 1000).toFixed(1)}천` : String(n),
 };
+
+
+/* ---------- ③ 정보 관심도 ---------- */
+
+/**
+ * 콘텐츠 종류별 주목도.
+ *
+ * 체류가 길다고 좋은 게 아니라는 것을 함께 보여줘야 한다. 그래서 평균 체류 옆에
+ * **전환 기여**(그 콘텐츠를 본 방문의 담기 비율 ÷ 전체 평균)를 나란히 둔다.
+ * usage_guide 처럼 오래 보는데 전환이 안 되는 것은 설명이 어렵다는 신호다.
+ *
+ * 집계 전제: co_visible_blocks <= 2 인 체류만 쓴다. PC 는 한 화면에 블록이
+ * 여러 개 들어가서, 겹쳐 보인 체류는 어느 콘텐츠를 향한 것인지 단정할 수 없다.
+ */
+export interface ContentAttention {
+  kind: string;
+  ko: string;
+  avgDwellMs: number;
+  viewRate: number;
+  conversionLift: number;
+  sampleSize: number;
+}
+
+export const contentAttention: ContentAttention[] = (() => {
+  const rand = rng(hashString('content-attention'));
+  const base: Array<[string, string, number, number, number]> = [
+    // [kind, 한국어, 평균 체류 ms, 열람률, 전환 기여]
+    ['ingredient_list', '성분 목록', 38200, 0.62, 2.3],
+    ['user_review', '사용자 리뷰', 31400, 0.71, 1.8],
+    ['clinical_claim', '임상 결과', 22300, 0.34, 2.1],
+    ['ingredient_callout', '성분 특징', 15800, 0.41, 1.6],
+    ['what_it_is', '제품 소개', 12900, 0.88, 1.0],
+    ['usage_guide', '사용법', 12100, 0.37, 0.9],
+    ['brand_story', '브랜드 소개', 9800, 0.22, 1.2],
+    ['review_stats', '평점 분포', 8400, 0.66, 1.1],
+    ['what_else', '추가 설명', 7600, 0.28, 0.8],
+    ['product_image', '상품 이미지', 6900, 0.94, 1.0],
+  ];
+  return base.map(([kind, ko, avgDwellMs, viewRate, conversionLift]) => ({
+    kind,
+    ko,
+    avgDwellMs,
+    viewRate,
+    conversionLift,
+    sampleSize: Math.round(400 + rand() * 900),
+  }));
+})();
+
+/**
+ * 긁어간 성분 빈도.
+ *
+ * 원문은 로그에 남지 않는다(데이터 계약). 성분 사전에 걸린 표준 명칭만 온다.
+ * 사전은 contracts/product-feature-vocab.json — AI 파트가 상품 벡터에 쓰는 것과
+ * 같은 파일이라 "이 성분을 긁은 사람" 과 "이 성분이 든 상품" 이 같은 이름으로
+ * 조인된다. 여기서도 그 사전을 그대로 읽어 화면과 로그의 성분 목록이 어긋나지
+ * 않게 한다.
+ *
+ * 반복해서 긁히는 성분 = 상세페이지가 그 성분을 설명하지 못하고 있다는 뜻.
+ * 사용자는 모르는 성분명을 만나면 그 부분만 긁어서 밖에서 검색한다.
+ */
+export const scrapedIngredients: Array<{ name: string; count: number; copyCount: number }> =
+  (() => {
+    const rand = rng(hashString('scraped-ingredients'));
+    return Object.keys(vocab.ingredient_source.synonyms)
+      .map((name) => {
+        const count = Math.round(8 + rand() * 190);
+        return { name, count, copyCount: Math.round(count * (0.15 + rand() * 0.3)) };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  })();
+
+/**
+ * 검증 행동 실행률과 전환 비교.
+ * "그 행동을 한 방문" 과 "안 한 방문" 의 담기 비율을 나란히 두면
+ * 어떤 정보가 결정을 만드는지가 바로 보인다.
+ */
+export const validationBehaviors = [
+  {
+    event: 'ingredient_view_mode_change',
+    ko: '전성분 펼쳐 보기',
+    doneRate: 0.18,
+    cartRateWith: 0.132,
+    cartRateWithout: 0.051,
+  },
+  {
+    event: 'review_filter_apply',
+    ko: '내 피부 타입 리뷰만 보기',
+    doneRate: 0.11,
+    cartRateWith: 0.148,
+    cartRateWithout: 0.056,
+  },
+  {
+    event: 'accordion_toggle',
+    ko: '접힌 정보 펼치기',
+    doneRate: 0.42,
+    cartRateWith: 0.094,
+    cartRateWithout: 0.049,
+  },
+  {
+    event: 'text_copy',
+    ko: '성분명 복사',
+    doneRate: 0.06,
+    cartRateWith: 0.087,
+    cartRateWithout: 0.061,
+  },
+];
+
+/* ---------- ④ 고객군 ---------- */
+
+export const SKIN_TYPE_KO: Record<string, string> = {
+  dry: '건성',
+  oily: '지성',
+  combination: '복합성',
+  normal: '중성',
+};
+
+export const SKIN_TONE_ORDER = ['fair', 'light', 'medium', 'tan', 'deep'] as const;
+
+/**
+ * 피부 타입 × 톤 전환 매트릭스.
+ *
+ * 페르소나 100명이 타입 4종 × 톤 5종으로 정확히 균등이라(칸마다 5명)
+ * 어느 조합을 골라도 비교가 성립한다. 균등이 아니었으면 칸마다 표본 수부터
+ * 보정해야 했다.
+ */
+export const segmentMatrix = (() => {
+  const rand = rng(hashString('segment-matrix'));
+  const types = ['dry', 'oily', 'combination', 'normal'];
+  return types.map((type) => ({
+    type,
+    cells: SKIN_TONE_ORDER.map((tone) => ({
+      tone,
+      cartRate: 0.04 + rand() * 0.11,
+      sessions: Math.round(60 + rand() * 200),
+    })),
+  }));
+})();
+
+/**
+ * 고객군별로 가장 오래 본 콘텐츠.
+ * "건성은 성분을, 지성은 임상 근거를 오래 본다" 가 데이터로 나오면
+ * 그것이 바로 브랜드에 파는 인사이트다.
+ */
+export const segmentTopContent = [
+  { type: 'dry', top: '성분 목록', second: '사용자 리뷰', dwellShare: 0.34 },
+  { type: 'oily', top: '임상 결과', second: '성분 목록', dwellShare: 0.29 },
+  { type: 'combination', top: '사용자 리뷰', second: '성분 목록', dwellShare: 0.31 },
+  { type: 'normal', top: '상품 이미지', second: '사용자 리뷰', dwellShare: 0.26 },
+];
+
+/** 리뷰 필터에서 "나와 같은 피부 타입" 을 고른 방문 비율 */
+export const sameSkinFilterRate = 0.63;
+
+/* ---------- ⑤ 마찰 위치 ---------- */
+
+/**
+ * 좌절 신호를 위치와 함께 본다.
+ * dead_click 이 상품 이미지에 몰리면 확대를 기대했는데 안 되는 것이고,
+ * scroll_backtrack 이 성분에 몰리면 그 구간 설명이 어렵다는 뜻이다.
+ * 상품 선호와 UI 품질은 같은 축이 아니라서 여기 값은 선호 벡터에 넣지 않는다.
+ */
+export const frictionByLocation = [
+  { where: '상품 이미지', event: 'dead_click', count: 412, meaning: '확대 기대 — 줌 없음' },
+  { where: '성분 목록', event: 'scroll_backtrack', count: 388, meaning: '되돌아 읽기 — 설명 난이도' },
+  { where: '옵션 선택', event: 'rage_click', count: 214, meaning: '품절 옵션 반응 없음' },
+  { where: '리뷰 더보기', event: 'dead_click', count: 156, meaning: '버튼처럼 보이는 비버튼' },
+  { where: '담기 버튼', event: 'hover_dwell', count: 1893, meaning: '평균 2.4초 망설임' },
+];

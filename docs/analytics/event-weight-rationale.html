@@ -533,7 +533,7 @@
       rows: [
         ['갤러리를 넘겼다', 'media_view', 1.5, '화장품은 색·질감을 <strong>이미지로 대체 판단</strong>한다.', [['guess', '추정']], ''],
         ['Quicklook을 열었다', 'quick_look', 1.5, '<strong>오작동 개방이 잦아 단독 사용 금지.</strong> 닫을 때의 값으로 사후 판정하는 것을 전제로 한 중간값이다.', [['pub', '공개']], 'Baymard — Quick View 사용성'],
-        ['상품 상세에 들어왔다', 'product_view', 1.0, '<strong>기준선.</strong> 모든 값이 이 1.0을 기준으로 상대 배치된다.', [['pub', '공개']], 'AI 설계서 PRODUCT_VIEW = 1.0'],
+        ['상품 상세에 들어왔다', 'product_view', 1.0, '<strong>기준선.</strong> 모든 값이 이 1.0을 기준으로 상대 배치된다. 상품 단위 조회는 이 이벤트만 센다.', [['pub', '공개']], 'AI 설계서 PRODUCT_VIEW = 1.0'],
         ['섹션에 머물렀다', 'section_dwell', 1.0, '섹션에 따라 0.5–1.5로 재조정한다. 성분·리뷰가 높고 히어로·유사상품이 낮다.', [['pub', '공개']], 'AI 설계서 SCROLL 단계값'],
         ['스크롤을 멈췄다', 'scroll_pause', 0.3, '멈춘 지점 = 시선이 머문 지점. <strong>단독으로는 매우 약하다.</strong>', [['norm', '관행']], ''],
         ['섹션이 보였다', 'section_view', 0, '같은 섹션에서 <code>section_dwell</code>이 함께 발생해 <strong>이중 가산이 된다.</strong> 분모로만 쓴다.', [['pub', '공개']], '노출 = 0'],
@@ -571,9 +571,9 @@
     },
     {
       key: 'session', title: '세션', lede: '메타 이벤트. 선호도가 아니라 <strong>다른 이벤트를 묶는 뼈대</strong>다.',
-      note: '<code>page_view</code>와 <code>product_view</code>를 모두 1.0으로 두되 <strong>상품 벡터에는 <code>product_view</code>만 반영</strong>해 이중 가산을 막는다. <code>page_view</code>는 목록·장바구니에서도 발생하므로 상품 선호의 기준선으로는 부정확하다.',
+      note: '집계는 <code>product_id</code>가 실리고 가중이 양수인 이벤트를 전부 그 상품에 귀속시킨다. <code>page_view</code>와 <code>product_view</code>가 <strong>둘 다 product_id를 싣기 때문에</strong> 양쪽을 1.0으로 두면 상세 진입 한 번이 두 번 세어진다. 데이터 파트 실측(페르소나 300명)에서 두 이벤트의 귀속 가중 합이 1,378로 정확히 일치했다. <code>section_view</code>를 0으로 둔 것과 같은 문제라 <code>page_view</code>도 0으로 내렸다.',
       rows: [
-        ['화면을 이동했다', 'page_view', 1.0, '화면 이동과 체류를 표현한다. 상품 단위 집계는 <code>product_view</code>가 담당한다.', [['pub', '공개']], ''],
+        ['화면을 이동했다', 'page_view', 0, '상세에서 <code>product_view</code>와 <strong>둘 다 product_id를 실어</strong> 한 번을 두 번 셌다. 페르소나 300명 실측에서 귀속 가중 합이 1,378로 정확히 같았다.', [['pub', '공개']], ''],
         ['방문을 시작했다', 'session_start', 0, '메타 이벤트. 첫 <code>page_view</code>와 같은 식별자를 공유한다.', [['norm', '관행']], ''],
         ['화면을 떠났다', 'exit_summary', 0, '메타 이벤트. 단 <strong>짧은 체류 이탈은 −1.0</strong>으로 따로 환산한다.', [['pub', '공개']], 'AI 설계서 — 단순 이탈은 낮은 가중']
       ]

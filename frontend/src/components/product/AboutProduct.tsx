@@ -68,6 +68,22 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
               <p className="about__pre">{description.clinical_results}</p>
             </section>
           ) : null}
+
+          {/*
+           * 브랜드 소개.
+           *
+           * 데이터에 들어 있는데 화면에 없었다. AI 파트가 상품 벡터에 brand 블록을
+           * 넣어 추천 정확도를 11.4% -> 23.6% 로 올렸는데, 정작 브랜드 콘텐츠를
+           * 얼마나 보는지는 아무도 수집하고 있지 않았다.
+           * content_kind 21종 중 brand_story 만 화면에 없어서 대시보드의 콘텐츠
+           * 주목도 표에서도 이 줄만 영원히 비어 있었다.
+           */}
+          {description.brand_story ? (
+            <section data-log-content="brand_story">
+              <h3>About the Brand</h3>
+              <p className="about__pre">{description.brand_story}</p>
+            </section>
+          ) : null}
         </div>
       ) : null}
 

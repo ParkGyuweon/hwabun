@@ -2,14 +2,35 @@ import { useState } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
 import ProductsScreen from './screens/ProductsScreen';
 import BehaviorScreen from './screens/BehaviorScreen';
+import ContentScreen from './screens/ContentScreen';
+import SegmentsScreen from './screens/SegmentsScreen';
 import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
 
-type ScreenKey = 'overview' | 'products' | 'behavior' | 'reviews' | 'ingredients';
+type ScreenKey =
+  | 'overview'
+  | 'products'
+  | 'content'
+  | 'segments'
+  | 'behavior'
+  | 'reviews'
+  | 'ingredients';
 
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
   { key: 'overview', label: 'Overview', title: 'Overview', desc: '전체 성과와 핵심 KPI' },
   { key: 'products', label: '상품 분석', title: '상품 분석', desc: '상품별 관심도와 전환 성과' },
+  {
+    key: 'content',
+    label: '정보 관심도',
+    title: '정보 관심도',
+    desc: '무엇을 보여줘야 사는가 — 콘텐츠 단위 주목도',
+  },
+  {
+    key: 'segments',
+    label: '고객군',
+    title: '고객군 분석',
+    desc: '피부 타입 × 톤별 전환과 콘텐츠 선호',
+  },
   {
     key: 'behavior',
     label: '행동 분석',
@@ -91,6 +112,8 @@ export default function DashboardApp() {
 
         {screen === 'overview' ? <OverviewScreen days={days} /> : null}
         {screen === 'products' ? <ProductsScreen /> : null}
+        {screen === 'content' ? <ContentScreen /> : null}
+        {screen === 'segments' ? <SegmentsScreen /> : null}
         {screen === 'behavior' ? <BehaviorScreen /> : null}
         {screen === 'reviews' ? (
           <ReviewsScreen productId={productId} onProductChange={setProductId} />
