@@ -99,27 +99,44 @@ async function findArchived(productId) {
     'http://web.archive.org/cdx/search/cdx' +
     `?url=sephora.com/product/*&filter=urlkey:.*${low}.*&limit=40&fl=original,timestamp&collapse=urlkey`;
 
-  const body = await get(cdx, { tries: 5, timeout: 60_000 });
-  if (!body) return null;
+  /*
+   * CDX 가 200 에 빈 본문을 주는 일이 잦다. 실패가 아니라 "결과 없음" 처럼 보여서
+   * 그대로 믿으면 아카이브에 멀쩡히 남아 있는 상품을 못 찾았다고 넘긴다.
+   * 실제로 이것 때문에 43% 가 주소 못 찾음으로 빠졌다. 비어 있으면 다시 묻는다.
+   */
+  let rows = [];
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const body = await get(cdx, { tries: 2, timeout: 60_000 });
+    rows = (body ?? '')
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/))
+      .filter(([url]) => url?.startsWith('https://www.sephora.com/product/'))
+      .map(([url, timestamp]) => ({ url, timestamp }));
 
-  const rows = body
-    .split('\n')
-    .map((line) => line.trim().split(/\s+/))
-    .filter(([url]) => url?.startsWith('https://www.sephora.com/product/'))
-    .map(([url, timestamp]) => ({ url, timestamp }));
+    if (rows.length > 0) break;
+    await sleep(attempt * 8000);
+  }
+  if (rows.length === 0) return null;
 
   // 광고 주소에 딸려 온 skuId 는 그 자체로 쓸모가 있다
   const skuFromUrl = rows.map((row) => row.url.match(/skuId=(\d{6,8})/)?.[1]).find(Boolean) ?? null;
 
-  const clean = rows
+  const usable = rows
     // 시각이 온전하지 않으면 주소를 만들 수 없다. 없는 채로 만들면 아카이브
     // 오류 페이지를 받아 놓고 "내용이 없다" 고 잘못 판단하게 된다
     .filter((row) => /^\d{14}$/.test(row.timestamp ?? ''))
-    .filter((row) => !row.url.includes('?'))
     .filter((row) => !/\b(mini|trial|value-set|travel-size)\b/i.test(row.url))
     .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
 
-  if (clean.length === 0) return null;
+  /*
+   * 깔끔한 주소를 먼저 쓰되, 그것만 남은 게 없으면 쿼리스트링이 붙은 주소도 쓴다.
+   * 광고 유입 주소로만 아카이브된 상품이 있는데, 가리키는 페이지는 같다.
+   * 여기서 버리면 내용이 있는데도 빈칸으로 남는다.
+   */
+  const clean = usable.filter((row) => !row.url.includes('?'));
+  const candidates = clean.length > 0 ? clean : usable;
+
+  if (candidates.length === 0) return null;
 
   return {
     skuFromUrl,
@@ -129,7 +146,7 @@ async function findArchived(productId) {
      * 하나 실패했다고 그 상품을 포기하면 내용이 있는데도 빈칸으로 남는다.
      * id_ 는 아카이브가 덧붙이는 배너·스크립트 없이 원본 그대로를 준다.
      */
-    snapshots: pickSpread(clean, 6).map(
+    snapshots: pickSpread(candidates, 6).map(
       (row) => `https://web.archive.org/web/${row.timestamp}id_/${row.url}`,
     ),
   };
