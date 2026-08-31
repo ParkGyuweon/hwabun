@@ -115,3 +115,35 @@ python -m py_compile streaming/jobs/raw_sink_job.py
 위 테스트는 실제 Broker나 Spark executor를 띄우는 통합 테스트가 아니다. 실제
 Kafka → Parquet 연결은 Docker Kafka와 Spark-Kafka connector가 준비된 환경에서
 별도로 확인한다.
+
+## Q2 실행
+
+Q2는 Raw 전체 snapshot을 읽어 Processed 결과를 다시 만드는 배치 작업이다.
+새로운 후보가 늦게 Raw에 들어오거나 checkpoint를 잃고 Raw가 재생된 경우에도
+전체 후보를 다시 비교하므로 `event_id` 정본이 동일한 규칙으로 수렴한다.
+
+```bash
+spark-submit streaming/jobs/clean_events_job.py \
+  --input-path data/raw_events \
+  --cleaned-path data/processed/cleaned_events \
+  --bad-path data/processed/bad_events \
+  --duplicate-path data/processed/duplicate_events
+```
+
+정상적인 후보 중 정본은 다음 순서로 고른다.
+
+```text
+received_at ASC
+→ kafka_topic ASC
+→ kafka_partition ASC
+→ kafka_offset ASC
+```
+
+Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하고, 그 다음
+`event_id` 기준 정본을 고른다. 같은 `event_id`의 나머지 후보는
+`duplicate_events`에 보존한다. JSON 파싱·공통 필드·enum·sequence·synthetic
+필수 properties 검증에 실패한 row는 원문과 좌표를 `bad_events`에 남긴다.
+
+현재 Q2는 전체 snapshot을 `overwrite`하는 MVP다. 운영 환경에서 Raw가 커지면
+날짜/offset 범위 증분 처리와 transactional upsert를 도입하되, 정본 비교 규칙과
+출력 grain은 유지한다.

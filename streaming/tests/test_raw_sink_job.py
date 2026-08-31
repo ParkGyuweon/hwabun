@@ -5,6 +5,11 @@ from streaming.jobs.raw_sink_job import (
     RawSinkConfig,
     parse_args,
 )
+from streaming.jobs.clean_events_job import (
+    CANONICAL_ORDER_FIELDS,
+    CleanEventsConfig,
+    parse_args as parse_clean_args,
+)
 
 
 class RawSinkConfigTest(unittest.TestCase):
@@ -51,6 +56,31 @@ class RawSinkConfigTest(unittest.TestCase):
         self.assertEqual("activity-events-dev", config.topic)
         self.assertEqual(5000, config.max_offsets_per_trigger)
         self.assertEqual("dev-local", config.cluster_id)
+
+
+class CleanEventsConfigTest(unittest.TestCase):
+    def test_canonical_order_matches_team_contract(self):
+        self.assertEqual(
+            (
+                "received_at",
+                "kafka_topic",
+                "kafka_partition",
+                "kafka_offset",
+            ),
+            CANONICAL_ORDER_FIELDS,
+        )
+
+    def test_defaults_use_q1_raw_path_and_processed_outputs(self):
+        config = parse_clean_args([])
+
+        self.assertEqual("data/raw_events", config.input_path)
+        self.assertEqual("data/processed/cleaned_events", config.cleaned_path)
+        self.assertEqual("data/processed/bad_events", config.bad_path)
+        self.assertEqual("data/processed/duplicate_events", config.duplicate_path)
+
+    def test_empty_output_path_is_rejected(self):
+        with self.assertRaises(ValueError):
+            CleanEventsConfig(cleaned_path=" ")
 
 
 if __name__ == "__main__":
