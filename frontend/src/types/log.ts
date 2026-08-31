@@ -28,6 +28,10 @@ export type P0EventName =
 /** 우선순위 P1. 관심 강도를 보조하는 이벤트 */
 export type P1EventName =
   | 'scroll_depth'
+  /** 노출 확정 카드가 화면을 벗어날 때의 구간 유지 시간. 노출 기준 재집계용 */
+  | 'impression_dwell'
+  /** 추천 목록이 다시 그려질 때의 정렬 결과. 순위 변동 추적용 */
+  | 'recommendation_snapshot'
   | 'media_view'
   /** 목록에서 상세로 가지 않고 요약 창을 연 것. 세포라 Quicklook */
   | 'quick_look'
@@ -155,6 +159,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   product_impression: 'exposure',
   recommendation_impression: 'exposure',
   scroll_depth: 'exposure',
+  impression_dwell: 'exposure',
+  recommendation_snapshot: 'exposure',
 
   section_view: 'interest',
   section_dwell: 'interest',
@@ -245,6 +251,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
    */
   product_impression: 0,
   recommendation_impression: 0,
+  impression_dwell: 0,
+  recommendation_snapshot: 0,
   scroll_depth: 0, // 도달 깊이는 scrollDepthWeight() 로 따로 계산한다
 
   // 메타. 선호도가 아니다
@@ -266,7 +274,18 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   scroll_backtrack: -1.0,
 };
 
-/** 감점 축으로 보내는 이벤트. 긍정 벡터와 분리해서 누적한다 */
+/**
+ * 감점 축으로 보내는 이벤트. 긍정 벡터와 분리해서 누적한다.
+ *
+ * ## 집계 규칙 B — 전환 안 한 상품은 v_u⁺ 가 아니라 v_u⁻ 다
+ *
+ * - 장바구니·찜을 누른 상품          → v_u⁺
+ * - 눌러봤지만 아무것도 안 한 상품    → v_u⁻ (보고 나서 안 담았다는 뜻이다)
+ * - 목록에 뜨기만 한 상품            → 어느 쪽에도 안 넣는다 (CTR 분모로만)
+ *
+ * "보긴 봤다" 는 좋아한다는 뜻이 아니다. 규칙 A·B 를 함께 적용하면
+ * Recall@10 이 5.9% → 12.6% 로 오른다 (3,000명 부트스트랩, AI 검증).
+ */
 export const NEGATIVE_EVENTS: ReadonlySet<EventName> = new Set<EventName>([
   'remove_from_cart',
   'rage_click',
@@ -276,6 +295,17 @@ export const NEGATIVE_EVENTS: ReadonlySet<EventName> = new Set<EventName>([
 
 /**
  * 섹션별 체류 가중치.
+ *
+ * ## 집계 규칙 A — 선호도 가중에는 상품 × 섹션당 1건만 반영한다
+ *
+ * `section_dwell` 은 체크포인트·이탈 때마다 나가므로 스크롤을 오르내리면
+ * 같은 섹션 체류가 계속 쌓인다. 그대로 합산하면 오래 스크롤한 것이
+ * `add_to_cart`(4.0)보다 훨씬 강한 신호가 된다 — 실측에서 담은 상품 점수의
+ * 92% 가 체류였고 담기 자체는 8% 였다.
+ *
+ * 이벤트는 전부 전송한다 (총 체류 시간 분석에 필요하다).
+ * **1건만 세는 것은 선호도 벡터를 만들 때다.** scrollDepthWeight 의
+ * "최대 도달 1건만" 과 같은 규칙이다.
  *
  * 같은 1초도 어느 섹션인지에 따라 의미가 다르다.
  * `similar_products` 는 값이 낮다 — 유사 상품을 오래 보는 것은 이 상품에 대한
