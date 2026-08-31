@@ -59,7 +59,8 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
 
-NL = "\n"        # f-string 안에서 줄바꿈을 쓰려면 이름이 필요하다
+NL = "\n"
+PCT_RE = "([0-9]+)[ ]*%"   # "스크롤 62%" 에서 숫자만 뽑는다
 
 
 # ============================================================================
@@ -97,26 +98,34 @@ def profile_text(p):
             f"- 지금까지 산 것:\n    " + "\n    ".join(bought[-8:]))
 
 
-SYSTEM_TMPL = """당신은 화장품 쇼핑몰을 둘러보는 실제 사람입니다.
+SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민하는 사람입니다.
+
+오늘 목표는 관심 있는 스킨케어 제품을 살펴보고, 마음에 드는 제품이 있으면
+장바구니에 담는 것입니다. 반드시 사야 하는 것은 아니지만, 충분히 살펴본
+상품은 계속 미루지 말고 담거나 목록으로 돌아가야 합니다.
 
 [당신이 누구인가]
 {profile}
 
-[어떻게 행동하는가]
-- **화면에 당신 취향과 맞는 상품이 보이면 그것을 누르십시오.**
-  이미 써보고 만족한 브랜드, 비슷한 가격대면 관심이 갑니다.
+[행동 기준]
+- 목록에서는 **아직 보지 않은 상품 중** 내 피부 타입, 피부 톤, 구매 이력,
+  가격대에 가장 맞는 상품을 하나 고르십시오.
+- 이미 본 상품은 다시 누르지 말고 다른 후보를 고르십시오.
 - 불만이었던 상품과 비슷한 것은 피하십시오.
-- 상세 페이지에서는 scroll 로 아래까지 읽어본 뒤에 판단하십시오.
-- 마음에 들면 add_to_cart, 아니면 back_to_list 로 돌아가십시오.
-- 한 세션에서 장바구니에 담는 것은 보통 한두 개입니다.
-- scroll 은 더 볼 것이 있을 때만 쓰십시오.
+- 상세 페이지에서는 처음에는 필요한 정보를 더 읽어볼 수 있습니다.
+- 상세 페이지를 충분히 봤다면 계속 스크롤하지 말고 add_to_cart 또는
+  back_to_list 중 하나를 고르십시오.
+- 마음에 드는 정도가 보통 이상이면 add_to_cart 를 고르십시오.
+- 맞지 않거나 이미 충분히 봤다면 back_to_list 를 고르십시오.
+- 목록 끝에 도달했고 더 관심 가는 상품이 없으면 leave 를 고르십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
+action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에서만 고르십시오.
 
 {{"action": {actions},
  "target": "화면에 실제로 있는 상품명 (해당 없으면 null)",
- "reason": "한 문장"}}"""
+ "reason": "내 프로필과 연결된 구체적인 한 문장"}}"""
 
 
 # ============================================================================
@@ -328,7 +337,9 @@ def do_action(page, act, target):
                     return False
                 page.wait_for_timeout(1400)
                 return True
-        return False                             # 화면에 없는 상품을 지어낸 경우
+        return False                             # 화면에 없는 상품을 지어냈다.
+        # 첫 상품으로 대충 누르지 않는다 — 고른 적 없는 클릭이 로그에 남으면
+        # 수집한 행동 로그 자체를 믿을 수 없게 된다
 
     return False
 
@@ -337,6 +348,64 @@ def do_action(page, act, target):
 # 5. 한 명 돌리기
 # ============================================================================
 
+DETAIL_MAX_SCROLL = 2      # 상세에서 이만큼 내렸으면 결정해야 한다
+
+
+def first_unvisited(page, visited):
+    """목록 화면에서 아직 안 본 상품 이름을 하나 돌려준다. 없으면 None.
+
+    LLM 이 화면에 없는 상품을 지어냈을 때 쓰는 fallback 이다.
+    '목록 첫 상품'을 무조건 누르면 그 사람이 고른 적 없는 클릭이 로그에
+    남으므로, 최소한 '아직 안 본 상품'이라는 근거는 있어야 한다.
+    """
+    seen = {norm(v) for v in visited}
+    cards = page.locator(".card[data-product-id]")
+    for i in range(min(cards.count(), 40)):
+        c = cards.nth(i)
+        try:
+            if not c.is_visible():
+                continue
+            brand = c.locator(".card__brand").inner_text(timeout=800).strip()
+            name = c.locator(".card__name").inner_text(timeout=800).strip()
+        except Exception:
+            continue
+        full = f"{brand} {name}"
+        if not any(norm(full) in v or v in norm(full) for v in seen if v):
+            return full
+    return None
+
+
+def allowed_actions(kind, pct, scroll_run, carted_here):
+    """이번 턴에 실제로 의미가 있는 행동만 남긴다.
+
+    행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
+    도망친다. 실제로 75턴 동안 add_to_cart 가 0건이었다 — 전환이 0이면
+    v_u+ 가 비어서 취향 벡터를 만들 수 없다.
+    그래서 프롬프트로 부탁하지 않고 코드가 선택지를 좁힌다.
+    """
+    if kind == "detail":
+        acts = ["back_to_list"]
+        if not carted_here:
+            acts.insert(0, "add_to_cart")     # 담기를 맨 앞에 둔다
+        if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
+            acts.append("scroll")
+        return acts
+    # 목록 화면: 끝까지 내려왔으면 scroll 은 무의미하다
+    acts = ["click_product"]
+    if pct < 97:
+        acts.append("scroll")
+    acts.append("leave")
+    return acts
+
+
+def detail_title(user):
+    """상세 화면 프롬프트에서 상품명 줄만 뽑는다"""
+    parts = user.split(NL + NL)
+    if len(parts) > 1:
+        return parts[1].split(" — ")[0].strip()
+    return ""
+
+
 def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
     system = SYSTEM_TMPL.format(profile=profile_text(persona),
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
@@ -344,14 +413,34 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
+    scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
+    here = ""                # 지금 상세를 보고 있는 상품
     for turn in range(1, max_turns + 1):
         user, kind = read_screen(page)
+        m = re.search(PCT_RE, user)
+        pct = int(m.group(1)) if m else 0
+        if kind == "detail":
+            here = detail_title(user) or here
+            # 무엇을 봤는지는 LLM 이 말한 target 이 아니라 화면이 진실이다.
+            # target 을 틀리게 쓰거나 빠뜨리면 중복 방지가 통째로 무력해진다
+            if here and here not in visited:
+                visited.append(here)
+        # 이미 담은 상품을 또 담게 두면 같은 전환이 중복으로 쌓인다
+        carted_here = any(norm(c) and (norm(c) in norm(here) or norm(here) in norm(c))
+                          for c in cart)
+        acts = allowed_actions(kind, pct, scroll_run, carted_here)
+        user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
+                f"{NL}이 중에서만 고르십시오." + NL + NL + user)
+        if kind == "detail" and "scroll" not in acts:
+            user = ("[결정하십시오] 이 상품을 충분히 봤습니다."
+                    " 마음에 들면 add_to_cart, 아니면 back_to_list 입니다."
+                    + NL + NL + user)
         # 본 상품과 담은 상품을 알려주지 않으면 같은 상품만 25턴 내내 반복한다.
         # (실제로 한 페르소나가 BELIF 두 개만 왕복한 사고가 있었다)
         if visited:
             user = (f"[이미 본 상품] {', '.join(visited[-8:])}"
-                    f"{NL}같은 상품을 또 누르지 마십시오. 목록에 새 상품이 없으면"
-                    f" scroll 로 아래쪽을 확인하십시오." + NL + NL + user)
+                    f"{NL}이미 본 상품은 다시 누르지 말고 다른 상품을 고르십시오."
+                    + NL + NL + user)
         if cart:
             user = f"[장바구니] {', '.join(cart)}{NL}{NL}" + user
         if history:
@@ -370,6 +459,27 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
                 print(f"    {turn:>2}. (응답 형식 깨짐 — 건너뜀)")
             continue
         act, tgt = obj["action"], obj.get("target")
+        if act not in acts:
+            # 크레딧을 또 쓰지 않는다. 이번 턴은 허용된 첫 행동으로 대체한다.
+            # 다만 click_product 로 교정할 때 target 을 그대로 두면,
+            # LLM 이 지어낸 이름이 매칭에 실패해 엉뚱한 상품이 눌릴 수 있다.
+            # 그 사람이 고른 적 없는 클릭이 로그에 남는 것은 수집 목적에 반한다
+            new_act = acts[0]
+            if new_act == "click_product":
+                tgt = first_unvisited(page, visited)
+                if tgt is None:                  # 누를 만한 새 상품이 없다
+                    new_act = "leave" if "leave" in acts else acts[-1]
+            elif new_act == "add_to_cart":
+                tgt = here or tgt                # 화면이 진실이다
+            else:
+                tgt = None
+            if verbose:
+                print(f"       [허용 밖 {act} -> {new_act}]")
+            act = new_act
+            if act == "leave":
+                if verbose:
+                    print(f"    {turn:>2}. leave (목록에 새 상품 없음)")
+                break
 
         if act == "leave":
             if verbose:
@@ -382,15 +492,13 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             okd = False
             if verbose:
                 print(f"       [조작 실패] {type(e).__name__}: {str(e)[:70]}")
+        scroll_run = scroll_run + 1 if act == "scroll" else 0
         history.append(f"{act}" + (f" → {tgt}" if tgt else "")
                        + ("" if okd else "  (실패)"))
-        if okd and act == "click_product" and tgt:
-            short = " ".join(str(tgt).split()[:4])
-            if short not in visited:
-                visited.append(short)
         if okd and act == "add_to_cart":
-            nm = " ".join(str(tgt).split()[:4]) if tgt else (visited[-1] if visited else "?")
-            if nm not in cart:
+            # 담은 것도 화면 기준. here 는 지금 보고 있는 상세 페이지의 상품이다
+            nm = here or (" ".join(str(tgt).split()[:4]) if tgt else "")
+            if nm and nm not in cart:
                 cart.append(nm)
         done += okd
         failed += (not okd)
