@@ -3,6 +3,7 @@ package com.cosmetic.collector.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.cosmetic.collector.common.ErrorResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -39,5 +40,43 @@ class EventRequestSizeFilterTest {
         filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> proceeded.set(true));
 
         assertThat(proceeded).isTrue();
+    }
+
+    @Test
+    void rejectsAChunkedEventRequestWhoseBodyExceedsTheLimit() throws Exception {
+        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, 10);
+        MockHttpServletRequest request = chunkedEventRequest("01234567890");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean proceeded = new AtomicBoolean();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> proceeded.set(true));
+
+        assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(proceeded).isFalse();
+    }
+
+    @Test
+    void passesAndPreservesAChunkedEventRequestWithinTheLimit() throws Exception {
+        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, 10);
+        MockHttpServletRequest request = chunkedEventRequest("0123456789");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (wrappedRequest, ignoredResponse) -> {
+            assertThat(wrappedRequest.getInputStream().readAllBytes())
+                    .isEqualTo("0123456789".getBytes(StandardCharsets.UTF_8));
+        });
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    private MockHttpServletRequest chunkedEventRequest(String body) {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/events") {
+            @Override
+            public long getContentLengthLong() {
+                return -1;
+            }
+        };
+        request.setContent(body.getBytes(StandardCharsets.UTF_8));
+        return request;
     }
 }
