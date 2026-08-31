@@ -41,6 +41,13 @@ S15P21A306/
 │   └── jobs/
 │       └── product_encoder.py           상품 → 93차원 콘텐츠 벡터 인코더
 │
+├── streaming/                      ★ Spark Structured Streaming — Q1 Raw 적재 MVP
+│   ├── jobs/
+│   │   └── raw_sink_job.py              Kafka activity-events → Raw Parquet
+│   ├── tests/
+│   │   └── test_raw_sink_job.py         Spark 없이 실행하는 설정·컬럼 계약 테스트
+│   └── README.md                         실행·복구·출력 스키마
+│
 ├── simulator/                       ★ 부하 발생기 — 현재는 페르소나 데이터만 존재
 │   └── personas/data/
 │       ├── README.md                    페르소나 데이터 설명
