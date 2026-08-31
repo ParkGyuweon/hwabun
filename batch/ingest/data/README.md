@@ -3,7 +3,9 @@
 | 파일 | 내용 |
 |---|---|
 | `products_200.json` | 상위 200개 상품 (`product_info` 27개 컬럼 + 병합·리뷰 통계) |
+| `excluded_products.json` | 리뷰 수로는 200위 안이지만 제외한 상품 4개 (제외 사유 포함) |
 | `affinity_lift.csv` | Attribute Affinity 테이블 4,000행 (200상품 × 20세그먼트) |
+| `concern_from_reviews.npz` | 리뷰 54만건에서 뽑은 상품별 concern 9축 점수 |
 
 ---
 
@@ -100,8 +102,28 @@ Sephora 원본 CSV(약 520MB)는 커밋하지 않습니다. Kaggle "Sephora Prod
 
 ## 재생성
 
+원본 CSV 는 `.gitignore` 대상이라 레포에 없습니다. `SEPHORA_DATASET` 으로 위치를 넘깁니다.
+
+```bash
+export SEPHORA_DATASET=/path/to/dataset/sephora
+
+# 1) 카탈로그 200개  -> data/products_200.json, data/excluded_products.json
+python batch/ingest/build_products_json.py
+
+# 2) 어휘집 v0.4     -> contracts/product-feature-vocab.json
+python batch/ingest/build_feature_vocab.py
 ```
-cd <Research 폴더>
-python build_products_json.py    # products_200.json
-python build_affinity_lift.py    # affinity_lift.csv
-```
+
+**순서가 중요합니다.** 어휘집의 IDF 문서빈도와 brand 어휘가 카탈로그에서 나오므로,
+`products_200.json` 이 바뀌면 반드시 어휘집을 다시 만들어야 합니다.
+
+`affinity_lift.csv` 와 `concern_from_reviews.npz` 생성기는 각각
+개인 폴더의 `build_affinity_lift.py`, `batch/jobs/concern_from_reviews.py` 입니다.
+
+### 재현 검증 (2026-08-31)
+
+원본 CSV 에서 처음부터 다시 돌려 `products_200.json` · `excluded_products.json` ·
+`contracts/product-feature-vocab.json` 이 **바이트 단위로 동일**함을 확인했습니다.
+
+> 이때 어휘집 v0.4 의 `brand` 블록(55종)에 생성 코드가 없어 손으로 넣은 상태였던 것을
+> 발견해 `build_feature_vocab.py` 에 포함시켰습니다. 이제 v0.4 전체가 재현됩니다.
