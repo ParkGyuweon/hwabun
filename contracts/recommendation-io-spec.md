@@ -124,20 +124,29 @@ v_u⁺ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    전환한 상�
 v_u⁻ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    그 외 접촉 상품 + 감점 이벤트
 ```
 
-**행동 가중치**
+**행동 가중치 — 단일 출처는 `frontend/src/types/log.ts` 입니다**
 
-| `event_type` | 가중치 | 비고 |
-|---|---:|---|
-| `product.impression` | 0 | 목록 노출은 증거가 아님 |
-| `product.click` | 1.0 | 상세 진입 |
-| `scroll.depth` 25% | 0.5 | |
-| `scroll.depth` 50% | 1.5 | |
-| `scroll.depth` 75% | 2.0 | 실질 관심 신호 |
-| `scroll.depth` 100% | 2.5 | |
-| `cart.add` | 4.0 | |
-| `review.submit` | **(rating − 3) × 2** | 범위 −4 ~ +4 |
+> 이 문서에 값을 복사해 두지 않습니다. 복사본은 반드시 갈라집니다.
+> `batch/jobs/behavior_weights.py` 가 `log.ts` 를 **직접 파싱**해 `EVENT_WEIGHT` ·
+> `SECTION_DWELL_WEIGHT` · `scrollDepthWeight()` · `EVENT_INTENT` 를 읽습니다.
+> 프론트가 값을 고치면 배치·시뮬레이터가 자동으로 따라갑니다.
 
-`review.submit`의 중심 3은 **고정**입니다. `rating`을 그대로 쓰면 1점 준 상품도 취향으로 학습됩니다.
+| 원천 (`log.ts`) | 내용 |
+|---|---|
+| `EVENT_WEIGHT` | 이벤트 33종의 가중치 (`add_to_cart` 4.0 ~ `rage_click` −2.0) |
+| `SECTION_DWELL_WEIGHT` | 섹션 11종의 체류 가중치 (`ingredients`·`reviews` 1.5 ~ `list_controls` 0.3) |
+| `scrollDepthWeight()` | 도달률 → 가중치 (25% 0.2 / 50% 0.5 / 75% 1.0 / 100% 1.5) |
+| `EVENT_INTENT` | 이벤트 → intent 8종 (`session` `exposure` `interest` `comparison` `validation` `hesitation` `conversion` `friction`) |
+
+값을 확인하려면 아래를 실행합니다.
+
+```bash
+python batch/jobs/behavior_weights.py
+```
+
+`event_weight = 0` 인 이벤트(`product_impression`, `recommendation_impression`, `impression_dwell`, `recommendation_snapshot`, `scroll_depth`, `session_start`, `exit_summary`, `quick_look_close`)는 두 축 어디에도 누적되지 않습니다. `scroll_depth` 가 0인 이유는 도달률별 가중치를 `scrollDepthWeight()` 로 따로 계산하기 때문입니다(규칙 2).
+
+**리뷰 작성 이벤트는 없습니다.** 프론트에 `review_submit` 이 존재하지 않으며, 시뮬레이터도 생성하지 않습니다. 페르소나의 리뷰 이력은 이벤트가 아니라 **시드 상태**(`session_id = "seed"`)로 들어가고, 추천 단계에서는 "이미 산 상품" 으로 후보에서 제외됩니다(§5).
 
 **시간 감쇠**: `decay(t) = exp(−Δt / τ)`, τ = 30일
 
@@ -162,6 +171,9 @@ v_u⁻ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    그 외 접촉
 | `cart.add` (`add_to_cart`), `quantity_change` | `converted` 에 추가 |
 | `wishlist_toggle` (`action != "remove"`) | `converted` 에 추가 |
 | `wishlist_toggle` (`action == "remove"`), `remove_from_cart` | `converted` 에서 제거 → 해당 상품은 `v_u⁻` 로 넘어간다 |
+
+> **`intent` 와 `converted` 는 다른 축입니다.** `log.ts` 의 `EVENT_INTENT` 는 GA4 퍼널 단계 라벨이고, `converted` 는 특정 상품에 대한 선호 판정입니다.
+> `view_cart` 는 `intent = conversion` 이지만 `converted` 에 넣지 않습니다. 장바구니 **화면**을 열었다는 뜻이라 특정 상품의 증거가 아니며, 프론트도 `product_id` 없이 발행하므로 규칙 1에서 걸러집니다. 장바구니에 담긴 상품은 이미 `add_to_cart` 로 `converted` 에 들어가 있습니다.
 
 **부호와 축을 혼동하지 않도록 2단계로 나눕니다.** `final_weight` 의 부호는 1단계에서만 쓰고, 어느 축으로 갈지는 2단계에서 **상품 단위**로 정합니다.
 
@@ -206,20 +218,26 @@ FIELD positive_u_sum : float[148]  긍정 축 가중 누적합 (JSON 또는 바�
       positive_w_sum : float       긍정 축 가중치 누적합
       negative_u_sum : float[148]  부정 축 가중 누적합
       negative_w_sum : float       부정 축 가중치 누적합
-      converted      : Set         전환한 product_id  — 하드 제외 + v_u⁺ 판정
-      viewed         : Set         접촉했으나 미전환 product_id — 소프트 강등 + v_u⁻ 판정
-      n_products     : int         |converted ∪ viewed| (가중치 스케줄 판정용)
+      converted      : Set         전환한 product_id — 하드 제외 + v_u⁺ 판정
+      viewed         : Set         접촉한 모든 product_id (converted 포함)
+      n_products     : int         |viewed| (가중치 스케줄 판정용)
       updated_at     : timestamp
 TTL   없음 (시뮬레이션 종료까지 유지)
 ```
 
-**`seen` 을 두 집합으로 나눕니다.** 하드 제외와 소프트 강등은 다른 처리라 단일 집합으로 표현되지 않습니다. 기존 문서의 `seen` 은 `converted ∪ viewed` 에 해당하고, **추천 후보에서 실제로 빼는 것은 `converted` 뿐**입니다.
+**`seen` 을 두 집합으로 나눕니다.** 하드 제외와 소프트 강등은 다른 처리라 단일 집합으로 표현되지 않습니다. 기존 문서의 `seen` 은 `viewed` 에 해당하고, **추천 후보에서 실제로 빼는 것은 `converted` 뿐**입니다.
+
+`converted ⊆ viewed` 입니다. `cart.add` 는 가중치 4.0 이라 `viewed` 에도 들어갑니다. 두 집합은 배타적이지 않습니다.
 
 | 집합 | 등록 조건 | 추천에서의 처리 |
 |---|---|---|
 | `converted` | 위 "전환의 정의" 표에 해당하는 이벤트 발생 | **후보에서 완전히 제외** |
-| `viewed` | `event_weight > 0` 인 이벤트가 1건이라도 발생했고 `converted` 가 아닌 상품 | 후보에 남기되 **상한 2개** (§5) |
+| `viewed` | `event_weight != 0` 인 이벤트가 1건이라도 발생 (감점 이벤트·`scroll_depth` 포함) | 후보에 남기되 **상한 2개** (§5) |
 | (미등록) | `product.impression` 등 `event_weight = 0` 노출 | 두 집합 어디에도 넣지 않는다 |
+
+소프트 강등이 실제로 적용되는 대상은 `converted` 를 먼저 제외한 뒤 남는 **`viewed \ converted`** 입니다. 상한 계산은 이 차집합에 대해 셉니다.
+
+감점 이벤트만 발생한 상품도 `viewed` 에 들어갑니다. `rage_click` 이 찍혔다는 것은 그 상품을 봤다는 뜻이므로 노출 이력으로는 유효합니다.
 
 노출(`impression`)을 넣지 않는 이유는 사용자 의지가 아니기 때문입니다. 넣으면 스크롤 한 번에 후보가 통째로 사라집니다.
 
@@ -228,7 +246,7 @@ TTL   없음 (시뮬레이션 종료까지 유지)
 #  축 결정은 조회 시점의 상품 단위 분기를 따른다 (위 2단계 의사코드)
 u_sum += w * decay * v_item
 w_sum += w * decay
-n_products = |converted ∪ viewed|
+n_products = |viewed|                               # converted ⊆ viewed
 positive_vector = positive_u_sum / positive_w_sum   # positive_w_sum > 0
 negative_vector = negative_u_sum / negative_w_sum   # negative_w_sum > 0
 ```
