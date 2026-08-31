@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.2.0-draft",
+  "event_id": "evt-synthetic-0001",
+  "event_name": "product_view",
+  "intent": "interest",
+  "occurred_at": "2026-08-31T05:11:00.000Z",
+  "persona_id": "PC00001",
+  "session_id": "session-synthetic-0001",
+  "page_view_id": "page-view-synthetic-0001",
+  "sequence_no": 3,
+  "page_type": "product_detail",
+  "product_id": "P101",
+  "actor_type": "synthetic",
+  "environment": "simulation",
+  "received_at": "2026-08-31T05:11:00.080Z",
+  "source": "simulator",
+  "request_id": "request-synthetic-0001",
+  "event_index": 1,
+  "properties": {
+    "navigation_source": "session_start",
+    "scenario_id": "normal_day",
+    "simulation_run_id": "run-20260831-001",
+    "generator_type": "python_batch"
+  }
+}
