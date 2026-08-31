@@ -3,6 +3,7 @@ package com.cosmetic.collector.event.infrastructure;
 import com.cosmetic.collector.event.api.ActivityEvent;
 import com.cosmetic.collector.event.api.EventBatchRequest;
 import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.Test;
@@ -320,8 +321,8 @@ class KafkaEventPublisherTest {
         ));
 
         assertThatThrownBy(result::join)
-                .hasCauseInstanceOf(EventPublishException.class);
-        verify(metrics).recordPublishFailure(1);
+                .hasCauseInstanceOf(EventPublishOverloadedException.class);
+        verify(metrics, never()).recordPublishFailure(any(Integer.class));
         verify(metrics, never()).recordPublished(any(Integer.class));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
     }

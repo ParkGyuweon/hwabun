@@ -1,6 +1,7 @@
 package com.cosmetic.collector.common;
 
 import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -47,5 +48,16 @@ public class GlobalExceptionHandler {
                 "이벤트 수집 시스템을 일시적으로 사용할 수 없습니다.",
                 List.of()
         ));
+    }
+
+    @ExceptionHandler(EventPublishOverloadedException.class)
+    public ResponseEntity<ErrorResponse> handlePublishOverloaded(EventPublishOverloadedException exception) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "1")
+                .body(new ErrorResponse(
+                        "INGESTION_OVERLOADED",
+                        "이벤트 수집 요청이 많습니다. 잠시 후 재시도해 주세요.",
+                        List.of()
+                ));
     }
 }

@@ -2,6 +2,7 @@ package com.cosmetic.collector.event.api;
 
 import com.cosmetic.collector.common.GlobalExceptionHandler;
 import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
@@ -161,6 +162,24 @@ class EventControllerTest {
     }
 
     @Test
+    void returnsTooManyRequestsWhenThePublisherIsOverloaded() throws Exception {
+        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
+                new EventPublishOverloadedException("publisher overloaded", new RuntimeException("executor saturated"))
+        ));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validEventBatch()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "1"))
+                .andExpect(jsonPath("$.code").value("INGESTION_OVERLOADED"));
+    }
+
+    @Test
     void rejectsMalformedJsonBeforeCallingThePublisher() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -169,5 +188,29 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.code").value("MALFORMED_JSON"));
 
         verifyNoInteractions(publisher, metrics);
+    }
+
+    private String validEventBatch() {
+        return """
+                {
+                  "schema_version": "0.2.0-draft",
+                  "events": [{
+                    "schema_version": "0.2.0-draft",
+                    "event_id": "evt-001",
+                    "event_name": "product_click",
+                    "intent": "comparison",
+                    "occurred_at": "2026-08-27T14:30:00Z",
+                    "persona_id": null,
+                    "session_id": "session-001",
+                    "page_view_id": "page-view-001",
+                    "sequence_no": 1,
+                    "page_type": "product_list",
+                    "product_id": "product-001",
+                    "actor_type": "user",
+                    "environment": "local",
+                    "properties": {}
+                  }]
+                }
+                """;
     }
 }

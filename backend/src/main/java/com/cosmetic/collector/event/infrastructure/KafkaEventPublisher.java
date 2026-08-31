@@ -3,6 +3,7 @@ package com.cosmetic.collector.event.infrastructure;
 import com.cosmetic.collector.event.api.ActivityEvent;
 import com.cosmetic.collector.event.api.EventBatchRequest;
 import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
@@ -71,7 +72,10 @@ public class KafkaEventPublisher implements EventPublisher {
                     kafkaPublisherExecutor
             );
         } catch (RejectedExecutionException exception) {
-            dispatch = CompletableFuture.failedFuture(exception);
+            dispatch = CompletableFuture.failedFuture(new EventPublishOverloadedException(
+                    "Kafka 발행 작업 대기열이 가득 찼습니다.",
+                    exception
+            ));
         }
 
         return dispatch
@@ -82,6 +86,15 @@ public class KafkaEventPublisher implements EventPublisher {
                 })
                 .exceptionally(cause -> {
                     Throwable failure = unwrap(cause);
+                    if (failure instanceof EventPublishOverloadedException) {
+                        log.warn(
+                                "Kafka 이벤트 배치 발행 작업이 포화되었습니다. topic={}, requestId={}, batchSize={}",
+                                topic,
+                                requestId,
+                                request.events().size()
+                        );
+                        throw new CompletionException(failure);
+                    }
                     metrics.recordPublishFailure(request.events().size());
                     log.error(
                             "Kafka 이벤트 배치 발행에 실패했습니다. topic={}, requestId={}, batchSize={}",
