@@ -265,8 +265,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  /**
+   * actor_type 은 로거가 진입 주소를 보고 스스로 정한다 (syntheticContextFromUrl).
+   * 여기서 'user' 로 덮으면 부하 생성기의 방문까지 실사용자로 남는다.
+   */
   useEffect(() => {
-    setLoggerContext({ actorType: 'user', environment: 'local' });
+    setLoggerContext({ environment: 'local' });
   }, []);
 
   /**
