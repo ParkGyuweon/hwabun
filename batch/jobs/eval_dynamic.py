@@ -38,7 +38,8 @@ BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from eval_metadata import load as load_metadata              # noqa: E402
-from hidden_preference import PROFILES, HiddenPreference     # noqa: E402
+from hidden_preference import (PROFILES, TEXT_EMBEDDING,      # noqa: E402
+                               TEXT_LEXICAL, HiddenPreference)
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
@@ -253,6 +254,9 @@ def main():
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
     ap.add_argument("--rng-seed", type=int, default=42, help="탐색 난수 seed")
+    ap.add_argument("--text-backend", choices=(TEXT_LEXICAL, TEXT_EMBEDDING),
+                    default=None,
+                    help="텍스트 매칭 방식. 기본은 임베딩 산출물이 있으면 embedding")
     ap.add_argument("--pref-profile", choices=tuple(PROFILES), default="default",
                     help="hidden preference 가중치 조합. 강건성 평가에서 바꿔 가며 돈다")
     a = ap.parse_args()
@@ -264,7 +268,8 @@ def main():
     affinity = load_affinity(index)
     recommender = Recommender(M, index, prior, affinity=affinity)
     hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed,
-                          weights=PROFILES[a.pref_profile])
+                          weights=PROFILES[a.pref_profile],
+                          text_backend=a.text_backend)
     meta = [{"product_id": p["product_id"],
              "tertiary_category": p.get("tertiary_category")}
             for p in encoder.products]
@@ -280,7 +285,8 @@ def main():
     print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
           f" 상품 {len(M)}개")
     print(f"노출: 추천 점수 · 행동: hidden preference"
-          f"({a.pref_profile}, seed {a.noise_seed}) · 탐색 seed {a.rng_seed}")
+          f"({a.pref_profile}, {hp.text_backend}, seed {a.noise_seed})"
+          f" · 탐색 seed {a.rng_seed}")
     if a.split == "test":
         print("  ⚠ test 는 최종 보고용이다")
 
