@@ -36,6 +36,7 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | --- | --- | --- |
 | `session_start` | 쇼핑 세션 시작 | 전체 방문 수, 세션당 행동 수 |
 | `page_view` | 페이지 진입 | 페이지별 방문, 이탈 분석 |
+| `navigation_click` | 상품과 무관한 화면 이동 클릭 | 이동·이탈 경로 분석 |
 | `product_view` | 상품 상세 조회 | 상세 조회 수, Funnel 시작점 |
 | `product_impression` | 상품 카드 유효 노출 | 노출 수, CTR 분모 |
 | `product_click` | 상품 카드 클릭 | 클릭 수, CTR 분자 |
@@ -44,8 +45,6 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | `accordion_toggle` | 접힌 상세 정보 펼침/닫힘 | 성분/사용법 검증 행동 |
 | `add_to_cart` | 장바구니 담기 | 장바구니 전환율 |
 | `view_cart` | 장바구니 화면 진입 | Cart 확인율 |
-| `begin_checkout` | 구매 진행 시작 | Checkout 전환율 |
-| `purchase` | 테스트 구매 완료 | 구매 전환율 |
 | `exit_summary` | 페이지 이탈 요약 | 상세페이지 이탈률 |
 
 ### 3.2 P1 - 차별화/해석 강화
@@ -55,7 +54,9 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | event_name | 의미 | 주요 활용 |
 | --- | --- | --- |
 | `recommendation_impression` | 추천/유사 상품 노출 | 추천 CTR |
+| `recommendation_snapshot` | 추천 목록 순위 스냅샷 | 노출 시점 순위 분석 |
 | `recommendation_click` | 추천/유사 상품 클릭 | 추천 반응 |
+| `impression_dwell` | 유효 노출 카드의 실제 체류시간 | 노출 품질 및 위치 편향 보정 |
 | `scroll_depth` | 스크롤 깊이 도달 | 탐색 깊이 |
 | `scroll_pause` | 스크롤 후 멈춤 | 관심 지점 |
 | `scroll_backtrack` | 다시 위로 되돌아봄 | 비교/재확인 |
@@ -76,15 +77,24 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 
 | event_name | 의미 | 비고 |
 | --- | --- | --- |
-| `search` | 검색 실행 | 상품 목록 구현 후 Trigger 확정 |
 | `filter_change` | 상품 필터 적용/해제 | 상품 목록 구현 후 Trigger 확정 |
 | `sort_change` | 정렬 변경 | 확장 |
-| `compare_products` | 상품 비교 | 확장 |
 | `hover_dwell` | CTA 위 망설임 | 보조 신호 |
 | `rage_click` | 반복 클릭 | UX 마찰 |
 | `dead_click` | 클릭 불가 영역 클릭 | UX 마찰 |
 
 `wishlist_toggle`은 `action=add/remove`로 찜 추가와 해제를 함께 표현한다. 별도 `remove_from_wishlist` Event는 두지 않는다.
+
+### 3.4 구현 예정 Event
+
+아래 Event는 분석 설계만 확정됐으며 현재 `event_name` enum에는 없다. 관련 화면과 Trigger 구현 후 계약에 등록한다.
+
+| event_name | 예정 intent | 도입 조건 |
+| --- | --- | --- |
+| `search` | `comparison` | 검색 화면과 결과 확정 Trigger 구현 |
+| `compare_products` | `comparison` | 상품 비교 기능 구현 |
+| `begin_checkout` | `conversion` | Checkout 화면 구현 |
+| `purchase` | `conversion` | 테스트 주문 완료 흐름 구현 |
 
 ## 4. Trigger 요약
 
@@ -92,10 +102,13 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | --- | --- |
 | `session_start` | Persona/User가 새 쇼핑 세션을 시작하거나 Persona가 변경될 때 |
 | `page_view` | 라우트 진입 또는 상품 변경 완료 시 |
+| `navigation_click` | breadcrumb 등 상품을 대상으로 하지 않는 화면 이동 UI 클릭 시 |
 | `product_view` | 상품 상세 데이터 렌더링 완료 및 `product_id` 확정 시 |
 | `product_impression` | 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 |
+| `impression_dwell` | 유효 노출 카드가 viewport를 벗어나거나 목록·페이지 컴포넌트가 해제될 때 |
 | `product_click` | 상품 카드 클릭 후 상세 이동이 시작될 때 |
 | `recommendation_impression` | 추천/유사 상품 카드가 viewport 50% 이상에서 1초 이상 노출될 때 |
+| `recommendation_snapshot` | 추천 목록 렌더링 또는 순서 변경으로 노출 순위가 확정될 때 |
 | `recommendation_click` | 추천/유사 상품 카드 클릭 시 |
 | `section_view` | 섹션/콘텐츠가 유효 노출 기준을 만족하고 400ms 이상 유지될 때 |
 | `section_dwell` | 섹션/콘텐츠가 화면을 벗어나거나 페이지 이탈/15초 checkpoint 도달 시 |
@@ -104,6 +117,7 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | `scroll_pause` | 스크롤 이동 후 320ms 이상 멈추고 이동거리 24px 이상일 때 |
 | `scroll_backtrack` | 아래로 탐색하다가 240px 이상 위로 되돌아볼 때 |
 | `media_view` | 이미지 썸네일 또는 미디어 항목 선택 시 |
+| `variant_select` | 색상·향·용량 등 상품 옵션 선택이 확정될 때 |
 | `quick_look` | 목록/기획전 상품 요약 창이 열릴 때 |
 | `quick_look_close` | 요약 창이 닫힐 때 |
 | `review_filter_apply` | 리뷰 필터 또는 정렬 조건 변경 완료 시 |
@@ -112,8 +126,6 @@ Dashboard 핵심 KPI와 Funnel 계산에 반드시 필요한 Event다.
 | `wishlist_toggle` | 찜 추가/해제 성공 시 |
 | `add_to_cart` | 장바구니 추가 성공 시 |
 | `view_cart` | 장바구니 페이지 진입 시 |
-| `begin_checkout` | 구매 진행 시작 성공 시 |
-| `purchase` | 테스트 주문 완료 확정 시 |
 | `exit_summary` | 탭 숨김, pagehide, 페이지/상품 이동 시 |
 
 ## 5. Event Schema
@@ -216,6 +228,7 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 | --- | --- |
 | `session_start` | `entry_page`, `referrer`, `utm_source`, `utm_medium`, `utm_campaign` |
 | `page_view` | `navigation_source`, `referrer`, `route` |
+| `navigation_click` | `target`, `entry_source` |
 | `product_view` | `navigation_source`, `list_id`, `position`, `recommendation_id`, `context_product_id` |
 | `product_impression` | `list_id`, `position`, `visible_ratio` |
 | `product_click` | `list_id`, `position`, `entry_source`, `impression_event_id`, `context_product_id` |
@@ -252,7 +265,7 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 `recommendation_impression` 중복 판단은 `page_view_id + list_id + recommendation_id + product_id + position` 기준으로 본다.
 
-`begin_checkout`, `purchase`의 `items[]`는 Processed 단계에서 상품별 row로 펼쳐서 집계한다.
+`search`, `compare_products`, `begin_checkout`, `purchase`의 properties는 구현 전 설계안이다. 네 Event는 enum에 등록되기 전까지 전송하지 않는다. 이후 `begin_checkout`, `purchase`가 활성화되면 `items[]`는 Processed 단계에서 상품별 row로 펼쳐서 집계한다.
 
 ## 6. 주요 Enum
 
@@ -260,8 +273,8 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 | intent | 의미 | 예시 |
 | --- | --- | --- |
-| `session` | 세션/페이지 경계 | `session_start`, `page_view` |
-| `exposure` | 화면에 노출됨 | `product_impression`, `scroll_depth` |
+| `session` | 세션/페이지 경계 | `session_start`, `page_view`, `navigation_click` |
+| `exposure` | 화면에 노출됨 | `product_impression`, `impression_dwell`, `recommendation_snapshot`, `scroll_depth` |
 | `interest` | 관심 있게 봄 | `product_view`, `section_view`, `section_dwell`, `media_view`, `quick_look` |
 | `comparison` | 비교/탐색 | `product_click`, `variant_select`, `scroll_backtrack` |
 | `validation` | 구매 판단 근거 확인 | `accordion_toggle`, `review_filter_apply`, `text_selection` |
@@ -349,11 +362,11 @@ product_impression
 
 | 상태 | Event |
 | --- | --- |
-| `dev` 구현 완료(MR !24 포함, 35종) | `session_start`, `page_view`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `exit_summary`, `scroll_depth`, `impression_dwell`, `recommendation_snapshot`, `media_view`, `quick_look`, `quick_look_close`, `remove_from_cart`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `sort_change`, `filter_change`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
+| `dev` 구현 완료(MR !24 포함, 36종) | `session_start`, `page_view`, `navigation_click`, `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `accordion_toggle`, `recommendation_impression`, `recommendation_click`, `wishlist_toggle`, `add_to_cart`, `view_cart`, `exit_summary`, `scroll_depth`, `impression_dwell`, `recommendation_snapshot`, `media_view`, `quick_look`, `quick_look_close`, `remove_from_cart`, `variant_select`, `quantity_change`, `review_filter_apply`, `review_expand`, `ingredient_view_mode_change`, `sort_change`, `filter_change`, `scroll_pause`, `scroll_backtrack`, `text_selection`, `text_copy`, `hover_dwell`, `rage_click`, `dead_click` |
 | 시뮬레이터 정책상 제외(1종) | `dead_click` |
 | 후속 화면 구현 후 확정 | `search`, `compare_products`, `begin_checkout`, `purchase` |
 
-최신 `dev` 생성기는 FE 35종 중 34종을 만든다. `ingredient_view_mode_change`, `text_copy`, `hover_dwell`, `impression_dwell`, `recommendation_snapshot`은 `bcc9c51`에서 반영됐다. 남은 `dead_click`은 실제 UI 오작동에서만 나오는 신호라 의도적으로 생성하지 않는다.
+최신 `dev` 생성기는 FE 36종 중 34종을 만든다. `ingredient_view_mode_change`, `text_copy`, `hover_dwell`, `impression_dwell`, `recommendation_snapshot`은 `bcc9c51`에서 반영됐다. `navigation_click`은 실제 UI 이동에서 발생하고, `dead_click`은 실제 UI 오작동에서만 나오는 신호라 생성기가 의도적으로 만들지 않는다.
 
 ## 10. 팀 합의 현황
 
@@ -379,11 +392,11 @@ product_impression
 | 합의 | `quick_look` 가중치 | 현재 1.5를 유지한다. `added_to_cart`는 별도 Event로 이미 가산되므로 상향 조건으로 쓰지 않고, `variants_viewed`/짧은 체류 기반 조건부 가중치는 실측 후 별도 합의한다 |
 | 분석 초안 | Quick Look 존치 판단 | 같은 목록에 노출된 `(session_id, product_id)`를 Quick Look 사용/비사용+클릭으로 나눠 장바구니 전환율, 상세 이동률, 짧은 무상호작용 종료율, 창 안 완결률을 비교한다. 실제 사용자 로그의 기술 통계로 판단한다 |
 | 합의 | `product_view` 집계 분모 | 전환율 분모는 `product_view_sessions`(distinct `session_id`+`product_id`). `product_view_count`는 장바구니 왕복 시 재발화한다 |
-| 현행 구현 | 시뮬레이터 최신 Event | FE 35종 중 34종 생성. 남은 `dead_click`은 실제 UI 오작동 신호라 정책상 생성하지 않음 |
+| 현행 구현 | 시뮬레이터 최신 Event | FE 36종 중 34종 생성. `navigation_click`은 실제 UI 이동에서 발생하며 `dead_click`은 실제 UI 오작동 신호라 생성기가 만들지 않음 |
 | 보강 필요 | 시뮬레이터 properties/enum | 10개 Event가 필수 property 또는 enum 계약과 다르다. BE는 synthetic runtime metadata 3종을 Collector에서 검증하고, Event별 세부 properties는 Spark semantic validation에서 방어적으로 확인한다 |
-| 확인 요청 | `view_cart` 뒤로가기 경로 | popstate 경로에도 `item_count`, `distinct_products`, `cart_value`를 동일하게 실어 달라고 FE에 요청 |
-| 확인 요청 | breadcrumb 홈 이동 | `product_click(product_id=null)`은 상품 대상 Event 계약에 어긋난다. 상품 클릭 로그에서 제거하거나 navigation Event로 분리 요청 |
-| 확인 요청 | `text_snippet` 전송 | 선택 원문이 Raw Kafka payload에 남으므로 FE에서 제거 요청. Raw 저장이 꼭 필요하면 별도 합의 후 계약을 변경한다 |
+| 반영 완료 | `view_cart` 뒤로가기 경로 | popstate 경로에도 `item_count`, `distinct_products`, `cart_value`를 동일하게 전송 |
+| 반영 완료 | breadcrumb 홈 이동 | 상품 대상이 아닌 이동을 `navigation_click(intent=session, weight=0)`으로 분리 |
+| 반영 완료 | `text_snippet` 전송 | 선택 원문 전송을 제거하고 `text_length`와 구역 정보만 유지 |
 | 합의 | `section_dwell` 합산 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 합의 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. Web Event에는 미적용 |
