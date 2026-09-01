@@ -7,6 +7,20 @@ PA(LLM 에이전트) 100명은 기본으로 **생성하지 않는다** (`--inclu
 PA 는 대표 정량 지표에 합치지 않는 **별도의 정성 검증 축**이다
 (docs/ai/evaluation-framework.md 5절). 두 집단을 합쳐 하나의 성능처럼 보고하지 않는다.
 
+## 행동을 무엇이 정하는가 — 평가용이면 모드를 바꿀 것
+
+기본(`--behavior rule`)은 **평가 정답(target)을 알고 그 상품에 전환을 강제한다.**
+트래픽·파이프라인·부하 검증에는 문제없지만, 그 로그로 추천을 평가하면 정답이 로그에
+심겨 있어 자기실현 평가가 된다 (실측: target 을 담은 사람 30/30명).
+
+```bash
+python simulator/generator/gen_behavior_logs.py --behavior hidden_preference
+```
+
+이 모드는 추천·정답과 분리된 hidden preference 가 행동 강도를 정하고 target 에
+전환을 강제하지 않는다 (실측: 30명 중 1명, 우연히 담긴 것). **평가에 쓸 로그는
+반드시 이 모드로 만든다.** 계약: `docs/ai/evaluation-framework.md` 2절 · 부록 F
+
 이벤트 형식은 프론트 `LogEnvelope` 와 같고, 백엔드 `ActivityEvent` 검증 규칙
 (`event_name` 패턴 · `intent` 8종 · `page_type` 3종 · `sequence_no` 양수 등)을
 전부 통과하는 것을 확인했다. `actor_type` 은 항상 `synthetic` 이라
