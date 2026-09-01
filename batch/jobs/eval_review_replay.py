@@ -34,6 +34,7 @@ import numpy as np
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
+from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
@@ -55,18 +56,19 @@ def ordered_reviews(persona, index):
 
 
 def split_history(persona, index):
-    """(재생할 리뷰, target). 마지막 **긍정** 리뷰가 target 이다"""
-    rows = ordered_reviews(persona, index)
-    target = None
-    for r in reversed(rows):
-        if (r.get("rating") or 0) >= POSITIVE:
-            target = r
-            break
-    if target is None:
+    """(재생할 리뷰, target). **정의는 eval_metadata.py 한 곳에만 둔다.**
+
+    metadata 가 정한 seed 상품에 해당하는 리뷰만 시간순으로 재생한다. 예전에는
+    이 파일이 자체 기준으로 target 을 골랐고, 다른 축과 8.0% 가 어긋났다.
+    """
+    row = persona.get("_meta") or {}
+    seeds = set(row.get("seed_product_ids", []))
+    target = row.get("target_product_id")
+    if not seeds or target not in index:
         return None, None
-    cut = rows.index(target)
-    history = [r for r in rows[:cut] if r["group_id"] != target["group_id"]]
-    return history, target["group_id"]
+    history = [r for r in ordered_reviews(persona, index)
+               if r["group_id"] in seeds]
+    return history, target
 
 
 def events_for(review):
@@ -150,7 +152,10 @@ def main():
     recommender = Recommender(M, index, prior, affinity=affinity)
     ctx = (M, index, prior, affinity, recommender)
 
-    personas = select_split(json.load(open(PERSONAS, encoding="utf-8")), a.split)
+    profiles = {p["persona_id"]: p
+                for p in json.load(open(PERSONAS, encoding="utf-8"))}
+    personas = [dict(profiles[r["persona_id"]], _meta=r)
+                for r in load_metadata(split=a.split) if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
     print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
