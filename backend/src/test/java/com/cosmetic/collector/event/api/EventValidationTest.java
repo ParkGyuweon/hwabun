@@ -137,24 +137,33 @@ class EventValidationTest {
     }
 
     @Test
-    void rejectsDifferentSchemaVersionsAndDuplicateEventIdsInOneBatch() {
+    void rejectsAnEventWithADifferentSchemaVersion() {
         ActivityEvent mismatchedVersion = new ActivityEvent(
                 "0.1.0-draft", "evt-001", "product_click", "comparison",
                 Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
                 "product_list", "product-001", "user", "local", objectMapper.createObjectNode()
         );
-        ActivityEvent duplicateId = new ActivityEvent(
-                "0.2.0-draft", "evt-001", "product_click", "comparison",
-                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
-                "product_list", "product-001", "user", "local", objectMapper.createObjectNode()
-        );
-        EventBatchRequest request = new EventBatchRequest("0.2.0-draft", List.of(mismatchedVersion, duplicateId));
+        EventBatchRequest request = new EventBatchRequest("0.2.0-draft", List.of(mismatchedVersion));
 
         Set<ConstraintViolation<EventBatchRequest>> violations = validator.validate(request);
 
         assertThat(violations)
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("events.schemaVersion", "events.eventId");
+                .contains("events.schemaVersion");
+    }
+
+    @Test
+    void allowsDuplicateEventIdsWithinABatch() {
+        ActivityEvent duplicateId = new ActivityEvent(
+                "0.2.0-draft", "evt-001", "product_click", "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
+                "product_list", "product-001", "user", "local", objectMapper.createObjectNode()
+        );
+        EventBatchRequest request = new EventBatchRequest("0.2.0-draft", List.of(validEvent(), duplicateId));
+
+        Set<ConstraintViolation<EventBatchRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
     }
 
     @Test
