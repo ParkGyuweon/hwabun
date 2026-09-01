@@ -307,10 +307,12 @@ function buildFlow() {
       'raw_sink · clean_events · derive_facts · build_marts', 'partial', 'Job 작성 · 연결 검증 중'],
     ['5', 'Mart',
       '집계 결과를 Dashboard 가 바로 질의할 수 있는 형태로 적재한다.',
-      'DW 스키마 정의 완료', 'partial', '스키마 확정 · 적재 전'],
+      'DW 스키마 정의 완료 · 집계 API 미연결', 'partial', '스키마 확정 · 적재 전'],
     ['6', 'B2B Dashboard (FE)',
-      '기업 사용자가 보는 화면. 고객군별 관심 상품, 상품별 성과, Funnel 전환·이탈을 제공한다.',
-      '설계안만 존재 · 화면 미구현', 'todo', '미착수'],
+      '기업 사용자가 보는 화면. Overview · 고객군 · 상품 · 행동 · 리뷰 · 성분 · 콘텐츠 7개 화면이 있다. '
+      + '다만 파이프라인이 아직 데이터를 흘리기 전이라, 리뷰·성분은 실측값이고 행동 지표는 '
+      + '시드 고정 모의값이다. 화면이 배지로 둘을 구분해 보여준다.',
+      'dashboard.html · 화면 7개 · 집계 API 붙으면 metrics.ts 만 교체', 'partial', '화면 구현 · 데이터 대기'],
   ];
 
   h += `<div class="flow">`;
