@@ -101,6 +101,10 @@ MIN_DETAILS_BEFORE_LEAVE = 3   # 이만큼은 상세를 보고 나서야 나갈 
 # 매 턴 화면 판정을 찍는다. 왜 그 행동이 열렸는지 못 밝힐 때만 켠다 (--debug-screen)
 DEBUG_SCREEN = False
 
+# 목록 화면 주소. 딥링크로 상세에 바로 들어온 사람은 **히스토리에 앞 페이지가 없어**
+# go_back() 이 about:blank 로 간다. 그때 돌아갈 곳을 알고 있어야 복구가 된다
+LIST_URL = None
+
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
 # 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다.
@@ -313,6 +317,30 @@ action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에
 # ============================================================================
 # 2. 화면 -> 텍스트
 # ============================================================================
+
+def screen_is_broken(page):
+    """화면이 죽었는가 — 카드도 없고 담기 버튼도 없다.
+
+    프론트 AboutProduct.tsx 가 `highlighted_ingredients` 없는 상품에서 던져
+    React 가 트리를 통째로 버린다 (202개 중 78개 · 목록 첫 화면 25개 중 10개).
+    빈 화면에서는 어떤 조작도 성공하지 못하므로 에이전트가 남은 턴을 전부 버린다.
+    """
+    try:
+        return (not page.locator(".card[data-product-id]").count()
+                and not page.locator('[data-log-action="add_to_cart"]').count())
+    except Exception:
+        return False
+
+
+def recover_screen(page):
+    """목록으로 되돌려 세션을 살린다. 돌아갈 곳을 모르면 아무것도 하지 않는다"""
+    if not LIST_URL:
+        return False
+    page.goto(LIST_URL, wait_until="networkidle")
+    page.evaluate("() => window.scrollTo(0, 0)")
+    page.wait_for_timeout(900)
+    return True
+
 
 def read_screen(page):
     """지금 브라우저에 보이는 것을 LLM 이 읽을 수 있는 텍스트로 만든다.
@@ -577,17 +605,15 @@ def do_action(page, act, target):
     if a == "back_to_list":
         page.go_back()
         page.wait_for_timeout(1200)
-        # 딥링크로 상세에 바로 들어온 사람은 **돌아갈 목록이 없다.** 그대로 두면
-        # 빈 화면을 "목록을 다 봤다" 로 읽고 곧장 나간다 (실측: 5명 중 3명).
-        # 목록 주소로 직접 이동해 복구한다
-        if not page.locator(".card[data-product-id]").count():
-            parts = urlsplit(page.url)
-            query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-                     if k != "product"]
-            page.goto(urlunsplit(parts._replace(query=urlencode(query))),
-                      wait_until="networkidle")
+        # 딥링크로 상세에 바로 들어온 사람은 **돌아갈 목록이 없다.** go_back() 이
+        # about:blank 로 가고, 그 빈 화면을 "다 봤다" 로 읽어 곧장 나간다
+        # (실측: 5명 중 3명이 상세를 한 개도 못 열고 종료).
+        # 그래서 목록 주소를 미리 기억해 두고 그리로 이동해 복구한다
+        if (page.url.startswith("about:")
+                or not page.locator(".card[data-product-id]").count()):
+            page.goto(LIST_URL or page.url, wait_until="networkidle")
             page.evaluate("() => window.scrollTo(0, 0)")   # 복구는 목록 맨 위에서
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(900)
         return True
 
     if a == "add_to_cart":
@@ -787,7 +813,16 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
+    broken = 0
     for turn in range(1, max_turns + 1):
+        if screen_is_broken(page):
+            # 화면이 죽었다. 목록으로 되돌리고 이 턴은 LLM 을 부르지 않는다
+            broken += 1
+            if verbose:
+                print(f"    {turn:>2}. (화면이 비어 목록으로 복구)")
+            if not recover_screen(page) or broken > 3:
+                break
+            continue
         user, kind = read_screen(page)
         m = re.search(PCT_RE, user)
         pct = int(m.group(1)) if m else 0
@@ -917,7 +952,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {obj.get('reason','')[:40]}")
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
-    return dict(calls=calls, done=done, failed=failed, carted=carted)
+    return dict(calls=calls, done=done, failed=failed, carted=carted, broken=broken)
 
 
 # ============================================================================
@@ -1030,6 +1065,8 @@ def main():
 
     simulation_run_id = a.simulation_run_id or default_simulation_run_id()
     start_url = entry_url(a.url, a.scenario_id, simulation_run_id)
+    # 상세로 딥링크한 사람이 목록으로 돌아갈 때 쓸 주소 (product 파라미터 없음)
+    globals()["LIST_URL"] = start_url
 
     if a.model:
         MODEL = a.model
@@ -1076,7 +1113,7 @@ def main():
     print(f"수집 API {a.post}" if a.post else "수집 API 전송 없음 (파일로만 남김)")
 
     from playwright.sync_api import sync_playwright
-    tot = dict(calls=0, done=0, failed=0, carted=0)
+    tot = dict(calls=0, done=0, failed=0, carted=0, broken=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -1101,6 +1138,15 @@ def main():
                               product_id=rng.choice(catalog) if deep else None)
             page.goto(entry, wait_until="networkidle")
 
+            # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
+            # 프론트 AboutProduct.tsx 가 highlighted_ingredients 없는 상품에서
+            # 던져 화면이 통째로 빈다 (202개 중 78개, Research/handoff 참고).
+            # 그쪽이 고쳐지면 이 방어는 저절로 놀게 된다
+            if deep and not page.locator('[data-log-action="add_to_cart"]').count():
+                print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
+                page.goto(LIST_URL, wait_until="networkidle")
+                page.wait_for_timeout(800)
+
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
@@ -1124,6 +1170,9 @@ def main():
     print()
     print("=" * 60)
     print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건")
+    if tot.get("broken"):
+        print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회 —"
+              f" 프론트 AboutProduct.tsx 크래시 (Research/handoff/frontend_detail_crash.md)")
     print(f"  LLM 호출 {tot['calls']}회 · {dt:.0f}초")
     if tot["calls"]:
         print(f"  예상 크레딧 약 {tot['calls'] * 0.6:.0f}"
