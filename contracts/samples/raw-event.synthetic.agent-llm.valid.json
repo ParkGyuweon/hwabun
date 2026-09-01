@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.2.0-draft",
+  "event_id": "evt-synthetic-agent-0001",
+  "event_name": "product_view",
+  "intent": "interest",
+  "occurred_at": "2026-09-01T01:15:00.000Z",
+  "persona_id": "PA00001",
+  "session_id": "session-synthetic-agent-0001",
+  "page_view_id": "page-view-synthetic-agent-0001",
+  "sequence_no": 1,
+  "page_type": "product_detail",
+  "product_id": "P101",
+  "actor_type": "synthetic",
+  "environment": "simulation",
+  "received_at": "2026-09-01T01:15:00.080Z",
+  "source": "simulator",
+  "request_id": "request-synthetic-agent-0001",
+  "event_index": 0,
+  "properties": {
+    "navigation_source": "session_start",
+    "scenario_id": "normal_day",
+    "simulation_run_id": "run_20260901T011500Z",
+    "generator_type": "agent_llm"
+  }
+}

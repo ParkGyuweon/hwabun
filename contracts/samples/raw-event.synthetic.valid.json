@@ -19,7 +19,7 @@
   "properties": {
     "navigation_source": "session_start",
     "scenario_id": "normal_day",
-    "simulation_run_id": "run-20260831-001",
+    "simulation_run_id": "run_20260831T051100Z",
     "generator_type": "python_batch"
   }
 }
