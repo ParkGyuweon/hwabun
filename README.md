@@ -63,6 +63,7 @@ S15P21A306/
 │       ├── recommender.py               점수 계산·노출 정책·순위
 │       ├── export_features.py           서빙용 산출물 + 순위 대조 기준 생성
 │       ├── eval_persona_feature.py      9,900명 leave-last-out 검증
+│       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 (피처·산출물·사용자 벡터)
 │

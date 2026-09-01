@@ -25,6 +25,22 @@ sys.path.insert(0, BD)
 
 LAMBDA = 0.15
 VIEW_CAP = 2
+# MMR 다양성 계수. 1.0 이면 끈 것과 같다 (점수 그대로)
+#
+# **다양성과 정확도가 같이 오른다.** 상위 10개를 한 브랜드가 5~6칸 먹고 있어서
+# 정답이 들어올 자리가 없었기 때문이다. 중복을 걷어내면 그 자리가 생긴다.
+# 강하게 걸면(0.5) 그때부터는 손해다.
+#
+# 9,900명 leave-last-out (부트스트랩 300회, 짝비교):
+#   λ    전체      새 브랜드   고유 브랜드   한 브랜드 최대 점유
+#   1.0  23.70%      1.37%       3.7개        61.4%   (끔)
+#   0.9  23.97%      1.43%       3.9개        60.3%   +0.27%p [+0.10, +0.47]
+#   0.8  23.96%      1.50%       4.1개        58.9%   +0.26%p [+0.03, +0.53]  <- 채택
+#   0.7  23.66%      1.63%       4.4개        56.8%   -0.04%p (구분 안 됨)
+#   0.5  22.36%      2.75%       5.9개        45.5%   -1.33%p [-1.81, -0.83]
+# 0.9 와 정확도 이득이 같으면서(CI 겹침) 다양성이 더 커서 0.8 을 쓴다.
+# 측정: docs/ai/recommendation-design.md 8절
+LAMBDA_MMR = 0.8
 
 # 시드(리뷰) 상품 개수 -> (w1 콘텐츠, w2 속성, w3 인기)
 #
@@ -82,8 +98,37 @@ class Recommender:
         s += w3 * self.prior
         return s
 
+    def mmr(self, scores, order, k, lam):
+        """다양성 보정 — 점수 1등만 줄세우지 않고 서로 덜 닮은 것을 섞는다.
+
+            선택 = argmax [ lam x score(i) - (1-lam) x max cos(v_i, 이미 고른 것) ]
+
+        점수 축과 유사도 축의 크기가 다르면 lam 의 의미가 흔들리므로,
+        후보 점수를 0~1 로 편 뒤 섞는다. lam=1.0 이면 원래 순서 그대로다.
+
+        **정확도를 깎는 장치다.** 점수 1등을 밀어내기 때문이다. 켤지 말지는
+        docs/ai/recommendation-design.md 8절의 측정으로 판단한다.
+        """
+        if lam >= 1.0 or len(order) <= 1:
+            return order[:k]
+        cand = list(order)
+        s = scores[cand]
+        lo, hi = float(s.min()), float(s.max())
+        norm = (s - lo) / (hi - lo) if hi > lo else np.zeros_like(s)
+        rel = dict(zip(cand, norm))
+
+        picked = [cand[0]]
+        rest = cand[1:]
+        while rest and len(picked) < k:
+            sim = self.M[rest] @ self.M[picked].T      # (남은 후보, 고른 것)
+            penalty = sim.max(axis=1)
+            gain = lam * np.array([rel[i] for i in rest]) - (1 - lam) * penalty
+            best = int(np.argmax(gain))
+            picked.append(rest.pop(best))
+        return picked
+
     def rank(self, state, persona=None, k=10, evaluation=False,
-             review_products=(), view_cap=VIEW_CAP):
+             review_products=(), view_cap=VIEW_CAP, lam_mmr=LAMBDA_MMR):
         """추천 목록 상위 k개. evaluation=True 면 본 상품을 전부 뺀다(leakage 차단)"""
         s = self.score(state, persona).copy()
         blocked = set(review_products) | set(state.converted)
@@ -103,9 +148,10 @@ class Recommender:
                         continue
                     used += 1
                 out.append(i)
-                if len(out) >= k:
+                if len(out) >= k * 3:      # MMR 이 고를 여지를 남긴다
                     break
             order = out
+        order = self.mmr(s, order, k, lam_mmr)
         return [(self.ids[i], float(s[i])) for i in order[:k]]
 
     def rank_of(self, state, product_id, persona=None, **kw):
