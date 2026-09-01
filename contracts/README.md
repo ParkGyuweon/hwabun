@@ -25,6 +25,7 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | Event별 intent 의미·properties·property enum | `event-properties-schema.md` |
 | Processed Dataset grain·key·컬럼·타입·nullable·partition | `processed-schema.md` |
 | Persona·리뷰·평가 split·segment·Simulation Run | `persona-schema.md` |
+| DW Dimension·Mart grain·key·컬럼·타입·nullable | `dw-schema.md` |
 | Product Feature | `product-feature-spec.md`, `product-feature-vocab.json` |
 | Recommendation 입출력과 행동 집계 | `recommendation-io-spec.md` |
 

@@ -446,7 +446,7 @@ Spark Lag은 마지막 성공 Batch가 사용한 끝 Offset을 기준으로 계�
 | Synthetic 요청 크기 | 500~2,000건 배치 제안 | Collector 요청당 최대 100건 | 부하 생성기가 100건 이하로 분할하거나 별도 계약 |
 | 정본 선택 | 최초 수신, Partition/Offset 보조 | Spark 미구현 | 전역 순서와 결정적 정렬의 차이, Streaming 갱신 방식 합의 |
 
-대조 문서: [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md), [Event Logging 설계](../docs/analytics/event-logging-design.md), [Processed Schema](../contracts/processed-schema.md), [Spark 처리 설계](../docs/analytics/spark-processing-design.md), [DW Schema](../docs/analytics/dw-schema.md), [로그 전송 계약](../docs/analytics/log-transport-contract.md).
+대조 문서: [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md), [Event Logging 설계](../docs/analytics/event-logging-design.md), [Processed Schema](../contracts/processed-schema.md), [Spark 처리 설계](../docs/analytics/spark-processing-design.md), [DW Schema](../contracts/dw-schema.md), [DW 적재 설계](../docs/analytics/dw-design.md), [로그 전송 계약](../docs/analytics/log-transport-contract.md).
 
 ## 14. 미확정 항목과 담당 경계
 

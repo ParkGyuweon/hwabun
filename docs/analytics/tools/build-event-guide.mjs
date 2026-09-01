@@ -398,7 +398,8 @@ const GROUPS = [
       { f: 'docs/analytics/log-transport-contract.md', t: '로그 전송 주기 계약', d: '배치 · 재시도 · synthetic 표시' },
       { f: 'contracts/processed-schema.md', t: 'Processed 스키마', d: 'Spark 정제 단계 컬럼 계약' },
       { f: 'docs/analytics/spark-processing-design.md', t: 'Spark 처리 설계', d: '처리 근거 · 구현 현황 · 검증 계획' },
-      { f: 'docs/analytics/dw-schema.md', t: 'DW 스키마', d: 'Mart 와 KPI 산식' },
+      { f: 'contracts/dw-schema.md', t: 'DW · Mart 스키마', d: 'Dimension 과 Mart 컬럼 계약' },
+      { f: 'docs/analytics/dw-design.md', t: 'DW 적재 설계', d: '저장 흐름 · Dashboard KPI · 검증 계획' },
     ],
   },
 ];

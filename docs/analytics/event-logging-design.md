@@ -207,4 +207,5 @@ properties 전체는 `JsonNode`로 통과시킨다. 이 차이는 HTTP 200만으
 Raw·Processed 저장 구조는 각각 Raw Event Log 문서와
 [`processed-schema.md`](../../contracts/processed-schema.md), Spark 처리 근거는
 [`spark-processing-design.md`](./spark-processing-design.md), Dashboard Mart는
-[`dw-schema.md`](./dw-schema.md)를 따른다.
+[`dw-schema.md`](../../contracts/dw-schema.md), 적재·조회 근거는
+[`dw-design.md`](./dw-design.md)를 따른다.

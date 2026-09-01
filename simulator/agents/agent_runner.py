@@ -117,7 +117,7 @@ DEBUG_SCREEN = False
 #
 # 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
 # 시나리오는 배치와 같은 값을 쓰고, 배치(python_batch)와 에이전트는
-# generator_type 으로 가른다 (docs/analytics/dw-schema.md).
+# generator_type 으로 가른다 (contracts/dw-schema.md).
 DEFAULT_SCENARIO_ID = "normal_day"
 # 계약 enum 은 python_batch | agent_llm 이다 (contracts/event-schema.json).
 # agent_realtime 은 legacy 로 명시적으로 거절된다 (contracts/tests/test_validate_events.py)

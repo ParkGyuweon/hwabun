@@ -15,8 +15,9 @@ nullable, partition과 입력 관계만 정의한다.
 처리 배경, 중복 제거 근거, KPI 산식, 현재 구현 gap과 E2E 계획은
 `../docs/analytics/spark-processing-design.md`에서 설명한다. 두 문서가 충돌하면 이
 문서를 우선한다.
-Dashboard 대상 KPI를 MySQL `dw`에 제공하는 Mart 계약은
-[`dw-schema.md`](../docs/analytics/dw-schema.md)에서 다룬다.
+Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약은
+[`dw-schema.md`](./dw-schema.md), 적재·조회 설계는
+[`dw-design.md`](../docs/analytics/dw-design.md)에서 다룬다.
 
 ## 2. 공통 물리 규칙
 

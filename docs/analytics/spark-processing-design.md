@@ -58,7 +58,8 @@ raw_events
 ```
 
 Raw 저장 계약은 Raw Event Log Draft MR의 `raw-event-storage.md`, Dashboard용 MySQL
-Mart 설계는 [`dw-schema.md`](./dw-schema.md)에서 다룬다. Raw MR이 병합되면 이 문서의
+Mart 계약은 [`dw-schema.md`](../../contracts/dw-schema.md), 적재·조회 설계는
+[`dw-design.md`](./dw-design.md)에서 다룬다. Raw MR이 병합되면 이 문서의
 직접 링크를 연결한다. Processed Dataset은 Raw와 Mart 사이에서 타입, 중복, 순서 및
 분석 grain을 보장한다.
 
