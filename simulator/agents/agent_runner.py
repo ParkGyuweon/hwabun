@@ -84,7 +84,7 @@ ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
 # 시나리오는 배치와 같은 값을 쓰고, 배치(python_batch)와 에이전트는
 # generator_type 으로 가른다 (docs/analytics/dw-schema.md).
 DEFAULT_SCENARIO_ID = "normal_day"
-GENERATOR_TYPE = "agent_realtime"
+GENERATOR_TYPE = "agent_llm"
 
 # 봉투에 schema_version 이 없을 때만 쓰는 값. 평소에는 프론트가 보낸 값을 그대로 쓴다
 SCHEMA_VERSION = "0.2.0-draft"
