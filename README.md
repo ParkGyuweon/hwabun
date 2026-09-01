@@ -23,7 +23,8 @@ S15P21A306/
 │   │   ├── recommendation-design.md     CBF 전체 설계안 — 점수 공식, 행동 가중치, 스케줄, MMR
 │   │   ├── cbf-technical-review.md      코사인 계산 구조 실측 검증서
 │   │   ├── product-feature-sample.md    상품 6개 인코딩 샘플 (생성물 — build_feature_sample.py)
-│   │   └── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
+│   │   ├── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
+│   │   └── evaluation-framework.md     ★ 추천 평가 체계 (팀 합의) — 오프라인/동적/LLM 3축 분리
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
 │   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지

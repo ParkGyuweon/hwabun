@@ -24,8 +24,11 @@ LLM 에이전트 러너 — PA 페르소나가 실제 사이트를 돌아다닌�
 준비
     pip install playwright openai
     playwright install chromium
-    set GMS_KEY=...            (Windows CMD)
-    $env:GMS_KEY="..."          (PowerShell)
+
+    키는 레포 루트 .env 에 둔다 (.gitignore 에 있어 커밋되지 않는다):
+        GMS_KEY=...
+        OPENAI_API_KEY=...      (--openai 로 개인 키를 쓸 때만)
+    환경변수로 줘도 된다 — 환경변수가 .env 보다 우선한다.
 
 실행
     python simulator/agents/agent_runner.py --dry-run --limit 1     # 프롬프트만 확인
@@ -93,6 +96,10 @@ ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
 # 0건 사고). 그래서 세 개 모두 **코드가 조건을 만족할 때만** 목록에 올린다.
 QUICK_LOOK_MAX = 3      # 1인당 요약 열기 상한. 넘으면 상세로 들어가야 한다
 CART_MIN_TO_REMOVE = 2  # 장바구니에 이만큼 있어야 빼는 선택지를 연다 (전환 0 방지)
+MIN_DETAILS_BEFORE_LEAVE = 3   # 이만큼은 상세를 보고 나서야 나갈 수 있다
+
+# 매 턴 화면 판정을 찍는다. 왜 그 행동이 열렸는지 못 밝힐 때만 켠다 (--debug-screen)
+DEBUG_SCREEN = False
 
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
@@ -152,6 +159,31 @@ def entry_url(base, scenario_id, simulation_run_id, product_id=None):
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
+def load_dotenv(path=None):
+    """레포 루트 .env 에서 키를 읽어 환경변수에 얹는다.
+
+    의존성을 늘리지 않으려고 직접 읽는다 (python-dotenv 없이 동작해야 팀원이
+    받자마자 돌릴 수 있다). **이미 환경변수에 있으면 덮지 않는다** — CI 나 일회성
+    실행에서 준 값이 파일보다 우선이어야 한다.
+    """
+    path = path or os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with io.open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception as exc:                      # 키가 없다고 러너가 죽으면 안 된다
+        print(f"  .env 를 읽지 못했습니다 ({exc}) — 환경변수로 주십시오")
+
+
 def load_catalog():
     """딥링크로 보낼 상품 ID 목록. 프론트 목록과 같은 200개다"""
     try:
@@ -197,7 +229,9 @@ def spread_start(page, rng):
 
     height = page.evaluate("() => document.body.scrollHeight")
     view = page.evaluate("() => window.innerHeight")
-    target = int(max(0, height - view) * rng.uniform(0, 0.75))
+    # 0.75 까지 내렸더니 첫 화면부터 "목록 끝" 이 떠서 곧장 leave 하는 사고가 났다
+    # (실측: 9명 중 6명이 2~5턴 만에 종료). 바닥 근처에서 시작하지 않게 한다
+    target = int(max(0, height - view) * rng.uniform(0, 0.55))
     while page.evaluate("() => window.scrollY") + 40 < target:
         page.mouse.wheel(0, rng.randint(500, 900))
         page.wait_for_timeout(rng.randint(180, 420))
@@ -519,7 +553,13 @@ def do_action(page, act, target):
     a = act
 
     if a == "scroll":
-        page.mouse.wheel(0, random.randint(500, 1200))
+        # 바닥에 닿았으면 위로 올린다. 아래로만 굴리면 화면이 안 바뀌어
+        # "볼 것이 없다" 로 읽히고, 실제로 위쪽에 안 본 상품이 남아 있다
+        at_bottom = page.evaluate(
+            "() => window.scrollY + window.innerHeight"
+            " >= document.body.scrollHeight - 40")
+        step = random.randint(500, 1200)
+        page.mouse.wheel(0, -step if at_bottom else step)
         page.wait_for_timeout(random.randint(700, 2500))
         # 목록 바닥에 닿았고 "더 보기" 가 보이면 눌러 준다. 사람은 더 볼 게
         # 있으면 누른다. LLM 의 선택지로 두지 않는 이유는, 행동을 하나 더 늘리면
@@ -537,6 +577,17 @@ def do_action(page, act, target):
     if a == "back_to_list":
         page.go_back()
         page.wait_for_timeout(1200)
+        # 딥링크로 상세에 바로 들어온 사람은 **돌아갈 목록이 없다.** 그대로 두면
+        # 빈 화면을 "목록을 다 봤다" 로 읽고 곧장 나간다 (실측: 5명 중 3명).
+        # 목록 주소로 직접 이동해 복구한다
+        if not page.locator(".card[data-product-id]").count():
+            parts = urlsplit(page.url)
+            query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+                     if k != "product"]
+            page.goto(urlunsplit(parts._replace(query=urlencode(query))),
+                      wait_until="networkidle")
+            page.evaluate("() => window.scrollTo(0, 0)")   # 복구는 목록 맨 위에서
+            page.wait_for_timeout(800)
         return True
 
     if a == "add_to_cart":
@@ -650,8 +701,35 @@ def first_unvisited(page, visited):
     return None
 
 
+def has_unvisited_in_list(page, visited):
+    """목록에 아직 안 본 상품이 남아 있는가.
+
+    **화면에 보이는 카드만 보면 안 된다.** back_to_list 로 돌아오면 스크롤이
+    복원되는데, 그 자리에 안 본 카드가 안 보이면 "다 봤다" 로 판정돼 첫 턴부터
+    leave 가 열린다 (실측: 5명 중 5명이 2~3턴에 종료). 스크롤하거나 "더 보기" 를
+    누르면 닿을 수 있는 것까지 세야 한다.
+    """
+    if page.locator(".list__more").count():
+        return True                              # 아직 안 불러온 상품이 남아 있다
+    seen = {norm(v) for v in visited if norm(v)}
+    cards = page.locator(".card[data-product-id]")
+    if not cards.count():
+        # 화면이 비어 있는 것은 "다 봤다" 가 아니라 화면이 이상한 것이다.
+        # 여기서 True 를 돌려줘야 leave 가 안 열리고 다음 턴에 복구할 기회가 생긴다
+        return True
+    for i in range(min(cards.count(), 120)):
+        try:
+            name = norm(cards.nth(i).locator(".card__name").inner_text(timeout=600))
+        except Exception:
+            continue
+        if name and not any(name in v or v in name for v in seen):
+            return True
+    return False
+
+
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
-                    wished_here=False, quick_looks=0, cart_size=0):
+                    wished_here=False, quick_looks=0, cart_size=0,
+                    n_details=0, has_unvisited=True):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -673,14 +751,19 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
     # 더 보기를 눌러 26번째 상품부터를 화면에 올린다)
     acts = ["click_product"]
-    if pct < 97 or has_more:
-        acts.append("scroll")
+    # 목록에서는 스크롤을 늘 연다. 바닥에 닿으면 do_action 이 위로 올리므로
+    # "바닥이라 볼 것이 없다" 로 갇히지 않는다. 연속 스크롤은 프롬프트가 지적한다
+    acts.append("scroll")
     if quick_looks < QUICK_LOOK_MAX:
         acts.append("quick_look")
     # 담은 것이 하나뿐일 때 빼기를 열면 전환이 0 으로 돌아갈 수 있다
     if cart_size >= CART_MIN_TO_REMOVE:
         acts.append("remove_from_cart")
-    acts.append("leave")
+    # **leave 를 일찍 열지 않는다.** 시작 위치를 흩으면서 목록 아래쪽에서 출발하는
+    # 사람이 생겼는데, 화면에 "목록 끝" 이 보이면 첫 턴부터 나가버렸다.
+    # 상세를 몇 개는 보고 나서, 그리고 화면에 새 상품이 없을 때만 나갈 수 있다
+    if n_details >= MIN_DETAILS_BEFORE_LEAVE or not has_unvisited:
+        acts.append("leave")
     return acts
 
 
@@ -720,9 +803,11 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         has_more = kind == "list" and page.locator(".list__more").count() > 0
         wished_here = any(norm(w) and (norm(w) in norm(here) or norm(here) in norm(w))
                           for w in wished)
+        has_unvisited = kind != "list" or has_unvisited_in_list(page, visited)
         acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more,
                                wished_here=wished_here, quick_looks=quick_looks,
-                               cart_size=len(cart))
+                               cart_size=len(cart), n_details=len(visited),
+                               has_unvisited=has_unvisited)
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -752,6 +837,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             if len(history) >= 3 and all(h.startswith("scroll") for h in history[-3:]):
                 user = ("[주의] 스크롤을 세 번 연속 했습니다. **이번에는 상품을 하나 고르거나"
                         " 목록 끝이면 leave 하십시오.**" + NL + NL + user)
+        if verbose and DEBUG_SCREEN:
+            print(f"       [화면 {kind} · 스크롤 {pct}% · 상세 {len(visited)}개"
+                  f" · 새 상품 {'있음' if has_unvisited else '없음'}"
+                  f" · 선택지 {'/'.join(acts)}]")
         if script is not None:
             obj, used = script.next_action(page, acts, here, cart, visited, peeked), 0
         else:
@@ -850,6 +939,8 @@ def main():
     ap.add_argument("--out", default=os.path.join(BD, "data", "agent_events.jsonl"),
                     help="가로챈 행동 로그를 적을 파일")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--debug-screen", action="store_true",
+                    help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
@@ -872,6 +963,10 @@ def main():
 
     if a.model:
         MODEL = a.model
+    if a.debug_screen:
+        globals()["DEBUG_SCREEN"] = True
+
+    load_dotenv()
 
     client = None
     if not a.dry_run and not a.script:
@@ -879,13 +974,13 @@ def main():
         if a.openai:
             key = os.environ.get("OPENAI_API_KEY")
             if not key:
-                print("OPENAI_API_KEY 환경변수가 없습니다.  set OPENAI_API_KEY=sk-...")
+                print("OPENAI_API_KEY 가 없습니다. 레포 루트 .env 에 넣거나 환경변수로 주십시오.")
                 raise SystemExit(1)
             client = OpenAI(api_key=key)          # 기본 엔드포인트 = api.openai.com
         else:
             key = os.environ.get("GMS_KEY")
             if not key:
-                print("GMS_KEY 환경변수가 없습니다.  set GMS_KEY=...")
+                print("GMS_KEY 가 없습니다. 레포 루트 .env 에 'GMS_KEY=...' 를 넣으십시오.")
                 raise SystemExit(1)
             client = OpenAI(base_url=GMS_BASE, api_key=key)
 
@@ -893,6 +988,8 @@ def main():
     catalog = load_catalog()
     if not catalog:
         print(f"상품 목록을 못 읽었습니다 ({PRODUCTS_FILE}) — 전원 목록에서 시작합니다")
+    print("PA(LLM 에이전트) — 정성 검증 축입니다. 대표 정량 지표(PC 9,900명)에"
+          " 합치지 마십시오 (docs/ai/evaluation-framework.md 5절)")
     print(f"페르소나 {len(personas)}명 · 모델 {MODEL} · 최대 {a.turns}턴"
           + ("  [dry-run]" if a.dry_run else ""))
     print(f"프론트 {start_url}")

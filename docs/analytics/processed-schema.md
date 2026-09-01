@@ -810,19 +810,19 @@ Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하�
 | `actor_type` | string | user/synthetic |
 | `source` | string | web/simulator/server |
 
-초기 Event Weight `[추정]`의 실행 원본은 `frontend/src/types/log.ts`다. 상품 상세 조회 기준은 `product_view=1.0`이며 상품 관심도/추천 feature에는 `product_view`만 반영해야 한다. 현재 `batch/jobs/user_vector.py`는 `page_view=1.0`도 함께 누적하므로 이중 가산 방지 수정 전까지 계약 미준수 상태다.
+초기 Event Weight `[추정]`의 실행 원본은 `frontend/src/types/log.ts`다. 상품 상세 조회 기준은 `product_view=1.0`이며 상품 관심도/추천 feature에는 `product_view`만 반영한다. `batch/jobs/user_vector.py`는 `behavior_weights.py`를 통해 이 원본을 읽으므로 `page_view`, `navigation_click` 등 가중치 0 Event를 누적하지 않는다.
 
 | 조건 | event_weight |
 | --- | ---: |
 | `add_to_cart` | 4.0 |
 | `wishlist_toggle(action='add')` | 3.0 |
 | `quantity_change`, `variant_select` | 2.0 |
-| `recommendation_click`, `media_view`, `review_expand`, `accordion_toggle`, `ingredient_view_mode_change` | 1.5 |
+| `recommendation_click`, `media_view`, `review_expand`, `accordion_toggle`, `ingredient_view_mode_change`, `quick_look` | 1.5 |
 | `product_view`, `product_click`, `review_filter_apply`, `filter_change`, `text_copy`, `view_cart` | 1.0 |
 | `section_dwell` | 1.0 x section 계수 |
 | `sort_change`, `text_selection` | 0.5 |
-| `scroll_pause`, `hover_dwell`, `section_view` | 0.3 |
-| `product_impression`, `recommendation_impression`, `impression_dwell`, `recommendation_snapshot`, `scroll_depth`, `quick_look_close`, `session_start`, `exit_summary` | 0 |
+| `scroll_pause`, `hover_dwell` | 0.3 |
+| `page_view`, `navigation_click`, `section_view`, `product_impression`, `recommendation_impression`, `impression_dwell`, `recommendation_snapshot`, `scroll_depth`, `quick_look_close`, `session_start`, `exit_summary` | 0 |
 | `remove_from_cart` | -2.0 |
 | `rage_click` | -2.0 |
 | `dead_click` | -1.5 |
@@ -1000,7 +1000,7 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 | `search_id` 생성 정책 | 검색 구현 전에는 nullable/session fallback, 구현 후 Raw 추가 또는 Spark 파생 중 선택 |
 | `cart_id` 생성 정책 | Raw에 없으므로 현재는 nullable, 장바구니 구현 후 Raw 추가 여부 결정 |
 | Event weight 단일 출처 | 실행 상수는 `frontend/src/types/log.ts`, 의미와 근거는 Data 문서를 기준으로 관리한다 |
-| 시뮬레이터 최신 Event | 최신 `dev` 기준 FE 35종 중 34종 생성. 남은 `dead_click`은 실제 UI 오작동 신호라 정책상 생성하지 않음 |
+| 시뮬레이터 최신 Event | 최신 `dev` 기준 FE 36종 중 34종 생성. `navigation_click`은 브라우저 UI 경로에서 발생하고 `dead_click`은 실제 UI 오작동 신호라 생성기가 만들지 않음 |
 | Collector 필드 정렬 브랜치 병합 | `event_name`, `actor_type`, `page_view_id`, `sequence_no` 승격은 정렬 브랜치가 `dev`에 병합된 뒤에만 성립 |
 
 ## 25. E2E 이후 확인할 것
