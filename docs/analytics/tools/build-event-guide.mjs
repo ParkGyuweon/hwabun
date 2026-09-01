@@ -180,7 +180,9 @@ function parseWeights() {
   const block = ts.match(/EVENT_WEIGHT[^=]*=\s*\{([\s\S]*?)\n\};/);
   if (!block) throw new Error('log.ts 에서 EVENT_WEIGHT 를 못 읽었다');
   const w = {};
-  for (const m of block[1].matchAll(/^\s*([a-z_]+)\s*:\s*([\d.]+)\s*,/gm)) {
+  // 음수 가중치가 있다 (remove_from_cart -2.0 등). `-?` 가 없으면 그 행이
+  // 통째로 안 걸려서 0 으로 표시된다. 감점 신호가 화면에서 사라진다.
+  for (const m of block[1].matchAll(/^\s*([a-z_]+)\s*:\s*(-?[\d.]+)\s*,/gm)) {
     w[m[1]] = parseFloat(m[2]);
   }
   if (!Object.keys(w).length) throw new Error('EVENT_WEIGHT 항목을 못 읽었다');
@@ -227,8 +229,10 @@ function buildEvents() {
 
   const positive = contract.filter(n => (weights[n] ?? 0) > 0);
   const zero = contract.filter(n => (weights[n] ?? 0) === 0);
+  const negative = contract.filter(n => (weights[n] ?? 0) < 0);
+  const minW = Math.min(...contract.map(n => weights[n] ?? 0));
   const maxW = Math.max(...contract.map(n => weights[n] ?? 0));
-  const cls = w => w === 0 ? 'w0' : w >= 3 ? 'w3' : w >= 1.5 ? 'w2' : 'w1';
+  const cls = w => w < 0 ? 'wneg' : w === 0 ? 'w0' : w >= 3 ? 'w3' : w >= 1.5 ? 'w2' : 'w1';
 
   let h = '';
   h += `<h1 id="ev-top">이벤트 ${contract.length}종과 가중치</h1>`;
@@ -237,11 +241,18 @@ function buildEvents() {
      + `각 Event 에는 <strong>선호도 가중치</strong>가 붙는다. 이 가중치를 누적해 `
      + `사용자 벡터를 만들고, 상품 추천(CBF)의 입력으로 쓴다.</p>`;
 
+  h += `<p class="note">이 표는 <strong>생성 스크립트가 이벤트 계약과 프론트 가중치 `
+     + `코드를 읽어</strong> 만든다. 여기에 숫자를 적어 두지 않는다. 다만 생성은 `
+     + `자동이 아니므로, 관련 코드를 바꾼 뒤에는 `
+     + `<code>node docs/analytics/tools/build-event-guide.mjs</code> 를 다시 실행해 `
+     + `문서를 갱신해야 한다.</p>`;
+
   h += `<div class="kpirow">`
      + `<div class="kpi"><b>${contract.length}</b><span>계약 Event</span></div>`
      + `<div class="kpi"><b>${positive.length}</b><span>선호도에 반영</span></div>`
+     + `<div class="kpi"><b>${negative.length}</b><span>감점 (음수)</span></div>`
      + `<div class="kpi"><b>${zero.length}</b><span>가중 0 · 분모·요약용</span></div>`
-     + `<div class="kpi"><b>${maxW.toFixed(1)}</b><span>최대 가중치</span></div>`
+     + `<div class="kpi"><b>${maxW.toFixed(1)} / ${minW.toFixed(1)}</b><span>최대 · 최소 가중치</span></div>`
      + `</div>`;
 
   h += `<h2 id="ev-weight">가중치 설계 원칙</h2>`;
@@ -251,6 +262,13 @@ function buildEvents() {
      + `구매 데이터가 없는 환경이라 장바구니 담기가 가장 강한 구매 의도 신호다.</li>`
      + `<li><strong>노출(impression)은 가중 0 이다.</strong> `
      + `사용자 의지가 아니므로 선호도에 넣지 않고, CTR 의 <strong>분모</strong>로만 쓴다.</li>`
+     + `<li><strong>감점 신호가 있다.</strong> `
+     + `<code>remove_from_cart</code> ${(weights.remove_from_cart ?? -2).toFixed(1)}, `
+     + `<code>rage_click</code> ${(weights.rage_click ?? -2).toFixed(1)}, `
+     + `<code>dead_click</code> ${(weights.dead_click ?? -1.5).toFixed(1)}, `
+     + `<code>scroll_backtrack</code> ${(weights.scroll_backtrack ?? -1).toFixed(1)}. `
+     + `담았다 뺀 것은 선호를 되돌린 것이고, 좌절 신호는 그 방문의 품질을 깎는다. `
+     + `다만 좌절 신호는 상품이 아니라 화면 문제일 수 있어 상품 선호와 같은 축에 넣지 않는다.</li>`
      + `<li><strong>이중 계상을 막는다.</strong> 한 행동에서 두 Event 가 같은 `
      + `<code>product_id</code> 를 실으면 한쪽을 0 으로 둔다. 상세 진입은 `
      + `<code>product_view</code>(1.0)가 담당하고 <code>page_view</code>는 0 이다. `
@@ -362,6 +380,11 @@ function buildFlow() {
   return h;
 }
 
+/** 계약 Event 종수. 제목에 숫자를 적어 두면 계약이 바뀔 때 조용히 어긋난다 */
+const CONTRACT_COUNT = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'contracts/event-schema.json'), 'utf8'),
+).properties.event_name.enum.length;
+
 // tier 'brief' = 발표에 들어가는 내용. tier 'deep' = 파트 내부 상세.
 const GROUPS = [
   {
@@ -370,7 +393,7 @@ const GROUPS = [
     name: '요약',
     note: '이 두 장이면 발표 내용은 다 들어 있습니다',
     docs: [
-      { key: 'events', t: '이벤트 35종과 가중치', d: '무엇을 수집하고 각각 몇 점인가', gen: buildEvents },
+      { key: 'events', t: `이벤트 ${CONTRACT_COUNT}종과 가중치`, d: '무엇을 수집하고 각각 몇 점인가', gen: buildEvents },
       { key: 'flow', t: 'Event 수집 파이프라인', d: '화면 → 수집 → 분석 → Dashboard · 진행 상황', gen: buildFlow },
     ],
   },
@@ -473,7 +496,7 @@ const head = `<title>A306 행동 기록 안내서</title>
   --g-brief:#1f6b66; --g-basis:#8a5a2b; --g-deep:#5a6478;
   --brief-bg:#e8f2f0; --brief-bd:#bcdcd7; --brief-hi:#ffffff;
   --basis-bg:#f6eee3; --basis-bd:#e2d0b8;
-  --wt3:#1f6b66; --wt2:#3f7f6b; --wt1:#7d8a7e; --wt0:#9aa3ad;
+  --wt3:#1f6b66; --wt2:#3f7f6b; --wt1:#7d8a7e; --wt0:#9aa3ad; --wtneg:#a03d2c;
   --ok:#2f7a55; --part:#9a6a1f; --todo:#8b93a2;
   --code-bg:#f4f5f9; --code-ink:#26303f;
   --shadow:0 1px 2px rgba(24,30,44,.05),0 8px 24px -12px rgba(24,30,44,.16);
@@ -490,7 +513,7 @@ const head = `<title>A306 행동 기록 안내서</title>
     --g-brief:#5fbcb2; --g-basis:#c99a5e; --g-deep:#8b95a8;
     --brief-bg:#16302e; --brief-bd:#24544e; --brief-hi:#1b232b;
     --basis-bg:#2b2418; --basis-bd:#4a3c24;
-    --wt3:#5fbcb2; --wt2:#54a394; --wt1:#8d9a92; --wt0:#6f7889;
+    --wt3:#5fbcb2; --wt2:#54a394; --wt1:#8d9a92; --wt0:#6f7889; --wtneg:#d4806c;
     --ok:#5fb98a; --part:#d0a352; --todo:#6f7889;
     --code-bg:#161b23; --code-ink:#c8d2e0;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
@@ -504,7 +527,7 @@ const head = `<title>A306 행동 기록 안내서</title>
   --g-brief:#5fbcb2; --g-basis:#c99a5e; --g-deep:#8b95a8;
     --brief-bg:#16302e; --brief-bd:#24544e; --brief-hi:#1b232b;
     --basis-bg:#2b2418; --basis-bd:#4a3c24;
-    --wt3:#5fbcb2; --wt2:#54a394; --wt1:#8d9a92; --wt0:#6f7889;
+    --wt3:#5fbcb2; --wt2:#54a394; --wt1:#8d9a92; --wt0:#6f7889; --wtneg:#d4806c;
     --ok:#5fb98a; --part:#d0a352; --todo:#6f7889;
   --code-bg:#161b23; --code-ink:#c8d2e0;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
@@ -641,6 +664,8 @@ main{padding:44px 52px 120px;min-width:0}
   color:#fff;font-variant-numeric:tabular-nums}
 .wt.w3{background:var(--wt3)} .wt.w2{background:var(--wt2)}
 .wt.w1{background:var(--wt1)} .wt.w0{background:var(--wt0);opacity:.65}
+/* 감점은 0 과 뜻이 다르다. 색을 나눠 표에서 바로 갈리게 한다 */
+.wt.wneg{background:var(--wtneg)}
 .tw td.dim{color:var(--muted);font-size:12.5px}
 
 /* 흐름 카드 */
