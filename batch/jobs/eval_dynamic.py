@@ -254,6 +254,8 @@ def main():
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
     ap.add_argument("--rng-seed", type=int, default=42, help="탐색 난수 seed")
+    ap.add_argument("--embeddings", default=None,
+                    help="임베딩 산출물 경로 (대안 산출물과 비교할 때)")
     ap.add_argument("--text-backend", choices=(TEXT_LEXICAL, TEXT_EMBEDDING),
                     default=None,
                     help="텍스트 매칭 방식. 기본은 임베딩 산출물이 있으면 embedding")
@@ -269,7 +271,8 @@ def main():
     recommender = Recommender(M, index, prior, affinity=affinity)
     hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed,
                           weights=PROFILES[a.pref_profile],
-                          text_backend=a.text_backend)
+                          text_backend=a.text_backend,
+                          **({"embeddings_path": a.embeddings} if a.embeddings else {}))
     meta = [{"product_id": p["product_id"],
              "tertiary_category": p.get("tertiary_category")}
             for p in encoder.products]
