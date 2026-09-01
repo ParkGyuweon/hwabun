@@ -830,6 +830,7 @@ class LogSink:
         self.sent = 0
         self.send_failed = 0
         self.dropped = 0
+        self.client = None          # 첫 전송 때 만든다 (백프레셔 상태를 들고 있다)
         self.schema_version = None
         self.queue = None
         self.worker = None
@@ -908,36 +909,26 @@ class LogSink:
             self.queue.task_done()
 
     def _post(self, events):
-        import urllib.error
-        import urllib.request
+        """수집 API 로 보낸다. 백프레셔 처리는 공용 클라이언트가 한다.
 
-        url = self.post_base + "/api/events"
-        for i in range(0, len(events), POST_BATCH):
-            chunk = events[i:i + POST_BATCH]
-            body = json.dumps(
-                {"schema_version": self.schema_version or SCHEMA_VERSION,
-                 "events": chunk}, ensure_ascii=False).encode()
-            req = urllib.request.Request(
-                url, data=body, method="POST",
-                headers={"Content-Type": "application/json",
-                         # 합성 트래픽은 전송 계층에서도 자기를 밝힌다
-                         "X-Actor-Type": "synthetic",
-                         "X-Simulation-Run-Id": self.simulation_run_id})
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                    if r.status in (200, 202):
-                        self.sent += len(chunk)
-                    else:
-                        self.send_failed += len(chunk)
-            except urllib.error.HTTPError as e:
-                self.send_failed += len(chunk)
-                if self.send_failed <= POST_BATCH:      # 첫 실패만 자세히 남긴다
-                    detail = e.read()[:300].decode("utf-8", "replace")
-                    print(f"    수집 API HTTP {e.code} — {detail}")
-            except Exception as e:
-                self.send_failed += len(chunk)
-                if self.send_failed <= POST_BATCH:
-                    print(f"    수집 API 전송 실패 — {e}")
+        생성기(gen_behavior_logs.py)와 **같은 클라이언트**를 쓴다 — 같은 서버에
+        같은 계약으로 보내면서 재시도 정책이 다르면 부하 결과를 해석할 수 없다.
+        """
+        if self.client is None:
+            sys.path.insert(0, os.path.join(ROOT, "simulator"))
+            from collector_client import CollectorClient
+            self.client = CollectorClient(
+                self.post_base, timeout=self.timeout, max_batch=POST_BATCH,
+                log=lambda m: print(f"   {m}"))
+        before = dict(self.client.stats)
+        self.client.send(
+            events, schema_version=self.schema_version or SCHEMA_VERSION,
+            headers={"X-Actor-Type": "synthetic",
+                     "X-Simulation-Run-Id": self.simulation_run_id})
+        st = self.client.stats
+        self.sent += st["sent"] - before["sent"]
+        self.send_failed += ((st["dropped"] - before["dropped"])
+                             + (st["gave_up"] - before["gave_up"]))
 
     def close(self):
         if self.queue is not None:
