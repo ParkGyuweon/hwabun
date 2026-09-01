@@ -1,0 +1,186 @@
+"""
+실제 리뷰 이력 순차 재생 — synthetic 행동을 최소화한 평가.
+
+    과거 리뷰를 **시간순 이벤트로 재생**해서 사용자 벡터를 만들고,
+    마지막 긍정 리뷰 상품(target)이 추천 Top 10 에 들어오는지 본다.
+
+동적 시뮬레이션과 다른 점: 탐색 상품을 우리가 뽑지 않는다. 사용자가 **실제로 남긴
+리뷰 순서** 그대로 간다. 그래서 "우리가 지어낸 행동" 이 개입할 여지가 가장 적다.
+가능한 경우 이 축을 우선한다 (docs/ai/evaluation-framework.md 3절).
+
+리뷰 -> 이벤트 변환
+    평점 4~5   상세를 보고 섹션을 읽고 **담는다** (긍정. v_u+ 로 간다)
+    평점 3      상세는 보되 담지 않는다 (중립)
+    평점 1~2    얕게 보고 빠르게 나간다. 소량의 부정 신호 (v_u- 로 간다)
+    is_recommended=False 는 한 단계 낮춰 본다
+
+누출 방지
+    - target 상품에 대한 **그 사용자의 모든 리뷰**는 재생하지 않는다.
+      (같은 상품을 앞서 리뷰한 적이 있으면 그것까지 뺀다)
+    - target 이후 시점의 리뷰도 재생하지 않는다.
+    - target 은 정답이므로 추천 후보에서 빼지 않는다. seed 상품만 뺀다.
+
+실행
+    python batch/jobs/eval_review_replay.py --split valid
+    python batch/jobs/eval_review_replay.py --split test
+"""
+import argparse
+import json
+import os
+import sys
+
+import numpy as np
+
+BD = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
+sys.path.insert(0, BD)
+from persona_feature import load as load_affinity            # noqa: E402
+from persona_split import select as select_split             # noqa: E402
+from product_encoder import Encoder                          # noqa: E402
+from recommender import (LAMBDA, LAMBDA_MMR, Recommender,    # noqa: E402
+                         schedule_for)
+from user_vector import UserVector                           # noqa: E402
+
+PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
+K = 10
+POSITIVE = 4        # 이 점수 이상이면 긍정
+NEGATIVE = 2        # 이 점수 이하면 부정
+SECTIONS = ("about_product", "ingredients", "reviews", "how_to_use")
+
+
+def ordered_reviews(persona, index):
+    """시간순. 상품 목록에 없는 리뷰는 버린다"""
+    rows = [r for r in persona.get("reviews", []) if r.get("group_id") in index]
+    return sorted(rows, key=lambda r: str(r.get("submission_time") or ""))
+
+
+def split_history(persona, index):
+    """(재생할 리뷰, target). 마지막 **긍정** 리뷰가 target 이다"""
+    rows = ordered_reviews(persona, index)
+    target = None
+    for r in reversed(rows):
+        if (r.get("rating") or 0) >= POSITIVE:
+            target = r
+            break
+    if target is None:
+        return None, None
+    cut = rows.index(target)
+    history = [r for r in rows[:cut] if r["group_id"] != target["group_id"]]
+    return history, target["group_id"]
+
+
+def events_for(review):
+    """리뷰 한 건 -> 이벤트. 부족한 UI 이벤트만 보강한다"""
+    gid = review["group_id"]
+    rating = review.get("rating") or 0
+    recommended = review.get("is_recommended")
+    if recommended is False and rating >= POSITIVE:
+        rating -= 1                      # 별점은 높은데 추천은 안 한 경우
+
+    def ev(name, **props):
+        return {"event_name": name, "product_id": gid, "properties": props}
+
+    out = [ev("product_view")]
+    if rating >= POSITIVE:
+        out += [ev("section_dwell", section_id=s, dwell_ms=8000) for s in SECTIONS]
+        out.append(ev("scroll_depth", depth_percent=100))
+        out.append(ev("wishlist_toggle", action="add"))
+        out.append(ev("add_to_cart"))    # 리뷰를 썼다는 것은 샀다는 뜻이다
+    elif rating > NEGATIVE:
+        out += [ev("section_dwell", section_id=s, dwell_ms=4000)
+                for s in SECTIONS[:2]]
+        out.append(ev("scroll_depth", depth_percent=50))
+    else:
+        out.append(ev("section_dwell", section_id=SECTIONS[0], dwell_ms=1200))
+        out.append(ev("scroll_depth", depth_percent=25))
+        out.append(ev("scroll_backtrack"))
+    return out
+
+
+def served_top(scores, blocked, recommender, k=K, lam_mmr=LAMBDA_MMR):
+    masked = scores.copy()
+    for i in blocked:
+        masked[i] = -np.inf
+    order = [int(i) for i in np.argsort(-masked)[:k * 3] if np.isfinite(masked[i])]
+    return recommender.mmr(masked, order, k, lam_mmr)
+
+
+def run_persona(persona, history, target, ctx):
+    M, index, prior, affinity, recommender = ctx
+    state = UserVector()
+    for review in history:
+        for event in events_for(review):
+            state.observe(event)
+
+    vp, vn = state.vectors(index, M)
+    w1, w2, w3 = schedule_for(len(state.viewed))
+    scores = np.zeros(len(M), dtype=np.float32)
+    if vp is not None:
+        scores += w1 * (M @ vp.astype(np.float32))
+    if vn is not None:
+        scores -= LAMBDA * (M @ vn.astype(np.float32))
+    scores += w2 * affinity(persona) + w3 * prior
+
+    # seed(재생한 상품)는 후보에서 뺀다. target 은 정답이라 빼지 않는다
+    blocked = {index[r["group_id"]] for r in history}
+    blocked.discard(index[target])
+    top = served_top(scores, blocked, recommender)
+    masked = scores.copy()
+    for i in blocked:
+        masked[i] = -np.inf
+    target_i = index[target]
+    rank = int((masked > masked[target_i]).sum()) + 1
+    return {"hit": target_i in top, "rank": rank,
+            "n_seed": len(blocked), "n_converted": len(state.converted),
+            "n_negative": len(state.viewed) - len(state.converted)}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=("train", "valid", "test", "all"),
+                    default="valid")
+    ap.add_argument("--limit", type=int, default=None)
+    a = ap.parse_args()
+
+    encoder = Encoder()
+    M = np.asarray(encoder.matrix(), np.float32)
+    index = {p["product_id"]: i for i, p in enumerate(encoder.products)}
+    prior = np.asarray(encoder.prior(), dtype=np.float32)
+    affinity = load_affinity(index)
+    recommender = Recommender(M, index, prior, affinity=affinity)
+    ctx = (M, index, prior, affinity, recommender)
+
+    personas = select_split(json.load(open(PERSONAS, encoding="utf-8")), a.split)
+    if a.limit:
+        personas = personas[:a.limit]
+    print(f"**{a.split}** 집합 {len(personas):,}명 · 리뷰를 시간순 이벤트로 재생")
+    if a.split == "test":
+        print("  ⚠ test 는 최종 보고용이다")
+
+    results, skipped = [], 0
+    for persona in personas:
+        history, target = split_history(persona, index)
+        if not target or not history:
+            skipped += 1
+            continue
+        results.append(run_persona(persona, history, target, ctx))
+
+    hits = np.array([r["hit"] for r in results])
+    ranks = np.array([r["rank"] for r in results])
+    ndcg = np.where(ranks <= K, 1.0 / np.log2(ranks + 1), 0.0)
+    rng = np.random.default_rng(42)
+    boot = rng.integers(0, len(hits), (300, len(hits)))
+    ci = np.percentile(hits[boot].mean(axis=1) * 100, [2.5, 97.5])
+
+    print(f"\n평가 {len(results):,}명 (재생할 리뷰가 없어 제외 {skipped:,}명)")
+    print(f"  Recall@10   {hits.mean() * 100:6.2f}%   CI [{ci[0]:.2f}, {ci[1]:.2f}]")
+    print(f"  MRR         {np.mean(1.0 / ranks):6.4f}")
+    print(f"  NDCG@10     {ndcg.mean():6.4f}")
+    print(f"  target 순위 중앙 {np.median(ranks):.0f}위 · 상위 25% {np.percentile(ranks, 25):.0f}위")
+    print(f"  재생 리뷰   1인당 {np.mean([r['n_seed'] for r in results]):.1f}개"
+          f" (전환 {np.mean([r['n_converted'] for r in results]):.1f}"
+          f" / 비전환 {np.mean([r['n_negative'] for r in results]):.1f})")
+
+
+if __name__ == "__main__":
+    main()
