@@ -22,7 +22,7 @@ S15P21A306/
 │   ├── ai/                          추천 알고리즘 설계·검증 (AI)
 │   │   ├── recommendation-design.md     CBF 전체 설계안 — 점수 공식, 행동 가중치, 스케줄, MMR
 │   │   ├── cbf-technical-review.md      코사인 계산 구조 실측 검증서
-│   │   ├── product-feature-sample.md    상품 5개 인코딩 샘플  ⚠ 어휘집 0.3·93차원 기준 (갱신 필요)
+│   │   ├── product-feature-sample.md    상품 6개 인코딩 샘플 (생성물 — build_feature_sample.py)
 │   │   └── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
@@ -42,11 +42,14 @@ S15P21A306/
 │   ├── ingest/
 │   │   ├── build_feature_vocab.py       어휘집 생성 (문서빈도·블록 가중치)
 │   │   ├── build_products_json.py       상품 200개 카탈로그 생성 (사이즈 변형 병합)
+│   │   ├── build_feature_sample.py      샘플 6개 산출물 + 문서 생성
+│   │   ├── test_feature_sample.py       산출물·문서가 코드와 어긋나지 않았는지
 │   │   └── data/
 │   │       ├── products_200.json            상품 200개 (원본 27컬럼 + 병합 이력 + 리뷰 통계)
 │   │       ├── affinity_lift.csv            속성 친화도 4,000행 (200상품 × 20세그먼트)
 │   │       ├── concern_from_reviews.npz     리뷰에서 뽑은 concern 점수
 │   │       ├── excluded_products.json       제외 상품 목록과 사유
+│   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력
 │   │           ├── product_feature.jsonl        상품 200개 × 148차원 + prior
 │   │           ├── attribute_affinity.csv       친화도 4,000행 (계약 열)
