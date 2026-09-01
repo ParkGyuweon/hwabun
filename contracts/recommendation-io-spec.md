@@ -354,7 +354,7 @@ CREATE TABLE attribute_affinity (
 );
 ```
 
-**4,000행** = 200상품 × 21세그먼트(`skin_type` 4 + `skin_tone` 5 + `hair_color` 6 + `eye_color` 5). 원본은 `batch/ingest/data/affinity_lift.csv`.
+**4,000행** = 200상품 × 20세그먼트(`skin_type` 4 + `skin_tone` 5 + `hair_color` 6 + `eye_color` 5). 원본은 `batch/ingest/data/affinity_lift.csv`.
 
 `lift`와 `n_reviews`를 함께 저장하는 이유는 **추천 근거 문구**에 쓰기 때문입니다 — "지성 피부 사용자 1,240명이 평균보다 2.6배 많이 선택한 제품".
 
