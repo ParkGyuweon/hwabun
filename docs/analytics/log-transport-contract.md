@@ -215,49 +215,67 @@ e × T < B  →  시간 트리거.  전송 간격 = T 초
 전송 로그에 상한은 없다. `logger.ts` 의 `HISTORY_LIMIT = 200` 은 개발용 패널이
 되돌아보기 위해 들고 있는 개수이고, 발생·전송량과 무관하다.
 
-## 9. actor_type 판정 (2026-09-01 제안 · 프론트 미적용)
+## 9. 에이전트 로그의 actor_type (2026-09-01)
 
 LLM 에이전트(PA 100명)는 로그를 직접 만들지 않고 **실제 브라우저로 이 화면을
-조작한다.** 그래서 표시를 따로 하지 않으면 에이전트가 만든 로그가 실사용자와
-똑같이 `actor_type='user'` 로 찍힌다. 실측에서 40,492건이 전부 그렇게 나왔다.
-**한 번 섞이면 나중에 분리할 방법이 없다.**
+조작한다.** 프론트 로거는 그 방문을 실사용자와 구분할 수단이 없어서
+`actor_type='user'` 로 남긴다. 8/31 첫 완주에서 수집한 40,492건이 전부 그랬다.
 
-**현재 상태:** 시뮬레이터(러너)는 아래 파라미터를 붙여 진입하고 실행 끝에
-`actor_type` 분포를 검증한다. **프론트 로거는 아직 이 파라미터를 읽지 않는다.**
-프론트가 반영하기 전까지 러너는 매 실행 경고를 띄우며, 그동안 PA 로그는
-Kafka 로 보내지 않는다. 로거 변경은 프론트 담당 범위이므로 제안 패치로 전달한다.
+### 9-1. 무엇이 깨지는가
 
-### 9-1. 진입 주소로 표시한다
+실사용자 트래픽이 없어도 문제가 된다. `streaming/jobs/clean_events_job.py` 가
+`actor_type` 하나로 세 가지를 파생하기 때문이다.
 
-에이전트는 아래 파라미터를 붙여 진입하고, 로거가 그것을 읽어 봉투에 얹는다.
-
-| 파라미터 | 값 | 봉투/properties |
+| 파생 | `synthetic` | `user` |
 |---|---|---|
-| `actor` | `synthetic` | `actor_type` |
-| `gen` | `agent_realtime` | `properties.generator_type` |
-| `run` | 실행 ID (`run_20260901T031500Z`) | `properties.simulation_run_id` |
-| `scenario` | 시나리오 ID (`normal_day`) | `properties.scenario_id` |
+| `source` | `simulator` | `web` |
+| `user_id` | `persona_id` | **NULL** |
+| `is_synthetic` | true | false |
 
-```
-http://localhost:5173/?actor=synthetic&gen=agent_realtime&run=run_...&scenario=normal_day
-```
+PA 로그가 `user` 로 들어오면 `user_id` 가 NULL 이라 사용자 단위 지표에서 빠지고,
+`simulation_run_id` 를 grain 에 쓰는 시뮬레이션 Mart 에는 아예 안 잡힌다.
+게다가 synthetic 필수 properties 검증은 `actor_type != 'synthetic'` 이면 그냥
+통과시키므로 **거절되지도 않고 조용히 잘못된 데이터**가 된다.
 
-**Agent bridge(전용 API·전용 훅)를 쓰지 않는 이유:** 로그 경로가 실사용자와
-달라지면 이 화면으로 이벤트 계약·수집 API·Kafka 를 검증하는 의미가 사라진다.
-진입 주소만 다르고 그 뒤 경로는 실사용자와 완전히 같아야 한다.
+### 9-2. 표시는 시뮬레이터가 붙인다
 
-### 9-2. 프론트가 지킬 규칙 (제안)
+계약이 정한 강제 지점이 Simulator 와 Spark 이므로
+(`event-taxonomy-trigger-schema.md` §8.4 — "실제 Web Event 에는 적용하지 않으므로
+프론트 구현에는 영향이 없다"), 표시도 시뮬레이터에서 붙인다.
+러너의 `LogSink` 가 프론트의 `/api/events` 요청을 가로채 봉투를 채운 뒤
+파일로 남기고, `--post` 를 주면 수집 API 로 대신 보낸다.
 
-- **개발 서버에서만 인정한다.** 배포 빌드는 이 분기 자체가 사라진다
-  (`import.meta.env.DEV`). 배포 화면에서 받아주면 주소만 고쳐 아무나 로그 출처를
-  위장할 수 있다.
-- `gen` · `run` · `scenario` 중 하나라도 비면 **user 로 되돌리고 경고한다.**
-  실행 단위 Join 이 끊긴 synthetic 로그는 Spark semantic validation 에서
-  `invalid_properties` 로 격리돼 어차피 버려진다.
-- 판정은 **로거 모듈을 읽는 시점**에 끝낸다. effect 에서 정하면 그 전에 발생한
-  이벤트가 새어 나간다 (실측: 첫 화면 `scroll_depth` 2건).
-- 러너는 실행 끝에 `actor_type` 분포와 실행 메타데이터 누락 건수를 출력한다.
-  synthetic 이 아닌 로그가 한 건이라도 있으면 **Kafka 로 보내지 않는다.**
+| 채우는 값 | 자리 |
+|---|---|
+| `synthetic` | `actor_type` |
+| `agent_realtime` | `properties.generator_type` |
+| 실행 ID (`run_20260901T031500Z`) | `properties.simulation_run_id` |
+| 시나리오 ID (`normal_day`) | `properties.scenario_id` |
+
+전송 요청에는 `X-Actor-Type: synthetic` · `X-Simulation-Run-Id` 헤더도 같이 단다.
+지금은 아무도 읽지 않지만, 합성 트래픽의 일반적인 처리는 **자동화가 전송 계층에서
+자기를 밝히고 수집 서버가 라벨을 찍는 것**이다. 나중에 수집 서버가 그렇게 올라가도
+러너를 다시 고칠 필요가 없다.
+
+**프론트 로거는 고치지 않는다.** 프론트 담당 범위이고, 8/28 협의에서 프론트
+요청을 코드 수정 2건으로 좁혀 두었다. 진입 주소에 같은 값을 파라미터로도 붙이므로
+(`?actor=synthetic&gen=...&run=...&scenario=...`), 프론트가 나중에 이걸 읽게 되면
+봉투에 표시가 이미 붙어 오고 러너의 보정은 저절로 0 이 된다. 러너는 둘을 나눠 센다.
+
+### 9-3. 지키는 규칙
+
+- **프론트가 넣은 값은 덮지 않는다.** 덮으면 프론트가 제대로 붙였는지 확인할 방법이
+  없어진다. 비어 있을 때만 채운다.
+- **페르소나 선택 전 이벤트는 보내지 않는다.** 첫 화면 로드에서 발생하는
+  `scroll_depth` 2건(1인당)은 `persona_id` 가 없다. synthetic Event 는
+  `persona_id` 가 필수라 Spark 가 격리하는데, 어느 페르소나의 행동도 아니므로
+  격리 로그만 늘 뿐이다. 파일에는 남겨 확인할 수 있게 둔다.
+- **수집 서버 응답과 무관하게 브라우저에는 200 을 돌려준다.** 실패를 그대로
+  전하면 프론트가 같은 배치를 재전송해 파일에 중복이 쌓인다. 전송 성패는
+  러너가 세어서 실행 끝에 보고한다.
+- **전송은 별도 스레드에서 한다.** route 핸들러 안에서 보내면 브라우저가 멈춘다.
+  Kafka 가 없으면 수집 서버가 25초쯤 뒤에 503 을 주는데, 그동안 에이전트의 한 턴이
+  통째로 정지한다.
 
 `environment` 는 `local` 그대로 둔다. 실제/합성 구분은 `actor_type` 이 하고,
 `environment` 는 어디서 돌았는지(`local`/`dev`/`staging`/`prod`/`loadtest`)를

@@ -31,6 +31,13 @@ LLM 에이전트 러너 — PA 페르소나가 실제 사이트를 돌아다닌�
     python simulator/agents/agent_runner.py --dry-run --limit 1     # 프롬프트만 확인
     python simulator/agents/agent_runner.py --limit 3 --headed      # 3명, 브라우저 보이게
     python simulator/agents/agent_runner.py --limit 100             # 전원 배치
+    python simulator/agents/agent_runner.py --limit 100 --post http://localhost:8080
+
+로그에 synthetic 표시를 붙이는 곳
+    프론트 로거는 에이전트를 실사용자와 구분하지 못한다(브라우저로 조작하므로).
+    그래서 LogSink 가 가로챈 봉투에 actor_type 과 실행 메타데이터 3종을 채운 뒤
+    파일로 남기고, --post 를 주면 수집 API 로 대신 보낸다.
+    계약이 정한 강제 지점이 Simulator 와 Spark 이라 프론트는 고치지 않는다.
 """
 import argparse
 import hashlib
@@ -63,12 +70,14 @@ ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
 
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
-# 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다. 한 번 섞이면 나중에
-# 분리할 방법이 없어서, 진입 주소에 실행 정보를 붙여 로거가 읽게 한다.
+# 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다.
 #
-# ⚠ 프론트 로거는 아직 이 파라미터를 읽지 않는다 (반영은 프론트 담당 범위).
-# 반영 전까지는 실행 끝 검증에서 "표시가 안 붙은 로그" 경고가 그대로 뜬다.
-# 그 경고가 뜨는 동안에는 PA 로그를 Kafka 로 보내면 안 된다.
+# 표시를 채우는 곳은 LogSink 다 (계약이 정한 강제 지점이 Simulator + Spark).
+# 프론트 로거는 고치지 않는다 — 프론트 담당 범위이기도 하고, 8/28 협의에서 프론트
+# 요청을 2건으로 좁혀 두었다.
+#
+# 진입 주소에도 같은 값을 붙인다. 지금 프론트는 이 파라미터를 읽지 않지만,
+# 읽게 되면 봉투에 이미 표시가 붙어 오고 LogSink 의 보정은 저절로 0 이 된다.
 # 계약: docs/analytics/log-transport-contract.md §9
 #
 # 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
@@ -76,6 +85,11 @@ ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
 # generator_type 으로 가른다 (docs/analytics/dw-schema.md).
 DEFAULT_SCENARIO_ID = "normal_day"
 GENERATOR_TYPE = "agent_realtime"
+
+# 봉투에 schema_version 이 없을 때만 쓰는 값. 평소에는 프론트가 보낸 값을 그대로 쓴다
+SCHEMA_VERSION = "0.2.0-draft"
+# 수집 API 한 요청의 최대 건수. 백엔드 EventBatchRequest 의 @Size(max = 100)
+POST_BATCH = 100
 
 
 def default_simulation_run_id(now=None):
@@ -579,6 +593,11 @@ def main():
                     help=f"synthetic 시나리오 ID (기본 {DEFAULT_SCENARIO_ID})")
     ap.add_argument("--simulation-run-id", default=None,
                     help="이번 실행 ID. 안 주면 시각으로 만든다")
+    ap.add_argument("--post", default=None, metavar="URL",
+                    help="수집 API 베이스 URL. 예) http://localhost:8080"
+                         " (안 주면 파일로만 남긴다)")
+    ap.add_argument("--post-timeout", type=int, default=40,
+                    help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
 
     simulation_run_id = a.simulation_run_id or default_simulation_run_id()
@@ -609,13 +628,15 @@ def main():
     print(f"프론트 {start_url}")
     print(f"실행 메타데이터 actor_type=synthetic generator_type={GENERATOR_TYPE} "
           f"scenario_id={a.scenario_id} simulation_run_id={simulation_run_id}")
+    print(f"수집 API {a.post}" if a.post else "수집 API 전송 없음 (파일로만 남김)")
 
     from playwright.sync_api import sync_playwright
     tot = dict(calls=0, done=0, failed=0, carted=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    sink = LogSink(a.out)
+    sink = LogSink(a.out, a.scenario_id, simulation_run_id,
+                   post_base=a.post, timeout=a.post_timeout)
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=not a.headed)
@@ -653,15 +674,15 @@ def main():
     if top:
         print("  " + " · ".join(f"{k} {v}" for k, v in top))
 
-    # actor 표시 확인. 여기서 걸러야 실사용자 로그와 섞인 채로 Kafka 에 올라가지 않는다
-    actors = " · ".join(f"{k} {v}" for k, v in sorted(sink.actors.items()))
-    print(f"  actor_type  {actors or '(없음)'}")
-    stray = sink.n - sink.actors.get("synthetic", 0)
-    if stray or sink.missing_runtime:
-        print(f"  ⚠ synthetic 표시가 안 붙은 로그 {stray}건 · "
-              f"실행 메타데이터 누락 {sink.missing_runtime}건")
-        print("    프론트를 개발 서버로 띄웠는지, --url 이 그 주소인지 확인하세요.")
-        print("    이 상태의 로그는 Kafka 로 보내면 안 됩니다 (실사용자와 구분 불가).")
+    # 표시가 어디서 붙었는지. 프론트가 스스로 붙이기 시작하면 stamped 가 0 이 된다
+    print(f"  actor_type=synthetic  {sink.n}건 "
+          f"(러너가 채움 {sink.stamped} · 봉투에 이미 있었음 {sink.already})")
+    if sink.dropped:
+        print(f"  페르소나 선택 전 이벤트 {sink.dropped}건은 전송 제외 (파일에는 있음)")
+    if a.post:
+        print(f"  수집 API 전송  성공 {sink.sent}건 / 실패 {sink.send_failed}건")
+        if sink.send_failed:
+            print("    수집 서버와 Kafka 가 떠 있는지 확인하세요. 파일에는 그대로 남아 있습니다.")
     print("=" * 60)
 
 
@@ -670,49 +691,157 @@ def main():
 # ============================================================================
 
 class LogSink:
-    """프론트가 /api/events 로 보내는 행동 로그를 가로채 파일로 남긴다.
+    """프론트가 /api/events 로 보내는 행동 로그를 가로채 표시를 채우고 내보낸다.
 
-    프론트는 sendBeacon/fetch 로 백엔드에 로그를 보낸다. 백엔드가 안 떠 있으면
-    그 요청은 그대로 실패하고 **로그가 통째로 사라진다** — 에이전트를 25턴씩
-    돌려놓고 아무것도 못 건지는 사고가 여기서 난다.
-    그래서 백엔드에 의존하지 않고 Playwright 가 요청을 가로채 직접 적는다.
-    응답은 200 으로 돌려줘야 프론트가 재전송 큐에 쌓지 않는다.
+    두 가지를 한다.
+
+    1. **파일로 남긴다.** 프론트는 sendBeacon/fetch 로 백엔드에 로그를 보내는데,
+       백엔드가 안 떠 있으면 그 요청은 그대로 실패하고 **로그가 통째로 사라진다** —
+       에이전트를 25턴씩 돌려놓고 아무것도 못 건지는 사고가 여기서 난다.
+    2. **synthetic 표시를 채운다.** 에이전트는 실제 브라우저로 조작하므로 프론트
+       로거가 실사용자와 똑같이 `actor_type='user'` 로 남긴다. 그대로 두면
+       `clean_events_job` 이 `user_id` 를 NULL 로, `source` 를 `web` 으로 파생하고
+       시뮬레이션 Mart 에서 통째로 빠진다. 게다가 synthetic 필수 properties 검증은
+       `actor_type != 'synthetic'` 이면 그냥 통과시켜서 **거절도 안 되고 조용히
+       잘못된 데이터**가 된다. 표시는 여기서 채운다 — 계약이 정한 강제 지점이
+       Simulator 와 Spark 이기 때문이다 (event-taxonomy-trigger-schema.md §8.4).
+
+    `--post` 를 주면 채운 로그를 수집 API 로 대신 보낸다. 헤더에도 같은 사실을
+    적어 둔다 (`X-Actor-Type`). 지금은 아무도 안 읽지만, 나중에 수집 서버가
+    헤더를 보고 직접 찍는 방식(합성 트래픽의 일반적인 처리)으로 올라가도
+    러너를 다시 고칠 필요가 없다.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, scenario_id, simulation_run_id, post_base=None,
+                 timeout=40):
         self.path = path
         self.f = io.open(path, "w", encoding="utf-8")
         self.n = 0
         self.kinds = {}
-        # 표시가 제대로 붙었는지 세어 둔다. 하나라도 user 면 실사용자 로그와
-        # 구분이 안 되는 로그를 만든 것이므로 실행 끝에 크게 알린다.
-        self.actors = {}
-        self.missing_runtime = 0
+        self.scenario_id = scenario_id
+        self.simulation_run_id = simulation_run_id
+        self.post_base = post_base.rstrip("/") if post_base else None
+        self.timeout = timeout
+        # 봉투가 어떤 상태로 들어왔는지. 프론트가 스스로 표시를 붙이게 되면
+        # already 가 오르고 stamped 는 0 이 된다 — 그때 이 보정을 걷어내면 된다
+        self.already = 0
+        self.stamped = 0
+        self.sent = 0
+        self.send_failed = 0
+        self.dropped = 0
+        self.schema_version = None
+        self.queue = None
+        self.worker = None
+        if self.post_base:
+            import queue as _queue
+            import threading
+            self.queue = _queue.Queue()
+            self.worker = threading.Thread(target=self._drain, daemon=True)
+            self.worker.start()
 
     def attach(self, ctx):
         ctx.route("**/api/events", self._handle)
 
+    def _stamp(self, ev):
+        """봉투에 synthetic 표시를 채운다. 이미 붙어 있으면 건드리지 않는다"""
+        if ev.get("actor_type") == "synthetic":
+            self.already += 1
+        else:
+            ev["actor_type"] = "synthetic"
+            self.stamped += 1
+
+        props = ev.get("properties")
+        if not isinstance(props, dict):
+            props = {}
+            ev["properties"] = props
+        # 프론트가 넣어준 값이 있으면 존중한다. 우리 값으로 덮으면 프론트가
+        # 나중에 제대로 붙였을 때 그 사실을 확인할 방법이 없어진다
+        props.setdefault("scenario_id", self.scenario_id)
+        props.setdefault("simulation_run_id", self.simulation_run_id)
+        props.setdefault("generator_type", GENERATOR_TYPE)
+        return ev
+
     def _handle(self, route, request):
         try:
             payload = json.loads(request.post_data or "{}")
-            for ev in payload.get("events", []):
+            self.schema_version = payload.get("schema_version") or self.schema_version
+            events = [self._stamp(ev) for ev in payload.get("events", [])]
+            for ev in events:
                 self.f.write(json.dumps(ev, ensure_ascii=False) + NL)
                 self.n += 1
                 k = ev.get("event_name") or ev.get("action") or "?"
                 self.kinds[k] = self.kinds.get(k, 0) + 1
 
-                actor = ev.get("actor_type") or "?"
-                self.actors[actor] = self.actors.get(actor, 0) + 1
-                props = ev.get("properties") or {}
-                if not all(props.get(key) for key in
-                           ("scenario_id", "simulation_run_id", "generator_type")):
-                    self.missing_runtime += 1
+            # 페르소나를 고르기 전(첫 화면 로드)에 발생한 이벤트는 보내지 않는다.
+            # synthetic Event 는 persona_id 가 필수라 Spark 가 invalid_properties 로
+            # 격리한다. 어느 페르소나의 행동도 아니므로 격리 로그만 늘 뿐이다.
+            # 실측: 1인당 2건(첫 화면 scroll_depth). 파일에는 그대로 남긴다
+            sendable = [ev for ev in events if ev.get("persona_id")]
+            self.dropped += len(events) - len(sendable)
+            if self.queue is not None and sendable:
+                self.queue.put(sendable)
         except Exception:
             pass
+        # 수집 서버 응답과 무관하게 200 을 돌려준다. 실패를 그대로 전하면
+        # 프론트가 같은 배치를 재전송해 파일에 중복이 쌓인다. 전송 성패는
+        # 우리가 세어서 실행 끝에 보고한다
         route.fulfill(status=200, content_type="application/json",
                       body='{"ok":true}')
 
+    def _drain(self):
+        """전송은 별도 스레드에서 한다.
+
+        route 핸들러 안에서 그대로 보내면 브라우저가 응답을 기다리며 멈춘다.
+        Kafka 가 안 떠 있으면 수집 서버가 25초쯤 뒤에 503 을 주는데, 그동안
+        에이전트의 한 턴이 통째로 정지한다.
+        """
+        while True:
+            events = self.queue.get()
+            if events is None:
+                self.queue.task_done()
+                return
+            try:
+                self._post(events)
+            except Exception:
+                self.send_failed += len(events)
+            self.queue.task_done()
+
+    def _post(self, events):
+        import urllib.error
+        import urllib.request
+
+        url = self.post_base + "/api/events"
+        for i in range(0, len(events), POST_BATCH):
+            chunk = events[i:i + POST_BATCH]
+            body = json.dumps(
+                {"schema_version": self.schema_version or SCHEMA_VERSION,
+                 "events": chunk}, ensure_ascii=False).encode()
+            req = urllib.request.Request(
+                url, data=body, method="POST",
+                headers={"Content-Type": "application/json",
+                         # 합성 트래픽은 전송 계층에서도 자기를 밝힌다
+                         "X-Actor-Type": "synthetic",
+                         "X-Simulation-Run-Id": self.simulation_run_id})
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    if r.status in (200, 202):
+                        self.sent += len(chunk)
+                    else:
+                        self.send_failed += len(chunk)
+            except urllib.error.HTTPError as e:
+                self.send_failed += len(chunk)
+                if self.send_failed <= POST_BATCH:      # 첫 실패만 자세히 남긴다
+                    detail = e.read()[:300].decode("utf-8", "replace")
+                    print(f"    수집 API HTTP {e.code} — {detail}")
+            except Exception as e:
+                self.send_failed += len(chunk)
+                if self.send_failed <= POST_BATCH:
+                    print(f"    수집 API 전송 실패 — {e}")
+
     def close(self):
+        if self.queue is not None:
+            self.queue.put(None)
+            self.worker.join(timeout=self.timeout + 10)
         self.f.close()
 
 
