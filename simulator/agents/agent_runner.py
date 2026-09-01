@@ -924,6 +924,72 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
 # 6. 메인
 # ============================================================================
 
+
+def run_parallel(a):
+    """자기 자신을 --shard 로 여러 번 띄우고 로그를 합친다.
+
+    Playwright 의 sync API 가 스레드 안전하지 않아 스레드가 아니라 프로세스로
+    나눈다. 한 워커가 죽어도 나머지는 계속 돈다.
+    """
+    import subprocess
+    n = min(a.workers, a.limit)
+    base, ext = os.path.splitext(a.out)
+    parts = [f"{base}.part{i}{ext}" for i in range(n)]
+    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+
+    # **실행 ID 를 부모가 정해 모든 샤드에 물려준다.** 샤드마다 만들면 한 번의
+    # 실행이 워커 수만큼의 simulation_run_id 로 쪼개져 실행 단위 집계가 깨진다
+    run_id = a.simulation_run_id or default_simulation_run_id()
+
+    argv = [sys.executable, os.path.abspath(__file__),
+            "--url", a.url, "--limit", str(a.limit), "--turns", str(a.turns),
+            "--model", MODEL,
+            "--scenario-id", a.scenario_id, "--simulation-run-id", run_id,
+            "--entry", a.entry]
+    for flag, on in (("--headed", a.headed), ("--dry-run", a.dry_run),
+                     ("--openai", a.openai), ("--cache", a.cache),
+                     ("--debug-screen", a.debug_screen)):
+        if on:
+            argv.append(flag)
+    if a.post:                      # 안 넘기면 워커가 파일로만 쓰고 수집이 안 된다
+        argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
+    if a.script:
+        argv += ["--script", a.script]
+
+    print(f"워커 {n}개로 나눠 실행합니다 (Playwright sync API 가 스레드 안전하지"
+          f" 않아 프로세스로 분리)")
+    print(f"  실행 ID {run_id} — 모든 워커가 같은 값을 씁니다")
+    t0 = time.time()
+    procs = []
+    for i in range(n):
+        cmd = argv + ["--shard", str(i), "--shards", str(n),
+                      "--out", parts[i], "--quiet"]
+        procs.append(subprocess.Popen(cmd))
+    codes = [p.wait() for p in procs]
+    dead = [i for i, c in enumerate(codes) if c != 0]
+
+    # 로그 합치기 — 워커마다 따로 쓴 파일을 하나로 잇는다
+    total = 0
+    with io.open(a.out, "w", encoding="utf-8") as out:
+        for p in parts:
+            if not os.path.exists(p):
+                continue
+            with io.open(p, encoding="utf-8") as f:
+                for line in f:
+                    out.write(line)
+                    total += 1
+            os.remove(p)
+
+    dt = time.time() - t0
+    print()
+    print("=" * 60)
+    print(f"  워커 {n}개 · {dt:.0f}초 ({dt/60:.1f}분)")
+    if dead:
+        print(f"  실패한 워커 {len(dead)}개: {dead}  <- 그만큼 페르소나가 빠졌습니다")
+    print(f"  수집 로그 {total:,}건 -> {a.out}")
+    print("=" * 60)
+
+
 def main():
     global MODEL
     ap = argparse.ArgumentParser()
@@ -938,6 +1004,10 @@ def main():
     ap.add_argument("--model", default=None, help=f"모델 (기본 {MODEL})")
     ap.add_argument("--out", default=os.path.join(BD, "data", "agent_events.jsonl"),
                     help="가로챈 행동 로그를 적을 파일")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="동시에 돌릴 프로세스 수. LLM 대기가 병목이라 그대로 빨라진다")
+    ap.add_argument("--shard", type=int, default=0, help=argparse.SUPPRESS)
+    ap.add_argument("--shards", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
@@ -984,12 +1054,20 @@ def main():
                 raise SystemExit(1)
             client = OpenAI(base_url=GMS_BASE, api_key=key)
 
+    if a.workers > 1 and a.shards == 1:
+        run_parallel(a)
+        return
+
     personas = json.load(open(PERSONA_FILE, encoding="utf-8"))[:a.limit]
     catalog = load_catalog()
     if not catalog:
         print(f"상품 목록을 못 읽었습니다 ({PRODUCTS_FILE}) — 전원 목록에서 시작합니다")
     print("PA(LLM 에이전트) — 정성 검증 축입니다. 대표 정량 지표(PC 9,900명)에"
           " 합치지 마십시오 (docs/ai/evaluation-framework.md 5절)")
+    if a.shards > 1:
+        # 앞에서부터 순서대로 나누지 않고 건너뛰며 나눈다. 페르소나 파일이
+        # 정렬돼 있으면 앞쪽 샤드에만 무거운 사람이 몰릴 수 있다
+        personas = personas[a.shard::a.shards]
     print(f"페르소나 {len(personas)}명 · 모델 {MODEL} · 최대 {a.turns}턴"
           + ("  [dry-run]" if a.dry_run else ""))
     print(f"프론트 {start_url}")
