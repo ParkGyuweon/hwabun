@@ -80,6 +80,25 @@ Kafka Connector는 `SPARK_KAFKA_PACKAGE`으로 Spark Version과 함께 고정한
 기동 때 Connector 의존성을 받아 `spark-ivy-cache` Volume에 저장하므로 이후 기동은
 같은 캐시를 사용한다.
 
+## 상태 관측
+
+Spark Master UI는 `http://localhost:18080`, 완료된 Application Event Log는 History
+Server `http://localhost:18081`에서 본다. 자동 점검은 Master JSON과 History Server
+응답을 함께 확인하고, 활성 Worker·실행/완료 Application 수를 JSON으로 출력한다.
+
+```powershell
+.\infra\spark\healthcheck.ps1
+```
+
+Q1까지 반드시 실행 중이어야 하는 환경에서는 아래처럼 확인한다.
+
+```powershell
+.\infra\spark\healthcheck.ps1 -RequireRawSink
+```
+
+Micro-batch 지연·Kafka 연결 오류는 `spark-raw-sink` 로그에서, Batch Job의 실행 이력은
+History Server에서 확인한다.
+
 ## Pipeline Runner
 
 PowerShell에서는 아래 명령으로 인프라와 Pipeline을 관리한다.
