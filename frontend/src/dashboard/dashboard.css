@@ -11,12 +11,12 @@
 
 :root {
   /* 본문. Charcoal — 순검정보다 눈이 덜 아프다 */
-  --ink: #2b2b2b;
-  --ink-soft: #6b7280;
-  --ink-faint: #9aa0a6;
+  --ink: #23252a;
+  --ink-soft: #5c626c;
+  --ink-faint: #878d97;
 
-  --line: #e9ecef;
-  --line-soft: #f2f4f5;
+  --line: #ddd8ce;
+  --line-soft: #ece7dd;
   /* Warm Ivory. 흰 바탕보다 오래 봐도 편하다 */
   --ground: #faf7f1;
   --panel: #ffffff;
@@ -178,7 +178,7 @@ body {
 }
 
 .grid--kpi {
-  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
 }
 
 .grid--2 {
@@ -189,7 +189,8 @@ body {
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  /* 카드 사이(16)보다 넓게. 같으면 어디서 주제가 바뀌는지 안 보인다 */
+  gap: 26px;
 }
 
 .panel {
@@ -203,12 +204,14 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .panel__head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -231,9 +234,10 @@ body {
 .verdict {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
+  border-left: 5px solid var(--accent);
   border-radius: var(--radius);
-  padding: 22px 26px;
+  padding: 24px 28px;
+  box-shadow: 0 1px 2px rgba(35, 37, 42, 0.04), 0 10px 24px -18px rgba(35, 37, 42, 0.25);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -284,12 +288,19 @@ body {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px 18px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  /* 라벨 → 값 → 보조 순서를 고정한다. 값이 항상 같은 자리에 오면
+     카드 사이를 가로로 훑을 때 눈이 멈추지 않는다 */
+  justify-content: flex-start;
+  min-height: 104px;
 }
 
 .kpi__label {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--ink-soft);
   display: flex;
   align-items: center;
@@ -297,8 +308,9 @@ body {
 }
 
 .kpi__value {
-  margin: 0;
-  font-size: 26px;
+  margin: auto 0 0;
+  font-size: 33px;
+  line-height: 1.05;
   font-weight: 700;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
