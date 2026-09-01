@@ -38,7 +38,8 @@ def _strip_comments(t):
 def load(path=None):
     """{'event': {...}, 'section': {...}, 'negative': {...}, 'scroll': [(임계, 가중), ...]}"""
     path = path or LOG_TS
-    src = open(path, encoding="utf-8").read()
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
 
     event = {k: float(v) for k, v in
              _ENTRY.findall(_strip_comments(_block(src, "EVENT_WEIGHT")))}
