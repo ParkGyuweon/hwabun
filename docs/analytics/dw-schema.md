@@ -29,7 +29,7 @@ Processed Schema와 DW Schema의 차이는 다음과 같다.
 | Kafka topic | 기본값 `activity-events` | 실제 Spark 입력 topic으로 사용할 수 있음. 환경별 override 가능성은 Kafka/Spark 담당자와 확인 |
 | Backend Event 필드 | `schema_version`, `event_id`, `event_name`, `intent`, `occurred_at`, `persona_id`, `session_id`, `page_view_id`, `sequence_no`, `page_type`, `product_id`, `actor_type`, `environment`, `properties`, `received_at` | 주요 Event 필드는 문서 계약과 맞음. `event_id`는 dedup 기준 |
 | Backend Kafka message | Event 단위 발행, key는 `session_id`, payload에는 `received_at`, `source`, `request_id`, `event_index` 포함 | Raw 중복 수신은 가능하며, dedup은 Data/Spark `cleaned_events` 생성 단계에서 수행 |
-| 중복 처리 계약 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준 dedup | 동일 `event_id`의 대표 Event는 `received_at ASC`, 동률이면 `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건 |
+| 중복 처리 계약 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준 dedup | 동일 `event_id`의 대표 Event는 `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건 |
 | 상품 원천 데이터 | `batch/ingest/data/products_200.json`, `batch/ingest/data/affinity_lift.csv` | `dim_product`, `dim_persona_segment` 후보 원천 |
 | Dashboard 구현 | 별도 Dashboard 구현 폴더는 아직 명확하지 않음 | 화면 구현체가 아니라 기획 KPI와 Processed Schema 기준으로 설계 |
 
@@ -80,8 +80,8 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 | `event_hour_kst` | timestamp | KST 기준 시간 단위 집계. hour truncate timestamp |
 | `event_minute_kst` | timestamp | 실시간 모니터링용 minute truncate timestamp |
 | `actor_type` | string | `user`, `synthetic` |
-| `source` | string | MVP 기준 `web`, `simulator`, `server` |
-| `generator_type` | string/null | synthetic 생성 방식. 예: `python_batch`, `agent_realtime` |
+| `source` | string | MVP 기준 `web`, `simulator` |
+| `generator_type` | string/null | synthetic 생성 방식. 예: `python_batch`, `agent_llm` |
 | `scenario_id` | string/null | 시나리오 ID. 실제 Web Event는 NULL 가능 |
 | `simulation_run_id` | string/null | synthetic 실행 단위 ID. 실제 Web Event는 NULL 가능 |
 | `count` 계열 | bigint | Event 수, 세션 수, 사용자 수 |
@@ -241,7 +241,7 @@ source = persona-schema.md simulation_run
 | `simulation_run_id` | string | N | 시뮬레이션 실행 ID |
 | `scenario_id` | string | N | 시나리오 ID. `dim_scenario` Join key |
 | `source` | string | Y | MVP 기준 `simulator` |
-| `generator_type` | string/null | Y | `python_batch`, `agent_realtime` 등 synthetic 생성 방식 |
+| `generator_type` | string/null | Y | `python_batch`, `agent_llm` 등 synthetic 생성 방식 |
 | `persona_source` | string/null | Y | `batch_sample`, `agent_sample`. Dashboard 모집단 필터 기준 |
 | `started_at` | timestamp | Y | 실행 시작 시각 |
 | `ended_at` | timestamp | Y | 실행 종료 시각 |
@@ -663,7 +663,7 @@ rate = numerator / NULLIF(denominator, 0)
 | --- | --- | --- |
 | Kafka key 기준 | 현재 구현처럼 `session_id`를 partition key로 사용 | Web Event의 `persona_id`가 null일 수 있으므로 `session_id` 유지 |
 | Raw 중복 직접 집계 | Raw는 at-least-once 수신 원본이라 같은 `event_id`가 여러 건 있을 수 있음 | KPI, Fact, Mart 산식에는 Raw를 직접 넣지 않고 `cleaned_events` 또는 그 파생 Dataset만 사용 |
-| 대표 Event 선정 기준 불일치 | Processed와 DW 재처리 결과가 달라질 수 있음 | 동일 `event_id`는 `received_at ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준으로 선택한 1건만 DW 입력으로 사용 |
+| 대표 Event 선정 기준 불일치 | Processed와 DW 재처리 결과가 달라질 수 있음 | 동일 `event_id`는 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준으로 선택한 1건만 DW 입력으로 사용 |
 | source fallback 필요 | 현재 Raw에는 `source`가 있으나 과거 Raw/누락 Event 처리 시 source별 Mart가 흔들릴 수 있음 | Kafka payload 값을 우선 사용하고, 누락 시 `actor_type=synthetic → simulator`, 그 외 → `web`으로 fallback 파생. 서버 내부 Event는 별도 경로 확인 시 `server` |
 | `scenario_id`, `simulation_run_id` 물리 위치 | top-level 필드로 오해하면 E2E 파싱이 어긋날 수 있음 | Raw에서는 `properties.scenario_id`, `properties.simulation_run_id`, Processed/DW에서는 승격 컬럼으로 사용 |
 | 서로 다른 grain Fact 직접 Join | COUNT/SUM이 중복되어 KPI가 과대계산될 수 있음 | 각 Processed Dataset을 목표 Mart grain으로 먼저 집계한 뒤 집계 결과끼리 Join |
@@ -687,7 +687,7 @@ rate = numerator / NULLIF(denominator, 0)
 1. Event 수집 API 경로는 `POST /api/events`로 사용하고, body 형태가 Front/Backend 사이에서 동일한지 확인한다.
 2. Kafka message는 백엔드 확정 브랜치 기준 Event 단위다. Spark Raw 적재에서 이 전제를 확인한다.
 3. Kafka partition key는 `session_id`를 최종 기준으로 사용한다.
-4. 동일 `event_id` 중복 입력 시 `cleaned_events`가 `received_at ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 남기는지 확인한다.
+4. 동일 `event_id` 중복 입력 시 `cleaned_events`가 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 남기는지 확인한다.
 5. DW/Mart 입력이 Raw가 아니라 `cleaned_events` 및 파생 Processed Dataset으로 제한되는지 확인한다.
 6. E2E 기준 `schema_version`은 `0.2.0-draft`로 맞추고, `1.0.0-draft` 전환 시 Front/Backend/Spark를 동시에 갱신한다.
 7. `session_start`와 세션 첫 `page_view`는 같은 `page_view_id`를 공유하고, 첫 `page_view`는 `properties.navigation_source='session_start'`로 들어오는지 확인한다.

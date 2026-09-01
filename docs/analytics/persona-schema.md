@@ -96,7 +96,7 @@ Persona가 아니라 "이번 실행"에 귀속된다. 같은 Persona가 다른 r
 | `actor_type` | string | Y | Persona 기반 Event는 `synthetic` |
 | `scenario_id` | string | Y | 시나리오 ID. 트래픽/프로모션/상황 조건 |
 | `simulation_run_id` | string | Y | 시뮬레이션 실행 1회 단위 ID. 같은 시나리오 반복 실행 분리 |
-| `generator_type` | string | Y | 생성 방식. `python_batch`, `agent_realtime` |
+| `generator_type` | string | Y | 생성 방식. `python_batch`, `agent_llm` |
 
 즉 `scenario_id`는 `persona_id`의 속성이 아니라 `persona_id × simulation_run_id`의 속성이다.
 
@@ -502,7 +502,7 @@ synthetic Event를 만들 때는 아래 기준으로 Event Schema에 매핑한�
 | `user_id` | Processed 파생 | synthetic은 `persona_id → user_id` |
 | `actor_type` | top-level `actor_type` | `synthetic` |
 | `persona_source` | Event에 반복 저장하지 않음 | `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인 |
-| `generator_type` | `properties.generator_type` | 필수. `agent_realtime`, `python_batch`. 실행 방식이므로 `simulation_run`에도 저장 |
+| `generator_type` | `properties.generator_type` | 필수. `agent_llm`, `python_batch`. 실행 방식이므로 `simulation_run`에도 저장 |
 | `scenario_id` | `properties.scenario_id` | 필수. 시나리오 ID |
 | `simulation_run_id` | `properties.simulation_run_id` | 필수. 실행 단위 ID |
 | `canonical_product_id` | top-level `product_id` | Event 대상 상품. Event 계약에서는 `product_id` 이름 사용 |
@@ -532,7 +532,7 @@ grain = simulation_run_id
 | `simulation_run_id` | string | N | 실행 1회 식별자 |
 | `scenario_id` | string | N | 시나리오 ID |
 | `scenario_name` | string/null | Y | 표시명 |
-| `generator_type` | string | N | `python_batch`, `agent_realtime` |
+| `generator_type` | string | N | `python_batch`, `agent_llm` |
 | `persona_source` | string | N | `batch_sample`, `agent_sample` |
 | `target_persona_count` | int | N | 실행 대상 Persona 수 |
 | `seed` | int/null | Y | 재현용 난수 seed |
@@ -645,7 +645,7 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 | --- | --- | --- |
 | `profile_version` 값 | Data / AI-Product Feature | Persona 생성 기준 버전명을 어떻게 둘지 |
 | `persona_source` 값 | Data / Simulator | `agent_sample`, `batch_sample` 명칭 확정 |
-| `generator_type` 값 | Data / Kafka-Spark | `agent_realtime`, `python_batch` 명칭 확정 |
+| `generator_type` 값 | Data / Kafka-Spark / AI-Recommendation | `agent_llm`, `python_batch` 명칭 확정 |
 | 실시간·시뮬레이션 seed 초기화 정책 | Data / AI-Product Feature | 오프라인 평가는 리뷰 극성별 축 반영을 사용한다. 실시간·시뮬레이션 시작 상태에서 seed 리뷰를 User Behavior Vector 초기값에 반영할지, 리뷰 상품 하드 제외에만 쓸지는 별도 확정 |
 | Holdout positive 기준 | Data / AI-Product Feature | 초안은 `rating >= 4` 또는 `is_recommended=true`. 추천 평가 정의에 따라 조정 가능 |
 | User Behavior Vector 감점 계수 | Data / AI-Product Feature | canonical 계약의 잠정값 `λ=0.15`를 실제 로그 적재 후 재측정 |
@@ -662,7 +662,7 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 
 | 항목 | 본 문서 기준 | 상대 문서/구현 상태 |
 | --- | --- | --- |
-| synthetic runtime metadata | `properties`에 `scenario_id`, `simulation_run_id`, `generator_type` 필수 | `event-taxonomy-trigger-schema.md` §8.4에 계약 반영됨. Collector는 `properties`를 검증 없이 통과시키므로 실제 강제는 Simulator(생성 시)와 Spark semantic validation에서 수행 |
+| synthetic runtime metadata | `properties`에 `scenario_id`, `simulation_run_id`, `generator_type` 필수 | `event-taxonomy-trigger-schema.md` §8.4에 계약 반영됨. 실제 강제는 Simulator(생성 시), Collector validation, Spark semantic validation에서 수행 |
 | `persona_source` 필터 | Event 미포함, `dim_simulation_run` Join | `dw-schema.md` §6.7에 `dim_simulation_run` 정의 |
 | `concern` segment | Persona segment에서 제외 | `dw-schema.md`의 `dim_persona_segment`/`bridge_persona_segment`에서 제거됨. `dim_product.concern_tags`는 상품 속성이므로 유지 |
 | scenario/run 분리 | `scenario`(scenario_id) + `simulation_run`(simulation_run_id) | `dw-schema.md`에서 `dim_scenario` + `dim_simulation_run`으로 분리 |

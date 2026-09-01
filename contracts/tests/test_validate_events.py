@@ -1,0 +1,342 @@
+from __future__ import annotations
+
+import contextlib
+import copy
+import io
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from contracts.validate_events import (
+    ValidatorInputError,
+    main,
+    validate_event_files,
+)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = ROOT / "contracts" / "event-schema.json"
+USER_SAMPLE_PATH = ROOT / "contracts" / "samples" / "raw-event.user.valid.json"
+SYNTHETIC_SAMPLE_PATH = (
+    ROOT / "contracts" / "samples" / "raw-event.synthetic.valid.json"
+)
+
+
+class EventValidatorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.user_event = json.loads(USER_SAMPLE_PATH.read_text(encoding="utf-8"))
+
+    def validate_values(self, values: object, **kwargs: object):
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "events.json"
+            input_path.write_text(
+                json.dumps(values, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            return validate_event_files([input_path], SCHEMA_PATH, **kwargs)
+
+    def assert_has_error(self, errors: list[str], marker: str) -> None:
+        self.assertTrue(
+            any(marker in error for error in errors),
+            f"Expected {marker!r} in errors: {errors}",
+        )
+
+    def test_valid_user_and_synthetic_samples(self) -> None:
+        result = validate_event_files(
+            [USER_SAMPLE_PATH, SYNTHETIC_SAMPLE_PATH],
+            SCHEMA_PATH,
+        )
+
+        self.assertEqual(2, result.event_count)
+        self.assertEqual([], result.errors)
+
+    def test_missing_required_field(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        del event["session_id"]
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[required]")
+        self.assert_has_error(result.errors, "session_id")
+
+    def test_field_type_error(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["sequence_no"] = "12"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[type] $.sequence_no")
+
+    def test_invalid_timestamp_format(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["occurred_at"] = "2026-08-31"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[format] $.occurred_at")
+
+    def test_unregistered_event_name(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["event_name"] = "search"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[enum] $.event_name")
+
+    def test_schema_version_mismatch(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["schema_version"] = "1.0.0-draft"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[const] $.schema_version")
+
+    def test_event_name_and_intent_must_match(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["intent"] = "interest"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[const] $.intent")
+
+    def test_actor_type_and_source_must_match(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["source"] = "simulator"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[const] $.source")
+
+    def test_unknown_top_level_field_is_rejected(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["unknown_field"] = "unexpected"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[additionalProperties] $")
+
+    def test_duplicates_are_warnings_by_default_for_raw(self) -> None:
+        result = self.validate_values([self.user_event, self.user_event])
+
+        self.assertEqual([], result.errors)
+        self.assert_has_error(result.warnings, "[duplicate_event_id] $.event_id")
+
+    def test_duplicate_event_id_can_be_ignored(self) -> None:
+        result = self.validate_values(
+            [self.user_event, self.user_event],
+            duplicate_policy="ignore",
+        )
+
+        self.assertEqual([], result.errors)
+        self.assertEqual([], result.warnings)
+
+    def test_duplicate_event_id_can_be_warning(self) -> None:
+        result = self.validate_values(
+            [self.user_event, self.user_event],
+            duplicate_policy="warn",
+        )
+
+        self.assertEqual([], result.errors)
+        self.assert_has_error(result.warnings, "[duplicate_event_id] $.event_id")
+
+    def test_duplicate_event_id_can_be_error(self) -> None:
+        result = self.validate_values(
+            [self.user_event, self.user_event],
+            duplicate_policy="error",
+        )
+
+        self.assert_has_error(result.errors, "[duplicate_event_id] $.event_id")
+
+    def test_synthetic_runtime_metadata_is_required(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "actor_type": "synthetic",
+                "source": "simulator",
+                "persona_id": "PC00001",
+                "properties": {
+                    "scenario_id": "normal_day",
+                    "simulation_run_id": "run-20260831-001",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "generator_type")
+
+    def test_agent_llm_generator_type_is_allowed(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "actor_type": "synthetic",
+                "source": "simulator",
+                "persona_id": "PA00001",
+                "properties": {
+                    "scenario_id": "normal_day",
+                    "simulation_run_id": "run-20260831-001",
+                    "generator_type": "agent_llm",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assertEqual([], result.errors)
+
+    def test_legacy_agent_realtime_generator_type_is_rejected(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "actor_type": "synthetic",
+                "source": "simulator",
+                "persona_id": "PA00001",
+                "properties": {
+                    "scenario_id": "normal_day",
+                    "simulation_run_id": "run-20260831-001",
+                    "generator_type": "agent_realtime",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[enum] $.properties.generator_type")
+
+    def test_jsonl_input(self) -> None:
+        second_event = copy.deepcopy(self.user_event)
+        second_event["event_id"] = "evt-user-0002"
+        second_event["event_index"] = 1
+
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "events.jsonl"
+            input_path.write_text(
+                "\n".join(
+                    json.dumps(event) for event in [self.user_event, second_event]
+                ),
+                encoding="utf-8",
+            )
+            result = validate_event_files([input_path], SCHEMA_PATH)
+
+        self.assertEqual(2, result.event_count)
+        self.assertEqual([], result.errors)
+
+    def test_utf8_bom_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "event.json"
+            input_path.write_text(
+                json.dumps(self.user_event),
+                encoding="utf-8-sig",
+            )
+            result = validate_event_files([input_path], SCHEMA_PATH)
+
+        self.assertEqual(1, result.event_count)
+        self.assertEqual([], result.errors)
+
+    def test_empty_jsonl_is_input_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "empty.jsonl"
+            input_path.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValidatorInputError, "no Events"):
+                validate_event_files([input_path], SCHEMA_PATH)
+
+    def test_non_utf8_input_returns_two(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "cp949.json"
+            input_path.write_bytes('{"메시지":"테스트"}'.encode("cp949"))
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = main([str(input_path)])
+
+        self.assertEqual(2, exit_code)
+        self.assertIn("input must be UTF-8", stderr.getvalue())
+
+    def test_jsonl_parse_error_includes_line_number(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "broken.jsonl"
+            input_path.write_text(
+                json.dumps(self.user_event) + "\n{not-json\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValidatorInputError, r"broken\.jsonl:2:"):
+                validate_event_files([input_path], SCHEMA_PATH)
+
+    def test_api_batch_body_is_unwrapped(self) -> None:
+        second_event = copy.deepcopy(self.user_event)
+        second_event["event_id"] = "evt-user-0002"
+        batch = {
+            "schema_version": "0.2.0-draft",
+            "events": [self.user_event, second_event],
+        }
+
+        result = self.validate_values(batch)
+
+        self.assertEqual(2, result.event_count)
+        self.assertEqual([], result.errors)
+
+    def test_duplicate_input_path_is_skipped_with_warning(self) -> None:
+        result = validate_event_files(
+            [USER_SAMPLE_PATH, USER_SAMPLE_PATH],
+            SCHEMA_PATH,
+        )
+
+        self.assertEqual(1, result.event_count)
+        self.assert_has_error(result.warnings, "[duplicate_input_path]")
+
+    def test_max_errors_stops_validation_early(self) -> None:
+        events = []
+        for index in range(5):
+            event = copy.deepcopy(self.user_event)
+            event["event_id"] = f"invalid-{index}"
+            event["schema_version"] = "invalid"
+            events.append(event)
+
+        result = self.validate_values(events, max_errors=2)
+
+        self.assertEqual(2, len(result.errors))
+        self.assertTrue(result.stopped_early)
+        self.assertLess(result.event_count, len(events))
+
+    def test_cli_returns_zero_for_valid_events(self) -> None:
+        stdout = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout):
+            exit_code = main([str(USER_SAMPLE_PATH), str(SYNTHETIC_SAMPLE_PATH)])
+
+        self.assertEqual(0, exit_code)
+        self.assertIn("PASSED: 2 event(s)", stdout.getvalue())
+
+    def test_cli_returns_one_for_validation_errors(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["schema_version"] = "invalid"
+
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "invalid.json"
+            input_path.write_text(json.dumps(event), encoding="utf-8")
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = main([str(input_path)])
+
+        self.assertEqual(1, exit_code)
+        self.assertIn("FAILED: 1 event(s) checked", stderr.getvalue())
+
+    def test_cli_returns_two_for_invalid_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "broken.json"
+            input_path.write_text("{not-json", encoding="utf-8")
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = main([str(input_path)])
+
+        self.assertEqual(2, exit_code)
+        self.assertIn("Validator setup/input error", stderr.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()
