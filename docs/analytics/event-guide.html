@@ -58,15 +58,17 @@ body{margin:0;background:var(--ground);color:var(--body);font-family:var(--sans)
 .wrap{display:grid;grid-template-columns:298px minmax(0,1fr);align-items:start;
   max-width:1360px;margin:0 auto}
 
-.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 16px 32px;
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 16px 40px;
   border-right:1px solid var(--rule);background:var(--panel);
-  display:flex;flex-direction:column;gap:18px}
+  display:flex;flex-direction:column;gap:30px}
 .brand{display:flex;flex-direction:column;gap:5px}
 .brand b{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
 .brand span{font-size:11.5px;color:var(--faint)}
-.navgroup{display:flex;flex-direction:column;gap:4px}
+/* 그룹은 <nav> 안에 들어 있다. .side 의 gap 은 여기까지 오지 않는다 */
+.side nav{display:flex;flex-direction:column;gap:30px}
+.navgroup{display:flex;flex-direction:column;gap:6px}
 .navhead{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;font-family:var(--sans);
-  padding:0 2px 8px}
+  padding:0 2px 11px}
 .stepno{flex:none;width:17px;height:17px;border-radius:50%;display:inline-flex;
   align-items:center;justify-content:center;font-size:10.5px;font-weight:600;
   color:#fff;align-self:center}
@@ -81,7 +83,7 @@ body{margin:0;background:var(--ground);color:var(--body);font-family:var(--sans)
 /* 아래 단계일수록 들여쓰고 세로선으로 묶어, 무엇이 무엇을 받치는지 보이게 한다 */
 .navgroup{position:relative}
 .t-basis .navitem,.t-deep .navitem{margin-left:16px}
-.t-basis::before,.t-deep::before{content:"";position:absolute;left:8px;top:30px;bottom:4px;
+.t-basis::before,.t-deep::before{content:"";position:absolute;left:8px;top:34px;bottom:6px;
   width:1px;background:var(--rule)}
 .dot{width:7px;height:7px;border-radius:50%;flex:none}
 .d-brief{background:var(--g-brief)}
@@ -1420,7 +1422,7 @@ e × T &lt; B  →  시간 트리거.  전송 간격 = T 초</code></pre>
 <p>PA 로그가 <code>user</code> 로 들어오면 <code>user_id</code> 가 NULL 이라 사용자 단위 지표에서 빠지고,<br><code>simulation_run_id</code> 를 grain 에 쓰는 시뮬레이션 Mart 에는 아예 안 잡힌다.<br>게다가 synthetic 필수 properties 검증은 <code>actor_type != 'synthetic'</code> 이면 그냥<br>통과시키므로 <strong>거절되지도 않고 조용히 잘못된 데이터</strong>가 된다.</p>
 <h3 id="9-2-표시는-시뮬레이터가-붙인다">9-2. 표시는 시뮬레이터가 붙인다</h3>
 <p>계약이 정한 강제 지점이 Simulator 와 Spark 이므로<br>(<code>event-taxonomy-trigger-schema.md</code> §8.4 — "실제 Web Event 에는 적용하지 않으므로<br>프론트 구현에는 영향이 없다"), 표시도 시뮬레이터에서 붙인다.<br>러너의 <code>LogSink</code> 가 프론트의 <code>/api/events</code> 요청을 가로채 봉투를 채운 뒤<br>파일로 남기고, <code>--post</code> 를 주면 수집 API 로 대신 보낸다.</p>
-<div class="tw"><table><thead><tr><th>채우는 값</th><th>자리</th></tr></thead><tbody><tr><td><code>synthetic</code></td><td><code>actor_type</code></td></tr><tr><td><code>agent_realtime</code></td><td><code>properties.generator_type</code></td></tr><tr><td>실행 ID (<code>run_20260901T031500Z</code>)</td><td><code>properties.simulation_run_id</code></td></tr><tr><td>시나리오 ID (<code>normal_day</code>)</td><td><code>properties.scenario_id</code></td></tr></tbody></table></div>
+<div class="tw"><table><thead><tr><th>채우는 값</th><th>자리</th></tr></thead><tbody><tr><td><code>synthetic</code></td><td><code>actor_type</code></td></tr><tr><td><code>agent_llm</code></td><td><code>properties.generator_type</code></td></tr><tr><td>실행 ID (<code>run_20260901T031500Z</code>)</td><td><code>properties.simulation_run_id</code></td></tr><tr><td>시나리오 ID (<code>normal_day</code>)</td><td><code>properties.scenario_id</code></td></tr></tbody></table></div>
 <p>전송 요청에는 <code>X-Actor-Type: synthetic</code> · <code>X-Simulation-Run-Id</code> 헤더도 같이 단다.<br>지금은 아무도 읽지 않지만, 합성 트래픽의 일반적인 처리는 <strong>자동화가 전송 계층에서<br>자기를 밝히고 수집 서버가 라벨을 찍는 것</strong>이다. 나중에 수집 서버가 그렇게 올라가도<br>러너를 다시 고칠 필요가 없다.</p>
 <p><strong>프론트 로거는 고치지 않는다.</strong> 프론트 담당 범위이고, 8/28 협의에서 프론트<br>요청을 코드 수정 2건으로 좁혀 두었다. 진입 주소에 같은 값을 파라미터로도 붙이므로<br>(<code>?actor=synthetic&amp;gen=...&amp;run=...&amp;scenario=...</code>), 프론트가 나중에 이걸 읽게 되면<br>봉투에 표시가 이미 붙어 오고 러너의 보정은 저절로 0 이 된다. 러너는 둘을 나눠 센다.</p>
 <h3 id="9-3-지키는-규칙">9-3. 지키는 규칙</h3>

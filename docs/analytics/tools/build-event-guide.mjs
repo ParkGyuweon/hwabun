@@ -515,15 +515,17 @@ body{margin:0;background:var(--ground);color:var(--body);font-family:var(--sans)
 .wrap{display:grid;grid-template-columns:298px minmax(0,1fr);align-items:start;
   max-width:1360px;margin:0 auto}
 
-.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 16px 32px;
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 16px 40px;
   border-right:1px solid var(--rule);background:var(--panel);
-  display:flex;flex-direction:column;gap:18px}
+  display:flex;flex-direction:column;gap:30px}
 .brand{display:flex;flex-direction:column;gap:5px}
 .brand b{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
 .brand span{font-size:11.5px;color:var(--faint)}
-.navgroup{display:flex;flex-direction:column;gap:4px}
+/* 그룹은 <nav> 안에 들어 있다. .side 의 gap 은 여기까지 오지 않는다 */
+.side nav{display:flex;flex-direction:column;gap:30px}
+.navgroup{display:flex;flex-direction:column;gap:6px}
 .navhead{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;font-family:var(--sans);
-  padding:0 2px 8px}
+  padding:0 2px 11px}
 .stepno{flex:none;width:17px;height:17px;border-radius:50%;display:inline-flex;
   align-items:center;justify-content:center;font-size:10.5px;font-weight:600;
   color:#fff;align-self:center}
@@ -538,7 +540,7 @@ body{margin:0;background:var(--ground);color:var(--body);font-family:var(--sans)
 /* 아래 단계일수록 들여쓰고 세로선으로 묶어, 무엇이 무엇을 받치는지 보이게 한다 */
 .navgroup{position:relative}
 .t-basis .navitem,.t-deep .navitem{margin-left:16px}
-.t-basis::before,.t-deep::before{content:"";position:absolute;left:8px;top:30px;bottom:4px;
+.t-basis::before,.t-deep::before{content:"";position:absolute;left:8px;top:34px;bottom:6px;
   width:1px;background:var(--rule)}
 .dot{width:7px;height:7px;border-radius:50%;flex:none}
 .d-brief{background:var(--g-brief)}
