@@ -142,7 +142,7 @@ class UserVector:
                 n[g] = n.get(g, 0.0) + NEG_W0 / (1.0 + w / NEG_TAU)
         return p, n
 
-    # ── 93차원 벡터 ───────────────────────────────────────────────────────
+    # ── 상품 공간 벡터 ─────────────────────────────────────────────────────
     def vectors(self, index, matrix):
         """index: product_id -> 행 번호,  matrix: (상품수, 차원)
            반환 (v_u⁺, v_u⁻). 신호가 없으면 None"""

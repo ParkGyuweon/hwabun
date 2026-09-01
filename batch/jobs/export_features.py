@@ -129,8 +129,9 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
             "vocab_version": e.V["version"],
             "schedule": [list(x) for x in SCHEDULE],
             "note": ("행동 로그 없이 리뷰 시드만으로 만든 사용자 벡터 기준. "
-                     "시드는 후보에서 제외한다. 점수 계산 대조용이며 서빙 정책"
-                     "(viewed 상한 2개)과는 다르다."),
+                     "시드는 후보에서 제외하고 **MMR 은 적용하지 않았다** — 점수 계산 "
+                     "자체를 대조하기 위한 값이다. 서빙은 여기에 노출 정책"
+                     "(viewed 상한 2개)과 MMR(λ_mmr=0.8)이 더 붙는다."),
             "cases": cases,
         }, f, ensure_ascii=False, indent=2)
     return len(cases)

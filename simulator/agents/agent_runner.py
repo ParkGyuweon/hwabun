@@ -29,6 +29,8 @@ LLM 에이전트 러너 — PA 페르소나가 실제 사이트를 돌아다닌�
 
 실행
     python simulator/agents/agent_runner.py --dry-run --limit 1     # 프롬프트만 확인
+    python simulator/agents/agent_runner.py --limit 1 --entry list         --script quick_look,click_product,wishlist_toggle,add_to_cart,back_to_list
+                                                                    # 대본 리허설 (0 크레딧)
     python simulator/agents/agent_runner.py --limit 3 --headed      # 3명, 브라우저 보이게
     python simulator/agents/agent_runner.py --limit 100             # 전원 배치
     python simulator/agents/agent_runner.py --limit 100 --post http://localhost:8080
@@ -76,7 +78,21 @@ GMS_BASE = "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
 MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
-ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
+ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
+           "wishlist_toggle", "remove_from_cart", "back_to_list", "leave")
+
+# 행동을 세 개 더 연 이유
+#   5개(click_product/scroll/add_to_cart/back_to_list/leave)만으로는 프론트가 정의한
+#   이벤트 36종 중 상당수가 **구조적으로 생성 불가능**했다. 특히 v_u- 의 입력인
+#   찜 해제·장바구니 제거가 아예 안 나왔다.
+#   quick_look     목록에서 상세로 안 가고 요약만 열어보는 동선 (관심은 있으나 약함)
+#   wishlist_toggle 담기 전 단계의 관심. 두 번 누르면 찜 해제 = 부정 신호
+#   remove_from_cart 담았다 뺀 것. 조사 7-2 기준 상품 특정 부정 신호 중 가장 명확
+#
+# 다만 선택지를 늘리면 약한 모델이 그쪽으로 도망쳐 전환이 줄어든다(75턴 add_to_cart
+# 0건 사고). 그래서 세 개 모두 **코드가 조건을 만족할 때만** 목록에 올린다.
+QUICK_LOOK_MAX = 3      # 1인당 요약 열기 상한. 넘으면 상세로 들어가야 한다
+CART_MIN_TO_REMOVE = 2  # 장바구니에 이만큼 있어야 빼는 선택지를 연다 (전환 0 방지)
 
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
@@ -246,6 +262,10 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 마음에 드는 정도가 보통 이상이면 add_to_cart 를 고르십시오.
 - 맞지 않거나 이미 충분히 봤다면 back_to_list 를 고르십시오.
 - 목록 끝에 도달했고 더 관심 가는 상품이 없으면 leave 를 고르십시오.
+- 궁금하지만 상세까지 볼 정도는 아니면 quick_look 으로 요약만 열어보십시오.
+- 상세에서 마음에 들지만 지금 사기는 망설여지면 wishlist_toggle 로 찜하십시오.
+  이미 찜한 상품이 마음에서 멀어졌으면 다시 눌러 해제하십시오.
+- 장바구니에 담아둔 것 중 다시 보니 아닌 것이 있으면 remove_from_cart 로 빼십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
@@ -345,6 +365,46 @@ def read_detail(page):
 # 3. LLM 호출 (캐시)
 # ============================================================================
 
+class ScriptedLLM:
+    """정해진 순서를 돌려주는 가짜 LLM. 크레딧 0 으로 배선을 검증한다.
+
+    행동을 새로 열 때 그것이 **실제 DOM 조작과 로그로 이어지는지**는 프롬프트를
+    아무리 다듬어도 알 수 없다. 모델을 부르는 대신 순서를 강제해서, 브라우저와
+    프론트 로거는 진짜인 채로 나머지 배선을 전부 확인한다.
+
+    target 은 화면에서 고른다 — LLM 이 지어낸 이름을 흉내 내면 매칭 실패까지
+    같이 재현돼 무엇을 검증하는지 흐려진다.
+    """
+
+    def __init__(self, plan):
+        self.plan = list(plan)
+        self.i = 0
+
+    def next_action(self, page, acts, here, cart, visited, peeked=()):
+        while self.i < len(self.plan):
+            act = self.plan[self.i]
+            self.i += 1
+            if act not in acts:
+                print(f"       [대본 {act} 은 이번 턴에 허용되지 않음 — 건너뜀]")
+                continue
+            target = None
+            if act == "click_product":
+                target = first_unvisited(page, visited)
+                if target is None:
+                    continue
+            elif act == "quick_look":
+                # 요약을 이미 열어본 카드는 다시 고르지 않는다
+                target = first_unvisited(page, list(visited) + list(peeked))
+                if target is None:
+                    continue
+            elif act in ("add_to_cart", "wishlist_toggle"):
+                target = here
+            elif act == "remove_from_cart":
+                target = cart[-1] if cart else None
+            return {"action": act, "target": target, "reason": "(대본)"}
+        return {"action": "leave", "target": None, "reason": "(대본 끝)"}
+
+
 def ask(client, system, user, cache_on, dry):
     """LLM 에게 다음 행동을 묻는다.
 
@@ -433,6 +493,27 @@ def click_safe(loc, page):
         return False
 
 
+def find_card(page, target):
+    """LLM 이 말한 이름과 맞는 목록 카드를 찾는다. 없으면 None
+
+    이름을 줄여 쓰는 경우가 많아 부분 일치까지 허용한다. 못 찾으면 첫 카드로
+    대충 누르지 않는다 — 고른 적 없는 클릭이 로그에 남으면 수집 자체를 못 믿는다.
+    """
+    cards = page.locator(".card[data-product-id]")
+    want = norm(target)
+    if not want:
+        return None
+    for i in range(cards.count()):
+        card = cards.nth(i)
+        try:
+            name = norm(card.locator(".card__name").inner_text(timeout=1000))
+        except Exception:
+            continue
+        if want in name or name in want or want[:14] in name:
+            return card
+    return None
+
+
 def do_action(page, act, target):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
@@ -467,24 +548,73 @@ def do_action(page, act, target):
         page.wait_for_timeout(900)
         return True
 
-    if a == "click_product":
-        cards = page.locator(".card[data-product-id]")
+    if a == "quick_look":
+        # 카드에 마우스를 올려야 버튼이 뜬다. 사람이 하는 순서 그대로 간다
+        card = find_card(page, target)
+        if card is None:
+            return False
+        try:
+            card.hover(timeout=2000)
+        except Exception:
+            pass
+        btn = card.locator(".card__quicklook")
+        if not btn.count() or not click_safe(btn.first, page):
+            return False
+        page.wait_for_timeout(random.randint(900, 2200))   # 요약을 읽는 시간
+        # 열었으면 닫는다. 닫는 것까지가 한 동선이라 quick_look_close 가 남는다
+        close = page.locator('.qlook__close[data-log-action="quick_look_close"]')
+        if close.count():
+            click_safe(close.first, page)
+            page.wait_for_timeout(500)
+        return True
+
+    if a == "wishlist_toggle":
+        btn = page.locator('[data-log-action="wishlist_toggle"]')
+        if not btn.count():
+            return False                         # 목록 화면에는 없다
+        if not click_safe(btn.first, page):
+            return False
+        page.wait_for_timeout(600)
+        return True
+
+    if a == "remove_from_cart":
+        # 장바구니를 열고 -> 빼고 -> 돌아온다. 한 동선이라 코드가 묶어서 실행한다.
+        # 사람도 "빼려고" 장바구니를 열지, 열어놓고 고민하지 않는다
+        basket = page.locator('[data-log-action="view_cart"]')
+        if not basket.count() or not click_safe(basket.first, page):
+            return False
+        page.wait_for_timeout(1000)
+        rows = page.locator('[data-log-action="remove_from_cart"]')
+        if not rows.count():
+            page.go_back()
+            page.wait_for_timeout(800)
+            return False
         want = norm(target)
-        for i in range(cards.count()):
-            c = cards.nth(i)
-            try:
-                nm = norm(c.locator(".card__name").inner_text(timeout=1000))
-            except Exception:
-                continue
-            # LLM 이 이름을 줄여 쓰는 경우가 많아 부분 일치까지 허용한다
-            if want and (want in nm or nm in want or want[:14] in nm):
-                if not click_safe(c.locator(".card__link").first, page):
-                    return False
-                page.wait_for_timeout(1400)
-                return True
-        return False                             # 화면에 없는 상품을 지어냈다.
-        # 첫 상품으로 대충 누르지 않는다 — 고른 적 없는 클릭이 로그에 남으면
-        # 수집한 행동 로그 자체를 믿을 수 없게 된다
+        pick = rows.first
+        if want:                                 # 지목한 상품이 있으면 그것을 뺀다
+            for i in range(rows.count()):
+                row = rows.nth(i)
+                try:
+                    text = norm(row.locator("xpath=ancestor::li[1]").inner_text(timeout=800))
+                except Exception:
+                    continue
+                if want[:14] and want[:14] in text:
+                    pick = row
+                    break
+        ok = click_safe(pick, page)
+        page.wait_for_timeout(700)
+        page.go_back()                           # 보던 화면으로 돌아간다
+        page.wait_for_timeout(900)
+        return ok
+
+    if a == "click_product":
+        card = find_card(page, target)
+        if card is None:
+            return False                         # 화면에 없는 상품을 지어냈다
+        if not click_safe(card.locator(".card__link").first, page):
+            return False
+        page.wait_for_timeout(1400)
+        return True
 
     return False
 
@@ -520,7 +650,8 @@ def first_unvisited(page, visited):
     return None
 
 
-def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False):
+def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
+                    wished_here=False, quick_looks=0, cart_size=0):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -534,6 +665,9 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False):
             acts.insert(0, "add_to_cart")     # 담기를 맨 앞에 둔다
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
+        # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
+        if not wished_here:
+            acts.append("wishlist_toggle")
         return acts
     # 목록 화면: 끝까지 내려왔고 더 불러올 것도 없으면 scroll 은 무의미하다.
     # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
@@ -541,6 +675,11 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False):
     acts = ["click_product"]
     if pct < 97 or has_more:
         acts.append("scroll")
+    if quick_looks < QUICK_LOOK_MAX:
+        acts.append("quick_look")
+    # 담은 것이 하나뿐일 때 빼기를 열면 전환이 0 으로 돌아갈 수 있다
+    if cart_size >= CART_MIN_TO_REMOVE:
+        acts.append("remove_from_cart")
     acts.append("leave")
     return acts
 
@@ -553,13 +692,16 @@ def detail_title(user):
     return ""
 
 
-def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
+def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=None):
     system = SYSTEM_TMPL.format(profile=profile_text(persona),
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
     calls, done, failed, carted = 0, 0, 0, 0
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
+    wished = set()           # 찜한 상품. 상품당 한 번만 열어준다
+    peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
+    quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
     for turn in range(1, max_turns + 1):
@@ -576,7 +718,11 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
         carted_here = any(norm(c) and (norm(c) in norm(here) or norm(here) in norm(c))
                           for c in cart)
         has_more = kind == "list" and page.locator(".list__more").count() > 0
-        acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more)
+        wished_here = any(norm(w) and (norm(w) in norm(here) or norm(here) in norm(w))
+                          for w in wished)
+        acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more,
+                               wished_here=wished_here, quick_looks=quick_looks,
+                               cart_size=len(cart))
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -589,6 +735,13 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             user = (f"[이미 본 상품] {', '.join(visited[-8:])}"
                     f"{NL}이미 본 상품은 다시 누르지 말고 다른 상품을 고르십시오."
                     + NL + NL + user)
+        if peeked:
+            user = (f"[요약만 열어본 상품] {', '.join(peeked[-6:])}{NL}"
+                    f"같은 상품을 또 열지 말고, 관심이 남았으면 상세로 들어가십시오."
+                    f"{NL}{NL}") + user
+        if wished:
+            user = (f"[찜한 상품] {', '.join(sorted(wished))}{NL}"
+                    f"이미 찜한 상품을 다시 누르면 찜이 해제됩니다.{NL}{NL}") + user
         if cart:
             user = f"[장바구니] {', '.join(cart)}{NL}{NL}" + user
         if history:
@@ -599,7 +752,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             if len(history) >= 3 and all(h.startswith("scroll") for h in history[-3:]):
                 user = ("[주의] 스크롤을 세 번 연속 했습니다. **이번에는 상품을 하나 고르거나"
                         " 목록 끝이면 leave 하십시오.**" + NL + NL + user)
-        obj, used = ask(client, system, user, cache_on, dry)
+        if script is not None:
+            obj, used = script.next_action(page, acts, here, cart, visited, peeked), 0
+        else:
+            obj, used = ask(client, system, user, cache_on, dry)
         calls += used
         if obj is None:
             failed += 1
@@ -617,8 +773,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
                 tgt = first_unvisited(page, visited)
                 if tgt is None:                  # 누를 만한 새 상품이 없다
                     new_act = "leave" if "leave" in acts else acts[-1]
-            elif new_act == "add_to_cart":
+            elif new_act in ("add_to_cart", "wishlist_toggle"):
                 tgt = here or tgt                # 화면이 진실이다
+            elif new_act == "remove_from_cart":
+                tgt = cart[-1] if cart else None
             else:
                 tgt = None
             if verbose:
@@ -648,6 +806,19 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             nm = here or (" ".join(str(tgt).split()[:4]) if tgt else "")
             if nm and nm not in cart:
                 cart.append(nm)
+        if okd and act == "wishlist_toggle":
+            # 같은 상품을 다시 누르면 해제다. 상태를 뒤집어 둬야 프롬프트가 맞는다
+            nm = here or (str(tgt) if tgt else "")
+            if nm:
+                wished.discard(nm) if nm in wished else wished.add(nm)
+        if okd and act == "quick_look":
+            quick_looks += 1
+            if tgt and tgt not in peeked:
+                peeked.append(str(tgt))
+        if okd and act == "remove_from_cart":
+            gone = str(tgt) if tgt else (cart[-1] if cart else None)
+            if gone in cart:
+                cart.remove(gone)
         done += okd
         failed += (not okd)
         if okd and act == "add_to_cart":
@@ -679,6 +850,12 @@ def main():
     ap.add_argument("--out", default=os.path.join(BD, "data", "agent_events.jsonl"),
                     help="가로챈 행동 로그를 적을 파일")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
+                    help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
+                         "(리허설에서 특정 동선을 재현할 때 쓴다)")
+    ap.add_argument("--script", default=None,
+                    help="LLM 대신 정해진 행동 순서를 실행한다 (크레딧 0). "
+                         "예) click_product,wishlist_toggle,add_to_cart,back_to_list")
     ap.add_argument("--scenario-id", default=DEFAULT_SCENARIO_ID,
                     help=f"synthetic 시나리오 ID (기본 {DEFAULT_SCENARIO_ID})")
     ap.add_argument("--simulation-run-id", default=None,
@@ -697,7 +874,7 @@ def main():
         MODEL = a.model
 
     client = None
-    if not a.dry_run:
+    if not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
             key = os.environ.get("OPENAI_API_KEY")
@@ -743,6 +920,8 @@ def main():
             # 운 때문인지 구분할 수 없다
             rng = random.Random(p["persona_id"])
             deep = catalog and rng.random() < DEEP_LINK_P
+            if a.entry != "auto":
+                deep = a.entry == "detail"
             entry = entry_url(a.url, a.scenario_id, simulation_run_id,
                               product_id=rng.choice(catalog) if deep else None)
             page.goto(entry, wait_until="networkidle")
@@ -756,7 +935,9 @@ def main():
 
             print(f"  {p['persona_id']}  {TYPE_KR.get(p['skin_type'], '')}/"
                   f"{p['skin_tone']}  구매 {p['n_products']}개")
-            r = run_one(page, client, p, a.turns, a.cache, a.dry_run, not a.quiet)
+            script = ScriptedLLM(a.script.split(",")) if a.script else None
+            r = run_one(page, client, p, a.turns, a.cache, a.dry_run, not a.quiet,
+                        script=script)
             for k in tot:
                 tot[k] += r[k]
             page.wait_for_timeout(1200)       # 남은 배치가 flush 될 시간을 준다
