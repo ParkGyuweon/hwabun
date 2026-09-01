@@ -25,11 +25,47 @@ sys.path.insert(0, BD)
 
 LAMBDA = 0.15
 VIEW_CAP = 2
+# MMR 다양성 계수. **값이 클수록 약하게 건다** — 헷갈리기 쉬운 방향이다.
+#
+#     선택 = argmax [ λ_mmr x score(i) - (1-λ_mmr) x max cos(v_i, 이미 고른 것) ]
+#                     └ 점수(관련성)          └ 중복 벌점(다양성)
+#
+# λ 가 점수 쪽에 붙어 있어서 1.0 이면 벌점 계수가 0 이 되어 **끈 것과 같고**,
+# 내릴수록 중복 벌점이 세진다 (0.8 = 약하게 / 0.5 = 세게).
+#
+# **다양성과 정확도가 같이 오른다.** 상위 10개를 한 브랜드가 5~6칸 먹고 있어서
+# 정답이 들어올 자리가 없었기 때문이다. 중복을 걷어내면 그 자리가 생긴다.
+# 강하게 걸면(0.5) 그때부터는 손해다.
+#
+# 9,900명 leave-last-out (부트스트랩 300회, 짝비교):
+#   λ    전체      새 브랜드   고유 브랜드   한 브랜드 최대 점유
+#   1.0  23.70%      1.37%       3.7개        61.4%   (끔)
+#   0.9  23.97%      1.43%       3.9개        60.3%   +0.27%p [+0.10, +0.47]
+#   0.8  23.96%      1.50%       4.1개        58.9%   +0.26%p [+0.03, +0.53]  <- 채택
+#   0.7  23.66%      1.63%       4.4개        56.8%   -0.04%p (구분 안 됨)
+#   0.5  22.36%      2.75%       5.9개        45.5%   -1.33%p [-1.81, -0.83]
+# 0.9 와 정확도 이득이 같으면서(CI 겹침) 다양성이 더 커서 0.8 을 쓴다.
+# 측정: docs/ai/recommendation-design.md 8절
+LAMBDA_MMR = 0.8
 
 # 시드(리뷰) 상품 개수 -> (w1 콘텐츠, w2 속성, w3 인기)
+#
+# **행동이 쌓일수록 속성의 몫을 콘텐츠로 넘긴다.** 이전 스케줄은 시드 6개 이상에
+# w2=0.55 를 줘서 가장 많이 행동한 사람에게 속성 비중이 가장 컸다. 서술과 코드가
+# 반대였고, 그 구간에서 Recall@10 16.9% (같은 조건에서 속성을 빼면 21.2%) 였다.
+#
+# **고친 것은 6개 이상 구간 하나뿐이다.** 1~5개 구간은 측정으로 뒷받침된 값이라
+# 그대로 둔다. 그 구간까지 같이 손대면 1~2개 구간에서 26.24% -> 25.38% 로 손해를 본다.
+#
+# 9,900명 leave-last-out 재측정 (부트스트랩 300회, 짝비교):
+#   이 스케줄          23.70%  (롱테일 31.50%)   시드 6개 이상 구간 22.51%
+#   이전 스케줄        23.08%  (롱테일 31.32%)   시드 6개 이상 구간 17.64%
+#   속성 항 제거       22.86%  (롱테일 29.48%)   -0.64%p CI [-1.01, -0.25]
+# 속성 항은 정확도를 올리는 장치가 아니라 **롱테일 보험**이라 남긴다.
+# 측정: docs/ai/persona-feature-port.md §7 · batch/jobs/eval_persona_feature.py
 SCHEDULE = [(0, 0.00, 0.30, 0.70),
             (5, 0.70, 0.25, 0.05),
-            (10 ** 9, 0.40, 0.55, 0.05)]
+            (10 ** 9, 0.80, 0.18, 0.02)]
 
 
 def schedule_for(n_seed):
@@ -68,8 +104,40 @@ class Recommender:
         s += w3 * self.prior
         return s
 
+    def mmr(self, scores, order, k, lam):
+        """다양성 보정 — 점수 1등만 줄세우지 않고 서로 덜 닮은 것을 섞는다.
+
+            선택 = argmax [ lam x score(i) - (1-lam) x max cos(v_i, 이미 고른 것) ]
+
+        **lam 이 클수록 약하게 건다.** lam 은 점수 쪽 계수라 1.0 이면 벌점이 0 이 되어
+        원래 순서 그대로고, 내릴수록 중복에 대한 벌점이 세진다.
+
+        점수 축과 유사도 축의 크기가 다르면 lam 의 의미가 흔들리므로,
+        후보 점수를 0~1 로 편 뒤 섞는다.
+
+        **정확도를 깎는 장치다.** 점수 1등을 밀어내기 때문이다. 켤지 말지는
+        docs/ai/recommendation-design.md 8절의 측정으로 판단한다.
+        """
+        if lam >= 1.0 or len(order) <= 1:
+            return order[:k]
+        cand = list(order)
+        s = scores[cand]
+        lo, hi = float(s.min()), float(s.max())
+        norm = (s - lo) / (hi - lo) if hi > lo else np.zeros_like(s)
+        rel = dict(zip(cand, norm))
+
+        picked = [cand[0]]
+        rest = cand[1:]
+        while rest and len(picked) < k:
+            sim = self.M[rest] @ self.M[picked].T      # (남은 후보, 고른 것)
+            penalty = sim.max(axis=1)
+            gain = lam * np.array([rel[i] for i in rest]) - (1 - lam) * penalty
+            best = int(np.argmax(gain))
+            picked.append(rest.pop(best))
+        return picked
+
     def rank(self, state, persona=None, k=10, evaluation=False,
-             review_products=(), view_cap=VIEW_CAP):
+             review_products=(), view_cap=VIEW_CAP, lam_mmr=LAMBDA_MMR):
         """추천 목록 상위 k개. evaluation=True 면 본 상품을 전부 뺀다(leakage 차단)"""
         s = self.score(state, persona).copy()
         blocked = set(review_products) | set(state.converted)
@@ -89,9 +157,10 @@ class Recommender:
                         continue
                     used += 1
                 out.append(i)
-                if len(out) >= k:
+                if len(out) >= k * 3:      # MMR 이 고를 여지를 남긴다
                     break
             order = out
+        order = self.mmr(s, order, k, lam_mmr)
         return [(self.ids[i], float(s[i])) for i in order[:k]]
 
     def rank_of(self, state, product_id, persona=None, **kw):
@@ -122,9 +191,14 @@ def load_catalog(products_path=None, vocab_path=None):
 if __name__ == "__main__":
     try: sys.stdout.reconfigure(encoding="utf-8")
     except Exception: pass
+    from persona_feature import AffinityTable
     from user_vector import UserVector
     M, idx, prior, enc = load_catalog()
-    rec = Recommender(M, idx, prior)
+    # 속성 친화도를 꽂지 않으면 w2 항이 통째로 0 이 된다. 데모가 그 상태면
+    # 읽는 사람이 "속성은 안 쓰는구나" 로 오해한다
+    rec = Recommender(M, idx, prior, affinity=AffinityTable(idx))
+    persona = {"skin_type": "dry", "skin_tone": "light",
+               "hair_color": "brown", "eye_color": "brown"}
     ids = list(idx)
 
     st = UserVector()
@@ -135,16 +209,21 @@ if __name__ == "__main__":
 
     print(f"카탈로그 {M.shape[0]}개 상품 / 벡터 {M.shape[1]}차원")
     print(st)
+    print(f"페르소나 속성 {persona}")
     w1, w2, w3 = schedule_for(len(st.weights()[0]))
     print(f"스케줄 w1={w1} w2={w2} w3={w3}  λ={rec.lam}")
     print()
     print("서빙 top-5")
-    for g, s in rec.rank(st, k=5):
+    for g, s in rec.rank(st, persona=persona, k=5):
         mark = "  (조회함)" if g in st.viewed else ""
         print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}{mark}")
     print()
     print("평가 모드 top-5 (본 상품 전부 제외)")
-    for g, s in rec.rank(st, k=5, evaluation=True):
+    for g, s in rec.rank(st, persona=persona, k=5, evaluation=True):
         print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}")
     print()
-    print(f"특정 상품의 현재 순위: {rec.rank_of(st, ids[100])}위")
+    print("속성 항을 빼면 (affinity 미주입) top-5")
+    for g, s in Recommender(M, idx, prior).rank(st, k=5):
+        print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}")
+    print()
+    print(f"특정 상품의 현재 순위: {rec.rank_of(st, ids[100], persona=persona)}위")

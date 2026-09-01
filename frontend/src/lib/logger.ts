@@ -17,6 +17,18 @@ interface LoggerContext {
   productId: string | null;
   actorType: ActorType;
   environment: string;
+  /** synthetic 실행 정보. 실사용자 방문이면 null */
+  synthetic: SyntheticContext | null;
+}
+
+/**
+ * 부하 생성기가 이 화면을 직접 조작할 때 봉투에 실어야 하는 실행 정보.
+ * actor_type='synthetic' 이면 셋 다 필수다 (contracts/event-schema.json).
+ */
+interface SyntheticContext {
+  generatorType: string;
+  simulationRunId: string;
+  scenarioId: string;
 }
 
 type Listener = (event: LogEnvelope) => void;
@@ -57,12 +69,59 @@ function createId(): string {
   return `id-${Math.random().toString(36).slice(2)}-${Date.now()}`;
 }
 
+/**
+ * 계약이 정한 생성 방식(`contracts/event-schema.json`).
+ * 여기 없는 값은 검증기가 거절하므로 받아주지 않는다.
+ */
+const GENERATOR_TYPES = ['python_batch', 'agent_llm'];
+
+/**
+ * 진입 주소에서 synthetic 표시를 읽는다.
+ *
+ * LLM 에이전트는 로그를 직접 만들지 않고 실제 브라우저로 이 화면을 조작한다.
+ * 표시가 없으면 로거가 실사용자와 구분할 수 없어 actor_type='user' 로 남기는데,
+ * 그러면 Spark 가 user_id 를 NULL 로 파생하고 synthetic 필수 property 검증도
+ * 건너뛰어서 **거절되지 않고 조용히 잘못된 데이터**가 된다.
+ * 계약: docs/analytics/log-transport-contract.md §9
+ *
+ * **개발 서버에서만 인정한다.** 배포 화면에서도 받아주면 주소만 고쳐서
+ * 아무나 로그 출처를 위장할 수 있다.
+ *
+ * 넷 중 하나라도 없거나 계약 밖의 값이면 통째로 무시하고 user 로 둔다.
+ * 일부만 채운 봉투는 검증기에 걸려 어차피 격리되므로, 반쯤 표시된 상태로
+ * 흘려보내는 것보다 실사용자로 남기고 러너가 보정하게 두는 편이 낫다.
+ */
+function syntheticContextFromUrl(): SyntheticContext | null {
+  if (!import.meta.env.DEV) return null;
+  if (typeof window === 'undefined') return null;
+
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('actor') !== 'synthetic') return null;
+
+  const generatorType = query.get('gen') ?? '';
+  const simulationRunId = query.get('run') ?? '';
+  const scenarioId = query.get('scenario') ?? '';
+  if (!GENERATOR_TYPES.includes(generatorType)) return null;
+  if (!simulationRunId || !scenarioId) return null;
+
+  return { generatorType, simulationRunId, scenarioId };
+}
+
+/**
+ * 모듈을 읽을 때 한 번 판정한다.
+ *
+ * 화면 effect 에서 정하면 그 전에 나가는 이벤트(첫 로드의 scroll_depth 등)가
+ * user 로 남아 한 실행 안에서 actor_type 이 섞인다.
+ */
+const syntheticContext = syntheticContextFromUrl();
+
 let context: LoggerContext = {
   personaId: null,
   pageType: 'product_detail',
   productId: null,
-  actorType: 'user',
+  actorType: syntheticContext ? 'synthetic' : 'user',
   environment: 'local',
+  synthetic: syntheticContext,
 };
 
 let sessionId = createId();
@@ -182,6 +241,19 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   const finalProperties: Record<string, unknown> = hasTarget ? restProperties : { ...properties };
   if (hasTarget && context.productId !== null && context.productId !== targetProductId) {
     finalProperties.context_product_id = context.productId;
+  }
+
+  /**
+   * synthetic 실행 정보는 어느 이벤트에나 실린다. 셋 다 없으면 검증기가 거절한다.
+   *
+   * 호출부가 같은 키를 이미 실었으면 덮지 않는다. 덮으면 화면이 제대로 붙였는지
+   * 확인할 방법이 없어진다 (log-transport-contract.md §9-3 과 같은 규칙).
+   */
+  if (context.synthetic !== null) {
+    const { generatorType, simulationRunId, scenarioId } = context.synthetic;
+    finalProperties.generator_type ??= generatorType;
+    finalProperties.simulation_run_id ??= simulationRunId;
+    finalProperties.scenario_id ??= scenarioId;
   }
 
   const event: LogEnvelope = {

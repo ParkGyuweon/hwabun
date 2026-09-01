@@ -29,6 +29,8 @@ LLM 에이전트 러너 — PA 페르소나가 실제 사이트를 돌아다닌�
 
 실행
     python simulator/agents/agent_runner.py --dry-run --limit 1     # 프롬프트만 확인
+    python simulator/agents/agent_runner.py --limit 1 --entry list         --script quick_look,click_product,wishlist_toggle,add_to_cart,back_to_list
+                                                                    # 대본 리허설 (0 크레딧)
     python simulator/agents/agent_runner.py --limit 3 --headed      # 3명, 브라우저 보이게
     python simulator/agents/agent_runner.py --limit 100             # 전원 배치
     python simulator/agents/agent_runner.py --limit 100 --post http://localhost:8080
@@ -61,30 +63,58 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 PERSONA_FILE = os.path.join(ROOT, "simulator", "personas", "data",
                             "personas_100_agent.json")
 CACHE_DIR = os.path.join(BD, ".cache")
+PRODUCTS_FILE = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
+
+# ── 카탈로그 커버리지 ─────────────────────────────────────
+# 100명이 200개 중 38개만 만졌다(19%). 원인은 취향이 아니라 화면 구조다.
+#   * 목록은 25개씩 끊어 보여주고 나머지는 "더 보기" 버튼 뒤에 있다
+#   * 100명 전원이 같은 첫 화면에서 시작하니 보이는 후보가 늘 같은 25개다
+# 프롬프트로 "더 내려보라" 고 부탁하지 않고 코드로 시작 지점을 흩는다.
+DEEP_LINK_P = 0.5       # 이 확률로 상품 상세에서 시작한다 (검색·광고 유입에 해당)
+CATEGORY_P = 0.6        # 목록에서 시작할 때 이 확률로 카테고리 탭을 하나 고른다
+MAX_MORE_CLICKS = 3     # "더 보기" 한도. 25 -> 최대 100개까지 늘린다
 
 GMS_BASE = "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
 MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
-ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
+ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
+           "wishlist_toggle", "remove_from_cart", "back_to_list", "leave")
+
+# 행동을 세 개 더 연 이유
+#   5개(click_product/scroll/add_to_cart/back_to_list/leave)만으로는 프론트가 정의한
+#   이벤트 36종 중 상당수가 **구조적으로 생성 불가능**했다. 특히 v_u- 의 입력인
+#   찜 해제·장바구니 제거가 아예 안 나왔다.
+#   quick_look     목록에서 상세로 안 가고 요약만 열어보는 동선 (관심은 있으나 약함)
+#   wishlist_toggle 담기 전 단계의 관심. 두 번 누르면 찜 해제 = 부정 신호
+#   remove_from_cart 담았다 뺀 것. 조사 7-2 기준 상품 특정 부정 신호 중 가장 명확
+#
+# 다만 선택지를 늘리면 약한 모델이 그쪽으로 도망쳐 전환이 줄어든다(75턴 add_to_cart
+# 0건 사고). 그래서 세 개 모두 **코드가 조건을 만족할 때만** 목록에 올린다.
+QUICK_LOOK_MAX = 3      # 1인당 요약 열기 상한. 넘으면 상세로 들어가야 한다
+CART_MIN_TO_REMOVE = 2  # 장바구니에 이만큼 있어야 빼는 선택지를 연다 (전환 0 방지)
 
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
 # 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다.
 #
-# 표시를 채우는 곳은 LogSink 다 (계약이 정한 강제 지점이 Simulator + Spark).
-# 프론트 로거는 고치지 않는다 — 프론트 담당 범위이기도 하고, 8/28 협의에서 프론트
-# 요청을 2건으로 좁혀 두었다.
+# 진입 주소에 표시를 붙이면 **프론트 로거가 그것을 읽어 봉투에 싣는다**
+# (frontend/src/lib/logger.ts syntheticContextFromUrl). 그래서 평상시 LogSink 의
+# 보정은 0 이고, 프론트가 표시를 못 붙인 경우에만 채운다.
+# 실측: stamped 0 / already 120.
 #
-# 진입 주소에도 같은 값을 붙인다. 지금 프론트는 이 파라미터를 읽지 않지만,
-# 읽게 되면 봉투에 이미 표시가 붙어 오고 LogSink 의 보정은 저절로 0 이 된다.
+# LogSink 를 남겨 두는 이유는 프론트가 파라미터를 못 읽는 경우(배포 빌드,
+# 파라미터 누락)에도 로그를 건지기 위해서다. 계약이 정한 강제 지점도
+# Simulator + Spark 다.
 # 계약: docs/analytics/log-transport-contract.md §9
 #
 # 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
 # 시나리오는 배치와 같은 값을 쓰고, 배치(python_batch)와 에이전트는
 # generator_type 으로 가른다 (docs/analytics/dw-schema.md).
 DEFAULT_SCENARIO_ID = "normal_day"
-GENERATOR_TYPE = "agent_realtime"
+# 계약 enum 은 python_batch | agent_llm 이다 (contracts/event-schema.json).
+# agent_realtime 은 legacy 로 명시적으로 거절된다 (contracts/tests/test_validate_events.py)
+GENERATOR_TYPE = "agent_llm"
 
 # 봉투에 schema_version 이 없을 때만 쓰는 값. 평소에는 프론트가 보낸 값을 그대로 쓴다
 SCHEMA_VERSION = "0.2.0-draft"
@@ -98,7 +128,7 @@ def default_simulation_run_id(now=None):
     return f"run_{ts.strftime('%Y%m%dT%H%M%SZ')}"
 
 
-def entry_url(base, scenario_id, simulation_run_id):
+def entry_url(base, scenario_id, simulation_run_id, product_id=None):
     """프론트 진입 주소에 synthetic 표시를 붙인다.
 
     프론트 로거는 **개발 서버에서만** 이 파라미터를 인정한다. 배포 화면에서도
@@ -115,7 +145,63 @@ def entry_url(base, scenario_id, simulation_run_id):
         "run": simulation_run_id,
         "scenario": scenario_id,
     })
+    if product_id:
+        # 프론트가 이미 지원하는 진입 경로다 (App.tsx initialProductId).
+        # 검색·광고로 상세에 바로 떨어지는 실제 유입에 해당한다
+        query["product"] = product_id
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def load_catalog():
+    """딥링크로 보낼 상품 ID 목록. 프론트 목록과 같은 200개다"""
+    try:
+        with io.open(PRODUCTS_FILE, encoding="utf-8") as f:
+            return [p["product_id"] for p in json.load(f) if p.get("product_id")]
+    except Exception:
+        return []
+
+
+def spread_start(page, rng):
+    """목록에서 시작하는 사람의 출발 지점을 흩는다.
+
+    100명 전원이 같은 첫 화면(25개)에서 시작하면 그 25개만 후보가 된다.
+    카테고리 탭을 고르고, "더 보기" 로 목록을 늘리고, 시작 스크롤 위치를 옮긴다.
+    전부 화면에 실제로 있는 조작이라 로그도 실제 사용자와 같은 모양으로 남는다.
+
+    스크롤은 한 번에 뛰지 않고 여러 번에 나눠 내린다. 한 번에 뛰면 프론트의
+    scroll_depth 25/50/75 단계가 통째로 건너뛰어져 로그가 사람 같지 않다.
+    """
+    tabs = page.locator(".list__tabs button")
+    if not tabs.count():
+        return None                      # 목록 화면이 아니다 (상세로 바로 들어옴)
+
+    picked = None
+    if rng.random() < CATEGORY_P:
+        i = rng.randrange(tabs.count())
+        try:
+            picked = tabs.nth(i).inner_text(timeout=1500).split(NL)[0].strip()
+            tabs.nth(i).click(timeout=3000)
+            page.wait_for_timeout(700)
+        except Exception:
+            picked = None
+
+    for _ in range(rng.randint(0, MAX_MORE_CLICKS)):
+        more = page.locator(".list__more")
+        if not more.count():
+            break
+        try:
+            more.first.click(timeout=3000)
+            page.wait_for_timeout(500)
+        except Exception:
+            break
+
+    height = page.evaluate("() => document.body.scrollHeight")
+    view = page.evaluate("() => window.innerHeight")
+    target = int(max(0, height - view) * rng.uniform(0, 0.75))
+    while page.evaluate("() => window.scrollY") + 40 < target:
+        page.mouse.wheel(0, rng.randint(500, 900))
+        page.wait_for_timeout(rng.randint(180, 420))
+    return picked
 
 NL = "\n"
 PCT_RE = "([0-9]+)[ ]*%"   # "스크롤 62%" 에서 숫자만 뽑는다
@@ -176,6 +262,10 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 마음에 드는 정도가 보통 이상이면 add_to_cart 를 고르십시오.
 - 맞지 않거나 이미 충분히 봤다면 back_to_list 를 고르십시오.
 - 목록 끝에 도달했고 더 관심 가는 상품이 없으면 leave 를 고르십시오.
+- 궁금하지만 상세까지 볼 정도는 아니면 quick_look 으로 요약만 열어보십시오.
+- 상세에서 마음에 들지만 지금 사기는 망설여지면 wishlist_toggle 로 찜하십시오.
+  이미 찜한 상품이 마음에서 멀어졌으면 다시 눌러 해제하십시오.
+- 장바구니에 담아둔 것 중 다시 보니 아닌 것이 있으면 remove_from_cart 로 빼십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
@@ -233,7 +323,13 @@ def read_list(page):
             continue
         lines.append(f"{len(lines)+1}. {brand} {name} — {price}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
-    tail = "  ← 목록 끝입니다" if pct >= 97 else ""
+    # 바닥이어도 "더 보기" 가 남아 있으면 목록 끝이 아니다. 끝이라고 말하면
+    # LLM 이 leave 를 고르고, 26번째 상품부터는 아무도 보지 못한다
+    more = page.locator(".list__more").count() > 0
+    if pct >= 97:
+        tail = "  ← 목록 끝입니다" if not more else "  ← 더 내리면 상품이 더 나옵니다"
+    else:
+        tail = ""
     return (f"[현재 화면] 상품 목록 (스크롤 {pct}%{tail})\n\n{body}\n\n"
             f"다음에 무엇을 하시겠습니까?"), "list"
 
@@ -268,6 +364,46 @@ def read_detail(page):
 # ============================================================================
 # 3. LLM 호출 (캐시)
 # ============================================================================
+
+class ScriptedLLM:
+    """정해진 순서를 돌려주는 가짜 LLM. 크레딧 0 으로 배선을 검증한다.
+
+    행동을 새로 열 때 그것이 **실제 DOM 조작과 로그로 이어지는지**는 프롬프트를
+    아무리 다듬어도 알 수 없다. 모델을 부르는 대신 순서를 강제해서, 브라우저와
+    프론트 로거는 진짜인 채로 나머지 배선을 전부 확인한다.
+
+    target 은 화면에서 고른다 — LLM 이 지어낸 이름을 흉내 내면 매칭 실패까지
+    같이 재현돼 무엇을 검증하는지 흐려진다.
+    """
+
+    def __init__(self, plan):
+        self.plan = list(plan)
+        self.i = 0
+
+    def next_action(self, page, acts, here, cart, visited, peeked=()):
+        while self.i < len(self.plan):
+            act = self.plan[self.i]
+            self.i += 1
+            if act not in acts:
+                print(f"       [대본 {act} 은 이번 턴에 허용되지 않음 — 건너뜀]")
+                continue
+            target = None
+            if act == "click_product":
+                target = first_unvisited(page, visited)
+                if target is None:
+                    continue
+            elif act == "quick_look":
+                # 요약을 이미 열어본 카드는 다시 고르지 않는다
+                target = first_unvisited(page, list(visited) + list(peeked))
+                if target is None:
+                    continue
+            elif act in ("add_to_cart", "wishlist_toggle"):
+                target = here
+            elif act == "remove_from_cart":
+                target = cart[-1] if cart else None
+            return {"action": act, "target": target, "reason": "(대본)"}
+        return {"action": "leave", "target": None, "reason": "(대본 끝)"}
+
 
 def ask(client, system, user, cache_on, dry):
     """LLM 에게 다음 행동을 묻는다.
@@ -357,6 +493,27 @@ def click_safe(loc, page):
         return False
 
 
+def find_card(page, target):
+    """LLM 이 말한 이름과 맞는 목록 카드를 찾는다. 없으면 None
+
+    이름을 줄여 쓰는 경우가 많아 부분 일치까지 허용한다. 못 찾으면 첫 카드로
+    대충 누르지 않는다 — 고른 적 없는 클릭이 로그에 남으면 수집 자체를 못 믿는다.
+    """
+    cards = page.locator(".card[data-product-id]")
+    want = norm(target)
+    if not want:
+        return None
+    for i in range(cards.count()):
+        card = cards.nth(i)
+        try:
+            name = norm(card.locator(".card__name").inner_text(timeout=1000))
+        except Exception:
+            continue
+        if want in name or name in want or want[:14] in name:
+            return card
+    return None
+
+
 def do_action(page, act, target):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
@@ -364,6 +521,17 @@ def do_action(page, act, target):
     if a == "scroll":
         page.mouse.wheel(0, random.randint(500, 1200))
         page.wait_for_timeout(random.randint(700, 2500))
+        # 목록 바닥에 닿았고 "더 보기" 가 보이면 눌러 준다. 사람은 더 볼 게
+        # 있으면 누른다. LLM 의 선택지로 두지 않는 이유는, 행동을 하나 더 늘리면
+        # 약한 모델이 그쪽으로 도망쳐 상품을 안 고르기 때문이다
+        more = page.locator(".list__more")
+        if more.count():
+            try:
+                more.first.scroll_into_view_if_needed(timeout=1500)
+                more.first.click(timeout=2500)
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
         return True
 
     if a == "back_to_list":
@@ -380,24 +548,73 @@ def do_action(page, act, target):
         page.wait_for_timeout(900)
         return True
 
-    if a == "click_product":
-        cards = page.locator(".card[data-product-id]")
+    if a == "quick_look":
+        # 카드에 마우스를 올려야 버튼이 뜬다. 사람이 하는 순서 그대로 간다
+        card = find_card(page, target)
+        if card is None:
+            return False
+        try:
+            card.hover(timeout=2000)
+        except Exception:
+            pass
+        btn = card.locator(".card__quicklook")
+        if not btn.count() or not click_safe(btn.first, page):
+            return False
+        page.wait_for_timeout(random.randint(900, 2200))   # 요약을 읽는 시간
+        # 열었으면 닫는다. 닫는 것까지가 한 동선이라 quick_look_close 가 남는다
+        close = page.locator('.qlook__close[data-log-action="quick_look_close"]')
+        if close.count():
+            click_safe(close.first, page)
+            page.wait_for_timeout(500)
+        return True
+
+    if a == "wishlist_toggle":
+        btn = page.locator('[data-log-action="wishlist_toggle"]')
+        if not btn.count():
+            return False                         # 목록 화면에는 없다
+        if not click_safe(btn.first, page):
+            return False
+        page.wait_for_timeout(600)
+        return True
+
+    if a == "remove_from_cart":
+        # 장바구니를 열고 -> 빼고 -> 돌아온다. 한 동선이라 코드가 묶어서 실행한다.
+        # 사람도 "빼려고" 장바구니를 열지, 열어놓고 고민하지 않는다
+        basket = page.locator('[data-log-action="view_cart"]')
+        if not basket.count() or not click_safe(basket.first, page):
+            return False
+        page.wait_for_timeout(1000)
+        rows = page.locator('[data-log-action="remove_from_cart"]')
+        if not rows.count():
+            page.go_back()
+            page.wait_for_timeout(800)
+            return False
         want = norm(target)
-        for i in range(cards.count()):
-            c = cards.nth(i)
-            try:
-                nm = norm(c.locator(".card__name").inner_text(timeout=1000))
-            except Exception:
-                continue
-            # LLM 이 이름을 줄여 쓰는 경우가 많아 부분 일치까지 허용한다
-            if want and (want in nm or nm in want or want[:14] in nm):
-                if not click_safe(c.locator(".card__link").first, page):
-                    return False
-                page.wait_for_timeout(1400)
-                return True
-        return False                             # 화면에 없는 상품을 지어냈다.
-        # 첫 상품으로 대충 누르지 않는다 — 고른 적 없는 클릭이 로그에 남으면
-        # 수집한 행동 로그 자체를 믿을 수 없게 된다
+        pick = rows.first
+        if want:                                 # 지목한 상품이 있으면 그것을 뺀다
+            for i in range(rows.count()):
+                row = rows.nth(i)
+                try:
+                    text = norm(row.locator("xpath=ancestor::li[1]").inner_text(timeout=800))
+                except Exception:
+                    continue
+                if want[:14] and want[:14] in text:
+                    pick = row
+                    break
+        ok = click_safe(pick, page)
+        page.wait_for_timeout(700)
+        page.go_back()                           # 보던 화면으로 돌아간다
+        page.wait_for_timeout(900)
+        return ok
+
+    if a == "click_product":
+        card = find_card(page, target)
+        if card is None:
+            return False                         # 화면에 없는 상품을 지어냈다
+        if not click_safe(card.locator(".card__link").first, page):
+            return False
+        page.wait_for_timeout(1400)
+        return True
 
     return False
 
@@ -433,7 +650,8 @@ def first_unvisited(page, visited):
     return None
 
 
-def allowed_actions(kind, pct, scroll_run, carted_here):
+def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
+                    wished_here=False, quick_looks=0, cart_size=0):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -447,11 +665,21 @@ def allowed_actions(kind, pct, scroll_run, carted_here):
             acts.insert(0, "add_to_cart")     # 담기를 맨 앞에 둔다
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
+        # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
+        if not wished_here:
+            acts.append("wishlist_toggle")
         return acts
-    # 목록 화면: 끝까지 내려왔으면 scroll 은 무의미하다
+    # 목록 화면: 끝까지 내려왔고 더 불러올 것도 없으면 scroll 은 무의미하다.
+    # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
+    # 더 보기를 눌러 26번째 상품부터를 화면에 올린다)
     acts = ["click_product"]
-    if pct < 97:
+    if pct < 97 or has_more:
         acts.append("scroll")
+    if quick_looks < QUICK_LOOK_MAX:
+        acts.append("quick_look")
+    # 담은 것이 하나뿐일 때 빼기를 열면 전환이 0 으로 돌아갈 수 있다
+    if cart_size >= CART_MIN_TO_REMOVE:
+        acts.append("remove_from_cart")
     acts.append("leave")
     return acts
 
@@ -464,13 +692,16 @@ def detail_title(user):
     return ""
 
 
-def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
+def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=None):
     system = SYSTEM_TMPL.format(profile=profile_text(persona),
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
     calls, done, failed, carted = 0, 0, 0, 0
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
+    wished = set()           # 찜한 상품. 상품당 한 번만 열어준다
+    peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
+    quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
     for turn in range(1, max_turns + 1):
@@ -486,7 +717,12 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
         # 이미 담은 상품을 또 담게 두면 같은 전환이 중복으로 쌓인다
         carted_here = any(norm(c) and (norm(c) in norm(here) or norm(here) in norm(c))
                           for c in cart)
-        acts = allowed_actions(kind, pct, scroll_run, carted_here)
+        has_more = kind == "list" and page.locator(".list__more").count() > 0
+        wished_here = any(norm(w) and (norm(w) in norm(here) or norm(here) in norm(w))
+                          for w in wished)
+        acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more,
+                               wished_here=wished_here, quick_looks=quick_looks,
+                               cart_size=len(cart))
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -499,6 +735,13 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             user = (f"[이미 본 상품] {', '.join(visited[-8:])}"
                     f"{NL}이미 본 상품은 다시 누르지 말고 다른 상품을 고르십시오."
                     + NL + NL + user)
+        if peeked:
+            user = (f"[요약만 열어본 상품] {', '.join(peeked[-6:])}{NL}"
+                    f"같은 상품을 또 열지 말고, 관심이 남았으면 상세로 들어가십시오."
+                    f"{NL}{NL}") + user
+        if wished:
+            user = (f"[찜한 상품] {', '.join(sorted(wished))}{NL}"
+                    f"이미 찜한 상품을 다시 누르면 찜이 해제됩니다.{NL}{NL}") + user
         if cart:
             user = f"[장바구니] {', '.join(cart)}{NL}{NL}" + user
         if history:
@@ -509,7 +752,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             if len(history) >= 3 and all(h.startswith("scroll") for h in history[-3:]):
                 user = ("[주의] 스크롤을 세 번 연속 했습니다. **이번에는 상품을 하나 고르거나"
                         " 목록 끝이면 leave 하십시오.**" + NL + NL + user)
-        obj, used = ask(client, system, user, cache_on, dry)
+        if script is not None:
+            obj, used = script.next_action(page, acts, here, cart, visited, peeked), 0
+        else:
+            obj, used = ask(client, system, user, cache_on, dry)
         calls += used
         if obj is None:
             failed += 1
@@ -527,8 +773,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
                 tgt = first_unvisited(page, visited)
                 if tgt is None:                  # 누를 만한 새 상품이 없다
                     new_act = "leave" if "leave" in acts else acts[-1]
-            elif new_act == "add_to_cart":
+            elif new_act in ("add_to_cart", "wishlist_toggle"):
                 tgt = here or tgt                # 화면이 진실이다
+            elif new_act == "remove_from_cart":
+                tgt = cart[-1] if cart else None
             else:
                 tgt = None
             if verbose:
@@ -558,6 +806,19 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
             nm = here or (" ".join(str(tgt).split()[:4]) if tgt else "")
             if nm and nm not in cart:
                 cart.append(nm)
+        if okd and act == "wishlist_toggle":
+            # 같은 상품을 다시 누르면 해제다. 상태를 뒤집어 둬야 프롬프트가 맞는다
+            nm = here or (str(tgt) if tgt else "")
+            if nm:
+                wished.discard(nm) if nm in wished else wished.add(nm)
+        if okd and act == "quick_look":
+            quick_looks += 1
+            if tgt and tgt not in peeked:
+                peeked.append(str(tgt))
+        if okd and act == "remove_from_cart":
+            gone = str(tgt) if tgt else (cart[-1] if cart else None)
+            if gone in cart:
+                cart.remove(gone)
         done += okd
         failed += (not okd)
         if okd and act == "add_to_cart":
@@ -589,6 +850,12 @@ def main():
     ap.add_argument("--out", default=os.path.join(BD, "data", "agent_events.jsonl"),
                     help="가로챈 행동 로그를 적을 파일")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
+                    help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
+                         "(리허설에서 특정 동선을 재현할 때 쓴다)")
+    ap.add_argument("--script", default=None,
+                    help="LLM 대신 정해진 행동 순서를 실행한다 (크레딧 0). "
+                         "예) click_product,wishlist_toggle,add_to_cart,back_to_list")
     ap.add_argument("--scenario-id", default=DEFAULT_SCENARIO_ID,
                     help=f"synthetic 시나리오 ID (기본 {DEFAULT_SCENARIO_ID})")
     ap.add_argument("--simulation-run-id", default=None,
@@ -607,7 +874,7 @@ def main():
         MODEL = a.model
 
     client = None
-    if not a.dry_run:
+    if not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
             key = os.environ.get("OPENAI_API_KEY")
@@ -623,6 +890,9 @@ def main():
             client = OpenAI(base_url=GMS_BASE, api_key=key)
 
     personas = json.load(open(PERSONA_FILE, encoding="utf-8"))[:a.limit]
+    catalog = load_catalog()
+    if not catalog:
+        print(f"상품 목록을 못 읽었습니다 ({PRODUCTS_FILE}) — 전원 목록에서 시작합니다")
     print(f"페르소나 {len(personas)}명 · 모델 {MODEL} · 최대 {a.turns}턴"
           + ("  [dry-run]" if a.dry_run else ""))
     print(f"프론트 {start_url}")
@@ -644,16 +914,30 @@ def main():
             ctx = browser.new_context()          # 페르소나마다 새 세션
             sink.attach(ctx)                     # 백엔드 없이도 로그를 건진다
             page = ctx.new_page()
-            page.goto(start_url, wait_until="networkidle")
+
+            # 출발 지점은 페르소나마다 다르되 **같은 사람은 늘 같은 곳**에서
+            # 시작한다. 실행마다 달라지면 커버리지 변화가 코드 때문인지
+            # 운 때문인지 구분할 수 없다
+            rng = random.Random(p["persona_id"])
+            deep = catalog and rng.random() < DEEP_LINK_P
+            if a.entry != "auto":
+                deep = a.entry == "detail"
+            entry = entry_url(a.url, a.scenario_id, simulation_run_id,
+                              product_id=rng.choice(catalog) if deep else None)
+            page.goto(entry, wait_until="networkidle")
 
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
                 continue
 
+            spread_start(page, rng)              # 목록에서 시작하면 자리를 흩는다
+
             print(f"  {p['persona_id']}  {TYPE_KR.get(p['skin_type'], '')}/"
                   f"{p['skin_tone']}  구매 {p['n_products']}개")
-            r = run_one(page, client, p, a.turns, a.cache, a.dry_run, not a.quiet)
+            script = ScriptedLLM(a.script.split(",")) if a.script else None
+            r = run_one(page, client, p, a.turns, a.cache, a.dry_run, not a.quiet,
+                        script=script)
             for k in tot:
                 tot[k] += r[k]
             page.wait_for_timeout(1200)       # 남은 배치가 flush 될 시간을 준다
@@ -729,6 +1013,7 @@ class LogSink:
         self.sent = 0
         self.send_failed = 0
         self.dropped = 0
+        self.client = None          # 첫 전송 때 만든다 (백프레셔 상태를 들고 있다)
         self.schema_version = None
         self.queue = None
         self.worker = None
@@ -807,36 +1092,26 @@ class LogSink:
             self.queue.task_done()
 
     def _post(self, events):
-        import urllib.error
-        import urllib.request
+        """수집 API 로 보낸다. 백프레셔 처리는 공용 클라이언트가 한다.
 
-        url = self.post_base + "/api/events"
-        for i in range(0, len(events), POST_BATCH):
-            chunk = events[i:i + POST_BATCH]
-            body = json.dumps(
-                {"schema_version": self.schema_version or SCHEMA_VERSION,
-                 "events": chunk}, ensure_ascii=False).encode()
-            req = urllib.request.Request(
-                url, data=body, method="POST",
-                headers={"Content-Type": "application/json",
-                         # 합성 트래픽은 전송 계층에서도 자기를 밝힌다
-                         "X-Actor-Type": "synthetic",
-                         "X-Simulation-Run-Id": self.simulation_run_id})
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                    if r.status in (200, 202):
-                        self.sent += len(chunk)
-                    else:
-                        self.send_failed += len(chunk)
-            except urllib.error.HTTPError as e:
-                self.send_failed += len(chunk)
-                if self.send_failed <= POST_BATCH:      # 첫 실패만 자세히 남긴다
-                    detail = e.read()[:300].decode("utf-8", "replace")
-                    print(f"    수집 API HTTP {e.code} — {detail}")
-            except Exception as e:
-                self.send_failed += len(chunk)
-                if self.send_failed <= POST_BATCH:
-                    print(f"    수집 API 전송 실패 — {e}")
+        생성기(gen_behavior_logs.py)와 **같은 클라이언트**를 쓴다 — 같은 서버에
+        같은 계약으로 보내면서 재시도 정책이 다르면 부하 결과를 해석할 수 없다.
+        """
+        if self.client is None:
+            sys.path.insert(0, os.path.join(ROOT, "simulator"))
+            from collector_client import CollectorClient
+            self.client = CollectorClient(
+                self.post_base, timeout=self.timeout, max_batch=POST_BATCH,
+                log=lambda m: print(f"   {m}"))
+        before = dict(self.client.stats)
+        self.client.send(
+            events, schema_version=self.schema_version or SCHEMA_VERSION,
+            headers={"X-Actor-Type": "synthetic",
+                     "X-Simulation-Run-Id": self.simulation_run_id})
+        st = self.client.stats
+        self.sent += st["sent"] - before["sent"]
+        self.send_failed += ((st["dropped"] - before["dropped"])
+                             + (st["gave_up"] - before["gave_up"]))
 
     def close(self):
         if self.queue is not None:

@@ -1,0 +1,1276 @@
+{
+  "generated_at": "2026-09-01T02:15:47.371307+00:00",
+  "vocab_version": "0.4",
+  "schedule": [
+    [
+      0,
+      0.0,
+      0.3,
+      0.7
+    ],
+    [
+      5,
+      0.7,
+      0.25,
+      0.05
+    ],
+    [
+      1000000000,
+      0.8,
+      0.18,
+      0.02
+    ]
+  ],
+  "note": "행동 로그 없이 리뷰 시드만으로 만든 사용자 벡터 기준. 시드는 후보에서 제외하고 **MMR 은 적용하지 않았다** — 점수 계산 자체를 대조하기 위한 값이다. 서빙은 여기에 노출 정책(viewed 상한 2개)과 MMR(λ_mmr=0.8)이 더 붙는다.",
+  "cases": [
+    {
+      "persona_id": "PC00001",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "red",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P415771",
+        "P439058",
+        "P439926"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P466155",
+          "score": 0.694426
+        },
+        {
+          "product_id": "P474377",
+          "score": 0.632626
+        },
+        {
+          "product_id": "P454018",
+          "score": 0.620967
+        },
+        {
+          "product_id": "P447780",
+          "score": 0.618243
+        },
+        {
+          "product_id": "P399623",
+          "score": 0.58986
+        },
+        {
+          "product_id": "P432668",
+          "score": 0.582373
+        },
+        {
+          "product_id": "P392235",
+          "score": 0.580572
+        },
+        {
+          "product_id": "P426340",
+          "score": 0.571623
+        },
+        {
+          "product_id": "P400259",
+          "score": 0.565304
+        },
+        {
+          "product_id": "P441101",
+          "score": 0.544622
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00002",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "blonde",
+        "eye_color": "blue"
+      },
+      "seed_product_ids": [
+        "P479734",
+        "P500718",
+        "P473267"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P468351",
+          "score": 0.607783
+        },
+        {
+          "product_id": "P126301",
+          "score": 0.580858
+        },
+        {
+          "product_id": "P448203",
+          "score": 0.364746
+        },
+        {
+          "product_id": "P443842",
+          "score": 0.355835
+        },
+        {
+          "product_id": "P429515",
+          "score": 0.348582
+        },
+        {
+          "product_id": "P461159",
+          "score": 0.342786
+        },
+        {
+          "product_id": "P467602",
+          "score": 0.342076
+        },
+        {
+          "product_id": "P433435",
+          "score": 0.341971
+        },
+        {
+          "product_id": "P479839",
+          "score": 0.340652
+        },
+        {
+          "product_id": "P455926",
+          "score": 0.326871
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00003",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "green"
+      },
+      "seed_product_ids": [
+        "P458219",
+        "P460779",
+        "P480612"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P479327",
+          "score": 0.502068
+        },
+        {
+          "product_id": "P462699",
+          "score": 0.501272
+        },
+        {
+          "product_id": "P466123",
+          "score": 0.466532
+        },
+        {
+          "product_id": "P481989",
+          "score": 0.456549
+        },
+        {
+          "product_id": "P447791",
+          "score": 0.443011
+        },
+        {
+          "product_id": "P460516",
+          "score": 0.433189
+        },
+        {
+          "product_id": "P470529",
+          "score": 0.416185
+        },
+        {
+          "product_id": "P456207",
+          "score": 0.414334
+        },
+        {
+          "product_id": "P458755",
+          "score": 0.39753
+        },
+        {
+          "product_id": "P431848",
+          "score": 0.395889
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00004",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P443563",
+        "P442566",
+        "P434548",
+        "P126301"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P392246",
+          "score": 0.52506
+        },
+        {
+          "product_id": "P417238",
+          "score": 0.522574
+        },
+        {
+          "product_id": "P460515",
+          "score": 0.514305
+        },
+        {
+          "product_id": "P426836",
+          "score": 0.499332
+        },
+        {
+          "product_id": "P403818",
+          "score": 0.464653
+        },
+        {
+          "product_id": "P420652",
+          "score": 0.449278
+        },
+        {
+          "product_id": "P392245",
+          "score": 0.446768
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.436961
+        },
+        {
+          "product_id": "P468351",
+          "score": 0.422279
+        },
+        {
+          "product_id": "P463036",
+          "score": 0.421521
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00005",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "black",
+        "eye_color": "blue"
+      },
+      "seed_product_ids": [
+        "P439061",
+        "P462336",
+        "P418346"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P309308",
+          "score": 0.564272
+        },
+        {
+          "product_id": "P466142",
+          "score": 0.540612
+        },
+        {
+          "product_id": "P456566",
+          "score": 0.519341
+        },
+        {
+          "product_id": "P434545",
+          "score": 0.515972
+        },
+        {
+          "product_id": "P473322",
+          "score": 0.514822
+        },
+        {
+          "product_id": "P416816",
+          "score": 0.504939
+        },
+        {
+          "product_id": "P424948",
+          "score": 0.465003
+        },
+        {
+          "product_id": "P422905",
+          "score": 0.4548
+        },
+        {
+          "product_id": "P393718",
+          "score": 0.450717
+        },
+        {
+          "product_id": "P430337",
+          "score": 0.444478
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00006",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "hazel"
+      },
+      "seed_product_ids": [
+        "P460779",
+        "P466155",
+        "P400259"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P432668",
+          "score": 0.627756
+        },
+        {
+          "product_id": "P415771",
+          "score": 0.594426
+        },
+        {
+          "product_id": "P439926",
+          "score": 0.583094
+        },
+        {
+          "product_id": "P439058",
+          "score": 0.573394
+        },
+        {
+          "product_id": "P454018",
+          "score": 0.565528
+        },
+        {
+          "product_id": "P447780",
+          "score": 0.554612
+        },
+        {
+          "product_id": "P427421",
+          "score": 0.55343
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.512833
+        },
+        {
+          "product_id": "P474377",
+          "score": 0.511627
+        },
+        {
+          "product_id": "P429515",
+          "score": 0.49202
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00007",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "blonde",
+        "eye_color": "blue"
+      },
+      "seed_product_ids": [
+        "P392246",
+        "P406712",
+        "P392245",
+        "P420652"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P403818",
+          "score": 0.756181
+        },
+        {
+          "product_id": "P460515",
+          "score": 0.711073
+        },
+        {
+          "product_id": "P427421",
+          "score": 0.709985
+        },
+        {
+          "product_id": "P454120",
+          "score": 0.708448
+        },
+        {
+          "product_id": "P446938",
+          "score": 0.691155
+        },
+        {
+          "product_id": "P432668",
+          "score": 0.6631
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.650972
+        },
+        {
+          "product_id": "P400259",
+          "score": 0.648782
+        },
+        {
+          "product_id": "P442566",
+          "score": 0.646092
+        },
+        {
+          "product_id": "P439926",
+          "score": 0.644091
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00008",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "blonde",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P309308",
+        "P476414",
+        "P423148"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P424948",
+          "score": 0.667765
+        },
+        {
+          "product_id": "P393718",
+          "score": 0.666213
+        },
+        {
+          "product_id": "P418346",
+          "score": 0.659985
+        },
+        {
+          "product_id": "P410400",
+          "score": 0.625743
+        },
+        {
+          "product_id": "P448937",
+          "score": 0.609858
+        },
+        {
+          "product_id": "P423688",
+          "score": 0.412526
+        },
+        {
+          "product_id": "P467038",
+          "score": 0.329022
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.319884
+        },
+        {
+          "product_id": "P392246",
+          "score": 0.317323
+        },
+        {
+          "product_id": "P422905",
+          "score": 0.312936
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00009",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "black",
+        "eye_color": "green"
+      },
+      "seed_product_ids": [
+        "P458755",
+        "P500777",
+        "P421277"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P439055",
+          "score": 0.595724
+        },
+        {
+          "product_id": "P440312",
+          "score": 0.547291
+        },
+        {
+          "product_id": "P500633",
+          "score": 0.547004
+        },
+        {
+          "product_id": "P454378",
+          "score": 0.536294
+        },
+        {
+          "product_id": "P433520",
+          "score": 0.493569
+        },
+        {
+          "product_id": "P417936",
+          "score": 0.476407
+        },
+        {
+          "product_id": "P467602",
+          "score": 0.44174
+        },
+        {
+          "product_id": "P466155",
+          "score": 0.436447
+        },
+        {
+          "product_id": "P471237",
+          "score": 0.433598
+        },
+        {
+          "product_id": "P411403",
+          "score": 0.422736
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00010",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P420652",
+        "P427421",
+        "P429515",
+        "P453225",
+        "P309308"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P403818",
+          "score": 0.644343
+        },
+        {
+          "product_id": "P406712",
+          "score": 0.59968
+        },
+        {
+          "product_id": "P446938",
+          "score": 0.599027
+        },
+        {
+          "product_id": "P454120",
+          "score": 0.577179
+        },
+        {
+          "product_id": "P392245",
+          "score": 0.573266
+        },
+        {
+          "product_id": "P432668",
+          "score": 0.566076
+        },
+        {
+          "product_id": "P460515",
+          "score": 0.547299
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.53932
+        },
+        {
+          "product_id": "P439926",
+          "score": 0.528235
+        },
+        {
+          "product_id": "P400259",
+          "score": 0.512646
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00011",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "hazel"
+      },
+      "seed_product_ids": [
+        "P421998",
+        "P476414",
+        "P474938"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P393718",
+          "score": 0.508559
+        },
+        {
+          "product_id": "P309308",
+          "score": 0.489745
+        },
+        {
+          "product_id": "P410400",
+          "score": 0.487495
+        },
+        {
+          "product_id": "P424948",
+          "score": 0.481328
+        },
+        {
+          "product_id": "P418346",
+          "score": 0.480155
+        },
+        {
+          "product_id": "P448937",
+          "score": 0.473885
+        },
+        {
+          "product_id": "P454838",
+          "score": 0.462865
+        },
+        {
+          "product_id": "P421996",
+          "score": 0.453542
+        },
+        {
+          "product_id": "P422000",
+          "score": 0.415729
+        },
+        {
+          "product_id": "P94421",
+          "score": 0.394093
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00012",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P422536",
+        "P397890",
+        "P447791"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P378852",
+          "score": 0.689931
+        },
+        {
+          "product_id": "P433444",
+          "score": 0.680421
+        },
+        {
+          "product_id": "P297524",
+          "score": 0.636289
+        },
+        {
+          "product_id": "P475589",
+          "score": 0.619116
+        },
+        {
+          "product_id": "P297516",
+          "score": 0.602699
+        },
+        {
+          "product_id": "P446421",
+          "score": 0.572684
+        },
+        {
+          "product_id": "P458219",
+          "score": 0.467546
+        },
+        {
+          "product_id": "P462699",
+          "score": 0.463329
+        },
+        {
+          "product_id": "P479327",
+          "score": 0.459593
+        },
+        {
+          "product_id": "P428819",
+          "score": 0.446773
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00013",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "hazel"
+      },
+      "seed_product_ids": [
+        "P500633",
+        "P423688",
+        "P421275"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P454378",
+          "score": 0.536057
+        },
+        {
+          "product_id": "P7880",
+          "score": 0.522215
+        },
+        {
+          "product_id": "P445827",
+          "score": 0.493891
+        },
+        {
+          "product_id": "P440312",
+          "score": 0.491759
+        },
+        {
+          "product_id": "P479841",
+          "score": 0.488812
+        },
+        {
+          "product_id": "P467038",
+          "score": 0.467068
+        },
+        {
+          "product_id": "P442858",
+          "score": 0.450738
+        },
+        {
+          "product_id": "P500777",
+          "score": 0.446893
+        },
+        {
+          "product_id": "P471237",
+          "score": 0.442965
+        },
+        {
+          "product_id": "P417936",
+          "score": 0.441563
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00014",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P421276",
+        "P472454",
+        "P415619"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P94421",
+          "score": 0.465735
+        },
+        {
+          "product_id": "P472028",
+          "score": 0.404037
+        },
+        {
+          "product_id": "P474938",
+          "score": 0.403609
+        },
+        {
+          "product_id": "P458755",
+          "score": 0.329447
+        },
+        {
+          "product_id": "P474377",
+          "score": 0.326612
+        },
+        {
+          "product_id": "P375849",
+          "score": 0.325997
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.32085
+        },
+        {
+          "product_id": "P418218",
+          "score": 0.319416
+        },
+        {
+          "product_id": "P458209",
+          "score": 0.316388
+        },
+        {
+          "product_id": "P445827",
+          "score": 0.314504
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00015",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "black",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P406712",
+        "P419222",
+        "P456207"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P427421",
+          "score": 0.706159
+        },
+        {
+          "product_id": "P400259",
+          "score": 0.678556
+        },
+        {
+          "product_id": "P446938",
+          "score": 0.666681
+        },
+        {
+          "product_id": "P432668",
+          "score": 0.659331
+        },
+        {
+          "product_id": "P439926",
+          "score": 0.647303
+        },
+        {
+          "product_id": "P403818",
+          "score": 0.633247
+        },
+        {
+          "product_id": "P392245",
+          "score": 0.627272
+        },
+        {
+          "product_id": "P454120",
+          "score": 0.594489
+        },
+        {
+          "product_id": "P460515",
+          "score": 0.581628
+        },
+        {
+          "product_id": "P415777",
+          "score": 0.574288
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00016",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P422000",
+        "P411387",
+        "P443563",
+        "P417238"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P420652",
+          "score": 0.550172
+        },
+        {
+          "product_id": "P463036",
+          "score": 0.503911
+        },
+        {
+          "product_id": "P440307",
+          "score": 0.49684
+        },
+        {
+          "product_id": "P411388",
+          "score": 0.483561
+        },
+        {
+          "product_id": "P421996",
+          "score": 0.481922
+        },
+        {
+          "product_id": "P421998",
+          "score": 0.474847
+        },
+        {
+          "product_id": "P430146",
+          "score": 0.464926
+        },
+        {
+          "product_id": "P458209",
+          "score": 0.456591
+        },
+        {
+          "product_id": "P432829",
+          "score": 0.448398
+        },
+        {
+          "product_id": "P446930",
+          "score": 0.447114
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00017",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "black",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P456412",
+        "P443845",
+        "P443840"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P455364",
+          "score": 0.620916
+        },
+        {
+          "product_id": "P448802",
+          "score": 0.601673
+        },
+        {
+          "product_id": "P443842",
+          "score": 0.581387
+        },
+        {
+          "product_id": "P443833",
+          "score": 0.548945
+        },
+        {
+          "product_id": "P456207",
+          "score": 0.428519
+        },
+        {
+          "product_id": "P480612",
+          "score": 0.32544
+        },
+        {
+          "product_id": "P447780",
+          "score": 0.318694
+        },
+        {
+          "product_id": "P424948",
+          "score": 0.310389
+        },
+        {
+          "product_id": "P467038",
+          "score": 0.309751
+        },
+        {
+          "product_id": "P441101",
+          "score": 0.309676
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00018",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P427416",
+        "P466123",
+        "P427417",
+        "P421275",
+        "P469502"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P442563",
+          "score": 0.599345
+        },
+        {
+          "product_id": "P427413",
+          "score": 0.582642
+        },
+        {
+          "product_id": "P427406",
+          "score": 0.563992
+        },
+        {
+          "product_id": "P427420",
+          "score": 0.560773
+        },
+        {
+          "product_id": "P427410",
+          "score": 0.516159
+        },
+        {
+          "product_id": "P460516",
+          "score": 0.448588
+        },
+        {
+          "product_id": "P427414",
+          "score": 0.445551
+        },
+        {
+          "product_id": "P427419",
+          "score": 0.444972
+        },
+        {
+          "product_id": "P436359",
+          "score": 0.444113
+        },
+        {
+          "product_id": "P427415",
+          "score": 0.443942
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00019",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "brown",
+        "eye_color": "brown"
+      },
+      "seed_product_ids": [
+        "P461159",
+        "P433887",
+        "P411403"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P479839",
+          "score": 0.605202
+        },
+        {
+          "product_id": "P447210",
+          "score": 0.576884
+        },
+        {
+          "product_id": "P473820",
+          "score": 0.507322
+        },
+        {
+          "product_id": "P433435",
+          "score": 0.490161
+        },
+        {
+          "product_id": "P416563",
+          "score": 0.459589
+        },
+        {
+          "product_id": "P500701",
+          "score": 0.446257
+        },
+        {
+          "product_id": "P454018",
+          "score": 0.433496
+        },
+        {
+          "product_id": "P427421",
+          "score": 0.424102
+        },
+        {
+          "product_id": "P440312",
+          "score": 0.419897
+        },
+        {
+          "product_id": "P454378",
+          "score": 0.41107
+        }
+      ]
+    },
+    {
+      "persona_id": "PC00020",
+      "attributes": {
+        "skin_type": "combination",
+        "skin_tone": "light",
+        "hair_color": "blonde",
+        "eye_color": "blue"
+      },
+      "seed_product_ids": [
+        "P411387",
+        "P439058",
+        "P455676",
+        "P422536",
+        "P443833"
+      ],
+      "weights": {
+        "w1_cosine": 0.7,
+        "w2_attribute": 0.25,
+        "w3_prior": 0.05,
+        "lambda_negative": 0.15
+      },
+      "expected_top10": [
+        {
+          "product_id": "P427536",
+          "score": 0.523828
+        },
+        {
+          "product_id": "P426340",
+          "score": 0.508552
+        },
+        {
+          "product_id": "P297516",
+          "score": 0.505257
+        },
+        {
+          "product_id": "P411388",
+          "score": 0.498873
+        },
+        {
+          "product_id": "P433444",
+          "score": 0.488826
+        },
+        {
+          "product_id": "P297524",
+          "score": 0.486106
+        },
+        {
+          "product_id": "P446421",
+          "score": 0.468485
+        },
+        {
+          "product_id": "P440307",
+          "score": 0.467255
+        },
+        {
+          "product_id": "P418218",
+          "score": 0.458047
+        },
+        {
+          "product_id": "P461537",
+          "score": 0.45484
+        }
+      ]
+    }
+  ]
+}

@@ -573,42 +573,25 @@ BATCH = 100          # 백엔드 EventBatchRequest 의 @Size(max = 100)
 def post_events(base_url, events, rps=0, timeout=40):
     """수집 API 로 배치 전송. (성공 건수, 실패 건수, 초) 를 돌려준다
 
+    백프레셔 처리는 simulator/collector_client.py 가 한다 — 429 의 Retry-After 를
+    존중하고, 503 은 지수 백오프로 재시도하고, 413 이면 배치를 반으로 줄인다.
+    에이전트 러너도 같은 클라이언트를 쓴다. 같은 서버에 같은 계약으로 보내면서
+    클라이언트마다 다르게 굴면 부하 테스트 결과를 해석할 수 없다.
+
     타임아웃이 넉넉한 이유 — Kafka 가 안 떠 있으면 백엔드가 발행을 기다리다
     25초쯤 뒤에 503 을 준다. 짧게 잡으면 클라이언트가 먼저 끊어져서
     "타임아웃" 으로만 보이고 진짜 원인(503)을 못 본다.
     """
-    import urllib.request
-    import urllib.error
+    sys.path.insert(0, os.path.join(ROOT, "simulator"))
+    from collector_client import CollectorClient
 
-    url = base_url.rstrip("/") + "/api/events"
-    ok = fail = 0
+    client = CollectorClient(base_url, timeout=timeout, rps=rps,
+                             max_batch=BATCH, log=log)
     t0 = time.time()
-    for i in range(0, len(events), BATCH):
-        chunk = events[i:i + BATCH]
-        body = json.dumps({"schema_version": SCHEMA_VERSION, "events": chunk},
-                          ensure_ascii=False).encode()
-        req = urllib.request.Request(url, data=body, method="POST",
-                                     headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                (ok if r.status in (200, 202) else fail)
-                if r.status in (200, 202): ok += len(chunk)
-                else: fail += len(chunk)
-        except urllib.error.HTTPError as e:
-            fail += len(chunk)
-            if fail <= BATCH:                       # 첫 실패만 자세히 남긴다
-                log(f"HTTP {e.code} — {e.read()[:400].decode('utf-8', 'replace')}")
-        except Exception as e:
-            fail += len(chunk)
-            if fail <= BATCH:
-                log(f"전송 실패 — {e}")
-        if rps:                                     # 초당 이벤트 수 제한
-            want = (i + len(chunk)) / rps
-            gap = want - (time.time() - t0)
-            if gap > 0: time.sleep(gap)
-        if (i // BATCH) % 200 == 0 and i:
-            log(f"  전송 {i:,}/{len(events):,}건")
-    return ok, fail, time.time() - t0
+    client.send(events, schema_version=SCHEMA_VERSION)
+    st = client.stats
+    log(client.summary())
+    return st["sent"], st["dropped"] + st["gave_up"], time.time() - t0
 
 
 # ── 페르소나 1명 ─────────────────────────────────────────────────────────
@@ -882,8 +865,9 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
               f"  ({ok/max(sec,1e-9):,.0f}건/초)")
         print("=" * 64)
         if fail:
-            print("  400 이면 계약 불일치, 503 이면 Kafka 미기동입니다.")
-            print("  첫 실패의 HTTP 응답 본문을 위에 출력했습니다.")
+            print("  400 이면 계약 불일치입니다 (재시도하지 않고 버림).")
+            print("  429/503 은 재시도했는데도 안 된 경우입니다 — 수집 서버와")
+            print("  Kafka 가 떠 있는지, --rps 를 낮춰야 하는지 확인하세요.")
 
     if show:
         pid = sink[0]["persona_id"]
