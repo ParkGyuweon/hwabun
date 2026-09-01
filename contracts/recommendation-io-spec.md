@@ -431,7 +431,7 @@ GET /api/recommend?persona_id={id}&size=10
    v_u⁻ = negative_u_sum / negative_w_sum   (negative_w_sum = 0이면 생략)
 4. scores = w1 x (V @ v_u⁺) − λ x (V @ v_u⁻) + w2 x attr_affinity + w3 x prior
 5. 노출 정책 적용 (아래)
-6. MMR 다양성 보정 (λ_mmr = 0.7)
+6. MMR 다양성 보정 (λ_mmr = 0.8, 후보 풀 상위 30개)
 7. 상위 size개 반환
 ```
 
@@ -529,6 +529,6 @@ FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서
 |---|---|
 | 콘텐츠 벡터 블록 가중치 | 측정 결과 같은 카테고리 이웃 91.1%로 과도. 중간안 A 권고, 담당자 확정 대기 |
 | `hair_color` / `eye_color` 존치 | 판별력 최하위. `hair_color`는 연령 대리변수로 의심 |
-| MMR λ | 0.7은 초기값 |
+| MMR λ_mmr | **0.8 확정** (2026-09-01 측정). 켜면 Recall +0.26%p, 목록당 고유 브랜드 3.7 → 4.1개. 근거는 `docs/ai/recommendation-design.md` 8절 |
 | 시간 감쇠 τ | 30일. 생성 로그의 시간 범위에 따라 조정 |
 | `w1` 항 검증 | 행동 로그 생성 후 가능 |
