@@ -152,18 +152,8 @@ const FILL = {
 };
 
 // 딱딱한 말을 쉬운 말로 바꾼다. 뜻이 달라지지 않는 것만 손댄다.
-const SOFTEN = [
-  [/유효 노출/g, '화면에 제대로 보임'],
-  [/milestone 도달/g, '지점을 지남'],
-  [/Funnel 분모/g, '전환율 계산의 기준'],
-  [/Funnel 시작점/g, '전환 흐름의 출발점'],
-  [/CTR 분모/g, '클릭률의 기준(보여준 횟수)'],
-  [/CTR 분자/g, '클릭률의 위쪽(실제 누른 횟수)'],
-  [/CTR/g, '클릭률'],
-  [/Persona의 /g, '가상 소비자의 '],
-  [/Persona/g, '가상 소비자'],
-  [/Dashboard/g, '대시보드'],
-];
+// 문서의 용어를 임의로 바꾸지 않는다. 계약 문서 표기를 그대로 쓴다.
+const SOFTEN = [];
 
 function parseSix() {
   const md = fs.readFileSync(
@@ -205,7 +195,7 @@ function soften(s) {
 }
 const rich = s => escS(soften(s)).replace(/`([^`]+)`/g, '<code>$1</code>');
 
-// ── 문서 1. 이벤트와 점수 ────────────────────────────────────────────────
+// ── 문서 1. 이벤트와 가중치 ──────────────────────────────────────────────
 function buildEvents() {
   const contract = JSON.parse(fs.readFileSync(
     path.join(ROOT, 'contracts/event-schema.json'), 'utf8'))
@@ -218,7 +208,6 @@ function buildEvents() {
     .filter(r => inContract.has(r.name))
     .filter(r => !seen.has(r.name) && seen.add(r.name));
 
-  // §6 에 없는 것을 채워 넣는다
   const filled = [];
   for (const name of contract) {
     if (seen.has(name) || !FILL[name]) continue;
@@ -242,40 +231,41 @@ function buildEvents() {
   const cls = w => w === 0 ? 'w0' : w >= 3 ? 'w3' : w >= 1.5 ? 'w2' : 'w1';
 
   let h = '';
-  h += `<h1 id="ev-top">이벤트 ${contract.length}종과 점수</h1>`;
-  h += `<p class="lead">손님이 쇼핑몰에서 하는 행동 하나하나를 기록으로 남긴 것을 `
-     + `<strong>이벤트</strong>라고 부른다. 상품을 눌렀다, 성분을 펼쳐 봤다, `
-     + `장바구니에 담았다 — 이런 것들이다. 지금 ${contract.length}가지를 정해 두었다.</p>`;
+  h += `<h1 id="ev-top">이벤트 ${contract.length}종과 가중치</h1>`;
+  h += `<p class="lead">테스트 쇼핑몰에서 사용자가 남기는 행동 신호를 `
+     + `<strong>Event</strong> 라 부른다. 현재 계약에 ${contract.length}종이 정의돼 있고, `
+     + `각 Event 에는 <strong>선호도 가중치</strong>가 붙는다. 이 가중치를 누적해 `
+     + `사용자 벡터를 만들고, 상품 추천(CBF)의 입력으로 쓴다.</p>`;
 
   h += `<div class="kpirow">`
-     + `<div class="kpi"><b>${contract.length}</b><span>기록하는 행동</span></div>`
-     + `<div class="kpi"><b>${positive.length}</b><span>취향 점수에 반영</span></div>`
-     + `<div class="kpi"><b>${zero.length}</b><span>점수 0 · 계산 기준으로만</span></div>`
-     + `<div class="kpi"><b>${maxW.toFixed(1)}</b><span>가장 높은 점수</span></div>`
+     + `<div class="kpi"><b>${contract.length}</b><span>계약 Event</span></div>`
+     + `<div class="kpi"><b>${positive.length}</b><span>선호도에 반영</span></div>`
+     + `<div class="kpi"><b>${zero.length}</b><span>가중 0 · 분모·요약용</span></div>`
+     + `<div class="kpi"><b>${maxW.toFixed(1)}</b><span>최대 가중치</span></div>`
      + `</div>`;
 
-  h += `<h2 id="ev-weight">점수가 무슨 뜻인가</h2>`;
-  h += `<p>행동마다 <strong>"이 사람이 이 상품을 얼마나 좋아하는지"</strong> 를 `
-     + `말해주는 정도가 다르다. 그 정도를 숫자로 매긴 것이 점수다. 이걸 모아서 `
-     + `사람마다 취향을 계산하고, 그 취향으로 상품을 추천한다.</p>`;
+  h += `<h2 id="ev-weight">가중치 설계 원칙</h2>`;
   h += `<ul>`
-     + `<li><strong>장바구니에 담기가 가장 높다 (${(weights.add_to_cart ?? 4).toFixed(1)}점).</strong> `
-     + `이 서비스에는 실제 결제가 없어서, 담는 행동이 사실상 "사고 싶다" 에 가장 가깝다.</li>`
-     + `<li><strong>화면에 보이기만 한 것은 0점이다.</strong> 손님이 원해서 한 행동이 아니기 때문이다. `
-     + `대신 "몇 번 보여줬는데 몇 번 눌렀나" 를 계산할 때 <em>기준 숫자</em>로 쓴다.</li>`
-     + `<li><strong>같은 행동을 두 번 세지 않는다.</strong> 상품 상세를 한 번 열면 기록이 두 개 남는데, `
-     + `그중 하나만 점수를 갖는다. 둘 다 점수를 주면 한 번 본 것을 두 번 본 것으로 센다.</li>`
+     + `<li><strong>전환 신호가 가장 높다.</strong> `
+     + `<code>add_to_cart</code> ${(weights.add_to_cart ?? 4).toFixed(1)}. `
+     + `구매 데이터가 없는 환경이라 장바구니 담기가 가장 강한 구매 의도 신호다.</li>`
+     + `<li><strong>노출(impression)은 가중 0 이다.</strong> `
+     + `사용자 의지가 아니므로 선호도에 넣지 않고, CTR 의 <strong>분모</strong>로만 쓴다.</li>`
+     + `<li><strong>이중 계상을 막는다.</strong> 한 행동에서 두 Event 가 같은 `
+     + `<code>product_id</code> 를 실으면 한쪽을 0 으로 둔다. 상세 진입은 `
+     + `<code>product_view</code>(1.0)가 담당하고 <code>page_view</code>는 0 이다. `
+     + `<code>section_view</code>와 <code>section_dwell</code>도 같은 이유로 갈랐다.</li>`
      + `</ul>`;
-  h += `<p class="note">이 숫자들은 아직 확정이 아니라 <strong>첫 가설</strong>이다. `
-     + `하나씩 빼 보면서 결과가 얼마나 달라지는지 확인해 조정할 예정이다. `
-     + `값을 그렇게 정한 근거는 따로 정리해 두었다 `
-     + `(<code>docs/analytics/event-weight-rationale.html</code>).</p>`;
+  h += `<p class="note">확정값이 아니라 <strong>초기 가설</strong>이다. Ablation 으로 검증해 `
+     + `조정한다. 가중치 상수의 단일 출처는 <code>frontend/src/types/log.ts</code> 의 `
+     + `<code>EVENT_WEIGHT</code> 이고, 값별 근거는 `
+     + `<code>docs/analytics/event-weight-rationale.html</code> 에 있다.</p>`;
 
   for (const [section, list] of bySection) {
-    h += `<h2 id="ev-${escS(section).replace(/[^\w]/g, '-')}">${escS(soften(section))}`
+    h += `<h2 id="ev-${escS(section).replace(/[^\w]/g, '-')}">${escS(section)}`
        + `<span class="cnt">${list.length}종</span></h2>`;
     h += `<div class="tw"><table><thead><tr>`
-       + `<th>이벤트</th><th>점수</th><th>무엇을 기록하나</th><th>어디에 쓰나</th>`
+       + `<th>event_name</th><th>가중치</th><th>설명</th><th>주요 KPI · 활용</th>`
        + `</tr></thead><tbody>`;
     for (const r of list) {
       const w = weights[r.name] ?? 0;
@@ -287,34 +277,40 @@ function buildEvents() {
   }
 
   if (filled.length) {
-    h += `<p class="note"><strong>확인 필요.</strong> `
+    h += `<p class="note"><strong>계약 문서 보완 필요.</strong> `
        + filled.map(n => `<code>${escS(n)}</code>`).join(', ')
-       + ` ${filled.length}종은 계약 문서의 설명 표에 행이 없어서 이 페이지에서 임시로 채웠다. `
-       + `필수 항목 표에는 들어 있으므로 이름이 빠진 것은 아니고, 설명만 비어 있다.</p>`;
+       + ` ${filled.length}종은 §6 설명 표에 행이 없다. §9 필수 property 표에는 있으므로 `
+       + `Event 자체가 빠진 것은 아니고 설명만 비어 있어, 이 페이지에서 임시로 채웠다.</p>`;
   }
   return h;
 }
 
-// ── 문서 2. 로그가 흘러가는 길 ───────────────────────────────────────────
+// ── 문서 2. 수집 파이프라인 ──────────────────────────────────────────────
 function buildFlow() {
   let h = '';
-  h += `<h1 id="fl-top">기록이 흘러가는 길</h1>`;
-  h += `<p class="lead">손님이 화면에서 무언가를 하면, 그 기록이 여섯 칸을 지나 `
-     + `대시보드까지 간다. 각 칸이 무슨 일을 하는지와 지금 어디까지 만들어졌는지를 적는다.</p>`;
+  h += `<h1 id="fl-top">Event 수집 파이프라인</h1>`;
+  h += `<p class="lead">화면에서 발생한 Event 가 B2B Dashboard 까지 가는 경로다. `
+     + `단계별 역할과 현재 구현 상태를 함께 적는다.</p>`;
 
   const steps = [
-    ['1', '쇼핑몰 화면', '손님(또는 가상 소비자)이 상품을 보고 누르고 담는다. 그 순간마다 기록이 하나씩 생긴다.',
-      'React 화면 3개 — 상품 목록 · 상품 상세 · 장바구니', 'done', '완료'],
-    ['2', '모아서 보내기', '기록을 하나씩 보내면 요청이 너무 많아진다. 20개가 쌓이거나 5초가 지나면 묶어서 한 번에 보낸다. 창을 닫을 때는 남은 것을 마저 보낸다.',
-      '브라우저 안의 전송기', 'done', '완료'],
-    ['3', '받아서 줄 세우기', '보낸 기록을 서버가 받아서 처리 대기줄에 넣는다. 한꺼번에 몰리면 받아주지 않고 잠시 기다리라고 답한다.',
-      'Spring Boot 수집 서버 · Kafka', 'done', '완료'],
-    ['4', '정제하고 계산하기', '들어온 기록에서 이상한 것을 걸러내고, 사람별·상품별로 묶어서 계산한다.',
-      'Spark 작업 5개', 'partial', '작업은 있고 연결 검증 중'],
-    ['5', '분석 결과 저장', '계산이 끝난 결과를 대시보드가 바로 읽을 수 있는 모양으로 저장한다.',
-      'Mart 테이블', 'partial', '설계 완료'],
-    ['6', 'B2B 대시보드', '기업 담당자가 보는 화면. 어떤 고객군이 어떤 상품에 반응하는지 보여준다.',
-      '아직 화면 없음', 'todo', '설계만 있음'],
+    ['1', '테스트 쇼핑몰 (FE)',
+      '사용자 또는 가상 소비자가 상품을 탐색·비교·담는다. 화면의 로거가 각 행동을 LogEnvelope 로 조립한다.',
+      'React 19 · 상품 목록 / 상품 상세 / 장바구니', 'done', '구현 완료'],
+    ['2', '배치 전송',
+      'Event 를 건별로 보내지 않는다. 20건이 쌓이거나 5초가 지나면 먼저 오는 쪽에 묶어서 POST /api/events 로 보낸다. 이탈 시점에는 sendBeacon 으로 잔여 버퍼를 flush 한다.',
+      'logger.ts · 배치 20건 / 주기 5초 / 요청 상한 100건', 'done', '구현 완료'],
+    ['3', 'Collector · Kafka',
+      '수집 서버가 배치를 검증하고 봉투에 서버 메타(received_at·source·request_id·event_index)를 붙여 Kafka 로 발행한다. 과부하 시 ack 기반 백프레셔로 거절한다.',
+      'Spring Boot Collector · Kafka activity-events', 'done', '구현 완료'],
+    ['4', 'Spark 정제 · 집계',
+      'Raw Event 를 Parquet 로 적재하고, 계약 위반 row 를 격리한 뒤 세션·상품·고객군 단위로 집계한다.',
+      'raw_sink · clean_events · derive_facts · build_marts', 'partial', 'Job 작성 · 연결 검증 중'],
+    ['5', 'Mart',
+      '집계 결과를 Dashboard 가 바로 질의할 수 있는 형태로 적재한다.',
+      'DW 스키마 정의 완료', 'partial', '스키마 확정 · 적재 전'],
+    ['6', 'B2B Dashboard (FE)',
+      '기업 사용자가 보는 화면. 고객군별 관심 상품, 상품별 성과, Funnel 전환·이탈을 제공한다.',
+      '설계안만 존재 · 화면 미구현', 'todo', '미착수'],
   ];
 
   h += `<div class="flow">`;
@@ -327,65 +323,77 @@ function buildFlow() {
   }
   h += `</div>`;
 
-  h += `<h2 id="fl-who">기록을 만드는 사람은 둘이다</h2>`;
-  h += `<p>이 서비스에는 진짜 손님이 없다. 대신 성격이 다른 <strong>가상 소비자</strong>가 `
-     + `쇼핑몰을 돌아다닌다. 그런데 두 종류가 있고, 만드는 방식이 완전히 다르다.</p>`;
-  h += `<div class="tw"><table><thead><tr><th></th><th>PC 9,900명</th><th>PA 100명</th>`
-     + `</tr></thead><tbody>`
-     + `<tr><td>어떻게 움직이나</td><td>프로그램이 정해진 규칙대로</td>`
-     + `<td><strong>AI 가 화면을 보고 직접 판단해서</strong></td></tr>`
-     + `<tr><td>쇼핑몰 화면을</td><td>거치지 않는다</td><td>진짜 브라우저로 실제로 누른다</td></tr>`
-     + `<tr><td>기록을 만드는 곳</td><td>프로그램이 직접 지어낸다</td><td>쇼핑몰 화면이 스스로 남긴다</td></tr>`
-     + `<tr><td>무엇을 확인하나</td><td><strong>규모</strong> — 많이 몰려도 견디는지</td>`
-     + `<td><strong>정확성</strong> — 화면·기록·수집이 규칙대로 맞물리는지</td></tr>`
-     + `<tr><td>비용</td><td>없다</td><td>AI 사용료</td></tr>`
+  h += `<h2 id="fl-who">트래픽 생성 주체는 둘이다</h2>`;
+  h += `<p>실사용자가 없으므로 가상 소비자가 트래픽을 만든다. 두 경로는 `
+     + `<strong>Event 를 누가 생성하느냐</strong>가 근본적으로 다르고, `
+     + `<code>properties.generator_type</code> 으로 구분한다.</p>`;
+  h += `<div class="tw"><table><thead><tr><th></th>`
+     + `<th>PC 9,900명 <code>python_batch</code></th>`
+     + `<th>PA 100명 <code>agent_llm</code></th></tr></thead><tbody>`
+     + `<tr><td>실행 도구</td><td><code>gen_behavior_logs.py</code></td>`
+     + `<td><code>agent_runner.py</code></td></tr>`
+     + `<tr><td>행동 결정</td><td>확률 상태머신</td><td>LLM 이 화면을 읽고 판단</td></tr>`
+     + `<tr><td>FE 화면 경유</td><td>경유하지 않음</td>`
+     + `<td>Playwright 로 실제 DOM 조작</td></tr>`
+     + `<tr><td>Event 생성 주체</td><td>스크립트가 직접 합성</td>`
+     + `<td><strong>프론트 <code>log.ts</code></strong></td></tr>`
+     + `<tr><td>검증 목적</td><td><strong>규모</strong> — Kafka·Spark TPS</td>`
+     + `<td><strong>계약 정합성</strong> — 화면·Event·수집 API E2E</td></tr>`
+     + `<tr><td>비용</td><td>없음</td><td>LLM 호출 크레딧</td></tr>`
      + `</tbody></table></div>`;
-  h += `<p class="note">둘 다 필요하다. PC 는 숫자를 채워 <strong>분산 처리가 되는지</strong> 를 증명하고, `
-     + `PA 는 적은 수로 <strong>만든 것이 제대로 도는지</strong> 를 증명한다. `
-     + `PA 에게는 일부러 프로그램 기록을 안 넣는다. 미리 쌓아 두면 사람이 직접 눌러도 `
-     + `추천이 거의 안 바뀌어서, "누른 대로 추천이 바뀐다" 를 보여줄 수 없기 때문이다.</p>`;
+  h += `<p class="note">PA 는 합성 로그 대상에서 제외한다. 1인당 약 590건이 미리 쌓이면 `
+     + `사용자가 직접 10회 클릭해도 벡터가 1.7% 만 움직여 `
+     + `"행동에 따라 추천이 바뀐다" 를 시연할 수 없다. 부하 손실은 590만 건 중 1% 라 무시할 수준이다.</p>`;
 
-  h += `<h2 id="fl-scale">얼마나 많은 기록이 오가나</h2>`;
-  h += `<p>한 사람이 한 번 방문하면 <strong>100~160개</strong>의 기록이 생긴다. `
-     + `이걸 사람 수로 곱하면 처리해야 할 양이 나온다.</p>`;
-  h += `<div class="tw"><table><thead><tr><th>동시 접속</th><th>초당 기록 수</th>`
-     + `<th>초당 요청 수</th></tr></thead><tbody>`
-     + `<tr><td>100명</td><td>170</td><td>20</td></tr>`
-     + `<tr><td>1,000명</td><td>1,700</td><td>200</td></tr>`
-     + `<tr><td>10,000명</td><td><strong>17,000</strong></td><td><strong>2,000</strong></td></tr>`
+  h += `<h2 id="fl-scale">처리 규모</h2>`;
+  h += `<p>실측 기준 방문 1회당 Event 100~160건이 발생한다. 방문당 150건 · 90초면 `
+     + `1인당 1.7 event/s 다.</p>`;
+  h += `<div class="tw"><table><thead><tr><th>동시 사용자</th><th>Event TPS</th>`
+     + `<th>요청/초</th></tr></thead><tbody>`
+     + `<tr><td>100</td><td>170</td><td>20</td></tr>`
+     + `<tr><td>1,000</td><td>1,700</td><td>200</td></tr>`
+     + `<tr><td>10,000</td><td><strong>17,000</strong></td><td><strong>2,000</strong></td></tr>`
      + `</tbody></table></div>`;
-  h += `<p class="note">자세한 전송 규칙(재시도·크기 상한 등)은 `
-     + `<strong>데이터·백엔드 파트용 원문</strong>의 「로그 전송 주기 계약」에 있다.</p>`;
+  h += `<p class="note">부하 생성기는 브라우저가 아니라 이탈 위험이 없으므로 배치를 `
+     + `500~2,000건으로 키운다. Event TPS 는 유지하면서 HTTP 요청 수만 줄어든다. `
+     + `재시도·크기 상한 등 상세 규칙은 「로그 전송 주기 계약」에 있다.</p>`;
   return h;
 }
-
 
 // tier 'brief' = 발표에 들어가는 내용. tier 'deep' = 파트 내부 상세.
 const GROUPS = [
   {
-    id: 'brief', tier: 'brief', name: '먼저 보시면 됩니다',
-    note: '발표에 들어가는 내용. 쉬운 말로 새로 썼습니다',
+    id: 'brief', tier: 'brief', step: '1',
+    role: '읽는 문서',
+    name: '요약',
+    note: '이 두 장이면 발표 내용은 다 들어 있습니다',
     docs: [
-      { key: 'events', t: '이벤트 35종과 점수', d: '무엇을 기록하고, 각각 몇 점인가', gen: buildEvents },
-      { key: 'flow', t: '기록이 흘러가는 길', d: '화면에서 대시보드까지 · 지금 어디까지 됐나', gen: buildFlow },
+      { key: 'events', t: '이벤트 35종과 가중치', d: '무엇을 수집하고 각각 몇 점인가', gen: buildEvents },
+      { key: 'flow', t: 'Event 수집 파이프라인', d: '화면 → 수집 → 분석 → Dashboard · 진행 상황', gen: buildFlow },
     ],
   },
   {
-    id: 'basis', tier: 'basis', name: '발표 근거 · 꼭 같이 보세요',
-    note: '"왜 그렇게 정했는지" 를 물으면 답이 여기 있습니다',
+    id: 'basis', tier: 'basis', step: '2',
+    role: '위 요약의 근거',
+    name: '왜 그렇게 정했나',
+    note: '"이 숫자 왜 이래요?" 라는 질문의 답이 여기 있습니다',
     docs: [
-      { f: 'docs/analytics/behavior-log-design.md', t: '행동 로그 설계', d: '왜 그 화면 그 자리에서 기록을 남기나' },
-      { f: 'docs/analytics/marketing-signal-research.md', t: '마케팅 시그널 조사', d: '점수를 그렇게 매긴 바깥 사례·근거' },
+      { f: 'docs/analytics/behavior-log-design.md', t: '행동 로그 설계',
+        d: '화면 어느 지점에서 왜 그 Event 를 남기는가' },
+      { f: 'docs/analytics/marketing-signal-research.md', t: '마케팅 시그널 조사',
+        d: '가중치를 그렇게 매긴 외부 사례·근거' },
     ],
   },
   {
-    id: 'deep', tier: 'deep', name: '데이터·백엔드 파트용 원문',
-    note: '구현할 때 보는 계약 원문. PM 이 다 읽을 필요는 없습니다',
+    id: 'deep', tier: 'deep', step: '3',
+    role: '근거의 원문',
+    name: '데이터 · 백엔드 파트 계약',
+    note: '구현할 때 보는 원문입니다. PM 이 다 읽을 필요는 없습니다',
     docs: [
       { f: 'contracts/event-schema.json', t: 'Raw Event JSON Schema', d: '검증기가 돌리는 단일 출처', json: true },
-      { f: 'docs/analytics/event-taxonomy-trigger-schema.md', t: 'Event Taxonomy · Trigger', d: '발화 시점과 필수 항목 전문' },
+      { f: 'docs/analytics/event-taxonomy-trigger-schema.md', t: 'Event Taxonomy · Trigger', d: '발화 시점과 필수 property 전문' },
       { f: 'docs/analytics/event-contract-summary.md', t: 'Event 계약 요약', d: '타 파트용 축약본' },
-      { f: 'docs/analytics/log-transport-contract.md', t: '로그 전송 주기 계약', d: '배치·재시도·synthetic 표시' },
+      { f: 'docs/analytics/log-transport-contract.md', t: '로그 전송 주기 계약', d: '배치 · 재시도 · synthetic 표시' },
       { f: 'docs/analytics/processed-schema.md', t: 'Processed 스키마', d: 'Spark 정제 단계 컬럼' },
       { f: 'docs/analytics/dw-schema.md', t: 'DW 스키마', d: 'Mart 와 KPI 산식' },
     ],
@@ -394,10 +402,13 @@ const GROUPS = [
 
 
 
+
 let nav = '', body = '', n = 0;
 for (const g of GROUPS) {
   nav += `<div class="navgroup t-${g.tier}">`
-       + `<div class="navhead"><span class="dot d-${g.id}"></span>${g.name}`
+       + `<div class="navhead"><span class="stepno n-${g.id}">${g.step}</span>`
+       + `<span class="nh-t">${g.name}</span>`
+       + `<span class="nh-r">${g.role}</span>`
        + `<span class="navnote">${g.note}</span></div>`;
 
   for (const d of g.docs) {
@@ -432,8 +443,9 @@ for (const g of GROUPS) {
       : '';
 
     body += `<article class="doc" id="${key}" data-tier="${g.tier}" hidden>`
-          + `<header class="dochead"><div class="eyebrow"><span class="dot d-${g.id}"></span>`
-          + `${escS(g.name)}</div>`
+          + `<header class="dochead"><div class="eyebrow">`
+          + `<span class="stepno n-${g.id}">${g.step}</span>`
+          + `<span>${escS(g.name)}</span><span class="eb-r">${escS(g.role)}</span></div>`
           + `<h1 class="doctitle">${escS(d.t)}</h1><p class="docsub">${escS(d.d)}</p>`
           + `<p class="docpath"><code>${escS(meta)}</code></p></header>`
           + tocHtml
@@ -501,19 +513,31 @@ body{margin:0;background:var(--ground);color:var(--body);font-family:var(--sans)
 .wrap{display:grid;grid-template-columns:298px minmax(0,1fr);align-items:start;
   max-width:1360px;margin:0 auto}
 
-.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 20px 40px;
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 16px 32px;
   border-right:1px solid var(--rule);background:var(--panel);
-  display:flex;flex-direction:column;gap:22px}
+  display:flex;flex-direction:column;gap:18px}
 .brand{display:flex;flex-direction:column;gap:5px}
 .brand b{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
-.brand span{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--faint)}
-.navgroup{display:flex;flex-direction:column;gap:3px}
-.navhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-family:var(--mono);
-  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
-  padding:0 8px 7px;font-weight:500}
-.navnote{flex:1 0 100%;padding-left:15px;font-family:var(--sans);font-size:11px;
-  letter-spacing:0;text-transform:none;color:var(--faint);line-height:1.45}
+.brand span{font-size:11.5px;color:var(--faint)}
+.navgroup{display:flex;flex-direction:column;gap:4px}
+.navhead{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;font-family:var(--sans);
+  padding:0 2px 8px}
+.stepno{flex:none;width:17px;height:17px;border-radius:50%;display:inline-flex;
+  align-items:center;justify-content:center;font-size:10.5px;font-weight:600;
+  color:#fff;align-self:center}
+.n-brief{background:var(--g-brief)} .n-basis{background:var(--g-basis)}
+.n-deep{background:var(--g-deep)}
+.nh-t{font-size:13px;font-weight:600;color:var(--ink)}
+.nh-r{font-size:11px;color:var(--faint);font-weight:400}
+.nh-r::before{content:"— "}
+.navnote{flex:1 0 100%;padding-left:24px;font-size:11.5px;color:var(--muted);
+  line-height:1.45;font-weight:400;margin-top:3px}
+
+/* 아래 단계일수록 들여쓰고 세로선으로 묶어, 무엇이 무엇을 받치는지 보이게 한다 */
+.navgroup{position:relative}
+.t-basis .navitem,.t-deep .navitem{margin-left:16px}
+.t-basis::before,.t-deep::before{content:"";position:absolute;left:8px;top:30px;bottom:4px;
+  width:1px;background:var(--rule)}
 .dot{width:7px;height:7px;border-radius:50%;flex:none}
 .d-brief{background:var(--g-brief)}
 .d-basis{background:var(--g-basis)}
@@ -537,18 +561,24 @@ body{margin:0;background:var(--ground);color:var(--body);font-family:var(--sans)
 .t-basis .navitem{background:var(--basis-bg);border:1px solid var(--basis-bd)}
 .t-basis .navitem:hover{filter:brightness(1.03)}
 .t-basis .navitem[aria-current="true"]{border-color:var(--g-basis)}
-.t-deep .navitem{background:none;border:1px solid transparent}
-.t-deep .ni-t{font-weight:400;color:var(--muted)}
+.t-deep .navitem{background:none;border:1px solid var(--rule-soft);padding:7px 10px}
+.t-deep .ni-t{font-weight:500;font-size:13px;color:var(--muted)}
+.t-deep .ni-d{font-size:11px}
+.t-deep .navitem[aria-current="true"]{background:var(--raise);border-color:var(--rule)}
 
 main{padding:44px 52px 120px;min-width:0}
 .dochead{padding-bottom:22px;border-bottom:1px solid var(--rule);margin-bottom:26px}
-.eyebrow{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10.5px;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+.eyebrow{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;
+  color:var(--ink);margin-bottom:10px}
+.eb-r{font-weight:400;color:var(--faint);font-size:11.5px}
+.eb-r::before{content:"— "}
 .doctitle{font-size:31px;line-height:1.2;font-weight:600;color:var(--ink);margin:0 0 8px;
   letter-spacing:-.02em;text-wrap:balance}
 .docsub{margin:0 0 12px;color:var(--muted);font-size:14.5px}
 .docpath{margin:0;font-size:11.5px;color:var(--faint)}
-.docpath code{font-family:var(--mono);background:none;border:0;padding:0;color:var(--faint);font-size:11.5px}
+.docpath code{font-family:var(--mono);background:none;border:0;padding:0;
+  color:var(--faint);font-size:11px;white-space:normal;overflow-wrap:anywhere}
+.docpath code:lang(ko){font-family:var(--sans)}
 
 .toc{display:flex;flex-direction:column;gap:1px;margin-bottom:30px;padding:14px 16px;
   background:var(--panel);border:1px solid var(--rule-soft);border-radius:9px;max-width:68ch}
@@ -642,7 +672,8 @@ main{padding:44px 52px 120px;min-width:0}
 
 @media (max-width:960px){
   .wrap{grid-template-columns:1fr}
-  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule)}
+  .side{position:static;height:auto;max-height:44vh;border-right:0;
+    border-bottom:1px solid var(--rule)}
   main{padding:30px 22px 90px}
   .tw{max-width:100%}
 }
