@@ -37,6 +37,7 @@ import numpy as np
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
+from eval_metadata import load as load_metadata              # noqa: E402
 from hidden_preference import PROFILES, HiddenPreference     # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
@@ -54,15 +55,13 @@ POOL_MIX = {"top": 6, "category_popular": 3, "random": 3}
 
 
 def seed_and_target(persona, index):
-    """리뷰 상품을 순서대로. 마지막이 target, 나머지가 seed"""
-    order = []
-    for r in persona["reviews"]:
-        gid = r["group_id"]
-        if gid in index and gid not in order:
-            order.append(gid)
-    if len(order) < 2:
+    """metadata 가 정한 seed / target 을 쓴다 (정의는 eval_metadata.py 한 곳)"""
+    row = persona.get("_meta") or {}
+    seeds = [g for g in row.get("seed_product_ids", []) if g in index]
+    target = row.get("target_product_id")
+    if not seeds or target not in index:
         return None, None
-    return order[:-1], order[-1]
+    return seeds, target
 
 
 def events_for(product_id, pref, rng):
@@ -271,7 +270,10 @@ def main():
             for p in encoder.products]
     ctx = (M, index, prior, affinity, hp, recommender, meta)
 
-    personas = select_split(json.load(open(PERSONAS, encoding="utf-8")), a.split)
+    profiles = {p["persona_id"]: p
+                for p in json.load(open(PERSONAS, encoding="utf-8"))}
+    personas = [dict(profiles[r["persona_id"]], _meta=r)
+                for r in load_metadata(split=a.split) if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
 
