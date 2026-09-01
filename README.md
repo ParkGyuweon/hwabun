@@ -2,7 +2,7 @@
 
 ## 1. 현재 폴더 구조
 
-지금 레포에 실제로 들어있는 것입니다.
+지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-01)
 
 ```
 S15P21A306/
@@ -10,83 +10,107 @@ S15P21A306/
 ├── .gitignore
 │
 ├── contracts/                       ★ 팀 계약. 여기가 바뀌면 여러 모듈이 동시에 영향받음
-│   ├── product-feature-spec.md          상품 벡터 93차원 명세 — 블록 구성·인코딩·가중치·MySQL 스키마
-│   ├── product-feature-vocab.json       인코딩 어휘집 `0.3` — 8개 블록의 어휘·문서빈도·가중치
-│   └── recommendation-io-spec.md        추천 입출력 데이터 구조 (백엔드↔AI 계약)
+│   ├── event-schema.json                Raw Event JSON Schema (Collector 통과 후 계약)
+│   ├── validate_events.py               이벤트 파일을 스키마로 검증하는 CLI
+│   ├── requirements-validator.txt       검증기 의존성 (jsonschema[format])
+│   ├── samples/ · tests/                유효/무효 이벤트 표본과 계약 테스트
+│   ├── product-feature-spec.md          상품 벡터 148차원 명세 — 블록 구성·인코딩·가중치
+│   ├── product-feature-vocab.json       인코딩 어휘집 `0.4` — 9개 블록 (brand 포함)
+│   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·가중치 스케줄
 │
 ├── docs/
-│   ├── ai/                          추천 알고리즘 설계·검증 (AI 파트)
-│   │   ├── recommendation-design.md     CBF 전체 설계안 — 점수 공식, 행동 가중치,
-│   │   │                                속성 친화도, 가중치 스케줄, MMR, 서빙 구조
-│   │   ├── cbf-technical-review.md      코사인 계산 구조 실측 검증서 — 값 범위, 증분 갱신,
-│   │   │                                블록 가중치 튜닝, 성분 어휘 확장, 성능
-│   │   └── product-feature-sample.md    상품 5개를 실제로 인코딩한 계산 샘플
+│   ├── ai/                          추천 알고리즘 설계·검증 (AI)
+│   │   ├── recommendation-design.md     CBF 전체 설계안 — 점수 공식, 행동 가중치, 스케줄, MMR
+│   │   ├── cbf-technical-review.md      코사인 계산 구조 실측 검증서
+│   │   ├── product-feature-sample.md    상품 5개 인코딩 샘플  ⚠ 어휘집 0.3·93차원 기준 (갱신 필요)
+│   │   └── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
 │   │
-│   ├── analytics/                   행동 로그 설계 (프론트 파트)
-│   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지 — 설계 근거
-│   │   └── marketing-signal-research.md 이벤트 목록·가중치의 외부 근거 조사
+│   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
+│   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지
+│   │   ├── event-taxonomy-trigger-schema.md · event-contract-summary.md   이벤트 계약
+│   │   ├── log-transport-contract.md    전송 주기·재시도·actor_type 판정
+│   │   ├── dw-schema.md · processed-schema.md   Mart·Processed 스키마
+│   │   ├── persona-schema.md · persona-attribute-preprocessing.md
+│   │   ├── marketing-signal-research.md · event-weight-rationale.html
 │   │
-│   ├── data/                        데이터 수집 메모 (프론트 파트)
-│   │   ├── README.md                    프론트 초기 UI용 샘플 데이터 설명 (상품 8개 / 리뷰 40건)
-│   │   ├── field_stats.json             필드별 통계
-│   │   └── product-images.md            원본에 없는 이미지·상세 설명을 채운 방법
-│   │
+│   ├── dashboard/                   B2B 대시보드 조사·설계 (프론트)
+│   ├── data/                        데이터 수집 메모 (프론트)
+│   ├── backend-ingestion-backpressure.md  수집 과부하 응답 정책 (백엔드)
 │   └── git-convention.md            커밋 메시지·브랜치 전략 (팀 공통)
 │
-├── batch/                           ★ Spark Batch — 현재는 데이터와 인코더만 존재
-│   ├── ingest/data/
-│   │   ├── README.md                    배치 입력 데이터 설명
-│   │   ├── products_200.json            상품 200개 (원본 27컬럼 + 병합 이력 + 리뷰 통계)
-│   │   └── affinity_lift.csv            속성 친화도 테이블 4,000행 (200상품 × 20세그먼트)
+├── batch/                           ★ Spark Batch — 상품·페르소나 피처와 추천 계산
+│   ├── ingest/
+│   │   ├── build_feature_vocab.py       어휘집 생성 (문서빈도·블록 가중치)
+│   │   ├── build_products_json.py       상품 200개 카탈로그 생성 (사이즈 변형 병합)
+│   │   └── data/
+│   │       ├── products_200.json            상품 200개 (원본 27컬럼 + 병합 이력 + 리뷰 통계)
+│   │       ├── affinity_lift.csv            속성 친화도 4,000행 (200상품 × 20세그먼트)
+│   │       ├── concern_from_reviews.npz     리뷰에서 뽑은 concern 점수
+│   │       ├── excluded_products.json       제외 상품 목록과 사유
+│   │       └── serving/                     ★ 백엔드 RankingService 입력
+│   │           ├── product_feature.jsonl        상품 200개 × 148차원 + prior
+│   │           ├── attribute_affinity.csv       친화도 4,000행 (계약 열)
+│   │           └── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
 │   └── jobs/
-│       └── product_encoder.py           상품 → 93차원 콘텐츠 벡터 인코더
+│       ├── product_encoder.py           상품 → 148차원 콘텐츠 벡터 인코더
+│       ├── behavior_weights.py          `types/log.ts` 를 직접 읽는 행동 가중치 로더
+│       ├── user_vector.py               이벤트 → v_u⁺ / v_u⁻ 집계
+│       ├── build_user_vectors.py        Spark 산출물·JSONL → 사용자 벡터 상태 (Redis 형태)
+│       ├── persona_feature.py           페르소나 속성 → 상품별 친화도 (200,)
+│       ├── recommender.py               점수 계산·노출 정책·순위
+│       ├── export_features.py           서빙용 산출물 + 순위 대조 기준 생성
+│       ├── eval_persona_feature.py      9,900명 leave-last-out 검증
+│       ├── concern_from_reviews.py · explore_choice.py
+│       └── test_*.py                    단위 테스트 (피처·산출물·사용자 벡터)
 │
-├── streaming/                      ★ Spark Structured Streaming — Q1 Raw 적재 MVP
+├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/
-│   │   └── raw_sink_job.py              Kafka activity-events → Raw Parquet
-│   ├── tests/
-│   │   └── test_raw_sink_job.py         Spark 없이 실행하는 설정·컬럼 계약 테스트
-│   └── README.md                         실행·복구·출력 스키마
+│   │   ├── raw_sink_job.py              Kafka activity-events → Raw Parquet
+│   │   ├── clean_events_job.py          검증·중복 제거 → cleaned_events
+│   │   ├── derive_facts_job.py          Fact 파생
+│   │   ├── build_marts_job.py           Mart 집계
+│   │   └── validate_pipeline_job.py     품질 검증 리포트
+│   ├── tests/ · README.md
 │
-├── simulator/                       ★ 부하 발생기 — 현재는 페르소나 데이터만 존재
-│   └── personas/data/
-│       ├── README.md                    페르소나 데이터 설명
-│       ├── personas_9900.json           코드 생성용 페르소나 9,900명 (52MB)
-│       └── personas_100_agent.json      LLM 에이전트 구동용 100명 (0.5MB)
+├── simulator/                       ★ 부하·행동 로그 생성기 (AI)
+│   ├── collector_client.py              수집 API 전송 (429/503 백프레셔 대응) — 공용
+│   ├── test_collector_client.py
+│   ├── generator/
+│   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건)
+│   │   ├── build_persona_style.py       리뷰에서 페르소나 6축 스타일 추출
+│   │   └── test_gen_behavior_logs.py · README.md
+│   ├── agents/agent_runner.py           PA 100명 — 실제 브라우저로 프론트를 조작
+│   └── personas/
+│       ├── build_personas.py            페르소나 추출
+│       └── data/  personas_9900.json · personas_100_agent.json · persona_style.json
+│
+├── backend/                         Spring Boot 수집 서버 (백엔드)
+│   └── src/main/java/com/cosmetic/collector/   POST /api/events → Kafka activity-events
+│
+├── kafka/README.md                  Kafka 구조·이벤트 처리 명세 (백엔드·인프라)
+├── infra/kafka/                     로컬 Kafka (docker-compose, topics.sh/ps1)
+├── monitoring/                      Grafana 대시보드·프로비저닝
 │
 ├── frontend/                        React 19 + TypeScript + Vite 8
-│   ├── index.html
-│   ├── package.json / tsconfig*.json / vite.config.ts
-│   ├── .oxlintrc.json                   Oxlint 설정
-│   ├── plugins/image-cache.ts           빌드 시 원격 이미지 로컬 캐시
-│   ├── scripts/warm-images.ts           이미지 프리페치 스크립트
-│   ├── public/                          favicon, 아이콘 스프라이트, 상품 플레이스홀더
+│   ├── index.html · dashboard.html
+│   ├── package.json / tsconfig*.json / vite.config.ts / .oxlintrc.json
+│   ├── plugins/image-cache.ts · scripts/warm-images.ts
+│   ├── public/
 │   └── src/
 │       ├── main.tsx / App.tsx
 │       ├── types/
-│       │   ├── log.ts               ★ 행동 로그 이벤트 계약 — 이벤트 26종, 섹션,
+│       │   ├── log.ts               ★ 행동 로그 이벤트 계약 (`frontend/src/types/log.ts`) — 이벤트 36종, 섹션,
 │       │   │                          콘텐츠 종류, intent 분류, LogEnvelope
-│       │   ├── product.ts / review.ts / persona.ts
-│       ├── hooks/                   로그 수집 훅
-│       │   ├── useScrollDepth.ts        25/50/75/100% 통과 시점 기록
-│       │   ├── useSectionView.ts        IntersectionObserver 기반 섹션 노출·체류
-│       │   ├── useTextSelection.ts      텍스트 선택·복사 (성분 검색 의도 신호)
-│       │   ├── useInteractionSignals.ts 스크롤 정지·되돌아가기·호버 등 주목 신호
-│       │   └── useExitSummary.ts        이탈 시 세션 요약 flush
+│       │   └── product.ts / review.ts / persona.ts / cart.ts
+│       ├── hooks/                   로그 수집 훅 (스크롤·섹션·선택·주목 신호·이탈 요약)
 │       ├── lib/
-│       │   ├── logger.ts                이벤트 조립·버퍼링·전송
+│       │   ├── logger.ts                이벤트 조립·버퍼링·전송 (재시도·백오프 포함)
 │       │   ├── section.ts               섹션 ↔ 콘텐츠 종류 매핑
-│       │   ├── persona.ts               페르소나 전환 (개발용)
-│       │   ├── image.ts / image-widths.ts  이미지 URL·반응형 폭
-│       │   └── format.ts
-│       ├── pages/ProductDetailPage.tsx  상품 상세 페이지 (로그 트리거의 무대)
-│       ├── components/
-│       │   ├── product/                 갤러리·요약·성분·하이라이트·옵션·유사상품
-│       │   ├── review/                  리뷰 카드·목록·필터·요약
-│       │   ├── layout/                  헤더, 페르소나 전환기
-│       │   ├── devtools/                개발용 툴바·로그 패널 (찍히는 로그 실시간 확인)
-│       │   └── common/                  Accordion, Chip, StarRating, EmptyState
-│       ├── mocks/                       상품·리뷰 샘플 JSON
+│       │   └── image.ts / image-widths.ts / format.ts
+│       ├── pages/                   상품 목록·상세·장바구니
+│       ├── dashboard/               B2B 대시보드 화면 (별도 엔트리)
+│       ├── components/              product · review · layout · devtools · common
+│       ├── mocks/                   상품·리뷰·페르소나 샘플 JSON
 │       └── styles/ · index.css
 │
 └── 1차 평가/                        평가 제출물 (팀원별 폴더)
