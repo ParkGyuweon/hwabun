@@ -51,6 +51,7 @@ S15P21A306/
 │   │       ├── concern_from_reviews.npz     리뷰에서 뽑은 concern 점수
 │   │       ├── excluded_products.json       제외 상품 목록과 사유
 │   │       ├── eval_metadata.jsonl          평가 seed/target 정본 (9,900행)
+│   │       ├── text_embeddings.npz         seed 리뷰·상품 임베딩 384차원 (13.7MB)
 │   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력
 │   │           ├── product_feature.jsonl        상품 200개 × 148차원 + prior
@@ -66,6 +67,7 @@ S15P21A306/
 │       ├── export_features.py           서빙용 산출물 + 순위 대조 기준 생성
 │       ├── eval_metadata.py            ★ seed/target 정본 — 세 축이 같은 문제를 풀게 한다
 │       ├── hidden_preference.py        행동 생성을 추천 점수에서 떼어내는 통제 장치
+│       ├── build_text_embeddings.py    seed 리뷰·상품 텍스트 임베딩 (GPU 21초)
 │       ├── eval_persona_feature.py      9,900명 leave-last-out 검증 (오프라인 축)
 │       ├── eval_dynamic.py             동적 시뮬레이션 (Dynamic Recall@10)
 │       ├── eval_review_replay.py       실제 리뷰 이력 순차 재생

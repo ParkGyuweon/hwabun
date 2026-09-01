@@ -427,6 +427,48 @@ def read_detail(page):
 # 3. LLM 호출 (캐시)
 # ============================================================================
 
+class LocalLLM:
+    """로컬 GPU 에 올린 오픈 모델. GMS 크레딧을 쓰지 않는다.
+
+    100명 x 15턴이 약 900 크레딧이라 반복 실행이 부담이다. 러너가 모델에 요구하는
+    것은 "허용된 행동 중 하나 + 상품명 + 한 줄 이유" 를 JSON 으로 뱉는 것뿐이라,
+    작은 모델로도 되는지 먼저 확인하고 쓴다.
+
+    서버를 따로 띄우지 않고 프로세스 안에서 돌린다. 대신 --workers 로 여러 개를
+    띄우면 워커마다 모델을 올려 VRAM 이 그만큼 곱해진다 (8GB 에서는 1개만).
+    """
+
+    def __init__(self, model_id, device=None, max_new_tokens=160):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.max_new_tokens = max_new_tokens
+        print(f"로컬 모델 {model_id} 를 {self.device} 에 올립니다...")
+        t0 = time.time()
+        self.tok = AutoTokenizer.from_pretrained(model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=torch.float16 if self.device == "cuda" else None)
+        self.model.to(self.device).eval()
+        print(f"  준비 {time.time() - t0:.1f}초")
+
+    def chat(self, system, user):
+        import torch
+        prompt = self.tok.apply_chat_template(
+            [{"role": "system", "content": system},
+             {"role": "user", "content": user}],
+            tokenize=False, add_generation_prompt=True)
+        # JSON 만 뱉게 첫 글자를 미리 넣어 준다. 작은 모델은 서두를 붙이는 버릇이 있다
+        prompt += '{"action": "'
+        ids = self.tok(prompt, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model.generate(
+                **ids, max_new_tokens=self.max_new_tokens, do_sample=True,
+                temperature=0.9, top_p=0.9, pad_token_id=self.tok.eos_token_id)
+        text = self.tok.decode(out[0][ids["input_ids"].shape[1]:],
+                               skip_special_tokens=True)
+        return '{"action": "' + text
+
+
 class ScriptedLLM:
     """정해진 순서를 돌려주는 가짜 LLM. 크레딧 0 으로 배선을 검증한다.
 
@@ -465,6 +507,18 @@ class ScriptedLLM:
                 target = cart[-1] if cart else None
             return {"action": act, "target": target, "reason": "(대본)"}
         return {"action": "leave", "target": None, "reason": "(대본 끝)"}
+
+
+def parse_action(text):
+    """모델 응답에서 JSON 하나를 건진다. 앞뒤에 말을 붙여도 중괄호만 떼어 쓴다"""
+    lo, hi = text.find("{"), text.rfind("}")
+    if lo < 0 or hi <= lo:
+        return None
+    try:
+        obj = json.loads(text[lo:hi + 1])
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) and obj.get("action") else None
 
 
 def ask(client, system, user, cache_on, dry):
@@ -878,6 +932,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                   f" · 선택지 {'/'.join(acts)}]")
         if script is not None:
             obj, used = script.next_action(page, acts, here, cart, visited, peeked), 0
+        elif isinstance(client, LocalLLM):
+            obj, used = parse_action(client.chat(system, user)), 0
         else:
             obj, used = ask(client, system, user, cache_on, dry)
         calls += used
@@ -949,7 +1005,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             carted += 1
         if verbose:
             mark = "  " if okd else "! "
-            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {obj.get('reason','')[:40]}")
+            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
     return dict(calls=calls, done=done, failed=failed, carted=carted, broken=broken)
@@ -1034,6 +1090,9 @@ def main():
     ap.add_argument("--headed", action="store_true", help="브라우저를 띄워서 본다")
     ap.add_argument("--dry-run", action="store_true", help="LLM 호출 없이 프롬프트만 (0 크레딧)")
     ap.add_argument("--cache", action="store_true", help="같은 화면이면 저장된 응답 재사용")
+    ap.add_argument("--local-model", default=None, metavar="HF_ID",
+                    help="로컬 GPU 의 오픈 모델을 쓴다 (크레딧 0). "
+                         "예) HuggingFaceTB/SmolLM2-1.7B-Instruct")
     ap.add_argument("--openai", action="store_true",
                     help="GMS 대신 개인 OpenAI 키를 쓴다 (OPENAI_API_KEY 환경변수)")
     ap.add_argument("--model", default=None, help=f"모델 (기본 {MODEL})")
@@ -1076,7 +1135,9 @@ def main():
     load_dotenv()
 
     client = None
-    if not a.dry_run and not a.script:
+    if a.local_model and not a.dry_run and not a.script:
+        client = LocalLLM(a.local_model)
+    elif not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
             key = os.environ.get("OPENAI_API_KEY")
@@ -1174,7 +1235,7 @@ def main():
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회 —"
               f" 프론트 AboutProduct.tsx 크래시 (Research/handoff/frontend_detail_crash.md)")
     print(f"  LLM 호출 {tot['calls']}회 · {dt:.0f}초")
-    if tot["calls"]:
+    if tot["calls"] and not a.local_model:
         print(f"  예상 크레딧 약 {tot['calls'] * 0.6:.0f}"
               f"  (100명 환산 {tot['calls'] * 0.6 / max(len(personas),1) * 100:,.0f})")
     top = sorted(sink.kinds.items(), key=lambda x: -x[1])[:8]

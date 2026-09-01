@@ -44,6 +44,14 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
 # 프론트가 수집한 상세 설명. 있으면 텍스트가 풍부해지고, 없어도 동작한다
 DESCRIPTIONS = os.path.join(ROOT, "frontend", "src", "mocks", "products.collected.json")
+EMBEDDINGS = os.path.join(ROOT, "batch", "ingest", "data", "text_embeddings.npz")
+
+# 텍스트 매칭을 무엇으로 하는가
+#   lexical    IDF 가중 어휘 겹침. 의존성이 없고 어디서나 돈다
+#   embedding  build_text_embeddings.py 가 만든 문장 임베딩. 동의어를 잡는다
+# 산출물이 있으면 embedding, 없으면 lexical 로 자동 내려간다
+TEXT_LEXICAL = "lexical"
+TEXT_EMBEDDING = "embedding"
 
 WEIGHTS = {
     "seed_review_text_match": 0.30,
@@ -94,12 +102,16 @@ def _clip01(x):
 class HiddenPreference:
     """상품 쪽 표현은 한 번만 만들어 두고 페르소나마다 재사용한다"""
 
-    def __init__(self, products=None, descriptions=None, weights=None, noise_seed=0):
+    def __init__(self, products=None, descriptions=None, weights=None, noise_seed=0,
+                 text_backend=None, embeddings_path=EMBEDDINGS):
         self.products = products if products is not None else _load(PRODUCTS)
         self.weights = dict(weights or WEIGHTS)
         self.noise_seed = noise_seed
         self.index = {p["product_id"]: i for i, p in enumerate(self.products)}
         self.n = len(self.products)
+        self.text_backend = text_backend or (
+            TEXT_EMBEDDING if os.path.exists(embeddings_path) else TEXT_LEXICAL)
+        self._emb = self._load_embeddings(embeddings_path)
 
         desc = descriptions if descriptions is not None else _load(DESCRIPTIONS, {})
         self._docs = [self._product_tokens(p, desc.get(p["product_id"]))
@@ -110,6 +122,23 @@ class HiddenPreference:
         self._price = np.array([float(p.get("price_usd") or 0) for p in self.products])
         self._quality = self._build_quality()
         self._segment_share = [self._shares(p) for p in self.products]
+
+    def _load_embeddings(self, path):
+        """상품·페르소나 벡터를 상품 순서에 맞춰 올린다. 없으면 어휘 겹침으로 돈다"""
+        if self.text_backend != TEXT_EMBEDDING or not os.path.exists(path):
+            self.text_backend = TEXT_LEXICAL
+            return None
+        z = np.load(path, allow_pickle=False)
+        pid = [str(x) for x in z["product_ids"]]
+        pos = {g: i for i, g in enumerate(pid)}
+        vecs = np.zeros((self.n, int(z["dim"])), np.float32)
+        for gid, i in self.index.items():
+            j = pos.get(gid)
+            if j is not None:
+                vecs[i] = z["product_vecs"][j]
+        return {"product": vecs,
+                "persona": {str(g): v for g, v in
+                            zip(z["persona_ids"], z["persona_vecs"])}}
 
     # ── 상품 쪽 준비 ────────────────────────────────────────────────────
     def _product_tokens(self, product, description):
@@ -176,7 +205,11 @@ class HiddenPreference:
             cats[product.get("tertiary_category")] += 1
             if product.get("price_usd"):
                 prices.append(float(product["price_usd"]))
+        emb = None
+        if self._emb is not None:
+            emb = self._emb["persona"].get(persona.get("persona_id"))
         return {
+            "embedding": emb,
             "vector": self._vector(tokens(text)),
             "brands": brands,
             "categories": cats,
@@ -187,6 +220,10 @@ class HiddenPreference:
 
     # ── 항목별 점수 ─────────────────────────────────────────────────────
     def _text_match(self, profile, i):
+        if self._emb is not None and profile.get("embedding") is not None:
+            # 임베딩 코사인은 실측 0.0~0.6 에 몰린다. 그 구간을 0~1 로 편다
+            cos = float(profile["embedding"] @ self._emb["product"][i])
+            return _clip01(cos / 0.6)
         user, doc = profile["vector"], self._doc_vecs[i]
         if not user or not doc:
             return 0.0
