@@ -1696,7 +1696,12 @@
   "P426340": {
     "sku_id": "2122489",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2122489-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2122489-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2122489-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2122489-av-05-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A water-activated exfoliant of nourishing Japanese rice bran that transforms to a creamy foam for smooth, polished skin.",
@@ -1969,7 +1974,11 @@
   "P427536": {
     "sku_id": "2023646",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2023646-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2023646-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2023646-av-03-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A daily gel cleanser with natural fruit exfoliant that thoroughly but gently lifts impurities and unclogs pores while leaving skin soft and hydrated.",
@@ -3612,7 +3621,14 @@
   "P455676": {
     "sku_id": "2404853",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2404853-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404853-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404853-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404853-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404853-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404853-av-06-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A gentle yet powerful exfoliator infused with pineapple and papaya enzymes, BHAs, and AHAs that leaves skin with a healthy glow.",
@@ -3689,7 +3705,12 @@
   "P456208": {
     "sku_id": "2319093",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2319093-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2319093-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2319093-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2319093-av-04-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A professional treatment inspired by professional treatments, this clinically proven overnight glycolic peel exfoliates, retexturizes, and brightens skin while you sleep.",
@@ -3709,7 +3730,10 @@
   "P456213": {
     "sku_id": "2319176",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2319176-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2319176-av-02-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A clinically tested, dual-action exfoliator that polishes for baby-smooth and glowing skin&#151;inspired by professional microdermabrasion.",
@@ -3858,7 +3882,13 @@
   "P458209": {
     "sku_id": "2327989",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2327989-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2327989-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2327989-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2327989-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2327989-av-07-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A moisturizer with a fragrance-free formula that delivers lightweight, lasting hydration while helping to visibly clear pores, reduce shine, and balance oil.",
@@ -3877,7 +3907,11 @@
   "P458219": {
     "sku_id": "2348431",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2348431-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2348431-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2348431-av-03-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A gentle, PHA- and BHA-infused watermelon toner that hydrates skin and minimizes the appearance of pores.",
@@ -3898,7 +3932,19 @@
   "P458755": {
     "sku_id": "2350635",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2350635-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2350635-av-13-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A Vitamin C and Polyglutamic Acid anti-aging serum that reduces appearance of dark spots, fine lines and wrinkles, visibly brightens, and plumps skin for flawless makeup application.",
@@ -3917,7 +3963,21 @@
   "P460515": {
     "sku_id": "2382489",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2382489-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382489-av-15-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A milky, ceramide-rich micellar water that thoroughly and gently removes makeup, dirt, pollution, and bacteria from the face and eye area&#151;no rinsing needed.",
@@ -3937,7 +3997,13 @@
   "P460516": {
     "sku_id": "2371516",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2371516-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371516-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371516-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371516-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371516-av-05-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A PEG-free cleansing balm that smooths the look of skin with natural papaya enzymes, while melting away stubborn makeup, dirt, oil, and SPF.",
@@ -3958,7 +4024,18 @@
   "P460779": {
     "sku_id": "2328912",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2328912-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2328912-av-12-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A serum that contains the powerful superfood long life herb clinically shown to support skin, so it appears younger, longer.",
@@ -4032,7 +4109,11 @@
   "P461537": {
     "sku_id": "2382232",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2382232-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382232-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2382232-av-03-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A PH-neutral, daily cream cleanser that gently washes away impurities without stripping skin&#151;leaving it hydrated, feeling soft, and looking luminous.",
@@ -4052,7 +4133,14 @@
   "P462336": {
     "sku_id": "2373926",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2373926-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2373926-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2373926-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2373926-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2373926-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2373926-av-06-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A hydrating cleanser that transforms from balm to cream to oil, gently removing all traces of makeup in one step.",
@@ -4071,7 +4159,12 @@
   "P462699": {
     "sku_id": "2371524",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2371524-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371524-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371524-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2371524-av-04-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A hydrating serum with juicy plum and five weights of hyaluronic acid that fills skin with hydration for a visibly plump effect.",
@@ -4091,7 +4184,19 @@
   "P463036": {
     "sku_id": "2369957",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2369957-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2369957-av-13-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "An intense moisturizer that replenishes dry, distressed skin with lasting hydration to visibly plump and improve the look of fine lines.",
@@ -4110,7 +4215,25 @@
   "P466123": {
     "sku_id": "2404846",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2404846-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-18-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2404846-av-20-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A breakthrough, multiuse highlighting serum that hydrates and visibly reduces the look of hyperpigmentation for a dewy, reflective glow&mdash;without mica, glitter, or gray cast.",
@@ -4131,7 +4254,12 @@
   "P466142": {
     "sku_id": "2869642",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2869642-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2869642-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2869642-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2869642-av-04-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A refreshing, exfoliating scrub that quickly and visibly retexturizes, polishes, and reduces the size of pores with AHAs, lemon peel, and sugar.",
@@ -4150,7 +4278,13 @@
   "P466155": {
     "sku_id": "2406858",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2406858-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2406858-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2406858-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2406858-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2406858-av-05-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A three-in-one serum that smooths the look of fine lines and texture with lactic acid from Hadasei-3&trade;, visibly plumps with hyaluronic acid, and locks in moisture with squalane.",
@@ -4272,7 +4406,13 @@
   "P468658": {
     "sku_id": "2443240",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2443240-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2443240-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2443240-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2443240-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2443240-av-05-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A deep-cleansing creamy clay mask&#151;formulated with absorbent Jeju Super Volcanic Clusters&trade; and AHA&#151;that helps clear pores while it exfoliates.",
@@ -4357,7 +4497,33 @@
   "P471237": {
     "sku_id": "2458230",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2458230-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-17-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-18-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-20-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-21-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-22-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-23-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-24-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-25-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-26-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-27-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2458230-av-28-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A best-selling hyaluronic acid moisturizer featuring a new clean formula with 72-hour hydration and a lightweight texture for plump, dewy skin.",
@@ -4378,7 +4544,14 @@
   "P471535": {
     "sku_id": "2454627",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2454627-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2454627-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2454627-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2454627-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2454627-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2454627-av-06-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A lightweight cream born from the Aqua Bomb DNA with added vitamins C and E plus four types of hyaluronic acid for visibly bright, glowing skin.",
@@ -4432,7 +4605,26 @@
   "P472050": {
     "sku_id": "2463388",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2463388-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-17-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2463388-av-18-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A lightweight moisturizer, designed specifically for oily and combination skin, that instantly hydrates and diminishes the look of pores.",
@@ -4452,7 +4644,13 @@
   "P472454": {
     "sku_id": "2461911",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2461911-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2461911-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2461911-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2461911-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2461911-av-05-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A lightweight cream moisturizer with hyaluronic acid and chamomile extract that hydrates, soothes, and addresses skin sensitivity and redness.",
@@ -4531,7 +4729,22 @@
   "P474377": {
     "sku_id": "2489755",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2489755-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2489755-av-16-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A serum-in-moisturizer treatment that visibly calms irritation, strengthens skin&rsquo;s barrier, and balances the microbiome for a healthy, hydrated glow.",
@@ -4551,7 +4764,16 @@
   "P474938": {
     "sku_id": "2491405",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2491405-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2491405-av-10-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A cleanly formulated serum for acne-prone skin with 100 percent natural salicylic acid and niacinamide to address blackheads, breakouts, pores, and excess oil.",
@@ -4571,7 +4793,33 @@
   "P474953": {
     "sku_id": "2492858",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2492858-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-17-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-18-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-20-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-21-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-22-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-23-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-24-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2492858-av-25-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A multitasking, watery oil formulated with 95 percent naturally derived ingredients to hydrate and visibly plump, smooth, and boost skin&rsquo;s radiance while softening the look of fine lines and wrinkles.",
@@ -4591,7 +4839,20 @@
   "P475589": {
     "sku_id": "2499689",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2499689-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2499689-av-12-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "This visibly de-puffing cream now has vitamin C and niacinamide to reduce the appearance of dark circles and promote a brighter-, more radiant-looking eye area.",
@@ -4612,7 +4873,14 @@
   "P475908": {
     "sku_id": "2484434",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2484434-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2484434-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2484434-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2484434-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2484434-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2484434-av-06-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A lip mask born from the Aqua Bomb DNA&mdash;with added Centella asiatica (cica)&mdash;to soothe and hydrate.",
@@ -4659,7 +4927,26 @@
   "P479327": {
     "sku_id": "2535128",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2535128-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-17-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-18-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535128-av-20-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A hydrating, skin-balancing, whipped gel cream in a refillable jar, packed with polyglutamic acid, hyaluronic acid, and plum for visibly plump, glowing skin.\n\nSkin Type: Normal, Dry, Combination, and Oily",
@@ -4736,7 +5023,20 @@
   "P479841": {
     "sku_id": "2535417",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2535417-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2535417-av-12-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "An antioxidant face mask that is clinically proven to calm signs of sensitivity—redness, uneven tone, and rough skin—for a visibly even-toned complexion.",
@@ -4754,7 +5054,18 @@
   "P480612": {
     "sku_id": "2559243",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2559243-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2559243-av-10-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A lightweight gel moisturizer that blurs pores and mattifies skin while providing optimal, up-to-all-day hydration.",
@@ -4779,7 +5090,27 @@
   "P481989": {
     "sku_id": "2549400",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2549400-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-17-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-18-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2549400-av-20-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "skin_type": "Normal, Dry, Combination, and Oily",
@@ -4795,7 +5126,18 @@
   "P482739": {
     "sku_id": "2534907",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2534907-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-08-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-09-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534907-av-11-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A lightweight, daily oil-free face sunscreen infused with hyaluronic acid that protects against harmful UVA/UVB rays and doubles as a face primer.",
@@ -4816,7 +5158,15 @@
   "P482742": {
     "sku_id": "2534915",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2534915-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534915-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534915-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534915-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534915-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534915-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2534915-av-08-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A daily, moisturizing sunscreen for dry skin that protects against harmful UVA/UVB rays with SPF 42 while hydrating and visibly plumping skin.",
@@ -4855,7 +5205,18 @@
   "P500701": {
     "sku_id": "2532976",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2532976-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-05-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-06-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-07-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2532976-av-12-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A silky eye gel-creme to brighten the look of dark circles in just 2 weeks, with double action to fight the visible effects of free radical damage.",
