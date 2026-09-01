@@ -2,7 +2,7 @@
 
 작성일: 2026-09-01  
 대상 Jira: `[DATA] Raw Event Log 저장 구성`  
-상태: Raw Event 계약·목표 projection 확정, 최종 저장 엔진 미확정
+상태: Raw Event 계약·목표 projection·Delta Lake 저장 구조 확정, 구현 검증 대기
 
 ## 1. 목적
 
@@ -26,8 +26,21 @@ Frontend / Simulator
 → Backend Collector
 → Kafka activity-events
 → Spark Structured Streaming Q1
-→ Parquet raw_events (현재 로컬 Q1 PoC/MVP)
+→ Delta Lake raw_events (EC2-2 목표 구조)
+→ Delta Lake cleaned_events / marts
+→ MySQL dw KPI Mart
+→ Dashboard
 ```
+
+서비스와 데이터 처리는 두 EC2로 분리한다. EC2-1은 Backend, MySQL의 `app`·`dw`
+스키마 및 Redis를 실행하고, EC2-2는 Kafka, Spark 및 Delta Lake를 실행한다. Delta
+Lake는 Raw·Processed·Mart의 기준 저장 계층이며, MySQL `dw`에는 Dashboard가 직접
+조회할 KPI Mart만 선별 적재한다.
+
+별도 S3, EBS 데이터 볼륨 또는 공유 파일시스템이 없으므로 Delta Table의 Parquet
+파일과 `_delta_log`는 EC2-2의 로컬 파일시스템에 함께 둔다. 이 구성은 서비스 영역과
+데이터 영역의 분리를 검증하는 MVP이며, EC2-2 장애·교체까지 견디는 HA 저장 구조는
+아니다. 여러 EC2에서 Spark를 분산 실행하는 구성은 공유 저장소를 도입한 뒤 검토한다.
 
 아래 항목은 Event 계약 문서, Connector 구현 및 Kafka 문서에서 이미 확정·확인된
 기준이다. Raw 저장 구조 검토를 이유로 다시 합의하지 않는다.
@@ -41,7 +54,7 @@ Frontend / Simulator
 | Kafka Key | `session_id` |
 | Kafka Topic | `activity-events` |
 | Spark 입력 단위 | Kafka record 1건 |
-| 현재 Q1 Raw 출력 단위 | Parquet row 1건 |
+| 목표 Q1 Raw 출력 단위 | Delta `raw_events` row 1건 |
 
 Collector는 batch에 포함된 Event를 각각 직렬화하여 Kafka에 발행한다. 같은 HTTP
 요청의 Event는 같은 `request_id`와 `received_at`을 공유하고 `event_index`로 batch
@@ -63,9 +76,9 @@ Collector는 batch에 포함된 Event를 각각 직렬화하여 Kafka에 발행�
 
 Kafka의 24시간 retention은 현재 로컬 기본값이며 Raw 장기 보존 기간이 아니다.
 Q1 장애가 retention을 넘으면 Kafka record가 만료될 수 있으므로
-`failOnDataLoss=true`로 조용한 누락을 막는다. 현재 Q1에서는 Parquet
-`raw_events`가 Kafka 만료 이후 원문 재처리 입력을 맡는다. 최종 저장 엔진과
-보존 기간은 물리 저장 운영안에서 확정한다.
+`failOnDataLoss=true`로 조용한 누락을 막는다. 목표 구조에서는 Delta
+`raw_events`가 Kafka 만료 이후 원문 재처리 입력을 맡는다. Raw 보존 기간은
+EC2-2 가용 용량과 데이터 생성량을 측정한 뒤 별도로 확정한다.
 
 Kafka Producer idempotence는 Producer 내부 재시도의 중복을 줄이지만 Front 또는
 Simulator가 같은 `event_id`를 다시 HTTP로 제출하는 업무 재전송까지 제거하지 않는다.
@@ -78,26 +91,32 @@ Simulator가 같은 `event_id`를 다시 HTTP로 제출하는 업무 재전송�
 | Dataset | `raw_events` | 확정 |
 | grain | Kafka record 1건 | 확정 |
 | 원본 기준 | `raw_value` + Kafka 출처 좌표 | 확정 |
-| 쓰기 방식 | append-only, `event_id` dedup 미수행 | 확정 |
+| 논리 쓰기 방식 | insert-only, `event_id` dedup 미수행 | 확정 |
 | 현재 Q1 저장 형식 | Parquet | 로컬 PoC/MVP 임시 방식 |
 | Host Raw 저장 경로 | `data/raw_events` | 로컬 확정값 |
 | Container Raw 저장 경로 | `/opt/project/data/raw_events` | 로컬 확정값 |
-| partition column | `raw_ingest_date` | 현재 Q1 구현값 |
-| partition 시간 기준 | UTC | 현재 Q1 구현값 |
+| 목표 저장 엔진 | Delta Lake | 확정 |
+| 목표 배치 위치 | EC2-2 로컬 파일시스템 | 확정 |
+| 목표 Raw Table | Delta `raw_events` | 확정 |
+| partition column | `raw_ingest_date` | 목표 구조 유지값 |
+| partition 시간 기준 | UTC | 확정 |
 | Host checkpoint 경로 | `data/checkpoints/raw-events` | 로컬 확정값 |
 | Container checkpoint 경로 | `/opt/project/data/checkpoints/raw-events` | 로컬 확정값 |
 | 기본 Kafka topic | `activity-events` | 확정 |
 | 신규 query 시작 offset | `earliest` | 현재 Q1 구현값 |
 | Kafka data loss 설정 | `failOnDataLoss=true` | 현재 Q1 구현값 |
-| 최종 저장 엔진·실제 저장 URI·보존 기간 | 영속 저장 및 전체 Replay 멱등성 지원 필요 | 미확정 |
+| EC2-2 Delta root URI | Spark·Delta 실행 구성과 함께 지정 | 구현 대기 |
+| EC2-2 checkpoint URI | Delta root와 분리된 EC2-2 경로로 지정 | 구현 대기 |
+| Raw 보존 기간 | EC2-2 용량·이벤트 발생량 확인 후 지정 | 운영값 미정 |
 
 HTTP batch의 크기와 관계없이 Collector가 Kafka에 Event 단위로 발행하므로
 Kafka record 1건을 Raw row 1건으로 저장한다.
 
 현재 Q1의 저장 경로는 `RAW_EVENTS_PATH`, checkpoint 경로는
 `RAW_EVENTS_CHECKPOINT_PATH`로 override할 수 있다. 위 Host/Container 경로는 현재
-로컬 Docker 구성의 확정값이다. 최종 저장 엔진과 실제 저장·checkpoint URI는 아직
-정해지지 않았으므로 Parquet 로컬 기본값을 최종 저장 구조로 확정하지 않는다.
+로컬 Docker 구성의 확정값이다. EC2-2의 실제 Delta root와 checkpoint URI는
+Spark·Scala·`delta-spark` 호환 조합 및 배포 경로를 확인한 뒤 환경변수에 적용한다.
+현재 Parquet 경로를 EC2 목표 경로로 간주하지 않는다.
 
 ## 5. 물리 식별자
 
@@ -113,8 +132,11 @@ kafka_cluster_id
 `event_id`는 업무 Event 식별자이며 Raw row의 물리 식별자가 아니다. 같은 Event를
 재전송하면 같은 `event_id`를 가진 서로 다른 Kafka record가 저장될 수 있다.
 
-Parquet은 PK/UNIQUE 제약을 강제하지 않으므로 위 조합은 논리적 식별자다. 동일
-Kafka 좌표가 재처리되어 중복 저장된 경우의 정리는 Processed 단계에서 수행한다.
+Delta `raw_events` 적재는 위 조합을 조건으로 한 insert-only `MERGE`를 사용한다.
+일치하는 row는 UPDATE하지 않고, 일치하지 않는 row만 INSERT한다. 따라서 동일
+checkpoint 재시작뿐 아니라 checkpoint 삭제 후 전체 Replay에서도 같은 Kafka
+record의 물리 중복을 줄인다. 서로 다른 Kafka 좌표로 수신된 같은 `event_id`는 Raw에
+각각 보존하고 Processed `cleaned_events`에서 업무 중복을 제거한다.
 
 동일 이름의 Kafka Topic을 삭제 후 재생성하면 Partition Offset이 다시 사용될 수
 있다. 이 경우 기존 Raw·checkpoint와 섞지 않고 `KAFKA_CLUSTER_ID`를 새 세대 값으로
@@ -191,7 +213,7 @@ Raw 조회 컬럼은 payload가 유효하지 않아도 row를 보존하기 위�
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `raw_ingested_at` | timestamp | N | Raw row를 생성한 UTC 시각 |
-| `raw_ingest_date` | date | N | `raw_ingested_at`의 UTC 날짜. Parquet partition column |
+| `raw_ingest_date` | date | N | `raw_ingested_at`의 UTC 날짜. Delta partition column |
 
 ## 7. 원본 보존 규칙
 
@@ -208,8 +230,8 @@ Raw 조회 컬럼은 payload가 유효하지 않아도 row를 보존하기 위�
 
 | 단계 | 기준 | 처리 |
 | --- | --- | --- |
-| Raw Q1 | Kafka record | 모든 record를 append 저장. `event_id` dedup 미수행 |
-| Processed Q2 좌표 정리 | `kafka_cluster_id + kafka_topic + kafka_partition + kafka_offset` | 같은 Kafka record가 반복 적재된 경우 1건 선택 |
+| Raw Q1 | Kafka record | Kafka 좌표 기반 insert-only `MERGE`. `event_id` dedup 미수행 |
+| Processed Q2 좌표 방어 | `kafka_cluster_id + kafka_topic + kafka_partition + kafka_offset` | 기존 Parquet 또는 비정상 적재에서 같은 좌표가 반복된 경우 1건 선택 |
 | Processed Q2 업무 dedup | `event_id` | 정본 1건을 `cleaned_events`에 저장 |
 | Processed Q2 감사 | 정본이 아닌 유효 후보 | `duplicate_events`에 저장 |
 | Processed Q2 오류 | 파싱·필수값·semantic validation 실패 | `bad_events`에 원문과 Kafka 좌표를 저장 |
@@ -226,18 +248,22 @@ received_at ASC
 Fact, Mart, Dashboard는 Raw를 직접 집계하지 않고 `cleaned_events` 또는 그 파생
 Dataset만 사용한다.
 
-## 9. 현재 Q1 Partition 및 checkpoint 규칙
+## 9. 목표 Q1 Partition, MERGE 및 checkpoint 규칙
 
-- Parquet partition은 Event 발생일이 아니라 적재 시각의 UTC 날짜인
+- Delta partition은 Event 발생일이 아니라 적재 시각의 UTC 날짜인
   `raw_ingest_date`를 사용한다.
 - 늦게 도착한 Event도 실제 Raw 적재 날짜 partition에 저장한다.
+- 각 micro-batch 내부에서 Kafka 물리 식별자 중복을 먼저 제거한다.
+- Delta `raw_events`와 Kafka 물리 식별자를 비교하고 matched row에는 UPDATE를
+  수행하지 않으며, unmatched row만 INSERT한다.
 - 정상 재시작은 동일한 checkpoint 경로를 사용한다.
 - 환경·Kafka cluster·topic 세대가 다르면 checkpoint를 공유하지 않는다.
 - 출력 경로와 checkpoint 경로는 서로 다른 위치를 사용하며, 하나의 checkpoint를
   서로 다른 Streaming Query가 공유하지 않는다.
 - `startingOffsets`는 checkpoint가 없는 신규 query에만 적용한다.
-- checkpoint를 삭제하고 재수집하면 같은 Kafka 좌표가 다시 저장될 수 있으므로
-  Processed Q2의 좌표 중복 정리를 유지한다.
+- checkpoint를 삭제하고 전체 Replay해도 insert-only `MERGE`가 같은 Kafka 좌표를
+  다시 INSERT하지 않아야 한다. Processed Q2의 좌표 중복 정리는 방어 로직으로
+  유지한다.
 
 ## 10. 조회 기준
 
@@ -256,17 +282,18 @@ Raw의 조회 결과는 원본 확인과 재처리를 위한 것이며 KPI 계�
 ## 11. Schema 변경 호환 원칙
 
 - Kafka payload 필드가 추가되어도 `raw_value`에는 전체 JSON을 그대로 저장한다.
-- 조회용 projection에 새 컬럼을 추가할 때는 기존 Raw 파일에 해당 컬럼이 없음을
-  전제로 nullable하게 확장하고, 기존 파일과 신규 파일의 동시 조회를 검증한다.
+- 조회용 projection에 새 컬럼을 추가할 때는 기존 Delta 파일에 해당 컬럼이 없음을
+  전제로 nullable하게 확장하고, Schema evolution 이후 기존·신규 row의 동시 조회를
+  검증한다.
 - 필드명·타입·의미 변경은 기존 Raw를 덮어쓰지 않고 `schema_version`으로 구분한다.
 - projection 파싱 실패나 알 수 없는 신규 필드 때문에 Kafka record 자체를 버리지
   않는다.
 
 ## 12. 구조 확정 후 검증 조건
 
-현재 저장소의 단위 테스트는 Q1 설정과 컬럼 목록을 확인하지만 실제
-Kafka → Spark → Raw 저장을 실행한 통합 검증 결과는 아니다. 저장 방식과 경로가
-확정되면 아래 결과를 남긴다.
+현재 저장소의 단위 테스트는 Parquet Q1 설정과 컬럼 목록을 확인하지만 실제
+Kafka → Spark → Delta 저장을 실행한 통합 검증 결과는 아니다. Spark·Scala·
+`delta-spark` 호환 버전과 EC2-2 경로를 적용한 뒤 아래 결과를 남긴다.
 
 1. 유효 Event를 전송해 Kafka record 1건이 Raw row 1건으로 저장되는지 확인한다.
 2. Kafka `value`와 Raw `raw_value`가 동일하고 Topic·Partition·Offset·Key가 함께
@@ -277,3 +304,6 @@ Kafka → Spark → Raw 저장을 실행한 통합 검증 결과는 아니다. �
    확인한다.
 6. JSON 파싱 실패 record도 `raw_value`와 Kafka 좌표를 가진 Raw row로 남는지
    확인한다.
+7. checkpoint를 새로 만들고 전체 Replay해도 같은 Kafka 좌표가 중복 INSERT되지
+   않는지 확인한다.
+8. EC2-2 프로세스 재시작 후 Delta Table과 checkpoint가 유지되는지 확인한다.
