@@ -107,6 +107,14 @@ function pickSpread(rows, count) {
  * 부수입이 하나 있다. 광고 유입 주소에 `skuId=` 가 붙어 있는 경우가 있어서,
  * 스냅샷을 못 읽어도 이미지 URL 은 만들 수 있다.
  */
+/**
+ * 세포라 상품 페이지 주소.
+ *
+ * 지역 경로가 붙는다: `/product/`(미국) · `/ca/en/product/` · `/ca/fr/product/`.
+ * 어느 쪽이든 상품 JSON 은 같은 모양이라 그대로 쓴다.
+ */
+const SEPHORA_PRODUCT = /^https?:\/\/(?:www\.)?sephora\.com\/(?:[a-z]{2}\/[a-z]{2}\/)?product\//i;
+
 async function findArchived(productId) {
   const low = productId.toLowerCase();
 
@@ -131,7 +139,14 @@ async function findArchived(productId) {
     rows = (body ?? '')
       .split('\n')
       .map((line) => line.trim().split(/\s+/))
-      .filter(([url]) => url?.startsWith('https://www.sephora.com/product/'))
+      // 경로는 지역마다 다르다 (`/product/`, `/ca/en/product/`, `/ca/fr/product/`).
+      // 미국 경로만 받고 있었더니 주소표의 지역 주소 3,485건이 전부
+      // "주소 못 찾음" 으로 빠졌다. 같은 상품이면 어느 지역 페이지든 쓴다 —
+      // 상품 JSON 의 구조와 skuId 는 같다.
+      .filter(([url]) => SEPHORA_PRODUCT.test(url ?? ''))
+      // 주소 끝의 상품 ID 로 같은 상품인지 확인한다. 와일드카드로 찾은 경우
+      // 이름이 비슷한 다른 상품이 섞여 들어올 수 있다
+      .filter(([url]) => url.toLowerCase().includes(low))
       .map(([url, timestamp]) => ({ url, timestamp }));
 
     if (rows.length > 0) break;

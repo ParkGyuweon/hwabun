@@ -1971,7 +1971,12 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A daily gel cleanser with natural fruit exfoliant that thoroughly but gently lifts impurities and unclogs pores while leaving skin soft and hydrated.",
+      "what_else": "Harvested under a full autumn moon, the water of luffa fruit has been prized as a favorite natural skincare ingredient in Japan since the Edo period. It is beloved for its clarifying and moisturizing properties. When dried and ground, the fruit gently exfoliates to purify and smooth skin texturethe original inspiration for the modern day loofah sponge. The Deep Cleanse harnesses this time-tested ingredient in this refreshing, easy-to-use daily exfoliating cleanser.\n\nThis pure, oil-free formula is non-irritating, non-sensitizing, dermatologist tested, and cruelty-free. It is formulated without synthetic fragrances, sulfate detergents, urea, DEA, of TEA.\n\nThis product is an Allure Best of Beauty award winner.\n\nBeauty that gives back: every Tatcha purchase you make supports girls’ education around the world. Tatcha is proud to partner with Room to Read to transform girls’ futures.Victoria Tsai, Founder\n\nCLEAN at Sephora is our commitment to offering formulas that go beyond regulatory standards to avoid controversial ingredients without sacrificing on effectiveness.",
+      "suggested_usage": "-Begin with wet hands and wet face.\n-Squeeze a small amount into palms and rub together to create a creamy foam.\n-Gently massage the face avoiding the eye area and rinse thoroughly.\n-Can be used daily.",
+      "brand_story": "Tatcha is a celebration of classical Japanese beauty culture from Kyoto to San Francisco. In 2008, Vicky Tsai encountered centuries-old beauty rituals in Kyoto and a philosophy of care and harmony that forever altered her life. Founded the following year, Tatcha remasters timeless Japanese beauty preparations into clean, luxurious rituals of self-care that invite you into the moment and back to yourself. Every Tatcha purchase also contributes towards a beautiful future by supporting equal access to education for underserved children around the world."
+    }
   },
   "P428095": {
     "sku_id": "2046639",
@@ -2494,7 +2499,20 @@
       "https://www.sephora.com/productimages/product/p439055-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A vegan, buttery, collagen sleeping cream that delivers essential nutrients and nurtures the skin for a dewy, cushioned glow by morning.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Loss of Firmness and Elasticity, Fine Lines and Wrinkles, and Dullness and Uneven Texture",
+      "highlighted_ingredients": [
+        "Patented Alguronic Acid: Naturally sourced and sustainably produced from algae, it’s clinically shown to visibly minimize appearance of fine lines and wrinkles, as well as boost the benefits of other active ingredients.",
+        "Exclusive Active Vegan Collagen&trade;: High-concentration vegan collagen that helps to strengthen and condition the skin to visibly improve texture and suppleness.",
+        "Skin-Mimicking Ceramides and Mary Thistle: Helps to support skin barrier function, increasing hydration, reducing the appearance of wrinkles, increasing the look of firmness and has antioxidants to protect skin from the appearance of oxidative aging."
+      ],
+      "ingredient_callouts": "Free of sulfates SLS and SLES, parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, triclosan, and triclocarban, and contains less than one percent of synthetic fragrances. This product is also vegan.",
+      "what_else": "Sleeping Collagen works overnight, during skin's optimal recovery time. With exclusive alguronic acid, Active Vegan Collagen&trade;, skin-mimicking ceramides, and Mary Thistle&#151;skin is left more hydrated, softer, supple, and radiant. Skin is also protected from moisture loss and visible damage from aggressors.",
+      "clinical_results": "In self-assessments of 85 women using the product once nightly, after 10 days of use:\n- 98% said skin felt and looked hydrated\n- 94% said skin looked and felt deeply moisturized\n- 95% said skin appeared softer and more supple",
+      "suggested_usage": "-After cleanser, apply a pea-sized amount to face, neck, and d&#233;collet&#233; in the evening.\n-A tranquil blend of natural, stress-relieving notes released during application also helps promote restful sleep.\n-Due to the nutrient-rich formula and buttery texture, only a pea-sized amount is needed per use."
+    }
   },
   "P439058": {
     "sku_id": "2181055",
@@ -2725,7 +2743,19 @@
       "https://www.sephora.com/productimages/product/p442594-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "Serum infused with natural forms of vitamins C and E, and peptides from marine algae. Helps increase skin radiance while improving and evening out skin tone.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dark Spots, Dryness, and Fine Lines and Wrinkles",
+      "highlighted_ingredients": [
+        "Natural Vitamin C and E: Known to provide radiance and protect the skin from environmental factors",
+        "Natural Peptides From Marine Algae: Known for its tightening effect"
+      ],
+      "ingredient_callouts": "This product is also vegan, and comes in recycling packaging.",
+      "what_else": "97% ingredients naturally sourced. After only 28 days, this fast absorbing serum hydrates and firms your skin while reducing wrinkles for a radiant appearance. Bottle is recyclable and packaging is from sustainably managed forests. Printed with vegetable inks.\n\n Clean + Planet Positive at Sephora\n\nWhen you see our Clean + Planet Positive seal, this brand's products are formulating without certain ingredients that are potentially harmful to human health and environment. They also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more: For the full list, check out the Ingredients tab.\n\nOn top of meeting the Clean at Sephora formulated without list, these brands are on a mission to do right by your routine and the planet by making climate commitments and focusing on sustainable sourcing, responsible packaging, and environmental giving.",
+      "suggested_usage": "-Apply in the morning to the face and neck on clean, dry skin.",
+      "brand_story": "Beauty Uncomplicated | What good are tons of options if you can't figure out how to choose between them? SEPHORA COLLECTION is about formulas that really deliver, paired with bite-sized bits of Sephora expertise that make all those options less overwhelming. Whether you're looking for a new color, a new formula, or even a whole new look, with SEPHORA COLLECTION it's easy to get exactly what you want."
+    }
   },
   "P442840": {
     "sku_id": "2215945",
@@ -3611,7 +3641,20 @@
       "https://www.sephora.com/productimages/product/p455926-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A cult-favorite retinol and AHA serum clinically shown to reduce the look of fine lines and wrinkles while visibly firming and brightening for glowing, younger-looking skin.",
+      "skin_type": "Normal, Combination, and Oily",
+      "concerns_text": "Fine Lines and Wrinkles, Dullness, Loss of Firmness and Elasticity",
+      "highlighted_ingredients": [
+        "Encapsulated Retinol: Non-irritating retinol that improves the look of fine lines, texture, and elasticity.",
+        "AHA: Exfoliates to improve texture and uneven tone for smoother, brighter-looking skin.",
+        "Pyrus Malus (Apple) Fruit Extract: Antioxidant that helps reduce visible signs of aging and defend against pollution."
+      ],
+      "ingredient_callouts": "Free of parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, sulfates SLS & SLES, triclocarban, triclosan, and contains less than one percent synthetic fragrance. It is also vegan and cruelty-free.",
+      "what_else": "Utilizing a time-release, encapsulated retinol, this formula delivers a consistent stream of retinol throughout the night to minimize irritation often experienced with retinol products. The formula also contains an AHA for smoothing and visible brightening benefits in as few as two weeks. This serum is clinically shown to improve texture in two weeks and reduce the look of fine lines and wrinkles in eight weeks.",
+      "clinical_results": "Results from a clinical study conducted on 35 women ages 25 to 50 via visual evaluation and instrumental measurement over 12 weeks of use:\n- Participants saw visible brightening in as few as two weeks\n\nIn a scientific study of 35 women:\n- 93% of subjects saw an improvement in texture\n- 90% of subjects reported a more even skin tone\n- 83% of subjects said their skin looks brighter\n\nThis product is an Allure Best of Beauty award winner.",
+      "suggested_usage": "-In the evening, smooth one to two pumps onto clean, dry skin.\n-Start with one to two nights a week, add a night each week, building up to as often as your skin can tolerate.\n-Follow with a moisturizer as needed.\n-Be sure to use a sunscreen daily.\n-Avoid using other AHA products on the same night as Retinol Reform.\n-Do not use if pregnant or nursing."
+    }
   },
   "P455936": {
     "sku_id": "2652113",
@@ -4152,7 +4195,7 @@
     }
   },
   "P467602": {
-    "sku_id": null,
+    "sku_id": "2425205",
     "image_url": null,
     "images": [
       "https://www.sephora.com/productimages/product/p467602-av-01-zoom.jpg",
@@ -4168,7 +4211,20 @@
       "https://www.sephora.com/productimages/product/p467602-av-11-zoom.jpg"
     ],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A balm that reduces the appearance of dark under-eye circles, bags, puffiness, lines, and wrinkles while brightening and helping eye area appear smoother and firmer.\n\nSkin Type: Normal, Dry, Combination, and Oily",
+      "concerns_text": "Fine Lines and Wrinkles, Dark Circles, and Puffiness",
+      "highlighted_ingredients": [
+        "Patented Alguronic Acid: Hydrates and reduces the appearance of fine lines and wrinkles.",
+        "Triple Algae (Red, Brown, and Green): Help target the look of varying causes and tones of dark circles.",
+        "Multi-Peptide Complex: Helps eye area appear firmer and smoother."
+      ],
+      "ingredient_callouts": "Free of parabens, formaldehydes, formaldehyde-releasing agents, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, sulfates SLS & SLES, triclocarban, triclosan, and contains less than one percent synthetic fragrance. It is also vegan.",
+      "what_else": "This balm is formulated with alguronic acid, triple algae, and a skin-responsive Multi-Peptide Complex to address the appearance of dark under-eye circles, dark rings, eyelid bags, and puffiness. It leaves the eye area looking brightened, nourished, smoothed, and hydrated.",
+      "clinical_results": "In a self-assessment of 27 women participating in a 4-week clinical study, after 10 days of use:\n- 100% agree that eye area feels moisturized and hydrated\n- 93% agree under eye dark circles are diminished\n- 93% agree eye area appears smoother and firmer",
+      "suggested_usage": "-Apply to the eye area twice a day. Use only as directed.",
+      "brand_story": "It started out as a renewable energy project—and turned into an unexpected antiaging discovery. Algenist comes from a team of biotechnology scientists based in San Francisco."
+    }
   },
   "P468351": {
     "sku_id": "2421683",
@@ -4374,11 +4430,24 @@
     }
   },
   "P472050": {
-    "sku_id": null,
+    "sku_id": "2463388",
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A lightweight moisturizer, designed specifically for oily and combination skin, that instantly hydrates and diminishes the look of pores.",
+      "skin_type": "Combination and Oily",
+      "concerns_text": "Pores, Acne and Blemishes, and Oiliness",
+      "highlighted_ingredients": [
+        "Salicylic Acid (BHA) and Lipohydroxy Acid (LHA): Lift and loosen pore-clogging dead skin cells.",
+        "Alpine Willowherb Extract: Nourishes and conditions skin with rich antioxidant levels.",
+        "Green Fusion Complex&trade;: A proprietary blend of potent active botanicals including green tea, eucalyptus, algae (kelp), and Irish moss extracts that absorbs excess oil and refines the look of pores."
+      ],
+      "ingredient_callouts": "This product is vegan and cruelty-free.",
+      "what_else": "This lightly cooling oil-free moisturizer gives skin a refreshing splash of hydration. With BHA (salicylic acid) and LHA, it helps detoxify and minimize the look of pores and control surface oil. Plus, it smoothes uneven skin texture and targets the look of fine lines, wrinkles and dark spots.",
+      "clinical_results": "In an 8 week clinical study on 36 women, after 4 weeks:\n- 100% of users agree this product balances skin\n- 94% of users agree this product detoxifies pores\n- 94% agreed it refines pores\n\nClean at Sephora\nClean at Sephora is a curation of brands committed to evolving the beauty industry. When you see our Clean seal, you can be sure this brand's products are formulated without certain ingredients that are potentially harmful to human health and the environment and also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Apply evenly to your face and neck, AM and PM.\n-For external use only.\n-Use as directed."
+    }
   },
   "P472454": {
     "sku_id": "2461911",
@@ -4484,14 +4553,40 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A cleanly formulated serum for acne-prone skin with 100 percent natural salicylic acid and niacinamide to address blackheads, breakouts, pores, and excess oil.",
+      "skin_type": "Combination and Oily",
+      "concerns_text": "Pores, Acne and Blemishes, and Oiliness",
+      "highlighted_ingredients": [
+        "All-Natural Salicylic Acid: Exfoliates, visibly refining skin&rsquo;s texture.",
+        "Niacinamide: Minimizes the look of pores.",
+        "Grapeseed Polyphenols: Limit sebum oxidation to visibly reduce blackheads."
+      ],
+      "ingredient_callouts": "This product is vegan, gluten-free, cruelty-free, and comes in recyclable packaging.",
+      "what_else": "Now in more sustainable packaging, this 97 percent-natural, lightweight serum is ideal for acne-prone skin. It visibly improves texture, minimizes pores and excess oil, and reduces blemishes. It is also free of fragrance and noncomedogenic.\n\nAs a pioneer of sustainable beauty, Caudalie is committed to reducing packaging waste for all new and existing products by the end of 2022, using less plastic, paper, and metal to create recycled, recyclable, or refillable packaging.",
+      "clinical_results": "In a clinical self-evaluation of 37 women, with the serum applied twice daily:\n- 82% saw tightened pores\n\n Clean + Planet Positive at Sephora\n\nWhen you see our Clean + Planet Positive seal, this brand's products are formulating without certain ingredients that are potentially harmful to human health and environment. They also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more: For the full list, check out the Ingredients tab.\n\nOn top of meeting the Clean at Sephora formulated without list, these brands are on a mission to do right by your routine and the planet by making climate commitments and focusing on sustainable sourcing, responsible packaging, and environmental giving.",
+      "suggested_usage": "-Apply morning and evening to your face, neck, and d&#233;collet&#233;, avoiding your eye contour.\n-Use with Vinopure Pore Purifying Gel Cleanser, Vinopure Natural Salicylic Acid Pore Minimizing Toner (each sold separately), and moisturizer for best results.\n-Can be applied directly to imperfections.\n\nRecycling Instructions:\n-Bottle is 100 percent recyclable, pump is recyclable through TerraCycle&reg;.\n\nAs a pioneer of sustainable beauty, Caudalie is committed to reducing packaging waste for all new and existing products by end of 2022, using less plastic, paper and metal to create recycled, recyclable or refillable packaging."
+    }
   },
   "P474953": {
-    "sku_id": null,
+    "sku_id": "2492858",
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A multitasking, watery oil formulated with 95 percent naturally derived ingredients to hydrate and visibly plump, smooth, and boost skin&rsquo;s radiance while softening the look of fine lines and wrinkles.",
+      "skin_type": "Normal, Dry, and Combination",
+      "concerns_text": "Fine Lines and Wrinkles, Dullness, and Uneven Texture",
+      "highlighted_ingredients": [
+        "Dynamic Black Bee Repair Technology: Four sustainably sourced, exceptional quality honeys from protected islands, biospheres, and Blue Zones (Ouessant Island in France, Ikaria in Greece, Corsica in France, and the Åland Islands in Finland) powerfully blend to help skin look healthier and visibly younger.",
+        "Guerlain Exclusive Royal Jelly: Sustainably sourced and rich in exceptional nutrients and vitamins to nourish the skin.",
+        "Commiphora Oil: Micro-encapsulated droplets immediately melt on contact with the skin to deliver the ultimate sensorial experience."
+      ],
+      "ingredient_callouts": "This product comes in recyclable packaging.",
+      "what_else": "This fast-absorbing, lightweight, 3-in-1, multitasking facial oil has a unique texture that&rsquo;s as light as water, rich as an oil, and powerful as a serum. Formulated with four exceptional, sustainably sourced honeys, this one-of-a-kind watery oil aids in skin recovery for visible radiance, hydration, and plumpness.",
+      "clinical_results": "In an instrumental test on 20 volunteers, after 3 days of twice-daily application:\n- Skin recovered 9 times faster for added radiance, hydration, and skin plumpness\n\nIn a satisfaction test on 20 volunteers, after 3 days of twice-daily application:\n- After just one application, 100% felt skin appeared softer and more plump\n- In one month, 98% saw complexion appeared visibly younger",
+      "suggested_usage": "-Tilt the bottle to activate droplets.\n-Gently massage two to three drops of The Advanced Watery Oil onto face, neck and décolleté morning and evening to deliver 3-in-1 multitasking power on the skin.\n-Follow with moisturizer or your skincare routine."
+    }
   },
   "P475589": {
     "sku_id": "2499689",
@@ -4519,7 +4614,19 @@
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "what_it_is": "A lip mask born from the Aqua Bomb DNA&mdash;with added Centella asiatica (cica)&mdash;to soothe and hydrate.",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness",
+      "highlighted_ingredients": [
+        "Centella Asiatica (Cica): Soothes and visibly restores dry lips.",
+        "Madecassoide: Visibly rebuilds and restores dry lips.",
+        "Shea Butter: Moisturizes for soft, healthy-looking lips."
+      ],
+      "ingredient_callouts": "Free of parabens, phthalates, mineral oil, sulfates SLS & SLES, and contains less than one percent synthetic fragrance. It also comes in recyclable packaging.",
+      "what_else": "Awaken to smooth, healthy-looking lips. This rich, nourishing mask soothes and moisturizes dry, irritated lips overnight.",
+      "suggested_usage": "-Apply a thin layer to your lips after your normal PM skincare routine.\n-Leave on overnight.\n\nBeauty tip:\n-For best results, use along with The True Cream Aqua Bomb and Aqua Bomb Sleeping Mask (each sold separately).\n\nPrecautions:\n-For external use only.\n-Avoid contact with eyes."
+    }
   },
   "P476414": {
     "sku_id": "2479822",
@@ -4670,11 +4777,20 @@
     }
   },
   "P481989": {
-    "sku_id": null,
+    "sku_id": "2549400",
     "image_url": null,
     "images": [],
     "variants": [],
-    "description": null
+    "description": {
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness, Dullness, Uneven Texture",
+      "highlighted_ingredients": [
+        "Niacinamide: Vitamin B3 and antioxidants visibly reduce hyperpigmentation, the look of dullness, and the appearance of pores.- Hyaluronic Acid: Hydrates skin by retaining 1000 times its weight in water and reduces the appearance of fine lines and wrinkles.- Aloe: Soothes and hydrates the skin, and is rich in antioxidants, enzymes, vitamin A, and vitamin C."
+      ],
+      "ingredient_callouts": "This product is vegan, cruelty-free, and comes in recyclable packaging.",
+      "what_else": "This lightweight, glow-boosting daily SPF 50 gives broad-spectrum protection with a blend of mineral and chemical sunscreen actives. It is reef-safe (without octinoxate and oxybenzone), and features niacinamide to visibly brighten and improve the appearance of hyperpigmentation. Soothing aloe and hydrating hyaluronic acid give a dewy finish. Ophthalmologist and dermatologist tested, safe for sensitive skin, and non-comedogenic.\nClean + Planet Positive at SephoraWhen you see our Clean + Planet Positive seal, this brand's products are formulated without certain ingredients that are potentially harmful to human health and environment. They also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more: For the full list, check out the Ingredients tab.\nOn top of meeting the Clean at Sephora formulated without list, these brands are on a mission to do right by your routine and the planet by making climate commitments and focusing on sustainable sourcing, responsible packaging, and environmental giving.",
+      "suggested_usage": "-Shake before use.\n-Apply liberally&mdash;more than your moisturizer&mdash;on face, neck, and d&#233;colletage.\n-Reapply every two hours.\n-Let your skincare steps fully absorb before SPF application. After applying SPF, wait for it to set before makeup application to prevent pilling.\n-When applying, work in sections. Pat in&mdash;don&rsquo;t rub!\n-Tip for reapplying over makeup or over facial hair: Apply little dots and pat it in gently with your fingertips or a sponge.\n\nRecycling Instructions:\n-Remove the cap and plastic inner lid.\n-Wash the glass jar with hot water to fully remove any remaining product, and dry thoroughly.\n-Upcycle the glass jar or recycle it along with the plastic cap and inner lid per your local guidelines.\n-Glow Recipe also offers a recycling send-back program with its partner TerraCycle&reg; for products that cannot be recycled locally."
+    }
   },
   "P482739": {
     "sku_id": "2534907",
