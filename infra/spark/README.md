@@ -99,6 +99,25 @@ PowerShell에서는 아래 명령으로 인프라와 Pipeline을 관리한다.
 Linux/macOS/Git Bash에서는 `bash infra/spark/run-pipeline.sh <action>`을 사용한다.
 지원 action은 `up`, `start-q1`, `stop-q1`, `run-batch`, `validate`, `status`, `down`이다.
 
+## E2E·재시작 검증
+
+아래 검증은 매 실행마다 새 `event_id`를 Kafka `activity-events`에 전송한다. Q1이
+그 이벤트를 Raw Parquet에 정확히 한 번 적재했는지 확인한 뒤 Q1을 Checkpoint를
+유지한 채 재생성하고, Q2~Q4와 불변성 검증까지 실행한다.
+
+```powershell
+.\infra\spark\verify-e2e.ps1
+```
+
+Raw 적재가 느린 환경에서는 대기 시간을 늘릴 수 있다.
+
+```powershell
+.\infra\spark\verify-e2e.ps1 -TimeoutSeconds 150
+```
+
+이 스크립트는 `data/`나 Kafka Topic을 삭제하지 않는다. 기존 적재 데이터와 함께
+검증되며, 최종 결과는 `data/validation/pipeline-report.json`에서 확인한다.
+
 ## 저장소와 한계
 
 `data/`는 컨테이너와 호스트가 공유하는 로컬 개발용 저장소다. Q1의 Raw Output과

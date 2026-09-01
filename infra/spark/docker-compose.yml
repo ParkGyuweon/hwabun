@@ -1,4 +1,7 @@
-x-spark-image: &spark-image
+x-spark-runtime: &spark-runtime
+  image: a306-spark:${SPARK_VERSION:-3.5.6}
+
+x-spark-build: &spark-build
   build:
     # Docker Compose resolves every relative path against the first -f file.
     # The documented command places infra/kafka first, so ../spark is this
@@ -6,11 +9,9 @@ x-spark-image: &spark-image
     context: ../spark
     args:
       SPARK_VERSION: ${SPARK_VERSION:-3.5.6}
-  image: a306-spark:${SPARK_VERSION:-3.5.6}
-
 services:
   spark-master:
-    <<: *spark-image
+    <<: [*spark-runtime, *spark-build]
     hostname: spark-master
     restart: unless-stopped
     entrypoint:
@@ -27,6 +28,7 @@ services:
     volumes:
       - ../../streaming:/opt/project/streaming:ro
       - ../../contracts:/opt/project/contracts:ro
+      - ../../infra/spark:/opt/project/infra/spark:ro
       - ../../data:/opt/project/data
       - spark-events:/opt/spark-events
       - spark-ivy-cache:/opt/spark/.ivy2
@@ -42,7 +44,7 @@ services:
       start_period: 20s
 
   spark-worker:
-    <<: *spark-image
+    <<: *spark-runtime
     restart: unless-stopped
     entrypoint:
       - /opt/spark/bin/spark-class
@@ -74,7 +76,7 @@ services:
       start_period: 20s
 
   spark-history:
-    <<: *spark-image
+    <<: *spark-runtime
     restart: unless-stopped
     entrypoint:
       - /opt/spark/bin/spark-class
@@ -100,7 +102,7 @@ services:
       start_period: 20s
 
   spark-raw-sink:
-    <<: *spark-image
+    <<: *spark-runtime
     profiles:
       - streaming
     restart: on-failure:5
