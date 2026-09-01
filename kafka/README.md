@@ -149,7 +149,7 @@ Parsed/Processed timestamp는 UTC로 정규화한다.
 
 `request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. 현재 Collector는 `schema_version`이 비어 있지 않은지만 검사하고, 지원 버전 목록과 배치·Event 버전 일치까지 강제하지는 않는다. 이벤트별 `properties` 의미 검증도 별도로 구현해야 한다.
 
-근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Raw Event 실행 계약](../contracts/event-schema.json), [Event별 properties·Trigger](../docs/analytics/event-taxonomy-trigger-schema.md).
+근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md).
 
 ## 5. Partition Key와 순서 보장
 
@@ -248,7 +248,7 @@ Front의 현재 메모리 재시도와 1,000건 큐는 영속 전송 보장이 �
 
 Collector가 거절한 HTTP 요청은 Kafka에 도달하지 않으므로 Kafka Raw Dataset에 자동 보존되지 않는다. Raw 보존 계약의 대상은 Kafka에 수록된 레코드다. HTTP 거절 요청을 별도로 보관하려면 민감정보·용량 정책을 포함한 별도 설계가 필요하다.
 
-Kafka에 들어온 후 확인되는 미등록 Event, 잘못된 `properties`, synthetic 필수 메타 누락 등은 Spark 의미 검증의 대상이다. Synthetic 필수 메타와 Event별 기준은 [Event Taxonomy 문서](../docs/analytics/event-taxonomy-trigger-schema.md)를 따른다.
+Kafka에 들어온 후 확인되는 미등록 Event, 잘못된 `properties`, synthetic 필수 메타 누락 등은 Spark 의미 검증의 대상이다. Synthetic 필수 메타와 Event별 기준은 [Event Properties 계약](../contracts/event-properties-schema.md)을 따른다.
 
 ## 8. Raw 보존과 Processed 정본 선정
 
@@ -446,7 +446,7 @@ Spark Lag은 마지막 성공 Batch가 사용한 끝 Offset을 기준으로 계�
 | Synthetic 요청 크기 | 500~2,000건 배치 제안 | Collector 요청당 최대 100건 | 부하 생성기가 100건 이하로 분할하거나 별도 계약 |
 | 정본 선택 | 최초 수신, Partition/Offset 보조 | Spark 미구현 | 전역 순서와 결정적 정렬의 차이, Streaming 갱신 방식 합의 |
 
-대조 문서: [Raw Event 실행 계약](../contracts/event-schema.json), [Event별 properties·Trigger](../docs/analytics/event-taxonomy-trigger-schema.md), [Processed Schema](../contracts/processed-schema.md), [Spark 처리 설계](../docs/analytics/spark-processing-design.md), [DW Schema](../docs/analytics/dw-schema.md), [로그 전송 계약](../docs/analytics/log-transport-contract.md).
+대조 문서: [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md), [Event Logging 설계](../docs/analytics/event-logging-design.md), [Processed Schema](../contracts/processed-schema.md), [Spark 처리 설계](../docs/analytics/spark-processing-design.md), [DW Schema](../docs/analytics/dw-schema.md), [로그 전송 계약](../docs/analytics/log-transport-contract.md).
 
 ## 14. 미확정 항목과 담당 경계
 

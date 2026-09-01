@@ -22,14 +22,10 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | 범위 | 단일 출처 |
 | --- | --- |
 | Raw Event 공통 Envelope·event enum·synthetic 필수 metadata | `event-schema.json` |
+| Event별 intent 의미·properties·property enum | `event-properties-schema.md` |
 | Processed Dataset grain·key·컬럼·타입·nullable·partition | `processed-schema.md` |
 | Product Feature | `product-feature-spec.md`, `product-feature-vocab.json` |
 | Recommendation 입출력과 행동 집계 | `recommendation-io-spec.md` |
-
-Event별 `properties`와 Trigger는 현재
-`docs/analytics/event-taxonomy-trigger-schema.md`에 남아 있는 전환 예외다. 해당
-명세를 `contracts/`로 분리하기 전까지 `event-schema.json`과 함께 확인하며, 두 파일이
-충돌하면 실행 검증 범위에서는 `event-schema.json`을 우선한다.
 
 ## 변경 규칙
 

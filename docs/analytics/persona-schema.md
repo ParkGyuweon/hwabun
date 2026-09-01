@@ -2,7 +2,8 @@
 
 작성일: 2026-08-28  
 상태: Draft, E2E 테스트 전 Persona 데이터 구조 초안. 리뷰 반영 2차  
-관련 문서: `persona-attribute-preprocessing.md`, `event-taxonomy-trigger-schema.md`,
+관련 문서: `persona-attribute-preprocessing.md`, `../../contracts/event-properties-schema.md`,
+`event-logging-design.md`,
 `../../contracts/processed-schema.md`, `spark-processing-design.md`, `dw-schema.md`,
 `../../contracts/recommendation-io-spec.md`, `../../contracts/product-feature-spec.md`,
 `../ai/recommendation-design.md`
@@ -523,7 +524,7 @@ synthetic Event를 만들 때는 아래 기준으로 Event Schema에 매핑한�
 `scenario_id`, `simulation_run_id`, `generator_type`은 현재 Backend top-level DTO가
 아니라 `properties`에 담고 Processed 단계에서 승격한다. 이 3개는
 `actor_type='synthetic'` Event의 **공통 필수 properties**이며, 같은 기준은
-`event-taxonomy-trigger-schema.md` §8.4에 정의되어 있다. 누락된 synthetic Event는
+`../../contracts/event-schema.json`에 정의되어 있다. 누락된 synthetic Event는
 Spark semantic validation에서 `invalid_properties`로 격리한다.
 
 `persona_source`는 Persona 정적 속성이므로 Event payload에 매번 싣지 않는다. 실제 Web Event(`actor_type='user'`)에는 이 runtime metadata를 요구하지 않으므로 프론트 구현에는 영향이 없다.
@@ -678,7 +679,7 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 
 | 항목 | 본 문서 기준 | 상대 문서/구현 상태 |
 | --- | --- | --- |
-| synthetic runtime metadata | `properties`에 `scenario_id`, `simulation_run_id`, `generator_type` 필수 | `event-taxonomy-trigger-schema.md` §8.4에 계약 반영됨. 실제 강제는 Simulator(생성 시), Collector validation, Spark semantic validation에서 수행 |
+| synthetic runtime metadata | `properties`에 `scenario_id`, `simulation_run_id`, `generator_type` 필수 | `contracts/event-schema.json`에 계약 반영됨. 실제 강제는 Simulator(생성 시), Collector validation, Spark semantic validation에서 수행 |
 | `persona_source` 필터 | Event 미포함, `dim_simulation_run` Join | `dw-schema.md` §6.7에 `dim_simulation_run` 정의 |
 | `concern` segment | Persona segment에서 제외 | `dw-schema.md`의 `dim_persona_segment`/`bridge_persona_segment`에서 제거됨. `dim_product.concern_tags`는 상품 속성이므로 유지 |
 | scenario/run 분리 | `scenario`(scenario_id) + `simulation_run`(simulation_run_id) | `dw-schema.md`에서 `dim_scenario` + `dim_simulation_run`으로 분리 |

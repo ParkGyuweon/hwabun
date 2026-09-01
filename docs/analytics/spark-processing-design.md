@@ -28,7 +28,8 @@ Frontend
 | 항목 | 기준 |
 | --- | --- |
 | Raw Event 공통 계약 | [`contracts/event-schema.json`](../../contracts/event-schema.json) |
-| Event별 properties·Trigger | [`event-taxonomy-trigger-schema.md`](./event-taxonomy-trigger-schema.md), 계약 분리 전 전환 위치 |
+| Event별 properties | [`event-properties-schema.md`](../../contracts/event-properties-schema.md) |
+| 화면 Trigger·KPI 연결 | [`event-logging-design.md`](./event-logging-design.md) |
 | Kafka payload | Front JSON을 유지하고 Collector가 `received_at`, `source`, `request_id`, `event_index` 보강 |
 | 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
 | Schema version | 현재 E2E 구현은 `0.2.0-draft`; 변경은 Raw 계약과 함께 검토 |
@@ -37,9 +38,8 @@ Frontend
 | Raw 중복 | 수신 원본을 보존하고 Processed에서 `event_id` 기준 제거 |
 | Synthetic 식별 | `actor_type`, `source`, `persona_id`, `simulation_run_id`, `generator_type` 사용 |
 
-Event별 properties와 Trigger는 아직 `docs/analytics/`에 남은 전환 예외다. 실행 검증
-범위에서는 `contracts/event-schema.json`을 우선하며, 후속 문서 정리에서 계약 부분을
-`contracts/`로 분리한다.
+공통 Envelope와 활성 Event enum은 `contracts/event-schema.json`, Event별 properties는
+`contracts/event-properties-schema.md`를 기준으로 검증한다.
 
 ## 3. 처리 단계
 
