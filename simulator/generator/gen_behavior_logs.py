@@ -63,6 +63,17 @@ PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 import behavior_weights as BW
 
+# ── 행동을 무엇이 정하는가 ──────────────────────────────────────────────────
+# 기본(rule) 모드는 **평가 정답(target)을 알고 그 상품에 반드시 전환**한다.
+# 트래픽·파이프라인 검증에는 문제없지만, 그 로그로 추천을 평가하면 정답이 로그에
+# 심겨 있는 셈이라 자기실현 평가가 된다.
+#
+# --hidden-preference 모드는 추천·정답과 분리된 hidden preference 가 행동 강도를
+# 정하고, **target 에 전환을 강제하지 않는다.** 평가에 쓸 로그는 이 모드로 만든다.
+# 계약: docs/ai/evaluation-framework.md 2절 · 6단계
+BEHAVIOR_RULE = "rule"
+BEHAVIOR_HIDDEN = "hidden_preference"
+
 SCHEMA_VERSION = "0.2.0-draft"
 ENV = "simulation"
 DEFAULT_SCENARIO_ID = "normal_day"
@@ -596,7 +607,7 @@ def post_events(base_url, events, rps=0, timeout=40):
 
 # ── 페르소나 1명 ─────────────────────────────────────────────────────────
 def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
-                quick_look=True):
+                quick_look=True, hidden=None):
     SC = persona_style(p)
     # Quick Look 전용 난수. persona_id 로만 결정되므로 본 동선 rng 와 독립이다.
     # 덕분에 quick_look=False 로 껐을 때 나머지 궤적이 **완전히 동일**하고,
@@ -715,9 +726,24 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                              position=1)
         rec_ids = [x for x in by_cat.get(catalog[g]["cat"], []) if x != g][:6]
         is_target = g == target
+        if hidden is not None:
+            # **행동을 정답이 아니라 hidden preference 가 정한다.**
+            # target 이라고 해서 더 깊이 보거나 반드시 담지 않는다
+            pref = float(hidden.get(g, 0.5))
+            is_target = False
+            if pref >= 0.80:
+                depth, convert, wish = 100, rng.random() < 0.75, rng.random() < 0.7
+            elif pref >= 0.60:
+                depth, convert, wish = 75, rng.random() < 0.25, rng.random() < 0.3
+            elif pref >= 0.40:
+                depth, convert, wish = 50, False, False
+            elif pref >= 0.20:
+                depth, convert, wish = 25, False, False
+            else:
+                depth, convert, wish = 25, False, False
         # 이탈 상품 일부는 끝까지 훑는다. 그래야 추천 섹션이 노출되고,
         # "진지하게 봤지만 안 샀다" 는 v_u- 의 가장 강한 재료가 된다.
-        if is_target:
+        elif is_target:
             depth = 100
         elif rng.random() < SC["p_deep_bounce"]:
             depth = SC["deep_bounce_depth"]
@@ -725,7 +751,13 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             depth = int(rng.choice(SC["bounce_depth_choices"]))
         visit_detail(e, g, rec_ids, rng, depth_target=depth,
                      engaged=is_target, entry_source="in_app", SC=SC)
-        if is_target:
+        if hidden is not None:
+            if wish:
+                e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+            if convert:
+                e.tick(); e.emit("add_to_cart", g, quantity=1,
+                                 price_usd=catalog[g]["price"], content_kind="cta")
+        elif is_target:
             if rng.random() < SC["wishlist_p_target"]:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
             # 담을까 말까 재는 구간. 버튼 위에 올려두고 안 누른 시간이다
@@ -776,7 +808,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
 
 def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
          scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
-         generator_type=DEFAULT_GENERATOR_TYPE):
+         generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
+         pref_profile="default", pref_seed=0):
     context = SimulationContext(
         scenario_id=scenario_id,
         simulation_run_id=simulation_run_id or default_simulation_run_id(),
@@ -808,9 +841,27 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         + f" -> 대상 {len(people):,}명")
 
     load_style()
+    hp = None
+    if behavior == BEHAVIOR_HIDDEN:
+        sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
+        from hidden_preference import PROFILES, HiddenPreference
+        hp = HiddenPreference(products=prods, weights=PROFILES[pref_profile],
+                              noise_seed=pref_seed)
+        log(f"행동 결정: hidden preference ({pref_profile}, seed {pref_seed})"
+            f" — target 에 전환을 강제하지 않는다")
+    else:
+        log("행동 결정: 규칙 기반 (target 에 전환을 강제한다)."
+            " 평가용 로그라면 --behavior hidden_preference 를 쓸 것")
     rng = np.random.default_rng(42)
     sink, meta, t0 = [], [], time.time()
     for i, p in enumerate(people):
+        hidden = None
+        if hp is not None:
+            seeds = [g for g in dict.fromkeys(r["group_id"] for r in p["reviews"])
+                     if g in hp.index]
+            # target(마지막 긍정 리뷰)은 입력에서 빼고 점수를 만든다 — 누출 방지
+            scores = hp.score_all(p, seeds[:-1] if len(seeds) > 1 else seeds)
+            hidden = {gid: float(scores[hp.index[gid]]) for gid in hp.index}
         r = gen_persona(
             p,
             catalog,
@@ -820,6 +871,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
             sink,
             context,
             quick_look=quick_look,
+            hidden=hidden,
         )
         if r: meta.append(r)
         if not limit and (i + 1) % 2000 == 0:
@@ -899,6 +951,14 @@ if __name__ == "__main__":
                     help="synthetic 생성 방식 (기본: python_batch)")
     ap.add_argument("--include-agents", action="store_true",
                     help="PA 100명(인터랙티브 전용)도 생성 대상에 넣는다. 기본은 제외")
+    ap.add_argument("--behavior", choices=(BEHAVIOR_RULE, BEHAVIOR_HIDDEN),
+                    default=BEHAVIOR_RULE,
+                    help="행동을 무엇이 정하는가. 평가용 로그는 hidden_preference "
+                         "(target 에 전환을 강제하지 않는다)")
+    ap.add_argument("--pref-profile", default="default",
+                    help="hidden preference 가중치 조합 (강건성 평가용)")
+    ap.add_argument("--pref-seed", type=int, default=0,
+                    help="hidden preference 잡음 seed")
     ap.add_argument("--rps", type=int, default=0,
                     help="초당 이벤트 수 제한. 0 이면 제한 없음")
     a = ap.parse_args()
@@ -915,4 +975,7 @@ if __name__ == "__main__":
         scenario_id=a.scenario_id,
         simulation_run_id=a.simulation_run_id,
         generator_type=a.generator_type,
+        behavior=a.behavior,
+        pref_profile=a.pref_profile,
+        pref_seed=a.pref_seed,
     )
