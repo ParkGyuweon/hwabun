@@ -82,12 +82,14 @@ ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
 # 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다.
 #
-# 표시를 채우는 곳은 LogSink 다 (계약이 정한 강제 지점이 Simulator + Spark).
-# 프론트 로거는 고치지 않는다 — 프론트 담당 범위이기도 하고, 8/28 협의에서 프론트
-# 요청을 2건으로 좁혀 두었다.
+# 진입 주소에 표시를 붙이면 **프론트 로거가 그것을 읽어 봉투에 싣는다**
+# (frontend/src/lib/logger.ts syntheticContextFromUrl). 그래서 평상시 LogSink 의
+# 보정은 0 이고, 프론트가 표시를 못 붙인 경우에만 채운다.
+# 실측: stamped 0 / already 120.
 #
-# 진입 주소에도 같은 값을 붙인다. 지금 프론트는 이 파라미터를 읽지 않지만,
-# 읽게 되면 봉투에 이미 표시가 붙어 오고 LogSink 의 보정은 저절로 0 이 된다.
+# LogSink 를 남겨 두는 이유는 프론트가 파라미터를 못 읽는 경우(배포 빌드,
+# 파라미터 누락)에도 로그를 건지기 위해서다. 계약이 정한 강제 지점도
+# Simulator + Spark 다.
 # 계약: docs/analytics/log-transport-contract.md §9
 #
 # 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
