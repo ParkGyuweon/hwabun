@@ -422,7 +422,8 @@ product_impression
 | --- | --- |
 | `event-contract-summary.md` | 팀 공유 및 합의용 요약 |
 | `event-taxonomy-trigger-schema.md` | Event Taxonomy, Trigger, Schema 상세 초안 |
-| `processed-schema.md` | Raw Event 이후 Spark 처리/Processed Dataset 초안 |
+| `../../contracts/processed-schema.md` | Raw Event 이후 Processed Dataset 계약 |
+| `spark-processing-design.md` | Spark 처리 근거·구현 현황·검증 계획 |
 | `dw-schema.md` | Processed Dataset 이후 Dashboard 조회용 DW/Mart 초안 |
 | `persona-schema.md` | Persona 원천, seed/holdout, segment, simulation run 규칙 |
 | `persona-attribute-preprocessing.md` | 사용자 속성 4종의 정규화·결측 처리·허용값 기준 |

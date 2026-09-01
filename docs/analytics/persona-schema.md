@@ -2,7 +2,10 @@
 
 작성일: 2026-08-28  
 상태: Draft, E2E 테스트 전 Persona 데이터 구조 초안. 리뷰 반영 2차  
-관련 문서: `persona-attribute-preprocessing.md`, `event-taxonomy-trigger-schema.md`, `processed-schema.md`, `dw-schema.md`, `contracts/recommendation-io-spec.md`, `contracts/product-feature-spec.md`, `docs/ai/recommendation-design.md`
+관련 문서: `persona-attribute-preprocessing.md`, `event-taxonomy-trigger-schema.md`,
+`../../contracts/processed-schema.md`, `spark-processing-design.md`, `dw-schema.md`,
+`../../contracts/recommendation-io-spec.md`, `../../contracts/product-feature-spec.md`,
+`../ai/recommendation-design.md`
 
 ## 1. 문서 목적
 
@@ -427,7 +430,9 @@ neutral_affinity = (1.0 - 0.60) / (1.60 - 0.60) = 0.40
 
 ## 12. User Behavior Vector 연결
 
-User Behavior Vector 자체는 Persona Profile에 저장하지 않는다. Event가 발생할 때마다 `processed-schema.md`의 `persona_behavior_feature_delta`를 만들고, Product Vector와 결합해 Redis 또는 후속 저장소의 User Vector를 증분 갱신한다.
+User Behavior Vector 자체는 Persona Profile에 저장하지 않는다. Event가 발생할 때마다
+`../../contracts/processed-schema.md`의 `persona_behavior_feature_delta`를 만들고,
+Product Vector와 결합해 Redis 또는 후속 저장소의 User Vector를 증분 갱신한다.
 
 ```text
 persona_id
@@ -458,7 +463,14 @@ User Behavior Vector의 두 분모에는 각 축에 반영한 양수 가중치�
 
 집계 공식과 Event별 전환 판정의 canonical 정의는 `contracts/recommendation-io-spec.md` §2 "집계 규칙 (canonical)"을 따른다. 구현 기준은 `batch/jobs/user_vector.py`다. 이 문서에는 산식을 중복 정의하지 않는다.
 
-`final_weight`는 `processed-schema.md`의 `persona_behavior_feature_delta.final_weight`(`event_weight × decay_weight`)다. 먼저 상품별 관여도와 friction 감점을 분리해 모은 뒤, 조회 시점의 `converted` 여부로 상품 단위 축을 정한다. **전환 상품의 관여도는 positive 축으로 가고, 미전환 접촉 상품은 관여도에 반비례하도록 변환한 부정 강도가 negative 축으로 간다.** friction 감점은 전환 여부와 무관하게 negative 축에 절대값으로 누적하며 최종 점수에서 한 번만 감점한다. `remove_from_cart`와 `scroll_backtrack`의 절대값은 friction 감점이 아니라 관여도에 포함한다.
+`final_weight`는 `../../contracts/processed-schema.md`의
+`persona_behavior_feature_delta.final_weight`(`event_weight × decay_weight`)다. 먼저
+상품별 관여도와 friction 감점을 분리해 모은 뒤, 조회 시점의 `converted` 여부로 상품
+단위 축을 정한다. **전환 상품의 관여도는 positive 축으로 가고, 미전환 접촉 상품은
+관여도에 반비례하도록 변환한 부정 강도가 negative 축으로 간다.** friction 감점은
+전환 여부와 무관하게 negative 축에 절대값으로 누적하며 최종 점수에서 한 번만
+감점한다. `remove_from_cart`와 `scroll_backtrack`의 절대값은 friction 감점이 아니라
+관여도에 포함한다.
 
 | 항목 | 기준 |
 | --- | --- |

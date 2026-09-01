@@ -2,11 +2,13 @@
 
 작성일: 2026-08-28  
 상태: Draft, E2E 테스트 전 논리 Mart 초안. Kafka payload 서버 메타 필드 계약은 BE 커넥터 담당 확인 완료(2026-08-31)
-관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`, `processed-schema.md`, `persona-schema.md`
+관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`,
+`../../contracts/processed-schema.md`, `spark-processing-design.md`, `persona-schema.md`
 
 ## 1. 문서 목적
 
-이 문서는 `processed-schema.md`의 Processed Dataset을 B2B Dashboard 조회용 DW/Mart로 변환하는 기준을 정의한다.
+이 문서는 `../../contracts/processed-schema.md`의 Processed Dataset을 B2B Dashboard
+조회용 DW/Mart로 변환하는 기준을 정의한다.
 
 여기서 DW Schema는 MySQL, ClickHouse, Parquet, BigQuery 같은 물리 저장소의 DDL이 아니다. 저장소 확정 전에도 Front/Backend/Data/Dashboard 팀이 같은 KPI 기준으로 논의할 수 있도록 Fact, Dimension, Mart의 논리 구조를 정리한다.
 

@@ -931,7 +931,8 @@ interest_score =
 ## 12. Raw / Processed 적재 초안
 
 이 문서는 Event Schema가 중심이지만, 데이터 파트 진행을 위해 최소 적재 구조도 함께 둔다.
-Processed Dataset의 상세 컬럼과 생성 기준은 `processed-schema.md`에 분리한다.
+Processed Dataset의 상세 컬럼 계약은 `../../contracts/processed-schema.md`, 처리 근거와
+생성 기준은 `spark-processing-design.md`에 분리한다.
 Dashboard 조회용 DW/Mart 상세 구조는 `dw-schema.md`에 분리한다.
 
 | 데이터셋 | Grain | 설명 |
