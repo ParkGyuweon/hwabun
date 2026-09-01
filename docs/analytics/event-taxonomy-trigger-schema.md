@@ -330,6 +330,19 @@ Frontend LogEnvelope
 → Processed/DW tables
 ```
 
+PA는 FE logger를 수정하지 않고 마지막 전송 홉만 아래처럼 바꾼다. `agent_runner.LogSink`는 프론트의 `/api/events` batch를 캡처한 뒤 Collector 전송 직전에 synthetic runtime metadata를 보강한다. DOM 조작, FE Event 발생, batch 구성은 기존 프론트 경로를 그대로 사용한다.
+
+```text
+PA DOM 조작
+→ Frontend LogEnvelope batch 구성
+→ agent_runner.LogSink batch 캡처
+→ actor_type/persona_id/synthetic runtime metadata 보강
+→ POST /api/events
+→ Collector → Kafka → Spark
+```
+
+Persona 선택 전에 발생한 `persona_id` 없는 초기 `scroll_depth`는 PA runner가 보내지 않는다. 이 Event는 pre-persona context에 속하며 synthetic 필수 계약을 만족하지 않으므로, 임의의 Persona를 붙이거나 실제 PA 세션에 포함하지 않는다.
+
 따라서 MVP 기준 공식 수집 Schema는 프론트가 보내는 flat 구조를 기준으로 한다. `context`, `target`처럼 중첩된 구조는 Kafka Raw Event가 아니라 Spark 이후 Processed/DW 정규화 단계에서 사용할 수 있는 형태다. 같은 `event_id`가 여러 번 들어와도 Raw는 수신 record 단위로 모두 보존한다.
 
 ### 8.2 Raw Event Schema
@@ -343,7 +356,7 @@ Frontend LogEnvelope
   "event_name": "add_to_cart",
   "intent": "conversion",
   "occurred_at": "2026-08-28T01:13:12.123Z",
-  "persona_id": "persona_1024",
+  "persona_id": "PA00001",
   "session_id": "session_923",
   "page_view_id": "pv_1001",
   "sequence_no": 12,
@@ -353,7 +366,8 @@ Frontend LogEnvelope
   "environment": "local",
   "properties": {
     "scenario_id": "normal_day",
-    "simulation_run_id": "run_20260828_001",
+    "simulation_run_id": "run_20260828T011312Z",
+    "generator_type": "agent_llm",
     "sku_id": "SKU342-01",
     "quantity": 1,
     "price_usd": 32
@@ -448,6 +462,15 @@ Raw record의 물리 식별은 Kafka metadata인 `kafka_topic + kafka_partition 
 | `generator_type` | Y | 생성 방식. 예: `python_batch`, `agent_llm` |
 
 `persona_source`는 Event에 반복 저장하지 않고 `persona_id`로 Persona Dimension을 Join해 확인한다.
+
+PA/PC 전송 계약은 아래처럼 고정한다.
+
+| 경로 | `persona_id` | `generator_type` | runtime metadata 보강 지점 |
+| --- | --- | --- | --- |
+| PA LLM agent | `PA00001~` | `agent_llm` | `agent_runner.LogSink`가 Collector로 전송하기 직전 |
+| PC batch generator | `PC00001~` | `python_batch` | batch Event 생성 시점 |
+
+두 경로의 `simulation_run_id`는 `run_<UTC timestamp>` 형식을 공유하고 `scenario_id` 기본값은 `normal_day`다. PA runner는 `--scenario-id`로 기본값을 변경할 수 있다. `source`는 두 경로 모두 Collector에서 `simulator`로 파생한다.
 
 ### 8.5 Processed / DW 정규화 예시
 
@@ -941,7 +964,8 @@ synthetic runtime metadata의 강제 지점은 아래처럼 나눈다. Collector
 
 | 지점 | 책임 |
 | --- | --- |
-| Simulator(Producer) | Event 생성 시 3개 값을 항상 채운다. 1차 책임 |
+| PC batch generator | Event 생성 시 3개 값을 항상 채운다. 1차 책임 |
+| PA `agent_runner.LogSink` | FE `/api/events` batch를 캡처해 Collector 전송 직전에 `actor_type`, PA `persona_id`, runtime metadata 3종을 강제한다. FE logger 수정 없음 |
 | Collector | `actor_type='synthetic'` Event의 runtime metadata 3종 누락을 Kafka 전송 전에 거절한다 |
 | Spark semantic validation | 누락 Event를 방어적으로 bad event로 격리한다 |
 
@@ -993,7 +1017,8 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 | 합의 | `section_dwell` 합산 위치 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
-| 합의 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. 강제 지점은 Simulator + Collector + Spark |
+| 합의 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. 강제 지점은 PC batch generator / PA runner + Collector + Spark |
+| 합의 | PA agent 로그 처리 방식 | FE logger와 MR !44는 변경하지 않는다. `agent_runner.LogSink`가 `/api/events` batch를 캡처하고 Collector 전송 직전에 PA metadata를 보강한다. `generator_type='agent_llm'`, `persona_id='PA00001~'`를 사용하며 `persona_id` 없는 초기 `scroll_depth`는 보내지 않는다 |
 | 합의 | `persona_source` 위치 | Event에 싣지 않는다. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인 |
 | 초안 | Dashboard 기본 산식 | session/product 기준 우선 |
 | 초안 | 집계 기간 | 일간 + 최근 7일 우선 |

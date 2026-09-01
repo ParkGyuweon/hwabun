@@ -314,6 +314,12 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 
 `error_stage`는 `spark_semantic_validation`이다. 이 규칙은 실제 Web Event에는 적용하지 않으므로 프론트 구현에 영향을 주지 않는다.
 
+PA 로그는 FE logger가 아니라 `agent_runner.LogSink`가 Collector 전송 직전에 `actor_type='synthetic'`, PA `persona_id`, `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type='agent_llm'`을 보강한다. PC batch 로그는 `generator_type='python_batch'`를 생성 시점에 넣는다. PA/PC 모두 `simulation_run_id=run_<UTC timestamp>` 형식을 사용하며, `scenario_id` 기본값은 `normal_day`다.
+
+PA가 보강되지 않아 `actor_type='user'`로 들어오면 Collector가 `source='web'`으로 기록하고 synthetic 필수 검증도 적용되지 않을 수 있다. 그 결과 `user_id=NULL`, `is_synthetic=false`로 조용히 통과하여 `dim_simulation_run` Join과 simulation Mart에서 누락된다. 이는 "실사용자 로그와 섞인다"기보다 **synthetic 분석 대상에서 빠지는 분류 오류**다. PA E2E에서는 `actor_type`, `source`, `user_id`, `is_synthetic`, `scenario_id`, `simulation_run_id`, `generator_type`을 한 묶음으로 검증한다.
+
+Persona 선택 전에 발생한 `persona_id` 없는 초기 `scroll_depth`는 PA runner가 전송하지 않는 것이 Producer 계약이다. Spark에 도달했다면 synthetic `persona_id` 필수 규칙에 따라 격리하며 임의의 Persona나 실제 PA 세션에 귀속하지 않는다.
+
 ## 9. `raw_events`
 
 Collector가 Front Event를 검증하고 서버 메타 필드를 추가한 원본이다. Raw는 분석 편의보다 원본 보존이 우선이다.
@@ -414,7 +420,7 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 | `event_index` | int/null | batch 안 Event 순서. Kafka payload 포함 |
 | `source` | string | 유입 경로. Kafka payload 값을 우선 사용하고, 누락 시 `actor_type`, `environment`, ingest 경로로 fallback 파생 |
 | `actor_type` | string | `user`, `synthetic` |
-| `is_synthetic` | boolean | `actor_type='synthetic'` 또는 `source='simulator'` |
+| `is_synthetic` | boolean | `actor_type='synthetic'` 또는 `source='simulator'`. 정상 PA/PC는 `true` |
 | `user_id` | string/null | 분석용 사용자 ID |
 | `persona_id` | string/null | Persona ID |
 | `scenario_id` | string/null | 시나리오 ID |

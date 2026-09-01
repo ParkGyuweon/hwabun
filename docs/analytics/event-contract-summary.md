@@ -204,6 +204,20 @@ E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`�
 
 `persona_source`(`agent_sample`/`batch_sample`)는 Persona의 정적 속성이라 **Event에 싣지 않는다.** Dashboard에서 표본을 나눠 봐야 하면 `simulation_run_id → dim_simulation_run.persona_source`로 Join한다.
 
+PA는 FE logger를 수정하지 않는다. `agent_runner.LogSink`가 프론트의 `/api/events` batch를 캡처하고 Collector로 전송하기 직전에 아래 값을 보강한다. DOM 조작부터 FE Event 발생과 batch 구성까지는 기존 프론트 경로를 유지하며 MR !44도 변경하지 않는다.
+
+| PA 보강값 | 기준 |
+| --- | --- |
+| `actor_type` | `synthetic` |
+| `persona_id` | `PA00001~` |
+| `properties.scenario_id` | 기본 `normal_day`, `--scenario-id`로 변경 가능 |
+| `properties.simulation_run_id` | `run_<UTC timestamp>` |
+| `properties.generator_type` | `agent_llm` |
+
+PC batch generator는 `persona_id='PC00001~'`, `generator_type='python_batch'`를 사용하며 나머지 synthetic 계약과 run ID 형식은 PA와 같다. 두 경로 모두 Collector/Spark에서 `source='simulator'`, Processed에서 `user_id=persona_id`, `is_synthetic=true`로 처리한다.
+
+Persona 선택 전 첫 화면에서 발생한 `persona_id` 없는 초기 `scroll_depth`는 PA runner가 전송하지 않는다. pre-persona Event를 synthetic으로 전송하면 필수 `persona_id` 누락으로 격리 대상이 되므로 임의 보강하지 않는다. 별도 pre-persona session의 Event이므로 실제 PA 세션의 `sequence_no` 연속성에는 영향을 주지 않는다.
+
 `session_start.page_view_id`는 첫 `page_view`와 같은 값을 공유한다. 세션의 첫 `page_view`는 `properties.navigation_source='session_start'`로 구분한다. 상품 상세 URL로 직접 진입한 경우에도 첫 `page_view` 직후 같은 `page_view_id`로 `product_view`를 남긴다.
 
 ### 5.4 Event별 주요 properties
@@ -387,6 +401,7 @@ product_impression
 | 합의 | `section_dwell` 합산 | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | 합의 | Synthetic/Web Event 분리 | 같은 Schema를 사용하고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 합의 | synthetic 공통 필수 properties | `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`, `generator_type` 필수. Web Event에는 미적용 |
+| 합의 | PA agent 로그 처리 방식 | FE logger와 MR !44는 변경하지 않는다. `agent_runner.LogSink`가 `/api/events` batch를 캡처해 Collector 전송 직전에 synthetic metadata를 보강한다. PA는 `persona_id='PA00001~'`, `generator_type='agent_llm'`을 사용하고 persona 선택 전 초기 `scroll_depth`는 보내지 않는다 |
 | 합의 | `persona_source` 위치 | Event 미포함. `simulation_run_id → dim_simulation_run` Join으로 표본 필터 |
 | 합의 | `text_snippet` 저장 | 원문 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
 | 합의 | `session_start.page_view_id` | `session_start` 발생 시점에 첫 `page_view_id`를 발급하고 첫 `page_view`와 공유 |

@@ -102,12 +102,21 @@ Persona가 아니라 "이번 실행"에 귀속된다. 같은 Persona가 다른 r
 
 ```text
 PA00001 이(가)
-run_20260828_001 에서
+run_20260828T011312Z 에서
 normal_day 시나리오로
-python_batch 방식으로 행동했다
+agent_llm 방식으로 행동했다
 ```
 
 `source`는 Collector가 Kafka payload에 기록하며, `actor_type='synthetic'`이면 `simulator`로 둔다. 과거 Raw나 누락 Event는 Processed/DW에서 같은 기준으로 fallback 파생한다. `persona_source`는 Event에 반복 저장하지 않고 `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join으로 확인한다(§14.3). `generator_type`은 Persona 고유 속성이 아니라 `simulation_run`과 Event 생성 실행 방식으로 관리한다.
+
+PA와 PC는 같은 synthetic Event 계약을 사용하되 생성 경로와 ID namespace로 구분한다.
+
+| 구분 | 생성 경로 | `persona_id` prefix | `generator_type` |
+| --- | --- | --- | --- |
+| PA | LLM agent runner | `PA00001~` | `agent_llm` |
+| PC | Python batch generator | `PC00001~` | `python_batch` |
+
+`user_id`는 두 경로 모두 Processed에서 `persona_id`로 파생한다. PA/PC 구분을 위해 `source` 값을 늘리지 않으며, 두 경로 모두 Collector/Spark 기준 `source='simulator'`를 사용한다. 2026-09-01 AI/Recommendation 담당 확인까지 반영해 PA 경로의 값은 `agent_llm`으로 확정한다. Schema 허용값은 `python_batch | agent_llm`이다.
 
 상품 ID는 아래처럼 구분한다.
 
@@ -512,6 +521,10 @@ synthetic Event를 만들 때는 아래 기준으로 Event Schema에 매핑한�
 
 `persona_source`는 Persona 정적 속성이므로 Event payload에 매번 싣지 않는다. 실제 Web Event(`actor_type='user'`)에는 이 runtime metadata를 요구하지 않으므로 프론트 구현에는 영향이 없다.
 
+PA는 FE logger를 수정하지 않는다. `agent_runner.LogSink`가 프론트의 `POST /api/events` batch를 캡처하고 Collector로 보내기 직전에 각 Event에 `actor_type='synthetic'`, PA `persona_id`, `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type='agent_llm'`을 보강한다. DOM 조작부터 FE Event 발생과 batch 구성까지는 기존 프론트 경로를 유지하고 마지막 전송 홉만 runner가 대행한다.
+
+Persona가 선택되기 전 첫 화면 로드에서 발생한 `persona_id` 없는 초기 `scroll_depth`는 PA runner가 Collector로 전송하지 않는다. 이는 실제 PA 세션과 분리된 pre-persona session의 Event이며, synthetic Event의 `persona_id` 필수 계약을 만족하지 못한다. 전송할 경우 Spark 격리 대상이므로 임의의 Persona를 붙이지 않는다. 별도 session의 Event이므로 실제 PA 세션의 `sequence_no` 연속성에는 영향을 주지 않는다.
+
 Synthetic seed Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}`
 형식으로 부여한다. seed 여부는 session ID 문자열에만 의존하지 않고 모든 seed
 Event의 `properties.seeded=true`로도 기록해 세션·퍼널 집계에서 명시적으로 제외하거나
@@ -548,6 +561,8 @@ grain = simulation_run_id
 | `note` | string/null | Y | 실행 조건 메모 |
 
 `seed`만으로는 과거 run을 재현할 수 없다. 같은 seed라도 Persona 표본, 상품 벡터 어휘집, affinity 기준, 추천 정책이 바뀌면 결과가 달라지기 때문이다. 위 version 컬럼들은 "왜 지난 run과 결과가 다른가"를 추적하기 위한 최소 집합이며, E2E에서는 값이 NULL이어도 파이프라인이 동작한다. 운영/실험 비교 단계에서는 필수로 채운다.
+
+`simulation_run_id` 형식은 PA runner와 PC batch generator 모두 `run_<UTC timestamp>`를 사용한다. 예시는 `run_20260828T011312Z`이며, timestamp는 실행 시작 UTC 시각을 초 단위로 표현한다. 재전송/재실행 시 같은 run ID를 재사용할지는 실행 정책에 따르고, 선택한 정책은 실행 메타데이터의 `note`에 기록한다. `scenario_id` 기본값은 `normal_day`이며 PA runner에서는 `--scenario-id`로 변경할 수 있다.
 
 ### 14.2 `scenario`
 
@@ -645,7 +660,6 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 | --- | --- | --- |
 | `profile_version` 값 | Data / AI-Product Feature | Persona 생성 기준 버전명을 어떻게 둘지 |
 | `persona_source` 값 | Data / Simulator | `agent_sample`, `batch_sample` 명칭 확정 |
-| `generator_type` 값 | Data / Kafka-Spark / AI-Recommendation | `agent_llm`, `python_batch` 명칭 확정 |
 | 실시간·시뮬레이션 seed 초기화 정책 | Data / AI-Product Feature | 오프라인 평가는 리뷰 극성별 축 반영을 사용한다. 실시간·시뮬레이션 시작 상태에서 seed 리뷰를 User Behavior Vector 초기값에 반영할지, 리뷰 상품 하드 제외에만 쓸지는 별도 확정 |
 | Holdout positive 기준 | Data / AI-Product Feature | 초안은 `rating >= 4` 또는 `is_recommended=true`. 추천 평가 정의에 따라 조정 가능 |
 | User Behavior Vector 감점 계수 | Data / AI-Product Feature | canonical 계약의 잠정값 `λ=0.15`를 실제 로그 적재 후 재측정 |
@@ -662,7 +676,7 @@ E2E 단계에서 아직 없어도 되는 것은 아래와 같다. 파이프라�
 
 | 항목 | 본 문서 기준 | 상대 문서/구현 상태 |
 | --- | --- | --- |
-| synthetic runtime metadata | `properties`에 `scenario_id`, `simulation_run_id`, `generator_type` 필수 | `event-taxonomy-trigger-schema.md` §8.4에 계약 반영됨. 실제 강제는 Simulator(생성 시), Collector validation, Spark semantic validation에서 수행 |
+| synthetic runtime metadata | `properties`에 `scenario_id`, `simulation_run_id`, `generator_type` 필수 | `event-taxonomy-trigger-schema.md` §8.4에 계약 반영됨. PC는 batch generator, PA는 `agent_runner.LogSink`의 Collector 전송 직전, 이후 Collector validation과 Spark semantic validation에서 강제 |
 | `persona_source` 필터 | Event 미포함, `dim_simulation_run` Join | `dw-schema.md` §6.7에 `dim_simulation_run` 정의 |
 | `concern` segment | Persona segment에서 제외 | `dw-schema.md`의 `dim_persona_segment`/`bridge_persona_segment`에서 제거됨. `dim_product.concern_tags`는 상품 속성이므로 유지 |
 | scenario/run 분리 | `scenario`(scenario_id) + `simulation_run`(simulation_run_id) | `dw-schema.md`에서 `dim_scenario` + `dim_simulation_run`으로 분리 |

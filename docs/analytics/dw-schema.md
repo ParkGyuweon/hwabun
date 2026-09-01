@@ -91,7 +91,7 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 
 `simulation_run_id`는 synthetic 분석에서는 분리에 가깝게 필수지만, 실제 Web Event에서는 NULL이 정상이다. Dashboard 기본 조회에서는 전체 합산을 보여줄 수 있고, 실험 분석에서는 `scenario_id`, `simulation_run_id`로 필터링한다.
 
-100명 agent 기반 생성과 9,900명 Python batch 생성을 구분해야 하면 `source`를 늘리지 않는다. 생성 방식은 `generator_type`, 표본 구분은 `simulation_run_id → dim_simulation_run.persona_source`로 본다. E2E MVP에서는 모든 synthetic Event를 `source='simulator'`로 둔다.
+100명 agent 기반 생성과 9,900명 Python batch 생성을 구분해야 하면 `source`를 늘리지 않는다. PA는 `persona_id='PA00001~'`, `generator_type='agent_llm'`, PC는 `persona_id='PC00001~'`, `generator_type='python_batch'`를 사용한다. 생성 방식은 `generator_type`, 표본 구분은 `simulation_run_id → dim_simulation_run.persona_source`로 본다. E2E MVP에서는 두 경로 모두 `source='simulator'`로 둔다.
 
 ## 6. Dimension 초안
 
@@ -256,6 +256,9 @@ source = persona-schema.md simulation_run
 | `note` | string/null | Y | 실행 조건 메모 |
 
 주의사항:
+
+- PA와 PC 모두 `dim_simulation_run` 대상이다. 두 경로는 `run_<UTC timestamp>` 형식의 `simulation_run_id`를 공유하며, `scenario_id` 기본값은 `normal_day`다. PA는 `generator_type='agent_llm'`, PC는 `generator_type='python_batch'`로 구분한다.
+- PA의 runtime metadata는 FE logger가 아니라 `agent_runner.LogSink`가 Collector 전송 직전에 보강한다. 정상 PA Event는 Processed에서 `actor_type='synthetic'`, `source='simulator'`, `user_id=persona_id`, `is_synthetic=true`여야 이 Dimension과 simulation Mart에 포함된다.
 
 - **`persona_source`는 Event payload에 넣지 않는다.** Persona 정적 속성을 Event마다 반복 저장하면 값이 어긋날 위험이 있으므로, Mart의 `simulation_run_id`로 이 Dimension을 Join해 필터한다.
 
@@ -678,7 +681,8 @@ rate = numerator / NULLIF(denominator, 0)
 | Persona segment 연결 누락 | `persona_id`에서 segment로 Join할 수 없음 | `bridge_persona_segment`를 통해 `dim_persona_segment`와 연결 |
 | Event에 `persona_source` 없음 | agent 100명/batch 9,900명을 Mart에서 직접 구분할 수 없음 | Event에 추가하지 않고 `simulation_run_id → dim_simulation_run.persona_source`로 필터. 이를 위해 synthetic Event는 `simulation_run_id`가 항상 있어야 한다 |
 | Persona 원천에 `concern` 없음 | 존재하지 않는 segment를 Mart가 기대하게 됨 | `segment_type`에서 `concern` 제외. 상품 축 고민 분석은 `dim_product.concern_tags` 사용 |
-| synthetic runtime metadata 누락 | `scenario_id`, `simulation_run_id`, `generator_type`이 없으면 실행 단위 Dimension Join이 끊김 | Simulator 생성 시 필수 포함, Spark semantic validation에서 누락 Event를 `invalid_properties`로 격리 |
+| synthetic runtime metadata 누락 | `scenario_id`, `simulation_run_id`, `generator_type`이 없으면 실행 단위 Dimension Join이 끊김 | PC는 생성 시, PA는 runner 전송 시 필수 포함하고 Spark semantic validation에서 누락 Event를 `invalid_properties`로 격리 |
+| PA가 `actor_type='user'`로 전송됨 | Collector/Spark가 Web Event로 오인해 `user_id=NULL`, `is_synthetic=false`로 조용히 통과하고 simulation Mart에서 누락될 수 있음 | `agent_runner.LogSink`가 전송 직전에 PA metadata를 강제하고 E2E에서 `actor_type/source/user_id/is_synthetic/run metadata`를 함께 검증 |
 | Collector reject 관측 불가 | Kafka 전송 전 거부된 Event는 Spark/DW에서 볼 수 없음 | Backend metric으로 관리하거나 별도 bad-event topic/storage가 있을 때만 DW에 포함 |
 | 물리 저장소 미정 | 타입, 파티션, 인덱스 전략 확정 불가 | 이 문서에서는 논리 타입만 정의하고 DDL은 작성하지 않음 |
 
@@ -704,6 +708,8 @@ rate = numerator / NULLIF(denominator, 0)
 18. synthetic Event에 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type`이 모두 들어오는지 확인한다.
 19. `dim_simulation_run`에 run별 `persona_source`가 채워지고, Dashboard 기본 필터가 `batch_sample`로 동작하는지 확인한다.
 20. `dim_persona_segment`/`bridge_persona_segment`에 `segment_type='concern'` row가 생성되지 않는지 확인한다.
+21. PA Event가 `generator_type='agent_llm'`, PC Event가 `generator_type='python_batch'`로 들어오고 두 경로 모두 `dim_simulation_run`에 Join되는지 확인한다.
+22. persona 선택 전 PA 초기 `scroll_depth`가 전송되지 않으며, PA Event가 `actor_type='user'`로 조용히 통과하지 않는지 확인한다.
 
 ## 12. 후속 문서 분리 기준
 
