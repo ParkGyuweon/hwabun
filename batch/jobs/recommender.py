@@ -27,9 +27,23 @@ LAMBDA = 0.15
 VIEW_CAP = 2
 
 # 시드(리뷰) 상품 개수 -> (w1 콘텐츠, w2 속성, w3 인기)
+#
+# **행동이 쌓일수록 속성의 몫을 콘텐츠로 넘긴다.** 이전 스케줄은 시드 6개 이상에
+# w2=0.55 를 줘서 가장 많이 행동한 사람에게 속성 비중이 가장 컸다. 서술과 코드가
+# 반대였고, 그 구간에서 Recall@10 16.9% (같은 조건에서 속성을 빼면 21.2%) 였다.
+#
+# **고친 것은 6개 이상 구간 하나뿐이다.** 1~5개 구간은 측정으로 뒷받침된 값이라
+# 그대로 둔다. 그 구간까지 같이 손대면 1~2개 구간에서 26.24% -> 25.38% 로 손해를 본다.
+#
+# 9,900명 leave-last-out 재측정 (부트스트랩 300회, 짝비교):
+#   이 스케줄          23.70%  (롱테일 31.50%)   시드 6개 이상 구간 22.51%
+#   이전 스케줄        23.08%  (롱테일 31.32%)   시드 6개 이상 구간 17.64%
+#   속성 항 제거       22.86%  (롱테일 29.48%)   -0.64%p CI [-1.01, -0.25]
+# 속성 항은 정확도를 올리는 장치가 아니라 **롱테일 보험**이라 남긴다.
+# 측정: docs/ai/persona-feature-port.md §7 · batch/jobs/eval_persona_feature.py
 SCHEDULE = [(0, 0.00, 0.30, 0.70),
             (5, 0.70, 0.25, 0.05),
-            (10 ** 9, 0.40, 0.55, 0.05)]
+            (10 ** 9, 0.80, 0.18, 0.02)]
 
 
 def schedule_for(n_seed):
@@ -122,9 +136,14 @@ def load_catalog(products_path=None, vocab_path=None):
 if __name__ == "__main__":
     try: sys.stdout.reconfigure(encoding="utf-8")
     except Exception: pass
+    from persona_feature import AffinityTable
     from user_vector import UserVector
     M, idx, prior, enc = load_catalog()
-    rec = Recommender(M, idx, prior)
+    # 속성 친화도를 꽂지 않으면 w2 항이 통째로 0 이 된다. 데모가 그 상태면
+    # 읽는 사람이 "속성은 안 쓰는구나" 로 오해한다
+    rec = Recommender(M, idx, prior, affinity=AffinityTable(idx))
+    persona = {"skin_type": "dry", "skin_tone": "light",
+               "hair_color": "brown", "eye_color": "brown"}
     ids = list(idx)
 
     st = UserVector()
@@ -135,16 +154,21 @@ if __name__ == "__main__":
 
     print(f"카탈로그 {M.shape[0]}개 상품 / 벡터 {M.shape[1]}차원")
     print(st)
+    print(f"페르소나 속성 {persona}")
     w1, w2, w3 = schedule_for(len(st.weights()[0]))
     print(f"스케줄 w1={w1} w2={w2} w3={w3}  λ={rec.lam}")
     print()
     print("서빙 top-5")
-    for g, s in rec.rank(st, k=5):
+    for g, s in rec.rank(st, persona=persona, k=5):
         mark = "  (조회함)" if g in st.viewed else ""
         print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}{mark}")
     print()
     print("평가 모드 top-5 (본 상품 전부 제외)")
-    for g, s in rec.rank(st, k=5, evaluation=True):
+    for g, s in rec.rank(st, persona=persona, k=5, evaluation=True):
         print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}")
     print()
-    print(f"특정 상품의 현재 순위: {rec.rank_of(st, ids[100])}위")
+    print("속성 항을 빼면 (affinity 미주입) top-5")
+    for g, s in Recommender(M, idx, prior).rank(st, k=5):
+        print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}")
+    print()
+    print(f"특정 상품의 현재 순위: {rec.rank_of(st, ids[100], persona=persona)}위")

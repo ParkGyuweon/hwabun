@@ -61,6 +61,16 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 PERSONA_FILE = os.path.join(ROOT, "simulator", "personas", "data",
                             "personas_100_agent.json")
 CACHE_DIR = os.path.join(BD, ".cache")
+PRODUCTS_FILE = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
+
+# ── 카탈로그 커버리지 ─────────────────────────────────────
+# 100명이 200개 중 38개만 만졌다(19%). 원인은 취향이 아니라 화면 구조다.
+#   * 목록은 25개씩 끊어 보여주고 나머지는 "더 보기" 버튼 뒤에 있다
+#   * 100명 전원이 같은 첫 화면에서 시작하니 보이는 후보가 늘 같은 25개다
+# 프롬프트로 "더 내려보라" 고 부탁하지 않고 코드로 시작 지점을 흩는다.
+DEEP_LINK_P = 0.5       # 이 확률로 상품 상세에서 시작한다 (검색·광고 유입에 해당)
+CATEGORY_P = 0.6        # 목록에서 시작할 때 이 확률로 카테고리 탭을 하나 고른다
+MAX_MORE_CLICKS = 3     # "더 보기" 한도. 25 -> 최대 100개까지 늘린다
 
 GMS_BASE = "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
 MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
@@ -72,18 +82,22 @@ ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
 # 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다.
 #
-# 표시를 채우는 곳은 LogSink 다 (계약이 정한 강제 지점이 Simulator + Spark).
-# 프론트 로거는 고치지 않는다 — 프론트 담당 범위이기도 하고, 8/28 협의에서 프론트
-# 요청을 2건으로 좁혀 두었다.
+# 진입 주소에 표시를 붙이면 **프론트 로거가 그것을 읽어 봉투에 싣는다**
+# (frontend/src/lib/logger.ts syntheticContextFromUrl). 그래서 평상시 LogSink 의
+# 보정은 0 이고, 프론트가 표시를 못 붙인 경우에만 채운다.
+# 실측: stamped 0 / already 120.
 #
-# 진입 주소에도 같은 값을 붙인다. 지금 프론트는 이 파라미터를 읽지 않지만,
-# 읽게 되면 봉투에 이미 표시가 붙어 오고 LogSink 의 보정은 저절로 0 이 된다.
+# LogSink 를 남겨 두는 이유는 프론트가 파라미터를 못 읽는 경우(배포 빌드,
+# 파라미터 누락)에도 로그를 건지기 위해서다. 계약이 정한 강제 지점도
+# Simulator + Spark 다.
 # 계약: docs/analytics/log-transport-contract.md §9
 #
 # 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
 # 시나리오는 배치와 같은 값을 쓰고, 배치(python_batch)와 에이전트는
 # generator_type 으로 가른다 (docs/analytics/dw-schema.md).
 DEFAULT_SCENARIO_ID = "normal_day"
+# 계약 enum 은 python_batch | agent_llm 이다 (contracts/event-schema.json).
+# agent_realtime 은 legacy 로 명시적으로 거절된다 (contracts/tests/test_validate_events.py)
 GENERATOR_TYPE = "agent_llm"
 
 # 봉투에 schema_version 이 없을 때만 쓰는 값. 평소에는 프론트가 보낸 값을 그대로 쓴다
@@ -98,7 +112,7 @@ def default_simulation_run_id(now=None):
     return f"run_{ts.strftime('%Y%m%dT%H%M%SZ')}"
 
 
-def entry_url(base, scenario_id, simulation_run_id):
+def entry_url(base, scenario_id, simulation_run_id, product_id=None):
     """프론트 진입 주소에 synthetic 표시를 붙인다.
 
     프론트 로거는 **개발 서버에서만** 이 파라미터를 인정한다. 배포 화면에서도
@@ -115,7 +129,63 @@ def entry_url(base, scenario_id, simulation_run_id):
         "run": simulation_run_id,
         "scenario": scenario_id,
     })
+    if product_id:
+        # 프론트가 이미 지원하는 진입 경로다 (App.tsx initialProductId).
+        # 검색·광고로 상세에 바로 떨어지는 실제 유입에 해당한다
+        query["product"] = product_id
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def load_catalog():
+    """딥링크로 보낼 상품 ID 목록. 프론트 목록과 같은 200개다"""
+    try:
+        with io.open(PRODUCTS_FILE, encoding="utf-8") as f:
+            return [p["product_id"] for p in json.load(f) if p.get("product_id")]
+    except Exception:
+        return []
+
+
+def spread_start(page, rng):
+    """목록에서 시작하는 사람의 출발 지점을 흩는다.
+
+    100명 전원이 같은 첫 화면(25개)에서 시작하면 그 25개만 후보가 된다.
+    카테고리 탭을 고르고, "더 보기" 로 목록을 늘리고, 시작 스크롤 위치를 옮긴다.
+    전부 화면에 실제로 있는 조작이라 로그도 실제 사용자와 같은 모양으로 남는다.
+
+    스크롤은 한 번에 뛰지 않고 여러 번에 나눠 내린다. 한 번에 뛰면 프론트의
+    scroll_depth 25/50/75 단계가 통째로 건너뛰어져 로그가 사람 같지 않다.
+    """
+    tabs = page.locator(".list__tabs button")
+    if not tabs.count():
+        return None                      # 목록 화면이 아니다 (상세로 바로 들어옴)
+
+    picked = None
+    if rng.random() < CATEGORY_P:
+        i = rng.randrange(tabs.count())
+        try:
+            picked = tabs.nth(i).inner_text(timeout=1500).split(NL)[0].strip()
+            tabs.nth(i).click(timeout=3000)
+            page.wait_for_timeout(700)
+        except Exception:
+            picked = None
+
+    for _ in range(rng.randint(0, MAX_MORE_CLICKS)):
+        more = page.locator(".list__more")
+        if not more.count():
+            break
+        try:
+            more.first.click(timeout=3000)
+            page.wait_for_timeout(500)
+        except Exception:
+            break
+
+    height = page.evaluate("() => document.body.scrollHeight")
+    view = page.evaluate("() => window.innerHeight")
+    target = int(max(0, height - view) * rng.uniform(0, 0.75))
+    while page.evaluate("() => window.scrollY") + 40 < target:
+        page.mouse.wheel(0, rng.randint(500, 900))
+        page.wait_for_timeout(rng.randint(180, 420))
+    return picked
 
 NL = "\n"
 PCT_RE = "([0-9]+)[ ]*%"   # "스크롤 62%" 에서 숫자만 뽑는다
@@ -233,7 +303,13 @@ def read_list(page):
             continue
         lines.append(f"{len(lines)+1}. {brand} {name} — {price}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
-    tail = "  ← 목록 끝입니다" if pct >= 97 else ""
+    # 바닥이어도 "더 보기" 가 남아 있으면 목록 끝이 아니다. 끝이라고 말하면
+    # LLM 이 leave 를 고르고, 26번째 상품부터는 아무도 보지 못한다
+    more = page.locator(".list__more").count() > 0
+    if pct >= 97:
+        tail = "  ← 목록 끝입니다" if not more else "  ← 더 내리면 상품이 더 나옵니다"
+    else:
+        tail = ""
     return (f"[현재 화면] 상품 목록 (스크롤 {pct}%{tail})\n\n{body}\n\n"
             f"다음에 무엇을 하시겠습니까?"), "list"
 
@@ -364,6 +440,17 @@ def do_action(page, act, target):
     if a == "scroll":
         page.mouse.wheel(0, random.randint(500, 1200))
         page.wait_for_timeout(random.randint(700, 2500))
+        # 목록 바닥에 닿았고 "더 보기" 가 보이면 눌러 준다. 사람은 더 볼 게
+        # 있으면 누른다. LLM 의 선택지로 두지 않는 이유는, 행동을 하나 더 늘리면
+        # 약한 모델이 그쪽으로 도망쳐 상품을 안 고르기 때문이다
+        more = page.locator(".list__more")
+        if more.count():
+            try:
+                more.first.scroll_into_view_if_needed(timeout=1500)
+                more.first.click(timeout=2500)
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
         return True
 
     if a == "back_to_list":
@@ -433,7 +520,7 @@ def first_unvisited(page, visited):
     return None
 
 
-def allowed_actions(kind, pct, scroll_run, carted_here):
+def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -448,9 +535,11 @@ def allowed_actions(kind, pct, scroll_run, carted_here):
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
         return acts
-    # 목록 화면: 끝까지 내려왔으면 scroll 은 무의미하다
+    # 목록 화면: 끝까지 내려왔고 더 불러올 것도 없으면 scroll 은 무의미하다.
+    # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
+    # 더 보기를 눌러 26번째 상품부터를 화면에 올린다)
     acts = ["click_product"]
-    if pct < 97:
+    if pct < 97 or has_more:
         acts.append("scroll")
     acts.append("leave")
     return acts
@@ -486,7 +575,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose):
         # 이미 담은 상품을 또 담게 두면 같은 전환이 중복으로 쌓인다
         carted_here = any(norm(c) and (norm(c) in norm(here) or norm(here) in norm(c))
                           for c in cart)
-        acts = allowed_actions(kind, pct, scroll_run, carted_here)
+        has_more = kind == "list" and page.locator(".list__more").count() > 0
+        acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more)
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -623,6 +713,9 @@ def main():
             client = OpenAI(base_url=GMS_BASE, api_key=key)
 
     personas = json.load(open(PERSONA_FILE, encoding="utf-8"))[:a.limit]
+    catalog = load_catalog()
+    if not catalog:
+        print(f"상품 목록을 못 읽었습니다 ({PRODUCTS_FILE}) — 전원 목록에서 시작합니다")
     print(f"페르소나 {len(personas)}명 · 모델 {MODEL} · 최대 {a.turns}턴"
           + ("  [dry-run]" if a.dry_run else ""))
     print(f"프론트 {start_url}")
@@ -644,12 +737,22 @@ def main():
             ctx = browser.new_context()          # 페르소나마다 새 세션
             sink.attach(ctx)                     # 백엔드 없이도 로그를 건진다
             page = ctx.new_page()
-            page.goto(start_url, wait_until="networkidle")
+
+            # 출발 지점은 페르소나마다 다르되 **같은 사람은 늘 같은 곳**에서
+            # 시작한다. 실행마다 달라지면 커버리지 변화가 코드 때문인지
+            # 운 때문인지 구분할 수 없다
+            rng = random.Random(p["persona_id"])
+            deep = catalog and rng.random() < DEEP_LINK_P
+            entry = entry_url(a.url, a.scenario_id, simulation_run_id,
+                              product_id=rng.choice(catalog) if deep else None)
+            page.goto(entry, wait_until="networkidle")
 
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
                 continue
+
+            spread_start(page, rng)              # 목록에서 시작하면 자리를 흩는다
 
             print(f"  {p['persona_id']}  {TYPE_KR.get(p['skin_type'], '')}/"
                   f"{p['skin_tone']}  구매 {p['n_products']}개")
@@ -729,6 +832,7 @@ class LogSink:
         self.sent = 0
         self.send_failed = 0
         self.dropped = 0
+        self.client = None          # 첫 전송 때 만든다 (백프레셔 상태를 들고 있다)
         self.schema_version = None
         self.queue = None
         self.worker = None
@@ -807,36 +911,26 @@ class LogSink:
             self.queue.task_done()
 
     def _post(self, events):
-        import urllib.error
-        import urllib.request
+        """수집 API 로 보낸다. 백프레셔 처리는 공용 클라이언트가 한다.
 
-        url = self.post_base + "/api/events"
-        for i in range(0, len(events), POST_BATCH):
-            chunk = events[i:i + POST_BATCH]
-            body = json.dumps(
-                {"schema_version": self.schema_version or SCHEMA_VERSION,
-                 "events": chunk}, ensure_ascii=False).encode()
-            req = urllib.request.Request(
-                url, data=body, method="POST",
-                headers={"Content-Type": "application/json",
-                         # 합성 트래픽은 전송 계층에서도 자기를 밝힌다
-                         "X-Actor-Type": "synthetic",
-                         "X-Simulation-Run-Id": self.simulation_run_id})
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                    if r.status in (200, 202):
-                        self.sent += len(chunk)
-                    else:
-                        self.send_failed += len(chunk)
-            except urllib.error.HTTPError as e:
-                self.send_failed += len(chunk)
-                if self.send_failed <= POST_BATCH:      # 첫 실패만 자세히 남긴다
-                    detail = e.read()[:300].decode("utf-8", "replace")
-                    print(f"    수집 API HTTP {e.code} — {detail}")
-            except Exception as e:
-                self.send_failed += len(chunk)
-                if self.send_failed <= POST_BATCH:
-                    print(f"    수집 API 전송 실패 — {e}")
+        생성기(gen_behavior_logs.py)와 **같은 클라이언트**를 쓴다 — 같은 서버에
+        같은 계약으로 보내면서 재시도 정책이 다르면 부하 결과를 해석할 수 없다.
+        """
+        if self.client is None:
+            sys.path.insert(0, os.path.join(ROOT, "simulator"))
+            from collector_client import CollectorClient
+            self.client = CollectorClient(
+                self.post_base, timeout=self.timeout, max_batch=POST_BATCH,
+                log=lambda m: print(f"   {m}"))
+        before = dict(self.client.stats)
+        self.client.send(
+            events, schema_version=self.schema_version or SCHEMA_VERSION,
+            headers={"X-Actor-Type": "synthetic",
+                     "X-Simulation-Run-Id": self.simulation_run_id})
+        st = self.client.stats
+        self.sent += st["sent"] - before["sent"]
+        self.send_failed += ((st["dropped"] - before["dropped"])
+                             + (st["gave_up"] - before["gave_up"]))
 
     def close(self):
         if self.queue is not None:
