@@ -1005,7 +1005,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             carted += 1
         if verbose:
             mark = "  " if okd else "! "
-            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {obj.get('reason','')[:40]}")
+            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
     return dict(calls=calls, done=done, failed=failed, carted=carted, broken=broken)
