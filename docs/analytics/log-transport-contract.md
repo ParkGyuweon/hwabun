@@ -248,7 +248,7 @@ PA 로그가 `user` 로 들어오면 `user_id` 가 NULL 이라 사용자 단위 
 | 채우는 값 | 자리 |
 |---|---|
 | `synthetic` | `actor_type` |
-| `agent_realtime` | `properties.generator_type` |
+| `agent_llm` | `properties.generator_type` |
 | 실행 ID (`run_20260901T031500Z`) | `properties.simulation_run_id` |
 | 시나리오 ID (`normal_day`) | `properties.scenario_id` |
 
