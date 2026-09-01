@@ -214,3 +214,51 @@ e × T < B  →  시간 트리거.  전송 간격 = T 초
 
 전송 로그에 상한은 없다. `logger.ts` 의 `HISTORY_LIMIT = 200` 은 개발용 패널이
 되돌아보기 위해 들고 있는 개수이고, 발생·전송량과 무관하다.
+
+## 9. actor_type 판정 (2026-09-01 제안 · 프론트 미적용)
+
+LLM 에이전트(PA 100명)는 로그를 직접 만들지 않고 **실제 브라우저로 이 화면을
+조작한다.** 그래서 표시를 따로 하지 않으면 에이전트가 만든 로그가 실사용자와
+똑같이 `actor_type='user'` 로 찍힌다. 실측에서 40,492건이 전부 그렇게 나왔다.
+**한 번 섞이면 나중에 분리할 방법이 없다.**
+
+**현재 상태:** 시뮬레이터(러너)는 아래 파라미터를 붙여 진입하고 실행 끝에
+`actor_type` 분포를 검증한다. **프론트 로거는 아직 이 파라미터를 읽지 않는다.**
+프론트가 반영하기 전까지 러너는 매 실행 경고를 띄우며, 그동안 PA 로그는
+Kafka 로 보내지 않는다. 로거 변경은 프론트 담당 범위이므로 제안 패치로 전달한다.
+
+### 9-1. 진입 주소로 표시한다
+
+에이전트는 아래 파라미터를 붙여 진입하고, 로거가 그것을 읽어 봉투에 얹는다.
+
+| 파라미터 | 값 | 봉투/properties |
+|---|---|---|
+| `actor` | `synthetic` | `actor_type` |
+| `gen` | `agent_realtime` | `properties.generator_type` |
+| `run` | 실행 ID (`run_20260901T031500Z`) | `properties.simulation_run_id` |
+| `scenario` | 시나리오 ID (`normal_day`) | `properties.scenario_id` |
+
+```
+http://localhost:5173/?actor=synthetic&gen=agent_realtime&run=run_...&scenario=normal_day
+```
+
+**Agent bridge(전용 API·전용 훅)를 쓰지 않는 이유:** 로그 경로가 실사용자와
+달라지면 이 화면으로 이벤트 계약·수집 API·Kafka 를 검증하는 의미가 사라진다.
+진입 주소만 다르고 그 뒤 경로는 실사용자와 완전히 같아야 한다.
+
+### 9-2. 프론트가 지킬 규칙 (제안)
+
+- **개발 서버에서만 인정한다.** 배포 빌드는 이 분기 자체가 사라진다
+  (`import.meta.env.DEV`). 배포 화면에서 받아주면 주소만 고쳐 아무나 로그 출처를
+  위장할 수 있다.
+- `gen` · `run` · `scenario` 중 하나라도 비면 **user 로 되돌리고 경고한다.**
+  실행 단위 Join 이 끊긴 synthetic 로그는 Spark semantic validation 에서
+  `invalid_properties` 로 격리돼 어차피 버려진다.
+- 판정은 **로거 모듈을 읽는 시점**에 끝낸다. effect 에서 정하면 그 전에 발생한
+  이벤트가 새어 나간다 (실측: 첫 화면 `scroll_depth` 2건).
+- 러너는 실행 끝에 `actor_type` 분포와 실행 메타데이터 누락 건수를 출력한다.
+  synthetic 이 아닌 로그가 한 건이라도 있으면 **Kafka 로 보내지 않는다.**
+
+`environment` 는 `local` 그대로 둔다. 실제/합성 구분은 `actor_type` 이 하고,
+`environment` 는 어디서 돌았는지(`local`/`dev`/`staging`/`prod`/`loadtest`)를
+말한다. 두 축을 겹쳐 쓰면 배포 환경에서 돌린 부하 테스트를 표현할 수 없다.

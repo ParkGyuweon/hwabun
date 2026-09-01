@@ -41,6 +41,8 @@ import random
 import re
 import sys
 import time
+from datetime import datetime, timezone
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -58,6 +60,48 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "add_to_cart", "back_to_list", "leave")
+
+# ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
+# 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
+# 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다. 한 번 섞이면 나중에
+# 분리할 방법이 없어서, 진입 주소에 실행 정보를 붙여 로거가 읽게 한다.
+#
+# ⚠ 프론트 로거는 아직 이 파라미터를 읽지 않는다 (반영은 프론트 담당 범위).
+# 반영 전까지는 실행 끝 검증에서 "표시가 안 붙은 로그" 경고가 그대로 뜬다.
+# 그 경고가 뜨는 동안에는 PA 로그를 Kafka 로 보내면 안 된다.
+# 계약: docs/analytics/log-transport-contract.md §9
+#
+# 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
+# 시나리오는 배치와 같은 값을 쓰고, 배치(python_batch)와 에이전트는
+# generator_type 으로 가른다 (docs/analytics/dw-schema.md).
+DEFAULT_SCENARIO_ID = "normal_day"
+GENERATOR_TYPE = "agent_realtime"
+
+
+def default_simulation_run_id(now=None):
+    """실행 ID 를 안 주면 시각으로 만든다. 배치 생성기와 같은 형식"""
+    ts = now or datetime.now(timezone.utc)
+    return f"run_{ts.strftime('%Y%m%dT%H%M%SZ')}"
+
+
+def entry_url(base, scenario_id, simulation_run_id):
+    """프론트 진입 주소에 synthetic 표시를 붙인다.
+
+    프론트 로거는 **개발 서버에서만** 이 파라미터를 인정한다. 배포 화면에서도
+    받아주면 주소만 고쳐 아무나 로그 출처를 위장할 수 있기 때문이다.
+    (frontend/src/lib/logger.ts syntheticContextFromUrl)
+
+    셋 중 하나라도 빠지면 로거가 user 로 되돌리므로 항상 함께 붙인다.
+    """
+    parts = urlsplit(base)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update({
+        "actor": "synthetic",
+        "gen": GENERATOR_TYPE,
+        "run": simulation_run_id,
+        "scenario": scenario_id,
+    })
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 NL = "\n"
 PCT_RE = "([0-9]+)[ ]*%"   # "스크롤 62%" 에서 숫자만 뽑는다
@@ -531,7 +575,14 @@ def main():
     ap.add_argument("--out", default=os.path.join(BD, "data", "agent_events.jsonl"),
                     help="가로챈 행동 로그를 적을 파일")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--scenario-id", default=DEFAULT_SCENARIO_ID,
+                    help=f"synthetic 시나리오 ID (기본 {DEFAULT_SCENARIO_ID})")
+    ap.add_argument("--simulation-run-id", default=None,
+                    help="이번 실행 ID. 안 주면 시각으로 만든다")
     a = ap.parse_args()
+
+    simulation_run_id = a.simulation_run_id or default_simulation_run_id()
+    start_url = entry_url(a.url, a.scenario_id, simulation_run_id)
 
     if a.model:
         MODEL = a.model
@@ -555,7 +606,9 @@ def main():
     personas = json.load(open(PERSONA_FILE, encoding="utf-8"))[:a.limit]
     print(f"페르소나 {len(personas)}명 · 모델 {MODEL} · 최대 {a.turns}턴"
           + ("  [dry-run]" if a.dry_run else ""))
-    print(f"프론트 {a.url}")
+    print(f"프론트 {start_url}")
+    print(f"실행 메타데이터 actor_type=synthetic generator_type={GENERATOR_TYPE} "
+          f"scenario_id={a.scenario_id} simulation_run_id={simulation_run_id}")
 
     from playwright.sync_api import sync_playwright
     tot = dict(calls=0, done=0, failed=0, carted=0)
@@ -570,7 +623,7 @@ def main():
             ctx = browser.new_context()          # 페르소나마다 새 세션
             sink.attach(ctx)                     # 백엔드 없이도 로그를 건진다
             page = ctx.new_page()
-            page.goto(a.url, wait_until="networkidle")
+            page.goto(start_url, wait_until="networkidle")
 
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
@@ -599,6 +652,16 @@ def main():
     print(f"  수집 로그 {sink.n}건 -> {a.out}")
     if top:
         print("  " + " · ".join(f"{k} {v}" for k, v in top))
+
+    # actor 표시 확인. 여기서 걸러야 실사용자 로그와 섞인 채로 Kafka 에 올라가지 않는다
+    actors = " · ".join(f"{k} {v}" for k, v in sorted(sink.actors.items()))
+    print(f"  actor_type  {actors or '(없음)'}")
+    stray = sink.n - sink.actors.get("synthetic", 0)
+    if stray or sink.missing_runtime:
+        print(f"  ⚠ synthetic 표시가 안 붙은 로그 {stray}건 · "
+              f"실행 메타데이터 누락 {sink.missing_runtime}건")
+        print("    프론트를 개발 서버로 띄웠는지, --url 이 그 주소인지 확인하세요.")
+        print("    이 상태의 로그는 Kafka 로 보내면 안 됩니다 (실사용자와 구분 불가).")
     print("=" * 60)
 
 
@@ -621,6 +684,10 @@ class LogSink:
         self.f = io.open(path, "w", encoding="utf-8")
         self.n = 0
         self.kinds = {}
+        # 표시가 제대로 붙었는지 세어 둔다. 하나라도 user 면 실사용자 로그와
+        # 구분이 안 되는 로그를 만든 것이므로 실행 끝에 크게 알린다.
+        self.actors = {}
+        self.missing_runtime = 0
 
     def attach(self, ctx):
         ctx.route("**/api/events", self._handle)
@@ -633,6 +700,13 @@ class LogSink:
                 self.n += 1
                 k = ev.get("event_name") or ev.get("action") or "?"
                 self.kinds[k] = self.kinds.get(k, 0) + 1
+
+                actor = ev.get("actor_type") or "?"
+                self.actors[actor] = self.actors.get(actor, 0) + 1
+                props = ev.get("properties") or {}
+                if not all(props.get(key) for key in
+                           ("scenario_id", "simulation_run_id", "generator_type")):
+                    self.missing_runtime += 1
         except Exception:
             pass
         route.fulfill(status=200, content_type="application/json",
