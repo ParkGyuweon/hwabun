@@ -136,9 +136,14 @@ def load_catalog(products_path=None, vocab_path=None):
 if __name__ == "__main__":
     try: sys.stdout.reconfigure(encoding="utf-8")
     except Exception: pass
+    from persona_feature import AffinityTable
     from user_vector import UserVector
     M, idx, prior, enc = load_catalog()
-    rec = Recommender(M, idx, prior)
+    # 속성 친화도를 꽂지 않으면 w2 항이 통째로 0 이 된다. 데모가 그 상태면
+    # 읽는 사람이 "속성은 안 쓰는구나" 로 오해한다
+    rec = Recommender(M, idx, prior, affinity=AffinityTable(idx))
+    persona = {"skin_type": "dry", "skin_tone": "light",
+               "hair_color": "brown", "eye_color": "brown"}
     ids = list(idx)
 
     st = UserVector()
@@ -149,16 +154,21 @@ if __name__ == "__main__":
 
     print(f"카탈로그 {M.shape[0]}개 상품 / 벡터 {M.shape[1]}차원")
     print(st)
+    print(f"페르소나 속성 {persona}")
     w1, w2, w3 = schedule_for(len(st.weights()[0]))
     print(f"스케줄 w1={w1} w2={w2} w3={w3}  λ={rec.lam}")
     print()
     print("서빙 top-5")
-    for g, s in rec.rank(st, k=5):
+    for g, s in rec.rank(st, persona=persona, k=5):
         mark = "  (조회함)" if g in st.viewed else ""
         print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}{mark}")
     print()
     print("평가 모드 top-5 (본 상품 전부 제외)")
-    for g, s in rec.rank(st, k=5, evaluation=True):
+    for g, s in rec.rank(st, persona=persona, k=5, evaluation=True):
         print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}")
     print()
-    print(f"특정 상품의 현재 순위: {rec.rank_of(st, ids[100])}위")
+    print("속성 항을 빼면 (affinity 미주입) top-5")
+    for g, s in Recommender(M, idx, prior).rank(st, k=5):
+        print(f"   {s:+.4f}  {enc.products[idx[g]]['product_name'][:46]}")
+    print()
+    print(f"특정 상품의 현재 순위: {rec.rank_of(st, ids[100], persona=persona)}위")
