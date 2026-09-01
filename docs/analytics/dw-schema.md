@@ -2,7 +2,7 @@
 
 작성일: 2026-08-28  
 상태: Draft, E2E 테스트 전 논리 Mart 초안. Kafka payload 서버 메타 필드 계약은 BE 커넥터 담당 확인 완료(2026-08-31)
-관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`,
+관련 문서: `../../contracts/event-schema.json`, `event-taxonomy-trigger-schema.md`,
 `../../contracts/processed-schema.md`, `spark-processing-design.md`, `persona-schema.md`
 
 ## 1. 문서 목적

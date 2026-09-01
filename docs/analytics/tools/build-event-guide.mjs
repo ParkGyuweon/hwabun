@@ -394,7 +394,6 @@ const GROUPS = [
     docs: [
       { f: 'contracts/event-schema.json', t: 'Raw Event JSON Schema', d: '검증기가 돌리는 단일 출처', json: true },
       { f: 'docs/analytics/event-taxonomy-trigger-schema.md', t: 'Event Taxonomy · Trigger', d: '발화 시점과 필수 property 전문' },
-      { f: 'docs/analytics/event-contract-summary.md', t: 'Event 계약 요약', d: '타 파트용 축약본' },
       { f: 'docs/analytics/log-transport-contract.md', t: '로그 전송 주기 계약', d: '배치 · 재시도 · synthetic 표시' },
       { f: 'contracts/processed-schema.md', t: 'Processed 스키마', d: 'Spark 정제 단계 컬럼 계약' },
       { f: 'docs/analytics/spark-processing-design.md', t: 'Spark 처리 설계', d: '처리 근거 · 구현 현황 · 검증 계획' },
@@ -622,7 +621,7 @@ main{padding:44px 52px 120px;min-width:0}
 .prose pre.code[data-lang]::before{content:attr(data-lang);position:absolute;top:8px;right:12px;
   font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
 
-/* 요약 문서 전용 */
+/* 가이드 요약 컴포넌트 */
 .prose .lead{font-size:17px;line-height:1.7;color:var(--ink)}
 .prose .note{font-size:14px;color:var(--muted);background:var(--panel);
   border-left:2px solid var(--rule);padding:11px 15px;border-radius:0 7px 7px 0}

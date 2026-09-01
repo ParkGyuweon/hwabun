@@ -149,7 +149,7 @@ Parsed/Processed timestamp는 UTC로 정규화한다.
 
 `request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. 현재 Collector는 `schema_version`이 비어 있지 않은지만 검사하고, 지원 버전 목록과 배치·Event 버전 일치까지 강제하지는 않는다. 이벤트별 `properties` 의미 검증도 별도로 구현해야 한다.
 
-근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Event 계약](../docs/analytics/event-contract-summary.md).
+근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Raw Event 실행 계약](../contracts/event-schema.json), [Event별 properties·Trigger](../docs/analytics/event-taxonomy-trigger-schema.md).
 
 ## 5. Partition Key와 순서 보장
 
@@ -446,7 +446,7 @@ Spark Lag은 마지막 성공 Batch가 사용한 끝 Offset을 기준으로 계�
 | Synthetic 요청 크기 | 500~2,000건 배치 제안 | Collector 요청당 최대 100건 | 부하 생성기가 100건 이하로 분할하거나 별도 계약 |
 | 정본 선택 | 최초 수신, Partition/Offset 보조 | Spark 미구현 | 전역 순서와 결정적 정렬의 차이, Streaming 갱신 방식 합의 |
 
-대조 문서: [Event 계약 요약](../docs/analytics/event-contract-summary.md), [Processed Schema](../contracts/processed-schema.md), [Spark 처리 설계](../docs/analytics/spark-processing-design.md), [DW Schema](../docs/analytics/dw-schema.md), [로그 전송 계약](../docs/analytics/log-transport-contract.md).
+대조 문서: [Raw Event 실행 계약](../contracts/event-schema.json), [Event별 properties·Trigger](../docs/analytics/event-taxonomy-trigger-schema.md), [Processed Schema](../contracts/processed-schema.md), [Spark 처리 설계](../docs/analytics/spark-processing-design.md), [DW Schema](../docs/analytics/dw-schema.md), [로그 전송 계약](../docs/analytics/log-transport-contract.md).
 
 ## 14. 미확정 항목과 담당 경계
 

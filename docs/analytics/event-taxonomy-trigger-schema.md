@@ -386,7 +386,15 @@ Frontend LogEnvelope
 
 E2E 기준 `schema_version`은 현재 프론트 구현과 맞춰 `0.2.0-draft`로 둔다. `1.0.0-draft`는 JSON Schema와 구현 계약을 확정한 뒤 올릴 후보 버전이다. 요청 body의 top-level `schema_version`과 각 Event의 `schema_version`이 다르면 Collector가 전체 batch를 400으로 거절한다.
 
-Event 계약의 단일 출처는 이 문서와 요약 문서(`event-contract-summary.md`)다. `frontend/src/types/log.ts`는 프론트 구현 미러이며, 변경 MR에서는 문서와 코드의 Event 목록, intent, properties 동기화 여부를 함께 확인한다. 실행 가중치 상수는 `log.ts`를 원본으로 사용한다. `SCHEMA_VERSION` 기준은 Data가 정하고 변경 MR 담당자가 문서와 구현값을 같이 올린다. 계약 확정 전인 이번 변경은 `0.2.0-draft`에 묶되, 이후에는 payload 변경 없는 설명/오탈자 수정은 patch, Event 또는 optional property 추가는 minor, 필드 삭제·이름/타입 변경·필수 전환·enum 의미 변경처럼 하위 호환되지 않는 변경은 major 후보로 본다.
+Raw Event 공통 Envelope와 event enum의 실행 계약은
+`../../contracts/event-schema.json`이다. Event별 properties와 Trigger는 계약 분리 전까지
+이 문서를 전환 원본으로 사용한다. `frontend/src/types/log.ts`는 프론트 구현 미러이며,
+변경 MR에서는 문서와 코드의 Event 목록, intent, properties 동기화 여부를 함께
+확인한다. 실행 가중치 상수는 `log.ts`를 원본으로 사용한다. `SCHEMA_VERSION` 기준은
+Data가 정하고 변경 MR 담당자가 문서와 구현값을 같이 올린다. 계약 확정 전인 이번
+변경은 `0.2.0-draft`에 묶되, 이후에는 payload 변경 없는 설명/오탈자 수정은 patch,
+Event 또는 optional property 추가는 minor, 필드 삭제·이름/타입 변경·필수 전환·enum
+의미 변경처럼 하위 호환되지 않는 변경은 major 후보로 본다.
 
 ### 8.3 Collector Enriched Fields
 
@@ -1003,7 +1011,7 @@ MVP에서는 bad event 격리, 중복 제거, dwell cap, synthetic/user 필터 �
 
 | 상태 | 안건 | 결정 내용 |
 | --- | --- | --- |
-| 합의 | Event 명세 단일 출처 | Data 문서(`event-contract-summary.md`, `event-taxonomy-trigger-schema.md`)를 계약 원본으로 둔다. `frontend/src/types/log.ts`는 구현 미러이며 변경 MR에서 문서 동기화 여부를 함께 확인한다 |
+| 합의 | Event 명세 단일 출처 | 공통 Envelope·event enum은 `contracts/event-schema.json`, Event별 properties·Trigger는 계약 분리 전까지 이 문서를 원본으로 둔다. `frontend/src/types/log.ts`는 구현 미러이며 변경 MR에서 동기화 여부를 함께 확인한다 |
 | 합의 | Raw Event Schema 기준 | Front JSON 구조를 유지하고, Backend는 큰 가공 없이 검증과 서버 메타 필드만 추가 |
 | 합의 | Event 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
 | 합의 | E2E Schema Version | 계약 확정 전인 현재는 `0.2.0-draft` 유지. 이후 payload 변경 없는 설명 수정은 patch, Event/optional property 추가는 minor, 필드 삭제·이름/타입 변경·필수 전환·enum 의미 변경은 major 후보 |

@@ -520,7 +520,11 @@ synthetic Event를 만들 때는 아래 기준으로 Event Schema에 매핑한�
 | `canonical_product_id` | top-level `product_id` | Event 대상 상품. Event 계약에서는 `product_id` 이름 사용 |
 | `source` | Kafka payload | `actor_type='synthetic' → simulator`. 누락 시 Processed fallback 파생 |
 
-`scenario_id`, `simulation_run_id`, `generator_type`은 현재 Backend top-level DTO가 아니라 `properties`에 담고 Processed 단계에서 승격한다. 이 3개는 `actor_type='synthetic'` Event의 **공통 필수 properties**이며, 같은 계약이 `event-taxonomy-trigger-schema.md` §8.4와 `event-contract-summary.md` §5.3에 들어 있다. 누락된 synthetic Event는 Spark semantic validation에서 `invalid_properties`로 격리한다.
+`scenario_id`, `simulation_run_id`, `generator_type`은 현재 Backend top-level DTO가
+아니라 `properties`에 담고 Processed 단계에서 승격한다. 이 3개는
+`actor_type='synthetic'` Event의 **공통 필수 properties**이며, 같은 기준은
+`event-taxonomy-trigger-schema.md` §8.4에 정의되어 있다. 누락된 synthetic Event는
+Spark semantic validation에서 `invalid_properties`로 격리한다.
 
 `persona_source`는 Persona 정적 속성이므로 Event payload에 매번 싣지 않는다. 실제 Web Event(`actor_type='user'`)에는 이 runtime metadata를 요구하지 않으므로 프론트 구현에는 영향이 없다.
 

@@ -29,7 +29,7 @@ S15P21A306/
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
 │   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지
-│   │   ├── event-taxonomy-trigger-schema.md · event-contract-summary.md   이벤트 계약
+│   │   ├── event-taxonomy-trigger-schema.md   Event별 properties·Trigger 전환 문서
 │   │   ├── log-transport-contract.md    전송 주기·재시도·actor_type 판정
 │   │   ├── dw-schema.md · spark-processing-design.md   Mart·Spark 처리 설계
 │   │   ├── persona-schema.md · persona-attribute-preprocessing.md
