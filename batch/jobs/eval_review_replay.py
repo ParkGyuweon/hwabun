@@ -153,7 +153,8 @@ def main():
     personas = select_split(json.load(open(PERSONAS, encoding="utf-8")), a.split)
     if a.limit:
         personas = personas[:a.limit]
-    print(f"**{a.split}** 집합 {len(personas):,}명 · 리뷰를 시간순 이벤트로 재생")
+    print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
+          f" 리뷰를 시간순 이벤트로 재생")
     if a.split == "test":
         print("  ⚠ test 는 최종 보고용이다")
 

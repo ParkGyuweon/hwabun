@@ -55,6 +55,22 @@ WEIGHTS = {
     "noise": 0.05,
 }
 
+# 강건성 평가용 대안 가중치. 하나의 공식만 쓰면 그 가정이 결과를 만든 것인지
+# 구분할 수 없다 (evaluation-framework 10단계)
+PROFILES = {
+    "default": WEIGHTS,
+    # 텍스트를 더 믿는다 — 추천 모델과 가장 멀어지는 쪽
+    "text_heavy": {"seed_review_text_match": 0.50, "product_attribute_match": 0.10,
+                   "category_match": 0.10, "brand_affinity": 0.10,
+                   "price_match": 0.05, "product_quality": 0.10, "noise": 0.05},
+    # 속성·카테고리를 더 믿는다 — 추천 모델과 가장 가까워지는 쪽
+    "attr_heavy": {"seed_review_text_match": 0.10, "product_attribute_match": 0.35,
+                   "category_match": 0.25, "brand_affinity": 0.10,
+                   "price_match": 0.05, "product_quality": 0.10, "noise": 0.05},
+    # 특정 항목에 기대지 않는다
+    "flat": {k: 1.0 / len(WEIGHTS) for k in WEIGHTS},
+}
+
 POSITIVE_RATING = 4          # 이 점수 이상을 긍정 seed 로 본다
 _TOKEN = re.compile(r"[a-z]{3,}")
 _STOP = frozenset("""

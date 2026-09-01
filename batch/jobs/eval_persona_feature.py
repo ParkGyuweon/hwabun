@@ -136,7 +136,8 @@ def main():
         personas = personas[:a.limit]
 
     print(f"상품 {V.shape[0]}개 x {V.shape[1]}차원")
-    print(f"**{a.split}** 집합 {len(personas):,}명 · 친화도 {affinity.n_rows:,}행")
+    print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
+          f" 친화도 {affinity.n_rows:,}행")
     print(f"스케줄 {SCHEDULE} · λ_mmr {LAMBDA_MMR}")
     if a.split == "test":
         print("  ⚠ test 는 최종 보고용이다. 이 수치를 보고 파라미터를 고치면 "

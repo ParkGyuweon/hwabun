@@ -37,7 +37,7 @@ import numpy as np
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
-from hidden_preference import HiddenPreference               # noqa: E402
+from hidden_preference import PROFILES, HiddenPreference     # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
@@ -254,6 +254,8 @@ def main():
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
     ap.add_argument("--rng-seed", type=int, default=42, help="탐색 난수 seed")
+    ap.add_argument("--pref-profile", choices=tuple(PROFILES), default="default",
+                    help="hidden preference 가중치 조합. 강건성 평가에서 바꿔 가며 돈다")
     a = ap.parse_args()
 
     encoder = Encoder()
@@ -262,7 +264,8 @@ def main():
     prior = np.asarray(encoder.prior(), dtype=np.float32)
     affinity = load_affinity(index)
     recommender = Recommender(M, index, prior, affinity=affinity)
-    hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed)
+    hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed,
+                          weights=PROFILES[a.pref_profile])
     meta = [{"product_id": p["product_id"],
              "tertiary_category": p.get("tertiary_category")}
             for p in encoder.products]
@@ -272,9 +275,10 @@ def main():
     if a.limit:
         personas = personas[:a.limit]
 
-    print(f"**{a.split}** 집합 {len(personas):,}명 · 상품 {len(M)}개")
-    print(f"노출: 추천 점수 · 행동: hidden preference(seed {a.noise_seed})"
-          f" · 탐색 seed {a.rng_seed}")
+    print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
+          f" 상품 {len(M)}개")
+    print(f"노출: 추천 점수 · 행동: hidden preference"
+          f"({a.pref_profile}, seed {a.noise_seed}) · 탐색 seed {a.rng_seed}")
     if a.split == "test":
         print("  ⚠ test 는 최종 보고용이다")
 
@@ -285,7 +289,7 @@ def main():
         if not seeds:
             continue
         results.append(run_persona(persona, seeds, target, ctx, rng))
-    summarize(results, f"{a.split} · noise {a.noise_seed}")
+    summarize(results, f"{a.split} · {a.pref_profile} · noise {a.noise_seed}")
 
 
 if __name__ == "__main__":
