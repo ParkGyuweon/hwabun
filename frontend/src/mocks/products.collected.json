@@ -1787,7 +1787,13 @@
   "P427410": {
     "sku_id": "2031466",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2031466-av-2-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2031466-av-3-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2031466-av-4-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2031466-av-5-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2031466-av-6-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A water- and silicone-free stable suspension of 23 percent pure l-ascorbic acid.",
@@ -1818,7 +1824,12 @@
   "P427414": {
     "sku_id": "2031425",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/product/p427414-av-1-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p427414-av-2-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p427414-av-3-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p427414-av-4-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A hydrating formula with amino acids, dermal lipids, and hyaluronic acid.",
@@ -3675,7 +3686,13 @@
   "P455936": {
     "sku_id": "2652113",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2495497-av-01-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2495497-av-02-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2495497-av-03-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2495497-av-04-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2495497-av-05-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A silky vegan balm that hydrates and soothes parched lips in seconds.",
@@ -3801,7 +3818,15 @@
   "P456398": {
     "sku_id": "2742641",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/product/p456398-av-1-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p456398-av-2-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p456398-av-3-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p456398-av-5-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p456398-av-6-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p456398-av-7-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p456398-av-8-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "skin_type": "Normal, Dry, Combination, and Oily",
@@ -3811,8 +3836,10 @@
       ],
       "ingredient_callouts": "Free of formaldehydes, phthalates, mineral oil, retinyl palmitate, oxybenzone, coal tar, hydroquinone, sulfates SLS & SLES, triclocarban, and triclosan.",
       "what_else": "Get peak protection for active, outdoor activities with this lightweight, invisible protective veil that’s strengthened when it senses water, sweat, or heat. This sunscreen lotion goes on clear and creates an even layer that provides protection against UVA/UVB rays, pollutants, and dryness. It is also dermatologist- and ophthalmologist-tested and non-comedogenic.",
-      "clinical_results": "In a test with 104 women,- During application, 100% felt this sunscreen is smooth and comfortable on the skin- During application, 100% felt this sunscreen spreads evenly over skin- After 4 hours, 98% felt this sunscreen maintains skin's moisture",
-      "suggested_usage": "-Apply sunscreen as the last step in your morning skincare routine before applying makeup.-Shake well.-Apply liberally to your face, neck, and body before sun exposure.-Use a nickel-size amount for your face.-Use one ounce, or a shot glass-size amount, for your body.-Re-apply sun protection to face and body every two hours while outdoors or immediately after swimming and toweling dry."
+      "clinical_results": "In a test with 104 women,- During application, 100% felt this sunscreen is smooth and comfortable on the skin- During application, 100% felt this sunscreen spreads evenly over skin- After 4 hours, 98% felt this sunscreen maintains skin's moisture- Visibly improves fine lines, smoothness and even skin tone in 2 weeks*  *Clinically tested by 30 women",
+      "suggested_usage": "-Apply sunscreen as the last step in your morning skincare routine before applying makeup.-Shake well.-Apply liberally to your face, neck, and body before sun exposure.-Use a nickel-size amount for your face.-Use one ounce, or a shot glass-size amount, for your body.-Re-apply sun protection to face and body every two hours while outdoors or immediately after swimming and toweling dry.",
+      "what_it_is": "An invisible and lightweight broad-spectrum SPF 60+ face and body lotion with higher protection strengthened by heat and water.",
+      "brand_story": "Beauty innovation. Born in Japan.\rEstablished in 1872, Shiseido is one of the world’s most-trusted beauty brands. Built on a foundation of respect for Japanese ingredients and culture, Shiseido is renowned for its commitment to tradition and quest for innovation. In skincare, sun care, and makeup, Shiseido offers superior products and unparalleled technologies that celebrate the art and science of beautiful skin."
     },
     "description_source": {
       "slug": "shiseido-ultimate-sun-protector-face-and-body-lotion-spf-60-sunscreen-P456398",
@@ -4476,22 +4503,27 @@
   "P470529": {
     "sku_id": "2266708",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2450096-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2450096-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2450096-av-16-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2450096-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2450096-av-20-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2450096-av-21-zoom.jpg"
+    ],
     "variants": [],
     "description": {
-      "what_it_is": "Skin-soothing serum made of antioxidant rich avocado and ceramides to help reduce the look of redness and irritation caused by dehydration and a weak skin barrier.",
+      "what_it_is": "A skin-barrier-strengthening serum formulated with ceramides & antioxidant-rich avocado to help soothe and visibly reduce redness, dryness, and irritation caused by a weak skin barrier.",
       "skin_type": "Normal, Dry, Combination, and Oily",
       "concerns_text": "Dryness, Redness, and Loss of Firmness and Elasticity",
       "highlighted_ingredients": [
-        "Avocado Butter and Extract: Intensely soothe and nourish skin.",
-        "Ceramide 5: Visibly reduces redness by supporting skin-barrier health.",
-        "Allantoin: A soothing, calming ingredient that occurs naturally in our bodies and nature."
+        "Ceramide 5: A blend of 5 skin-identical ceramides that support the skin barrier & help visibly reduce redness and dryness.- Avocado: A combination of butter + extract for ultimate soothing and nourishing. - Allantoin: A soothing & calming ingredient found naturally occurring in body & nature."
       ],
       "ingredient_callouts": "This product is vegan, cruelty-free, and comes in recyclable packaging.",
       "what_else": "Calming ingredients like avocado, ceramide-5, rice milk, and allantoin visibly reduce redness and soothe irritated or sensitized skin. Skin barrier health is strengthened, resulting in more hydrated, resilient skin. This product has been dermatologist-tested and clinically proven to reduce redness over time.",
-      "clinical_results": "In a consumer-use study of 30 participants, over a 4-week period:\n- 86% said it lessened visible redness\n- 96% said their skin felt soothed and rebalanced\n- 90% said there was a lasting improvement in skin dryness\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "clinical_results": "In a consumer-use study of 30 women, over a 4-week period:-96% said their skin feels soothed & rebalanced.-90% said there is a lasting improvement in my skin dryness.-86% said this serum lessens visible redness\n\n\nClean & Planet Aware\nOur ambitious curation of beauty made without controversial ingredients from brands dedicated to making meaningful environmental commitments, including sustainable ingredients and sourcing, packaging, corporate commitments, and consumer transparency.",
       "suggested_usage": "-After cleansing, toning, and applying eye cream, dispense one to two pumps into your hand.\n-Gently pat onto your slightly damp face and neck until fully absorbed.\n-Follow with your favorite moisturizer.\n-Apply daily, AM and PM.\n\nRecycling Instructions:\n-Glow Recipe products are 100 percent recyclable&mdash;either at home or through its send-back program with TerraCycle&reg;.\n-Recycle the glass jars at home. (Just wash first.)\n-Ship the plastic packaging to TerraCycle, where it will be converted into raw materials that can be used for new-product manufacturing.",
-      "brand_story": "Glow Recipe was created by beauty industry veterans Sarah Lee and Christine Chang to elevate K-beauty to an everyday luxury. Hybrid textures encapsulate the philosophy of Korean skincare. Natural ingredients work overtime to deliver lasting hydration, building the foundation for visibly healthier skin."
+      "brand_story": "Glow Recipe creates clean, fruit-forward, clinically effective skincare for glowing skin. Anchored in Korean skincare philosophies, this sensorial skincare line develops innovative formulas that pair antioxidant-rich fruit with gentle yet powerful actives for real results and your healthiest-looking, glowiest skin yet. Glow Recipe skincare is vegan and cruelty-free."
     }
   },
   "P471237": {
@@ -4696,7 +4728,16 @@
   "P473322": {
     "sku_id": "2648459",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2481414-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-15-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-17-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-18-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-19-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-20-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2481414-av-21-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A potent 20% PHA/AHA night serum that smooths skin texture, improves elasticity and targets the look of dark spots, pores, fine lines and wrinkles.",
@@ -5187,19 +5228,29 @@
   "P500633": {
     "sku_id": "2594588",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/product/p500633-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-2-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-3-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-4-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-5-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-6-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-7-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-8-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500633-av-9-zoom.jpg"
+    ],
     "variants": [],
     "description": {
-      "what_it_is": "An advanced face serum that boosts skin’s visible resilience by +62%* for smoother texture, visible glow, restored bounce & reduced look of wrinkles.",
+      "what_it_is": "An anti-aging serum that powers skin to resist and diminish signs of aging for reduced visible wrinkles, smoother texture, and increased bounce.",
       "skin_type": "Normal, Dry, Combination, and Oily",
       "concerns_text": "Fine Lines and Wrinkles, Dryness, and Dullness",
       "highlighted_ingredients": [
         "Adaptive Phytocompound Tea (APT) Technology™: to increase skin’s bioenergetic systems & antioxidant protection- Niacinamide (Vitamin B3): Refines the look of pores and improves visible radiance.- 5kDA Hyaluronic Acid: Intensely hydrates and minimizes the look of lines and wrinkles."
       ],
       "what_else": "This breakthrough formula helps skin function at its full potential by resisting life stressors, like lack of sleep, stress, and seasonal changes, that lead to visible signs of aging. Shown to be effective on all skin types and tones, this serum has a refreshing tea scent and a milky, bi-mesh texture for fast penetration.",
-      "clinical_results": "In a clinical study on 33 subjects over 8 weeks, using a self-assessment by scoring, observed results based on an average of smooth, visible lines, the look of pores, glow, and bounce (skin that looks plump and tightened), included:- A 62% increase in skin’s visible resilience\nIn a self-assessment by scoring on 33 subjects over 8 weeks, observed results included:- A 41% decrease in the look of fine lines and wrinkles- A 75% increase in smoother texture and visible glow\nClean at SephoraClean at Sephora is a curation of brands committed to evolving the beauty industry. When you see our Clean seal, you can be sure this brand's products are formulated without certain ingredients that are potentially harmful to human health and the environment and also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more. For the full list, check out the Ingredients tab.",
+      "clinical_results": "After 1 use-15% look of wrinkles*+41% smoother texture observed**+31% stronger skin barrier***\nAfter 8 weeks-41% look of fine lines & wrinkles****+75% smoother texture & glow****+58% more bounce**** -61% visible pores****+62% visibly resilient skin***** *instrumental test, 31 subjects**observed results, self-assessment by scoring, 33 subjects, 8 weeks***instrumental test, 32 subjects****observed results, self-assessment by scoring, 33 subjects, 8 weeks; “bounce” based on an average of plump & elasticity*****observed results, clinical study, self-assessment by scoring, 33 subjects, 8 weeks, based on an average of smooth, visible lines, look of pores, bounce (plump & elasticity), and glow\nClean at SephoraClean at Sephora is a curation of brands committed to evolving the beauty industry. When you see our Clean seal, you can be sure this brand's products are formulated without certain ingredients that are potentially harmful to human health and the environment and also address ingredients clients are concerned about, including phthalates, formaldehyde or formaldehyde releasers, oxybenzone and octinoxate, hydroquinone, triclosan, coal tar, methylisothiazolinone and methylchloroisothiazolinone, insoluble plastic microbeads, and more. For the full list, check out the Ingredients tab.",
       "suggested_usage": "-Dispense a few drops into the palm of your hand.\n-Press onto skin to activate serum.\n-Apply to the face and neck daily, morning and night, after cleansing with fresh&rsquo;s Soy pH-Balanced Hydrating Face Wash and following with their Kombucha Antioxidant Facial Treatment Essence (each sold separately).",
-      "brand_story": "By combining potent natural ingredients, ancient rituals, and modern science, Fresh creates products that perform with experiences that transform. Discovery drives innovation. Fresh’s Founders travel the world uncovering the highest quality natural ingredients and time-honored cultural traditions. But the real journey is using science to harness and heighten nature—developing effective formulas that look, smell, and feel as good as they work—to bring you the most beautiful skin and sensations."
+      "brand_story": "By combining potent natural ingredients, ancient rituals, and modern science, fresh creates products that perform with experiences that transform. Discovery drives innovation. fresh’s Founders travel the world uncovering the highest quality natural ingredients and time-honored cultural traditions. But the real journey is using science to harness and heighten nature—developing effective formulas that look, smell, and feel as good as they work—to bring you the most beautiful skin and sensations."
     }
   },
   "P500701": {
@@ -5235,27 +5286,46 @@
   "P500718": {
     "sku_id": "2608404",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/product/p500718-av-10-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500718-av-11-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500718-av-12-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500718-av-13-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500718-av-14-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500718-av-8-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500718-av-9-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A wrinkle-fighting cream supplying fortifying nourishment for smoother, younger-looking skin.",
       "skin_type": "Normal, Dry, Combination, and Oily",
       "concerns_text": "Fine Lines and Wrinkles and Dryness",
       "highlighted_ingredients": [
-        "CL1870 Peptide Complex&trade;: Targets the look of wrinkles.",
+        "CL1870 Peptide Complex™: Targets the look of wrinkles.",
         "Hyaluronic Acid: Floods skin with hydration.",
         "Soybean Seed Extract: Nourishes and fortifies skin."
       ],
       "ingredient_callouts": "Free of parabens and phthalates.",
-      "what_else": "This ultra-nourishing moisturizer is designed to visibly reduce lines and wrinkles for young-, supple-looking skin. The cutting-edge formula supports natural collagen with CL1870 Peptide Complex&trade;, fortifying the dermal structure and leaving skin feeling stronger and looking smoother.",
+      "what_else": "This ultra-nourishing moisturizer is designed to visibly reduce lines and wrinkles for young-, supple-looking skin. The cutting-edge formula supports natural collagen with CL1870 Peptide Complex™, fortifying the dermal structure and leaving skin feeling stronger and looking smoother.",
       "clinical_results": "In a consumer test on 148 women:\nAfter 1 use:\n- 91% said skin felt nourished\n\nAfter 1 week of use:\n- 95% said skin felt hydrated throughout the day\n- 95% said skin felt hydrated throughout the night\n\nIn a consumer test on 143 women, after 4 weeks of use:\n- 85% saw reduced lines and wrinkles\n\nIn a consumer test on 146 women, after 4 weeks of use:\n- 92% said skin looked rejuvenated\n- 93% said neck felt smoother\n- 94% said skin looked healthier",
-      "suggested_usage": "-Use twice a day, morning and night.\n-Apply to your face and neck after using CLINIQUE&rsquo;s Smart Clinical Repair&trade; Wrinkle Correcting Serum (sold separately).\n-Follow with Smart Clinical Repair&trade; Wrinkle Correcting Eye Cream (sold separately) for the ultimate visibly age-defying routine.\n-Always apply SPF as the last step in your AM regimen."
+      "suggested_usage": "-Use twice a day, morning and night.\n-Apply to your face and neck after using CLINIQUE&rsquo;s Smart Clinical Repair&trade; Wrinkle Correcting Serum (sold separately).\n-Follow with Smart Clinical Repair&trade; Wrinkle Correcting Eye Cream (sold separately) for the ultimate visibly age-defying routine.\n-Always apply SPF as the last step in your AM regimen.",
+      "brand_story": "Maximum Results | Allergy-tested, 100 percent fragrance-free, and always formulated for maximum results—without irritation. Clinique avoids using allergens, irritants, and ingredients that can age or harm skin, while never sacrificing one bit of the effectiveness you need."
     }
   },
   "P500757": {
     "sku_id": "2613255",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/product/p500757-av-1-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-2-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-3-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-4-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-5-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-6-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-7-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-8-zoom.jpg",
+      "https://www.sephora.com/productimages/product/p500757-av-9-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A pack of dissolving microneedling patches—now with encapsulated retinol and even more peptides—to boost efficacy and smooth the look of wrinkles.",
@@ -5276,7 +5346,14 @@
   "P500777": {
     "sku_id": "2594489",
     "image_url": null,
-    "images": [],
+    "images": [
+      "https://www.sephora.com/productimages/sku/s2594489-av-1-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2594489-av-2-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2594489-av-3-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2594489-av-4-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2594489-av-5-zoom.jpg",
+      "https://www.sephora.com/productimages/sku/s2594489-av-6-zoom.jpg"
+    ],
     "variants": [],
     "description": {
       "what_it_is": "A 24hr hydrating lip balm powered by sugar from beet root and sugar cane that offers sheer, buildable color with a smooth, buttery texture..",
@@ -5286,7 +5363,7 @@
         "Sugar: Scientifically shown to have a long-lasting hydrating effect.- Cranberry Seed Oil: Smooths.- Grapeseed Oil: Softens."
       ],
       "what_else": "The #1 Lip Treatment Brand in the US*, Fresh now offers a new & improved Sugar lip balm with 24hr hydration and sheer-to-buildable color that complements different skin tones for soft, smooth lips. Infused with sugar and plant-based fruit oils, this clear or tinted lip balm leaves lips feeling and looking healthy.",
-      "clinical_results": "*Source: The NPD Group/U.S. Prestige Beauty Total Department/Specialty, Skincare Dollar Sales, Jan-May 2022-24hr proven hydration even as color wears**-95% agreed it moisturized, softened & protected against dryness***-97% agreed lips looked and felt smoother*****instrumental test, 11 subjects ***self-assessment, 62 subjects, 4 weeks\n\nCLEAN at Sephora is our commitment to offering formulas that go beyond regulatory standards to avoid controversial ingredients without sacrificing on effectiveness.",
+      "clinical_results": "*Source: The NPD Group/U.S. Prestige Beauty Total Department/Specialty, Skincare Dollar Sales, Jan-May 2022-24hr proven hydration even as color wears**-95% agreed it moisturized, softened & protected against dryness***-97% agreed lips looked and felt smoother*****instrumental test, 11 subjects ***self-assessment, 62 subjects, 4 weeks\n\nClean at Sephora is our commitment to offering effective products without certain ingredients, such as parabens, sulfates, phthalates, and mineral oils. Learn more here.",
       "suggested_usage": "-Apply on lips as needed",
       "brand_story": "By combining potent natural ingredients, ancient rituals, and modern science, fresh creates products that perform with experiences that transform. Discovery drives innovation. fresh’s Founders travel the world uncovering the highest quality natural ingredients and time-honored cultural traditions. But the real journey is using science to harness and heighten nature—developing effective formulas that look, smell, and feel as good as they work—to bring you the most beautiful skin and sensations."
     }
