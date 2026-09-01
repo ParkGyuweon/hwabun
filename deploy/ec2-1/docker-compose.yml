@@ -1,7 +1,7 @@
 services:
   backend:
     build:
-      context: .
+      context: ../..
       dockerfile: deploy/backend.Dockerfile
     restart: unless-stopped
     environment:
@@ -15,7 +15,7 @@ services:
 
   nginx:
     build:
-      context: .
+      context: ../..
       dockerfile: deploy/nginx.Dockerfile
     restart: unless-stopped
     depends_on:
@@ -28,7 +28,7 @@ services:
     image: prom/prometheus:v3.5.0
     restart: unless-stopped
     volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -49,8 +49,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     mem_limit: 384m
 
 volumes:
