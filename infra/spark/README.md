@@ -43,6 +43,40 @@ docker compose \
 Spark Version·Worker 자원은 `infra/spark/.env.example`을 `infra/spark/.env`로
 복사한 뒤 `--env-file infra/spark/.env`로 전달해 변경할 수 있다.
 
+## Q1 Raw Streaming 실행
+
+Cluster가 정상 상태가 된 뒤 별도 Profile로 Q1을 시작한다.
+
+```powershell
+docker compose `
+  -f infra/kafka/docker-compose.yml `
+  -f infra/spark/docker-compose.yml `
+  --profile streaming up -d spark-raw-sink
+```
+
+Q1은 `kafka:19092`의 `activity-events`를 읽어
+`/opt/project/data/raw_events`에 Parquet을 추가하고,
+`/opt/project/data/checkpoints/raw-events`에 Checkpoint를 유지한다. 종료·재시작은
+같은 Checkpoint를 사용해야 Kafka offset부터 이어서 처리된다.
+
+상태와 로그는 아래처럼 확인한다.
+
+```powershell
+docker compose `
+  -f infra/kafka/docker-compose.yml `
+  -f infra/spark/docker-compose.yml `
+  ps
+
+docker compose `
+  -f infra/kafka/docker-compose.yml `
+  -f infra/spark/docker-compose.yml `
+  logs -f spark-raw-sink
+```
+
+Kafka Connector는 `SPARK_KAFKA_PACKAGE`으로 Spark Version과 함께 고정한다. 최초
+기동 때 Connector 의존성을 받아 `spark-ivy-cache` Volume에 저장하므로 이후 기동은
+같은 캐시를 사용한다.
+
 ## 저장소와 한계
 
 `data/`는 컨테이너와 호스트가 공유하는 로컬 개발용 저장소다. Q1의 Raw Output과

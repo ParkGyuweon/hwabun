@@ -99,6 +99,50 @@ services:
       retries: 12
       start_period: 20s
 
+  spark-raw-sink:
+    <<: *spark-image
+    profiles:
+      - streaming
+    restart: on-failure:5
+    entrypoint:
+      - /opt/spark/bin/spark-submit
+    command:
+      - --master
+      - spark://spark-master:7077
+      - --deploy-mode
+      - client
+      - --packages
+      - ${SPARK_KAFKA_PACKAGE:-org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6}
+      - --conf
+      - spark.jars.ivy=/opt/spark/.ivy2
+      - --conf
+      - spark.driver.host=spark-raw-sink
+      - --conf
+      - spark.driver.bindAddress=0.0.0.0
+      - /opt/project/streaming/jobs/raw_sink_job.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:19092}
+      ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
+      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID:-local}
+      RAW_EVENTS_PATH: ${RAW_EVENTS_PATH:-/opt/project/data/raw_events}
+      RAW_EVENTS_CHECKPOINT_PATH: ${RAW_EVENTS_CHECKPOINT_PATH:-/opt/project/data/checkpoints/raw-events}
+      RAW_EVENTS_STARTING_OFFSETS: ${RAW_EVENTS_STARTING_OFFSETS:-earliest}
+      RAW_EVENTS_TRIGGER_INTERVAL: ${RAW_EVENTS_TRIGGER_INTERVAL:-10 seconds}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      spark-master:
+        condition: service_healthy
+      spark-worker:
+        condition: service_healthy
+    volumes:
+      - ../../streaming:/opt/project/streaming:ro
+      - ../../data:/opt/project/data
+      - spark-events:/opt/spark-events
+      - spark-ivy-cache:/opt/spark/.ivy2
+    networks:
+      - a306-data
+
 volumes:
   spark-events:
   spark-ivy-cache:
