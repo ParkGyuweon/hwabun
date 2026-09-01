@@ -13,6 +13,7 @@ S15P21A306/
 │   ├── event-schema.json                Raw Event JSON Schema (Collector 통과 후 계약)
 │   ├── event-properties-schema.md       Event별 properties·enum·필수값 계약
 │   ├── processed-schema.md              Processed Dataset grain·key·컬럼 계약
+│   ├── persona-schema.md                Persona·평가 split·Simulation Run 계약
 │   ├── validate_events.py               이벤트 파일을 스키마로 검증하는 CLI
 │   ├── requirements-validator.txt       검증기 의존성 (jsonschema[format])
 │   ├── samples/ · tests/                유효/무효 이벤트 표본과 계약 테스트
@@ -33,7 +34,7 @@ S15P21A306/
 │   │   ├── event-logging-design.md       화면 Trigger·KPI 연결·구현 현황
 │   │   ├── log-transport-contract.md    전송 주기·재시도·actor_type 판정
 │   │   ├── dw-schema.md · spark-processing-design.md   Mart·Spark 처리 설계
-│   │   ├── persona-schema.md · persona-attribute-preprocessing.md
+│   │   ├── persona-design.md             Persona 생성·표본·추천 연결 설계
 │   │   ├── marketing-signal-research.md · event-weight-rationale.html
 │   │
 │   ├── dashboard/                   B2B 대시보드 조사·설계 (프론트)

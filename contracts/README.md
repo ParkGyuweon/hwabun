@@ -24,6 +24,7 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | Raw Event 공통 Envelope·event enum·synthetic 필수 metadata | `event-schema.json` |
 | Event별 intent 의미·properties·property enum | `event-properties-schema.md` |
 | Processed Dataset grain·key·컬럼·타입·nullable·partition | `processed-schema.md` |
+| Persona·리뷰·평가 split·segment·Simulation Run | `persona-schema.md` |
 | Product Feature | `product-feature-spec.md`, `product-feature-vocab.json` |
 | Recommendation 입출력과 행동 집계 | `recommendation-io-spec.md` |
 

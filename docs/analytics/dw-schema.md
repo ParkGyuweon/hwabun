@@ -4,7 +4,8 @@
 상태: Draft, E2E 테스트 전 논리 Mart 초안. Kafka payload 서버 메타 필드 계약은 BE 커넥터 담당 확인 완료(2026-08-31)
 관련 문서: `../../contracts/event-schema.json`, `../../contracts/event-properties-schema.md`,
 `event-logging-design.md`,
-`../../contracts/processed-schema.md`, `spark-processing-design.md`, `persona-schema.md`
+`../../contracts/processed-schema.md`, `spark-processing-design.md`,
+`../../contracts/persona-schema.md`, `persona-design.md`
 
 ## 1. 문서 목적
 
@@ -73,7 +74,9 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 | `dim_scenario` | `scenario_id` | 시나리오 메타데이터 |
 | `dim_simulation_run` | `simulation_run_id` | 실행 단위 메타데이터. `persona_source`, 재현 version 필터 |
 
-`bridge_persona_segment`, `dim_scenario`, `dim_simulation_run`의 원천 정의는 `persona-schema.md`다. 세 테이블의 컬럼과 허용값은 그 문서와 동일하게 유지한다.
+`bridge_persona_segment`, `dim_scenario`, `dim_simulation_run`의 원천 정의는
+`../../contracts/persona-schema.md`다. 세 테이블의 컬럼과 허용값은 그 문서와 동일하게
+유지한다.
 
 ## 5. 공통 필드 규칙
 
@@ -131,7 +134,9 @@ source = batch/ingest/data/products_200.json, Processed dim_product
 
 ### 6.2 `dim_persona_segment`
 
-Persona를 개별 사용자 단위가 아니라 Dashboard 분석용 segment로 묶는 Dimension이다. segment 값 자체의 표시명과 모집단 크기만 관리한다. 상세 Persona 정의는 `persona-schema.md`를 따른다.
+Persona를 개별 사용자 단위가 아니라 Dashboard 분석용 segment로 묶는 Dimension이다.
+segment 값 자체의 표시명과 모집단 크기만 관리한다. 상세 Persona 정의는
+`../../contracts/persona-schema.md`를 따른다.
 
 ```text
 grain = segment_type + segment_value
@@ -152,8 +157,8 @@ source = simulator persona data (persona_profile / bridge_persona_segment)
 
 - **Attribute Affinity는 이 Dimension에 넣지 않는다.** `affinity_lift.csv`의 grain은 `attribute + segment + product_id`(4,000행 = 200상품 × 20세그먼트)이므로, segment 단위 Dimension에 `affinity`/`lift`를 담으면 상품 축이 사라져 값이 뭉개진다. 상품×segment 친화도가 Dashboard에 필요하면 `product_segment_affinity`(grain `product_id + segment_type + segment_value`)를 별도 Fact/Dimension으로 둔다.
 - `population_count`는 표본에 따라 값이 달라진다. agent 100명은 균등배분이라 모집단 분포가 아니므로, 기본값은 `persona_source='batch_sample'` 기준으로 계산하고 어떤 표본인지 컬럼으로 남긴다.
-- 상품 단위 segment 집계를 `products_200.json`의 `_review_stats.segment_counts`에서 가져올 경우, 해당 필드의 `hair_color`에는 `brunette`가 병합되지 않은 채 남아 있다. 읽는 쪽에서 `brown`에 합산해야 한다. 근거는 `persona-attribute-preprocessing.md` §11.1.
-- `segment_type` 목록은 `persona-schema.md`의 `bridge_persona_segment`와 동일해야 한다. 현재 Persona 원천(`simulator/personas/data/personas_*.json`)에는 피부 고민 필드가 없으므로 **`concern`은 segment_type에서 제외한다.** 상품 속성인 `dim_product.concern_tags`는 다른 축이므로 그대로 유지한다.
+- 상품 단위 segment 집계를 `products_200.json`의 `_review_stats.segment_counts`에서 가져올 경우, 해당 필드의 `hair_color`에는 `brunette`가 병합되지 않은 채 남아 있다. 읽는 쪽에서 `brown`에 합산해야 한다. 근거는 `persona-design.md` §9다.
+- `segment_type` 목록은 `../../contracts/persona-schema.md`의 `bridge_persona_segment`와 동일해야 한다. 현재 Persona 원천(`simulator/personas/data/personas_*.json`)에는 피부 고민 필드가 없으므로 **`concern`은 segment_type에서 제외한다.** 상품 속성인 `dim_product.concern_tags`는 다른 축이므로 그대로 유지한다.
 - Persona 생성기에 고민 속성이 추가되면 Persona Schema와 이 Dimension에 동시에 다시 넣는다.
 
 ### 6.3 `bridge_persona_segment`
@@ -211,11 +216,13 @@ source = contracts/event-properties-schema.md
 
 ### 6.6 `dim_scenario`
 
-시나리오 자체의 메타데이터를 관리한다. 같은 시나리오를 여러 번 실행할 수 있으므로 실행 단위는 §6.7의 `dim_simulation_run`으로 분리한다. `persona-schema.md`의 `scenario` 구조와 같은 grain이다.
+시나리오 자체의 메타데이터를 관리한다. 같은 시나리오를 여러 번 실행할 수 있으므로
+실행 단위는 §6.7의 `dim_simulation_run`으로 분리한다.
+`../../contracts/persona-schema.md`의 `scenario` 구조와 같은 grain이다.
 
 ```text
 grain = scenario_id
-source = persona-schema.md scenario
+source = contracts/persona-schema.md scenario
 ```
 
 | column | type | nullable | 설명 |
@@ -232,11 +239,13 @@ source = persona-schema.md scenario
 
 ### 6.7 `dim_simulation_run`
 
-시뮬레이션 실행 1회의 메타데이터를 관리한다. `persona-schema.md`의 `simulation_run`과 같은 grain이며, Dashboard의 표본/버전 필터가 이 Dimension을 통해 이루어진다.
+시뮬레이션 실행 1회의 메타데이터를 관리한다.
+`../../contracts/persona-schema.md`의 `simulation_run`과 같은 grain이며, Dashboard의
+표본/버전 필터가 이 Dimension을 통해 이루어진다.
 
 ```text
 grain = simulation_run_id
-source = persona-schema.md simulation_run
+source = contracts/persona-schema.md simulation_run
 ```
 
 | column | type | nullable | 설명 |
@@ -715,7 +724,7 @@ rate = numerator / NULLIF(denominator, 0)
 | `contracts/event-schema.json` | Backend Collector가 검증할 실제 JSON Schema |
 | 물리 DW DDL 문서 | 선택한 저장소 기준 파티션, 인덱스, 타입, DDL |
 | Dashboard 산식 문서 | 화면별 필터, 기간 비교, 정렬/랭킹 기준 |
-| Persona Schema 문서 | `persona-schema.md`로 작성됨. Persona 원천, seed/holdout, segment, simulation run 규칙은 그 문서가 원천이다 |
+| Persona Schema 문서 | `contracts/persona-schema.md`로 분리됨. Persona, seed/holdout, segment, simulation run 규칙의 원천이다 |
 | Front 구현 문서 | 실제 컴포넌트/훅별 Trigger 위치 |
 
 이 문서는 E2E 테스트 전 Draft다. 다음 주 E2E에서는 구조 실패를 찾기보다 API 경로, 필드명, nullable, Trigger 발생 여부, 집계 grain이 실제 로그와 맞는지를 검증한다.
