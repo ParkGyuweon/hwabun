@@ -2,7 +2,7 @@
 
 > 버전 `0.4` · 2026-08-27 (최종 갱신 2026-08-31)
 > 대상: 상위 200개 Sephora 스킨케어 상품
-> 소비처: `batch/jobs/product_feature_job.py` → MySQL → `backend/recommend/RankingService`
+> 소비처: `batch/jobs/product_encoder.py` (인코딩) → `batch/jobs/export_features.py` (서빙 산출물) → MySQL → `backend/recommend/RankingService`
 > 어휘집: [`product-feature-vocab.json`](product-feature-vocab.json)
 
 `category`, `highlights`, `price_usd`, `rating`, `loves_count` 5개 필드를 실측 분석하고 상품 벡터 Encoding 방식을 정의한 초안입니다. 모든 수치는 상위 200개 상품 전수 기준입니다.

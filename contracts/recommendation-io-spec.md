@@ -100,7 +100,7 @@ CREATE TABLE product_feature (
 ### 소비처
 
 - `backend/recommend/RankingService` — 코사인 유사도 계산
-- `streaming/transforms/feature_calc.py` — **User Behavior Vector 생성의 재료.** 이벤트의 `product_id`를 벡터로 변환하려면 이 테이블이 필요하므로 스트리밍 잡 기동 시 브로드캐스트로 적재해야 합니다
+- `batch/jobs/build_user_vectors.py` — **User Behavior Vector 생성의 재료.** 이벤트의 `product_id`를 벡터로 변환하려면 이 테이블이 필요합니다. 스트리밍으로 옮길 때는 잡 기동 시 브로드캐스트로 적재해야 합니다
 
 ---
 
