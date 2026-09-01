@@ -16,11 +16,22 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
 합의사항 (BEHAVIOR_SCENARIO.md)
   - 리뷰 작성 이벤트를 만들지 않는다. 리뷰 상품은 add_to_cart 로 환산
   - 페르소나당 상품 1개를 목표로 떼고 나머지 전부를 시드로 사용
-  - 시드는 시뮬레이션 시작 전 상태 (session_id = "seed")
+  - 시드는 시뮬레이션 시작 전 상태 (Persona·상품·실행 단위별 session_id)
   - 이탈 상품은 취향이 아니라 노출(같은 카테고리 / 인기순)로 고른다
-  - rage_click / dead_click 은 생성하지 않는다 (실제 UI 오작동에서만 나오는 신호)
+  - 노출에는 impression_dwell 을, 추천 섹션에는 recommendation_snapshot 을 남긴다
+    (가중 0 이지만 노출 대비 클릭과 위치 편향 보정에 필요하다)
+  - dead_click 은 생성하지 않는다 (실제 UI 오작동에서만 나오는 신호).
+    rage_click 은 부정 시드에서만 소량 생성한다 (300명 기준 15건)
   - scroll_depth 는 프론트와 같은 10% 단위로 남기되, 가중치는 최대 도달 1건만 적용한다
   - actor_type 은 전부 synthetic
+  - 상세 진입은 page_view + product_view 를 함께 남긴다 (프론트와 동일)
+  - 장바구니 화면을 방문해 view_cart 를 남기고, 일부는 담았던 이탈 상품을 뺀다
+  - 목록에서 일부 상품은 Quick Look 으로 열어본다 (--no-quick-look 으로 끈다).
+    전용 난수 스트림을 쓰므로 껐을 때 나머지 궤적이 완전히 동일하다
+  - 직전 상세의 추천에 다음 상품이 있으면 recommendation_click 으로 넘어간다
+    (노출과 같은 recommendation_id / position 을 실어 CTR 이 성립하게 한다)
+  - 모든 synthetic Event properties 에 scenario_id / simulation_run_id /
+    generator_type 을 기록한다
 
 실행
   python gen_behavior_logs.py --limit 50                    # 맛보기. 파일로 저장
@@ -28,15 +39,18 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   python gen_behavior_logs.py --include-agents              # PA 100명까지 (기본 제외)
   python gen_behavior_logs.py --post http://localhost:8080  # 수집 API 로 전송
   python gen_behavior_logs.py --post http://localhost:8080 --rps 200 --limit 500
+  python gen_behavior_logs.py --limit 50 --scenario-id normal_day \
+      --simulation-run-id run_20260831_001
 
 전송 모드
   수집 API(POST /api/events) 로 배치 100건씩 보낸다. 백엔드 계약은
   ActivityEvent 레코드를 그대로 따르고, 필드는 프론트 LogEnvelope 와 같다.
   --rps 로 초당 이벤트 수를 제한해 부하를 조절한다 (0 이면 제한 없음).
 """
-import argparse, json, os, sys, time, uuid
+import argparse, json, os, sys, time, uuid, zlib
 from collections import Counter
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 import numpy as np
 
 try: sys.stdout.reconfigure(encoding="utf-8")
@@ -51,8 +65,41 @@ import behavior_weights as BW
 
 SCHEMA_VERSION = "0.2.0-draft"
 ENV = "simulation"
+DEFAULT_SCENARIO_ID = "normal_day"
+DEFAULT_GENERATOR_TYPE = "python_batch"
 NOW = datetime(2026, 8, 28, 12, 0, 0)
 CHECKPOINT_MS = 15000                # 목록 체류 중 dwell 재발화 주기
+
+
+def default_simulation_run_id(now=None):
+    """Return a readable execution ID when the caller does not provide one."""
+
+    timestamp = now or datetime.now(timezone.utc)
+    return f"run_{timestamp.strftime('%Y%m%dT%H%M%SZ')}"
+
+
+@dataclass(frozen=True)
+class SimulationContext:
+    """Metadata shared by every synthetic Event in one generator run."""
+
+    scenario_id: str
+    simulation_run_id: str
+    generator_type: str
+
+    def __post_init__(self):
+        for name, value in (
+            ("scenario_id", self.scenario_id),
+            ("simulation_run_id", self.simulation_run_id),
+            ("generator_type", self.generator_type),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{name} must be a non-empty string")
+
+
+def seed_session_id(context, persona_id, product_id):
+    """Build a seed session key that cannot merge personas or products."""
+
+    return f"seed:{context.simulation_run_id}:{persona_id}:{product_id}"
 
 # ══════════════════════════════════════════════════════════════════════════
 #  시나리오 파라미터 — ⚠️ 전부 자리표시자다. 팀 합의 전이므로 튜닝하지 않는다.
@@ -86,6 +133,49 @@ SCENARIO = {
     # [미정] 찜 확률
     "wishlist_p_target": 0.45,
     "wishlist_p_bounce": 0.08,
+
+    # [미정] 장바구니 화면 방문·후회 재현
+    #   p_cart_regret: 이탈 상품 하나를 충동적으로 담았다가 장바구니에서 빼는 확률.
+    #     "담았다 빼기" 는 가장 명확한 부정 신호이고, user_vector 의 UNDO 경로
+    #     (converted 에서 제거 -> v_u- 로 이동) 를 실제로 태우는 유일한 동선이다.
+    #   빼는 대상을 **이탈 상품**으로 고른 이유: 시드는 별점 4~5점을 준 상품이라
+    #     "담았다 뺐다" 가 데이터와 모순된다. 이탈 상품은 평점이 없어 모순이 없다.
+    "p_cart_regret": 0.22,
+    #   장바구니 화면 자체를 열어보는 확률 (후회가 없어도 확인차 들어간다)
+    "p_view_cart": 0.70,
+    #   장바구니에서 수량을 조절하는 확률
+    "p_quantity_change": 0.18,
+
+    # [미정] 유사 상품 추천을 눌러 다음 상세로 넘어가는 확률.
+    #   직전 상세의 추천 노출과 같은 recommendation_id / position 을 실어야
+    #   CTR 을 계산할 수 있다 (SimilarProducts.tsx 와 동일).
+    "p_rec_click": 0.55,
+
+    # [미정] 이탈 상품을 끝까지 훑어보는 확률 ("진지하게 봤지만 안 샀다").
+    #   similar_products 는 7개 섹션 중 6번째라 스크롤 79% 이상이어야 도달한다.
+    #   기본 이탈 깊이(20~50%)로는 추천이 노출조차 되지 않아
+    #   recommendation_click 이 구조적으로 발생할 수 없다.
+    "p_deep_bounce": 0.30,
+    "deep_bounce_depth": 90,
+
+    # [미정] Quick Look — 목록 카드에서 요약 창을 여는 동선.
+    #   A/B 측정을 위해 **전용 난수 스트림**을 쓴다. 본 동선의 rng 를 건드리면
+    #   Quick Look 을 켠 것만으로 이후 궤적이 통째로 달라져 비교가 불가능해진다.
+    # [미정] 성분 표시 방식 전환 — 칩(요약) <-> 원문. 검증 행동의 대표 신호다.
+    #   "성분을 보고 샀나 리뷰를 보고 샀나" 를 가르는 축이라 대시보드 핵심 화면에 쓰인다
+    "p_ingredient_mode": 0.30,
+    # [미정] 선택한 텍스트를 실제로 복사하는 확률 (text_selection 이 난 뒤)
+    #   페이지 밖으로 들고 나갈 만큼 관심이 있었다는 뜻이라 selection 보다 무겁다
+    "p_text_copy": 0.28,
+    # [미정] 담기 직전 버튼 위에서 망설이는 확률
+    "p_hover_before_cart": 0.40,
+    # [미정] 노출된 상품이 화면에 머문 시간을 남길 확률 (분모용, 가중 0)
+    "p_impression_dwell": 0.55,
+
+    "p_quick_look": 0.18,     # 노출된 상품 하나를 열어볼 확률
+    "p_ql_variant": 0.45,     # 창 안에서 옵션을 바꿔볼 확률
+    "p_ql_add": 0.12,         # 창 안에서 바로 담을 확률
+    "p_ql_wish": 0.10,
 
     # [미정] 상세 페이지 내 상호작용 확률
     "p_scroll_pause": 0.55,
@@ -189,18 +279,50 @@ LIST_LAYOUT = [("promo_row", "product_card"), ("list_controls", None),
 def log(m): print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
 
 
-class Emitter:
-    """이벤트 봉투 조립. session_id / page_view_id / sequence_no 를 관리한다"""
+SEED_PREFIX = "seed-"
 
-    def __init__(self, sink, persona_id, start, rng):
+
+def seed_sid(persona_id, product_id):
+    """시드 세션 id. 상품마다 별개 세션으로 나눈다.
+
+    시드는 **서로 다른 시점에 일어난 과거 구매**다. 원본 리뷰의
+    submission_time 이 몇 달씩 벌어져 있고 이 생성기도 날짜를 벌려놓는다.
+    전원이 session_id="seed" 하나를 공유하면 세션당 체류시간·전환율 같은
+    지표가 통째로 왜곡되고, 상품마다 Emitter 를 새로 만들기 때문에
+    sequence_no 도 1 부터 다시 시작해 세션 단위 집계가 깨진다.
+    """
+    return f"{SEED_PREFIX}{persona_id}-{product_id}"
+
+
+def is_seed(ev):
+    """시드 이벤트인가. 명시적인 metadata를 우선하고 legacy prefix도 읽는다."""
+    return (ev.get("properties", {}).get("seeded") is True
+            or str(ev.get("session_id", "")).startswith(SEED_PREFIX)
+            or str(ev.get("session_id", "")).startswith("seed:"))
+
+
+class Emitter:
+    """이벤트 봉투와 synthetic 실행 메타데이터를 조립한다."""
+
+    def __init__(self, sink, persona_id, start, rng, context,
+                 session_id=None, is_seed=False):
         self.sink, self.pid, self.t, self.rng = sink, persona_id, start, rng
-        self.sid = uuid.uuid4().hex[:16]
+        self.context = context
+        self.sid = session_id or f"{context.simulation_run_id}:{uuid.uuid4().hex[:16]}"
+        self.is_seed = is_seed
         self.pvid = ""
         self.n = 0
         self.page = "product_list"
+        self.last_rec = None      # 직전 상세에서 노출한 (recommendation_id, [상품])
 
-    def tick(self, lo=200, hi=1500):
-        self.t += timedelta(milliseconds=int(self.rng.integers(lo, hi)))
+    def tick(self, lo=200, hi=1500, rng=None):
+        """시간을 흘린다.
+
+        rng 를 넘기면 그 스트림에서 뽑는다. Quick Look 처럼 A/B 로 켜고 끄는
+        동선은 반드시 전용 스트림을 넘겨야 한다 — 기본 스트림을 소비하면
+        기능을 켠 것만으로 이후 궤적이 통째로 달라져 비교가 불가능해진다.
+        """
+        self.t += timedelta(milliseconds=int((rng or self.rng).integers(lo, hi)))
 
     def new_page(self, page_type):
         self.pvid = uuid.uuid4().hex[:16]
@@ -208,6 +330,21 @@ class Emitter:
 
     def emit(self, name, _pid=None, **props):
         self.n += 1
+        properties = {
+            k: v for k, v in props.items()
+            if v is not None or k in ("content_kind", "content_ref", "section_id")
+        }
+        # These fields are required for every synthetic Event.  Assign rather
+        # than setdefault so an event-specific property cannot contradict the
+        # run metadata carried by its Emitter.
+        properties.update({
+            "scenario_id": self.context.scenario_id,
+            "simulation_run_id": self.context.simulation_run_id,
+            "generator_type": self.context.generator_type,
+        })
+        if self.is_seed:
+            properties["seeded"] = True
+
         self.sink.append({
             "schema_version": SCHEMA_VERSION,
             "event_id": uuid.uuid4().hex,
@@ -222,7 +359,7 @@ class Emitter:
             "product_id": _pid,
             "actor_type": "synthetic",
             "environment": ENV,
-            "properties": {k: v for k, v in props.items() if v is not None or k in ("content_kind", "content_ref", "section_id")},
+            "properties": properties,
         })
 
 
@@ -232,6 +369,10 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
     e.new_page("product_detail")
     e.tick(300, 1200)
     e.emit("page_view", gid, navigation_source=entry_source)
+    # 프론트가 상세 진입에서 page_view 직후 product_view 를 같은 page_view_id 로 남긴다
+    # (frontend/src/lib/logger.ts 의 trackProductView). 둘 다 가중치 1.0 이라
+    # 하나만 만들면 합성 로그가 실제 로그보다 상품당 1.0 만큼 가볍다.
+    e.emit("product_view", gid, navigation_source=entry_source)
 
     n_sec = max(1, round(len(DETAIL_LAYOUT) * depth_target / 100))
     depth = 0
@@ -263,13 +404,30 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
             e.emit("section_view", gid, section_id=section, content_kind=kind,
                    content_ref=ref, visible_duration_ms=int(rng.integers(380, 1100)))
         # 유사 상품 섹션에 도달하면 추천 노출
-        if section == "similar_products":
+        if section == "similar_products" and rec_ids:
             rec_batch = "rec-%s-%d" % (gid, int(rng.integers(10**10, 10**11)))
+            # 무엇이 몇 번째로 노출됐는지 통째로 남긴다. 가중 0 이지만
+            # 위치 편향 보정에 필요하다 — 아래 놓인 좋은 상품은 선호와 무관하게
+            # 클릭이 적으므로, 클릭 로그를 그대로 학습에 쓰면 추천이 편향된다
+            e.emit("recommendation_snapshot", None,
+                   recommendation_id=rec_batch, list_id="similar_products",
+                   algorithm="same_category_v0", size=len(rec_ids),
+                   ranking=[{"product_id": r, "position": i}
+                            for i, r in enumerate(rec_ids, 1)])
             for pos, rid in enumerate(rec_ids, 1):
                 e.tick(20, 120)
                 e.emit("recommendation_impression", rid,
                        recommendation_id=rec_batch, list_id="similar_products",
                        algorithm="same_category_v0", position=pos)
+                # 화면에 얼마나 머물렀나. 위쪽일수록 오래 보인다
+                if rng.random() < SC["p_impression_dwell"]:
+                    e.emit("impression_dwell", rid,
+                           recommendation_id=rec_batch, list_id="similar_products",
+                           algorithm="same_category_v0", position=pos,
+                           visible_ms=int(rng.integers(400, 6000) / (1 + 0.15 * (pos - 1))))
+            # 다음 상품을 추천으로 들어갈 수 있게 배치를 기억해 둔다.
+            # 노출과 클릭이 같은 recommendation_id / position 을 써야 CTR 이 성립한다
+            e.last_rec = (rec_batch, list(rec_ids))
         # 섹션 이탈 시 체류 시간 확정
         for kind, ref, pos in expanded:
             e.tick(30, 250)
@@ -285,9 +443,26 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
                 e.tick(); e.emit("accordion_toggle", gid, section_id=section,
                                  content_kind="ingredient_list", open=True)
             if rng.random() < SC["p_text_selection"]:
+                tlen = int(rng.integers(20, 200))
                 e.tick(); e.emit("text_selection", gid, section_id=section,
                                  content_kind="product_meta", content_ref="category",
-                                 text_length=int(rng.integers(20, 200)), truncated=False)
+                                 text_length=tlen, truncated=False)
+                # 고른 텍스트를 실제로 복사. 프론트는 같은 선택에 대해
+                # text_selection 뒤 copy 이벤트로 남긴다 (useTextSelection)
+                if rng.random() < SC["p_text_copy"]:
+                    e.tick(200, 2000)
+                    e.emit("text_copy", gid, section_id=section,
+                           content_kind="product_meta", content_ref="category",
+                           text_length=tlen, truncated=False)
+        # 성분 표시 방식 전환. 성분을 신경 쓰는 페르소나일수록 자주 바꿔 본다
+        # (SC 의 p_accordion 이 성향 6축의 ingredient 로 이미 조정돼 있다)
+        if engaged and section == "ingredients":
+            if rng.random() < SC["p_ingredient_mode"]:
+                for m in ("raw", "chip")[:int(rng.integers(1, 3))]:
+                    e.tick(300, 3000)
+                    e.emit("ingredient_view_mode_change", gid,
+                           section_id=section, mode=m)
+
         if engaged and section == "product_hero":
             for idx in range(int(rng.integers(2, 8))):
                 e.tick(150, 800)
@@ -312,7 +487,7 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
 
 
 # ── 목록 페이지 체류 ──────────────────────────────────────────────────────
-def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO):
+def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
     e.new_page("product_list")
     e.tick(300, 1200)
     if first:
@@ -335,6 +510,43 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO):
         e.tick(20, 120)
         e.emit("product_impression", None, product_id=g, position=pos,
                list_id="product_grid")
+        # 노출 대비 클릭을 재려면 "얼마나 보였나" 가 있어야 한다. 가중 0 이다
+        if rng.random() < SC["p_impression_dwell"]:
+            e.emit("impression_dwell", None, product_id=g, position=pos,
+                   list_id="product_grid",
+                   visible_ms=int(rng.integers(400, 5000) / (1 + 0.12 * (pos - 1))))
+    # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
+    # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
+    # qrng 가 None 이면 이 동선 자체가 없다 (A/B 의 대조군)
+    if qrng is not None:
+        for pos, g in enumerate(grid, 1):
+            if qrng.random() >= SC["p_quick_look"]:
+                continue
+            e.tick(200, 1500, rng=qrng)
+            e.emit("quick_look", g, position=pos, list_id="product_grid")
+            n_var = 0
+            if qrng.random() < SC["p_ql_variant"]:
+                n_var = int(qrng.integers(1, 4))
+                for _ in range(n_var):
+                    e.tick(200, 1200, rng=qrng)
+                    e.emit("variant_select", g, entry_source="quick_look")
+            added = qrng.random() < SC["p_ql_add"]
+            wished = qrng.random() < SC["p_ql_wish"]
+            if added:
+                e.tick(300, 2000, rng=qrng)
+                e.emit("add_to_cart", g, quantity=1, entry_source="quick_look")
+            if wished:
+                e.tick(200, 1200, rng=qrng)
+                e.emit("wishlist_toggle", g, action="add", entry_source="quick_look")
+            dwell = int(qrng.integers(1200, 25000))
+            e.tick(200, 1500, rng=qrng)
+            # 닫는 방식. 프론트는 backdrop / esc / button / navigate 를 남긴다
+            e.emit("quick_look_close", g,
+                   close_reason=str(qrng.choice(["backdrop", "esc", "button", "navigate"],
+                                                p=[0.42, 0.13, 0.35, 0.10])),
+                   dwell_ms=dwell, variants_viewed=n_var,
+                   added_to_cart=bool(added), wishlisted=bool(wished))
+
     if rng.random() < SC["p_list_filter"]:
         e.tick(); e.emit("filter_change", filter_kind="category")
     if rng.random() < SC["p_list_sort"]:
@@ -400,8 +612,14 @@ def post_events(base_url, events, rps=0, timeout=40):
 
 
 # ── 페르소나 1명 ─────────────────────────────────────────────────────────
-def gen_persona(p, catalog, by_cat, popular, rng, sink):
+def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
+                quick_look=True):
     SC = persona_style(p)
+    # Quick Look 전용 난수. persona_id 로만 결정되므로 본 동선 rng 와 독립이다.
+    # 덕분에 quick_look=False 로 껐을 때 나머지 궤적이 **완전히 동일**하고,
+    # 두 조건의 차이가 Quick Look 하나로만 설명된다 (대응 설계).
+    qrng = (np.random.default_rng(zlib.crc32(p["persona_id"].encode()))
+            if quick_look else None)
     # 상품별 평점 평균으로 극성을 가른다. 4~5점 긍정 / 1~2점 부정 / 3점 중립
     #   긍정 시드 -> add_to_cart 로 환산해 v_u+ 에 넣는다
     #   부정 시드 -> "들어갔다 그냥 나감" 으로 재현한다. v_u+ 에 넣지 않는다
@@ -424,10 +642,18 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
 
     # 부정 시드 — 상세를 얕게 보고 이탈. 감점 이벤트가 v_u- 를 채운다
     for j, g in enumerate(neg):
-        e = Emitter(sink, p["persona_id"], base + timedelta(days=step * j), rng)
-        e.sid = "seed"
-        e.new_page("product_detail")
-        e.emit("page_view", g, navigation_source="direct", seeded=True)
+        e = Emitter(
+            sink,
+            p["persona_id"],
+            base + timedelta(days=step * j),
+            rng,
+            context,
+            session_id=seed_session_id(context, p["persona_id"], g),
+            is_seed=True,
+        )
+        # new_page / page_view 는 visit_detail 이 낸다. 여기서 또 내면 상세 진입 한 번에
+        # page_view 가 2건, page_view_id 가 2개 생겨 프론트와 어긋난다.
+        # 시드 표시는 Emitter가 모든 seed Event에 seeded=true로 남긴다.
         visit_detail(e, g, [], rng,
                      depth_target=int(rng.choice(SC["neg_seed_depth_choices"])),
                      engaged=False, entry_source="direct", SC=SC)
@@ -438,52 +664,146 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink):
                              click_count=int(rng.integers(3, 6)), seeded=True)
 
     for i, g in enumerate(seeds):
-        e = Emitter(sink, p["persona_id"], base + timedelta(days=step * (len(neg) + i)), rng)
-        e.sid = "seed"
+        e = Emitter(
+            sink,
+            p["persona_id"],
+            base + timedelta(days=step * (len(neg) + i)),
+            rng,
+            context,
+            session_id=seed_session_id(context, p["persona_id"], g),
+            is_seed=True,
+        )
         e.new_page("product_detail")
         e.emit("add_to_cart", g, seeded=True, quantity=1,
                price_usd=catalog[g]["price"])
 
     # 이탈 상품 — 노출 기반(같은 카테고리 -> 인기순). 취향으로 고르지 않는다
+    regret = None          # 담았다 뺄 이탈 상품 (최대 1개)
     cat = catalog[target]["cat"]
     pool = [g for g in by_cat.get(cat, []) if g not in seq]
     pool += [g for g in popular if g not in seq and g not in pool]
     n_bounce = int(rng.integers(*SC["bounce_range"]))
     bounce = list(rng.choice(pool, size=min(n_bounce, len(pool)), replace=False))
 
-    e = Emitter(sink, p["persona_id"], NOW - timedelta(days=float(rng.random() * 5)), rng)
+    e = Emitter(
+        sink,
+        p["persona_id"],
+        NOW - timedelta(days=float(rng.random() * 5)),
+        rng,
+        context,
+    )
     promo = popular[:6]
     liked = False
-    for i, g in enumerate(list(bounce) + [target]):
-        grid = list(rng.choice([x for x in pool if x != g] or pool,
-                               size=min(12, len(pool)), replace=False))
-        grid = [g] + [x for x in grid if x != g]
-        browse_list(e, promo, grid[:12], rng,
-                    dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0), SC=SC)
-        e.tick(); e.emit("product_click", g,
-                         entry_source="grid" if rng.random() < 0.8 else "promo_pick",
-                         position=1)
+    route = list(bounce) + [target]
+    visited = set()
+    for i in range(len(route)):
+        g = route[i]
+        # 직전 상세에서 추천이 노출됐다면, 목록으로 돌아가는 대신 그 추천을 눌러
+        # 다음 상품으로 넘어간다. 이때 다음 상품을 **추천 목록에서 고른다** —
+        # 이탈 상품은 원래 노출로 고르기로 한 것이고, 추천도 노출이다.
+        # 목표 상품은 반드시 마지막에 와야 하므로 바꾸지 않는다.
+        via_rec = False
+        if (e.last_rec is not None and g != target
+                and rng.random() < SC["p_rec_click"]):
+            cand = [x for x in e.last_rec[1]
+                    if x not in seq and x not in visited and x != target]
+            if cand:
+                g = cand[0]          # 추천 목록 상위부터 (위치 편향을 그대로 재현)
+                route[i] = g
+                via_rec = True
+        visited.add(g)
+        if via_rec:
+            rec_batch, rec_list = e.last_rec
+            e.tick(); e.emit("recommendation_click", g,
+                             recommendation_id=rec_batch, list_id="similar_products",
+                             algorithm="same_category_v0",
+                             position=rec_list.index(g) + 1)
+            e.tick(); e.emit("product_click", g, entry_source="similar_products",
+                             position=rec_list.index(g) + 1)
+        else:
+            grid = list(rng.choice([x for x in pool if x != g] or pool,
+                                   size=min(12, len(pool)), replace=False))
+            grid = [g] + [x for x in grid if x != g]
+            browse_list(e, promo, grid[:12], rng,
+                        dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0),
+                        SC=SC, qrng=qrng)
+            e.tick(); e.emit("product_click", g,
+                             entry_source="grid" if rng.random() < 0.8 else "promo_pick",
+                             position=1)
         rec_ids = [x for x in by_cat.get(catalog[g]["cat"], []) if x != g][:6]
         is_target = g == target
-        visit_detail(e, g, rec_ids, rng,
-                     depth_target=100 if is_target else int(rng.choice(SC["bounce_depth_choices"])),
+        # 이탈 상품 일부는 끝까지 훑는다. 그래야 추천 섹션이 노출되고,
+        # "진지하게 봤지만 안 샀다" 는 v_u- 의 가장 강한 재료가 된다.
+        if is_target:
+            depth = 100
+        elif rng.random() < SC["p_deep_bounce"]:
+            depth = SC["deep_bounce_depth"]
+        else:
+            depth = int(rng.choice(SC["bounce_depth_choices"]))
+        visit_detail(e, g, rec_ids, rng, depth_target=depth,
                      engaged=is_target, entry_source="in_app", SC=SC)
         if is_target:
             if rng.random() < SC["wishlist_p_target"]:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+            # 담을까 말까 재는 구간. 버튼 위에 올려두고 안 누른 시간이다
+            if rng.random() < SC["p_hover_before_cart"]:
+                e.tick(300, 2500)
+                e.emit("hover_dwell", g, section_id="product_hero",
+                       content_kind="cta", action="add_to_cart",
+                       dwell_ms=int(rng.integers(600, 9000)))
             e.tick(); e.emit("add_to_cart", g, quantity=1,
                              price_usd=catalog[g]["price"], content_kind="cta")
+        elif regret is None and rng.random() < SC["p_cart_regret"]:
+            # 충동적으로 담는다. 아래 장바구니 화면에서 도로 뺀다
+            e.tick(); e.emit("add_to_cart", g, quantity=1,
+                             price_usd=catalog[g]["price"], content_kind="cta")
+            regret = g
         elif rng.random() < SC["wishlist_p_bounce"]:
             e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
 
+    # ── 장바구니 화면 ────────────────────────────────────────────────────
+    # 프론트는 헤더 장바구니를 누를 때 view_cart 를 남긴다 (App.tsx openCart).
+    # product_id 는 싣지 않는다 — 화면 단위 이벤트라 특정 상품의 증거가 아니다.
+    if regret is not None or rng.random() < SC["p_view_cart"]:
+        cart = [g for g in seeds] + [target] + ([regret] if regret else [])
+        e.new_page("cart")
+        e.tick(); e.emit("page_view", navigation_source="in_app")
+        e.tick(300, 2000)
+        e.emit("view_cart",
+               item_count=len(cart), distinct_products=len(cart),
+               cart_value=round(sum(catalog[g]["price"] for g in cart), 2))
+        # 수량 조절. 프론트는 entry_source="cart" 를 싣는다 (App.tsx)
+        if rng.random() < SC["p_quantity_change"]:
+            q = int(rng.integers(2, 4))
+            e.tick(500, 4000)
+            e.emit("quantity_change", target, quantity=q, entry_source="cart")
+        if regret is not None:
+            # 담았다 빼기. converted 에서 빠져 v_u- 로 넘어간다
+            e.tick(800, 6000)
+            e.emit("remove_from_cart", regret, quantity=1,
+                   price_usd=catalog[regret]["price"],
+                   cart_size_after=len(cart) - 1)
+
     e.new_page("product_list")
     e.tick(); e.emit("page_view", navigation_source="in_app")
-    e.emit("exit_summary", products_viewed=len(bounce) + 1,
+    e.emit("exit_summary", products_viewed=len(route),
            converted=True, wishlisted=liked)
-    return {"seeds": len(seeds), "bounce": len(bounce)}
+    return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
 
 
-def main(limit, show, out, post=None, rps=0, include_agents=False):
+def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
+         scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
+         generator_type=DEFAULT_GENERATOR_TYPE):
+    context = SimulationContext(
+        scenario_id=scenario_id,
+        simulation_run_id=simulation_run_id or default_simulation_run_id(),
+        generator_type=generator_type,
+    )
+    log(
+        f"실행 메타데이터 scenario_id={context.scenario_id} "
+        f"simulation_run_id={context.simulation_run_id} "
+        f"generator_type={context.generator_type}"
+    )
     prods = json.load(open(PRODUCTS, encoding="utf-8"))
     catalog = {p["product_id"]: {"cat": p["secondary_category"], "name": p["product_name"],
                                  "price": p["price_usd"], "n": p["_review_stats"]["review_count"]}
@@ -508,7 +828,16 @@ def main(limit, show, out, post=None, rps=0, include_agents=False):
     rng = np.random.default_rng(42)
     sink, meta, t0 = [], [], time.time()
     for i, p in enumerate(people):
-        r = gen_persona(p, catalog, by_cat, popular, rng, sink)
+        r = gen_persona(
+            p,
+            catalog,
+            by_cat,
+            popular,
+            rng,
+            sink,
+            context,
+            quick_look=quick_look,
+        )
         if r: meta.append(r)
         if not limit and (i + 1) % 2000 == 0:
             log(f"  {i+1:,}명 / 이벤트 {len(sink):,}건")
@@ -521,7 +850,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False):
         log(f"저장 {out}  ({os.path.getsize(out)/1024/1024:.1f}MB)")
 
     c, ci = Counter(x["event_name"] for x in sink), Counter(x["intent"] for x in sink)
-    seed_n = sum(1 for x in sink if x["session_id"] == "seed")
+    seed_n = sum(1 for x in sink if x["properties"].get("seeded") is True)
     seed_cart = sum(1 for x in sink if x["properties"].get("seeded")
                     and x["event_name"] == "add_to_cart")
     seed_neg = sum(1 for x in sink if x["properties"].get("seeded")
@@ -563,7 +892,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False):
         print(f"세션 샘플 — {pid} (총 {len(ev)}건 중 앞 {show}건)")
         print("=" * 64)
         for x in ev[:show]:
-            tag = "SEED" if x["session_id"] == "seed" else f"#{x['sequence_no']:<4}"
+            tag = "SEED" if x["properties"].get("seeded") is True else f"#{x['sequence_no']:<4}"
             pr = " ".join(f"{k}={v}" for k, v in list(x["properties"].items())[:4])
             print(f"  {tag} {x['event_name']:<24} {x['intent']:<11} {pr[:78]}")
 
@@ -576,6 +905,14 @@ if __name__ == "__main__":
                     help="jsonl 저장 경로. 생략하면 파일로 안 쓴다")
     ap.add_argument("--post", default=None, metavar="URL",
                     help="수집 API 베이스 URL. 예) http://localhost:8080")
+    ap.add_argument("--no-quick-look", action="store_true",
+                    help="Quick Look 동선을 끈다 (A/B 대조군)")
+    ap.add_argument("--scenario-id", default=DEFAULT_SCENARIO_ID,
+                    help="시뮬레이션 시나리오 ID")
+    ap.add_argument("--simulation-run-id", default=None,
+                    help="실행 단위 ID. 생략하면 UTC 시각 기반으로 생성")
+    ap.add_argument("--generator-type", default=DEFAULT_GENERATOR_TYPE,
+                    help="synthetic 생성 방식 (기본: python_batch)")
     ap.add_argument("--include-agents", action="store_true",
                     help="PA 100명(인터랙티브 전용)도 생성 대상에 넣는다. 기본은 제외")
     ap.add_argument("--rps", type=int, default=0,
@@ -583,4 +920,15 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if not a.out and not a.post:
         a.out = os.path.join(BD, "behavior_logs.jsonl")
-    main(a.limit, a.show, a.out, a.post, a.rps, a.include_agents)
+    main(
+        a.limit,
+        a.show,
+        a.out,
+        a.post,
+        a.rps,
+        a.include_agents,
+        quick_look=not a.no_quick_look,
+        scenario_id=a.scenario_id,
+        simulation_run_id=a.simulation_run_id,
+        generator_type=a.generator_type,
+    )

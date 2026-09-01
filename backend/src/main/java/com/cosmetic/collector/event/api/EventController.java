@@ -47,6 +47,16 @@ public class EventController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))
             ),
             @ApiResponse(
+                    responseCode = "413",
+                    description = "요청 본문 또는 이벤트 수가 서버 상한을 초과함",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "429",
+                    description = "Kafka 발행 작업 대기열이 포화됨. Retry-After 이후 재시도 필요",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @ApiResponse(
                     responseCode = "503",
                     description = "Kafka에 이벤트를 발행하지 못함",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))

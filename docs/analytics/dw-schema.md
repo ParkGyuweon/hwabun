@@ -1,7 +1,7 @@
 # DW Schema
 
 작성일: 2026-08-28  
-상태: Draft, E2E 테스트 전 논리 Mart 초안  
+상태: Draft, E2E 테스트 전 논리 Mart 초안. Kafka payload 서버 메타 필드 계약은 BE 커넥터 담당 확인 완료(2026-08-31)
 관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`, `processed-schema.md`, `persona-schema.md`
 
 ## 1. 문서 목적
@@ -19,7 +19,7 @@ Processed Schema와 DW Schema의 차이는 다음과 같다.
 
 ## 2. 현재 구현 및 문서 전제
 
-백엔드 확정 브랜치 기준으로 Event 수집 경로와 주요 Event 필드는 문서 계약과 대부분 맞춰졌다. 다만 `request_id`, `event_index`, `source`처럼 Raw/Processed 분석에 필요한 일부 값은 Kafka payload에 없거나 파생/후속 확장이 필요하다. `scenario_id`, `simulation_run_id`는 E2E 기준 Raw payload의 top-level이 아니라 `properties` 내부 값으로 보고, Processed/DW에서 컬럼으로 승격한다.
+백엔드 현재 구현 기준으로 Event 수집 경로와 주요 Event 필드는 문서 계약과 대부분 맞춰졌다. BE 커넥터 담당 확인 결과(2026-08-31), Collector가 Kafka payload에 추가하는 `received_at`, `source`, `request_id`, `event_index` 구조를 최종 Raw Kafka 계약으로 사용한다. `scenario_id`, `simulation_run_id`는 E2E 기준 Raw payload의 top-level이 아니라 `properties` 내부 값으로 보고, Processed/DW에서 컬럼으로 승격한다.
 
 | 항목 | 현재 확인 내용 | DW 문서 반영 |
 | --- | --- | --- |
@@ -28,7 +28,8 @@ Processed Schema와 DW Schema의 차이는 다음과 같다.
 | Backend 브랜치 상태 | 위 필드 정렬은 `S15P21A306-29-be-post-events-api-v0-1`에만 있고 `dev`에는 아직 병합되지 않았다. `dev`의 Collector는 `event_type`/`event_time` 기준 구버전이다 | E2E 전에 병합이 선행되어야 한다. 이 문서의 필드 전제는 정렬된 브랜치 기준이다 |
 | Kafka topic | 기본값 `activity-events` | 실제 Spark 입력 topic으로 사용할 수 있음. 환경별 override 가능성은 Kafka/Spark 담당자와 확인 |
 | Backend Event 필드 | `schema_version`, `event_id`, `event_name`, `intent`, `occurred_at`, `persona_id`, `session_id`, `page_view_id`, `sequence_no`, `page_type`, `product_id`, `actor_type`, `environment`, `properties`, `received_at` | 주요 Event 필드는 문서 계약과 맞음. `event_id`는 dedup 기준 |
-| Backend Kafka message | Event 단위 발행, key는 `persona_id`, payload에는 `received_at` 포함 | Raw 중복 수신은 가능하며, dedup은 Data/Spark `cleaned_events` 생성 단계에서 수행 |
+| Backend Kafka message | Event 단위 발행, key는 `session_id`, payload에는 `received_at`, `source`, `request_id`, `event_index` 포함 | Raw 중복 수신은 가능하며, dedup은 Data/Spark `cleaned_events` 생성 단계에서 수행 |
+| 중복 처리 계약 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준 dedup | 동일 `event_id`의 대표 Event는 `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건 |
 | 상품 원천 데이터 | `batch/ingest/data/products_200.json`, `batch/ingest/data/affinity_lift.csv` | `dim_product`, `dim_persona_segment` 후보 원천 |
 | Dashboard 구현 | 별도 Dashboard 구현 폴더는 아직 명확하지 않음 | 화면 구현체가 아니라 기획 KPI와 Processed Schema 기준으로 설계 |
 
@@ -41,12 +42,12 @@ Processed Schema와 DW Schema의 차이는 다음과 같다.
 | 기본 집계 축 | `event_date_kst`, `product_id`, `actor_type`, `source`, `scenario_id`를 우선 축으로 사용한다 |
 | Synthetic/Web 분리 | 실제 Web Event와 synthetic Event는 같은 Mart에서 조회하되 `actor_type`, `source`, `simulation_run_id`로 필터링한다 |
 | 시간 기준 분리 | 원본 `event_time`은 UTC로 저장하고, Dashboard 일간 집계는 KST 파생일인 `event_date_kst`를 사용한다 |
-| 중복 제거 후 집계 | DW/Mart는 `event_id` 기준 deduplication이 끝난 `cleaned_events` 및 파생 Processed Dataset만 입력으로 사용한다 |
+| 중복 제거 후 집계 | DW/Mart는 `event_id` 기준 deduplication이 끝난 `cleaned_events` 및 파생 Processed Dataset만 입력으로 사용한다. Raw의 중복 원본을 직접 집계하지 않는다 |
 | 서로 다른 grain Join 금지 | 서로 다른 Processed Dataset은 row-level로 직접 Join하지 않고, 각 Dataset을 목표 Mart grain으로 먼저 집계한 뒤 집계 결과를 Join한다 |
 | 상품 속성 관리 | 상품명, 브랜드, 카테고리, 성분/피부 태그는 `dim_product`에서 관리한다 |
 | 상품 속성 스냅샷 | 조회 성능과 당시 상태 보존을 위해 주요 Mart에는 `category_id`, `brand_id`를 스냅샷 컬럼으로 둔다 |
 | 상품 대상 기준 | top-level `product_id`는 Event 대상 상품이다. 추천 클릭처럼 보고 있던 상품과 대상이 다르면 `context_product_id`로 배경 상품을 보존한다 |
-| source 파생 기준 | MVP에서는 `actor_type='user' → web`, `actor_type='synthetic' → simulator`, 서버 내부 Event는 `server`로 둔다 |
+| source 기준 | Kafka payload의 `source`를 우선 사용한다. 누락 시 MVP fallback은 `actor_type='synthetic' → simulator`, 그 외 → `web`으로 둔다. 서버 내부 Event는 별도 경로 확인 시 `server`로 둔다 |
 | 미구현 Event 표시 | `search`, `begin_checkout`, `purchase`는 화면 구현 전까지 provisional로 표시한다 |
 | NULL 의미 보존 | 원천이 없는 값은 억지 생성하지 않고 nullable로 둔다. 정상 NULL과 오류 NULL은 Processed validation 규칙에서 구분한다 |
 | 비율 산식 | 분모가 0이면 비율은 `0`이 아니라 `NULL`로 둔다 |
@@ -79,8 +80,8 @@ DW/Mart는 아래 Processed Dataset과 Dimension/Bridge를 입력으로 한다.
 | `event_hour_kst` | timestamp | KST 기준 시간 단위 집계. hour truncate timestamp |
 | `event_minute_kst` | timestamp | 실시간 모니터링용 minute truncate timestamp |
 | `actor_type` | string | `user`, `synthetic` |
-| `source` | string | MVP 기준 `web`, `simulator`, `server` |
-| `generator_type` | string/null | synthetic 생성 방식. 예: `python_batch`, `agent_realtime` |
+| `source` | string | MVP 기준 `web`, `simulator` |
+| `generator_type` | string/null | synthetic 생성 방식. 예: `python_batch`, `agent_llm` |
 | `scenario_id` | string/null | 시나리오 ID. 실제 Web Event는 NULL 가능 |
 | `simulation_run_id` | string/null | synthetic 실행 단위 ID. 실제 Web Event는 NULL 가능 |
 | `count` 계열 | bigint | Event 수, 세션 수, 사용자 수 |
@@ -240,7 +241,7 @@ source = persona-schema.md simulation_run
 | `simulation_run_id` | string | N | 시뮬레이션 실행 ID |
 | `scenario_id` | string | N | 시나리오 ID. `dim_scenario` Join key |
 | `source` | string | Y | MVP 기준 `simulator` |
-| `generator_type` | string/null | Y | `python_batch`, `agent_realtime` 등 synthetic 생성 방식 |
+| `generator_type` | string/null | Y | `python_batch`, `agent_llm` 등 synthetic 생성 방식 |
 | `persona_source` | string/null | Y | `batch_sample`, `agent_sample`. Dashboard 모집단 필터 기준 |
 | `started_at` | timestamp | Y | 실행 시작 시각 |
 | `ended_at` | timestamp | Y | 실행 종료 시각 |
@@ -319,6 +320,7 @@ input = product_event_fact, persona_behavior_feature_delta, dim_product
 
 - `view_cart`는 product_id가 없는 Event이므로 이 Mart의 상품 단위 집계 대상에서 제외한다.
 - `quick_look`은 상품 대상 Event이므로 상품 관심도와 상세 진입 전 관심 신호에 반영한다.
+- `product_view_count`와 `product_view_sessions`를 구분해서 쓴다. 상세 → 장바구니 → 뒤로가기로 같은 상세에 돌아오면 새 `page_view_id`가 발급되고 `product_view`가 한 건 더 나가므로, `product_view_count`는 화면이 그려진 횟수이고 `product_view_sessions`가 실제로 본 사람 수에 가깝다. **`add_to_cart_rate`, `purchase_rate`의 분모는 이미 `product_view_sessions`이며 그대로 유지한다.** `product_view_count`를 분모로 바꾸면 장바구니를 자주 여닫는 사용자일수록 전환율이 낮게 나온다. `detail_entry_rate`는 분자가 `product_view_count`라 같은 이유로 부풀 수 있으므로, 발표용 지표로는 `product_view_sessions / product_impression_count` 쪽을 병기한다.
 - `remove_from_cart`는 `add_to_cart` 과대평가를 보정하는 부정/망설임 신호로 집계한다.
 - `purchase`, `begin_checkout`의 `items[]`는 `product_event_fact`에서 `items explode` 후 상품별 row로 집계한다.
 - `order_value`는 주문 전체 금액이므로 상품 row에서 직접 합산하지 않는다. 상품별 매출은 `item_revenue`만 합산한다.
@@ -464,6 +466,10 @@ input = funnel_session_fact
 | `scenario_id` | string/null | 시나리오 ID |
 | `simulation_run_id` | string/null | 실행 ID |
 | `impression_sessions` | bigint | 상품 노출 도달 세션 |
+| `quick_look_sessions` | bigint | 상품 노출 후 Quick Look을 사용한 세션 |
+| `quick_look_cart_sessions` | bigint | Quick Look 사용 후 장바구니에 도달한 세션 |
+| `direct_click_sessions` | bigint | Quick Look 없이 상품을 클릭한 세션 |
+| `direct_click_cart_sessions` | bigint | Quick Look 없이 상품 클릭 후 장바구니에 도달한 세션 |
 | `click_sessions` | bigint | 상품 클릭 도달 세션 |
 | `product_view_sessions` | bigint | 상세 조회 도달 세션 |
 | `information_view_sessions` | bigint | 성분/리뷰 등 정보 확인 도달 세션 |
@@ -486,7 +492,7 @@ input = funnel_session_fact
 - Funnel 산식은 Event 수보다 세션 수를 우선 사용한다.
 - `funnel_date_kst`는 최초 non-null Funnel 단계 시각 기준이다.
 - 상세 이탈률은 `product_view_sessions` 이후 관심/전환 Event가 없는 세션 기준으로 별도 파생할 수 있다.
-
+- Quick Look 지표는 Funnel 단계가 아니라 `product_impression` 이후 비교 분기다. 기능 존치 판단에는 `actor_type='user'`의 arm별 표본 수와 장바구니 전환율을 함께 제시한다.
 ### 7.6 `persona_segment_daily_kpi`
 
 피부 타입, 피부 톤, 리뷰 활동량 등 Persona segment별 상품 반응을 계산하는 Mart다. segment 종류는 `bridge_persona_segment`의 `segment_type` 목록을 그대로 따른다.
@@ -655,9 +661,10 @@ rate = numerator / NULLIF(denominator, 0)
 
 | 주의사항 | 영향 | 대응 |
 | --- | --- | --- |
-| Backend Kafka payload의 메타 필드 부족 | Raw record 추적과 source 필터가 약해질 수 있음 | `request_id/event_index`를 추가할지, Kafka metadata와 Processed 파생값으로 처리할지 E2E 전 결정 |
-| Kafka partition key fallback 미확정 | 실제 Web Event에서 `persona_id=NULL`이면 현재 key 기준이 비어 있을 수 있음 | Kafka/Spark 담당자와 `session_id` 등 fallback key를 합의 |
-| Raw에 `source`가 없음 | source별 Mart가 임의 값으로 생성될 수 있음 | MVP는 `actor_type=user → web`, `actor_type=synthetic → simulator`, 서버 내부 Event → `server`로 파생 |
+| Kafka key 기준 | 현재 구현처럼 `session_id`를 partition key로 사용 | Web Event의 `persona_id`가 null일 수 있으므로 `session_id` 유지 |
+| Raw 중복 직접 집계 | Raw는 at-least-once 수신 원본이라 같은 `event_id`가 여러 건 있을 수 있음 | KPI, Fact, Mart 산식에는 Raw를 직접 넣지 않고 `cleaned_events` 또는 그 파생 Dataset만 사용 |
+| 대표 Event 선정 기준 불일치 | Processed와 DW 재처리 결과가 달라질 수 있음 | 동일 `event_id`는 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준으로 선택한 1건만 DW 입력으로 사용 |
+| source fallback 필요 | 현재 Raw에는 `source`가 있으나 과거 Raw/누락 Event 처리 시 source별 Mart가 흔들릴 수 있음 | Kafka payload 값을 우선 사용하고, 누락 시 `actor_type=synthetic → simulator`, 그 외 → `web`으로 fallback 파생. 서버 내부 Event는 별도 경로 확인 시 `server` |
 | `scenario_id`, `simulation_run_id` 물리 위치 | top-level 필드로 오해하면 E2E 파싱이 어긋날 수 있음 | Raw에서는 `properties.scenario_id`, `properties.simulation_run_id`, Processed/DW에서는 승격 컬럼으로 사용 |
 | 서로 다른 grain Fact 직접 Join | COUNT/SUM이 중복되어 KPI가 과대계산될 수 있음 | 각 Processed Dataset을 목표 Mart grain으로 먼저 집계한 뒤 집계 결과끼리 Join |
 | `user_id` 원천 불완전 | 실제 Web Event의 사용자 단위 지표가 NULL 가능 | synthetic은 `persona_id → user_id`, 실제 Web은 로그인/익명 ID 정책 확정 전까지 nullable |
@@ -679,22 +686,24 @@ rate = numerator / NULLIF(denominator, 0)
 
 1. Event 수집 API 경로는 `POST /api/events`로 사용하고, body 형태가 Front/Backend 사이에서 동일한지 확인한다.
 2. Kafka message는 백엔드 확정 브랜치 기준 Event 단위다. Spark Raw 적재에서 이 전제를 확인한다.
-3. Kafka partition key는 현재 `persona_id`다. 실제 Web Event에서 `persona_id=NULL`일 때 대체 key가 필요한지 확인한다.
-4. E2E 기준 `schema_version`은 `0.2.0-draft`로 맞추고, `1.0.0-draft` 전환 시 Front/Backend/Spark를 동시에 갱신한다.
-5. `session_start`와 세션 첫 `page_view`는 같은 `page_view_id`를 공유하고, 첫 `page_view`는 `properties.navigation_source='session_start'`로 들어오는지 확인한다.
-6. `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `add_to_cart`가 실제 화면에서 들어오는지 확인한다.
-7. `search`, `begin_checkout`, `purchase`는 구현 후 Trigger와 required field를 재검증한다.
-8. Checkout이 별도 화면이면 `page_type=checkout`을 Backend enum에 추가할지 확인한다.
-9. `section_dwell.dwell_ms`가 delta로 들어오고 `content_daily_kpi`에서 이중합산 없이 집계되는지 확인한다.
-10. `purchase`, `begin_checkout`의 `items[]`가 `product_event_fact`에서 상품별 row로 explode되는지 확인한다.
-11. `category_id`, `brand_id`가 `dim_product` Join으로 보강되는지 확인한다.
-12. `bad_events`에서 Collector validation error와 Spark semantic/type error를 구분할 수 있는지 확인한다. Collector reject가 Kafka 전에 끝난다면 Backend metric 또는 별도 저장소 필요 여부를 확인한다.
-13. Dashboard 비율 산식에서 분모 0이 `0`이 아니라 `NULL`로 처리되는지 확인한다.
-14. 상품별 매출 집계가 `order_value`가 아니라 `event_name='purchase'`의 `item_revenue` 기준으로 계산되는지 확인한다.
-15. Collector 필드 정렬 브랜치가 `dev`에 병합되었는지 확인한다. 병합 전에는 `event_name`, `actor_type`, `page_view_id`, `sequence_no`가 Kafka payload에 없다.
-16. synthetic Event에 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type`이 모두 들어오는지 확인한다.
-17. `dim_simulation_run`에 run별 `persona_source`가 채워지고, Dashboard 기본 필터가 `batch_sample`로 동작하는지 확인한다.
-18. `dim_persona_segment`/`bridge_persona_segment`에 `segment_type='concern'` row가 생성되지 않는지 확인한다.
+3. Kafka partition key는 `session_id`를 최종 기준으로 사용한다.
+4. 동일 `event_id` 중복 입력 시 `cleaned_events`가 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 남기는지 확인한다.
+5. DW/Mart 입력이 Raw가 아니라 `cleaned_events` 및 파생 Processed Dataset으로 제한되는지 확인한다.
+6. E2E 기준 `schema_version`은 `0.2.0-draft`로 맞추고, `1.0.0-draft` 전환 시 Front/Backend/Spark를 동시에 갱신한다.
+7. `session_start`와 세션 첫 `page_view`는 같은 `page_view_id`를 공유하고, 첫 `page_view`는 `properties.navigation_source='session_start'`로 들어오는지 확인한다.
+8. `product_view`, `product_impression`, `product_click`, `section_view`, `section_dwell`, `add_to_cart`가 실제 화면에서 들어오는지 확인한다.
+9. `search`, `begin_checkout`, `purchase`는 구현 후 Trigger와 required field를 재검증한다.
+10. Checkout이 별도 화면이면 `page_type=checkout`을 Backend enum에 추가할지 확인한다.
+11. `section_dwell.dwell_ms`가 delta로 들어오고 `content_daily_kpi`에서 이중합산 없이 집계되는지 확인한다.
+12. `purchase`, `begin_checkout`의 `items[]`가 `product_event_fact`에서 상품별 row로 explode되는지 확인한다.
+13. `category_id`, `brand_id`가 `dim_product` Join으로 보강되는지 확인한다.
+14. `bad_events`에서 Collector validation error와 Spark semantic/type error를 구분할 수 있는지 확인한다. Collector reject가 Kafka 전에 끝난다면 Backend metric 또는 별도 저장소 필요 여부를 확인한다.
+15. Dashboard 비율 산식에서 분모 0이 `0`이 아니라 `NULL`로 처리되는지 확인한다.
+16. 상품별 매출 집계가 `order_value`가 아니라 `event_name='purchase'`의 `item_revenue` 기준으로 계산되는지 확인한다.
+17. Collector 필드 정렬 브랜치가 `dev`에 병합되었는지 확인한다. 병합 전에는 `event_name`, `actor_type`, `page_view_id`, `sequence_no`가 Kafka payload에 없다.
+18. synthetic Event에 `properties.scenario_id`, `properties.simulation_run_id`, `properties.generator_type`이 모두 들어오는지 확인한다.
+19. `dim_simulation_run`에 run별 `persona_source`가 채워지고, Dashboard 기본 필터가 `batch_sample`로 동작하는지 확인한다.
+20. `dim_persona_segment`/`bridge_persona_segment`에 `segment_type='concern'` row가 생성되지 않는지 확인한다.
 
 ## 12. 후속 문서 분리 기준
 

@@ -1,7 +1,7 @@
 # Processed Event Schema
 
 작성일: 2026-08-28  
-상태: Draft, E2E 테스트 전 초안  
+상태: Draft, E2E 테스트 전 초안. Kafka payload 서버 메타 필드 계약은 BE 커넥터 담당 확인 완료(2026-08-31)
 관련 문서: `event-contract-summary.md`, `event-taxonomy-trigger-schema.md`
 
 ## 1. 문서 목적
@@ -21,7 +21,7 @@ Frontend
 
 ## 2. 반영된 합의 내용
 
-프론트/백 확인 결과 아래 기준을 반영한다.
+프론트/백 확인 및 BE 커넥터 담당 확인(2026-08-31) 결과 아래 기준을 반영한다.
 
 | 항목 | 반영 내용 |
 | --- | --- |
@@ -29,9 +29,14 @@ Frontend
 | 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
 | E2E Schema Version | 현재 구현 기준 `0.2.0-draft` 사용. `1.0.0-draft`는 추후 계약 확정 후 전환 |
 | batch 크기 | 프론트 기본값 20건 기준, 추후 부하 테스트로 조정 |
-| 서버/파생 메타 필드 | Kafka payload에는 `received_at` 포함. `request_id`는 HTTP 응답/Header 기준, `source`는 Processed 단계에서 파생 |
+| 서버 메타 필드 | Kafka payload에는 `received_at`, `source`, `request_id`, `event_index` 포함. Spark는 수집 시각, 유입 경로, 요청 단위 추적, batch 내 Event 순서 식별 기준으로 사용 |
+| 계층별 중복 처리 | Raw는 수신 Event를 그대로 보존하고, Processed `cleaned_events` 생성 단계에서 `event_id` 기준으로 중복 제거 |
+| 대표 Event 선정 | 동일 `event_id`는 `received_at ASC`, 동률이면 `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건을 정본으로 사용 |
 | 검증 실패 Event | 전체 batch 실패보다 실패 Event만 분리 처리 |
-| `product_view` | Front에서 별도 Event로 직접 전송 |
+| `product_view` | MR !24가 `dev`에 반영됨. 상세 진입 시 `page_view` 직후 별도 Event로 직접 전송하며, 목록 클릭 진입과 URL 직접 진입을 모두 포함하고 `product_id` 필수 |
+| `product_view.navigation_source` | `page_view`와 같은 값을 유지. 상품 URL 직접 진입은 `session_start`로 기록 |
+| Event 명세 단일 출처 | Data 문서(`event-contract-summary.md`, `event-taxonomy-trigger-schema.md`)를 계약 원본으로 둔다. `frontend/src/types/log.ts`는 구현 미러로 관리한다 |
+| `SCHEMA_VERSION` | 현재 E2E는 `0.2.0-draft` 유지. `product_view` 추가는 draft 내 하위 호환 확장으로 보고 이번에는 올리지 않는다 |
 | `section_dwell` | Front는 여러 건을 보내고 Spark/DW에서 합산 |
 | Synthetic/Web 구분 | 같은 Schema를 쓰고 `actor_type`, `source`, `simulation_run_id`로 구분 |
 | 텍스트 선택/복사 | `text_snippet` 제거, `text_length`, `matched_ingredients`, `vocab_version` 중심 |
@@ -99,7 +104,9 @@ processed_at = 12:00:05
 
 | 항목 | 기준 |
 | --- | --- |
+| 입력 timestamp | RFC 3339 offset 형식(`Z`, `+09:00` 등) 허용. timezone 없는 값은 거부 |
 | 저장 기준 | 모든 timestamp는 UTC로 저장 |
+| 정규화 표현 | Processed/DW의 timestamp는 UTC 기준으로 해석하며 외부 문자열 표현은 `Z` suffix로 통일 |
 | Dashboard 일간 기준 | `Asia/Seoul` 기준으로 `event_date_kst`, `event_hour_kst` 파생 |
 | `event_hour` 타입 | `timestamp`, hour truncate 값 |
 | late event 판정 | Spark watermark 기준. 정확한 허용 지연은 E2E 후 조정 |
@@ -135,12 +142,17 @@ processed_at = 12:00:05
 | Kafka/Raw | 같은 `event_id` 중복 수신을 정상 가능성으로 본다 |
 | Data/Spark | `cleaned_events` 생성 전 `event_id` 기준으로 deduplication 한다 |
 | Dedup 기준 | 같은 `event_id` 중 가장 먼저 수신/적재된 1건을 대표 Event로 사용한다 |
-| 대표 Event 선택 정렬 | `received_at ASC`, 보조로 `kafka_partition`, `kafka_offset` 또는 Raw 적재 순서를 사용한다 |
+| 대표 Event 선택 정렬 | `received_at ASC → kafka_topic ASC → kafka_partition ASC → kafka_offset ASC` 순으로 결정한다. 동일 topic 기준에서는 partition/offset 순서를 따른다 |
 | Fact/Mart 입력 | `product_event_fact`, `content_interest_fact`, `funnel_session_fact`, DW Mart는 중복 제거 후 Dataset만 입력으로 사용한다 |
 | 중복 원본 | `raw_events`에는 보존한다. 필요하면 후속으로 `duplicate_events` 또는 audit view를 만들 수 있다 |
 | Front 필수 전제 | 같은 행동을 재전송할 때 `event_id`를 새로 만들면 안 된다 |
 
 `event_id`가 없거나 파싱 불가능한 Event는 deduplication 자체가 불가능하므로 `bad_events.error_code='missing_required_field'` 또는 `invalid_properties`로 격리한다.
+
+현재 Kafka key는 `session_id`이므로, Front가 재시도 시 같은 `event_id`와 `session_id`를 유지하면 동일 Event의 중복본은 보통 같은 partition에 들어간다. 이 구조에서는 `received_at`이 같은 극단적인 경우에도 partition 내부 offset으로 최초 적재 record를 안정적으로 고를 수 있다. 만약 잘못된 key 변경 등으로 중복본이 서로 다른 partition에 들어오면 Kafka offset만으로 전역 시간 순서를 보장할 수 없으므로, `received_at`을 1차 기준으로 유지하고 partition/offset은 결정론적 tie-breaker로만 사용한다.
+Spark 품질 검증은 synthetic Event에 대해 `(simulation_run_id, session_id)` 안의
+`persona_id` 단일성, `(simulation_run_id, session_id, sequence_no)` 충돌,
+`simulation_run_id`별 `scenario_id`·`generator_type` 일관성을 확인한다.
 
 ## 6. 전체 처리 흐름
 
@@ -197,8 +209,9 @@ Processed Dataset에서 반복적으로 사용하는 공통 필드는 아래 기
 | `event_time` | timestamp | N | `occurred_at`을 정규화한 행동 발생 시각 |
 | `received_at` | timestamp | N | Collector 수신 시각 |
 | `processed_at` | timestamp | N | Spark 처리 시각 |
-| `request_id` | string/null | Y | batch 요청 ID. 현재 Backend Kafka payload에는 없으므로 NULL 가능 |
-| `source` | string | N | MVP 기준 `web`, `simulator`, `server`. `actor_type`, `environment`, ingest 경로로 파생 |
+| `request_id` | string/null | Y | batch 요청 ID. 현재 Backend Kafka payload 포함. 과거 Raw/누락 Event는 NULL 가능 |
+| `event_index` | int/null | Y | batch 안 Event 순서. 현재 Backend Kafka payload 포함. 과거 Raw/누락 Event는 NULL 가능 |
+| `source` | string | N | Kafka payload 값을 우선 사용. 누락 시 `actor_type`, `environment`, ingest 경로로 fallback 파생 |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `is_synthetic` | boolean | N | `actor_type='synthetic'` 또는 `source='simulator'` |
 | `user_id` | string/null | Y | 분석용 사용자 ID. synthetic이면 `persona_id`와 동일, 실제 Web은 ID 정책 확정 전까지 NULL 가능 |
@@ -209,7 +222,7 @@ Processed Dataset에서 반복적으로 사용하는 공통 필드는 아래 기
 | `page_type` | string | N | 화면 유형 |
 | `scenario_id` | string/null | Y | 시나리오 ID. 시뮬레이션 분석에서는 필수 |
 | `simulation_run_id` | string/null | Y | 시뮬레이션 실행 ID. synthetic에서는 필수 |
-| `generator_type` | string/null | Y | synthetic 생성 방식. 예: `python_batch`, `agent_realtime` |
+| `generator_type` | string/null | Y | synthetic 생성 방식. 예: `python_batch`, `agent_llm` |
 | `environment` | string | N | `local`, `dev`, `loadtest` 등 |
 | `product_id` | string/null | Y | 상품 대상 Event에서 필수 |
 | `category_id` | string/null | Y | 상품 카테고리. 상품 대상 Event에서는 권장 |
@@ -227,8 +240,9 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | Processed column | Raw source | 비고 |
 | --- | --- | --- |
 | `event_time` | `occurred_at` | timestamp 정규화 |
-| `request_id` | HTTP 응답/Header 또는 Backend payload 확장 | 현재 Kafka payload에는 없으므로 Raw/Processed에서 NULL 가능 |
-| `source` | `actor_type`, `environment`, ingest 경로 | MVP 기본값은 `actor_type='user' → web`, `actor_type='synthetic' → simulator`, 서버 생성 Event는 `server` |
+| `request_id` | Backend payload | Kafka payload에 포함. 과거 Raw/누락 Event는 NULL 가능 |
+| `event_index` | Backend payload | Kafka payload에 포함. batch 안 Event 순서 |
+| `source` | Backend payload 또는 fallback 파생 | Kafka payload 값을 우선 사용. 누락 시 현재 Collector 기준과 맞춰 `actor_type='synthetic' → simulator`, 그 외 → `web`으로 fallback 파생한다. 서버 생성 Event는 후속 도입 시 schema version을 올려 확장한다 |
 | `scenario_id`, `simulation_run_id` | `properties.scenario_id`, `properties.simulation_run_id` | E2E 기준 Raw 물리 위치는 `properties` 내부이고, Processed에서 컬럼으로 승격한다. `actor_type='synthetic'`이면 필수 |
 | `generator_type` | `properties.generator_type` | `actor_type='synthetic'`이면 필수 승격 대상이다. 100명 agent와 9,900명 Python batch의 생성 방식 구분은 `source`가 아니라 이 필드로 한다. Producer가 값을 보내지 않으면 `simulation_run_id`로 run 메타데이터를 Join해 보정하고, 그것도 없으면 NULL로 두고 품질 flag를 남긴다 |
 | `persona_source` | Raw에 없음. `persona_id → persona_profile` 또는 `simulation_run_id → dim_simulation_run` Join | Persona 정적 속성이므로 Event에 반복 저장하지 않는다. Processed Fact에도 승격하지 않고 DW Dimension Join으로 해석한다 |
@@ -259,9 +273,10 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 | `search_id` | `properties.search_id` 또는 Spark 파생 | 검색 구현 전에는 NULL/provisional |
 | `search_query` | `properties.query_text` | Raw 검색어를 Processed에서 `search_query`로 정규화. 저장 정책에 따라 hash만 보관 가능 |
 | `result_count` | `properties.result_count` | int 정규화 |
-| `filter_name` | `properties.filter_name` | Raw 이름 유지 |
-| `filter_action` | `properties.filter_action` | Raw 이름 유지 |
-| `filter_values` | `properties.filter_values` | array<string>. 단일 값도 길이 1 배열로 정규화 |
+| `filter_kind` | `properties.filter_kind` | 현재 FE 구현 기준 필터 축. 예: `category`, `concern`, `price` |
+| `filter_value` | `properties.filter_value` | 현재 FE 구현 기준 필터 값. 예: `all`, category name, price band |
+| `filter_action` | `properties.filter_action` | 후속 확장. 적용/해제/초기화 구분이 필요할 때 사용 |
+| `filter_values` | `properties.filter_values` | 후속 확장. 복수 선택 필터는 array<string>으로 정규화 |
 | `review_filter` | `properties.filter` | `review_filter_apply`에서 사용 |
 | `review_sort` | `properties.sort` | `review_filter_apply`에서 사용 |
 | `sort_key` | `properties.sort_key` 또는 `properties.sort` | sort Event에서 사용 |
@@ -277,19 +292,19 @@ Raw Event는 공통 Envelope와 Event별 `properties`로 들어온다. Processed
 
 ### 8.2 `source` 파생 규칙
 
-Raw payload에 `source`가 없으므로 E2E MVP에서는 Processed 단계에서 아래 규칙으로 파생한다.
+현재 Raw payload에는 Collector가 `source`를 포함한다. Processed는 payload 값을 우선 사용하고, 과거 Raw나 누락 Event를 처리할 때만 아래 규칙으로 fallback 파생한다.
 
 | 조건 | source |
 | --- | --- |
-| `actor_type='user'` | `web` |
-| `actor_type='synthetic'` | `simulator` |
 | Backend 또는 Batch가 서버 내부 Event를 생성 | `server` |
+| `actor_type='synthetic'` | `simulator` |
+| 그 외 | `web` |
 
 100명 agent 기반 생성과 9,900명 Python batch 생성은 `source`로 나누지 않는다. 생성 방식은 `properties.generator_type`, Persona 표본 구분은 `simulation_run_id → dim_simulation_run.persona_source`를 기준으로 한다.
 
 ### 8.3 synthetic Event 검증 규칙
 
-`actor_type='synthetic'`인 Event는 실행 단위 메타데이터가 있어야 Dimension Join과 표본 필터가 성립한다. Collector는 `properties`를 검증 없이 통과시키므로 실질적인 강제 지점은 Spark다.
+`actor_type='synthetic'`인 Event는 실행 단위 메타데이터가 있어야 Dimension Join과 표본 필터가 성립한다. Collector는 누락을 Kafka 전송 전에 거절하고, Spark는 방어적으로 같은 검증을 유지한다.
 
 | 조건 | 처리 | error_code |
 | --- | --- | --- |
@@ -311,22 +326,22 @@ unique key 후보 = kafka_topic + kafka_partition + kafka_offset
 event_id = business dedup key
 ```
 
-현재 Backend는 batch 요청을 받더라도 Event를 Kafka에 한 건씩 발행한다. `request_id`, `event_index`가 Kafka payload에 포함되지 않으면 Raw record 식별은 Kafka metadata를 우선 사용한다.
+현재 Backend는 batch 요청을 받더라도 Event를 Kafka에 한 건씩 발행한다. Kafka key는 `session_id`를 사용하며, `request_id`, `event_index`, `source`는 Kafka payload에 포함된다. Raw record의 물리 식별은 Kafka metadata를 우선 사용한다.
 
 | column | type | 설명 |
 | --- | --- | --- |
 | `kafka_topic` | string/null | Kafka topic. Raw 저장 시 metadata로 보강 |
 | `kafka_partition` | int/null | Kafka partition. Raw 저장 시 metadata로 보강 |
 | `kafka_offset` | bigint/null | Kafka offset. Raw 저장 시 metadata로 보강 |
-| `request_id` | string/null | batch 요청 ID. 현재 Kafka payload에는 없음 |
-| `event_index` | int/null | batch 안 Event 순서. 현재 Kafka payload에는 없음 |
+| `request_id` | string/null | batch 요청 ID. Kafka payload 포함 |
+| `event_index` | int/null | batch 안 Event 순서. Kafka payload 포함 |
 | `schema_version` | string | Event Schema 버전 |
 | `event_id` | string | Event 고유 ID |
 | `event_name` | string | Event 이름 |
 | `intent` | string | Event 의미 |
 | `occurred_at` | timestamp/string | 클라이언트 행동 발생 시각 원본 |
 | `received_at` | timestamp | Collector 수신 시각 |
-| `source` | string/null | `web`, `simulator`, `server`. Raw payload에 없으면 Processed에서 파생 |
+| `source` | string/null | `web`, `simulator`. 현재 Kafka payload 포함, 누락 시 Processed에서 fallback 파생 |
 | `persona_id` | string/null | Persona ID |
 | `session_id` | string | 쇼핑 세션 ID |
 | `page_view_id` | string | 페이지 방문 ID |
@@ -346,8 +361,8 @@ event_id = business dedup key
 
 | column | type | 설명 |
 | --- | --- | --- |
-| `request_id` | string/null | batch 요청 ID. 현재 Kafka payload에는 없음 |
-| `event_index` | int/null | batch 안 Event 순서. 현재 Kafka payload에는 없음 |
+| `request_id` | string/null | batch 요청 ID. Kafka payload 포함 |
+| `event_index` | int/null | batch 안 Event 순서. Kafka payload 포함 |
 | `kafka_topic` | string/null | Kafka topic. Spark에서 판정한 bad event면 metadata 보강 가능 |
 | `kafka_partition` | int/null | Kafka partition |
 | `kafka_offset` | bigint/null | Kafka offset |
@@ -367,6 +382,7 @@ event_id = business dedup key
 | `missing_required_field` | 필수 공통 필드 누락 |
 | `unknown_event_name` | Taxonomy에 없는 Event |
 | `invalid_timestamp` | timestamp 파싱 실패 |
+| `invalid_timestamp_format` | timezone offset이 없는 RFC 3339 형식 또는 허용되지 않는 timestamp 표현 |
 | `invalid_type` | Spark 타입 정규화 실패 |
 | `invalid_properties` | Event별 필수 properties 누락 |
 | `unsupported_schema_version` | 지원하지 않는 Schema 버전 |
@@ -394,8 +410,9 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 | `processed_at` | timestamp | Spark 처리 시각 |
 | `latency_ms` | bigint | `received_at - event_time` |
 | `processing_lag_ms` | bigint | `processed_at - received_at` |
-| `request_id` | string/null | batch 요청 ID. 현재 Kafka payload에는 없음 |
-| `source` | string | 유입 경로. `actor_type`, `environment`, ingest 경로로 파생 |
+| `request_id` | string/null | batch 요청 ID. Kafka payload 포함 |
+| `event_index` | int/null | batch 안 Event 순서. Kafka payload 포함 |
+| `source` | string | 유입 경로. Kafka payload 값을 우선 사용하고, 누락 시 `actor_type`, `environment`, ingest 경로로 fallback 파생 |
 | `actor_type` | string | `user`, `synthetic` |
 | `is_synthetic` | boolean | `actor_type='synthetic'` 또는 `source='simulator'` |
 | `user_id` | string/null | 분석용 사용자 ID |
@@ -420,7 +437,7 @@ Raw Event 중 유효한 Event만 남긴 기본 정제 테이블이다.
 
 | 처리 | 기준 |
 | --- | --- |
-| 중복 제거 | 같은 `event_id`는 최초 1건만 사용. 중복 원본은 `raw_events`에만 남고, downstream Fact/Mart에는 전달하지 않음 |
+| 중복 제거 | 같은 `event_id`는 `received_at ASC`, `kafka_topic ASC`, `kafka_partition ASC`, `kafka_offset ASC` 기준 최초 1건만 사용. 중복 원본은 `raw_events`에만 남고, downstream Fact/Mart에는 전달하지 않음 |
 | 타입 정리 | timestamp, int, decimal, boolean 파싱 |
 | 사용자 ID 생성 | synthetic이면 `user_id=persona_id`, 실제 Web은 로그인/익명 ID 정책 확정 전까지 NULL 허용 |
 | 지연 계산 | `latency_ms = received_at - event_time` |
@@ -691,6 +708,7 @@ session_id + page_view_id + product_id + section_id + content_kind + content_ref
 | `actor_type` | string | user/synthetic |
 | `source` | string | 유입 경로 |
 | `first_impression_at` | timestamp/null | 최초 상품 노출 |
+| `first_quick_look_at` | timestamp/null | 최초 Quick Look 열림. Funnel 단계가 아닌 비교 분기 |
 | `first_click_at` | timestamp/null | 최초 상품 클릭 |
 | `first_product_view_at` | timestamp/null | 최초 상세 조회 |
 | `first_information_view_at` | timestamp/null | 최초 정보 확인 |
@@ -698,6 +716,10 @@ session_id + page_view_id + product_id + section_id + content_kind + content_ref
 | `first_checkout_at` | timestamp/null | 최초 Checkout |
 | `first_purchase_at` | timestamp/null | 최초 구매 |
 | `reached_impression` | boolean | 노출 도달 |
+| `used_quick_look` | boolean | 같은 session/product에서 Quick Look 사용 여부 |
+| `quick_look_close_reason` | string/null | 마지막 닫힘 사유. `backdrop`/`escape`/`close_button`/`open_detail` |
+| `quick_look_dwell_ms` | bigint/null | 같은 session/product의 Quick Look 체류시간 합계 |
+| `quick_look_variants_viewed` | integer/null | 선택한 서로 다른 SKU 수의 최댓값. 기본 SKU는 제외 |
 | `reached_click` | boolean | 클릭 도달 |
 | `reached_product_view` | boolean | 상세 조회 도달 |
 | `reached_information_view` | boolean | 정보 확인 도달 |
@@ -744,6 +766,19 @@ first_impression_at
 
 이 기준은 Funnel 전체를 최초 진입일에 귀속한다. 구매 발생일 기준 매출 분석이 필요하면 `product_event_fact.event_date_kst` 기반 Mart를 별도로 사용한다.
 
+### 17.1 Quick Look 비교 분기
+
+Quick Look은 Funnel 단계에 넣지 않고 `product_impression`에서 갈라지는 비교 분기로 다룬다.
+
+```text
+대상 = reached_impression=true 인 (session_id, product_id)
+arm_quick_look = used_quick_look=true
+arm_direct = used_quick_look=false AND reached_click=true
+전환 = reached_add_to_cart=true
+```
+
+`quick_look`과 `quick_look_close`는 `session_id + product_id`와 발생 순서로 연결한다. 닫힘 Event가 없으면 닫힘 관련 필드는 null로 남기며 임의로 보정하지 않는다. 분석 결과는 선택 편향이 있는 기술 통계로 보고, 실제 기능 존치 판단에는 `actor_type='user'`만 사용한다.
+
 ## 18. `persona_behavior_feature_delta`
 
 Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하기 위한 입력 delta다. Product Vector 생성 자체는 AI/Product Feature 담당 범위이며, 이 테이블은 Event와 Product Vector를 연결하기 위한 행동 가중치만 만든다.
@@ -769,24 +804,30 @@ Event를 User Behavior Vector 또는 Persona 행동 Feature로 업데이트하�
 | `actor_type` | string | user/synthetic |
 | `source` | string | web/simulator/server |
 
-초기 Event Weight `[추정]`:
+초기 Event Weight `[추정]`의 실행 원본은 `frontend/src/types/log.ts`다. 상품 상세 조회 기준은 `product_view=1.0`이며 상품 관심도/추천 feature에는 `product_view`만 반영해야 한다. 현재 `batch/jobs/user_vector.py`는 `page_view=1.0`도 함께 누적하므로 이중 가산 방지 수정 전까지 계약 미준수 상태다.
 
 | 조건 | event_weight |
 | --- | ---: |
-| `product_view` | 1 |
-| 리뷰/이미지/체류 신호 | 2 |
-| 옵션/성분 검증 신호 | 3 |
-| `wishlist_toggle(action='add')` | 4 |
-| `add_to_cart` | 5 |
-| `purchase` | 8 |
-| 빠른 이탈/마찰 신호 | -2 |
+| `add_to_cart` | 4.0 |
+| `wishlist_toggle(action='add')` | 3.0 |
+| `quantity_change`, `variant_select` | 2.0 |
+| `recommendation_click`, `media_view`, `review_expand`, `accordion_toggle`, `ingredient_view_mode_change` | 1.5 |
+| `product_view`, `product_click`, `review_filter_apply`, `filter_change`, `text_copy`, `view_cart` | 1.0 |
+| `section_dwell` | 1.0 x section 계수 |
+| `sort_change`, `text_selection` | 0.5 |
+| `scroll_pause`, `hover_dwell`, `section_view` | 0.3 |
+| `product_impression`, `recommendation_impression`, `impression_dwell`, `recommendation_snapshot`, `scroll_depth`, `quick_look_close`, `session_start`, `exit_summary` | 0 |
+| `remove_from_cart` | -2.0 |
+| `rage_click` | -2.0 |
+| `dead_click` | -1.5 |
+| `scroll_backtrack` | -1.0 |
 
 주의:
 
-- 이 가중치는 외부 플랫폼 공식값이 아니라 프로젝트용 초기값이며, **현재 프론트 구현값과 다르다.** 단일 출처는 `frontend/src/types/log.ts`의 `EVENT_WEIGHT`, `SECTION_DWELL_WEIGHT`, `scrollDepthWeight()`이므로 구현 시 위 표가 아니라 log.ts 기준으로 맞추고, 이 표는 그때 함께 갱신한다.
+- 이 가중치는 외부 플랫폼 공식값이 아니라 프로젝트용 초기값이다. 실행 상수의 원본은 `frontend/src/types/log.ts`의 `EVENT_WEIGHT`, `SECTION_DWELL_WEIGHT`, `scrollDepthWeight()`이며 Data 문서는 의미와 근거를 관리한다.
 - 추천 품질 검증은 synthetic 행동 로그가 아니라 실제 리뷰 데이터 holdout 기준으로 해야 한다. holdout 판정 순서와 누수 방지 규칙은 `persona-schema.md` §6.1, §5.2를 따른다.
 - `product_id`가 필수이므로, 상품과 연결되지 않는 friction Event(`rage_click`, `dead_click` 등)는 이 Dataset에 들어오지 않는다. 해당 Event는 UX/Dashboard 지표로만 사용한다.
-- `final_weight`가 음수인 row는 User Behavior Vector의 negative 축에 **절대값으로** 누적한다. 감점은 최종 추천 점수 계산에서 한 번만 적용한다. 상세 공식은 `persona-schema.md` §12.1을 따른다.
+- User Behavior Vector는 row의 부호만으로 축을 정하지 않는다. 상품별 가중치를 모은 뒤 전환 상품의 양수 가중치만 positive 축으로 보내고, 미전환 접촉 상품의 양수 가중치와 모든 감점 가중치는 negative 축으로 보낸다. 감점 가중치는 절대값으로 누적하고 최종 추천 점수에서 한 번만 적용한다. canonical 집계 공식은 `contracts/recommendation-io-spec.md` §2를 따르며 `persona-schema.md` §12.1은 그 계약을 참조한다.
 - Product Vector는 `contracts/product-feature-spec.md`, 추천 입출력은 `contracts/recommendation-io-spec.md`를 따른다.
 
 ## 19. `dim_product`
@@ -830,11 +871,11 @@ Processed에서는 단순히 nullable 여부만 보지 않고 Event별로 정상
 | `recommendation_impression` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `context_product_id`, `section_id`, `order_id`, `order_value` |
 | `recommendation_click` | `recommendation_id`, `product_id`, `list_id`, `position`, `algorithm` | `context_product_id`, `section_id`, `order_id`, `order_value` |
 | `quick_look` | `product_id`, `session_id` | `context_product_id`, `list_id`, `position`, `entry_source`, `recommendation_id`, `algorithm`, `order_id`, `order_value` |
-| `quick_look_close` | `product_id`, `dwell_ms`, `session_id` | `variants_viewed`, `added_to_cart`, `wishlisted`, `list_id`, `position`, `entry_source`, `order_id`, `order_value` |
+| `quick_look_close` | `product_id`, `close_reason`, `dwell_ms`, `session_id` | `variants_viewed`, `added_to_cart`, `wishlisted`, `list_id`, `position`, `entry_source`, `order_id`, `order_value` |
 | `search` | `search_query`, `session_id` | `result_count`, `search_id`는 구현 전 NULL 가능. `product_id`, `position`, `order_value` |
-| `filter_change` | `filter_name`, `filter_action`, `filter_values`, `session_id` | `product_id`, `order_value` |
-| `sort_change` | `sort_key`, `sort_direction`, `session_id` | `product_id`, `order_value` |
-| `product_view` | `product_id`, `session_id`, `page_view_id` | `order_id`, `order_value` |
+| `filter_change` | `filter_kind`, `filter_value`, `session_id` | `from`, `result_count`, `filter_action`, `filter_values`, `product_id`, `order_value` |
+| `sort_change` | `sort_key`, `session_id` | `sort_direction`, `result_count`, `product_id`, `order_value` |
+| `product_view` | `product_id`, `navigation_source`, `session_id`, `page_view_id` | `list_id`, `position`, `recommendation_id`, `context_product_id`, `order_id`, `order_value` |
 | `section_view` | `section_id` 또는 `content_kind`, `session_id`, `page_view_id` | `order_id`, `order_value` |
 | `section_dwell` | `section_id` 또는 `content_kind`, `dwell_ms`, `session_id`, `page_view_id` | `order_id`, `order_value` |
 | `accordion_toggle` | `section_id`, `action`, `session_id` | `order_id`, `order_value` |
@@ -843,7 +884,7 @@ Processed에서는 단순히 nullable 여부만 보지 않고 Event별로 정상
 | `text_copy` | `text_length`, `session_id` | `section_id`, `content_kind`, `product_id`는 공통 페이지에서는 NULL 가능 |
 | `add_to_cart` | `product_id`, `quantity`, `session_id` | `order_id`, `order_value` |
 | `remove_from_cart` | `product_id`, `quantity`, `cart_size_after`, `session_id` | `order_id`, `order_value` |
-| `variant_select` | `product_id`, `variant_name` 또는 `option_name`, `selected_value`, `session_id` | `previous_value`, `sku_id` |
+| `variant_select` | `product_id`, `sku_id`, `label`, `session_id` | `previous_sku_id`, `variant_group` |
 | `view_cart` | `session_id` | `cart_id`는 Raw에 없으면 NULL 가능. `product_id`, `order_value`, `item_count`, `distinct_products`, `cart_value` |
 | `begin_checkout` | `items`, `session_id` | `cart_id`, `product_id`, `order_value`는 NULL 가능 |
 | `purchase` | `order_id`, `items`, `session_id` | `order_value`, `currency`는 Raw 선택값. 없으면 items 합산 또는 unknown 처리 |
@@ -944,7 +985,7 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 | --- | --- |
 | Kafka topic 이름 | 현재 Backend 기본값은 `activity-events`. 환경별 override 가능성은 Kafka/Spark 담당자와 확인 |
 | Kafka message 단위 | 현재 Backend 구현은 Event 1건 단위 발행 |
-| Kafka partition key | 현재 key는 `persona_id`. 실제 Web Event에서 `persona_id=NULL`일 때 fallback key는 Kafka/Spark 담당자와 합의 필요 |
+| Kafka partition key | 최종 기준은 `session_id`. 실제 Web Event에서 `persona_id`가 NULL일 수 있으므로 세션 단위 key를 사용 |
 | 물리 저장소 | Parquet/MySQL/ClickHouse 등에 따라 타입과 파티션 방식 변경 |
 | bad event 응답 포맷 | 프론트 재시도/디버깅 방식 |
 | 목록/구매 화면 Trigger | `product_impression`, `begin_checkout`, `purchase` 생성 기준 |
@@ -952,7 +993,8 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 | 실제 사용자 ID 정책 | 로그인/비로그인 사용자를 `user_id`로 어떻게 식별할지 확정 필요 |
 | `search_id` 생성 정책 | 검색 구현 전에는 nullable/session fallback, 구현 후 Raw 추가 또는 Spark 파생 중 선택 |
 | `cart_id` 생성 정책 | Raw에 없으므로 현재는 nullable, 장바구니 구현 후 Raw 추가 여부 결정 |
-| Event weight 단일 출처 | §18 초안 표와 `frontend/src/types/log.ts`의 `EVENT_WEIGHT` 값이 다르다. log.ts 기준으로 통일한 뒤 §18을 갱신 |
+| Event weight 단일 출처 | 실행 상수는 `frontend/src/types/log.ts`, 의미와 근거는 Data 문서를 기준으로 관리한다 |
+| 시뮬레이터 최신 Event | 최신 `dev` 기준 FE 35종 중 34종 생성. 남은 `dead_click`은 실제 UI 오작동 신호라 정책상 생성하지 않음 |
 | Collector 필드 정렬 브랜치 병합 | `event_name`, `actor_type`, `page_view_id`, `sequence_no` 승격은 정렬 브랜치가 `dev`에 병합된 뒤에만 성립 |
 
 ## 25. E2E 이후 확인할 것
@@ -961,7 +1003,7 @@ Processed Layer에서 아래 Mart/DW 테이블을 만들 수 있다.
 
 E2E 이후 확인할 것:
 
-1. `product_view`가 실제로 들어오는지
+1. `dev` 반영본의 `product_view`가 E2E 환경에서도 목록 클릭 진입과 URL 직접 진입 모두에서 실제로 들어오는지
 2. `product_impression`, `search`, `begin_checkout`, `purchase` Trigger가 실제 화면에서 발생하는지
 3. `section_dwell` 합산 grain이 맞는지
 4. batch 실패 Event 분리가 실제로 가능한지

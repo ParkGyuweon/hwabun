@@ -1,6 +1,7 @@
 package com.cosmetic.collector.common;
 
 import com.cosmetic.collector.event.application.EventPublishException;
+import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -23,6 +24,16 @@ public class GlobalExceptionHandler {
                         error.getDefaultMessage()
                 ))
                 .toList();
+
+        if (details.stream().anyMatch(detail -> detail.field().equals("events")
+                && exception.getBindingResult().getFieldErrors().stream()
+                .anyMatch(error -> error.getField().equals("events") && error.getCode().equals("Size")))) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ErrorResponse(
+                    "EVENT_BATCH_TOO_LARGE",
+                    "한 요청에는 이벤트를 최대 100건까지 담을 수 있습니다.",
+                    details
+            ));
+        }
 
         return ResponseEntity.badRequest().body(new ErrorResponse(
                 "INVALID_EVENT_BATCH",
@@ -47,5 +58,16 @@ public class GlobalExceptionHandler {
                 "이벤트 수집 시스템을 일시적으로 사용할 수 없습니다.",
                 List.of()
         ));
+    }
+
+    @ExceptionHandler(EventPublishOverloadedException.class)
+    public ResponseEntity<ErrorResponse> handlePublishOverloaded(EventPublishOverloadedException exception) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "1")
+                .body(new ErrorResponse(
+                        "INGESTION_OVERLOADED",
+                        "이벤트 수집 요청이 많습니다. 잠시 후 재시도해 주세요.",
+                        List.of()
+                ));
     }
 }
