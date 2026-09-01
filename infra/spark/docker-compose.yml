@@ -1,0 +1,109 @@
+x-spark-image: &spark-image
+  build:
+    # Docker Compose resolves every relative path against the first -f file.
+    # The documented command places infra/kafka first, so ../spark is this
+    # directory in both the combined and standalone forms.
+    context: ../spark
+    args:
+      SPARK_VERSION: ${SPARK_VERSION:-3.5.6}
+  image: a306-spark:${SPARK_VERSION:-3.5.6}
+
+services:
+  spark-master:
+    <<: *spark-image
+    hostname: spark-master
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+    command:
+      - org.apache.spark.deploy.master.Master
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8080"
+    ports:
+      - "7077:7077"
+      - "18080:8080"
+    volumes:
+      - ../../streaming:/opt/project/streaming:ro
+      - ../../contracts:/opt/project/contracts:ro
+      - ../../data:/opt/project/data
+      - spark-events:/opt/spark-events
+      - spark-ivy-cache:/opt/spark/.ivy2
+    networks:
+      - a306-data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "bash -c '</dev/tcp/127.0.0.1/8080'"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  spark-worker:
+    <<: *spark-image
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+    command:
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+    environment:
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
+      SPARK_WORKER_WEBUI_PORT: "8081"
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    volumes:
+      - ../../streaming:/opt/project/streaming:ro
+      - ../../contracts:/opt/project/contracts:ro
+      - ../../data:/opt/project/data
+      - spark-events:/opt/spark-events
+      - spark-ivy-cache:/opt/spark/.ivy2
+    networks:
+      - a306-data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "bash -c '</dev/tcp/127.0.0.1/8081'"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  spark-history:
+    <<: *spark-image
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+    command:
+      - org.apache.spark.deploy.history.HistoryServer
+    environment:
+      SPARK_HISTORY_OPTS: >-
+        -Dspark.history.fs.logDirectory=file:/opt/spark-events
+        -Dspark.history.ui.port=18080
+    ports:
+      - "18081:18080"
+    volumes:
+      - spark-events:/opt/spark-events
+    networks:
+      - a306-data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "bash -c '</dev/tcp/127.0.0.1/18080'"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  spark-events:
+  spark-ivy-cache:
+
+networks:
+  a306-data:
+    external: true
+    name: a306-data
