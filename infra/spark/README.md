@@ -59,6 +59,9 @@ Q1은 `kafka:19092`의 `activity-events`를 읽어
 `/opt/project/data/checkpoints/raw-events`에 Checkpoint를 유지한다. 종료·재시작은
 같은 Checkpoint를 사용해야 Kafka offset부터 이어서 처리된다.
 
+로컬 Worker는 기본 2코어이며 Q1은 그중 1코어만 사용한다. 남은 1코어는 Q2~Q4
+Batch Pipeline에 남겨 Streaming과 분석 Job을 동시에 실행할 수 있게 한다.
+
 상태와 로그는 아래처럼 확인한다.
 
 ```powershell
@@ -76,6 +79,25 @@ docker compose `
 Kafka Connector는 `SPARK_KAFKA_PACKAGE`으로 Spark Version과 함께 고정한다. 최초
 기동 때 Connector 의존성을 받아 `spark-ivy-cache` Volume에 저장하므로 이후 기동은
 같은 캐시를 사용한다.
+
+## Pipeline Runner
+
+PowerShell에서는 아래 명령으로 인프라와 Pipeline을 관리한다.
+
+```powershell
+.\infra\spark\run-pipeline.ps1 up
+.\infra\spark\run-pipeline.ps1 start-q1
+.\infra\spark\run-pipeline.ps1 run-batch
+.\infra\spark\run-pipeline.ps1 status
+```
+
+`run-batch`는 `clean_events_job.py` → `derive_facts_job.py` →
+`build_marts_job.py` → `validate_pipeline_job.py`를 순서대로 실행한다. 앞선 Job이
+실패하면 다음 Job은 실행하지 않는다. Validation Report는
+`data/validation/pipeline-report.json`에 저장된다.
+
+Linux/macOS/Git Bash에서는 `bash infra/spark/run-pipeline.sh <action>`을 사용한다.
+지원 action은 `up`, `start-q1`, `stop-q1`, `run-batch`, `validate`, `status`, `down`이다.
 
 ## 저장소와 한계
 

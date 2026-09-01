@@ -116,6 +116,8 @@ services:
       - --conf
       - spark.jars.ivy=/opt/spark/.ivy2
       - --conf
+      - spark.cores.max=1
+      - --conf
       - spark.driver.host=spark-raw-sink
       - --conf
       - spark.driver.bindAddress=0.0.0.0
