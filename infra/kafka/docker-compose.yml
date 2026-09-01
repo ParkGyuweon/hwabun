@@ -29,6 +29,8 @@ services:
       KAFKA_LOG_DIRS: "/var/lib/kafka/data"
     volumes:
       - kafka-data:/var/lib/kafka/data
+    networks:
+      - a306-data
     healthcheck:
       test:
         - CMD-SHELL
@@ -40,3 +42,8 @@ services:
 
 volumes:
   kafka-data:
+
+networks:
+  a306-data:
+    external: true
+    name: a306-data
