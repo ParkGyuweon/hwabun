@@ -1,5 +1,6 @@
 package com.cosmetic.collector.event.api;
 
+import com.cosmetic.collector.event.api.validation.ValidEventContract;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,9 +14,10 @@ import java.time.Instant;
 
 @Schema(description = "사용자 행동 로그 한 건")
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@ValidEventContract
 public record ActivityEvent(
         @Schema(description = "이벤트 계약 버전", example = "0.2.0-draft")
-        @NotBlank String schemaVersion,
+        @NotBlank @Pattern(regexp = "^0\\.2\\.0-draft$") String schemaVersion,
 
         @Schema(description = "중복 제거에 사용하는 이벤트 고유 ID", example = "evt-001")
         @NotBlank String eventId,
@@ -61,7 +63,7 @@ public record ActivityEvent(
         @Schema(description = "이벤트 발생 환경", example = "local")
         @NotBlank String environment,
 
-        @Schema(description = "이벤트 종류별 추가 속성", example = "{\"position\": 1}", nullable = true)
-        JsonNode properties
+        @Schema(description = "이벤트 종류별 추가 속성", example = "{\"position\": 1}")
+        @NotNull JsonNode properties
 ) {
 }
