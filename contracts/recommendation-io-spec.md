@@ -431,7 +431,7 @@ GET /api/recommend?persona_id={id}&size=10
    v_u⁻ = negative_u_sum / negative_w_sum   (negative_w_sum = 0이면 생략)
 4. scores = w1 x (V @ v_u⁺) − λ x (V @ v_u⁻) + w2 x attr_affinity + w3 x prior
 5. 노출 정책 적용 (아래)
-6. MMR 다양성 보정 (λ_mmr = 0.8, 후보 풀 상위 30개)
+6. MMR 다양성 보정 (λ_mmr = 0.8, 후보 풀 상위 30개 — λ_mmr 은 점수 쪽 계수라 클수록 약하게 걸리고 1.0 이면 끈 것과 같음)
 7. 상위 size개 반환
 ```
 
