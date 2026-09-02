@@ -25,8 +25,8 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 
 | 대상 | 지금 위치 | 조치 |
 |---|---|---|
-| 속성 친화도 테이블 생성 | `Research/build_affinity_lift.py` | **레포로 이관** |
-| 페르소나 → `(200,)` 친화도 벡터 | `Research/eval_weight_schedule.py` 의 `attr()` | **레포로 이관** (`Recommender(affinity=...)` 에 꽂히는 형태) |
+| 속성 친화도 테이블 생성 | `Research/build/build_affinity_lift.py` | **레포로 이관** |
+| 페르소나 → `(200,)` 친화도 벡터 | `Research/eval/eval_weight_schedule.py` 의 `attr()` | **레포로 이관** (`Recommender(affinity=...)` 에 꽂히는 형태) |
 | 속성 정규화 (skin_tone 5버킷, eye_color 표기, brunette→brown) | 위 두 파일에 흩어져 있음 | **한 곳으로 합쳐 이관** |
 | 행동 → `v_u+` / `v_u-` | `batch/jobs/user_vector.py` | 이미 레포에 있음. 손대지 않음 |
 | 친화도 원본 데이터 | `batch/ingest/data/affinity_lift.csv` | 이미 레포에 있음 |
@@ -88,7 +88,7 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 
 ## 5. 이미 측정한 것 — 평가 누출 편향
 
-`Research/eval_affinity_answer_leakage.py`. 9,900명, 정답 리뷰 12,092건(전체 리뷰의
+`Research/eval/eval_affinity_answer_leakage.py`. 9,900명, 정답 리뷰 12,092건(전체 리뷰의
 2.64%)을 뺀 테이블로 같은 평가를 돌려 짝지어 비교했다. 부트스트랩 300회.
 
 | 지표 | 전체 리뷰(현행) | 정답 제외 | 편향 |
