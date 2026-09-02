@@ -2,20 +2,25 @@
 
 작성일: 2026-09-02  
 최종 정적 검증: 2026-09-02
-상태: Draft — 논리 Schema 확정, 물리 DDL 및 실제 적재 검증 전
+상태: 저장 계층·공통 규칙 확정, Dashboard Mart·KPI 후보는 AI·추천 협의 후 확정
 
 ## 1. 범위와 우선순위
 
 이 문서는 [`processed-schema.md`](./processed-schema.md)의 Processed Dataset을
-Dashboard 조회용 Dimension과 Mart로 변환할 때 지켜야 하는 grain, 입력, key,
-컬럼, 논리 타입 및 nullable 계약의 단일 출처다.
+Delta Lake에 보존하고 MySQL `dw`로 제공하는 저장 계층, 책임 경계와 공통 물리
+규칙을 확정한다. Dimension과 Mart의 grain, 입력, key, 컬럼, 논리 타입 및 nullable은
+현재 Dashboard 후보를 구현 가능성 관점에서 정리한 초안이다.
 
 - Delta Lake의 `marts`는 계산 결과의 기준 저장소다.
 - MySQL `dw` schema는 Dashboard API 조회용 serving projection이다.
-- 물리 파티션, 인덱스, Delta `MERGE`, MySQL DDL은 구현 단계에서 이 논리 계약을
-  보존하는 범위로 정한다.
+- 물리 파티션, 인덱스, Delta `MERGE`, MySQL DDL은 구현 단계에서 확정된 저장
+  계층과 공통 규칙을 보존하는 범위로 정한다.
 - 처리 근거, KPI 화면 연결, 현재 구현 상태와 검증 계획은
   [`../docs/analytics/dw-design.md`](../docs/analytics/dw-design.md)에서 설명한다.
+
+§2의 입력 grain·공통 타입·NULL·집계 원칙과 Delta→MySQL 책임 경계는 이번 Jira의
+확정 범위다. §3~§5의 Dimension·Mart·KPI는 저장 가능성을 확인하기 위한 후보이며,
+Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별도 확정한다.
 
 ## 2. 공통 계약
 
@@ -139,10 +144,12 @@ source = event-properties-schema.md
 추가할 수 있다. Event payload에는 `persona_source`를 반복 저장하지 않고
 `simulation_run_id → dim_simulation_run.persona_source`로 조회한다.
 
-## 4. 일간 Mart
+## 4. 일간 Mart 후보
 
-아래 표의 `key` 전체가 복합 key다. `scenario_id`, `simulation_run_id`가 NULL인 Web
-행도 같은 key 규칙으로 집계한다.
+아래 Mart는 현재 Dashboard 요구를 저장 구조에 투영한 후보안이다. 지표 채택 전에는
+물리 Table 생성 계약으로 해석하지 않는다. 채택 시 표의 `key` 전체를 복합 key로
+사용하고, `scenario_id`, `simulation_run_id`가 NULL인 Web 행도 같은 grain 규칙으로
+집계한다.
 
 ### 4.1 `product_daily_kpi`
 
@@ -254,7 +261,7 @@ input = cleaned_events, product_event_fact, funnel_session_fact, content_interes
 | `avg_event_count_per_session`, `avg_product_interest_score`, `avg_content_interest_score`, `view_to_cart_rate`, `view_to_purchase_rate` | double | Y | 평균·전환율 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
-## 5. 실시간 Mart
+## 5. 실시간 Mart 후보
 
 ### 5.1 `realtime_event_stats`
 
@@ -287,7 +294,7 @@ input = bad_events
 Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없는 한 이 Mart에
 포함하지 않는다.
 
-## 6. 물리화 시 보존할 조건
+## 6. 후보 Mart 물리화 시 보존할 조건
 
 1. Delta `marts`와 MySQL `dw` projection은 같은 grain과 KPI 값을 가져야 한다.
 2. MySQL serving table은 API 조회에 불필요한 상세 컬럼을 생략할 수 있지만 key와
