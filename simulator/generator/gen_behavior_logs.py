@@ -520,11 +520,13 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
     for pos, g in enumerate(grid, 1):
         e.tick(20, 120)
         e.emit("product_impression", None, product_id=g, position=pos,
-               list_id="product_grid", algorithm=EXPOSURE_NAME)
-        # 노출 대비 클릭을 재려면 "얼마나 보였나" 가 있어야 한다. 가중 0 이다
+               list_id="list_grid")
+        # 노출 대비 클릭을 재려면 "얼마나 보였나" 가 있어야 한다. 가중 0 이다.
+        # 노출 정책은 여기에 싣는다 — 계약이 impression_dwell 의 선택 필드로
+        # algorithm 을 허용한다 (product_impression 에는 그 필드가 없다).
         if rng.random() < SC["p_impression_dwell"]:
             e.emit("impression_dwell", None, product_id=g, position=pos,
-                   list_id="product_grid",
+                   list_id="list_grid", algorithm=EXPOSURE_NAME,
                    visible_ms=int(rng.integers(400, 5000) / (1 + 0.12 * (pos - 1))))
     # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
     # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
@@ -534,7 +536,10 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
             if qrng.random() >= SC["p_quick_look"]:
                 continue
             e.tick(200, 1500, rng=qrng)
-            e.emit("quick_look", g, position=pos, list_id="product_grid")
+            # 계약상 quick_look 의 필수 property 는 entry_source 와 position 이다.
+            # 프론트도 목록에서 열면 entry_source=list_grid 를 싣는다
+            e.emit("quick_look", g, position=pos,
+                   entry_source="list_grid", list_id="list_grid")
             n_var = 0
             if qrng.random() < SC["p_ql_variant"]:
                 n_var = int(qrng.integers(1, 4))
