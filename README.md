@@ -11,6 +11,10 @@ S15P21A306/
 │
 ├── contracts/                       ★ 팀 계약. 여기가 바뀌면 여러 모듈이 동시에 영향받음
 │   ├── event-schema.json                Raw Event JSON Schema (Collector 통과 후 계약)
+│   ├── event-properties-schema.md       Event별 properties·enum·필수값 계약
+│   ├── processed-schema.md              Processed Dataset grain·key·컬럼 계약
+│   ├── persona-schema.md                Persona·평가 split·Simulation Run 계약
+│   ├── dw-schema.md                     DW Dimension·Mart grain·컬럼 계약
 │   ├── validate_events.py               이벤트 파일을 스키마로 검증하는 CLI
 │   ├── requirements-validator.txt       검증기 의존성 (jsonschema[format])
 │   ├── samples/ · tests/                유효/무효 이벤트 표본과 계약 테스트
@@ -28,10 +32,10 @@ S15P21A306/
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
 │   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지
-│   │   ├── event-taxonomy-trigger-schema.md · event-contract-summary.md   이벤트 계약
+│   │   ├── event-logging-design.md       화면 Trigger·KPI 연결·구현 현황
 │   │   ├── log-transport-contract.md    전송 주기·재시도·actor_type 판정
-│   │   ├── dw-schema.md · processed-schema.md   Mart·Processed 스키마
-│   │   ├── persona-schema.md · persona-attribute-preprocessing.md
+│   │   ├── dw-design.md · spark-processing-design.md   Mart 적재·Spark 처리 설계
+│   │   ├── persona-design.md             Persona 생성·표본·추천 연결 설계
 │   │   ├── marketing-signal-research.md · event-weight-rationale.html
 │   │
 │   ├── dashboard/                   B2B 대시보드 조사·설계 (프론트)

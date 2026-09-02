@@ -19,7 +19,7 @@
 3번은 검증기와 겹치지만 4번은 겹치지 않는다. 검증기가 명시적으로 범위 밖에
 두었고(properties 계약은 구현과 조율 전), Collector 도 properties 를 JsonNode 로
 통과시킨다. 그래서 이 위반은 **bad_events 에도 안 남고 Processed 까지 그냥 흘러간다**
-(event-taxonomy-trigger-schema.md §9.8). 세는 곳이 없으면 아무도 모른다.
+(event-properties-schema.md §4). 세는 곳이 없으면 아무도 모른다.
 
 필수 property 표는 문서에서 직접 읽는다. 여기에 복사해 두면 문서가 바뀔 때
 조용히 어긋나고, 어긋난 줄 모른 채 "통과" 가 나온다.
@@ -59,8 +59,7 @@ except Exception:
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, ".."))
 SCHEMA_PATH = os.path.join(HERE, "event-schema.json")
-TAXONOMY_PATH = os.path.join(ROOT, "docs", "analytics",
-                             "event-taxonomy-trigger-schema.md")
+PROPERTIES_CONTRACT_PATH = os.path.join(HERE, "event-properties-schema.md")
 
 BAR_W = 34
 
@@ -133,12 +132,12 @@ ROW = re.compile(r"^\|\s*`([a-z_][a-z0-9_]*)`\s*\|(.*)\|(.*)\|\s*$")
 
 
 def parse_required_properties(path):
-    """문서 §9 의 표에서 Event 별 필수 property 를 읽는다.
+    """문서 §4의 표에서 Event별 필수 property를 읽는다.
 
     돌려주는 값
-        {event_name: {"section": "9.2 ...", "all": [...], "any_of": [[...], ...]}}
+        {event_name: {"section": "4.2 ...", "all": [...], "any_of": [[...], ...]}}
 
-    `A 또는 B` 는 둘 중 하나 이상이라는 뜻이라(§9 머리말) 따로 담는다.
+    `A 또는 B`는 둘 중 하나 이상이라는 뜻이라(§4 머리말) 따로 담는다.
     `A 또는 B, C` 처럼 섞여 나오므로 '또는' 양옆 토큰만 묶고 나머지는 개별 필수다.
     """
     if not os.path.exists(path):
@@ -149,22 +148,19 @@ def parse_required_properties(path):
 
     spec = {}
     section = None
-    in_nine = False
+    in_properties = False
 
     for line in lines:
         h2 = re.match(r"^##\s+(\d+)\.", line)
         if h2:
-            in_nine = h2.group(1) == "9"
+            in_properties = h2.group(1) == "4"
             section = None
             continue
-        if not in_nine:
+        if not in_properties:
             continue
-        h3 = re.match(r"^###\s+(9\.(\d+).*)$", line)
+        h3 = re.match(r"^###\s+(4\.(\d+).*)$", line)
         if h3:
-            # 9.1~9.5 만 Event별 필수 property 표다.
-            # 9.6 배열/Object 구조, 9.7 표기 규칙, 9.8 구현과 명세의 차이는
-            # 표 모양이 다르므로 읽지 않는다. 9.8 을 읽으면 그 표의
-            # event_name 까지 규칙으로 잡혀 분류가 어긋난다.
+            # 4.1~4.5만 Event별 필수 property 표다.
             section = h3.group(1).strip() if h3.group(2) in "12345" else None
             continue
 
@@ -173,8 +169,7 @@ def parse_required_properties(path):
             continue
         name, req_cell, _opt = m.group(1), m.group(2), m.group(3)
         if name == "event_name" or section is None:
-            # 9.6~9.8 구간의 표는 필수 property 명세가 아니다. 읽으면
-            # 9.8 의 행이 9.1~9.5 에서 이미 잡은 분류를 덮어쓴다
+            # 그 밖의 표는 필수 property 명세가 아니다.
             continue
 
         toks = TOKEN.findall(req_cell)
@@ -286,7 +281,7 @@ def main(argv=None):
 
     schema = load_schema()
     contract = list(schema["properties"]["event_name"]["enum"])
-    spec, spec_path = parse_required_properties(TAXONOMY_PATH)
+    spec, spec_path = parse_required_properties(PROPERTIES_CONTRACT_PATH)
 
     filled = enrich(events)
 
@@ -383,7 +378,7 @@ def main(argv=None):
     print(rule())
     if not spec:
         props = None
-        print(f"      명세를 못 읽었다: {TAXONOMY_PATH}")
+        print(f"      명세를 못 읽었다: {PROPERTIES_CONTRACT_PATH}")
     else:
         props = check_properties(events, spec)
         print(f"      명세 출처 {os.path.relpath(spec_path, ROOT)}  ·  Event {len(spec)}종 규칙")
