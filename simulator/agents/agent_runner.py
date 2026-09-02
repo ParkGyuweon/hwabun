@@ -1131,6 +1131,23 @@ def run_parallel(a):
                     total += 1
             os.remove(p)
 
+    # 판단 근거도 합친다 — 워커마다 --out 옆에 따로 쓴다. 안 합치면 12개로 흩어진다
+    dec_total = 0
+    if not (a.decisions and a.decisions.lower() == "off"):
+        dbase, dext = os.path.splitext(a.out)
+        dec_out = f"{dbase}_decisions{dext}"
+        with io.open(dec_out, "w", encoding="utf-8") as out:
+            for p in parts:
+                pb, pe = os.path.splitext(p)
+                dp = f"{pb}_decisions{pe}"
+                if not os.path.exists(dp):
+                    continue
+                with io.open(dp, encoding="utf-8") as f:
+                    for line in f:
+                        out.write(line)
+                        dec_total += 1
+                os.remove(dp)
+
     dt = time.time() - t0
     print()
     print("=" * 60)
@@ -1138,6 +1155,8 @@ def run_parallel(a):
     if dead:
         print(f"  실패한 워커 {len(dead)}개: {dead}  <- 그만큼 페르소나가 빠졌습니다")
     print(f"  수집 로그 {total:,}건 -> {a.out}")
+    if dec_total:
+        print(f"  판단 근거 {dec_total:,}건 -> {dec_out}")
     print("=" * 60)
 
 
