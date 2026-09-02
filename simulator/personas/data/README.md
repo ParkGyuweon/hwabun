@@ -3,7 +3,7 @@
 | 파일 | 내용 | 크기 |
 |---|---|---|
 | `personas_100_agent.json` | **인터랙티브** 100명 (`PA00001`~`PA00100`) | 0.6MB |
-| `personas_9900.json` | **합성 로그용** 9,900명 (`PC00001`~`PC09900`) | 56.2MB |
+| `personas_9900.json` | **합성 로그용** 9,900명 (`PC00001`~`PC09900`) | 58.1MB |
 | `persona_style.json` | 페르소나별 성향 6축 (10,000명 전체) | 1.2MB |
 | `persona_sampling_report.json` | 추출 파라미터 · 모집단 대비 표본 분포 검증 | 2KB |
 
@@ -17,6 +17,30 @@
 PA 에 합성 로그를 쏘면 1인당 약 590건이 미리 쌓여, 사람이 10번 클릭해도 벡터의 1.7% 밖에 못 움직입니다. `gen_behavior_logs.py` 는 기본적으로 PC 만 생성하며 `--include-agents` 로만 PA 를 포함합니다.
 
 두 파일은 `persona_id` · `author_id` 가 하나도 겹치지 않습니다.
+
+## 레코드 필드
+
+`contracts/persona-schema.md` §4 `persona_profile` 을 따릅니다. 계약이 `nullable=N`
+으로 요구하는 컬럼은 전부 채워져 있습니다 (2026-09-02 확인, 10,000명 위반 0건).
+
+| 필드 | 값 | 비고 |
+|---|---|---|
+| `persona_id` | `PA00001` / `PC00001` … | 파일 안에서의 순번. `author_id` 와 무관 |
+| `user_id` | `persona_id` 와 같음 | 계약 §4 기본값 |
+| `author_id` | 원천 리뷰어 ID | 추적용. 조인 키가 아니고 외부 노출 금지 |
+| `persona_source` | `agent_sample` / `batch_sample` | **접두사를 파싱하지 말고 이 값을 쓰십시오** (계약 §2.1) |
+| `skin_type` · `skin_tone` · `eye_color` · `hair_color` | 정규화된 값 | 계약 §3 enum |
+| `stratum` · `review_bucket` | `skin_type\|skin_tone\|review_bucket` | 층 식별 |
+| `n_reviews` · `n_products` · `n_positive` · `n_negative` · `n_neutral` · `avg_rating` | 집계값 | |
+| `profile_version` | `persona-v1` | 추출 규칙이 바뀌면 올립니다 |
+| `profile_scope` | `full` | seed 만 쓰는 eval Profile 은 계약 §5 로 따로 냅니다 |
+| `created_at` · `updated_at` | 생성 시각 (UTC) | 한 번의 실행에서 전원 같은 값 |
+| `reviews` | 구매 이력 배열 | 계약 §6 `persona_review_history` 에 대응 |
+
+이 파일은 **중첩 JSON**(사람 1명 + `reviews` 배열)이고 계약은 grain 별 평탄
+테이블입니다. 평탄화·적재와 E2E 검증은 데이터 파트가 이 산출물을 입력으로 받아
+수행합니다. `evaluation_role`(seed/holdout_target/excluded)은 여기 없고
+`batch/ingest/data/eval_metadata.jsonl` 이 정본입니다.
 
 ## 추출 기준
 

@@ -9,7 +9,7 @@ export default function ProductsScreen() {
 
   return (
     <div className="stack">
-      <Panel title="구매 전환율 TOP 10" source="mock" aside="상세 조회 대비 장바구니">
+      <Panel title="장바구니 전환율 TOP 10" source="mock" aside="상세 조회 대비 담기 — 결제는 범위 밖">
         <BarList
           items={[...productMetrics]
             .filter((m) => m.detailViews >= 200)

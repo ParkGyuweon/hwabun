@@ -112,6 +112,8 @@ S15P21A306/
 │   │   ├── marketing-signal-research.md · event-weight-rationale.html
 │   │
 │   ├── dashboard/                   B2B 대시보드 조사·설계 (프론트)
+│   │   ├── b2b-dashboard-research.md    화면의 존재 이유 — 시장 조사와 설계 규칙
+│   │   ├── frontend-dashboard-design.md · metric-basis.md   화면 설계 · 지표별 산출 근거
 │   ├── data/                        데이터 수집 메모 (프론트)
 │   ├── backend-ingestion-backpressure.md  수집 과부하 응답 정책 (백엔드)
 │   └── git-convention.md            커밋 메시지·브랜치 전략 (팀 공통)
@@ -169,7 +171,10 @@ S15P21A306/
 │   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건)
 │   │   ├── build_persona_style.py       리뷰에서 페르소나 6축 스타일 추출
 │   │   └── test_gen_behavior_logs.py · README.md
-│   ├── agents/agent_runner.py           PA 100명 — 실제 브라우저로 프론트를 조작
+│   ├── agents/
+│   │   ├── agent_runner.py               PA 100명 — 실제 브라우저로 프론트를 조작
+│   │   ├── model_server.py               GPU 서버에 모델만 올리는 최소 서버 (--api-base 로 연결)
+│   │   └── README.md                     모델 선택 세 가지·러너가 지키는 계약
 │   └── personas/
 │       ├── build_personas.py            페르소나 추출
 │       └── data/  personas_9900.json · personas_100_agent.json · persona_style.json

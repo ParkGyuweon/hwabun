@@ -55,11 +55,17 @@ export default function VariantPicker({
               data-log-action="variant_select"
               onClick={() => select(variant)}
             >
+              {/*
+                스와치는 첫 화면 오른쪽에 그대로 보인다. lazy 를 걸면 배치가
+                끝난 뒤에 받아서 빈 원이 잠깐 보였다가 채워진다. 장당 7KB 라
+                한꺼번에 받아도 부담이 없다.
+              */}
               <img
                 src={sizedImage(variant.swatch_url ?? variant.image_url, IMAGE_WIDTH_SWATCH) ?? PLACEHOLDER}
                 alt=""
                 aria-hidden="true"
-                loading="lazy"
+                loading="eager"
+                decoding="async"
                 onError={(event) => {
                   event.currentTarget.src = PLACEHOLDER;
                 }}

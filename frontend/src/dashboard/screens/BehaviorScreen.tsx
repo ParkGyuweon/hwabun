@@ -50,10 +50,16 @@ export default function BehaviorScreen() {
           sub="같은 자리 연타 — 반응 없는 UI"
           source="mock"
         />
+        {/*
+          dead_click 은 실사용자 전용이다. 프론트 훅은 정상 동작하지만
+          가상 사용자가 이 행동을 만들지 못한다 — 러너는 유효한 요소만
+          클릭하고, 코드 생성기에는 이 행동이 없다. 합성 로그만 도는 동안
+          이 값은 항상 0 이므로, 그 0 이 "마찰 없음" 으로 읽히면 안 된다.
+        */}
         <Kpi
           label="dead_click"
           value={fmt.int(frictionCounts.dead_click)}
-          sub="눌리지 않는 곳 클릭"
+          sub="눌리지 않는 곳 클릭 — 실사용자 전용"
           source="mock"
         />
         <Kpi
@@ -63,7 +69,7 @@ export default function BehaviorScreen() {
           source="mock"
         />
         <Kpi
-          label="장바구니 재고율"
+          label="장바구니 제거율"
           value={fmt.pct(overview.removalRate)}
           sub="담기 대비 제거"
           source="mock"
@@ -106,7 +112,7 @@ export default function BehaviorScreen() {
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="이벤트 발생량 상위" source="mock" aside="32종 중 상위 13">
+        <Panel title="이벤트 발생량 상위" source="mock" aside="36종 중 상위 13">
           <BarList
             items={eventVolumes.map((e) => ({ label: e.name, value: e.count }))}
             format={fmt.compact}

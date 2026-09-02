@@ -37,7 +37,12 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
             </section>
           ) : null}
 
-          {description.highlighted_ingredients.length > 0 ? (
+          {/*
+            키가 아예 없는 상품이 65 / 200 이다. 옵셔널 체크 없이 .length 를
+            부르면 렌더가 던지고 React 가 트리를 통째로 버려서 화면이 완전히
+            빈다. 위아래 블록은 모두 존재 확인을 하는데 이 줄만 빠져 있었다.
+          */}
+          {description.highlighted_ingredients?.length ? (
             <section data-log-content="ingredient_list" data-log-ref="highlighted">
               <h3>Highlighted Ingredients</h3>
               <ul>
