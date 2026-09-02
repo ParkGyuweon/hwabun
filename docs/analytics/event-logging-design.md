@@ -166,36 +166,38 @@ Quick Look에서 다시 상향하지 않는다. 조건부 가중치는 실제 `d
 
 ## 8. 현재 구현과 계약의 차이
 
-2026-09-01 `dev` 기준 Front Event 36종이 활성 계약에 등록돼 있다. Simulator는 이 중
+2026-09-03 `dev` 기준 Front Event 36종이 활성 계약에 등록돼 있다. Simulator는 이 중
 34종을 생성하며 `navigation_click`은 브라우저 UI 이동에서, `dead_click`은 실제 UI
 오작동에서 발생하므로 의도적으로 생성하지 않는다.
 
-Front 확인 요청이 반영된 항목:
+Properties 계약에 반영한 Front 실제 값:
 
 - 장바구니 뒤로가기에서도 `item_count`, `distinct_products`, `cart_value` 전송
 - breadcrumb 이동을 `navigation_click(intent=session, weight=0)`으로 분리
+- `entry_source=breadcrumb`, `content_kind=cart_item`을 enum에 등록
 - `text_selection`, `text_copy`의 `text_snippet` 원문 제거
+- `matched_count`를 선택 property로 등록
 
-Simulator에서 계약 정렬이 필요한 대표 항목:
+모듈별 후속 반영 대상은 다음과 같다. 이 표는 계약을 다시 정의하지 않고 구현 차이만
+추적한다.
 
-- `quick_look.entry_source`
-- `quick_look_close.close_reason` enum
-- impression Event의 `hold_ms`, `visible_ratio`
-- `variant_select.sku_id`, `label`
-- `review_expand.target`
-- `review_filter_apply.filter` 또는 `sort`
-- `section_view`·`section_dwell`의 section/content 기준
-- `scroll_pause.duration_ms`
-- `dead_click.target_tag` nullable key
+| 담당 모듈 | 현재 차이 | 완료 기준 |
+| --- | --- | --- |
+| Backend Collector | `navigation_click`이 Java Event 허용 목록에서 누락 | `session` intent로 수집되고 회귀 테스트 통과 |
+| PC Generator | impression 필수값, 일부 required property, 타입·enum 불일치 | 생성 로그의 Properties 위반 0건 |
+| PA Agent | Agent 행동 Event의 동일 계약 준수 여부 미검증 | PA 샘플을 같은 검증기로 확인 |
+| Spark Q2 | 공통 필드·synthetic metadata만 검사 | required/type/enum 위반을 `bad_events`로 격리 |
 
 Collector는 현재 공통 Envelope와 synthetic runtime metadata를 검증하지만 Event별
 properties 전체는 `JsonNode`로 통과시킨다. 이 차이는 HTTP 200만으로 확인할 수 없어
-`contracts/coverage_report.py`와 Spark semantic validation에서 검사한다.
+`contracts/coverage_report.py`가 계약 문서의 required property, 타입, enum을 직접 읽어
+검사한다. Spark semantic validation 반영 전까지 이 검증 결과를 구현 인수 기준으로
+사용한다.
 
 ## 9. E2E 검증 체크리스트
 
 1. `event-schema.json`으로 Envelope와 event/intent 조합을 검증한다.
-2. `event-properties-schema.md`의 required properties 위반을 확인한다.
+2. `event-properties-schema.md`의 required property, 타입, enum 위반을 확인한다.
 3. 실제 UI Trigger가 threshold와 중복 grain을 지키는지 확인한다.
 4. 재전송 Event가 같은 `event_id`를 유지하는지 확인한다.
 5. PA runner가 `agent_llm` metadata를 Collector 전송 시점에 보강하는지 확인한다.

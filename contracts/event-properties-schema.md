@@ -1,7 +1,7 @@
 # Event Properties 계약
 
-작성일: 2026-09-01
-상태: Draft, Event별 semantic validation 구현·E2E 검증 대기
+작성일: 2026-09-03
+상태: v0.2 Properties 기준 확정, 모듈별 구현 반영·E2E 검증 대기
 실행 Envelope 계약: [`event-schema.json`](./event-schema.json)
 설계 설명: [`event-logging-design.md`](../docs/analytics/event-logging-design.md)
 
@@ -101,11 +101,11 @@ validation에서 검사한다.
 `product_image`, `price`, `variant_option`, `cta`, `highlight_badge`, `what_it_is`,
 `what_else`, `ingredient_list`, `ingredient_callout`, `clinical_claim`, `usage_guide`,
 `brand_story`, `persona_match`, `product_meta`, `user_review`, `review_stats`,
-`review_filter`, `recommendation_card`, `product_card`, `navigation`
+`review_filter`, `recommendation_card`, `product_card`, `cart_item`, `navigation`
 
 ### 3.3 `entry_source`
 
-`list_grid`, `promo_pick`, `similar_products`, `quick_look`, `cart`
+`list_grid`, `promo_pick`, `similar_products`, `quick_look`, `cart`, `breadcrumb`
 
 ### 3.4 `navigation_source`
 
@@ -163,8 +163,8 @@ validation에서 검사한다.
 | `scroll_backtrack` | `depth_percent: number`, `distance_px: number` | `section_id: string`, `content_kind: string` |
 | `media_view` | `media_type: string`, `media_index: integer` | `media_id: string`, `image_url_hash: string` |
 | `accordion_toggle` | `section_id: string`, `action: string` | `content_kind: string` |
-| `text_selection` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `vocab_version: string` |
-| `text_copy` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `vocab_version: string` |
+| `text_selection` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
+| `text_copy` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
 
 `text_snippet` 원문은 전송하지 않는다.
 
@@ -226,7 +226,22 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
    `generator_type`이 필요하다. 이 공통 규칙은 JSON Schema에서도 검사한다.
 5. `actor_type='user'`에 synthetic runtime metadata가 있으면 경고하고 분석에는
    사용하지 않는다.
-6. 위반 Event는 `invalid_properties` 등 표준 오류 코드로 `bad_events`에 격리한다.
+6. 위반 Event는 아래 표준 오류 코드로 `bad_events`에 격리한다. 한 Event에 여러
+   위반이 있으면 원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
 7. Collector가 Event별 properties를 검사하지 않는 동안 Spark가 방어적으로 검사한다.
+
+| 우선순위 | error_code | 판정 기준 |
+| --- | --- | --- |
+| 1 | `event_intent_mismatch` | 활성 `event_name`과 `intent` 조합 불일치 |
+| 2 | `missing_required_property` | §4 필수 key 또는 `A 또는 B` 조건 누락 |
+| 3 | `invalid_property_type` | §4·§5에 선언된 타입과 실제 JSON 타입 불일치 |
+| 4 | `invalid_property_enum` | §3에 선언된 허용값 밖의 값 사용 |
+
+`properties`에 계약 표에 없는 key가 존재하는 것만으로 Event를 격리하지 않는다.
+다만 공통 분석 필드로 사용할 key는 이 문서에 타입과 의미를 먼저 추가한다.
+
+`coverage_report.py`는 이 문서의 §3·§4를 직접 읽어 required property, 타입 및 enum을
+검사한다. 정상·오류 예시는 `samples/event-properties.valid.json`과
+`samples/event-properties.invalid.json`에 둔다.
 
 현재 구현과의 차이 및 E2E 확인 대상은 `event-logging-design.md`에서 추적한다.

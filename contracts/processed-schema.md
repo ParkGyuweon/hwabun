@@ -98,6 +98,10 @@ Kafka record를 원문과 함께 보존한다.
 | `bad_recorded_at` | timestamp | N | Spark 판정 시각 |
 | `bad_recorded_date` | date | N | `bad_recorded_at`의 UTC 날짜 |
 
+Event별 Properties 위반의 `error_code`와 우선순위는
+[`event-properties-schema.md` §7](./event-properties-schema.md#7-semantic-validation)을
+따른다. 이 표에서 오류 코드를 다시 정의하지 않는다.
+
 Collector가 Kafka 발행 전에 거절한 요청은 이 Dataset에 들어오지 않는다. 해당 건수는
 Backend metric 또는 후속 별도 error sink의 책임이다.
 

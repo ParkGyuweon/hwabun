@@ -10,8 +10,8 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | --- | --- | --- |
 | 실행 계약 | validator나 테스트가 직접 읽는 Schema·vocabulary | `event-schema.json`, `product-feature-vocab.json` |
 | 명세 계약 | 여러 구성요소가 합의한 grain, key, field 및 처리 경계 | `processed-schema.md`, `recommendation-io-spec.md` |
-| 정상 샘플 | 실행 계약을 만족하는 대표 payload | `samples/` |
-| 검증 코드 | 계약 위반과 구현 drift를 탐지 | `validate_events.py`, `tests/` |
+| 정상·오류 샘플 | 계약 통과 payload와 의도적인 위반 payload | `samples/` |
+| 검증 코드 | 계약 위반과 구현 drift를 탐지 | `validate_events.py`, `coverage_report.py`, `tests/` |
 
 `docs/analytics/`는 계약을 선택한 이유, 처리 흐름, 구현 현황, KPI 해석 및 검증 계획을
 설명한다. 동일한 컬럼·enum·산식을 두 위치에 각각 원본으로 복제하지 않는다. 설명
@@ -38,3 +38,14 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 3. 설명만 바뀌는 경우 계약을 수정하지 않는다.
 4. 계약이 바뀌는 경우 관련 설명 문서는 계약을 복사하지 않고 변경된 계약을
    참조하도록 갱신한다.
+
+## Event 검증 명령
+
+```bash
+python contracts/validate_events.py contracts/samples/raw-event.user.valid.json
+python contracts/coverage_report.py contracts/samples/event-properties.valid.json
+python contracts/coverage_report.py contracts/samples/event-properties.invalid.json
+```
+
+마지막 명령은 의도적인 required property·타입·enum 위반을 탐지하므로 종료 코드 2가
+정상이다.
