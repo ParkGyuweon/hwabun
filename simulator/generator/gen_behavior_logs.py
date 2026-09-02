@@ -283,6 +283,12 @@ DETAIL_LAYOUT = [
     ("reviews",          [("review_stats", None), ("review_filter", None),
                           ("user_review", None)]),
 ]
+# 목록 화면 크기 — **프론트와 같은 값을 쓴다** (frontend/src/pages/ProductListPage.tsx).
+# 여기가 어긋나면 합성 로그와 실제 화면 로그의 노출 수가 달라져서, 노출 대비 클릭
+# 같은 지표를 두 출처에서 같이 볼 수 없다.
+PROMO_SIZE = 10        # 맞춤 기획전 칸 수
+PAGE_SIZE = 25         # 목록 첫 화면 카드 수 ("더 보기" 로 25씩 늘어난다)
+
 LIST_LAYOUT = [("promo_row", "product_card"), ("list_controls", None),
                ("product_grid", "product_card")]
 
@@ -630,11 +636,14 @@ EXPOSURE_CBF = "cbf_v1"
 # 구분할 방법이 없다 (properties 는 계약상 자유 필드라 스키마 변경이 없다)
 EXPOSURE_NAME = EXPOSURE_POPULAR
 
-# 후보 구성. eval_dynamic.py 와 **같은 비율(추천 50%)** 이다 — 추천 Top 만 보면
-# 추천이 자기가 고른 것만 채점하게 되므로 카테고리·무작위를 섞는다.
-# 개수가 두 배인 이유는 이 pool 이 이탈 상품뿐 아니라 **목록 화면 12칸**을
-# 그리는 데도 쓰이기 때문이다. 12칸을 채우고도 남아야 한다.
-POOL_MIX = {"top": 12, "category_popular": 6, "random": 6}
+# 후보 구성. eval_dynamic.py 와 **같은 비율(추천 50% + 카테고리 25% + 무작위 25%)**
+# 이다 — 추천 Top 만 보면 추천이 자기가 고른 것만 채점하게 된다.
+# 개수는 목록 화면 크기에서 유도한다. 이 pool 이 이탈 상품뿐 아니라 **목록 카드
+# PAGE_SIZE 칸**을 그리는 데도 쓰이므로, 한 칸을 빼고도 남아야 한다.
+POOL_SIZE = PAGE_SIZE * 2
+POOL_MIX = {"top": POOL_SIZE // 2,
+            "category_popular": POOL_SIZE // 4,
+            "random": POOL_SIZE - POOL_SIZE // 2 - POOL_SIZE // 4}
 
 
 class CbfExposure:
@@ -771,7 +780,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         rng,
         context,
     )
-    promo = popular[:6]
+    promo = popular[:PROMO_SIZE]
     liked = False
     route = list(bounce) + [target]
     visited = set()
@@ -800,14 +809,16 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             e.tick(); e.emit("product_click", g, entry_source="similar_products",
                              position=rec_list.index(g) + 1)
         else:
-            grid = list(rng.choice([x for x in pool if x != g] or pool,
-                                   size=min(12, len(pool)), replace=False))
+            # size 를 pool 길이로 잡으면 g 를 뺀 만큼 모자라 죽는다
+            cards = [x for x in pool if x != g] or list(pool)
+            grid = list(rng.choice(cards, size=min(PAGE_SIZE, len(cards)),
+                                   replace=False))
             grid = [g] + [x for x in grid if x != g]
-            browse_list(e, promo, grid[:12], rng,
+            browse_list(e, promo, grid[:PAGE_SIZE], rng,
                         dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0),
                         SC=SC, qrng=qrng)
             e.tick(); e.emit("product_click", g,
-                             entry_source="grid" if rng.random() < 0.8 else "promo_pick",
+                             entry_source="list_grid" if rng.random() < 0.8 else "promo_pick",
                              position=1)
         rec_ids = [x for x in by_cat.get(catalog[g]["cat"], []) if x != g][:6]
         is_target = g == target
