@@ -520,7 +520,7 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
     for pos, g in enumerate(grid, 1):
         e.tick(20, 120)
         e.emit("product_impression", None, product_id=g, position=pos,
-               list_id="product_grid")
+               list_id="product_grid", algorithm=EXPOSURE_NAME)
         # 노출 대비 클릭을 재려면 "얼마나 보였나" 가 있어야 한다. 가중 0 이다
         if rng.random() < SC["p_impression_dwell"]:
             e.emit("impression_dwell", None, product_id=g, position=pos,
@@ -605,9 +605,81 @@ def post_events(base_url, events, rps=0, timeout=40):
     return st["sent"], st["dropped"] + st["gave_up"], time.time() - t0
 
 
+# ── 노출 정책 ────────────────────────────────────────────────────────────
+#
+# 사람은 위에 있는 것을 본다. 그런데 지금까지 이 생성기는 전원에게 같은 인기순
+# 화면을 보여줬다 — 건성인 사람과 지성인 사람이 같은 상품을 봤다. 실제 쇼핑몰은
+# 추천이 진열에 영향을 주므로, 노출을 추천 점수로 정하는 정책을 함께 둔다.
+#
+# **노출만 추천이 정한다. 행동은 hidden preference 가 정한다.**
+# 둘 다 추천이 정하면 추천이 자기가 띄운 것을 자기가 맞히는 로그가 되어
+# 아무것도 측정할 수 없다.
+#
+# 이렇게 만든 로그로 추천 정확도를 재지 않는다. 정책이 바뀌면 숫자가 같이
+# 움직여서 "추천이 좋아졌는가" 와 "노출을 많이 했는가" 가 섞이기 때문이다.
+# 대표 정확도는 리뷰 이력 기반 오프라인 평가가 계속 담당한다.
+# 이 로그는 노출 대비 클릭·전환·커버리지를 정책끼리 비교하는 데 쓴다.
+EXPOSURE_POPULAR = "popular_v0"
+EXPOSURE_CBF = "cbf_v1"
+# 이번 실행의 정책. 노출 이벤트에 실어 두지 않으면 나중에 정책이 다른 로그를
+# 구분할 방법이 없다 (properties 는 계약상 자유 필드라 스키마 변경이 없다)
+EXPOSURE_NAME = EXPOSURE_POPULAR
+
+# 후보 구성. eval_dynamic.py 와 **같은 비율(추천 50%)** 이다 — 추천 Top 만 보면
+# 추천이 자기가 고른 것만 채점하게 되므로 카테고리·무작위를 섞는다.
+# 개수가 두 배인 이유는 이 pool 이 이탈 상품뿐 아니라 **목록 화면 12칸**을
+# 그리는 데도 쓰이기 때문이다. 12칸을 채우고도 남아야 한다.
+POOL_MIX = {"top": 12, "category_popular": 6, "random": 6}
+
+
+class CbfExposure:
+    """추천 점수로 방문 후보를 뽑는다. 무엇을 고를지가 아니라 무엇이 보일지를 정한다."""
+
+    def __init__(self, catalog):
+        sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
+        from product_encoder import Encoder
+        from persona_feature import load as load_affinity
+        from recommender import Recommender
+        from user_vector import UserVector
+        self.UserVector = UserVector
+        enc = Encoder()
+        self.M = np.asarray(enc.matrix(), np.float32)
+        self.index = {x["product_id"]: i for i, x in enumerate(enc.products)}
+        self.prior = np.asarray(enc.prior(), dtype=np.float32)
+        self.rec = Recommender(self.M, self.index, self.prior,
+                               affinity=load_affinity(self.index))
+        self.ids = [None] * len(self.index)
+        for g, i in self.index.items():
+            self.ids[i] = g
+
+    def pool(self, persona, seeds, seen, cat, by_cat, rng, n):
+        """seen 은 후보에서 제외할 상품(시드·정답 등). cat 은 같은 카테고리 축이다."""
+        state = self.UserVector()
+        for gid in seeds:                       # 시드는 이미 좋아한 상품이다
+            if gid in self.index:
+                state.observe({"event_name": "add_to_cart", "product_id": gid,
+                               "properties": {}})
+        scores = self.rec.score(state, persona=persona)
+        order = [self.ids[i] for i in np.argsort(-scores)]
+        order = [g for g in order if g not in seen]
+
+        pool = order[:POOL_MIX["top"]]
+        same_cat = [g for g in order if g in set(by_cat.get(cat, [])) and g not in pool][:20]
+        if same_cat:
+            pool += list(rng.choice(same_cat,
+                                    size=min(POOL_MIX["category_popular"], len(same_cat)),
+                                    replace=False))
+        rest = [g for g in order if g not in pool]
+        if rest:
+            pool += list(rng.choice(rest, size=min(POOL_MIX["random"], len(rest)),
+                                    replace=False))
+        pool = list(dict.fromkeys(pool))
+        return pool[:n] if n else pool
+
+
 # ── 페르소나 1명 ─────────────────────────────────────────────────────────
 def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
-                quick_look=True, hidden=None):
+                quick_look=True, hidden=None, exposure=None):
     SC = persona_style(p)
     # Quick Look 전용 난수. persona_id 로만 결정되므로 본 동선 rng 와 독립이다.
     # 덕분에 quick_look=False 로 껐을 때 나머지 궤적이 **완전히 동일**하고,
@@ -671,13 +743,21 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         e.emit("add_to_cart", g, seeded=True, quantity=1,
                price_usd=catalog[g]["price"])
 
-    # 이탈 상품 — 노출 기반(같은 카테고리 -> 인기순). 취향으로 고르지 않는다
+    # 이탈 상품 — **노출**로 고른다. 취향으로 고르지 않는다.
+    #   popular_v0  같은 카테고리 -> 인기순. 전원이 같은 화면을 본다
+    #   cbf_v1      추천 점수가 후보의 절반을 정한다. 사람마다 다른 화면을 본다
+    # 어느 쪽이든 고른 뒤의 행동(체류·담기)은 hidden preference 가 정한다.
     regret = None          # 담았다 뺄 이탈 상품 (최대 1개)
     cat = catalog[target]["cat"]
-    pool = [g for g in by_cat.get(cat, []) if g not in seq]
-    pool += [g for g in popular if g not in seq and g not in pool]
     n_bounce = int(rng.integers(*SC["bounce_range"]))
-    bounce = list(rng.choice(pool, size=min(n_bounce, len(pool)), replace=False))
+    if exposure is not None:
+        # 시드만 준다 — target 은 정답이라 노출 계산에 넣지 않는다
+        pool = exposure.pool(p, seeds, set(seq), cat, by_cat, rng, n=None)
+        bounce = pool[:n_bounce]
+    else:
+        pool = [g for g in by_cat.get(cat, []) if g not in seq]
+        pool += [g for g in popular if g not in seq and g not in pool]
+        bounce = list(rng.choice(pool, size=min(n_bounce, len(pool)), replace=False))
 
     e = Emitter(
         sink,
@@ -809,7 +889,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
 def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
          scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
          generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
-         pref_profile="default", pref_seed=0):
+         pref_profile="default", pref_seed=0, exposure=EXPOSURE_POPULAR):
     context = SimulationContext(
         scenario_id=scenario_id,
         simulation_run_id=simulation_run_id or default_simulation_run_id(),
@@ -852,6 +932,15 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
     else:
         log("행동 결정: 규칙 기반 (target 에 전환을 강제한다)."
             " 평가용 로그라면 --behavior hidden_preference 를 쓸 것")
+    globals()["EXPOSURE_NAME"] = exposure
+    exp = None
+    if exposure == EXPOSURE_CBF:
+        exp = CbfExposure(catalog)
+        log(f"노출 정책: {EXPOSURE_CBF} — 추천 점수가 방문 후보의 절반을 정한다."
+            " 이 로그로 추천 정확도를 재지 않는다")
+    else:
+        log(f"노출 정책: {EXPOSURE_POPULAR} — 같은 카테고리 -> 인기순 (전원 같은 화면)")
+
     rng = np.random.default_rng(42)
     sink, meta, t0 = [], [], time.time()
     for i, p in enumerate(people):
@@ -872,6 +961,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
             context,
             quick_look=quick_look,
             hidden=hidden,
+            exposure=exp,
         )
         if r: meta.append(r)
         if not limit and (i + 1) % 2000 == 0:
@@ -955,6 +1045,12 @@ if __name__ == "__main__":
                     default=BEHAVIOR_RULE,
                     help="행동을 무엇이 정하는가. 평가용 로그는 hidden_preference "
                          "(target 에 전환을 강제하지 않는다)")
+    ap.add_argument("--exposure", choices=(EXPOSURE_POPULAR, EXPOSURE_CBF),
+                    default=EXPOSURE_POPULAR,
+                    help="무엇이 화면에 노출되는가. popular_v0 은 같은 카테고리->인기순 "
+                         "(전원 같은 화면), cbf_v1 은 추천 점수가 후보의 절반을 정한다. "
+                         "**노출만 정하고 행동은 hidden preference 가 정한다.** "
+                         "정책이 다른 로그의 수치를 나란히 비교하지 말 것")
     ap.add_argument("--pref-profile", default="default",
                     help="hidden preference 가중치 조합 (강건성 평가용)")
     ap.add_argument("--pref-seed", type=int, default=0,
@@ -978,4 +1074,5 @@ if __name__ == "__main__":
         behavior=a.behavior,
         pref_profile=a.pref_profile,
         pref_seed=a.pref_seed,
+        exposure=a.exposure,
     )
