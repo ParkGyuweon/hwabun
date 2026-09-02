@@ -130,15 +130,52 @@ export default function Onboarding({
   );
 }
 
-/** 레이아웃 미니어처. 실제 화면 구조를 도형으로 그린다 */
+/**
+ * 레이아웃 미리보기.
+ *
+ * 회색 박스만 그려 두었더니 "메뉴가 어디고 상품 표가 어디 나오는지" 를 알 수 없었다.
+ * 실제 화면에 나오는 이름을 그대로 적은 와이어프레임으로 그린다 — 사장님이 고르는
+ * 것은 도형이 아니라 "내 상품 순위가 어디에 뜨는가" 다.
+ */
 function LayoutThumb({ layout }: { layout: LayoutKey }) {
+  const menu = ['Overview', '상품 분석', '정보 관심도', '고객군', '행동 분석'];
+  const kpis =
+    layout === 'compact'
+      ? ['상세 조회', '진입률', '장바구니', '성분 열람', '리뷰 열람', '이탈률']
+      : ['상세 조회', '상세 진입률', '장바구니 전환율', '성분 열람률'];
+  const panels =
+    layout === 'compact' ? ['상품 TOP 10', '퍼널', '고객군'] : ['인기 상품 TOP 5', '전환 퍼널'];
+
   return (
     <span className={`lthumb lthumb--${layout}`} aria-hidden="true">
-      <i className="lthumb__nav" />
+      <i className="lthumb__nav">
+        <em>메뉴</em>
+        {menu.map((m, i) => (
+          <b key={m} className={i === 0 ? 'is-on' : ''}>
+            {m}
+          </b>
+        ))}
+      </i>
       <i className="lthumb__main">
-        <b />
-        <b />
-        <b />
+        <b className="lthumb__banner">지금 손봐야 할 것 — 노출→클릭 구간 이탈</b>
+        <span className="lthumb__kpis">
+          {kpis.map((k) => (
+            <b key={k} className="lthumb__kpi">
+              <small>{k}</small>
+              <strong>00.0%</strong>
+            </b>
+          ))}
+        </span>
+        <span className="lthumb__panels">
+          {panels.map((p) => (
+            <b key={p} className="lthumb__panel">
+              <small>{p}</small>
+              <u />
+              <u />
+              <u />
+            </b>
+          ))}
+        </span>
       </i>
     </span>
   );

@@ -376,16 +376,6 @@ table.data tr:hover td {
   font-size: 15px;
 }
 
-.lthumb {
-  background: var(--ground);
-  border: 0;
-  border-radius: 10px;
-}
-
-.lthumb__main b {
-  background: var(--panel);
-}
-
 /* ---------- Platform 조각 ---------- */
 
 .pill {

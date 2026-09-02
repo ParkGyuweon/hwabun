@@ -458,60 +458,206 @@
   flex: 2;
 }
 
-/* 레이아웃 미니어처 */
+/*
+ * 레이아웃 미리보기 — 라벨이 들어간 와이어프레임.
+ * 실제 화면의 이름(Overview·상품 분석·상세 진입률·인기 상품 TOP 5)을 그대로 적어서
+ * 고르는 사람이 "무엇이 어디에 뜨는지" 를 읽을 수 있게 한다. 글자는 작지만 읽힌다.
+ */
 .lthumb {
   display: grid;
-  gap: 4px;
-  height: 64px;
-  background: var(--panel);
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  padding: 6px;
+  gap: 6px;
+  height: 156px;
+  padding: 8px;
+  background: var(--ground);
+  border-radius: 10px;
+  font-size: 8.5px;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-align: left;
 }
 
 .lthumb i {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-style: normal;
 }
 
 .lthumb__nav {
-  background: var(--brand-soft);
+  gap: 3px;
+  padding: 6px 5px;
+  background: var(--panel);
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.lthumb__nav em {
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+.lthumb__nav b {
+  font-weight: 500;
+  padding: 2px 5px;
   border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lthumb__nav b.is-on {
+  background: rgb(var(--brand-rgb) / 0.18);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .lthumb__main {
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(3, 1fr);
-  align-content: start;
+  gap: 5px;
 }
 
-.lthumb__main b {
+.lthumb__banner {
   display: block;
-  height: 14px;
-  background: var(--line-soft);
-  border-radius: 3px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--ink);
+  background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.22), var(--panel) 70%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.lthumb--sidebar {
-  grid-template-columns: 22px 1fr;
+.lthumb__kpis,
+.lthumb__panels {
+  display: grid;
+  gap: 5px;
 }
 
-.lthumb--topbar {
-  grid-template-rows: 10px 1fr;
+.lthumb__kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.lthumb--compact {
-  grid-template-columns: 14px 1fr;
+.lthumb__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 6px;
+  background: var(--panel);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+}
+
+.lthumb__kpi small {
+  font-size: 7.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lthumb__kpi strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.lthumb__panels {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1;
+}
+
+.lthumb__panel {
+  display: flex;
+  flex-direction: column;
   gap: 3px;
+  padding: 5px 6px;
+  background: var(--panel);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+}
+
+.lthumb__panel small {
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lthumb__panel u {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--brand-soft);
+}
+
+.lthumb__panel u:nth-child(3) {
+  width: 78%;
+}
+
+.lthumb__panel u:nth-child(4) {
+  width: 56%;
+}
+
+/* 사이드바: 왼쪽 세로 메뉴 */
+.lthumb--sidebar {
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+
+/* 상단 탭: 메뉴가 위에 한 줄, 본문은 전폭 */
+.lthumb--topbar {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.lthumb--topbar .lthumb__nav {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.lthumb--topbar .lthumb__nav em {
+  margin: 0;
+}
+
+/* 컴팩트: 좁은 메뉴, KPI 6개, 패널 3개 */
+.lthumb--compact {
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 4px;
+}
+
+.lthumb--compact .lthumb__nav {
+  padding: 5px 4px;
 }
 
 .lthumb--compact .lthumb__main {
-  grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
+  gap: 4px;
 }
 
-.lthumb--compact .lthumb__main b {
-  height: 10px;
+.lthumb--compact .lthumb__kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.lthumb--compact .lthumb__kpi {
+  padding: 4px 5px;
+}
+
+.lthumb--compact .lthumb__kpi strong {
+  font-size: 9.5px;
+}
+
+.lthumb--compact .lthumb__panels {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .onboard__foot {

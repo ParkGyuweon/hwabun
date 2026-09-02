@@ -165,9 +165,16 @@ body {
   padding: 40px 22px 96px;
 }
 
+/*
+ * 목록의 부모는 클래스 없는 div 라 폭을 잡아줄 것이 없다. 여기서 직접 가둔다.
+ * 처음에 max-width 를 풀었더니 1,900px 화면에서 카드가 7열 × 242px 로 퍼졸고
+ * 기획전 카드도 그 폭에 늘어났다. 4열이 나오는 폭이 상품 사진에 맞다.
+ */
 .list {
-  max-width: none;
-  gap: 88px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 22px;
+  gap: 64px;
 }
 
 .breadcrumb {
@@ -257,7 +264,11 @@ body {
   background: var(--color-brand-soft);
 }
 
+/* 고민·정렬 셀렉트를 같은 필 모양으로. 고민 쪽이 200px 박스로 튀어 보였다 */
+.list__filters select,
 .list__sort select {
+  width: auto;
+  min-width: 0;
   padding: 7px 34px 7px 14px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-pill);
@@ -265,6 +276,15 @@ body {
   font: inherit;
   font-size: 13px;
   color: var(--color-ink);
+}
+
+.list__filters label,
+.list__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-ink-soft);
 }
 
 .list__count {

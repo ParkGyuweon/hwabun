@@ -22,17 +22,17 @@ export const LAYOUTS: Array<{ key: LayoutKey; label: string; desc: string }> = [
   {
     key: 'sidebar',
     label: '사이드바',
-    desc: '왼쪽에 메뉴, 오른쪽에 본문. 화면 사이를 자주 오갈 때',
+    desc: '왼쪽 메뉴에서 화면을 오가며 본다. 매일 여러 화면을 확인하는 분께',
   },
   {
     key: 'topbar',
     label: '상단 탭',
-    desc: '메뉴를 위에 한 줄로. 본문이 넓어져 표와 그래프가 크게 보인다',
+    desc: '메뉴는 위에 한 줄, 본문은 넓게. 표와 그래프를 크게 보고 싶은 분께',
   },
   {
     key: 'compact',
     label: '컴팩트',
-    desc: '메뉴를 좁히고 간격을 줄인다. 한 화면에 더 많은 숫자를 볼 때',
+    desc: '좁은 메뉴, 촘촘한 카드. 한 화면에서 숫자를 많이 훑는 분께',
   },
 ];
 
