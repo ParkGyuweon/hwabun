@@ -858,7 +858,58 @@ def detail_title(user):
     return ""
 
 
-def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=None):
+class DecisionLog:
+    """LLM 의 판단 근거를 별도 파일로 남긴다.
+
+    왜 이벤트에 안 넣는가 — 이벤트는 계약(36종)이고 property 도 계약이 정한 것만
+    쓴다. `reason` 은 거기에 없다. 그렇다고 콘솔에만 찍으면 실행이 끝나는 순간
+    사라진다 (8/31 GMS 100명 실행의 근거 문장이 그렇게 사라졌다).
+
+    이벤트 로그와는 `persona_id` + `simulation_run_id` + 시각으로 붙는다.
+    정성 검증 축의 근거이고, 발표에서 실제 문장을 인용할 때 쓴다.
+    """
+
+    def __init__(self, path, run_id, model):
+        self.path = path
+        self.run_id = run_id
+        self.model = model
+        self.n = 0
+        self.f = None
+        if path:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            self.f = open(path, "w", encoding="utf-8", newline="\n")
+
+    def write(self, persona_id, turn, screen, allowed, obj, act, tgt, ok):
+        if self.f is None:
+            return
+        self.f.write(json.dumps({
+            "simulation_run_id": self.run_id,
+            "model": self.model,
+            "persona_id": persona_id,
+            "turn": turn,
+            "decided_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+                          .replace("+00:00", "Z"),
+            "screen": screen,
+            "allowed": allowed,
+            # 모델이 뭐라고 했는가
+            "llm_action": (obj or {}).get("action"),
+            "llm_target": (obj or {}).get("target"),
+            "reason": (obj or {}).get("reason"),
+            # 코드가 무엇으로 바꿨는가. 둘이 다르면 교정된 턴이다
+            "action": act,
+            "target": tgt,
+            "corrected": bool(obj) and (obj.get("action") != act),
+            "succeeded": bool(ok),
+        }, ensure_ascii=False) + "\n")
+        self.n += 1
+
+    def close(self):
+        if self.f is not None:
+            self.f.close()
+
+
+def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=None,
+            decisions=None):
     system = SYSTEM_TMPL.format(profile=profile_text(persona),
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
     calls, done, failed, carted = 0, 0, 0, 0
@@ -1006,6 +1057,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         failed += (not okd)
         if okd and act == "add_to_cart":
             carted += 1
+        if decisions is not None:
+            decisions.write(persona["persona_id"], turn, kind, acts, obj, act, tgt, okd)
         if verbose:
             mark = "  " if okd else "! "
             print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
@@ -1047,6 +1100,8 @@ def run_parallel(a):
             argv.append(flag)
     if a.api_base:                  # 자체 모델 서버 주소도 워커에 물려준다
         argv += ["--api-base", a.api_base]
+    if a.decisions and a.decisions.lower() == "off":
+        argv += ["--decisions", "off"]   # 경로는 샤드별 --out 에서 유도된다
     if a.post:                      # 안 넘기면 워커가 파일로만 쓰고 수집이 안 된다
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
@@ -1098,6 +1153,9 @@ def main():
     ap.add_argument("--local-model", default=None, metavar="HF_ID",
                     help="로컬 GPU 의 오픈 모델을 쓴다 (크레딧 0). "
                          "예) HuggingFaceTB/SmolLM2-1.7B-Instruct")
+    ap.add_argument("--decisions",
+                    help="LLM 판단 근거를 남길 jsonl 경로. 안 주면 --out 옆에"
+                         " *_decisions.jsonl 로 만든다. 'off' 면 남기지 않는다")
     ap.add_argument("--api-base",
                     help="OpenAI 호환 자체 모델 서버 주소. 예) http://70.12.130.103:8501/v1"
                          " (GPU 서버에 model_server.py 를 띄워 두고 쓴다. 크레딧 0)")
@@ -1189,6 +1247,16 @@ def main():
           f"scenario_id={a.scenario_id} simulation_run_id={simulation_run_id}")
     print(f"수집 API {a.post}" if a.post else "수집 API 전송 없음 (파일로만 남김)")
 
+    dec_path = a.decisions
+    if dec_path is None:
+        base, ext = os.path.splitext(a.out)
+        dec_path = f"{base}_decisions{ext}"
+    elif dec_path.lower() == "off":
+        dec_path = None
+    decisions = DecisionLog(dec_path, simulation_run_id, MODEL)
+    if dec_path:
+        print(f"판단 근거 {dec_path}")
+
     from playwright.sync_api import sync_playwright
     tot = dict(calls=0, done=0, failed=0, carted=0, broken=0)
     t0 = time.time()
@@ -1234,6 +1302,7 @@ def main():
                   f"{p['skin_tone']}  구매 {p['n_products']}개")
             script = ScriptedLLM(a.script.split(",")) if a.script else None
             r = run_one(page, client, p, a.turns, a.cache, a.dry_run, not a.quiet,
+                        decisions=decisions,
                         script=script)
             for k in tot:
                 tot[k] += r[k]
@@ -1255,6 +1324,10 @@ def main():
               f"  (100명 환산 {tot['calls'] * 0.6 / max(len(personas),1) * 100:,.0f})")
     top = sorted(sink.kinds.items(), key=lambda x: -x[1])[:8]
     print(f"  수집 로그 {sink.n}건 -> {a.out}")
+    if decisions.n:
+        print(f"  판단 근거 {decisions.n}건 -> {decisions.path}"
+              f"  (교정된 턴 포함. 이벤트와는 persona_id+simulation_run_id 로 붙는다)")
+    decisions.close()
     if top:
         print("  " + " · ".join(f"{k} {v}" for k, v in top))
 
