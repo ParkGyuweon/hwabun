@@ -24,7 +24,7 @@ export const reviews = reviewsData as unknown as Review[];
 
 /* ---------- 시드 고정 난수 ---------- */
 
-function hashString(input: string): number {
+export function hashString(input: string): number {
   let h = 2166136261;
   for (let i = 0; i < input.length; i += 1) {
     h ^= input.charCodeAt(i);
@@ -34,7 +34,7 @@ function hashString(input: string): number {
 }
 
 /** mulberry32. 같은 시드면 언제나 같은 수열 */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = seed;
   return () => {
     a |= 0;

@@ -337,7 +337,7 @@ export default function ProductListPage({
           <p>
             {persona
               ? `${skinTypeLabel(persona.skin_type)} 피부에 맞춘 추천`
-              : '신제품 · 한정판 · 세포라 단독'}
+              : '신제품 · 한정판 · BLOOM 단독'}
           </p>
         </header>
         <ul className="list__row" ref={promoRef as React.Ref<HTMLUListElement>}>

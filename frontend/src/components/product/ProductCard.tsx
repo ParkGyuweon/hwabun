@@ -10,7 +10,7 @@ const PLACEHOLDER = '/images/product-placeholder.svg';
 const BADGE_LABEL: Record<string, string> = {
   new: '신제품',
   limited: '한정판',
-  exclusive: '세포라 단독',
+  exclusive: 'BLOOM 단독',
   online_only: '온라인 전용',
 };
 

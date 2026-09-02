@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
 import ProductsScreen from './screens/ProductsScreen';
 import BehaviorScreen from './screens/BehaviorScreen';
@@ -6,6 +6,10 @@ import ContentScreen from './screens/ContentScreen';
 import SegmentsScreen from './screens/SegmentsScreen';
 import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
+import Onboarding from './Onboarding';
+import { MotifLine } from './components';
+import { applyTheme, loadPrefs, savePrefs, DEFAULT_PREFS } from './lib/prefs';
+import type { Prefs } from './lib/prefs';
 
 type ScreenKey =
   | 'overview'
@@ -47,28 +51,64 @@ const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: strin
 ];
 
 /**
- * 브랜드 담당자용 대시보드 v0.1.
+ * HWABUN — 참여 브랜드 담당자용 대시보드 v0.2.
  *
  * 쇼핑몰과 진입점이 분리되어 있다 (/dashboard.html — 쇼핑몰 어디에서도 링크하지 않는다).
  * 실제 접근 제어(계정·권한)는 백엔드 범위이고, 여기서는 화면과 지표 정의를 확정한다.
  *
- * 흑백 단색으로 유지한다. 지표 화면에서 색은 판단을 앞지른다.
+ * 첫 진입에서 레이아웃과 색을 고른다. 50개 브랜드가 같은 인프라를 나눠 쓰되
+ * 화면은 각자에 맞게 — 그래서 선택은 사용자 몫이고, 기본값은 브랜딩 가이드의 '화분' 이다.
+ * 색은 자료 표시에만 쓰고 숫자는 Charcoal 하나로 간다는 원칙은 테마와 무관하게 유지한다.
  */
 export default function DashboardApp() {
+  const [prefs, setPrefs] = useState<Prefs | null>(() => loadPrefs());
+  const [editing, setEditing] = useState(false);
   const [screen, setScreen] = useState<ScreenKey>('overview');
   const [days, setDays] = useState(14);
   /** 리뷰·성분 화면이 공유하는 상품 선택 */
   const [productId, setProductId] = useState<string | null>(null);
 
+  useEffect(() => {
+    applyTheme((prefs ?? DEFAULT_PREFS).theme);
+  }, [prefs]);
+
+  const commit = (next: Prefs) => {
+    savePrefs(next);
+    setPrefs(next);
+    setEditing(false);
+  };
+
+  if (prefs === null || editing) {
+    return (
+      <Onboarding
+        initial={prefs ?? DEFAULT_PREFS}
+        onDone={commit}
+        onCancel={
+          prefs === null
+            ? undefined
+            : () => {
+                applyTheme(prefs.theme);
+                setEditing(false);
+              }
+        }
+      />
+    );
+  }
+
   const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
 
   return (
-    <div className="console">
+    <div className="console" data-layout={prefs.layout}>
       <aside className="sidebar">
         <div className="sidebar__brand">
-          <strong>Insight Console</strong>
-          <span>화장품 소비 행동 분석</span>
+          <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />
+          <div>
+            <strong>HWABUN</strong>
+            <span>{prefs.brandName || '화분 · Beauty Data, Naturally Yours'}</span>
+          </div>
         </div>
+
+        <MotifLine variant="divider" compact />
 
         <nav className="sidebar__nav" aria-label="대시보드 화면">
           {SCREENS.map((s) => (
@@ -83,11 +123,16 @@ export default function DashboardApp() {
           ))}
         </nav>
 
-        <p className="sidebar__foot">
-          v0.1 · 이벤트 36종 기준
-          <br />
-          행동 지표는 수집 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.
-        </p>
+        <div className="sidebar__foot">
+          <button type="button" className="sidebar__settings" onClick={() => setEditing(true)}>
+            화면 설정
+          </button>
+          <p>
+            v0.2 · 이벤트 36종 기준
+            <br />
+            행동 지표는 수집 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.
+          </p>
+        </div>
       </aside>
 
       <main className="main">
@@ -119,10 +164,7 @@ export default function DashboardApp() {
           <ReviewsScreen productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'ingredients' ? (
-          <IngredientsScreen
-            productId={productId}
-            onProductChange={setProductId}
-          />
+          <IngredientsScreen productId={productId} onProductChange={setProductId} />
         ) : null}
       </main>
     </div>

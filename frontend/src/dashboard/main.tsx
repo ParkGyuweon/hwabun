@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import DashboardApp from './DashboardApp';
 import './dashboard.css';
+import './dashboard-themes.css';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>

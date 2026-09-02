@@ -16,13 +16,12 @@ interface SiteHeaderProps {
 }
 
 /**
- * 세포라 상단 바를 단순화한 형태.
+ * BLOOM 상단 바.
  *
  * 계정 자리에는 접속 중인 페르소나를 올린다. 이 사이트에서는 페르소나가 곧 사용자다.
  *
  * 카테고리 메뉴는 **데이터에 실제로 있는 값만** 건다.
- * 처음에는 세포라를 그대로 흉내내 Makeup·Hair 같은 항목을 span 으로 두었는데
- * 두 가지 문제가 있었다.
+ * 처음에는 Makeup·Hair 같은 항목을 span 으로 두었는데 두 가지 문제가 있었다.
  *
  * 1. 우리 상품 200개는 전부 Skincare 라 그 메뉴에 보여줄 것이 없다.
  * 2. span 은 눌러도 아무 일이 없어서 **누를 때마다 `dead_click` 이 찍혔다.**
@@ -42,15 +41,15 @@ export default function SiteHeader({
   return (
     <header className="site-header">
       <div className="site-header__promo">
-        <strong>Get up to 3 Free* Trial Sizes</strong> with min. spend.{' '}
-        <strong>Use code SCOREMORE.</strong>{' '}
-        <span className="site-header__promo-terms">*Terms apply. APP ONLY.</span>{' '}
-        <strong>LEARN MORE ›</strong>
+        <strong>취향이 피어나는 뷰티 쇼핑 공간</strong> · 오늘 담은 상품은 무료배송{' '}
+        <span className="site-header__promo-terms">*3만원 이상 · 기간 한정</span>
       </div>
 
       <div className="site-header__main">
-        <button type="button" className="site-header__logo" onClick={onHome}>
-          SEPHORA
+        <button type="button" className="site-header__logo" onClick={onHome} aria-label="BLOOM 홈">
+          {/* 파비콘용으로 줄인 마크(192px). 표시 28px 라 충분하고 원본은 2450px 다 */}
+          <img src="/brand/bloom-mark.png" alt="" width="28" height="28" />
+          <span>BLOOM</span>
         </button>
 
         <nav className="site-header__nav" aria-label="주요 카테고리">
@@ -68,7 +67,7 @@ export default function SiteHeader({
             data-log-action="view_cart"
             onClick={onCart}
           >
-            Basket
+            장바구니
             <span className="site-header__basket-count">{cartCount}</span>
           </button>
           <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />

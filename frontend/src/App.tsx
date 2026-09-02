@@ -375,8 +375,8 @@ export default function App() {
   /** 탭 제목. 히스토리 목록에도 이 값이 남는다 */
   useEffect(() => {
     document.title = product
-      ? `${product.product_name} - ${product.brand_name} | SEPHORA`
-      : 'SEPHORA';
+      ? `${product.product_name} - ${product.brand_name} | BLOOM`
+      : 'BLOOM';
   }, [product]);
 
   /**

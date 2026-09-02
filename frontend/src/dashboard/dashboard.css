@@ -21,8 +21,14 @@
   --ground: #faf7f1;
   --panel: #ffffff;
 
-  /* 브랜드 색. 강조와 자료 표시에만 쓴다 */
+  /*
+   * 브랜드 색. 강조와 자료 표시에만 쓴다.
+   * 기본 테마 '화분' = 브랜딩 가이드 그대로. 다른 테마는 아래 :root[data-theme] 에서
+   * 이 여섯 토큰만 바꾼다. 컴포넌트는 토큰만 본다.
+   */
   --brand: #a8c96e;
+  /* 히트맵처럼 투명도를 섞어야 하는 자리용. --brand 와 같은 색을 rgb 채널로 */
+  --brand-rgb: 168 201 110;
   --brand-soft: #d8e9c3;
   --accent: #e68fa1;
   --accent-soft: #f7dfe4;

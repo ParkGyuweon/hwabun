@@ -1,19 +1,38 @@
 /* 기본 리셋과 디자인 토큰 */
 
 :root {
-  --color-ink: #111111;
-  --color-ink-soft: #555555;
-  --color-ink-faint: #888888;
-  --color-line: #e2e2e2;
-  --color-line-soft: #f0f0f0;
+  /*
+   * BLOOM 브랜드 팔레트 (브랜딩 가이드 BLOOM_COLOR PALLETE 기준).
+   *
+   *   Fresh Green      #A8C96E  Primary   — 생기, 성장
+   *   Soft Mint Green  #D8E9C3  Light     — 청량감, 발견의 시작
+   *   Soft Blossom Pink #E68FA1 Accent    — 설렘, 뷰티 감성
+   *   Earthy Brown     #7A5B43  Support   — 안정감, 따뜻한 연결
+   *   Charcoal         #2B2B2B  Text      — 주요 텍스트
+   *   Soft Gray        #6B7280  Text 2nd  — 보조 텍스트
+   *   Light Gray       #E9ECEF  Neutral   — 구분선, 보조 배경
+   *
+   * 토큰 이름은 그대로 두고 값만 바꿨다. 화면 CSS 2,200줄이 이 이름을 쓴다.
+   */
+  --color-ink: #2b2b2b;
+  --color-ink-soft: #6b7280;
+  --color-ink-faint: #9aa0a6;
+  --color-line: #e9ecef;
+  --color-line-soft: #f1f3f5;
   --color-surface: #ffffff;
-  --color-surface-soft: #f7f6f5;
-  --color-accent: #d0021b;
-  --color-star: #111111;
+  --color-surface-soft: #faf7f1;
+  /* 강조. 한정판 배지·찜·CTA 보조. 세포라 빨강 자리에 Blossom Pink */
+  --color-accent: #e68fa1;
+  --color-star: #a8c96e;
 
-  /* 세포라 상단 프로모 바 라벤더 */
-  --color-promo: #ecd9f5;
-  --color-promo-ink: #1c1719;
+  --color-brand: #a8c96e;
+  --color-brand-soft: #d8e9c3;
+  --color-brand-deep: #8fb35a;
+  --color-support: #7a5b43;
+
+  /* 상단 프로모 바. 라벤더 자리에 Soft Mint */
+  --color-promo: #d8e9c3;
+  --color-promo-ink: #3f4a2e;
 
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -36,7 +55,7 @@
 
   --page-max: 1200px;
 
-  font-family: 'Helvetica Neue', Helvetica, Arial, 'Apple SD Gothic Neo',
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Helvetica Neue', Helvetica, Arial,
     'Malgun Gothic', sans-serif;
   color: var(--color-ink);
   background: var(--color-surface);

@@ -1,0 +1,311 @@
+/*
+ * HWABUN Platform 전용 조각.
+ * 토큰·패널·KPI·표는 dashboard.css 를 그대로 쓴다. 여기는 이 화면에만 있는 것 —
+ * 상태 알약, 파이프라인 목록, 분포 히스토그램, 벤치마크 대비 표시.
+ */
+
+/* ---------- 상태 알약 ---------- */
+
+/*
+ * 의미 색이다. 테마와 무관하게 같아야 하므로 브랜드 토큰을 쓰지 않는다.
+ * 정상은 색을 거의 안 쓴다 — 대부분이 정상이라, 정상이 눈에 띄면 주의가 묻힌다.
+ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pill--ok {
+  color: #4f7a3a;
+  border-color: transparent;
+  background: rgb(168 201 110 / 0.22);
+}
+
+.pill--watch {
+  color: #8a5a2b;
+  border-color: transparent;
+  background: rgb(230 143 161 / 0.22);
+}
+
+.pill--stale {
+  color: #5c626c;
+  border-color: transparent;
+  background: var(--line-soft);
+}
+
+/* ---------- 파이프라인 ---------- */
+
+.pipe {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.pipe__row {
+  display: grid;
+  grid-template-columns: 12px 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.pipe__row:last-child {
+  border-bottom: 0;
+}
+
+.pipe__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+.pipe__row--watch .pipe__dot {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.pipe__stage {
+  font-weight: 600;
+}
+
+.pipe__detail {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipe__metric {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* ---------- 살펴볼 브랜드 ---------- */
+
+.tlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tlist__row {
+  appearance: none;
+  font: inherit;
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tlist__row:hover {
+  background: var(--line-soft);
+}
+
+.tlist__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tlist__why {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- 상태 필터 ---------- */
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.seg button {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.seg button.is-active {
+  background: var(--ink);
+  color: var(--panel);
+}
+
+/* ---------- 브랜드 표 ---------- */
+
+table.data--tenants {
+  min-width: 960px;
+}
+
+table.data--tenants tbody tr {
+  cursor: pointer;
+}
+
+table.data--tenants tr.is-selected td {
+  background: var(--brand-soft);
+}
+
+.delta {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+
+.delta em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+/* 좋음/나쁨은 의미 색. 절제해서 글자색만 */
+.delta--good em {
+  color: #4f7a3a;
+}
+
+.delta--bad em {
+  color: #b5535f;
+}
+
+/* ---------- 분포 히스토그램 ---------- */
+
+.hist {
+  position: relative;
+  height: 120px;
+  /* 표시 라벨이 위로 튀어나오므로 여백 */
+  margin-top: 26px;
+}
+
+.hist__bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.hist__bar {
+  flex: 1;
+  background: var(--brand-soft);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: background 0.12s;
+}
+
+.hist__bar:hover {
+  background: var(--brand);
+}
+
+.hist__mark {
+  position: absolute;
+  top: -22px;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed var(--ink-soft);
+  pointer-events: none;
+}
+
+.hist__mark em {
+  position: absolute;
+  top: -2px;
+  left: 6px;
+  font-style: normal;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist__mark--mine {
+  border-left: 2px solid var(--accent);
+}
+
+.hist__mark--mine em {
+  color: var(--ink);
+  font-weight: 600;
+  top: 14px;
+}
+
+.hist__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 질문 목록 ---------- */
+
+.qlist {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qlist li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.qlist strong {
+  font-size: 14px;
+}
+
+.qlist span {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.qlist code {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+}

@@ -147,6 +147,46 @@ export function Funnel({ steps }: { steps: Array<{ label: string; value: number;
   );
 }
 
+/**
+ * HWABUN 그래픽 모티프 — "Data Point & Connection".
+ *
+ * 브랜딩 가이드의 핵심 모티프다. 채운 원은 있음, 빈 원은 없음(또는 아직)을 뜻하고,
+ * 실선은 연결된 것, 점선은 아직 이어지지 않은 것이다. 색은 팔레트 토큰을 그대로 써서
+ * 테마가 바뀌면 같이 바뀐다.
+ *
+ * divider: 구역 사이 구분선. empty: 자료가 없을 때 빈 자리 그래픽.
+ */
+export function MotifLine({
+  variant = 'divider',
+  compact = false,
+}: {
+  variant?: 'divider' | 'empty';
+  compact?: boolean;
+}) {
+  const w = compact ? 160 : 320;
+  const cy = 12;
+  const r = compact ? 5 : 7;
+  // 노드 x 좌표. 브랜딩 가이드의 Core Motif 순서: 주색 → 빈원 → 강조 → 점선 → 빈원(회색)
+  const xs = [0.06, 0.32, 0.58, 0.9].map((f) => Math.round(w * f));
+  return (
+    <svg
+      className={`motif motif--${variant}`}
+      viewBox={`0 0 ${w} ${cy * 2}`}
+      width={w}
+      height={cy * 2}
+      role="img"
+      aria-hidden="true"
+    >
+      <line className="motif__line" x1={xs[0]} y1={cy} x2={xs[2]} y2={cy} />
+      <line className="motif__line motif__line--dashed" x1={xs[2]} y1={cy} x2={xs[3]} y2={cy} />
+      <circle className="motif__node motif__node--brand" cx={xs[0]} cy={cy} r={r} />
+      <circle className="motif__node motif__node--hollow" cx={xs[1]} cy={cy} r={r} />
+      <circle className="motif__node motif__node--accent" cx={xs[2]} cy={cy} r={r} />
+      <circle className="motif__node motif__node--faint" cx={xs[3]} cy={cy} r={r} />
+    </svg>
+  );
+}
+
 /** 단순 선 그래프. 면을 옅게 깔고 마지막 점만 강조한다 */
 export function LineChart({
   points,
