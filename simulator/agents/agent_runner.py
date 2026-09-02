@@ -101,6 +101,10 @@ MIN_DETAILS_BEFORE_LEAVE = 3   # 이만큼은 상세를 보고 나서야 나갈 
 # 매 턴 화면 판정을 찍는다. 왜 그 행동이 열렸는지 못 밝힐 때만 켠다 (--debug-screen)
 DEBUG_SCREEN = False
 
+# 목록 화면 주소. 딥링크로 상세에 바로 들어온 사람은 **히스토리에 앞 페이지가 없어**
+# go_back() 이 about:blank 로 간다. 그때 돌아갈 곳을 알고 있어야 복구가 된다
+LIST_URL = None
+
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
 # 로거가 실사용자와 똑같이 actor_type='user' 로 남긴다.
@@ -314,6 +318,30 @@ action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에
 # 2. 화면 -> 텍스트
 # ============================================================================
 
+def screen_is_broken(page):
+    """화면이 죽었는가 — 카드도 없고 담기 버튼도 없다.
+
+    프론트 AboutProduct.tsx 가 `highlighted_ingredients` 없는 상품에서 던져
+    React 가 트리를 통째로 버린다 (202개 중 78개 · 목록 첫 화면 25개 중 10개).
+    빈 화면에서는 어떤 조작도 성공하지 못하므로 에이전트가 남은 턴을 전부 버린다.
+    """
+    try:
+        return (not page.locator(".card[data-product-id]").count()
+                and not page.locator('[data-log-action="add_to_cart"]').count())
+    except Exception:
+        return False
+
+
+def recover_screen(page):
+    """목록으로 되돌려 세션을 살린다. 돌아갈 곳을 모르면 아무것도 하지 않는다"""
+    if not LIST_URL:
+        return False
+    page.goto(LIST_URL, wait_until="networkidle")
+    page.evaluate("() => window.scrollTo(0, 0)")
+    page.wait_for_timeout(900)
+    return True
+
+
 def read_screen(page):
     """지금 브라우저에 보이는 것을 LLM 이 읽을 수 있는 텍스트로 만든다.
 
@@ -399,6 +427,48 @@ def read_detail(page):
 # 3. LLM 호출 (캐시)
 # ============================================================================
 
+class LocalLLM:
+    """로컬 GPU 에 올린 오픈 모델. GMS 크레딧을 쓰지 않는다.
+
+    100명 x 15턴이 약 900 크레딧이라 반복 실행이 부담이다. 러너가 모델에 요구하는
+    것은 "허용된 행동 중 하나 + 상품명 + 한 줄 이유" 를 JSON 으로 뱉는 것뿐이라,
+    작은 모델로도 되는지 먼저 확인하고 쓴다.
+
+    서버를 따로 띄우지 않고 프로세스 안에서 돌린다. 대신 --workers 로 여러 개를
+    띄우면 워커마다 모델을 올려 VRAM 이 그만큼 곱해진다 (8GB 에서는 1개만).
+    """
+
+    def __init__(self, model_id, device=None, max_new_tokens=160):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.max_new_tokens = max_new_tokens
+        print(f"로컬 모델 {model_id} 를 {self.device} 에 올립니다...")
+        t0 = time.time()
+        self.tok = AutoTokenizer.from_pretrained(model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=torch.float16 if self.device == "cuda" else None)
+        self.model.to(self.device).eval()
+        print(f"  준비 {time.time() - t0:.1f}초")
+
+    def chat(self, system, user):
+        import torch
+        prompt = self.tok.apply_chat_template(
+            [{"role": "system", "content": system},
+             {"role": "user", "content": user}],
+            tokenize=False, add_generation_prompt=True)
+        # JSON 만 뱉게 첫 글자를 미리 넣어 준다. 작은 모델은 서두를 붙이는 버릇이 있다
+        prompt += '{"action": "'
+        ids = self.tok(prompt, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model.generate(
+                **ids, max_new_tokens=self.max_new_tokens, do_sample=True,
+                temperature=0.9, top_p=0.9, pad_token_id=self.tok.eos_token_id)
+        text = self.tok.decode(out[0][ids["input_ids"].shape[1]:],
+                               skip_special_tokens=True)
+        return '{"action": "' + text
+
+
 class ScriptedLLM:
     """정해진 순서를 돌려주는 가짜 LLM. 크레딧 0 으로 배선을 검증한다.
 
@@ -437,6 +507,18 @@ class ScriptedLLM:
                 target = cart[-1] if cart else None
             return {"action": act, "target": target, "reason": "(대본)"}
         return {"action": "leave", "target": None, "reason": "(대본 끝)"}
+
+
+def parse_action(text):
+    """모델 응답에서 JSON 하나를 건진다. 앞뒤에 말을 붙여도 중괄호만 떼어 쓴다"""
+    lo, hi = text.find("{"), text.rfind("}")
+    if lo < 0 or hi <= lo:
+        return None
+    try:
+        obj = json.loads(text[lo:hi + 1])
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) and obj.get("action") else None
 
 
 def ask(client, system, user, cache_on, dry):
@@ -577,17 +659,15 @@ def do_action(page, act, target):
     if a == "back_to_list":
         page.go_back()
         page.wait_for_timeout(1200)
-        # 딥링크로 상세에 바로 들어온 사람은 **돌아갈 목록이 없다.** 그대로 두면
-        # 빈 화면을 "목록을 다 봤다" 로 읽고 곧장 나간다 (실측: 5명 중 3명).
-        # 목록 주소로 직접 이동해 복구한다
-        if not page.locator(".card[data-product-id]").count():
-            parts = urlsplit(page.url)
-            query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-                     if k != "product"]
-            page.goto(urlunsplit(parts._replace(query=urlencode(query))),
-                      wait_until="networkidle")
+        # 딥링크로 상세에 바로 들어온 사람은 **돌아갈 목록이 없다.** go_back() 이
+        # about:blank 로 가고, 그 빈 화면을 "다 봤다" 로 읽어 곧장 나간다
+        # (실측: 5명 중 3명이 상세를 한 개도 못 열고 종료).
+        # 그래서 목록 주소를 미리 기억해 두고 그리로 이동해 복구한다
+        if (page.url.startswith("about:")
+                or not page.locator(".card[data-product-id]").count()):
+            page.goto(LIST_URL or page.url, wait_until="networkidle")
             page.evaluate("() => window.scrollTo(0, 0)")   # 복구는 목록 맨 위에서
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(900)
         return True
 
     if a == "add_to_cart":
@@ -787,7 +867,16 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
+    broken = 0
     for turn in range(1, max_turns + 1):
+        if screen_is_broken(page):
+            # 화면이 죽었다. 목록으로 되돌리고 이 턴은 LLM 을 부르지 않는다
+            broken += 1
+            if verbose:
+                print(f"    {turn:>2}. (화면이 비어 목록으로 복구)")
+            if not recover_screen(page) or broken > 3:
+                break
+            continue
         user, kind = read_screen(page)
         m = re.search(PCT_RE, user)
         pct = int(m.group(1)) if m else 0
@@ -843,6 +932,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                   f" · 선택지 {'/'.join(acts)}]")
         if script is not None:
             obj, used = script.next_action(page, acts, here, cart, visited, peeked), 0
+        elif isinstance(client, LocalLLM):
+            obj, used = parse_action(client.chat(system, user)), 0
         else:
             obj, used = ask(client, system, user, cache_on, dry)
         calls += used
@@ -914,10 +1005,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             carted += 1
         if verbose:
             mark = "  " if okd else "! "
-            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {obj.get('reason','')[:40]}")
+            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
-    return dict(calls=calls, done=done, failed=failed, carted=carted)
+    return dict(calls=calls, done=done, failed=failed, carted=carted, broken=broken)
 
 
 # ============================================================================
@@ -999,6 +1090,9 @@ def main():
     ap.add_argument("--headed", action="store_true", help="브라우저를 띄워서 본다")
     ap.add_argument("--dry-run", action="store_true", help="LLM 호출 없이 프롬프트만 (0 크레딧)")
     ap.add_argument("--cache", action="store_true", help="같은 화면이면 저장된 응답 재사용")
+    ap.add_argument("--local-model", default=None, metavar="HF_ID",
+                    help="로컬 GPU 의 오픈 모델을 쓴다 (크레딧 0). "
+                         "예) HuggingFaceTB/SmolLM2-1.7B-Instruct")
     ap.add_argument("--openai", action="store_true",
                     help="GMS 대신 개인 OpenAI 키를 쓴다 (OPENAI_API_KEY 환경변수)")
     ap.add_argument("--model", default=None, help=f"모델 (기본 {MODEL})")
@@ -1030,6 +1124,8 @@ def main():
 
     simulation_run_id = a.simulation_run_id or default_simulation_run_id()
     start_url = entry_url(a.url, a.scenario_id, simulation_run_id)
+    # 상세로 딥링크한 사람이 목록으로 돌아갈 때 쓸 주소 (product 파라미터 없음)
+    globals()["LIST_URL"] = start_url
 
     if a.model:
         MODEL = a.model
@@ -1039,7 +1135,9 @@ def main():
     load_dotenv()
 
     client = None
-    if not a.dry_run and not a.script:
+    if a.local_model and not a.dry_run and not a.script:
+        client = LocalLLM(a.local_model)
+    elif not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
             key = os.environ.get("OPENAI_API_KEY")
@@ -1076,7 +1174,7 @@ def main():
     print(f"수집 API {a.post}" if a.post else "수집 API 전송 없음 (파일로만 남김)")
 
     from playwright.sync_api import sync_playwright
-    tot = dict(calls=0, done=0, failed=0, carted=0)
+    tot = dict(calls=0, done=0, failed=0, carted=0, broken=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -1101,6 +1199,15 @@ def main():
                               product_id=rng.choice(catalog) if deep else None)
             page.goto(entry, wait_until="networkidle")
 
+            # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
+            # 프론트 AboutProduct.tsx 가 highlighted_ingredients 없는 상품에서
+            # 던져 화면이 통째로 빈다 (202개 중 78개, Research/handoff 참고).
+            # 그쪽이 고쳐지면 이 방어는 저절로 놀게 된다
+            if deep and not page.locator('[data-log-action="add_to_cart"]').count():
+                print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
+                page.goto(LIST_URL, wait_until="networkidle")
+                page.wait_for_timeout(800)
+
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
@@ -1124,8 +1231,11 @@ def main():
     print()
     print("=" * 60)
     print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건")
+    if tot.get("broken"):
+        print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회 —"
+              f" 프론트 AboutProduct.tsx 크래시 (Research/handoff/frontend_detail_crash.md)")
     print(f"  LLM 호출 {tot['calls']}회 · {dt:.0f}초")
-    if tot["calls"]:
+    if tot["calls"] and not a.local_model:
         print(f"  예상 크레딧 약 {tot['calls'] * 0.6:.0f}"
               f"  (100명 환산 {tot['calls'] * 0.6 / max(len(personas),1) * 100:,.0f})")
     top = sorted(sink.kinds.items(), key=lambda x: -x[1])[:8]

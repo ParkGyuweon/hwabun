@@ -27,6 +27,7 @@ import numpy as np
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
+from eval_metadata import load as load_metadata            # noqa: E402
 from persona_feature import load as load_affinity          # noqa: E402
 from persona_split import select as select_split           # noqa: E402
 from product_encoder import Encoder                        # noqa: E402
@@ -40,14 +41,15 @@ PREV_SCHEDULE = [(0, 0.00, 0.30, 0.70), (5, 0.70, 0.25, 0.05),
                  (10 ** 9, 0.40, 0.55, 0.05)]
 
 
-def seq_of(persona, index):
-    """리뷰 상품을 등장 순서대로. 마지막이 정답이다"""
-    out = []
-    for r in persona["reviews"]:
-        g = r["group_id"]
-        if g in index and g not in out:
-            out.append(g)
-    return out
+def seq_of(row, index):
+    """metadata 가 정한 seed + target. **정의는 한 곳에만 둔다** (eval_metadata.py).
+
+    예전에는 축마다 각자 계산했고 정의가 달라 9,900명 중 792명(8.0%)이 축마다
+    다른 target 을 맞히고 있었다.
+    """
+    seeds = [g for g in row["seed_product_ids"] if g in index]
+    target = row["target_product_id"]
+    return seeds + [target] if target in index and seeds else []
 
 
 def weights(schedule, n_seed):
@@ -71,7 +73,7 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender):
     hits = {c: [] for c in conds}
     longtail, seeds, elapsed = [], [], 0.0
     for p in personas:
-        s = seq_of(p, index)
+        s = seq_of(p["_meta"], index)
         if len(s) < 2:
             continue
         si = [index[g] for g in s[:-1]]
@@ -131,7 +133,11 @@ def main():
 
     affinity = load_affinity(index)
     recommender = Recommender(V, index, prior, affinity=affinity)
-    personas = select_split(json.load(open(PERSONAS, encoding="utf-8")), a.split)
+    profiles = {p["persona_id"]: p
+                for p in json.load(open(PERSONAS, encoding="utf-8"))}
+    rows = load_metadata(split=a.split)
+    personas = [dict(profiles[r["persona_id"]], _meta=r) for r in rows
+                if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
 

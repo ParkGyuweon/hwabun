@@ -37,7 +37,9 @@ import numpy as np
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
-from hidden_preference import PROFILES, HiddenPreference     # noqa: E402
+from eval_metadata import load as load_metadata              # noqa: E402
+from hidden_preference import (PROFILES, TEXT_EMBEDDING,      # noqa: E402
+                               TEXT_LEXICAL, HiddenPreference)
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
@@ -54,15 +56,13 @@ POOL_MIX = {"top": 6, "category_popular": 3, "random": 3}
 
 
 def seed_and_target(persona, index):
-    """리뷰 상품을 순서대로. 마지막이 target, 나머지가 seed"""
-    order = []
-    for r in persona["reviews"]:
-        gid = r["group_id"]
-        if gid in index and gid not in order:
-            order.append(gid)
-    if len(order) < 2:
+    """metadata 가 정한 seed / target 을 쓴다 (정의는 eval_metadata.py 한 곳)"""
+    row = persona.get("_meta") or {}
+    seeds = [g for g in row.get("seed_product_ids", []) if g in index]
+    target = row.get("target_product_id")
+    if not seeds or target not in index:
         return None, None
-    return order[:-1], order[-1]
+    return seeds, target
 
 
 def events_for(product_id, pref, rng):
@@ -254,6 +254,11 @@ def main():
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
     ap.add_argument("--rng-seed", type=int, default=42, help="탐색 난수 seed")
+    ap.add_argument("--embeddings", default=None,
+                    help="임베딩 산출물 경로 (대안 산출물과 비교할 때)")
+    ap.add_argument("--text-backend", choices=(TEXT_LEXICAL, TEXT_EMBEDDING),
+                    default=None,
+                    help="텍스트 매칭 방식. 기본은 임베딩 산출물이 있으면 embedding")
     ap.add_argument("--pref-profile", choices=tuple(PROFILES), default="default",
                     help="hidden preference 가중치 조합. 강건성 평가에서 바꿔 가며 돈다")
     a = ap.parse_args()
@@ -265,20 +270,26 @@ def main():
     affinity = load_affinity(index)
     recommender = Recommender(M, index, prior, affinity=affinity)
     hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed,
-                          weights=PROFILES[a.pref_profile])
+                          weights=PROFILES[a.pref_profile],
+                          text_backend=a.text_backend,
+                          **({"embeddings_path": a.embeddings} if a.embeddings else {}))
     meta = [{"product_id": p["product_id"],
              "tertiary_category": p.get("tertiary_category")}
             for p in encoder.products]
     ctx = (M, index, prior, affinity, hp, recommender, meta)
 
-    personas = select_split(json.load(open(PERSONAS, encoding="utf-8")), a.split)
+    profiles = {p["persona_id"]: p
+                for p in json.load(open(PERSONAS, encoding="utf-8"))}
+    personas = [dict(profiles[r["persona_id"]], _meta=r)
+                for r in load_metadata(split=a.split) if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
 
     print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
           f" 상품 {len(M)}개")
     print(f"노출: 추천 점수 · 행동: hidden preference"
-          f"({a.pref_profile}, seed {a.noise_seed}) · 탐색 seed {a.rng_seed}")
+          f"({a.pref_profile}, {hp.text_backend}, seed {a.noise_seed})"
+          f" · 탐색 seed {a.rng_seed}")
     if a.split == "test":
         print("  ⚠ test 는 최종 보고용이다")
 
