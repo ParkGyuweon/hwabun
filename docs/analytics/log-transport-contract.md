@@ -240,8 +240,8 @@ PA 로그가 `user` 로 들어오면 `user_id` 가 NULL 이라 사용자 단위 
 ### 9-2. 표시는 시뮬레이터가 붙인다
 
 계약이 정한 강제 지점이 Simulator 와 Spark 이므로
-(`event-taxonomy-trigger-schema.md` §8.4 — "실제 Web Event 에는 적용하지 않으므로
-프론트 구현에는 영향이 없다"), 표시도 시뮬레이터에서 붙인다.
+(`../../contracts/event-schema.json` — 실제 Web Event에는 적용하지 않으므로
+프론트 구현에는 영향이 없다), 표시도 시뮬레이터에서 붙인다.
 러너의 `LogSink` 가 프론트의 `/api/events` 요청을 가로채 봉투를 채운 뒤
 파일로 남기고, `--post` 를 주면 수집 API 로 대신 보낸다.
 

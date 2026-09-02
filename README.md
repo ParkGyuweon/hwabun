@@ -11,6 +11,10 @@ S15P21A306/
 │
 ├── contracts/                       ★ 팀 계약. 여기가 바뀌면 여러 모듈이 동시에 영향받음
 │   ├── event-schema.json                Raw Event JSON Schema (Collector 통과 후 계약)
+│   ├── event-properties-schema.md       Event별 properties·enum·필수값 계약
+│   ├── processed-schema.md              Processed Dataset grain·key·컬럼 계약
+│   ├── persona-schema.md                Persona·평가 split·Simulation Run 계약
+│   ├── dw-schema.md                     DW Dimension·Mart grain·컬럼 계약
 │   ├── validate_events.py               이벤트 파일을 스키마로 검증하는 CLI
 │   ├── requirements-validator.txt       검증기 의존성 (jsonschema[format])
 │   ├── samples/ · tests/                유효/무효 이벤트 표본과 계약 테스트
@@ -28,10 +32,10 @@ S15P21A306/
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
 │   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지
-│   │   ├── event-taxonomy-trigger-schema.md · event-contract-summary.md   이벤트 계약
+│   │   ├── event-logging-design.md       화면 Trigger·KPI 연결·구현 현황
 │   │   ├── log-transport-contract.md    전송 주기·재시도·actor_type 판정
-│   │   ├── dw-schema.md · processed-schema.md   Mart·Processed 스키마
-│   │   ├── persona-schema.md · persona-attribute-preprocessing.md
+│   │   ├── dw-design.md · spark-processing-design.md   Mart 적재·Spark 처리 설계
+│   │   ├── persona-design.md             Persona 생성·표본·추천 연결 설계
 │   │   ├── marketing-signal-research.md · event-weight-rationale.html
 │   │
 │   ├── dashboard/                   B2B 대시보드 조사·설계 (프론트)
@@ -50,6 +54,8 @@ S15P21A306/
 │   │       ├── affinity_lift.csv            속성 친화도 4,000행 (200상품 × 20세그먼트)
 │   │       ├── concern_from_reviews.npz     리뷰에서 뽑은 concern 점수
 │   │       ├── excluded_products.json       제외 상품 목록과 사유
+│   │       ├── eval_metadata.jsonl          평가 seed/target 정본 (9,900행)
+│   │       ├── text_embeddings.npz         seed 리뷰·상품 임베딩 384차원 (13.7MB)
 │   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력
 │   │           ├── product_feature.jsonl        상품 200개 × 148차원 + prior
@@ -63,7 +69,13 @@ S15P21A306/
 │       ├── persona_feature.py           페르소나 속성 → 상품별 친화도 (200,)
 │       ├── recommender.py               점수 계산·노출 정책·순위
 │       ├── export_features.py           서빙용 산출물 + 순위 대조 기준 생성
-│       ├── eval_persona_feature.py      9,900명 leave-last-out 검증
+│       ├── eval_metadata.py            ★ seed/target 정본 — 세 축이 같은 문제를 풀게 한다
+│       ├── hidden_preference.py        행동 생성을 추천 점수에서 떼어내는 통제 장치
+│       ├── build_text_embeddings.py    seed 리뷰·상품 텍스트 임베딩 (GPU 21초)
+│       ├── eval_persona_feature.py      9,900명 leave-last-out 검증 (오프라인 축)
+│       ├── eval_dynamic.py             동적 시뮬레이션 (Dynamic Recall@10)
+│       ├── eval_review_replay.py       실제 리뷰 이력 순차 재생
+│       ├── persona_split.py            train/valid/test 분할 (split-v1)
 │       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 (피처·산출물·사용자 벡터)

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class CollectorMetrics {
 
+    private final MeterRegistry registry;
     private final Counter received;
     private final Counter published;
     private final Counter publishFailures;
@@ -16,6 +17,7 @@ public class CollectorMetrics {
     private final Timer publishQueueWait;
 
     public CollectorMetrics(MeterRegistry registry) {
+        this.registry = registry;
         this.received = registry.counter("collector.events.received");
         this.published = registry.counter("collector.events.published");
         this.publishFailures = registry.counter("collector.events.publish.failures");
@@ -41,5 +43,9 @@ public class CollectorMetrics {
 
     public void recordPublishQueueWait(Duration duration) {
         publishQueueWait.record(duration);
+    }
+
+    public void recordValidationFailure(String reason) {
+        registry.counter("collector.events.validation.failures", "reason", reason).increment();
     }
 }

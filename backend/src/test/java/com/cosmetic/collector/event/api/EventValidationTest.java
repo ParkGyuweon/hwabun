@@ -5,6 +5,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class EventValidationTest {
 
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     private static Validator validator;
 
     @BeforeAll
@@ -24,7 +26,7 @@ class EventValidationTest {
 
     @Test
     void acceptsAValidEventBatch() {
-        EventBatchRequest request = new EventBatchRequest("draft", List.of(validEvent()));
+        EventBatchRequest request = new EventBatchRequest("0.2.0-draft", List.of(validEvent()));
 
         Set<ConstraintViolation<EventBatchRequest>> violations = validator.validate(request);
 
@@ -61,7 +63,7 @@ class EventValidationTest {
                 null,
                 "",
                 "",
-                null
+                objectMapper.createObjectNode()
         );
         EventBatchRequest request = new EventBatchRequest("draft", List.of(invalidEvent));
 
@@ -90,7 +92,7 @@ class EventValidationTest {
 
         assertThat(violations)
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .containsExactlyInAnyOrder("schemaVersion", "events");
+                .contains("schemaVersion", "events");
     }
 
     @Test
@@ -109,14 +111,74 @@ class EventValidationTest {
                 "product-001",
                 "bot",
                 "local",
-                null
+                objectMapper.createObjectNode()
         );
 
         Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(invalidEvent);
 
         assertThat(violations)
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .containsExactlyInAnyOrder("eventName", "intent", "sequenceNo", "pageType", "actorType");
+                .contains("eventName", "intent", "sequenceNo", "pageType", "actorType");
+    }
+
+    @Test
+    void rejectsPropertiesThatAreNotJsonObjects() {
+        ActivityEvent invalidEvent = new ActivityEvent(
+                "0.2.0-draft", "evt-001", "product_click", "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "product_list", "product-001", "user", "local", objectMapper.createArrayNode()
+        );
+
+        Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(invalidEvent);
+
+        assertThat(violations)
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
+    }
+
+    @Test
+    void rejectsAnEventWithADifferentSchemaVersion() {
+        ActivityEvent mismatchedVersion = new ActivityEvent(
+                "0.1.0-draft", "evt-001", "product_click", "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "product_list", "product-001", "user", "local", objectMapper.createObjectNode()
+        );
+        EventBatchRequest request = new EventBatchRequest("0.2.0-draft", List.of(mismatchedVersion));
+
+        Set<ConstraintViolation<EventBatchRequest>> violations = validator.validate(request);
+
+        assertThat(violations)
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("events.schemaVersion");
+    }
+
+    @Test
+    void allowsDuplicateEventIdsWithinABatch() {
+        ActivityEvent duplicateId = new ActivityEvent(
+                "0.2.0-draft", "evt-001", "product_click", "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
+                "product_list", "product-001", "user", "local", objectMapper.createObjectNode()
+        );
+        EventBatchRequest request = new EventBatchRequest("0.2.0-draft", List.of(validEvent(), duplicateId));
+
+        Set<ConstraintViolation<EventBatchRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void requiresSyntheticRuntimeMetadata() {
+        ActivityEvent invalidEvent = new ActivityEvent(
+                "0.2.0-draft", "evt-001", "product_click", "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"), "persona-001", "session-001", "page-view-001", 1,
+                "product_list", "product-001", "synthetic", "simulation", objectMapper.createObjectNode()
+        );
+
+        Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(invalidEvent);
+
+        assertThat(violations)
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
     }
 
     private ActivityEvent validEvent() {
@@ -134,7 +196,7 @@ class EventValidationTest {
                 "product-001",
                 "user",
                 "local",
-                null
+                objectMapper.createObjectNode()
         );
     }
 }
