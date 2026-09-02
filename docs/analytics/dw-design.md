@@ -1,14 +1,15 @@
 # DW / Mart 적재 및 Dashboard 설계
 
 작성일: 2026-09-02  
-상태: Draft — 저장 방향 합의, Spark → Delta → MySQL 적재 검증 전
+최종 정적 검증: 2026-09-02
+상태: Spark 결과와 DW 저장 구조 확정, Dashboard Mart·KPI 후보는 AI·추천 협의 대기
 
 ## 1. 문서 역할
 
-Dimension과 Mart의 확정 grain, key, 컬럼, 타입, nullable 계약은
-[`../../contracts/dw-schema.md`](../../contracts/dw-schema.md)가 단일 출처다. 이
-문서는 그 계약을 선택한 이유, 저장 흐름, Dashboard 연결, 구현 상태와 검증 계획을
-설명한다.
+DW 저장 계층과 공통 규칙, Dimension·Mart 후보는
+[`../../contracts/dw-schema.md`](../../contracts/dw-schema.md)를 단일 출처로 사용한다.
+이 문서는 저장 흐름과 책임 경계를 선택한 이유, Dashboard 후보 연결, 구현 상태와
+검증 계획을 설명한다.
 
 Processed Dataset 계약은 [`../../contracts/processed-schema.md`](../../contracts/processed-schema.md),
 Spark 처리 근거는 [`spark-processing-design.md`](./spark-processing-design.md)를 따른다.
@@ -51,7 +52,12 @@ Raw에서 `scenario_id`, `simulation_run_id`, `generator_type`은 `properties` �
 Processed에서 분석 컬럼으로 승격된다. PA와 PC는 모두 `source=simulator`이며
 `generator_type=agent_llm`, `python_batch`로 구분한다.
 
-## 4. Dashboard 연결
+## 4. Dashboard Mart 후보
+
+Dashboard에 제공할 정확한 지표와 최종 Mart는 아직 확정하지 않았다. 아래 표와 KPI는
+Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI 평가 결과와 함께
+팀에서 우선순위를 정한 뒤 채택한다. 따라서 이 절은 이번 Jira에서 물리 구현을
+강제하는 계약이 아니다.
 
 | 화면 | 주요 질문 | Mart / Dimension |
 | --- | --- | --- |
@@ -62,7 +68,11 @@ Processed에서 분석 컬럼으로 승격된다. PA와 PC는 모두 `source=sim
 | 검색 | 검색량, 결과 품질, 클릭 전환 | `search_daily_kpi` |
 | Persona·Scenario | 고객군·실행별 행동 차이 | `persona_segment_daily_kpi`, `scenario_daily_kpi`, Simulation Dimension |
 
-### 핵심 KPI
+노출률, 실제 구매율, 추천 성과, 콘텐츠 관심도 등 어떤 지표를 최종 채택하더라도
+서로 다른 Processed grain을 먼저 목표 grain으로 집계한 뒤 결합하고, Delta Mart를
+계산 결과의 기준으로, MySQL `dw`를 조회 projection으로 사용하는 원칙은 유지한다.
+
+### KPI 후보
 
 | KPI | 산식 | Mart |
 | --- | --- | --- |
@@ -85,14 +95,15 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 
 | 항목 | 현재 상태 | 후속 확인 |
 | --- | --- | --- |
-| Collector payload | Event 단위, `received_at`, `source`, `request_id`, `event_index` 계약 확인 | 관련 MR 병합 후 실제 payload 재검증 |
+| Collector payload | 관련 구현 병합 완료. Event 단위, `received_at`, `source`, `request_id`, `event_index` 보강과 Kafka key=`session_id`를 코드에서 재확인 | 실제 Kafka payload E2E 캡처 |
 | Kafka | 기본 topic `activity-events`, key `session_id` | 환경별 설정 확인 |
 | Raw Q1 | 로컬 Parquet + checkpoint, `source`는 `raw_value` 내부 | Raw projection에 `source` 반영 필요 |
-| Processed | 논리 계약과 처리 설계 작성 | 실제 Streaming 출력과 대조 필요 |
+| Processed | 논리 계약 작성 및 현재 Spark projection 정적 대조 완료 | Delta `printSchema()`와 row-level E2E 대조 |
 | Delta marts | 저장 방향 합의 | Spark/Scala/delta-spark 호환성과 MERGE 검증 |
 | MySQL `dw` | Dashboard serving 역할 합의 | DDL, 인덱스, 적재 주기, upsert 방식 결정 |
 | 검색·결제 Event | 일부 provisional | 화면·Collector 구현 후 key와 optional 값 재검증 |
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |
+| Dashboard Mart·KPI | 저장 가능한 후보 Schema 작성 | 추천·AI 담당과 지표 우선순위·최종 grain 합의 후 확정 |
 
 `search_query_hash`의 정규화·hash 규칙, 실제 Web의 안정적인 `user_id`, `cart_id`,
 운영 저장 경로는 구현 전 확정이 필요하다. 이 항목들은 이미 정한 Schema를 다시

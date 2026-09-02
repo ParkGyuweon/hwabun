@@ -1,7 +1,8 @@
 # Spark Processed 처리 설계
 
 작성일: 2026-09-01
-상태: 현재 `dev` 구현 gap 1차 검수 완료, Delta 전환·E2E 검증 대기
+최종 정적 검증: 2026-09-02
+상태: 논리 Schema와 최신 통합본 정적 대조 완료, 구현 gap 해소·Delta 전환·E2E 검증 대기
 계약 원본: [`contracts/processed-schema.md`](../../contracts/processed-schema.md)
 
 ## 1. 문서 목적
@@ -161,18 +162,20 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 
 ## 6. 현재 `dev` 구현과 목표 계약의 차이
 
-2026-09-01 `dev`의 `streaming/` 구현을 기준으로 확인한 결과다. 이 표는 구현 현황이며
+2026-09-02 `dev`의 최신 계약과 `streaming/` 구현을 다시 대조한 결과다. Spark Job의
+마지막 변경은 2026-08-31이며, 이후 Raw/Event/Persona 계약 변경이 반영되었으므로
+입력과 출력 양쪽을 재검수했다. 이 표는 구현 현황이며
 계약을 대체하지 않는다.
 
 | Dataset | 현재 구현 | 남은 차이 |
 | --- | --- | --- |
-| `raw_events` | Kafka 원문과 metadata를 Parquet로 저장 | Delta 전환, 확정 Raw 컬럼 projection |
-| `bad_events` | Q2에서 생성 | 목표 오류·추적 컬럼 정렬 |
-| `duplicate_events` | Q2에서 생성 | Delta key 기반 재실행 검증 |
-| `cleaned_events` | Q2에서 생성 | payload `source` 우선, Dimension·품질 컬럼 보완 |
+| `raw_events` | Kafka 원문과 metadata를 Parquet로 저장 | Delta 전환, Raw 계약의 `source` 조회 projection 반영 |
+| `bad_events` | Q2에서 생성 | `event_name`, `schema_version`, `request_id`, `event_index`, `actor_type`, `source`, `error_message`, `bad_recorded_date` 등 목표 오류·추적 컬럼 정렬 |
+| `duplicate_events` | Q2에서 생성 | `event_date_kst` 보완, Delta key 기반 재실행 검증 |
+| `cleaned_events` | Q2에서 생성 | payload `source` 우선, `event_index`, 지연·Dimension·콘텐츠 품질 컬럼 보완 |
 | `sessionized_events` | Q3에서 생성 | 목표 순서·late Event 규칙 검증 |
-| `product_event_fact` | Q3에서 생성 | item grain과 상품 Dimension 보강 |
-| `funnel_session_fact` | Q4에서 생성 | 목표 Funnel 단계·컬럼 보완 |
+| `product_event_fact` | Q3에서 생성 | item grain E2E 확인과 상품 Dimension 보강 |
+| `funnel_session_fact` | Q4에서 생성 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
 | `search_event_fact` | 미구현 | Trigger와 원천 필드 확인 후 구현 |
 | `section_dwell_agg` | 미구현 | delta 합산 grain 구현 |
 | `content_interest_fact` | 미구현 | 관심도 산식과 vocab 연결 |
@@ -180,6 +183,11 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 
 현재 Q1~Q4는 주로 Parquet output을 사용한다. 목표 저장 엔진은 Delta Lake이며 실제
 Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
+
+`search`, `begin_checkout`, `purchase`는 최신 Event properties 계약에서도 Planned
+Event다. 따라서 관련 Processed/DW Dataset은 논리 계약을 유지하되 활성 Event에서
+실데이터가 들어오는 것으로 간주하지 않는다. `dead_click`은 최신 Dashboard 기준
+실사용자 전용이므로 집계 소비자는 `actor_type='user'`를 명시해야 한다.
 
 ## 7. 구현 전에 닫아야 하는 의존성
 
@@ -207,4 +215,5 @@ Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해
 9. 상품 Dimension Join 전후 row 수가 의도치 않게 증가하지 않는다.
 10. Delta 결과에서 MySQL `dw` Mart와 Dashboard KPI까지 추적 가능하다.
 
-위 검증이 끝나기 전까지 `contracts/processed-schema.md`의 상태는 Draft로 유지한다.
+위 항목은 논리 Schema의 미완료 목록이 아니라, 구현이 확정 계약과 일치한다고
+판정하기 위한 물리 구현·E2E 검증 조건이다.
