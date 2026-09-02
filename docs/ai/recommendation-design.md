@@ -494,7 +494,7 @@ attr_affinity(u, i) = w_type  x A[i][u.skin_type]
 >
 > **로그 축적 후 재측정이 필수입니다.** 시뮬레이션이 돌면 대부분의 페르소나가 `6개 이상` 구간으로 이동합니다(⑩).
 
-> **2026-08-28 개정.** 실제 리뷰로 측정한 결과 이전 값이 콘텐츠 벡터의 발목을 잡고 있었습니다. 근거는 아래 7-2-1절, 재현은 `Research/eval_baseline.py`·`eval_schedule.py`.
+> **2026-08-28 개정.** 실제 리뷰로 측정한 결과 이전 값이 콘텐츠 벡터의 발목을 잡고 있었습니다. 근거는 아래 7-2-1절, 재현은 `Research/eval_leave_last_out_baseline.py`·`eval_weight_schedule.py`.
 
 ### 7-2-0. 시드 / 목표 구성 — 프론트 합의 (2026-08-28)
 
@@ -553,7 +553,7 @@ attr_affinity(u, i) = w_type  x A[i][u.skin_type]
 
 페르소나 9,900명 전원에 대해 **시간순 leave-last-out**으로 측정했습니다. 리뷰를 시간순 정렬해 마지막 1건을 정답으로 두고, 앞의 것들(시드)로 추천했을 때 정답이 상위 10개에 들어오는지 봅니다. 생성 로그가 아니라 **실제 리뷰**를 씁니다.
 
-재현: `Research/eval_baseline.py` · `eval_schedule.py` · `eval_catalog_size.py`
+재현: `Research/eval_leave_last_out_baseline.py` · `eval_weight_schedule.py` · `eval_catalog_size_effect.py`
 
 > **모집단이 바뀌었습니다.** 페르소나 조건을 "상위 200개 중 **2개 이상**"에서 **3개 이상**으로 올렸습니다. 시드/목표로 나누면 시드가 최소 2개 확보됩니다(이전에는 60%가 시드 1개였고, 그 벡터는 사실상 상품 하나의 복사본이라 개인화 평가로 약했습니다). 모집단 27,114명, 추출률 36.9%.
 

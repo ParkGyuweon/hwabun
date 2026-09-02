@@ -1,0 +1,5 @@
+﻿attribute,n_segments,lift_effect_size,lift_spread_in_product,significant_cell_pct,rating_spread_in_product,min_segment_share
+skin_type,4,0.1324,0.4131,32.4,0.1483,0.1234
+skin_tone,5,0.1601,0.4709,23.6,0.2346,0.029
+hair_color,6,0.1615,0.6051,16.0,0.2975,0.006
+eye_color,5,0.1476,0.5304,19.4,0.2435,0.006
