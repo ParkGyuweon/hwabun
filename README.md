@@ -119,9 +119,11 @@ S15P21A306/
 │   └── git-convention.md            커밋 메시지·브랜치 전략 (팀 공통)
 │
 ├── batch/                           ★ Spark Batch — 상품·페르소나 피처와 추천 계산
+│   ├── regenerate_all.py            ★ 상품이 바뀌면 여기서부터 다시 만든다 (9단계·mtime 확인)
 │   ├── ingest/
 │   │   ├── build_feature_vocab.py       어휘집 생성 (문서빈도·블록 가중치)
 │   │   ├── build_products_json.py       상품 200개 카탈로그 생성 (사이즈 변형 병합)
+│   │   ├── build_affinity_lift.py       속성 친화도 4,000행 (lift 기반) — 개인 폴더에서 이관
 │   │   ├── build_feature_sample.py      샘플 6개 산출물 + 문서 생성
 │   │   ├── test_feature_sample.py       산출물·문서가 코드와 어긋나지 않았는지
 │   │   └── data/
