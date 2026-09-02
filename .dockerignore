@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/build
+**/dist
+**/.gradle
+**/.idea
+frontend/.image-cache
+monitoring
+infra
+kafka
+batch
+contracts
+docs
+simulator
+streaming
+1차 평가

@@ -3,6 +3,8 @@ package com.cosmetic.collector.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.cosmetic.collector.common.ErrorResponse;
+import com.cosmetic.collector.event.observability.CollectorMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -17,7 +19,8 @@ class EventRequestSizeFilterTest {
 
     @Test
     void rejectsAnEventRequestWhoseContentLengthExceedsTheLimit() throws Exception {
-        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, 10);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, new CollectorMetrics(registry), 10);
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/events");
         request.setContent("01234567890".getBytes());
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -27,11 +30,13 @@ class EventRequestSizeFilterTest {
         ErrorResponse body = objectMapper.readValue(response.getContentAsByteArray(), ErrorResponse.class);
         assertThat(response.getStatus()).isEqualTo(413);
         assertThat(body.code()).isEqualTo("EVENT_REQUEST_TOO_LARGE");
+        assertThat(registry.get("collector.events.validation.failures")
+                .tag("reason", "event_request_too_large").counter().count()).isEqualTo(1);
     }
 
     @Test
     void passesARequestWithinTheLimitToTheNextFilter() throws Exception {
-        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, 10);
+        EventRequestSizeFilter filter = filter(10);
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/events");
         request.setContent("0123456789".getBytes());
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -44,7 +49,7 @@ class EventRequestSizeFilterTest {
 
     @Test
     void rejectsAChunkedEventRequestWhoseBodyExceedsTheLimit() throws Exception {
-        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, 10);
+        EventRequestSizeFilter filter = filter(10);
         MockHttpServletRequest request = chunkedEventRequest("01234567890");
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicBoolean proceeded = new AtomicBoolean();
@@ -57,7 +62,7 @@ class EventRequestSizeFilterTest {
 
     @Test
     void passesAndPreservesAChunkedEventRequestWithinTheLimit() throws Exception {
-        EventRequestSizeFilter filter = new EventRequestSizeFilter(objectMapper, 10);
+        EventRequestSizeFilter filter = filter(10);
         MockHttpServletRequest request = chunkedEventRequest("0123456789");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -78,5 +83,13 @@ class EventRequestSizeFilterTest {
         };
         request.setContent(body.getBytes(StandardCharsets.UTF_8));
         return request;
+    }
+
+    private EventRequestSizeFilter filter(long maxEventRequestBytes) {
+        return new EventRequestSizeFilter(
+                objectMapper,
+                new CollectorMetrics(new SimpleMeterRegistry()),
+                maxEventRequestBytes
+        );
     }
 }

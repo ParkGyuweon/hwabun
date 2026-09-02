@@ -1,6 +1,6 @@
 // 이벤트·행동 로그 문서를 한 페이지로 묶는다.
 //
-// 설명·KPI 는 event-taxonomy-trigger-schema.md §6 에서, 가중치 숫자는
+// Event 의미·분류는 contracts/event-properties-schema.md §2 에서, 가중치 숫자는
 // frontend/src/types/log.ts 에서 그때그때 읽는다. 어느 쪽도 이 파일에
 // 복사해 두지 않는다 — 복사해 두면 원본이 바뀔 때 조용히 어긋난다.
 //
@@ -128,10 +128,10 @@ function render(md){
 
 // PM 이 바로 보는 두 문서를 만든다.
 //
-// 설명·KPI 는 taxonomy §6 표에서, 가중치 숫자는 log.ts 에서 그때그때 읽는다.
+// Event 의미·분류는 properties 계약 §2 표에서, 가중치 숫자는 log.ts 에서 읽는다.
 // 어느 쪽도 여기에 복사해 두지 않는다 — 복사해 두면 원본이 바뀔 때 조용히 어긋난다.
 
-// §6 표에 설명 행이 없는 이벤트. 없으면 표에서 빠지므로 여기서 채운다.
+// §2 표에 설명 행이 없는 이벤트. 없으면 표에서 빠지므로 여기서 채운다.
 // (계약 문서에 채워지면 이 목록은 지운다)
 const FILL = {
   impression_dwell: {
@@ -155,18 +155,18 @@ const FILL = {
 // 문서의 용어를 임의로 바꾸지 않는다. 계약 문서 표기를 그대로 쓴다.
 const SOFTEN = [];
 
-function parseSix() {
+function parseTaxonomy() {
   const md = fs.readFileSync(
-    path.join(ROOT, 'docs/analytics/event-taxonomy-trigger-schema.md'), 'utf8')
+    path.join(ROOT, 'contracts/event-properties-schema.md'), 'utf8')
     .replace(/\r\n/g, '\n').split('\n');
   const rows = [];
-  let section = null, inSix = false;
+  let section = null, inTaxonomy = false;
   const ROW = /^\|\s*`([a-z_]+)`\s*\|\s*`?([a-z_]+)`?\s*\|([^|]*)\|([^|]*)\|\s*$/;
   for (const line of md) {
     const h2 = line.match(/^##\s+(\d+)\./);
-    if (h2) { inSix = h2[1] === '6'; section = null; continue; }
-    if (!inSix) continue;
-    const h3 = line.match(/^###\s+6\.\d+\s+(.*)$/);
+    if (h2) { inTaxonomy = h2[1] === '2'; section = null; continue; }
+    if (!inTaxonomy) continue;
+    const h3 = line.match(/^###\s+2\.\d+\s+(.*)$/);
     if (h3) { section = h3[1].trim(); continue; }
     const m = line.match(ROW);
     if (!m || !section) continue;
@@ -206,7 +206,7 @@ function buildEvents() {
 
   const weights = parseWeights();
   const seen = new Set();
-  const rows = parseSix()
+  const rows = parseTaxonomy()
     .filter(r => inContract.has(r.name))
     .filter(r => !seen.has(r.name) && seen.add(r.name));
 
@@ -416,11 +416,13 @@ const GROUPS = [
     note: '구현할 때 보는 원문입니다. PM 이 다 읽을 필요는 없습니다',
     docs: [
       { f: 'contracts/event-schema.json', t: 'Raw Event JSON Schema', d: '검증기가 돌리는 단일 출처', json: true },
-      { f: 'docs/analytics/event-taxonomy-trigger-schema.md', t: 'Event Taxonomy · Trigger', d: '발화 시점과 필수 property 전문' },
-      { f: 'docs/analytics/event-contract-summary.md', t: 'Event 계약 요약', d: '타 파트용 축약본' },
+      { f: 'contracts/event-properties-schema.md', t: 'Event Properties 계약', d: 'Event 의미 · 필수 property · enum' },
+      { f: 'docs/analytics/event-logging-design.md', t: 'Event Logging 설계', d: '화면 Trigger · KPI 연결 · 구현 현황' },
       { f: 'docs/analytics/log-transport-contract.md', t: '로그 전송 주기 계약', d: '배치 · 재시도 · synthetic 표시' },
-      { f: 'docs/analytics/processed-schema.md', t: 'Processed 스키마', d: 'Spark 정제 단계 컬럼' },
-      { f: 'docs/analytics/dw-schema.md', t: 'DW 스키마', d: 'Mart 와 KPI 산식' },
+      { f: 'contracts/processed-schema.md', t: 'Processed 스키마', d: 'Spark 정제 단계 컬럼 계약' },
+      { f: 'docs/analytics/spark-processing-design.md', t: 'Spark 처리 설계', d: '처리 근거 · 구현 현황 · 검증 계획' },
+      { f: 'contracts/dw-schema.md', t: 'DW · Mart 스키마', d: 'Dimension 과 Mart 컬럼 계약' },
+      { f: 'docs/analytics/dw-design.md', t: 'DW 적재 설계', d: '저장 흐름 · Dashboard KPI · 검증 계획' },
     ],
   },
 ];
@@ -646,7 +648,7 @@ main{padding:44px 52px 120px;min-width:0}
 .prose pre.code[data-lang]::before{content:attr(data-lang);position:absolute;top:8px;right:12px;
   font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
 
-/* 요약 문서 전용 */
+/* 가이드 요약 컴포넌트 */
 .prose .lead{font-size:17px;line-height:1.7;color:var(--ink)}
 .prose .note{font-size:14px;color:var(--muted);background:var(--panel);
   border-left:2px solid var(--rule);padding:11px 15px;border-radius:0 7px 7px 0}

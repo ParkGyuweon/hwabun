@@ -100,6 +100,42 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "[const] $.intent")
 
+    def test_navigation_click_with_session_intent_is_allowed(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "event_name": "navigation_click",
+                "intent": "session",
+                "product_id": None,
+                "properties": {
+                    "target": "home",
+                    "entry_source": "breadcrumb",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assertEqual([], result.errors)
+
+    def test_navigation_click_requires_session_intent(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "event_name": "navigation_click",
+                "intent": "comparison",
+                "product_id": None,
+                "properties": {
+                    "target": "home",
+                    "entry_source": "breadcrumb",
+                },
+            }
+        )
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[const] $.intent")
+
     def test_actor_type_and_source_must_match(self) -> None:
         event = copy.deepcopy(self.user_event)
         event["source"] = "simulator"

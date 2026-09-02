@@ -44,7 +44,7 @@ class EventControllerTest {
         validator.afterPropertiesSet();
 
         mockMvc = standaloneSetup(new EventController(publisher, metrics))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(metrics))
                 .setValidator(validator)
                 .build();
     }
@@ -102,6 +102,8 @@ class EventControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
+
+        verify(metrics).recordValidationFailure("invalid_event_batch");
     }
 
     @Test
@@ -128,7 +130,8 @@ class EventControllerTest {
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.code").value("EVENT_BATCH_TOO_LARGE"));
 
-        verifyNoInteractions(publisher, metrics);
+        verifyNoInteractions(publisher);
+        verify(metrics).recordValidationFailure("event_batch_too_large");
     }
 
     @Test
@@ -149,6 +152,8 @@ class EventControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
+
+        verify(metrics).recordValidationFailure("invalid_event_batch");
     }
 
     @Test
@@ -214,7 +219,8 @@ class EventControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MALFORMED_JSON"));
 
-        verifyNoInteractions(publisher, metrics);
+        verifyNoInteractions(publisher);
+        verify(metrics).recordValidationFailure("malformed_json");
     }
 
     private String validEventBatch() {

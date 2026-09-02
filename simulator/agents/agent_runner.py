@@ -24,8 +24,11 @@ LLM 에이전트 러너 — PA 페르소나가 실제 사이트를 돌아다닌�
 준비
     pip install playwright openai
     playwright install chromium
-    set GMS_KEY=...            (Windows CMD)
-    $env:GMS_KEY="..."          (PowerShell)
+
+    키는 레포 루트 .env 에 둔다 (.gitignore 에 있어 커밋되지 않는다):
+        GMS_KEY=...
+        OPENAI_API_KEY=...      (--openai 로 개인 키를 쓸 때만)
+    환경변수로 줘도 된다 — 환경변수가 .env 보다 우선한다.
 
 실행
     python simulator/agents/agent_runner.py --dry-run --limit 1     # 프롬프트만 확인
@@ -93,6 +96,14 @@ ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
 # 0건 사고). 그래서 세 개 모두 **코드가 조건을 만족할 때만** 목록에 올린다.
 QUICK_LOOK_MAX = 3      # 1인당 요약 열기 상한. 넘으면 상세로 들어가야 한다
 CART_MIN_TO_REMOVE = 2  # 장바구니에 이만큼 있어야 빼는 선택지를 연다 (전환 0 방지)
+MIN_DETAILS_BEFORE_LEAVE = 3   # 이만큼은 상세를 보고 나서야 나갈 수 있다
+
+# 매 턴 화면 판정을 찍는다. 왜 그 행동이 열렸는지 못 밝힐 때만 켠다 (--debug-screen)
+DEBUG_SCREEN = False
+
+# 목록 화면 주소. 딥링크로 상세에 바로 들어온 사람은 **히스토리에 앞 페이지가 없어**
+# go_back() 이 about:blank 로 간다. 그때 돌아갈 곳을 알고 있어야 복구가 된다
+LIST_URL = None
 
 # ── synthetic 실행 메타데이터 ────────────────────────────────────────────────
 # 에이전트는 실제 브라우저로 프론트를 조작하므로, 아무 표시도 하지 않으면 프론트
@@ -110,7 +121,7 @@ CART_MIN_TO_REMOVE = 2  # 장바구니에 이만큼 있어야 빼는 선택지�
 #
 # 이름은 gen_behavior_logs.py 와 맞춘다 — 두 생성기의 로그가 같은 Mart 에 들어간다.
 # 시나리오는 배치와 같은 값을 쓰고, 배치(python_batch)와 에이전트는
-# generator_type 으로 가른다 (docs/analytics/dw-schema.md).
+# generator_type 으로 가른다 (contracts/dw-schema.md).
 DEFAULT_SCENARIO_ID = "normal_day"
 # 계약 enum 은 python_batch | agent_llm 이다 (contracts/event-schema.json).
 # agent_realtime 은 legacy 로 명시적으로 거절된다 (contracts/tests/test_validate_events.py)
@@ -150,6 +161,31 @@ def entry_url(base, scenario_id, simulation_run_id, product_id=None):
         # 검색·광고로 상세에 바로 떨어지는 실제 유입에 해당한다
         query["product"] = product_id
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def load_dotenv(path=None):
+    """레포 루트 .env 에서 키를 읽어 환경변수에 얹는다.
+
+    의존성을 늘리지 않으려고 직접 읽는다 (python-dotenv 없이 동작해야 팀원이
+    받자마자 돌릴 수 있다). **이미 환경변수에 있으면 덮지 않는다** — CI 나 일회성
+    실행에서 준 값이 파일보다 우선이어야 한다.
+    """
+    path = path or os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with io.open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception as exc:                      # 키가 없다고 러너가 죽으면 안 된다
+        print(f"  .env 를 읽지 못했습니다 ({exc}) — 환경변수로 주십시오")
 
 
 def load_catalog():
@@ -197,7 +233,9 @@ def spread_start(page, rng):
 
     height = page.evaluate("() => document.body.scrollHeight")
     view = page.evaluate("() => window.innerHeight")
-    target = int(max(0, height - view) * rng.uniform(0, 0.75))
+    # 0.75 까지 내렸더니 첫 화면부터 "목록 끝" 이 떠서 곧장 leave 하는 사고가 났다
+    # (실측: 9명 중 6명이 2~5턴 만에 종료). 바닥 근처에서 시작하지 않게 한다
+    target = int(max(0, height - view) * rng.uniform(0, 0.55))
     while page.evaluate("() => window.scrollY") + 40 < target:
         page.mouse.wheel(0, rng.randint(500, 900))
         page.wait_for_timeout(rng.randint(180, 420))
@@ -279,6 +317,30 @@ action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에
 # ============================================================================
 # 2. 화면 -> 텍스트
 # ============================================================================
+
+def screen_is_broken(page):
+    """화면이 죽었는가 — 카드도 없고 담기 버튼도 없다.
+
+    프론트 AboutProduct.tsx 가 `highlighted_ingredients` 없는 상품에서 던져
+    React 가 트리를 통째로 버린다 (202개 중 78개 · 목록 첫 화면 25개 중 10개).
+    빈 화면에서는 어떤 조작도 성공하지 못하므로 에이전트가 남은 턴을 전부 버린다.
+    """
+    try:
+        return (not page.locator(".card[data-product-id]").count()
+                and not page.locator('[data-log-action="add_to_cart"]').count())
+    except Exception:
+        return False
+
+
+def recover_screen(page):
+    """목록으로 되돌려 세션을 살린다. 돌아갈 곳을 모르면 아무것도 하지 않는다"""
+    if not LIST_URL:
+        return False
+    page.goto(LIST_URL, wait_until="networkidle")
+    page.evaluate("() => window.scrollTo(0, 0)")
+    page.wait_for_timeout(900)
+    return True
+
 
 def read_screen(page):
     """지금 브라우저에 보이는 것을 LLM 이 읽을 수 있는 텍스트로 만든다.
@@ -365,6 +427,48 @@ def read_detail(page):
 # 3. LLM 호출 (캐시)
 # ============================================================================
 
+class LocalLLM:
+    """로컬 GPU 에 올린 오픈 모델. GMS 크레딧을 쓰지 않는다.
+
+    100명 x 15턴이 약 900 크레딧이라 반복 실행이 부담이다. 러너가 모델에 요구하는
+    것은 "허용된 행동 중 하나 + 상품명 + 한 줄 이유" 를 JSON 으로 뱉는 것뿐이라,
+    작은 모델로도 되는지 먼저 확인하고 쓴다.
+
+    서버를 따로 띄우지 않고 프로세스 안에서 돌린다. 대신 --workers 로 여러 개를
+    띄우면 워커마다 모델을 올려 VRAM 이 그만큼 곱해진다 (8GB 에서는 1개만).
+    """
+
+    def __init__(self, model_id, device=None, max_new_tokens=160):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.max_new_tokens = max_new_tokens
+        print(f"로컬 모델 {model_id} 를 {self.device} 에 올립니다...")
+        t0 = time.time()
+        self.tok = AutoTokenizer.from_pretrained(model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=torch.float16 if self.device == "cuda" else None)
+        self.model.to(self.device).eval()
+        print(f"  준비 {time.time() - t0:.1f}초")
+
+    def chat(self, system, user):
+        import torch
+        prompt = self.tok.apply_chat_template(
+            [{"role": "system", "content": system},
+             {"role": "user", "content": user}],
+            tokenize=False, add_generation_prompt=True)
+        # JSON 만 뱉게 첫 글자를 미리 넣어 준다. 작은 모델은 서두를 붙이는 버릇이 있다
+        prompt += '{"action": "'
+        ids = self.tok(prompt, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model.generate(
+                **ids, max_new_tokens=self.max_new_tokens, do_sample=True,
+                temperature=0.9, top_p=0.9, pad_token_id=self.tok.eos_token_id)
+        text = self.tok.decode(out[0][ids["input_ids"].shape[1]:],
+                               skip_special_tokens=True)
+        return '{"action": "' + text
+
+
 class ScriptedLLM:
     """정해진 순서를 돌려주는 가짜 LLM. 크레딧 0 으로 배선을 검증한다.
 
@@ -403,6 +507,18 @@ class ScriptedLLM:
                 target = cart[-1] if cart else None
             return {"action": act, "target": target, "reason": "(대본)"}
         return {"action": "leave", "target": None, "reason": "(대본 끝)"}
+
+
+def parse_action(text):
+    """모델 응답에서 JSON 하나를 건진다. 앞뒤에 말을 붙여도 중괄호만 떼어 쓴다"""
+    lo, hi = text.find("{"), text.rfind("}")
+    if lo < 0 or hi <= lo:
+        return None
+    try:
+        obj = json.loads(text[lo:hi + 1])
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) and obj.get("action") else None
 
 
 def ask(client, system, user, cache_on, dry):
@@ -519,7 +635,13 @@ def do_action(page, act, target):
     a = act
 
     if a == "scroll":
-        page.mouse.wheel(0, random.randint(500, 1200))
+        # 바닥에 닿았으면 위로 올린다. 아래로만 굴리면 화면이 안 바뀌어
+        # "볼 것이 없다" 로 읽히고, 실제로 위쪽에 안 본 상품이 남아 있다
+        at_bottom = page.evaluate(
+            "() => window.scrollY + window.innerHeight"
+            " >= document.body.scrollHeight - 40")
+        step = random.randint(500, 1200)
+        page.mouse.wheel(0, -step if at_bottom else step)
         page.wait_for_timeout(random.randint(700, 2500))
         # 목록 바닥에 닿았고 "더 보기" 가 보이면 눌러 준다. 사람은 더 볼 게
         # 있으면 누른다. LLM 의 선택지로 두지 않는 이유는, 행동을 하나 더 늘리면
@@ -537,6 +659,15 @@ def do_action(page, act, target):
     if a == "back_to_list":
         page.go_back()
         page.wait_for_timeout(1200)
+        # 딥링크로 상세에 바로 들어온 사람은 **돌아갈 목록이 없다.** go_back() 이
+        # about:blank 로 가고, 그 빈 화면을 "다 봤다" 로 읽어 곧장 나간다
+        # (실측: 5명 중 3명이 상세를 한 개도 못 열고 종료).
+        # 그래서 목록 주소를 미리 기억해 두고 그리로 이동해 복구한다
+        if (page.url.startswith("about:")
+                or not page.locator(".card[data-product-id]").count()):
+            page.goto(LIST_URL or page.url, wait_until="networkidle")
+            page.evaluate("() => window.scrollTo(0, 0)")   # 복구는 목록 맨 위에서
+            page.wait_for_timeout(900)
         return True
 
     if a == "add_to_cart":
@@ -650,8 +781,35 @@ def first_unvisited(page, visited):
     return None
 
 
+def has_unvisited_in_list(page, visited):
+    """목록에 아직 안 본 상품이 남아 있는가.
+
+    **화면에 보이는 카드만 보면 안 된다.** back_to_list 로 돌아오면 스크롤이
+    복원되는데, 그 자리에 안 본 카드가 안 보이면 "다 봤다" 로 판정돼 첫 턴부터
+    leave 가 열린다 (실측: 5명 중 5명이 2~3턴에 종료). 스크롤하거나 "더 보기" 를
+    누르면 닿을 수 있는 것까지 세야 한다.
+    """
+    if page.locator(".list__more").count():
+        return True                              # 아직 안 불러온 상품이 남아 있다
+    seen = {norm(v) for v in visited if norm(v)}
+    cards = page.locator(".card[data-product-id]")
+    if not cards.count():
+        # 화면이 비어 있는 것은 "다 봤다" 가 아니라 화면이 이상한 것이다.
+        # 여기서 True 를 돌려줘야 leave 가 안 열리고 다음 턴에 복구할 기회가 생긴다
+        return True
+    for i in range(min(cards.count(), 120)):
+        try:
+            name = norm(cards.nth(i).locator(".card__name").inner_text(timeout=600))
+        except Exception:
+            continue
+        if name and not any(name in v or v in name for v in seen):
+            return True
+    return False
+
+
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
-                    wished_here=False, quick_looks=0, cart_size=0):
+                    wished_here=False, quick_looks=0, cart_size=0,
+                    n_details=0, has_unvisited=True):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -673,14 +831,19 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
     # 더 보기를 눌러 26번째 상품부터를 화면에 올린다)
     acts = ["click_product"]
-    if pct < 97 or has_more:
-        acts.append("scroll")
+    # 목록에서는 스크롤을 늘 연다. 바닥에 닿으면 do_action 이 위로 올리므로
+    # "바닥이라 볼 것이 없다" 로 갇히지 않는다. 연속 스크롤은 프롬프트가 지적한다
+    acts.append("scroll")
     if quick_looks < QUICK_LOOK_MAX:
         acts.append("quick_look")
     # 담은 것이 하나뿐일 때 빼기를 열면 전환이 0 으로 돌아갈 수 있다
     if cart_size >= CART_MIN_TO_REMOVE:
         acts.append("remove_from_cart")
-    acts.append("leave")
+    # **leave 를 일찍 열지 않는다.** 시작 위치를 흩으면서 목록 아래쪽에서 출발하는
+    # 사람이 생겼는데, 화면에 "목록 끝" 이 보이면 첫 턴부터 나가버렸다.
+    # 상세를 몇 개는 보고 나서, 그리고 화면에 새 상품이 없을 때만 나갈 수 있다
+    if n_details >= MIN_DETAILS_BEFORE_LEAVE or not has_unvisited:
+        acts.append("leave")
     return acts
 
 
@@ -704,7 +867,16 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
+    broken = 0
     for turn in range(1, max_turns + 1):
+        if screen_is_broken(page):
+            # 화면이 죽었다. 목록으로 되돌리고 이 턴은 LLM 을 부르지 않는다
+            broken += 1
+            if verbose:
+                print(f"    {turn:>2}. (화면이 비어 목록으로 복구)")
+            if not recover_screen(page) or broken > 3:
+                break
+            continue
         user, kind = read_screen(page)
         m = re.search(PCT_RE, user)
         pct = int(m.group(1)) if m else 0
@@ -720,9 +892,11 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         has_more = kind == "list" and page.locator(".list__more").count() > 0
         wished_here = any(norm(w) and (norm(w) in norm(here) or norm(here) in norm(w))
                           for w in wished)
+        has_unvisited = kind != "list" or has_unvisited_in_list(page, visited)
         acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more,
                                wished_here=wished_here, quick_looks=quick_looks,
-                               cart_size=len(cart))
+                               cart_size=len(cart), n_details=len(visited),
+                               has_unvisited=has_unvisited)
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -752,8 +926,14 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             if len(history) >= 3 and all(h.startswith("scroll") for h in history[-3:]):
                 user = ("[주의] 스크롤을 세 번 연속 했습니다. **이번에는 상품을 하나 고르거나"
                         " 목록 끝이면 leave 하십시오.**" + NL + NL + user)
+        if verbose and DEBUG_SCREEN:
+            print(f"       [화면 {kind} · 스크롤 {pct}% · 상세 {len(visited)}개"
+                  f" · 새 상품 {'있음' if has_unvisited else '없음'}"
+                  f" · 선택지 {'/'.join(acts)}]")
         if script is not None:
             obj, used = script.next_action(page, acts, here, cart, visited, peeked), 0
+        elif isinstance(client, LocalLLM):
+            obj, used = parse_action(client.chat(system, user)), 0
         else:
             obj, used = ask(client, system, user, cache_on, dry)
         calls += used
@@ -825,15 +1005,81 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             carted += 1
         if verbose:
             mark = "  " if okd else "! "
-            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {obj.get('reason','')[:40]}")
+            print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
-    return dict(calls=calls, done=done, failed=failed, carted=carted)
+    return dict(calls=calls, done=done, failed=failed, carted=carted, broken=broken)
 
 
 # ============================================================================
 # 6. 메인
 # ============================================================================
+
+
+def run_parallel(a):
+    """자기 자신을 --shard 로 여러 번 띄우고 로그를 합친다.
+
+    Playwright 의 sync API 가 스레드 안전하지 않아 스레드가 아니라 프로세스로
+    나눈다. 한 워커가 죽어도 나머지는 계속 돈다.
+    """
+    import subprocess
+    n = min(a.workers, a.limit)
+    base, ext = os.path.splitext(a.out)
+    parts = [f"{base}.part{i}{ext}" for i in range(n)]
+    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+
+    # **실행 ID 를 부모가 정해 모든 샤드에 물려준다.** 샤드마다 만들면 한 번의
+    # 실행이 워커 수만큼의 simulation_run_id 로 쪼개져 실행 단위 집계가 깨진다
+    run_id = a.simulation_run_id or default_simulation_run_id()
+
+    argv = [sys.executable, os.path.abspath(__file__),
+            "--url", a.url, "--limit", str(a.limit), "--turns", str(a.turns),
+            "--model", MODEL,
+            "--scenario-id", a.scenario_id, "--simulation-run-id", run_id,
+            "--entry", a.entry]
+    for flag, on in (("--headed", a.headed), ("--dry-run", a.dry_run),
+                     ("--openai", a.openai), ("--cache", a.cache),
+                     ("--debug-screen", a.debug_screen)):
+        if on:
+            argv.append(flag)
+    if a.post:                      # 안 넘기면 워커가 파일로만 쓰고 수집이 안 된다
+        argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
+    if a.script:
+        argv += ["--script", a.script]
+
+    print(f"워커 {n}개로 나눠 실행합니다 (Playwright sync API 가 스레드 안전하지"
+          f" 않아 프로세스로 분리)")
+    print(f"  실행 ID {run_id} — 모든 워커가 같은 값을 씁니다")
+    t0 = time.time()
+    procs = []
+    for i in range(n):
+        cmd = argv + ["--shard", str(i), "--shards", str(n),
+                      "--out", parts[i], "--quiet"]
+        procs.append(subprocess.Popen(cmd))
+    codes = [p.wait() for p in procs]
+    dead = [i for i, c in enumerate(codes) if c != 0]
+
+    # 로그 합치기 — 워커마다 따로 쓴 파일을 하나로 잇는다
+    total = 0
+    with io.open(a.out, "w", encoding="utf-8") as out:
+        for p in parts:
+            if not os.path.exists(p):
+                continue
+            with io.open(p, encoding="utf-8") as f:
+                for line in f:
+                    out.write(line)
+                    total += 1
+            os.remove(p)
+
+    dt = time.time() - t0
+    print()
+    print("=" * 60)
+    print(f"  워커 {n}개 · {dt:.0f}초 ({dt/60:.1f}분)")
+    if dead:
+        print(f"  실패한 워커 {len(dead)}개: {dead}  <- 그만큼 페르소나가 빠졌습니다")
+    print(f"  수집 로그 {total:,}건 -> {a.out}")
+    print("=" * 60)
+
 
 def main():
     global MODEL
@@ -844,12 +1090,21 @@ def main():
     ap.add_argument("--headed", action="store_true", help="브라우저를 띄워서 본다")
     ap.add_argument("--dry-run", action="store_true", help="LLM 호출 없이 프롬프트만 (0 크레딧)")
     ap.add_argument("--cache", action="store_true", help="같은 화면이면 저장된 응답 재사용")
+    ap.add_argument("--local-model", default=None, metavar="HF_ID",
+                    help="로컬 GPU 의 오픈 모델을 쓴다 (크레딧 0). "
+                         "예) HuggingFaceTB/SmolLM2-1.7B-Instruct")
     ap.add_argument("--openai", action="store_true",
                     help="GMS 대신 개인 OpenAI 키를 쓴다 (OPENAI_API_KEY 환경변수)")
     ap.add_argument("--model", default=None, help=f"모델 (기본 {MODEL})")
     ap.add_argument("--out", default=os.path.join(BD, "data", "agent_events.jsonl"),
                     help="가로챈 행동 로그를 적을 파일")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="동시에 돌릴 프로세스 수. LLM 대기가 병목이라 그대로 빨라진다")
+    ap.add_argument("--shard", type=int, default=0, help=argparse.SUPPRESS)
+    ap.add_argument("--shards", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--debug-screen", action="store_true",
+                    help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
@@ -869,30 +1124,48 @@ def main():
 
     simulation_run_id = a.simulation_run_id or default_simulation_run_id()
     start_url = entry_url(a.url, a.scenario_id, simulation_run_id)
+    # 상세로 딥링크한 사람이 목록으로 돌아갈 때 쓸 주소 (product 파라미터 없음)
+    globals()["LIST_URL"] = start_url
 
     if a.model:
         MODEL = a.model
+    if a.debug_screen:
+        globals()["DEBUG_SCREEN"] = True
+
+    load_dotenv()
 
     client = None
-    if not a.dry_run and not a.script:
+    if a.local_model and not a.dry_run and not a.script:
+        client = LocalLLM(a.local_model)
+    elif not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
             key = os.environ.get("OPENAI_API_KEY")
             if not key:
-                print("OPENAI_API_KEY 환경변수가 없습니다.  set OPENAI_API_KEY=sk-...")
+                print("OPENAI_API_KEY 가 없습니다. 레포 루트 .env 에 넣거나 환경변수로 주십시오.")
                 raise SystemExit(1)
             client = OpenAI(api_key=key)          # 기본 엔드포인트 = api.openai.com
         else:
             key = os.environ.get("GMS_KEY")
             if not key:
-                print("GMS_KEY 환경변수가 없습니다.  set GMS_KEY=...")
+                print("GMS_KEY 가 없습니다. 레포 루트 .env 에 'GMS_KEY=...' 를 넣으십시오.")
                 raise SystemExit(1)
             client = OpenAI(base_url=GMS_BASE, api_key=key)
+
+    if a.workers > 1 and a.shards == 1:
+        run_parallel(a)
+        return
 
     personas = json.load(open(PERSONA_FILE, encoding="utf-8"))[:a.limit]
     catalog = load_catalog()
     if not catalog:
         print(f"상품 목록을 못 읽었습니다 ({PRODUCTS_FILE}) — 전원 목록에서 시작합니다")
+    print("PA(LLM 에이전트) — 정성 검증 축입니다. 대표 정량 지표(PC 9,900명)에"
+          " 합치지 마십시오 (docs/ai/evaluation-framework.md 5절)")
+    if a.shards > 1:
+        # 앞에서부터 순서대로 나누지 않고 건너뛰며 나눈다. 페르소나 파일이
+        # 정렬돼 있으면 앞쪽 샤드에만 무거운 사람이 몰릴 수 있다
+        personas = personas[a.shard::a.shards]
     print(f"페르소나 {len(personas)}명 · 모델 {MODEL} · 최대 {a.turns}턴"
           + ("  [dry-run]" if a.dry_run else ""))
     print(f"프론트 {start_url}")
@@ -901,7 +1174,7 @@ def main():
     print(f"수집 API {a.post}" if a.post else "수집 API 전송 없음 (파일로만 남김)")
 
     from playwright.sync_api import sync_playwright
-    tot = dict(calls=0, done=0, failed=0, carted=0)
+    tot = dict(calls=0, done=0, failed=0, carted=0, broken=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -926,6 +1199,15 @@ def main():
                               product_id=rng.choice(catalog) if deep else None)
             page.goto(entry, wait_until="networkidle")
 
+            # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
+            # 프론트 AboutProduct.tsx 가 highlighted_ingredients 없는 상품에서
+            # 던져 화면이 통째로 빈다 (202개 중 78개, Research/handoff 참고).
+            # 그쪽이 고쳐지면 이 방어는 저절로 놀게 된다
+            if deep and not page.locator('[data-log-action="add_to_cart"]').count():
+                print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
+                page.goto(LIST_URL, wait_until="networkidle")
+                page.wait_for_timeout(800)
+
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
@@ -949,8 +1231,11 @@ def main():
     print()
     print("=" * 60)
     print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건")
+    if tot.get("broken"):
+        print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회 —"
+              f" 프론트 AboutProduct.tsx 크래시 (Research/handoff/frontend_detail_crash.md)")
     print(f"  LLM 호출 {tot['calls']}회 · {dt:.0f}초")
-    if tot["calls"]:
+    if tot["calls"] and not a.local_model:
         print(f"  예상 크레딧 약 {tot['calls'] * 0.6:.0f}"
               f"  (100명 환산 {tot['calls'] * 0.6 / max(len(personas),1) * 100:,.0f})")
     top = sorted(sink.kinds.items(), key=lambda x: -x[1])[:8]
@@ -987,8 +1272,9 @@ class LogSink:
        `clean_events_job` 이 `user_id` 를 NULL 로, `source` 를 `web` 으로 파생하고
        시뮬레이션 Mart 에서 통째로 빠진다. 게다가 synthetic 필수 properties 검증은
        `actor_type != 'synthetic'` 이면 그냥 통과시켜서 **거절도 안 되고 조용히
-       잘못된 데이터**가 된다. 표시는 여기서 채운다 — 계약이 정한 강제 지점이
-       Simulator 와 Spark 이기 때문이다 (event-taxonomy-trigger-schema.md §8.4).
+       잘못된 데이터**가 된다. 표시는 여기서 채운다. synthetic 필수값은
+       contracts/event-schema.json, PA 보강 책임은
+       docs/analytics/log-transport-contract.md §9-2를 따른다.
 
     `--post` 를 주면 채운 로그를 수집 API 로 대신 보낸다. 헤더에도 같은 사실을
     적어 둔다 (`X-Actor-Type`). 지금은 아무도 안 읽지만, 나중에 수집 서버가

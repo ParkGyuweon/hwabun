@@ -40,6 +40,7 @@
         "page_view",
         "product_view",
         "product_impression",
+        "navigation_click",
         "product_click",
         "section_view",
         "section_dwell",
@@ -188,7 +189,12 @@
       "if": {
         "properties": {
           "event_name": {
-            "enum": ["session_start", "page_view", "exit_summary"]
+            "enum": [
+              "session_start",
+              "page_view",
+              "navigation_click",
+              "exit_summary"
+            ]
           }
         },
         "required": ["event_name"]

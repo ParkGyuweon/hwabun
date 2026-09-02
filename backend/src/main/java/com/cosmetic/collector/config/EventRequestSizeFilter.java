@@ -1,6 +1,7 @@
 package com.cosmetic.collector.config;
 
 import com.cosmetic.collector.common.ErrorResponse;
+import com.cosmetic.collector.event.observability.CollectorMetrics;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -32,13 +33,16 @@ public class EventRequestSizeFilter extends OncePerRequestFilter {
     private static final String EVENTS_PATH = "/api/events";
 
     private final ObjectMapper objectMapper;
+    private final CollectorMetrics metrics;
     private final long maxEventRequestBytes;
 
     public EventRequestSizeFilter(
             ObjectMapper objectMapper,
+            CollectorMetrics metrics,
             @Value("${collector.http.max-event-request-bytes}") long maxEventRequestBytes
     ) {
         this.objectMapper = objectMapper;
+        this.metrics = metrics;
         this.maxEventRequestBytes = maxEventRequestBytes;
     }
 
@@ -92,6 +96,7 @@ public class EventRequestSizeFilter extends OncePerRequestFilter {
     }
 
     private void writePayloadTooLarge(HttpServletResponse response) throws IOException {
+        metrics.recordValidationFailure("event_request_too_large");
         response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), new ErrorResponse(
