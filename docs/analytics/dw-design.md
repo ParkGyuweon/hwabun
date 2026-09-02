@@ -1,7 +1,8 @@
 # DW / Mart 적재 및 Dashboard 설계
 
 작성일: 2026-09-02  
-상태: Draft — 저장 방향 합의, Spark → Delta → MySQL 적재 검증 전
+최종 정적 검증: 2026-09-02
+상태: 논리 Schema와 최신 Dashboard 핵심 KPI 대조 완료, Spark → Delta → MySQL 적재 검증 전
 
 ## 1. 문서 역할
 
@@ -62,6 +63,14 @@ Processed에서 분석 컬럼으로 승격된다. PA와 PC는 모두 `source=sim
 | 검색 | 검색량, 결과 품질, 클릭 전환 | `search_daily_kpi` |
 | Persona·Scenario | 고객군·실행별 행동 차이 | `persona_segment_daily_kpi`, `scenario_daily_kpi`, Simulation Dimension |
 
+이 표는 `contracts/dw-schema.md`가 보장하는 핵심 serving 범위다. 최신 Dashboard
+근거표의 모의 화면에는 이 계약보다 넓은 탐색 지표도 있다. 예를 들어 스크롤 90%
+도달, `exit_summary` 최빈 이탈 위치, 마찰 Event의 위치 분포, 매칭 성분 TOP 10,
+콘텐츠 열람 arm별 전환 기여, Segment별 콘텐츠 선호는 현재 Mart 컬럼만으로 직접
+조회할 수 없다. Dashboard API 연결 전에 해당 지표를 별도 Mart로 물리화할지,
+Delta 상세 Dataset에서 계산할지 결정해야 한다. 이를 이미 확정된 핵심 Mart의
+논리 Schema가 비어 있다는 뜻으로 해석하지 않는다.
+
 ### 핵심 KPI
 
 | KPI | 산식 | Mart |
@@ -85,14 +94,15 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 
 | 항목 | 현재 상태 | 후속 확인 |
 | --- | --- | --- |
-| Collector payload | Event 단위, `received_at`, `source`, `request_id`, `event_index` 계약 확인 | 관련 MR 병합 후 실제 payload 재검증 |
+| Collector payload | 관련 구현 병합 완료. Event 단위, `received_at`, `source`, `request_id`, `event_index` 보강과 Kafka key=`session_id`를 코드에서 재확인 | 실제 Kafka payload E2E 캡처 |
 | Kafka | 기본 topic `activity-events`, key `session_id` | 환경별 설정 확인 |
 | Raw Q1 | 로컬 Parquet + checkpoint, `source`는 `raw_value` 내부 | Raw projection에 `source` 반영 필요 |
-| Processed | 논리 계약과 처리 설계 작성 | 실제 Streaming 출력과 대조 필요 |
+| Processed | 논리 계약 작성 및 현재 Spark projection 정적 대조 완료 | Delta `printSchema()`와 row-level E2E 대조 |
 | Delta marts | 저장 방향 합의 | Spark/Scala/delta-spark 호환성과 MERGE 검증 |
 | MySQL `dw` | Dashboard serving 역할 합의 | DDL, 인덱스, 적재 주기, upsert 방식 결정 |
 | 검색·결제 Event | 일부 provisional | 화면·Collector 구현 후 key와 optional 값 재검증 |
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |
+| Dashboard 확장 지표 | 핵심 KPI Mart는 계약 완료, 최신 모의 화면 일부 지표는 serving 계약 밖 | API 구현 전 별도 Mart 또는 Delta 계산 경로 결정 |
 
 `search_query_hash`의 정규화·hash 규칙, 실제 Web의 안정적인 `user_id`, `cart_id`,
 운영 저장 경로는 구현 전 확정이 필요하다. 이 항목들은 이미 정한 Schema를 다시

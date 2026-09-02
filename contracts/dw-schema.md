@@ -1,6 +1,7 @@
 # DW / Mart Schema Contract
 
 작성일: 2026-09-02  
+최종 정적 검증: 2026-09-02
 상태: Draft — 논리 Schema 확정, 물리 DDL 및 실제 적재 검증 전
 
 ## 1. 범위와 우선순위
@@ -39,6 +40,7 @@ Dashboard 조회용 Dimension과 Mart로 변환할 때 지켜야 하는 grain, �
 | 필드군 | 논리 타입 | nullable | 규칙 |
 | --- | --- | --- | --- |
 | `event_date_kst` | date | N | KST 일간 집계일 |
+| `funnel_date_kst` | date | N | 최초 Funnel 단계 도달 시각의 KST 집계일 |
 | `event_minute_kst` | timestamp | N | KST minute truncate |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `source` | string | N | MVP: `web`, `simulator` |
@@ -153,7 +155,7 @@ input = product_event_fact, persona_behavior_feature_delta, dim_product
 | --- | --- | --- | --- |
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
-| `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계 |
+| `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
 | `quick_look_sessions`, `product_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
 | `revenue_amount` | decimal(18,2) | Y | `purchase`의 `item_revenue` 합계 |
 | `currency` | string | Y | 통화 |
@@ -211,13 +213,13 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 ### 4.5 `funnel_daily_kpi`
 
 ```text
-key = event_date_kst + product_id + actor_type + source + scenario_id + simulation_run_id
+key = funnel_date_kst + product_id + actor_type + source + scenario_id + simulation_run_id
 input = funnel_session_fact, dim_product
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
-| key 전체 | 공통/string | scenario/run만 Y | 최초 Funnel 진입일 기준 축 |
+| key 전체 | 공통/string | scenario/run만 Y | `funnel_date_kst`는 최초 Funnel 진입일 기준 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `impression_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `click_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
 | `impression_to_click_rate`, `click_to_view_rate`, `view_to_information_rate`, `view_to_cart_rate`, `cart_to_purchase_rate`, `view_to_purchase_rate`, `dropoff_after_impression_rate`, `dropoff_after_view_rate`, `dropoff_after_cart_rate` | double | Y | 전환·이탈률 |

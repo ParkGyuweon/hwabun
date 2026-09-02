@@ -1,9 +1,10 @@
 # Processed Dataset Schema 계약
 
 작성일: 2026-09-01
+최종 정적 검증: 2026-09-02
 대상 Jira: `[DATA] Spark 처리 결과 및 DW 저장 구조 확정`
 문서 정리 Jira: `[DATA] Analytics 계약 및 설계 문서 구조 정리`
-상태: Draft, 목표 Schema 검토 및 Spark 구현·E2E 검증 대기
+상태: 논리 Schema 확정, 현재 Spark 구현·Delta 물리화·E2E 정합성 검증 대기
 설계 설명: [`spark-processing-design.md`](../docs/analytics/spark-processing-design.md)
 
 ## 1. 범위와 우선순위
@@ -444,6 +445,11 @@ Vector 자체를 저장하지 않는다.
 | `updated_at` | timestamp | N | 상품 속성 갱신 시각 |
 
 ## 15. 구현 정합성 완료 조건
+
+2026-09-02 기준 최신 Raw/Event/Persona 계약과 현재 `streaming/` 구현을 정적으로
+대조했다. Dataset의 grain, key, partition, 컬럼과 nullable에 새 논리 변경은
+필요하지 않았다. 아래 조건은 논리 Schema 작성 완료 조건이 아니라, 구현 결과가 이
+계약을 충족했다고 판정하기 위한 물리 구현·E2E 완료 조건이다.
 
 1. 각 Delta Table의 실제 `printSchema()`가 이 문서의 컬럼·타입·nullable과 일치한다.
 2. §3의 unique key 중복이 0건이다.
