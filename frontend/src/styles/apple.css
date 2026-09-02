@@ -1,0 +1,895 @@
+/*
+ * BLOOM — 시각 레이어.
+ *
+ * 기존 화면 CSS(product-list · product-detail · cart) 위에 마지막으로 얹는다.
+ * 구조·로그 트리거는 건드리지 않고 보이는 것만 바꾼다.
+ *
+ * 방향: 넉넉한 여백, 타이트한 대형 타이포, 헤어라인, 큰 라운드, 얇은 반투명 헤더,
+ * 필 버튼. 중립색은 차가운 회색 계열로 통일하고, 브랜드 색(Fresh Green · Blossom Pink ·
+ * Soft Mint)은 CTA·배지·포인트에만 쓴다. 색이 많으면 상품 사진이 죽는다.
+ */
+
+/* ---------- 토큰 재정의 ---------- */
+
+:root {
+  --color-ink: #1d1d1f;
+  --color-ink-soft: #6e6e73;
+  --color-ink-faint: #86868b;
+  --color-line: #d2d2d7;
+  --color-line-soft: #e8e8ed;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f5f5f7;
+
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-pill: 980px;
+
+  --page-max: 1120px;
+
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Pretendard',
+    'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+/* ---------- 헤더: 얇고 반투명 ---------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+.site-header__promo {
+  padding: 7px var(--space-4);
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  background: var(--color-brand-soft);
+  color: #3f4a2e;
+}
+
+.site-header__promo strong {
+  font-weight: 600;
+}
+
+.site-header__promo-terms {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.site-header__main {
+  max-width: var(--page-max);
+  height: 48px;
+  padding: 0 22px;
+  gap: 32px;
+}
+
+.site-header__logo {
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--color-ink);
+}
+
+.site-header__logo img {
+  width: 22px;
+  height: 22px;
+}
+
+.site-header__nav {
+  gap: 24px;
+  font-size: 12px;
+  color: var(--color-ink);
+  /* 카테고리가 7개다. 좁은 폭에서는 줄을 바꾸지 않고 이 안에서만 가로로 밀린다 —
+     페이지 전체가 가로 스크롤되면 안 된다 */
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.site-header__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.site-header__account {
+  flex: none;
+}
+
+.site-header__nav button {
+  padding: 0;
+  border-bottom: 0;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.site-header__nav button:hover {
+  opacity: 1;
+  border-bottom: 0;
+}
+
+.site-header__account {
+  gap: 12px;
+  font-size: 12px;
+}
+
+.site-header__basket {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 12px;
+  color: var(--color-ink);
+}
+
+.site-header__basket-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.persona__trigger {
+  border-color: var(--color-line);
+}
+
+/* ---------- 페이지 컨테이너 ---------- */
+
+.page {
+  max-width: var(--page-max);
+  padding: 40px 22px 96px;
+}
+
+.list {
+  max-width: none;
+  gap: 88px;
+}
+
+.breadcrumb {
+  max-width: var(--page-max);
+  padding: 0 22px;
+  font-size: 12px;
+}
+
+/* ---------- 기획전 헤딩: 크게, 타이트하게 ---------- */
+
+.list__promo-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 32px;
+}
+
+.list__promo-head h2 {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.list__promo-head p {
+  font-size: 17px;
+  color: var(--color-ink-soft);
+}
+
+.list__row {
+  grid-auto-columns: 240px;
+  gap: 24px;
+  padding-bottom: 8px;
+}
+
+/* ---------- 탭·필터: 필 ---------- */
+
+.list__tabs {
+  gap: 8px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.list__tabs button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+
+.list__tabs button:hover {
+  background: var(--color-line-soft);
+}
+
+.list__tabs button.is-active,
+.list__tabs button[aria-pressed='true'],
+.list__tabs button[aria-current] {
+  background: var(--color-ink);
+  color: #fff;
+}
+
+.list__controls {
+  gap: 16px;
+  padding: 0;
+  border: 0;
+}
+
+.list__filters button,
+.list__bands button {
+  padding: 7px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.list__filters button.is-active,
+.list__bands button.is-active,
+.list__filters button[aria-pressed='true'],
+.list__bands button[aria-pressed='true'] {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+
+.list__sort select {
+  padding: 7px 34px 7px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.list__count {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.list__grid {
+  gap: 28px 24px;
+}
+
+.list__more {
+  padding: 12px 26px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ---------- 카드: 테두리 없이, 이미지 타일 ---------- */
+
+.card {
+  padding: 0 0 14px;
+  border: 0;
+  background: transparent;
+  transition: transform 0.25s ease;
+}
+
+.card:hover {
+  border: 0;
+  box-shadow: none;
+  transform: translateY(-3px);
+}
+
+.card__thumb {
+  margin-bottom: 14px;
+  padding: 10%;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+
+.card__thumb img {
+  border-radius: 6px;
+}
+
+.card__brand {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-soft);
+}
+
+.card__name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.card__price {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.card__count {
+  font-size: 12px;
+}
+
+.card__badge {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.card__badge--new {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
+.card__badge--limited {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.card__badge--exclusive {
+  background: var(--color-brand-soft);
+  border-color: var(--color-brand-soft);
+  color: #3f4a2e;
+}
+
+.card__quicklook {
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ---------- 버튼: 필 ---------- */
+
+.btn {
+  height: 44px;
+  padding: 0 22px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.btn:active {
+  transform: scale(0.99);
+}
+
+.btn--primary {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: var(--color-brand-deep);
+  border-color: var(--color-brand-deep);
+}
+
+.btn--icon {
+  width: 44px;
+}
+
+.link-button {
+  color: var(--color-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-line);
+}
+
+/* ---------- 상세: 히어로 ---------- */
+
+.pdp {
+  max-width: var(--page-max);
+  gap: 56px;
+}
+
+.gallery__main {
+  border-radius: 22px;
+  background: var(--color-surface-soft);
+}
+
+.gallery__main img {
+  object-fit: contain;
+  padding: 6%;
+}
+
+.gallery__thumbs button {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+
+.gallery__thumbs button.is-active {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 1px var(--color-brand);
+}
+
+.gallery__badge {
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+}
+
+.summary__brand {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--color-ink-soft);
+}
+
+.summary__name {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.summary__price {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.summary__size {
+  font-size: 14px;
+  color: var(--color-ink-soft);
+}
+
+.summary__rating-value {
+  font-weight: 600;
+}
+
+.summary__meta {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.summary__actions {
+  gap: 10px;
+}
+
+.variants__label {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.variants__list button {
+  border-radius: 50%;
+  border: 1px solid transparent;
+  transition: transform 0.12s, border-color 0.12s;
+}
+
+.variants__list button:hover {
+  transform: scale(1.06);
+}
+
+.variants__list button.is-active {
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 2px #fff inset;
+}
+
+.qty {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+/* ---------- 상세: 섹션 ---------- */
+
+.pdp__section {
+  padding-top: 56px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.pdp__section--tight {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.pdp__section-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.15;
+  margin-bottom: 24px;
+}
+
+.pdp__block-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pdp__prose {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+.highlight-grid {
+  gap: 16px;
+}
+
+.highlight-grid__icon {
+  border-radius: 14px;
+  background: var(--color-surface-soft);
+}
+
+.highlight-grid__label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.accordion {
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.accordion:last-of-type {
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.accordion__head {
+  padding: 20px 0;
+}
+
+.accordion__title {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+
+.accordion__hint {
+  font-size: 13px;
+  color: var(--color-ink-faint);
+}
+
+.accordion__icon {
+  color: var(--color-ink-soft);
+}
+
+.accordion__body {
+  padding-bottom: 24px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+.chip {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-soft);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.chip--accent {
+  background: var(--color-brand-soft);
+  color: #3f4a2e;
+}
+
+.chip--muted {
+  color: var(--color-ink-soft);
+}
+
+.segmented {
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-soft);
+  padding: 3px;
+  border: 0;
+}
+
+.segmented button {
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.segmented button.is-active {
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.ingredients__toolbar {
+  gap: 12px;
+}
+
+.ingredients__count {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.ingredients__raw {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-ink-soft);
+}
+
+.empty-state {
+  padding: 20px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  font-size: 14px;
+  color: var(--color-ink-soft);
+}
+
+/* ---------- 유사 상품 ---------- */
+
+.similar__track {
+  gap: 20px;
+}
+
+.similar__thumb {
+  border-radius: 16px;
+  background: var(--color-surface-soft);
+  padding: 8%;
+}
+
+.similar__name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.similar__price {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- 리뷰 ---------- */
+
+.review-summary__score {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.review-summary__recommend {
+  font-size: 15px;
+  color: var(--color-ink-soft);
+}
+
+.review-summary__dist-bar {
+  border-radius: 999px;
+  background: var(--color-line-soft);
+}
+
+.review-summary__dist-bar > * {
+  border-radius: 999px;
+  background: var(--color-brand);
+}
+
+.review-filter__chips button {
+  padding: 6px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 13px;
+}
+
+.review-filter__chips button.is-active {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: #fff;
+}
+
+.review-filter__count {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.review-card {
+  padding: 24px 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.review-card__title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.review-card__text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+.review-card__author,
+.review-card__date,
+.review-card__attrs {
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+.review-card__badge {
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+}
+
+.review-card__recommend {
+  font-size: 12px;
+  color: #4f7a3a;
+}
+
+.skin-match__block {
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+
+/* ---------- Quick Look ---------- */
+
+.qlook__dialog {
+  border-radius: 24px;
+  border: 0;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.22);
+}
+
+.qlook__media {
+  border-radius: 18px;
+  background: var(--color-surface-soft);
+}
+
+.qlook__name {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.qlook__price {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.qlook__cta {
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.qlook__cta:hover {
+  background: var(--color-brand-deep);
+  border-color: var(--color-brand-deep);
+}
+
+.qlook__lists button {
+  border-radius: var(--radius-pill);
+}
+
+.qlook__close {
+  border-radius: 50%;
+  background: var(--color-surface-soft);
+}
+
+.qlook__toast {
+  border-radius: var(--radius-pill);
+}
+
+/* ---------- 장바구니 ---------- */
+
+.cart__title {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.cart__item {
+  padding: 22px 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.cart__thumb {
+  border-radius: 14px;
+  background: var(--color-surface-soft);
+}
+
+.cart__name {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.cart__price {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cart__summary {
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+
+.cart__total {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.cart__remove {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.cart__continue {
+  border-radius: var(--radius-pill);
+}
+
+.cart__empty {
+  padding: 64px 0;
+  color: var(--color-ink-soft);
+}
+
+/* ---------- 별점 ---------- */
+
+.stars__fill {
+  color: var(--color-star);
+}
+
+/* ---------- 개발용 로그 패널: 화면 톤에 맞게만 ---------- */
+
+.log-panel__toggle {
+  border-radius: var(--radius-pill);
+  background: rgba(29, 29, 31, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.log-panel__body {
+  border-radius: 16px;
+}
+
+@media (max-width: 720px) {
+  .list__promo-head h2 {
+    font-size: 30px;
+  }
+
+  .summary__name {
+    font-size: 26px;
+  }
+
+  .pdp__section-title {
+    font-size: 22px;
+  }
+
+  .site-header__main {
+    padding: 0 16px;
+    gap: 16px;
+  }
+}

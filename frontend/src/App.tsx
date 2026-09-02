@@ -16,6 +16,8 @@ import type { CartItem } from './types/cart';
 import './styles/product-detail.css';
 import './styles/product-list.css';
 import './styles/cart.css';
+// 시각 레이어. 위 셋 다음에 와야 한다 — 같은 셀렉터를 덧씌운다
+import './styles/apple.css';
 
 // JSON 목업은 리터럴 타입으로 추론되므로 unknown 을 거쳐 캐스팅한다.
 const products = productsData as unknown as Product[];
