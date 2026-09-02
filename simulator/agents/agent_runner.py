@@ -1042,6 +1042,8 @@ def run_parallel(a):
                      ("--debug-screen", a.debug_screen)):
         if on:
             argv.append(flag)
+    if a.api_base:                  # 자체 모델 서버 주소도 워커에 물려준다
+        argv += ["--api-base", a.api_base]
     if a.post:                      # 안 넘기면 워커가 파일로만 쓰고 수집이 안 된다
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
@@ -1093,6 +1095,9 @@ def main():
     ap.add_argument("--local-model", default=None, metavar="HF_ID",
                     help="로컬 GPU 의 오픈 모델을 쓴다 (크레딧 0). "
                          "예) HuggingFaceTB/SmolLM2-1.7B-Instruct")
+    ap.add_argument("--api-base",
+                    help="OpenAI 호환 자체 모델 서버 주소. 예) http://70.12.130.103:8501/v1"
+                         " (GPU 서버에 model_server.py 를 띄워 두고 쓴다. 크레딧 0)")
     ap.add_argument("--openai", action="store_true",
                     help="GMS 대신 개인 OpenAI 키를 쓴다 (OPENAI_API_KEY 환경변수)")
     ap.add_argument("--model", default=None, help=f"모델 (기본 {MODEL})")
@@ -1137,6 +1142,14 @@ def main():
     client = None
     if a.local_model and not a.dry_run and not a.script:
         client = LocalLLM(a.local_model)
+    elif a.api_base and not a.dry_run and not a.script:
+        # 자체 모델 서버 (model_server.py). GPU 서버에 모델을 올려 두고 여기서는
+        # 브라우저만 돌린다 — 노트북 VRAM 이 8GB 라 3B 가 한계인데, 서버가 32GB 면
+        # 7B 이상을 쓸 수 있고 노트북 GPU 가 비어 워커도 늘릴 수 있다.
+        # 키는 검사하지 않는 서버라 자리만 채운다.
+        from openai import OpenAI
+        client = OpenAI(base_url=a.api_base, api_key="not-used")
+        print(f"모델 서버 {a.api_base} · 모델 {MODEL}")
     elif not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
@@ -1235,7 +1248,7 @@ def main():
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회 —"
               f" 프론트 AboutProduct.tsx 크래시 (Research/handoff/frontend_detail_crash.md)")
     print(f"  LLM 호출 {tot['calls']}회 · {dt:.0f}초")
-    if tot["calls"] and not a.local_model:
+    if tot["calls"] and not a.local_model and not a.api_base:
         print(f"  예상 크레딧 약 {tot['calls'] * 0.6:.0f}"
               f"  (100명 환산 {tot['calls'] * 0.6 / max(len(personas),1) * 100:,.0f})")
     top = sorted(sink.kinds.items(), key=lambda x: -x[1])[:8]
