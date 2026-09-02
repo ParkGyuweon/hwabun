@@ -419,6 +419,8 @@ const GROUPS = [
       { f: 'contracts/event-properties-schema.md', t: 'Event Properties 계약', d: 'Event 의미 · 필수 property · enum' },
       { f: 'docs/analytics/event-logging-design.md', t: 'Event Logging 설계', d: '화면 Trigger · KPI 연결 · 구현 현황' },
       { f: 'docs/analytics/log-transport-contract.md', t: '로그 전송 주기 계약', d: '배치 · 재시도 · synthetic 표시' },
+      { f: 'contracts/raw-event-schema.md', t: 'Raw Event 스키마', d: 'Kafka 원본 보존 · 물리 key · 컬럼 계약' },
+      { f: 'docs/analytics/raw-event-storage-design.md', t: 'Raw 저장 설계', d: 'Delta 저장 구조 · 구현 현황 · 검증 계획' },
       { f: 'contracts/processed-schema.md', t: 'Processed 스키마', d: 'Spark 정제 단계 컬럼 계약' },
       { f: 'docs/analytics/spark-processing-design.md', t: 'Spark 처리 설계', d: '처리 근거 · 구현 현황 · 검증 계획' },
       { f: 'contracts/dw-schema.md', t: 'DW · Mart 스키마', d: 'Dimension 과 Mart 컬럼 계약' },

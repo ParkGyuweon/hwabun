@@ -321,9 +321,12 @@ action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에
 def screen_is_broken(page):
     """화면이 죽었는가 — 카드도 없고 담기 버튼도 없다.
 
-    프론트 AboutProduct.tsx 가 `highlighted_ingredients` 없는 상품에서 던져
-    React 가 트리를 통째로 버린다 (202개 중 78개 · 목록 첫 화면 25개 중 10개).
     빈 화면에서는 어떤 조작도 성공하지 못하므로 에이전트가 남은 턴을 전부 버린다.
+
+    원래 잡으려던 것은 AboutProduct.tsx 가 `highlighted_ingredients` 없는 상품에서
+    던지던 크래시였다 (202개 중 78개). **2026-09-02 프론트가 옵셔널 체이닝으로
+    고쳐 dev 에 들어갔다.** 그래도 이 판정은 남긴다 — 화면이 비는 이유가 그것
+    하나뿐이라는 보장이 없고, 비었는데 계속 조작하면 로그가 조용히 망가진다.
     """
     try:
         return (not page.locator(".card[data-product-id]").count()
@@ -1042,6 +1045,8 @@ def run_parallel(a):
                      ("--debug-screen", a.debug_screen)):
         if on:
             argv.append(flag)
+    if a.api_base:                  # 자체 모델 서버 주소도 워커에 물려준다
+        argv += ["--api-base", a.api_base]
     if a.post:                      # 안 넘기면 워커가 파일로만 쓰고 수집이 안 된다
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
@@ -1093,6 +1098,9 @@ def main():
     ap.add_argument("--local-model", default=None, metavar="HF_ID",
                     help="로컬 GPU 의 오픈 모델을 쓴다 (크레딧 0). "
                          "예) HuggingFaceTB/SmolLM2-1.7B-Instruct")
+    ap.add_argument("--api-base",
+                    help="OpenAI 호환 자체 모델 서버 주소. 예) http://70.12.130.103:8501/v1"
+                         " (GPU 서버에 model_server.py 를 띄워 두고 쓴다. 크레딧 0)")
     ap.add_argument("--openai", action="store_true",
                     help="GMS 대신 개인 OpenAI 키를 쓴다 (OPENAI_API_KEY 환경변수)")
     ap.add_argument("--model", default=None, help=f"모델 (기본 {MODEL})")
@@ -1137,6 +1145,14 @@ def main():
     client = None
     if a.local_model and not a.dry_run and not a.script:
         client = LocalLLM(a.local_model)
+    elif a.api_base and not a.dry_run and not a.script:
+        # 자체 모델 서버 (model_server.py). GPU 서버에 모델을 올려 두고 여기서는
+        # 브라우저만 돌린다 — 노트북 VRAM 이 8GB 라 3B 가 한계인데, 서버가 32GB 면
+        # 7B 이상을 쓸 수 있고 노트북 GPU 가 비어 워커도 늘릴 수 있다.
+        # 키는 검사하지 않는 서버라 자리만 채운다.
+        from openai import OpenAI
+        client = OpenAI(base_url=a.api_base, api_key="not-used")
+        print(f"모델 서버 {a.api_base} · 모델 {MODEL}")
     elif not a.dry_run and not a.script:
         from openai import OpenAI
         if a.openai:
@@ -1200,9 +1216,8 @@ def main():
             page.goto(entry, wait_until="networkidle")
 
             # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
-            # 프론트 AboutProduct.tsx 가 highlighted_ingredients 없는 상품에서
-            # 던져 화면이 통째로 빈다 (202개 중 78개, Research/handoff 참고).
-            # 그쪽이 고쳐지면 이 방어는 저절로 놀게 된다
+            # AboutProduct.tsx 크래시는 2026-09-02 고쳐졌다. 이 방어는 이제
+            # 대부분 놀지만, 놀고 있다는 것 자체가 확인이라 남긴다
             if deep and not page.locator('[data-log-action="add_to_cart"]').count():
                 print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
                 page.goto(LIST_URL, wait_until="networkidle")
@@ -1232,10 +1247,10 @@ def main():
     print("=" * 60)
     print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건")
     if tot.get("broken"):
-        print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회 —"
-              f" 프론트 AboutProduct.tsx 크래시 (Research/handoff/frontend_detail_crash.md)")
+        print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회"
+              f" — AboutProduct.tsx 크래시는 2026-09-02 고쳐졌으므로 다른 원인입니다")
     print(f"  LLM 호출 {tot['calls']}회 · {dt:.0f}초")
-    if tot["calls"] and not a.local_model:
+    if tot["calls"] and not a.local_model and not a.api_base:
         print(f"  예상 크레딧 약 {tot['calls'] * 0.6:.0f}"
               f"  (100명 환산 {tot['calls'] * 0.6 / max(len(personas),1) * 100:,.0f})")
     top = sorted(sink.kinds.items(), key=lambda x: -x[1])[:8]
