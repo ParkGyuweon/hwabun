@@ -292,13 +292,16 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 [행동 기준]
 - 목록에서는 **아직 보지 않은 상품 중** 내 피부 타입, 피부 톤, 구매 이력,
   가격대에 가장 맞는 상품을 하나 고르십시오.
-- 이미 본 상품은 다시 누르지 말고 다른 후보를 고르십시오.
+- **`[이미 봄]` 이 붙은 줄은 이미 상세까지 본 상품입니다. 그 줄은 고르지 마십시오.**
+  표시가 없는 줄 중에서만 고르십시오.
 - 불만이었던 상품과 비슷한 것은 피하십시오.
 - 상세 페이지에서는 처음에는 필요한 정보를 더 읽어볼 수 있습니다.
 - 상세 페이지를 충분히 봤다면 계속 스크롤하지 말고 add_to_cart 또는
   back_to_list 중 하나를 고르십시오.
-- 마음에 드는 정도가 보통 이상이면 add_to_cart 를 고르십시오.
-- 맞지 않거나 이미 충분히 봤다면 back_to_list 를 고르십시오.
+- **내 피부 타입에 맞고 가격대도 부담스럽지 않다면 add_to_cart 를 고르십시오.**
+  완벽한 상품을 찾을 때까지 미루지 마십시오 — 사람은 그렇게 쇼핑하지 않습니다.
+- 피부 타입이 안 맞거나, 불만이었던 상품과 비슷하거나, 가격이 부담스러우면
+  back_to_list 를 고르십시오.
 - 목록 끝에 도달했고 더 관심 가는 상품이 없으면 leave 를 고르십시오.
 - 궁금하지만 상세까지 볼 정도는 아니면 quick_look 으로 요약만 열어보십시오.
 - 상세에서 마음에 들지만 지금 사기는 망설여지면 wishlist_toggle 로 찜하십시오.
@@ -310,8 +313,13 @@ JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오
 action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에서만 고르십시오.
 
 {{"action": {actions},
- "target": "화면에 실제로 있는 상품명 (해당 없으면 null)",
- "reason": "내 프로필과 연결된 구체적인 한 문장"}}"""
+ "target": "화면에 실제로 있는 상품명",
+ "reason": "내 프로필과 연결된 구체적인 한 문장"}}
+
+target 규칙
+- 목록에서 상품을 고를 때: 그 줄에 적힌 상품명을 그대로 적으십시오.
+- **상세에서 담거나 찜할 때: 지금 보고 있는 상품명을 적으십시오. null 로 두지 마십시오.**
+- 상품과 무관한 행동(scroll · back_to_list · leave)일 때만 null 입니다."""
 
 
 # ============================================================================
@@ -345,7 +353,7 @@ def recover_screen(page):
     return True
 
 
-def read_screen(page):
+def read_screen(page, visited=()):
     """지금 브라우저에 보이는 것을 LLM 이 읽을 수 있는 텍스트로 만든다.
 
     DOM 전체를 주면 토큰이 폭발하고 모델이 헤맨다. **판단에 필요한 것만** 추린다.
@@ -354,10 +362,26 @@ def read_screen(page):
     url = page.url
     if "/product/" in url or page.locator('[data-log-action="add_to_cart"]').count():
         return read_detail(page)
-    return read_list(page)
+    return read_list(page, visited)
 
 
-def read_list(page):
+def _seen_before(title, visited):
+    """카드가 이미 본 상품인가.
+
+    `visited` 는 상세 화면의 h1(상품명)이고 카드는 "브랜드 상품명" 이라 문자열이
+    똑같지 않다. 양방향 부분일치로 본다. 너무 짧으면 오탐이 나므로 8자 하한을 둔다.
+    """
+    t = (title or "").strip().casefold()
+    for v in visited:
+        v = (v or "").strip().casefold()
+        if len(v) < 8 or len(t) < 8:
+            continue
+        if v in t or t in v:
+            return True
+    return False
+
+
+def read_list(page, visited=()):
     """목록 화면. **지금 화면에 실제로 보이는 카드만** 읽는다.
 
     스크롤해도 같은 12개를 돌려주면 프롬프트가 안 바뀌어 LLM 이 같은 판단을
@@ -386,7 +410,13 @@ def read_list(page):
             price = c.locator(".card__price").inner_text(timeout=1500).strip()
         except Exception:
             continue
-        lines.append(f"{len(lines)+1}. {brand} {name} — {price}")
+        # **카드 줄에 직접 표시한다.** 프롬프트 위쪽에 [이미 본 상품] 목록을 따로
+        # 주고 있었는데도 모델이 "이미 본 상품이 아니고" 라며 같은 상품을 다시
+        # 눌렀다 (100명 중 56명). 목록과 화면을 대조하는 일을 모델에게 시키지
+        # 않고, 화면 자체에 답을 적어 준다.
+        title = f"{brand} {name}"
+        lines.append(f"{len(lines)+1}. {title} — {price}"
+                     f"{'  [이미 봄]' if _seen_before(title, visited) else ''}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
     # 바닥이어도 "더 보기" 가 남아 있으면 목록 끝이 아니다. 끝이라고 말하면
     # LLM 이 leave 를 고르고, 26번째 상품부터는 아무도 보지 못한다
@@ -931,7 +961,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             if not recover_screen(page) or broken > 3:
                 break
             continue
-        user, kind = read_screen(page)
+        user, kind = read_screen(page, visited)
         m = re.search(PCT_RE, user)
         pct = int(m.group(1)) if m else 0
         if kind == "detail":
