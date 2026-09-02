@@ -1536,9 +1536,10 @@
       "Skincare",
       "Moisturizers"
     ],
-    "image_url": "https://www.sephora.com/productimages/product/p456207-av-01-zoom.jpg",
-    "sku_id": null,
+    "image_url": "https://www.sephora.com/productimages/sku/s2366607-main-zoom.jpg",
+    "sku_id": "2366607",
     "images": [
+      "https://www.sephora.com/productimages/product/p456207-av-01-zoom.jpg",
       "https://www.sephora.com/productimages/product/p456207-av-02-zoom.jpg",
       "https://www.sephora.com/productimages/product/p456207-av-03-zoom.jpg",
       "https://www.sephora.com/productimages/product/p456207-av-04-zoom.jpg",
@@ -1546,7 +1547,20 @@
       "https://www.sephora.com/productimages/product/p456207-av-06-zoom.jpg"
     ],
     "variants": [],
-    "description": null,
+    "description": {
+      "what_it_is": "A gel-cream moisturizer with Greek yoghurt, rich in collagen building protein for a redness-reducing, plumped bounce to your skin that lasts all day..",
+      "skin_type": "Normal, Dry, Combination, and Oily",
+      "concerns_text": "Dryness and Redness",
+      "highlighted_ingredients": [
+        "Greek Yoghurt: Delivers a soothing, cooling sensation with a super dose of pre- and probiotics to nurture skin.",
+        "Microbiome Re-Balancing Technology: Works to support your skin’s natural invisible microbiome, protect, and relieve visible signs of stress."
+      ],
+      "ingredient_callouts": "This product is cruelty-free and comes in recyclable packaging.",
+      "what_else": "The unique whipped texture of this nurturing moisturizer melts into skin and unlocks time-released hydration for up to 48 hours, while clinically proven microbiome-friendly technology provides a skin veil for a healthy glow.",
+      "clinical_results": "In a consumer perception study:\r\n- 100% of users saw improvement in their skin softness\n- 94% of users saw improvement in their skin elasticity\n- 91% of users saw improvement in their overall appearance\n\nImmediately improves:\n- The appearance of pores\n- The appearance of redness\n- Skin texture and smoothness\n\nClean at Sephora\nClean at Sephora is formulated without a list of over 50 ingredients, including sulfates (SLS and SLES), parabens, phthalates, and more. For the full list, check out the Ingredients tab.",
+      "suggested_usage": "-Apply to the face and neck morning and evening, avoiding the eye area.",
+      "brand_story": "With roots in the oldest homeopathic pharmacy in Athens, Greece, Korres is committed to developing natural skincare, color, and body products that provide maximum results. Their formulations are among the most environmentally friendly and skin compatible available today, utilizing active natural extracts with antioxidant and skin-transforming benefits for clinically proven results."
+    },
     "price_usd": 38.5,
     "size": "1.35 oz/ 40 mL",
     "rating": 4.35,
@@ -5405,16 +5419,29 @@
       "Skincare",
       "Moisturizers"
     ],
-    "image_url": "https://www.sephora.com/productimages/product/p453825-av-01-zoom.jpg",
-    "sku_id": null,
+    "image_url": "https://www.sephora.com/productimages/sku/s2314102-main-zoom.jpg",
+    "sku_id": "2314102",
     "images": [
+      "https://www.sephora.com/productimages/product/p453825-av-01-zoom.jpg",
       "https://www.sephora.com/productimages/product/p453825-av-02-zoom.jpg",
       "https://www.sephora.com/productimages/product/p453825-av-03-zoom.jpg",
       "https://www.sephora.com/productimages/product/p453825-av-04-zoom.jpg",
       "https://www.sephora.com/productimages/product/p453825-av-05-zoom.jpg"
     ],
     "variants": [],
-    "description": null,
+    "description": {
+      "what_it_is": "A soothing facial lotion with hyaluronic acid, amino acids, and aloe vera for hydrated, reenergized-looking skin with a visible all-day glow.",
+      "skin_type": "Normal, Dry, and Combination",
+      "concerns_text": "Dryness, Redness, and Dullness",
+      "highlighted_ingredients": [
+        "Amino Acids: Support supple, smooth skin.",
+        "Hyaluronic Acid: Enhances moisture retention.",
+        "Aloe Vera: Soothes and moisturizes while providing antioxidant protection."
+      ],
+      "ingredient_callouts": "Free of parabens, mineral oil, and sulfates SLS & SLES.",
+      "what_else": "This silky liquid lotion absorbs quickly to nourish, soothe, and soften dry, irritated skin with up to 24 hours of hydration. It provides antioxidant protection from external aggressors and quickly leaves your complexion visibly reenergized and glowing.\n\nClinical Results: In a self-assessment test conducted by 50 women, after 1 use:\n- 90% agreed their skin looked satiny soft\n- 90% agreed their complexion appeared fresher\n- 88% agreed their skin felt soothed",
+      "suggested_usage": "-Use daily, morning and night, after cleansing and applying your face serum and before applying makeup.\n-Apply two to three pumps to your face and neck, spreading evenly until absorbed.\n-Follow with the rest of your skincare routine."
+    },
     "price_usd": 54,
     "size": null,
     "rating": 4.41,
