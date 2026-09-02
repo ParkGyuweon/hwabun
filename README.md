@@ -1,6 +1,76 @@
 # S15P21A306 
 
-## 1. 현재 폴더 구조
+## 1. 시스템 아키텍처
+
+가상 사용자가 쇼핑몰을 쓰고, 그 행동 로그가 수집·처리되어 브랜드 대시보드로
+나오는 한 줄기 파이프라인입니다. 추천은 그 옆에서 배치로 계산됩니다.
+
+```
+[ 행동 생성 ]                     [ 서비스 ]                  [ 수집 ]
+
+ simulator/generator             frontend (React)           backend (Spring Boot)
+ PC 9,900명 · 합성 로그   ────▶   상품 목록·상세·장바구니  ────▶  POST /api/events
+                                 lib/logger.ts                  Collector
+ simulator/agents        ────▶   이벤트 조립·버퍼링·재시도        백프레셔 429/503
+ PA 100명 · Playwright                                              │
+ + LLM (실제 브라우저 조작)                                          ▼
+                                                        Kafka  activity-events
+                                                         key = session_id
+                                                                    │
+                                                                    ▼
+[ 처리 ]  streaming/  Spark Structured Streaming
+   Q1 raw_sink       Kafka → raw_events (Parquet)
+   Q2 clean_events   검증·중복 제거 → cleaned_events
+   Q3 derive_facts   Fact 파생
+   Q4 build_marts    Mart 집계
+   Q5 validate       품질 검증 리포트
+        │
+        ▼
+[ 소비 ]  frontend/src/dashboard — B2B 대시보드 (별도 엔트리)
+
+
+[ 추천 ]  batch/ — 위 파이프라인과 분리된 오프라인 배치
+   Sephora 리뷰 844,865건
+     → 상품 벡터 148차원 · 페르소나 9,900명 · 속성 친화도 4,000행
+     → recommender.py  점수 + MMR
+     → batch/ingest/data/serving/  서빙용 산출물
+          ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
+
+[ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
+```
+
+**계약이 모듈을 잇습니다.** 이벤트는 `contracts/event-schema.json`, 추천 입출력은
+`contracts/recommendation-io-spec.md` 가 단일 출처입니다. 기준은
+[`contracts/README.md`](contracts/README.md) 를 따릅니다.
+
+**아직 없는 것** — 백엔드 `RankingService`, 사용자 벡터 Redis 적재, 서빙 테이블 MySQL.
+추천은 현재 배치 산출물까지만 나옵니다.
+
+---
+
+## 2. 기술 스택
+
+| 영역 | 기술 | 버전 | 비고 |
+| --- | --- | --- | --- |
+| 프론트엔드 | React · TypeScript · Vite | 19.2 · 6.0 · 8.2 | 쇼핑몰과 대시보드가 별도 엔트리 (`index.html` / `dashboard.html`) |
+| | oxlint | 1.79 | ESLint 대신 사용 |
+| 백엔드 | Spring Boot · Java | 4.1.1 · 21 | 수집 서버. `POST /api/events` → Kafka |
+| | springdoc-openapi | 3.1.0 | API 문서 |
+| | Actuator + Micrometer | — | Prometheus 메트릭 노출 |
+| 메시징 | Apache Kafka | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id` |
+| 스트리밍 | Spark Structured Streaming | 미고정 | Q1~Q5. 출력은 Parquet |
+| 배치 · AI | Python · NumPy · pandas | — | 상품 벡터·페르소나·추천 점수 계산 |
+| | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 384차원 (GPU) |
+| 시뮬레이터 | Playwright (Chromium) | — | PA 에이전트가 실제 브라우저를 조작 |
+| | OpenAI SDK → GMS | — | `gpt-4.1-nano`. 100명 × 15턴 ≈ 900 크레딧 |
+| | transformers (로컬) | — | `--local-model`. Qwen2.5-3B 기준 크레딧 0 |
+| 운영 | Docker Compose · nginx | — | EC2-1 배포 (`deploy/ec2-1/`) |
+| | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 에 대시보드 프로비저닝 |
+| 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개 |
+
+---
+
+## 3. 현재 폴더 구조
 
 지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-01)
 
@@ -10,6 +80,7 @@ S15P21A306/
 ├── .gitignore
 │
 ├── contracts/                       ★ 팀 계약. 여기가 바뀌면 여러 모듈이 동시에 영향받음
+│   ├── README.md                        계약 디렉터리 기준 — 단일 출처와 변경 규칙
 │   ├── event-schema.json                Raw Event JSON Schema (Collector 통과 후 계약)
 │   ├── event-properties-schema.md       Event별 properties·enum·필수값 계약
 │   ├── raw-event-schema.md              Raw Dataset grain·물리 key·컬럼 계약
@@ -106,6 +177,10 @@ S15P21A306/
 ├── backend/                         Spring Boot 수집 서버 (백엔드)
 │   └── src/main/java/com/cosmetic/collector/   POST /api/events → Kafka activity-events
 │
+├── deploy/                          EC2 배포 (백엔드·인프라)
+│   ├── backend.Dockerfile · nginx.Dockerfile · nginx/default.conf
+│   └── ec2-1/                           docker-compose.yml · prometheus.yml
+│
 ├── kafka/README.md                  Kafka 구조·이벤트 처리 명세 (백엔드·인프라)
 ├── infra/kafka/                     로컬 Kafka (docker-compose, topics.sh/ps1)
 ├── monitoring/                      Grafana 대시보드·프로비저닝
@@ -137,7 +212,7 @@ S15P21A306/
 
 ---
 
-## 2. 참고한 폴더 구조
+## 4. 참고한 폴더 구조
 
 아래는 참고한 구조입니다. 현재 구조는 여기서 `contracts/` · `frontend/` · `batch/` · `simulator/` 일부만 채워진 상태입니다.
 

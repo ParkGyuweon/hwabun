@@ -41,6 +41,7 @@
     python simulator/generator/build_persona_style.py
 """
 import glob, json, os
+from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
@@ -58,6 +59,19 @@ UF = ["skin_type", "skin_tone", "eye_color", "hair_color"]
 
 SEED = 42                      # 재현을 위해 난수를 고정한다
 N_TOTAL, N_AGENT = 10000, 100  # 전체 1만 = 코드 9,900 + 에이전트 100
+
+# 계약 `contracts/persona-schema.md` §4 가 요구하는 생성·정규화 버전.
+# 표본 추출 규칙(SEED·MIN_POSITIVE·극성 기준·TONE_BUCKET)이나 속성 정규화가
+# 바뀌면 올린다. 산출물이 어느 규칙으로 만들어졌는지 파일만 보고 알 수 있어야 한다.
+PROFILE_VERSION = "persona-v1"
+
+# 표본 구분. 계약 §2.1 이 "분석에서 prefix 를 파싱하지 말고 persona_source 를
+# 쓰라" 고 정해서, PC/PA 접두사와 별개로 필드에 적어 둔다.
+PERSONA_SOURCE = {"PC": "batch_sample", "PA": "agent_sample"}
+
+# 생성 시각. 한 번의 실행 안에서는 전원이 같은 값을 갖는다 — 사람마다 초가 달라지면
+# 같은 배치로 만든 것을 나중에 알아볼 수 없다. 재생성하면 이 값은 바뀐다.
+BUILT_AT = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 # 긍정(4~5점) 상품 최소 개수. 시드 1 + 좋아요 1 + 정답 1 을 채우기 위한 값.
 # 이 하한이 없으면 "리뷰 1건짜리" 사용자가 대량으로 들어와 평가 케이스가 성립하지 않는다.
@@ -330,6 +344,10 @@ def clean(c, v):
 def to_records(ids, prefix):
     """author_id 목록 -> 페르소나 레코드 목록.
 
+    필드 구성은 `contracts/persona-schema.md` §4 `persona_profile` 을 따른다.
+    이 파일은 중첩 JSON(사람 1명 + reviews 배열)이고 계약은 grain 별 평탄
+    테이블이라, 평탄화·적재는 데이터 파트가 이 산출물을 입력으로 받아서 한다.
+
     prefix 가 "PC" 면 PC00001, "PA" 면 PA00001 부터 번호를 매긴다.
     persona_id 는 **파일 안에서의 순번**이라 author_id 와 무관하다.
     두 파일의 번호가 겹치지 않는 이유는 접두사가 다르기 때문이다.
@@ -347,9 +365,18 @@ def to_records(ids, prefix):
             rec = {c: clean(c, x[c]) for c in REV_COLS}
             rec["product_rank"] = group_meta[x.group_id]["rank"]   # 인기 순위(가독성용)
             revs.append(rec)
+        pid = f"{prefix}{i:05d}"
         out.append({
-            "persona_id": f"{prefix}{i:05d}",
+            "persona_id": pid,
             "author_id": str(a),                  # 원본 추적용. 조인 키가 아니다
+            # 계약 §4 가 요구하는 식별·버전 필드. 값을 새로 계산하는 게 아니라
+            # "이 레코드가 무엇인지" 를 적는 자리다.
+            "user_id": pid,                       # Synthetic 분석 ID. 기본값이 persona_id
+            "persona_source": PERSONA_SOURCE[prefix],
+            "profile_version": PROFILE_VERSION,
+            "profile_scope": "full",              # seed 만 쓰는 eval Profile 은 §5 로 따로 낸다
+            "created_at": BUILT_AT,
+            "updated_at": BUILT_AT,
             "skin_type": u.skin_type, "skin_tone": u.skin_tone,
             "eye_color": u.eye_color, "hair_color": u.hair_color,
             "stratum": u.stratum, "review_bucket": u.review_bucket,
