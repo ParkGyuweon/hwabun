@@ -17,8 +17,11 @@ Kafka 이벤트 수집과 이후 Spark Job을 로컬에서 연결하기 위한 �
 | Topic 보존 기간(생성 시) | 24시간 |
 | 자동 Topic 생성 | 비활성화 |
 | 데이터 볼륨 | `kafka-data` |
+| 공용 Docker Network | `a306-data` |
 
-호스트에서 실행하는 Backend는 `localhost:9092`를 사용하고, 추후 Spark를 컨테이너로 실행할 때는 `kafka:19092`를 사용한다. `raw_events`, `cleaned_events`, `bad_events`는 Kafka Topic이 아니라 Spark가 저장할 Dataset 이름이다.
+호스트에서 실행하는 Backend는 `localhost:9092`를 사용하고, Spark 컨테이너는 공용 Network에서 `kafka:19092`를 사용한다. `raw_events`, `cleaned_events`, `bad_events`는 Kafka Topic이 아니라 Spark가 저장할 Dataset 이름이다.
+
+`a306-data`는 Kafka Compose가 만들거나 지우지 않는 외부 Network다. Spark Compose도 같은 Network에 참여하므로, Kafka와 Spark를 실행하기 전에 한 번 생성한다.
 
 단일 Broker와 RF1은 로컬 PoC를 위한 설정이다. Broker 장애를 견디는 운영 환경은 Broker 3대 이상, RF3, `min.insync.replicas=2` 구성을 별도로 검증해야 한다.
 
@@ -29,6 +32,7 @@ Kafka 이벤트 수집과 이후 Spark Job을 로컬에서 연결하기 위한 �
 ### Windows PowerShell
 
 ```powershell
+.\infra\create-network.ps1
 docker compose -f infra/kafka/docker-compose.yml up -d
 .\infra\kafka\topics.ps1
 ```
@@ -36,6 +40,7 @@ docker compose -f infra/kafka/docker-compose.yml up -d
 ### Linux / macOS / Git Bash
 
 ```bash
+bash infra/create-network.sh
 docker compose -f infra/kafka/docker-compose.yml up -d
 bash infra/kafka/topics.sh
 ```
@@ -76,6 +81,8 @@ docker compose -f infra/kafka/docker-compose.yml exec kafka `
 ```powershell
 docker compose -f infra/kafka/docker-compose.yml down
 ```
+
+`down`은 외부 Network `a306-data`를 지우지 않는다. Spark 컨테이너가 모두 종료된 뒤에만 필요에 따라 직접 제거한다.
 
 로컬 Kafka 이력을 초기화할 때만 `down -v`를 사용한다. 이 명령은 저장된 Kafka 이벤트와 Topic 메타데이터를 삭제한다.
 

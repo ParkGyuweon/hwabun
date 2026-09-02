@@ -1,0 +1,127 @@
+[CmdletBinding()]
+param(
+    [ValidateSet('up', 'start-q1', 'stop-q1', 'run-batch', 'validate', 'status', 'down')]
+    [string]$Action = 'status'
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw 'Docker CLI를 찾을 수 없습니다. Docker Desktop 또는 Docker Engine을 먼저 실행하세요.'
+}
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$kafkaCompose = Join-Path $repoRoot 'infra\kafka\docker-compose.yml'
+$sparkCompose = Join-Path $repoRoot 'infra\spark\docker-compose.yml'
+$sparkEnv = Join-Path $repoRoot 'infra\spark\.env'
+$dataRoot = '/opt/project/data'
+
+$composeBaseArgs = @()
+if (Test-Path $sparkEnv) {
+    $composeBaseArgs += @('--env-file', $sparkEnv)
+}
+$composeBaseArgs += @('-f', $kafkaCompose, '-f', $sparkCompose)
+
+function Invoke-Compose {
+    param([Parameter(Mandatory)][string[]]$Arguments)
+
+    & docker compose @composeBaseArgs @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose 실행에 실패했습니다: $($Arguments -join ' ')"
+    }
+}
+
+function Invoke-SparkSubmit {
+    param(
+        [Parameter(Mandatory)][string]$JobPath,
+        [string[]]$JobArguments = @()
+    )
+
+    $submitArguments = @(
+        'exec', '-T', 'spark-master',
+        '/opt/spark/bin/spark-submit',
+        '--master', 'spark://spark-master:7077',
+        '--deploy-mode', 'client',
+        '--conf', 'spark.driver.host=spark-master',
+        '--conf', 'spark.driver.bindAddress=0.0.0.0',
+        $JobPath
+    ) + $JobArguments
+
+    Invoke-Compose -Arguments $submitArguments
+}
+
+function Invoke-BatchPipeline {
+    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/clean_events_job.py' -JobArguments @(
+        '--input-path', "$dataRoot/raw_events",
+        '--cleaned-path', "$dataRoot/processed/cleaned_events",
+        '--bad-path', "$dataRoot/processed/bad_events",
+        '--duplicate-path', "$dataRoot/processed/duplicate_events"
+    )
+    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/derive_facts_job.py' -JobArguments @(
+        '--input-path', "$dataRoot/processed/cleaned_events",
+        '--sessionized-path', "$dataRoot/processed/sessionized_events",
+        '--product-fact-path', "$dataRoot/processed/product_event_fact"
+    )
+    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/build_marts_job.py' -JobArguments @(
+        '--sessionized-path', "$dataRoot/processed/sessionized_events",
+        '--product-fact-path', "$dataRoot/processed/product_event_fact",
+        '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
+        '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
+        '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi"
+    )
+    Invoke-PipelineValidation
+}
+
+function Invoke-PipelineValidation {
+    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/validate_pipeline_job.py' -JobArguments @(
+        '--raw-path', "$dataRoot/raw_events",
+        '--cleaned-path', "$dataRoot/processed/cleaned_events",
+        '--bad-path', "$dataRoot/processed/bad_events",
+        '--duplicate-path', "$dataRoot/processed/duplicate_events",
+        '--sessionized-path', "$dataRoot/processed/sessionized_events",
+        '--product-fact-path', "$dataRoot/processed/product_event_fact",
+        '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
+        '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
+        '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
+        '--report-path', "$dataRoot/validation/pipeline-report.json",
+        '--require-events'
+    )
+}
+
+Push-Location $repoRoot
+try {
+    switch ($Action) {
+        'up' {
+            & (Join-Path $repoRoot 'infra\create-network.ps1')
+            if ($LASTEXITCODE -ne 0) {
+                throw 'Docker 공용 Network 생성에 실패했습니다.'
+            }
+            Invoke-Compose -Arguments @(
+                'up', '-d', '--build', '--wait',
+                'kafka', 'spark-master', 'spark-worker', 'spark-history'
+            )
+        }
+        'start-q1' {
+            Invoke-Compose -Arguments @('--profile', 'streaming', 'up', '-d', 'spark-raw-sink')
+        }
+        'stop-q1' {
+            Invoke-Compose -Arguments @('--profile', 'streaming', 'stop', 'spark-raw-sink')
+        }
+        'run-batch' {
+            Invoke-BatchPipeline
+        }
+        'validate' {
+            Invoke-PipelineValidation
+        }
+        'status' {
+            Invoke-Compose -Arguments @('--profile', 'streaming', 'ps')
+        }
+        'down' {
+            Invoke-Compose -Arguments @('down')
+        }
+    }
+}
+finally {
+    Pop-Location
+}
