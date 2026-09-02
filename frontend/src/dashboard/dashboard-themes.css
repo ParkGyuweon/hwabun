@@ -1,58 +1,12 @@
 /*
- * HWABUN 대시보드 — 색 테마 · 레이아웃 · 첫 진입 화면.
+ * HWABUN 대시보드 — 브랜드 블록 · 모티프 · 내 쇼핑몰 · 가입 화면.
  *
- * dashboard.css 가 기본 토큰과 컴포넌트를 정의하고, 이 파일은 그 위에서
- *   1) :root[data-theme]      여섯 개 브랜드 토큰만 바꾼다
- *   2) .console[data-layout]  배치만 바꾼다. DOM 은 하나다
- *   3) .onboard*              레이아웃·색을 고르는 첫 화면
- * 을 얹는다. 화면(screens/*)은 이 파일을 모른다.
+ * dashboard.css 가 컴포넌트를 정의하고, 이 파일은 그 위에
+ *   1) 사이드바 브랜드 블록과 그래픽 모티프
+ *   2) "내 쇼핑몰" 설정 블록
+ *   3) 가입 화면(.onboard*) 과 쇼핑몰 와이어프레임 미리보기(.sthumb*)
+ * 를 얹는다. 대시보드 자체의 색·배치는 고정이다 — 브랜드마다 다른 것은 쇼핑몰이다.
  */
-
-/* ---------- 색 테마 ---------- */
-
-/*
- * 팔레트 네 색의 역할만 바꾼다. 어느 테마를 골라도 HWABUN 팔레트 밖으로 나가지 않는다.
- * 실측/모의 배지(.badge)와 감점·경고 표시는 --ink 계열이라 테마에 안 흔들린다.
- */
-:root[data-theme='blossom'] {
-  --brand: #e68fa1;
-  --brand-rgb: 230 143 161;
-  --brand-soft: #f7dfe4;
-  --accent: #a8c96e;
-  --accent-soft: #e4f0d6;
-  --support: #7a5b43;
-}
-
-:root[data-theme='earth'] {
-  --brand: #7a5b43;
-  --brand-rgb: 122 91 67;
-  --brand-soft: #e9ded3;
-  --accent: #e68fa1;
-  --accent-soft: #f7dfe4;
-  --support: #a8c96e;
-}
-
-:root[data-theme='mint'] {
-  --brand: #9cc08a;
-  --brand-rgb: 156 192 138;
-  --brand-soft: #e4f0d6;
-  --accent: #e68fa1;
-  --accent-soft: #f7dfe4;
-  --support: #6b7280;
-}
-
-/* 무채색. 색이 판단을 앞지르지 않기를 바라는 담당자용. 바탕도 아이보리 대신 순백에 가깝게 */
-:root[data-theme='mono'] {
-  --brand: #2b2b2b;
-  --brand-rgb: 43 43 43;
-  --brand-soft: #e9ecef;
-  --accent: #6b7280;
-  --accent-soft: #eef0f2;
-  --support: #2b2b2b;
-  --ground: #f7f7f8;
-  --line: #dfe2e6;
-  --line-soft: #eceef1;
-}
 
 /* ---------- 브랜드 블록 · 모티프 ---------- */
 
@@ -128,159 +82,66 @@
   margin: 24px auto;
 }
 
-.sidebar__foot {
+/* ---------- 내 쇼핑몰 ---------- */
+
+.sidebar__shop {
+  margin-top: auto;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--brand-soft);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+}
+
+.sidebar__shop-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--support);
+}
+
+.sidebar__shop-state {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sidebar__shop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sidebar__settings {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sidebar__settings:hover {
+  border-color: var(--ink-soft);
+}
+
+.sidebar__foot {
+  margin-top: 0;
 }
 
 .sidebar__foot p {
   margin: 0;
 }
 
-.sidebar__settings {
-  appearance: none;
-  align-self: flex-start;
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink-soft);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-
-.sidebar__settings:hover {
-  border-color: var(--ink-soft);
-  color: var(--ink);
-}
-
-/* ---------- 레이아웃 3종 ---------- */
-
-/*
- * DOM 은 하나다. .console[data-layout] 만 바꿔서 배치를 바꾼다.
- * 화면(screens/*)은 레이아웃을 모른다 — 알게 하면 7개 화면이 3배가 된다.
- */
-
-/* 상단 탭: 메뉴를 가로 한 줄로, 본문은 전폭 */
-.console[data-layout='topbar'] {
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
-}
-
-.console[data-layout='topbar'] .sidebar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  height: auto;
-  flex-direction: row;
-  align-items: center;
-  gap: 20px;
-  padding: 12px 28px;
-  border-right: 0;
-  border-bottom: 1px solid var(--line);
-  overflow-x: auto;
-}
-
-.console[data-layout='topbar'] .sidebar .motif,
-.console[data-layout='topbar'] .sidebar__brand span,
-.console[data-layout='topbar'] .sidebar__foot p {
-  display: none;
-}
-
-.console[data-layout='topbar'] .sidebar__nav {
-  flex-direction: row;
-  gap: 4px;
-}
-
-.console[data-layout='topbar'] .sidebar__nav button {
-  white-space: nowrap;
-  padding: 8px 12px;
-}
-
-.console[data-layout='topbar'] .sidebar__nav button.is-active {
-  box-shadow: inset 0 -3px 0 var(--brand);
-  background: none;
-}
-
-.console[data-layout='topbar'] .sidebar__foot {
-  margin-top: 0;
-  margin-left: auto;
-  flex-direction: row;
-  align-items: center;
-  gap: 14px;
-  padding: 0;
-}
-
-.console[data-layout='topbar'] .main {
-  max-width: none;
-  padding: 24px 36px 64px;
-}
-
-.console[data-layout='topbar'] .grid--kpi {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-/* 컴팩트: 메뉴를 좁히고 간격을 줄여 한 화면에 더 많은 숫자 */
-.console[data-layout='compact'] {
-  grid-template-columns: 176px minmax(0, 1fr);
-}
-
-.console[data-layout='compact'] .sidebar {
-  padding: 20px 10px;
-  gap: 18px;
-}
-
-.console[data-layout='compact'] .sidebar__brand img {
-  width: 26px;
-  height: 26px;
-}
-
-.console[data-layout='compact'] .sidebar__brand strong {
-  font-size: 14px;
-}
-
-.console[data-layout='compact'] .sidebar__nav button {
-  font-size: 13px;
-  padding: 7px 10px;
-}
-
-.console[data-layout='compact'] .main {
-  max-width: none;
-  padding: 20px 24px 48px;
-}
-
-.console[data-layout='compact'] .stack {
-  gap: 16px;
-}
-
-.console[data-layout='compact'] .grid {
-  gap: 10px;
-}
-
-.console[data-layout='compact'] .grid--kpi {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.console[data-layout='compact'] .panel {
-  padding: 14px 16px;
-}
-
-.console[data-layout='compact'] .kpi {
-  min-height: 88px;
-  padding: 12px 14px;
-}
-
-.console[data-layout='compact'] .kpi__value {
-  font-size: 27px;
-}
-
-.console[data-layout='compact'] .verdict {
-  padding: 16px 20px;
-}
-
-/* ---------- 첫 진입 · 화면 설정 ---------- */
+/* ---------- 가입 · 쇼핑몰 설정 화면 ---------- */
 
 .onboard {
   min-height: 100vh;
@@ -294,7 +155,7 @@
 }
 
 .onboard__card {
-  width: min(880px, 100%);
+  width: min(1040px, 100%);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -338,7 +199,7 @@
 .onboard__lead {
   margin: 0;
   color: var(--ink-soft);
-  max-width: 60ch;
+  max-width: 64ch;
   line-height: 1.6;
 }
 
@@ -391,7 +252,7 @@
 
 .onboard__grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .onboard__grid--3 {
@@ -435,12 +296,19 @@
 
 .onboard__opt strong {
   font-size: 13.5px;
+  margin-top: 4px;
 }
 
-.onboard__opt span:last-child {
+.onboard__opt > span:not(.onboard__swatch) {
   font-size: 11.5px;
   color: var(--ink-faint);
   line-height: 1.45;
+}
+
+.onboard__fit {
+  font-size: 11px;
+  color: var(--support);
+  font-weight: 600;
 }
 
 .onboard__swatch {
@@ -456,208 +324,6 @@
 
 .onboard__swatch i:first-child {
   flex: 2;
-}
-
-/*
- * 레이아웃 미리보기 — 라벨이 들어간 와이어프레임.
- * 실제 화면의 이름(Overview·상품 분석·상세 진입률·인기 상품 TOP 5)을 그대로 적어서
- * 고르는 사람이 "무엇이 어디에 뜨는지" 를 읽을 수 있게 한다. 글자는 작지만 읽힌다.
- */
-.lthumb {
-  display: grid;
-  gap: 6px;
-  height: 156px;
-  padding: 8px;
-  background: var(--ground);
-  border-radius: 10px;
-  font-size: 8.5px;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  overflow: hidden;
-  text-align: left;
-}
-
-.lthumb i {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  font-style: normal;
-}
-
-.lthumb__nav {
-  gap: 3px;
-  padding: 6px 5px;
-  background: var(--panel);
-  border-radius: 7px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.lthumb__nav em {
-  font-size: 7.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-faint);
-  margin-bottom: 2px;
-}
-
-.lthumb__nav b {
-  font-weight: 500;
-  padding: 2px 5px;
-  border-radius: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lthumb__nav b.is-on {
-  background: rgb(var(--brand-rgb) / 0.18);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.lthumb__main {
-  gap: 5px;
-}
-
-.lthumb__banner {
-  display: block;
-  padding: 5px 7px;
-  border-radius: 6px;
-  font-weight: 600;
-  color: var(--ink);
-  background: linear-gradient(135deg, rgb(var(--brand-rgb) / 0.22), var(--panel) 70%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lthumb__kpis,
-.lthumb__panels {
-  display: grid;
-  gap: 5px;
-}
-
-.lthumb__kpis {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.lthumb__kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 5px 6px;
-  background: var(--panel);
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  min-width: 0;
-}
-
-.lthumb__kpi small {
-  font-size: 7.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lthumb__kpi strong {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-
-.lthumb__panels {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  flex: 1;
-}
-
-.lthumb__panel {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 5px 6px;
-  background: var(--panel);
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  min-width: 0;
-}
-
-.lthumb__panel small {
-  font-size: 7.5px;
-  font-weight: 600;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lthumb__panel u {
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--brand-soft);
-}
-
-.lthumb__panel u:nth-child(3) {
-  width: 78%;
-}
-
-.lthumb__panel u:nth-child(4) {
-  width: 56%;
-}
-
-/* 사이드바: 왼쪽 세로 메뉴 */
-.lthumb--sidebar {
-  grid-template-columns: 58px minmax(0, 1fr);
-}
-
-/* 상단 탭: 메뉴가 위에 한 줄, 본문은 전폭 */
-.lthumb--topbar {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.lthumb--topbar .lthumb__nav {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-}
-
-.lthumb--topbar .lthumb__nav em {
-  margin: 0;
-}
-
-/* 컴팩트: 좁은 메뉴, KPI 6개, 패널 3개 */
-.lthumb--compact {
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 4px;
-}
-
-.lthumb--compact .lthumb__nav {
-  padding: 5px 4px;
-}
-
-.lthumb--compact .lthumb__main {
-  gap: 4px;
-}
-
-.lthumb--compact .lthumb__kpis {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.lthumb--compact .lthumb__kpi {
-  padding: 4px 5px;
-}
-
-.lthumb--compact .lthumb__kpi strong {
-  font-size: 9.5px;
-}
-
-.lthumb--compact .lthumb__panels {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
 }
 
 .onboard__foot {
@@ -693,6 +359,287 @@
 .onboard__btn:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* ---------- 쇼핑몰 와이어프레임 미리보기 ---------- */
+
+/*
+ * 고객이 보는 쇼핑몰을 축소해 그린다. 요소 이름(메뉴·기획전·카테고리·필터·상품 카드)을
+ * 그대로 적고, 고른 테마의 색을 --t-brand / --t-accent / --t-soft 로 받아 CTA·배지·리본에 입힌다.
+ */
+.sthumb {
+  display: flex;
+  flex-direction: column;
+  height: 210px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+  font-size: 8px;
+  line-height: 1.2;
+  color: #6e6e73;
+  text-align: left;
+}
+
+.sthumb i {
+  font-style: normal;
+  display: block;
+}
+
+.sthumb em {
+  display: block;
+  font-style: normal;
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #86868b;
+  margin-bottom: 3px;
+}
+
+.sthumb__ribbon {
+  padding: 3px 8px;
+  background: var(--t-soft);
+  color: #3f4a2e;
+  font-size: 7px;
+  text-align: center;
+}
+
+.sthumb__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #ececf0;
+}
+
+.sthumb__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #1d1d1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 64px;
+}
+
+.sthumb__logo u {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--t-brand);
+  flex: none;
+}
+
+.sthumb__menu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sthumb__menu em {
+  margin: 0;
+}
+
+.sthumb__menu small {
+  font-size: 7.5px;
+  color: #1d1d1f;
+  white-space: nowrap;
+}
+
+.sthumb__cart {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  font-size: 7px;
+  color: #1d1d1f;
+  white-space: nowrap;
+}
+
+.sthumb__hero {
+  padding: 8px 8px 6px;
+}
+
+.sthumb__hero-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1d1d1f;
+  margin-bottom: 5px;
+}
+
+.sthumb__row,
+.sthumb__cards {
+  display: grid;
+  gap: 5px;
+}
+
+.sthumb__row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sthumb__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sthumb__img {
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  border-radius: 5px;
+  background: #f5f5f7;
+}
+
+.sthumb__badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--t-accent);
+  color: #fff;
+  font-size: 6px;
+  font-weight: 700;
+}
+
+.sthumb__card small {
+  font-size: 7px;
+  color: #6e6e73;
+}
+
+.sthumb__card strong {
+  font-size: 7.5px;
+  color: #1d1d1f;
+}
+
+.sthumb__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px 8px 8px;
+  border-top: 1px solid #ececf0;
+  min-height: 0;
+}
+
+.sthumb__chips {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.sthumb__chips small {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f5f5f7;
+  font-size: 7px;
+  color: #1d1d1f;
+}
+
+.sthumb__chips small.is-on {
+  background: #1d1d1f;
+  color: #fff;
+}
+
+.sthumb__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.sthumb__filters small {
+  padding: 2px 6px;
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  font-size: 7px;
+  color: #1d1d1f;
+}
+
+.sthumb__grid {
+  min-height: 0;
+}
+
+.sthumb__cards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* 쇼케이스: 기획전 2장 크게, 상품 2열 */
+.sthumb--showcase .sthumb__hero-title {
+  font-size: 13px;
+}
+
+.sthumb--showcase .sthumb__row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sthumb--showcase .sthumb__row .sthumb__img {
+  aspect-ratio: 2 / 1;
+  border-radius: 7px;
+}
+
+.sthumb--showcase .sthumb__cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sthumb--showcase .sthumb__cards .sthumb__img {
+  aspect-ratio: 5 / 3;
+  border-radius: 7px;
+}
+
+/* 카탈로그: 왼쪽 필터 열 + 3열 목록 */
+.sthumb--catalog .sthumb__hero {
+  padding-bottom: 4px;
+}
+
+.sthumb--catalog .sthumb__hero-title {
+  font-size: 10px;
+}
+
+.sthumb--catalog .sthumb__body {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.sthumb--catalog .sthumb__side {
+  flex: 0 0 56px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sthumb--catalog .sthumb__chips {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sthumb--catalog .sthumb__chips small {
+  border-radius: 4px;
+  background: transparent;
+  padding: 1px 4px;
+}
+
+.sthumb--catalog .sthumb__chips small.is-on {
+  background: var(--t-soft);
+  color: #1d1d1f;
+}
+
+.sthumb--catalog .sthumb__grid {
+  flex: 1;
+}
+
+.sthumb--catalog .sthumb__cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
 }
 
 @media (max-width: 760px) {

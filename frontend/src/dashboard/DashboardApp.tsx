@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
 import ProductsScreen from './screens/ProductsScreen';
 import BehaviorScreen from './screens/BehaviorScreen';
@@ -8,8 +8,8 @@ import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
 import Onboarding from './Onboarding';
 import { MotifLine } from './components';
-import { applyTheme, loadPrefs, savePrefs, DEFAULT_PREFS } from './lib/prefs';
-import type { Prefs } from './lib/prefs';
+import { DEFAULT_STOREFRONT, STOREFRONT_LAYOUTS, STOREFRONT_THEMES, loadStorefront, saveStorefront } from '../lib/storefront';
+import type { StorefrontPrefs } from '../lib/storefront';
 
 type ScreenKey =
   | 'overview'
@@ -51,60 +51,51 @@ const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: strin
 ];
 
 /**
- * HWABUN — 참여 브랜드 담당자용 대시보드 v0.2.
+ * HWABUN — 참여 브랜드(소상공인) 담당자용 대시보드 v0.2.
  *
  * 쇼핑몰과 진입점이 분리되어 있다 (/dashboard.html — 쇼핑몰 어디에서도 링크하지 않는다).
  * 실제 접근 제어(계정·권한)는 백엔드 범위이고, 여기서는 화면과 지표 정의를 확정한다.
  *
- * 첫 진입에서 레이아웃과 색을 고른다. 50개 브랜드가 같은 인프라를 나눠 쓰되
- * 화면은 각자에 맞게 — 그래서 선택은 사용자 몫이고, 기본값은 브랜딩 가이드의 '화분' 이다.
- * 색은 자료 표시에만 쓰고 숫자는 Charcoal 하나로 간다는 원칙은 테마와 무관하게 유지한다.
+ * 화면은 사이드바 하나로 고정이고 색도 HWABUN 이다 — 브랜드마다 다른 것은 대시보드가 아니라
+ * **고객이 보는 쇼핑몰**이다. 가입할 때 쇼핑몰의 진열 레이아웃과 색을 고르고(Onboarding),
+ * 그 값은 같은 브라우저의 쇼핑몰(index.html)에 바로 반영된다. 사이드바 "쇼핑몰 설정" 으로 다시 고칠 수 있다.
  */
 export default function DashboardApp() {
-  const [prefs, setPrefs] = useState<Prefs | null>(() => loadPrefs());
+  const [storefront, setStorefront] = useState<StorefrontPrefs | null>(() => loadStorefront());
   const [editing, setEditing] = useState(false);
   const [screen, setScreen] = useState<ScreenKey>('overview');
   const [days, setDays] = useState(14);
   /** 리뷰·성분 화면이 공유하는 상품 선택 */
   const [productId, setProductId] = useState<string | null>(null);
 
-  useEffect(() => {
-    applyTheme((prefs ?? DEFAULT_PREFS).theme);
-  }, [prefs]);
-
-  const commit = (next: Prefs) => {
-    savePrefs(next);
-    setPrefs(next);
+  const commit = (next: StorefrontPrefs) => {
+    saveStorefront(next);
+    setStorefront(next);
     setEditing(false);
   };
 
-  if (prefs === null || editing) {
+  if (storefront === null || editing) {
     return (
       <Onboarding
-        initial={prefs ?? DEFAULT_PREFS}
+        initial={storefront ?? DEFAULT_STOREFRONT}
         onDone={commit}
-        onCancel={
-          prefs === null
-            ? undefined
-            : () => {
-                applyTheme(prefs.theme);
-                setEditing(false);
-              }
-        }
+        onCancel={storefront === null ? undefined : () => setEditing(false)}
       />
     );
   }
 
   const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
+  const layoutLabel = STOREFRONT_LAYOUTS.find((l) => l.key === storefront.layout)?.label ?? '';
+  const themeLabel = STOREFRONT_THEMES.find((t) => t.key === storefront.theme)?.label ?? '';
 
   return (
-    <div className="console" data-layout={prefs.layout}>
+    <div className="console">
       <aside className="sidebar">
         <div className="sidebar__brand">
           <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />
           <div>
             <strong>HWABUN</strong>
-            <span>{prefs.brandName || '화분 · Beauty Data, Naturally Yours'}</span>
+            <span>{storefront.brandName || '화분 · Beauty Data, Naturally Yours'}</span>
           </div>
         </div>
 
@@ -123,10 +114,23 @@ export default function DashboardApp() {
           ))}
         </nav>
 
+        {/* 내 쇼핑몰 — 고객이 보는 화면. 진열 설정과 바로가기 */}
+        <div className="sidebar__shop">
+          <p className="sidebar__shop-label">내 쇼핑몰</p>
+          <p className="sidebar__shop-state">
+            {layoutLabel} · {themeLabel}
+          </p>
+          <div className="sidebar__shop-actions">
+            <button type="button" className="sidebar__settings" onClick={() => setEditing(true)}>
+              쇼핑몰 설정
+            </button>
+            <a className="sidebar__settings" href="/" target="_blank" rel="noopener">
+              쇼핑몰 보기 ↗
+            </a>
+          </div>
+        </div>
+
         <div className="sidebar__foot">
-          <button type="button" className="sidebar__settings" onClick={() => setEditing(true)}>
-            화면 설정
-          </button>
           <p>
             v0.2 · 이벤트 36종 기준
             <br />

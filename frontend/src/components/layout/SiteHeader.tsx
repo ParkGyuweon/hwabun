@@ -13,6 +13,8 @@ interface SiteHeaderProps {
   /** 장바구니에 담긴 총 수량 */
   cartCount: number;
   onCart: () => void;
+  /** 소상공인이 가입할 때 적은 브랜드 이름. 비어 있으면 BLOOM 워드마크 */
+  brandName?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ export default function SiteHeader({
   onCategorySelect,
   cartCount,
   onCart,
+  brandName,
 }: SiteHeaderProps) {
   return (
     <header className="site-header">
@@ -49,7 +52,7 @@ export default function SiteHeader({
         <button type="button" className="site-header__logo" onClick={onHome} aria-label="BLOOM 홈">
           {/* 파비콘용으로 줄인 마크(192px). 표시 28px 라 충분하고 원본은 2450px 다 */}
           <img src="/brand/bloom-mark.png" alt="" width="28" height="28" />
-          <span>BLOOM</span>
+          <span>{brandName || 'BLOOM'}</span>
         </button>
 
         <nav className="site-header__nav" aria-label="주요 카테고리">

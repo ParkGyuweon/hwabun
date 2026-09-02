@@ -48,7 +48,7 @@ export default function PlatformApp() {
   const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
 
   return (
-    <div className="console" data-layout="sidebar">
+    <div className="console">
       <aside className="sidebar">
         <div className="sidebar__brand">
           <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />

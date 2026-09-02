@@ -6,6 +6,8 @@ import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
+import { DEFAULT_STOREFRONT, STOREFRONT_KEY, applyStorefront, loadStorefront } from './lib/storefront';
+import type { StorefrontPrefs } from './lib/storefront';
 import productsData from './mocks/products.sample.json';
 import reviewsData from './mocks/reviews.sample.json';
 import personasData from './mocks/personas.sample.json';
@@ -18,6 +20,8 @@ import './styles/product-list.css';
 import './styles/cart.css';
 // 시각 레이어. 위 셋 다음에 와야 한다 — 같은 셀렉터를 덧씌운다
 import './styles/apple.css';
+// 소상공인이 고른 진열 레이아웃·색. 맨 마지막 — data-storefront / data-theme 로 분기한다
+import './styles/storefront.css';
 
 // JSON 목업은 리터럴 타입으로 추론되므로 unknown 을 거쳐 캐스팅한다.
 const products = productsData as unknown as Product[];
@@ -276,6 +280,27 @@ export default function App() {
   }, []);
 
   /**
+   * 소상공인이 대시보드에서 고른 쇼핑몰 진열 설정.
+   * 같은 브라우저의 localStorage 로 건너온다. 대시보드 탭에서 바꾸면 storage 이벤트로
+   * 이 탭도 새로고침 없이 따라온다 — 시연에서 두 탭을 나란히 놓고 보여줄 수 있다.
+   */
+  const [storefront, setStorefront] = useState<StorefrontPrefs>(
+    () => loadStorefront() ?? DEFAULT_STOREFRONT,
+  );
+
+  useEffect(() => {
+    applyStorefront(storefront);
+  }, [storefront]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STOREFRONT_KEY) setStorefront(loadStorefront() ?? DEFAULT_STOREFRONT);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  /**
    * 스크롤 복원을 브라우저에서 가져온다.
    *
    * 기본값('auto')이면 뒤로가기 때 브라우저가 복원을 시도하는데,
@@ -415,6 +440,7 @@ export default function App() {
         onCategorySelect={selectCategory}
         cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
         onCart={openCart}
+        brandName={storefront.brandName}
       />
 
       {cartOpen ? (

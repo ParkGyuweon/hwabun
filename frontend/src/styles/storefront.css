@@ -1,0 +1,219 @@
+/*
+ * BLOOM 쇼핑몰 — 진열 레이아웃 3종 · 색 테마 5종.
+ *
+ * 소상공인이 대시보드에서 고른 값이 <html data-storefront data-theme> 으로 걸린다
+ * (src/lib/storefront.ts). 이 파일은 그 속성만 보고 진열을 바꾼다.
+ * 마크업은 하나다 — ProductListPage 는 어떤 레이아웃인지 모른다.
+ *
+ * apple.css 다음에 로드된다.
+ */
+
+/* ---------- 색 테마: 팔레트 네 색의 역할만 바꾼다 ---------- */
+
+:root[data-theme='rose'] {
+  --color-brand: #e68fa1;
+  --color-brand-soft: #f7dfe4;
+  --color-brand-deep: #d9738a;
+  --color-accent: #a8c96e;
+  --color-star: #e68fa1;
+  --color-promo: #f7dfe4;
+  --color-promo-ink: #6b3a45;
+}
+
+:root[data-theme='earth'] {
+  --color-brand: #7a5b43;
+  --color-brand-soft: #efe6dc;
+  --color-brand-deep: #634838;
+  --color-accent: #e68fa1;
+  --color-star: #7a5b43;
+  --color-promo: #efe6dc;
+  --color-promo-ink: #4a382b;
+}
+
+:root[data-theme='mint'] {
+  --color-brand: #8fb889;
+  --color-brand-soft: #e4f0d6;
+  --color-brand-deep: #76a070;
+  --color-accent: #e68fa1;
+  --color-star: #8fb889;
+  --color-promo: #e4f0d6;
+  --color-promo-ink: #3d5233;
+}
+
+/* 무채색. 상품 사진 색만 살린다. 배지 강조도 회색으로 */
+:root[data-theme='mono'] {
+  --color-brand: #1d1d1f;
+  --color-brand-soft: #e8e8ed;
+  --color-brand-deep: #000000;
+  --color-accent: #6e6e73;
+  --color-star: #1d1d1f;
+  --color-promo: #f5f5f7;
+  --color-promo-ink: #1d1d1f;
+  --color-support: #1d1d1f;
+}
+
+/* ---------- 쇼케이스: 큰 기획전 · 2열 큼직한 카드 ---------- */
+
+:root[data-storefront='showcase'] .list__promo-head h2 {
+  font-size: 48px;
+  letter-spacing: -0.03em;
+}
+
+:root[data-storefront='showcase'] .list__row {
+  grid-auto-columns: 340px;
+  gap: 28px;
+}
+
+:root[data-storefront='showcase'] .list__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px 32px;
+}
+
+:root[data-storefront='showcase'] .card__thumb {
+  border-radius: 24px;
+  padding: 8%;
+  margin-bottom: 18px;
+}
+
+:root[data-storefront='showcase'] .card__name {
+  font-size: 19px;
+  letter-spacing: -0.015em;
+}
+
+:root[data-storefront='showcase'] .card__price {
+  font-size: 18px;
+}
+
+:root[data-storefront='showcase'] .card__brand {
+  font-size: 12px;
+}
+
+/* ---------- 카탈로그: 왼쪽 필터 · 3열 촘촘한 목록 ---------- */
+
+/*
+ * .list__catalog 의 자식 순서: 탭 → 컨트롤(고민·가격대·정렬) → 개수 → 그리드 → 더보기.
+ * 마크업을 바꾸지 않고 grid 자리로만 왼쪽 열에 탭과 컨트롤을 세운다.
+ */
+:root[data-storefront='catalog'] .list__catalog {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 36px;
+  row-gap: 0;
+  align-items: start;
+}
+
+:root[data-storefront='catalog'] .list__tabs {
+  grid-column: 1;
+  grid-row: 1;
+  position: sticky;
+  top: 72px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+:root[data-storefront='catalog'] .list__tabs button {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: transparent;
+  text-align: left;
+}
+
+:root[data-storefront='catalog'] .list__tabs button:hover {
+  background: var(--color-surface-soft);
+}
+
+:root[data-storefront='catalog'] .list__controls {
+  grid-column: 1;
+  grid-row: 2;
+  position: sticky;
+  top: calc(72px + 320px);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  padding-top: 18px;
+}
+
+:root[data-storefront='catalog'] .list__filters,
+:root[data-storefront='catalog'] .list__bands {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+:root[data-storefront='catalog'] .list__filters label,
+:root[data-storefront='catalog'] .list__sort {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+:root[data-storefront='catalog'] .list__filters select,
+:root[data-storefront='catalog'] .list__sort select {
+  width: 100%;
+}
+
+:root[data-storefront='catalog'] .list__bands button {
+  text-align: left;
+}
+
+:root[data-storefront='catalog'] .list__count {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0 0 16px;
+}
+
+:root[data-storefront='catalog'] .list__grid {
+  grid-column: 2;
+  grid-row: 2;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 18px;
+}
+
+:root[data-storefront='catalog'] .list__more,
+:root[data-storefront='catalog'] .empty-state {
+  grid-column: 2;
+}
+
+:root[data-storefront='catalog'] .card__thumb {
+  border-radius: 12px;
+  padding: 8%;
+  margin-bottom: 10px;
+}
+
+:root[data-storefront='catalog'] .card__name {
+  font-size: 14px;
+}
+
+:root[data-storefront='catalog'] .card__price {
+  font-size: 14px;
+}
+
+:root[data-storefront='catalog'] .list__row {
+  grid-auto-columns: 200px;
+  gap: 18px;
+}
+
+:root[data-storefront='catalog'] .list__promo-head h2 {
+  font-size: 32px;
+}
+
+@media (max-width: 900px) {
+  :root[data-storefront='catalog'] .list__catalog {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :root[data-storefront='catalog'] .list__tabs,
+  :root[data-storefront='catalog'] .list__controls {
+    position: static;
+  }
+
+  :root[data-storefront='showcase'] .list__grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
