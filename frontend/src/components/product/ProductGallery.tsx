@@ -5,6 +5,13 @@ import { track } from '../../lib/logger';
 const PLACEHOLDER = '/images/product-placeholder.svg';
 /** 이미지가 없는 상품에서도 레이아웃이 무너지지 않도록 유지하는 최소 썸네일 칸 수 */
 const MIN_THUMB_SLOTS = 4;
+/**
+ * 즉시 받을 썸네일 수.
+ *
+ * 1280 폭에서 한 줄에 6칸이 보인다. 장당 15KB 라 여섯 장을 바로 받아도
+ * 90KB 다. 뒤쪽은 스크롤해야 보이므로 lazy 로 남긴다.
+ */
+const EAGER_THUMBS = 6;
 
 interface ProductGalleryProps {
   imageUrl: string | null;
@@ -72,9 +79,15 @@ export default function ProductGallery({ imageUrl, images, productName, productI
   return (
     <div className="gallery" data-log-content="product_image">
       <div className="gallery__main">
+        {/*
+          이 페이지에서 가장 큰 이미지이고 가장 먼저 보여야 한다.
+          우선순위를 안 주면 썸네일·스와치와 같은 줄에 서서 늦게 뜬다.
+        */}
         <img
           src={sizedImage(mainSrc, IMAGE_WIDTH_MAIN) ?? PLACEHOLDER}
           alt={productName}
+          fetchPriority="high"
+          decoding="async"
           onError={() => activeSrc && markFailed(activeSrc)}
         />
         {gallery.length === 0 ? <span className="gallery__badge">이미지 확보 전</span> : null}
@@ -95,11 +108,18 @@ export default function ProductGallery({ imageUrl, images, productName, productI
                 disabled={!src}
                 onClick={() => selectThumb(index)}
               >
+                {/*
+                  첫 화면에 들어오는 앞쪽 썸네일은 lazy 로 두지 않는다.
+                  화면에 이미 보이는 이미지에 lazy 를 걸면 배치가 끝난 뒤
+                  낮은 우선순위로 받아서, 빈 칸이 잠깐 보였다가 채워진다.
+                  뒤쪽은 스크롤해야 보이므로 그대로 lazy 로 둔다.
+                */}
                 <img
                   src={sizedImage(thumbSrc, IMAGE_WIDTH_THUMB) ?? PLACEHOLDER}
                   alt=""
                   aria-hidden="true"
-                  loading="lazy"
+                  loading={index < EAGER_THUMBS ? 'eager' : 'lazy'}
+                  decoding="async"
                   onError={() => src && markFailed(src)}
                 />
               </button>

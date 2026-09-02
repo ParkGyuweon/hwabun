@@ -107,6 +107,14 @@ function pickSpread(rows, count) {
  * 부수입이 하나 있다. 광고 유입 주소에 `skuId=` 가 붙어 있는 경우가 있어서,
  * 스냅샷을 못 읽어도 이미지 URL 은 만들 수 있다.
  */
+/**
+ * 세포라 상품 페이지 주소.
+ *
+ * 지역 경로가 붙는다: `/product/`(미국) · `/ca/en/product/` · `/ca/fr/product/`.
+ * 어느 쪽이든 상품 JSON 은 같은 모양이라 그대로 쓴다.
+ */
+const SEPHORA_PRODUCT = /^https?:\/\/(?:www\.)?sephora\.com\/(?:[a-z]{2}\/[a-z]{2}\/)?product\//i;
+
 async function findArchived(productId) {
   const low = productId.toLowerCase();
 
@@ -131,7 +139,14 @@ async function findArchived(productId) {
     rows = (body ?? '')
       .split('\n')
       .map((line) => line.trim().split(/\s+/))
-      .filter(([url]) => url?.startsWith('https://www.sephora.com/product/'))
+      // 경로는 지역마다 다르다 (`/product/`, `/ca/en/product/`, `/ca/fr/product/`).
+      // 미국 경로만 받고 있었더니 주소표의 지역 주소 3,485건이 전부
+      // "주소 못 찾음" 으로 빠졌다. 같은 상품이면 어느 지역 페이지든 쓴다 —
+      // 상품 JSON 의 구조와 skuId 는 같다.
+      .filter(([url]) => SEPHORA_PRODUCT.test(url ?? ''))
+      // 주소 끝의 상품 ID 로 같은 상품인지 확인한다. 와일드카드로 찾은 경우
+      // 이름이 비슷한 다른 상품이 섞여 들어올 수 있다
+      .filter(([url]) => url.toLowerCase().includes(low))
       .map(([url, timestamp]) => ({ url, timestamp }));
 
     if (rows.length > 0) break;
@@ -325,7 +340,62 @@ function extract(html) {
   return {
     skuId: skuMatch?.[1] ?? null,
     description: Object.keys(description).length ? description : null,
+    images: extractGallery(html),
   };
+}
+
+/**
+ * 갤러리 이미지를 스냅샷에서 뽑는다.
+ *
+ * 대부분의 갤러리는 상품 ID 나 SKU 로 조립되지만
+ * (`product/p<ID>-av-<NN>`, `sku/s<SKU>-av-<NN>`), 일부 상품은
+ * `av-1202511121331491790800` 같은 **긴 ID** 를 쓴다. 규칙이 없어서
+ * 조립으로는 못 만들고, 스냅샷 HTML 의 alternateImages 에만 들어 있다.
+ *
+ * 두 방식으로 찾는다.
+ *   1. alternateImages 배열의 image 값
+ *   2. 그래도 없으면 HTML 전체에서 productimages 경로를 훑는다
+ *      (스냅샷마다 JSON 모양이 조금씩 다르다)
+ *
+ * 아카이브 스냅샷의 URL 은 web.archive.org 를 거치도록 다시 쓰여 있다.
+ * 그대로 저장하면 화면이 아카이브에서 이미지를 받게 되므로 원본으로 되돌린다.
+ */
+function extractGallery(html) {
+  const urls = new Set();
+
+  const push = (raw) => {
+    if (!raw) return;
+    let clean = raw.trim();
+
+    // 아카이브가 앞에 붙인 것을 걷어낸다: /web/<TS>im_/https://www.sephora.com/...
+    clean = clean.replace(/^.*?(https?:\/\/(?:www\.)?sephora\.com)/, '$1');
+
+    /*
+     * 스냅샷의 imageUrl 은 **상대경로**다.
+     *
+     *   "imageUrl":"/productimages/sku/s2481414-av-01-zoom.jpg"
+     *
+     * 절대 URL 만 받도록 두었더니 한 장도 안 걸렸다. 앞에 도메인을 붙인다.
+     */
+    if (clean.startsWith('/productimages/')) clean = `https://www.sephora.com${clean}`;
+
+    if (!/^https?:\/\/(?:www\.)?sephora\.com\/productimages\//.test(clean)) return;
+    // 대표 이미지(main)는 갤러리가 아니다. image_url 이 따로 담는다
+    if (/-main-/.test(clean)) return;
+    urls.add(clean.replace(/^http:/, 'https:').split('?')[0]);
+  };
+
+  const block = html.match(/"alternateImages"\s*:\s*\[([\s\S]{0,20000}?)\]/);
+  if (block) {
+    for (const m of block[1].matchAll(/"image[^"]*"\s*:\s*"([^"]+)"/g)) push(m[1]);
+  }
+  if (urls.size === 0) {
+    for (const m of html.matchAll(/[^"'\s]*\/productimages\/[^"'\s]+?\.jpg/g)) push(m[0]);
+  }
+
+  // -zoom 판이 가장 크다. 같은 사진의 작은 판이 섞이면 중복이 된다
+  const zoom = [...urls].filter((u) => /-zoom\.jpg$/.test(u));
+  return (zoom.length ? zoom : [...urls]).sort();
 }
 
 // ---------------------------------------------------------------- 실행
@@ -403,7 +473,7 @@ async function collectOne(productId) {
   const skuId = parsed.skuId ?? found.skuFromUrl;
   if (!skuId && !parsed.description) return { productId, reason: '스냅샷 못 읽음' };
 
-  return { productId, skuId, description: parsed.description };
+  return { productId, skuId, description: parsed.description, images: parsed.images ?? [] };
 }
 
 /**
@@ -442,13 +512,21 @@ async function worker() {
       if (result.description) {
         entry.description = { ...(entry.description ?? {}), ...result.description };
       }
+      // CDN 조회로 이미 채운 갤러리는 덮지 않는다. 비어 있을 때만 스냅샷 것을 쓴다
+      if (result.images?.length && !(entry.images?.length > 0)) {
+        entry.images = result.images;
+      }
       collected[productId] = entry;
 
       // 중단돼도 진행분이 남도록 한 건마다 저장한다
       writeFileSync(COLLECTED, `${JSON.stringify(collected, null, 2)}\n`);
 
       const blocks = result.description ? Object.keys(result.description).length : 0;
-      console.log(`${head}  sku ${entry.sku_id ?? '없음'} · 블록 ${blocks}개`);
+      const shots = entry.images?.length ?? 0;
+      console.log(
+        `${head}  sku ${entry.sku_id ?? '없음'} · 블록 ${blocks}개` +
+          (shots ? ` · 갤러리 ${shots}장` : ''),
+      );
       filled += 1;
     }
 

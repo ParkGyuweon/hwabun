@@ -63,7 +63,7 @@ export default function BehaviorScreen() {
           source="mock"
         />
         <Kpi
-          label="장바구니 재고율"
+          label="장바구니 제거율"
           value={fmt.pct(overview.removalRate)}
           sub="담기 대비 제거"
           source="mock"
@@ -106,7 +106,7 @@ export default function BehaviorScreen() {
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="이벤트 발생량 상위" source="mock" aside="32종 중 상위 13">
+        <Panel title="이벤트 발생량 상위" source="mock" aside="36종 중 상위 13">
           <BarList
             items={eventVolumes.map((e) => ({ label: e.name, value: e.count }))}
             format={fmt.compact}

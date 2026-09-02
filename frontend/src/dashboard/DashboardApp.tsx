@@ -84,7 +84,7 @@ export default function DashboardApp() {
         </nav>
 
         <p className="sidebar__foot">
-          v0.1 · 이벤트 32종 기준
+          v0.1 · 이벤트 36종 기준
           <br />
           행동 지표는 수집 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.
         </p>
