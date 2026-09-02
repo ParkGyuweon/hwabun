@@ -18,8 +18,11 @@ from contracts.validate_events import (
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = ROOT / "contracts" / "event-schema.json"
 USER_SAMPLE_PATH = ROOT / "contracts" / "samples" / "raw-event.user.valid.json"
-SYNTHETIC_SAMPLE_PATH = (
+SYNTHETIC_PC_SAMPLE_PATH = (
     ROOT / "contracts" / "samples" / "raw-event.synthetic.valid.json"
+)
+SYNTHETIC_PA_SAMPLE_PATH = (
+    ROOT / "contracts" / "samples" / "raw-event.synthetic.agent-llm.valid.json"
 )
 
 
@@ -44,11 +47,11 @@ class EventValidatorTest(unittest.TestCase):
 
     def test_valid_user_and_synthetic_samples(self) -> None:
         result = validate_event_files(
-            [USER_SAMPLE_PATH, SYNTHETIC_SAMPLE_PATH],
+            [USER_SAMPLE_PATH, SYNTHETIC_PC_SAMPLE_PATH, SYNTHETIC_PA_SAMPLE_PATH],
             SCHEMA_PATH,
         )
 
-        self.assertEqual(2, result.event_count)
+        self.assertEqual(3, result.event_count)
         self.assertEqual([], result.errors)
 
     def test_missing_required_field(self) -> None:
@@ -193,7 +196,7 @@ class EventValidatorTest(unittest.TestCase):
                 "persona_id": "PC00001",
                 "properties": {
                     "scenario_id": "normal_day",
-                    "simulation_run_id": "run-20260831-001",
+                    "simulation_run_id": "run_20260831T051100Z",
                 },
             }
         )
@@ -211,7 +214,7 @@ class EventValidatorTest(unittest.TestCase):
                 "persona_id": "PA00001",
                 "properties": {
                     "scenario_id": "normal_day",
-                    "simulation_run_id": "run-20260831-001",
+                    "simulation_run_id": "run_20260831T051100Z",
                     "generator_type": "agent_llm",
                 },
             }
@@ -230,7 +233,7 @@ class EventValidatorTest(unittest.TestCase):
                 "persona_id": "PA00001",
                 "properties": {
                     "scenario_id": "normal_day",
-                    "simulation_run_id": "run-20260831-001",
+                    "simulation_run_id": "run_20260831T051100Z",
                     "generator_type": "agent_realtime",
                 },
             }
@@ -341,10 +344,16 @@ class EventValidatorTest(unittest.TestCase):
         stdout = io.StringIO()
 
         with contextlib.redirect_stdout(stdout):
-            exit_code = main([str(USER_SAMPLE_PATH), str(SYNTHETIC_SAMPLE_PATH)])
+            exit_code = main(
+                [
+                    str(USER_SAMPLE_PATH),
+                    str(SYNTHETIC_PC_SAMPLE_PATH),
+                    str(SYNTHETIC_PA_SAMPLE_PATH),
+                ]
+            )
 
         self.assertEqual(0, exit_code)
-        self.assertIn("PASSED: 2 event(s)", stdout.getvalue())
+        self.assertIn("PASSED: 3 event(s)", stdout.getvalue())
 
     def test_cli_returns_one_for_validation_errors(self) -> None:
         event = copy.deepcopy(self.user_event)

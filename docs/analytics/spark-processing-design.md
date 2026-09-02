@@ -57,10 +57,10 @@ raw_events
       └─ persona_behavior_feature_delta
 ```
 
-Raw 저장 계약은 Raw Event Log Draft MR의 `raw-event-storage.md`, Dashboard용 MySQL
+Raw 저장 계약은 [`raw-event-schema.md`](../../contracts/raw-event-schema.md), 저장
+설계는 [`raw-event-storage-design.md`](./raw-event-storage-design.md), Dashboard용 MySQL
 Mart 계약은 [`dw-schema.md`](../../contracts/dw-schema.md), 적재·조회 설계는
-[`dw-design.md`](./dw-design.md)에서 다룬다. Raw MR이 병합되면 이 문서의
-직접 링크를 연결한다. Processed Dataset은 Raw와 Mart 사이에서 타입, 중복, 순서 및
+[`dw-design.md`](./dw-design.md)에서 다룬다. Processed Dataset은 Raw와 Mart 사이에서 타입, 중복, 순서 및
 분석 grain을 보장한다.
 
 ## 4. 핵심 처리 원칙

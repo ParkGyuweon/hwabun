@@ -83,6 +83,7 @@ S15P21A306/
 │   ├── README.md                        계약 디렉터리 기준 — 단일 출처와 변경 규칙
 │   ├── event-schema.json                Raw Event JSON Schema (Collector 통과 후 계약)
 │   ├── event-properties-schema.md       Event별 properties·enum·필수값 계약
+│   ├── raw-event-schema.md              Raw Dataset grain·물리 key·컬럼 계약
 │   ├── processed-schema.md              Processed Dataset grain·key·컬럼 계약
 │   ├── persona-schema.md                Persona·평가 split·Simulation Run 계약
 │   ├── dw-schema.md                     DW Dimension·Mart grain·컬럼 계약
@@ -105,6 +106,7 @@ S15P21A306/
 │   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지
 │   │   ├── event-logging-design.md       화면 Trigger·KPI 연결·구현 현황
 │   │   ├── log-transport-contract.md    전송 주기·재시도·actor_type 판정
+│   │   ├── raw-event-storage-design.md  Raw 저장 구조·Delta 전환·검증 계획
 │   │   ├── dw-design.md · spark-processing-design.md   Mart 적재·Spark 처리 설계
 │   │   ├── persona-design.md             Persona 생성·표본·추천 연결 설계
 │   │   ├── marketing-signal-research.md · event-weight-rationale.html
