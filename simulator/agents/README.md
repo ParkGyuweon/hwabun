@@ -39,6 +39,29 @@ python simulator/agents/agent_runner.py --limit 10 \
 프론트(`localhost:5173`)가 떠 있어야 합니다. `--post http://localhost:8080` 을 주면
 파일 대신 수집 API 로 보냅니다.
 
+## 판단 근거는 따로 남는다 — `--decisions`
+
+`reason` 이 콘솔에만 찍히면 실행이 끝나는 순간 사라집니다. 실제로 8/31 GMS 100명
+실행의 근거 문장이 그렇게 없어졌습니다. 그래서 턴마다 별도 파일로 남깁니다.
+경로는 `--out` 옆에 `*_decisions.jsonl` 로 자동 생성되고, `--decisions off` 로 끕니다.
+
+**이벤트에 넣지 않습니다.** 이벤트는 계약(36종)이고 property 도 계약이 정한 것만
+씁니다 — `reason` 은 거기에 없습니다. 이벤트 로그와는
+`persona_id` + `simulation_run_id` + 시각으로 붙습니다.
+
+| 필드 | 뜻 |
+|---|---|
+| `screen` · `allowed` | 그 턴에 무슨 화면이었고 어떤 선택지를 줬는가 |
+| `llm_action` · `llm_target` · `reason` | 모델이 뭐라고 했고 근거를 뭐라 댔는가 |
+| `action` · `target` | **코드가 무엇으로 바꿨는가** |
+| `corrected` | 둘이 다르면 교정된 턴 |
+| `succeeded` | 그 조작이 실제로 먹혔는가 |
+
+**`corrected` 가 특히 중요합니다.** 러너는 허용 밖 행동을 조용히 교정합니다.
+그 비율을 모르면 "LLM 이 판단했다" 고 말할 근거가 얼마나 되는지 알 수 없습니다.
+
+워커를 여러 개 쓰면 조각으로 쓰였다가 하나로 합쳐집니다.
+
 ## 왜 모델 서버를 따로 두는가
 
 배정된 GPU 서버에는 주피터만 있고 `node` 도 `sudo` 도 없어 프론트와 Chromium 을
