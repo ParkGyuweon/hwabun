@@ -15,6 +15,40 @@
 이 대시보드는 "있으면 좋은 부가 기능" 이 아니다. 리테일이 행동 데이터를
 브랜드에 파는 사업 모델 자체가 지금 업계에서 가장 빠르게 크는 축이다.
 
+### 국내 — 브랜드는 폭증하는데, 분석 인력은 없다 [공개]
+
+**수출.** 2025년 화장품 수출은 **114억 달러**(+11.8%)로 사상 최대, 무역수지
+흑자는 처음 100억 달러를 넘겼고, 국가 순위는 미국을 제쳐 **세계 2위**가 됐다
+(1위 프랑스 243억). 2026년 상반기도 **70억 달러(+27.3%)**로 역대 상반기 최대다.
+
+**이 성장을 만든 것은 대기업이 아니다.**
+
+| 지표 | 수치 |
+|---|---|
+| 중소기업 화장품 수출 (2025) | **83.2억 달러** (+21.5%) |
+| 전체 화장품 수출 중 중소기업 비중 | 2024년 67.0% → **2025년 72.5%** |
+| 대기업 화장품 수출 (2025) | **−18.8%**, 2022년 이후 **4년 연속 감소** |
+| 2026 상반기 중소기업 화장품 수출 | **50.7억 달러** (+30.7%) — 중소기업 수출 1위 품목 |
+| 2026 상반기 화장품 온라인 수출 | 5.2억 달러 (**+85.3%**) |
+
+**진입도 폭증했다.** 화장품책임판매업체는 2019년 15,707개에서 2023년 **31,524개**로
+5년 만에 두 배가 됐다. 2024년 신규 등록 5,169개의 대표자는 **30대 34.1%, 40대 32.7%**
+— 신규 진입의 3분의 2가 30~40대 개인 창업이다. 코스맥스·한국콜마 같은 ODM 이
+제조를 넘어 브랜딩·마케팅까지 원스톱으로 제공하면서 공장 없이 브랜드를 내는
+것이 가능해졌고, 두 회사 모두 매출 2조 원을 넘겼다.
+
+**그리고 폭증만큼 폭망한다.** 책임판매업체 폐업은 2020년 882건에서 2024년
+**8,831건**으로 4년 만에 10배가 됐다. 폐업률은 5.6% → **28%**. 등록 업체의
+4분의 1이 1년 안에 사라진다. 생산 10억 원 미만 업체 비중은 **93.5%**(2023)다.
+
+> **여기가 우리 자리다.** 매년 5천 개가 생기고 그 4분의 1이 1년 안에 사라지는
+> 시장에서, 살아남는 브랜드와 사라지는 브랜드의 차이는 "왜 안 팔리는지" 를
+> 아는가다. 10인 미만 업체에는 그걸 알려줄 분석 인력이 없다. 이 대시보드의
+> "지금 손봐야 할 것 한 줄" 은 분석가 없는 브랜드가 다음 할 일을 아는 장치다.
+> 5초 규칙(2-2)이 필요한 이유도 같다 — 읽는 사람이 분석 전문가가 아니다.
+
+2025년 말 기준 책임판매업체 수는 이 문서 작성 시점(2026-09)에 공식 발표 전이다.
+
 ### 리테일 미디어 — 유통이 데이터를 파는 시대 [공개]
 
 미국 리테일 미디어 광고비는 2024년 **548.5억 달러**에서 2026년
@@ -294,6 +328,13 @@ PC 쇼핑이라 한 화면에 블록이 여러 개 들어가서 이 조건이 �
 - 성분 중심 세분화와 트렌드 추적 — [Cosmetic Index: Segmenting Your Market for a Skincare Brand](https://www.cosmeticindex.com/segmenting-your-market-skincare-brand-p2321.php)
 - 피부 타입·기후 세분화 — [BO International: Skincare Market Segmentation](https://www.bointernational.net/blogs/skincare-market-segmentation)
 - B2B 뷰티 데이터 공유와 실시간 대응 — [Shopify: B2B Beauty Guide](https://www.shopify.com/enterprise/blog/b2b-beauty)
+- 2025년 화장품 수출 114억 달러·세계 2위·무역흑자 100억 — [THE K BEAUTY SCIENCE](https://www.thekbs.co.kr/news/articleView.html?idxno=14719) · [코스모닝: 식약처 2025 통계 분석](https://www.cosmorning.com/news/article.html?no=52843)
+- 2025년 중소기업 화장품 수출 83.2억·비중 72.5%·대기업 4년 연속 감소 — [코스인코리아 (2026-01-29)](https://www.cosinkorea.com/news/article.html?no=56735) · [아시아투데이: 중기 수출 1186억 달러](https://www.asiatoday.co.kr/kn/view.php?key=20260128010013084)
+- 2026 상반기 화장품 수출 70억(+27.3%) — [CNC News](http://www.cncnews.co.kr/news/article.html?no=11059) · [푸드투데이](https://www.foodtoday.or.kr/news/article.html?no=206085)
+- 2026 상반기 중소기업 화장품 수출 50.7억(+30.7%)·온라인 +85.3% — [헤럴드경제](https://biz.heraldcorp.com/article/10816928) · [뉴스핌](https://www.newspim.com/news/view/20260723000227)
+- 책임판매업체 연도별 수·신규등록 대표자 연령 — [CNC News: 책임판매업자 매년 23%↑](https://www.cncnews.co.kr/news/article.html?no=9561) · [코스모닝: 2024 산업 현황](https://cosmorning.com/news/article.html?no=50594)
+- 폐업 4년 새 10배·폐업률 28%·10억 미만 93.5% — [The Economy Korea](https://kr.economy.ac/news/2025/04/20250434533) · [서울경제: 1년새 4곳 중 1곳 폐업](https://www.sedaily.com/article/20009242)
+- ODM 원스톱 지원과 진입장벽 완화 — [뉴스토마토](https://www.newstomato.com/readNewspaper.aspx?no=1057281) · [블로터](https://www.bloter.net/news/articleView.html?idxno=614636)
 - 리테일 미디어 시장 규모·성장률 — [Improvado: Top Retail Media Networks](https://improvado.io/blog/top-retail-media-networks) · [Persistence Market Research: Retail Media Networks Market](https://www.persistencemarketresearch.com/market-research/retail-media-networks-market.asp)
 - 퍼스트파티 데이터 가치 상승(마케터 74%)·확정 측정 — [Osmos: First-Party Shopper Data in Retail Media](https://www.osmos.ai/blog/first-party-data-in-retail-media-the-complete-targeting-guide)
 - 광고주의 유통사 데이터 중시(60%+) — [Tinuiti: Top Retail Media Networks](https://tinuiti.com/blog/ecommerce/retail-media-networks/)
@@ -309,3 +350,8 @@ PC 쇼핑이라 한 화면에 블록이 여러 개 들어가서 이 조건이 �
 - 0절의 시장 수치는 각 조사기관 추정치로, 기관마다 시장 정의가 달라 수치가
   갈린다. 방향(고성장·퍼스트파티 중심)은 여러 출처에서 일치한다.
 - 개인화 수치는 업종 전체 평균이다. 화장품 단독 수치는 확인하지 못했다.
+- 국내 업체 수 통계는 식약처 발표 기준 2024년이 최신이다. 2025년 말 수치는
+  작성 시점에 미발표라, 폐업·신규 등록 추세는 2024년까지로 끊긴다.
+- 폐업 8,831건 중 일부는 2024년 7월 시행규칙 개정으로 세무서 폐업 업체를
+  식약처가 직권취소한 것(6,292건)이 섞여 있다. 그해 급증분을 전부 실제 사업
+  실패로 읽으면 안 된다. 다만 2020→2023년(882→3,258건)의 4배 증가는 개정 전이다.
