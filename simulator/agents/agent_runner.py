@@ -1162,8 +1162,9 @@ class LogSink:
        `clean_events_job` 이 `user_id` 를 NULL 로, `source` 를 `web` 으로 파생하고
        시뮬레이션 Mart 에서 통째로 빠진다. 게다가 synthetic 필수 properties 검증은
        `actor_type != 'synthetic'` 이면 그냥 통과시켜서 **거절도 안 되고 조용히
-       잘못된 데이터**가 된다. 표시는 여기서 채운다 — 계약이 정한 강제 지점이
-       Simulator 와 Spark 이기 때문이다 (event-taxonomy-trigger-schema.md §8.4).
+       잘못된 데이터**가 된다. 표시는 여기서 채운다. synthetic 필수값은
+       contracts/event-schema.json, PA 보강 책임은
+       docs/analytics/log-transport-contract.md §9-2를 따른다.
 
     `--post` 를 주면 채운 로그를 수집 API 로 대신 보낸다. 헤더에도 같은 사실을
     적어 둔다 (`X-Actor-Type`). 지금은 아무도 안 읽지만, 나중에 수집 서버가
