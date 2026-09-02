@@ -13,7 +13,7 @@
 
 근거의 출처는 `b2b-dashboard-research.md`(시장·설계 조사)와
 `marketing-signal-research.md`(가중치 조사)다. 이벤트 이름과 property 는
-`contracts/event-schema.json` 과 `event-taxonomy-trigger-schema.md` §9 를 따른다.
+`contracts/event-schema.json` 과 `contracts/event-properties-schema.md` 를 따른다.
 
 ---
 
@@ -181,8 +181,9 @@
 
 - `docs/dashboard/b2b-dashboard-research.md` — 시장 맥락, 고객 불만, 화면 설계 규칙
 - `docs/analytics/marketing-signal-research.md` — 이벤트 가중치의 외부 근거
-- `docs/analytics/event-taxonomy-trigger-schema.md` §6·§9 — 이벤트 정의와 필수 property
-- `contracts/event-schema.json` — 계약 35종
+- `contracts/event-properties-schema.md` — 이벤트 의미·필수 property·enum
+- `docs/analytics/event-logging-design.md` — 화면 Trigger 와 KPI 연결
+- `contracts/event-schema.json` — 계약 36종 (`navigation_click` 포함)
 - `frontend/src/types/log.ts` — `EVENT_WEIGHT` 단일 출처
 
 표기: `[공개]` 는 공개 자료에서 확인된 것, `[추정]` 은 조사 결과를 우리 맥락에

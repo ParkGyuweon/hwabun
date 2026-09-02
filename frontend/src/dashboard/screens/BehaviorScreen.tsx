@@ -106,7 +106,7 @@ export default function BehaviorScreen() {
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="이벤트 발생량 상위" source="mock" aside="35종 중 상위 13">
+        <Panel title="이벤트 발생량 상위" source="mock" aside="36종 중 상위 13">
           <BarList
             items={eventVolumes.map((e) => ({ label: e.name, value: e.count }))}
             format={fmt.compact}
