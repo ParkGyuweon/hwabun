@@ -35,9 +35,25 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | 재실행 | 같은 입력 범위 재실행 시 Dataset key 기준 동일 결과로 수렴 |
 | 업무 중복 | `cleaned_events` 생성 전에 `event_id` 정본 1건 선택 |
 | Schema 확장 | 신규 컬럼은 nullable 추가를 기본으로 하고 기존 컬럼 의미·타입 변경 금지 |
+| Tenant 격리 | 모든 Dataset은 `tenant_id`를 보유하고 소비자는 이 값으로만 격리한다 |
 
 환경별 Delta root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
 하위 경로는 환경이 달라도 유지한다.
+
+### 2.1 `tenant_id`와 `brand_id`
+
+두 값은 뜻이 다르므로 서로 대체하지 않는다.
+
+| 컬럼 | 뜻 | 원천 |
+| --- | --- | --- |
+| `tenant_id` | 그 Event가 발생한 Storefront의 소유 Tenant | Raw Envelope에서 승격 |
+| `brand_id` | 그 Event가 대상으로 한 상품의 브랜드 | `product_id` → `dim_product` Join 파생 |
+
+격리, partition, Mart 집계 key는 `tenant_id`만 사용한다. `brand_id`는 상품 속성이며
+`page_view`처럼 상품이 없는 Event에서는 NULL이다.
+
+`schema_version = 0.2.0-draft` Event에는 `tenant_id`가 없다. 이 경우 컬럼은 NULL이며
+Tenant 격리가 필요한 소비자는 해당 row를 제외한다. 값을 임의로 추정해 채우지 않는다.
 
 ## 3. Dataset 카탈로그
 
@@ -51,6 +67,8 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | `search_event_fact` | Processed Fact | `event_id` | `event_date_kst` | 미구현 |
 | `section_dwell_agg` | Processed Aggregate | section dwell grain | `event_date_kst` | 미구현 |
 | `content_interest_fact` | Processed Fact | content interest grain | `event_date_kst` | 미구현 |
+| `purchase_fact` | Processed Fact | `order_id + product_id` | `event_date_kst` | 미구현 |
+| `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 미구현 |
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
 | `dim_product` | Dimension | `product_id` | 없음 | 원천·Join 구현 대기 |
@@ -148,6 +166,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `request_id` | string | Y | Collector batch ID |
 | `event_index` | int | Y | batch 내부 순서 |
 | `source` | string | N | Raw payload 우선, 누락 시 fallback |
+| `tenant_id` | string | Y | Storefront 소유 Tenant. `0.2.0-draft` Event는 NULL |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `is_synthetic` | boolean | N | synthetic 판정 결과 |
 | `user_id` | string | Y | synthetic이면 `persona_id`; Web 정책 확정 전 NULL |
@@ -188,6 +207,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `event_date_kst` | date | N | Partition |
 | `session_id` | string | N | 세션 ID |
 | `page_view_id` | string | N | 페이지 방문 ID |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -233,6 +253,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `event_name` | string | N | Event 이름 |
 | `intent` | string | N | Event 의미 |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -267,7 +288,85 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
 
-## 9. `search_event_fact`
+## 9. `purchase_fact`
+
+입력은 `cleaned_events`의 `purchase` Event다. `items[]`를 상품 단위로 explode한다.
+unique key는 `order_id + product_id`다.
+
+일간 Mart만으로는 "두 번째 구매"를 셀 수 없다. 집계 과정에서 사용자 축이 사라지기
+때문이다. 이 Dataset은 사용자·주문·상품을 함께 보존해 재구매 분석의 입력이 된다.
+
+| column | type | nullable | source / rule |
+| --- | --- | --- | --- |
+| `order_id` | string | N | Grain |
+| `product_id` | string | N | Grain |
+| `event_id` | string | N | 원천 `purchase` Event |
+| `event_date_kst` | date | N | Partition |
+| `event_time` | timestamp | N | 주문 완료 시각 |
+| `processed_at` | timestamp | N | 처리 시각 |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
+| `user_id` | string | Y | 분석 사용자 ID |
+| `persona_id` | string | Y | Persona ID |
+| `scenario_id` | string | Y | synthetic 실행 축 |
+| `simulation_run_id` | string | Y | synthetic 실행 축 |
+| `generator_type` | string | Y | synthetic 생성 방식 |
+| `session_id` | string | N | 세션 ID |
+| `category_id` | string | Y | 상품 Dimension |
+| `brand_id` | string | Y | 상품 Dimension |
+| `sku_id` | string | Y | `items[].sku_id` |
+| `quantity` | int | N | `items[].quantity` |
+| `unit_price` | decimal(18,2) | N | `items[].unit_price` |
+| `item_revenue` | decimal(18,2) | N | `quantity * unit_price` 파생 |
+| `order_value` | decimal(18,2) | Y | 주문 전체 금액. 상품 row에서 합산 금지 |
+| `currency` | string | Y | 통화 |
+| `actor_type` | string | N | 사용자 유형 |
+| `source` | string | N | 유입 경로 |
+
+`item_revenue`는 Event가 운반하지 않고 여기서 파생한다. `order_value`는 주문 단위
+값이므로 explode된 상품 row를 합산하면 상품 수만큼 중복된다. 상품 매출은
+`item_revenue`만 합산한다.
+
+같은 `order_id`가 여러 번 수신되면 `cleaned_events` 단계에서 이미 `event_id` 정본
+1건으로 정리된다. 이 Dataset에서 다시 중복 제거하지 않는다.
+
+## 10. `purchase_reason_fact`
+
+입력은 `cleaned_events`의 `purchase_reason_select` Event다. `reasons[]`를 이유
+단위로 explode하며 unique key는 `order_id + reason`이다.
+
+건너뛴 응답은 `reasons`가 빈 배열이라 explode 결과가 없다. 응답률을 세려면 row가
+없는 주문도 알아야 하므로, 건너뛴 주문은 `reason = NULL`, `skipped = true`인 row
+1건으로 보존한다.
+
+| column | type | nullable | source / rule |
+| --- | --- | --- | --- |
+| `order_id` | string | N | Grain |
+| `reason` | string | Y | Grain. `reasons[]` 원소. 건너뛰면 NULL |
+| `event_id` | string | N | 원천 Event |
+| `event_date_kst` | date | N | Partition |
+| `event_time` | timestamp | N | 응답 시각 |
+| `processed_at` | timestamp | N | 처리 시각 |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
+| `user_id` | string | Y | 분석 사용자 ID |
+| `persona_id` | string | Y | Persona ID |
+| `scenario_id` | string | Y | synthetic 실행 축 |
+| `simulation_run_id` | string | Y | synthetic 실행 축 |
+| `generator_type` | string | Y | synthetic 생성 방식 |
+| `session_id` | string | N | 세션 ID |
+| `is_primary` | boolean | N | `primary_reason`과 일치하는지 |
+| `reason_rank` | int | Y | `reasons[]` 내 순서, 1부터 |
+| `free_text_kind` | string | Y | 자유 입력 분류값. 원문은 저장하지 않는다 |
+| `skipped` | boolean | N | 설문 건너뛰기 여부 |
+| `actor_type` | string | N | 사용자 유형 |
+| `source` | string | N | 유입 경로 |
+
+Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 주문에서 같은
+이유가 두 번 선택되는 경우는 없다고 보고, 들어오면 품질 표시 대상이다.
+
+선언한 이유와 행동에서 추론한 관심을 대조하는 집계는 Mart 단계에서 수행한다.
+이 Dataset은 선언 쪽 입력만 보존한다.
+
+## 11. `search_event_fact`
 
 입력은 `cleaned_events`의 `search` Event이며 unique key는 `event_id`다.
 
@@ -278,6 +377,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `search_id` | string | Y | 검색 1회 ID |
 | `event_time` | timestamp | N | 검색 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -291,7 +391,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
 
-## 10. `section_dwell_agg`
+## 12. `section_dwell_agg`
 
 입력은 `cleaned_events`의 `section_dwell` Event다.
 
@@ -304,6 +404,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `section_id` | string | Y | Grain |
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -320,7 +421,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
 
-## 11. `content_interest_fact`
+## 13. `content_interest_fact`
 
 입력은 `cleaned_events`와 `section_dwell_agg`다. grain은 §3의 content interest
 조합이다.
@@ -334,6 +435,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `section_id` | string | Y | Grain |
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -355,7 +457,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
 
-## 12. `funnel_session_fact`
+## 14. `funnel_session_fact`
 
 입력은 `sessionized_events`와 `product_event_fact`다. unique key는
 `session_id + product_id`다.
@@ -365,6 +467,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `funnel_date_kst` | date | N | 최초 non-null Funnel 단계의 KST 날짜 |
 | `session_id` | string | N | Unique key |
 | `product_id` | string | N | Unique key |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -396,7 +499,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `dropoff_step` | string | Y | 마지막 도달 후 이탈 단계 |
 | `processed_at` | timestamp | N | 처리 시각 |
 
-## 13. `persona_behavior_feature_delta`
+## 15. `persona_behavior_feature_delta`
 
 입력은 상품과 연결되는 `cleaned_events`다. unique key는
 `event_id + user_id + product_id`다. `user_id`가 NULL인 Web Event는 사용자 Feature
@@ -427,7 +530,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 `../docs/analytics/spark-processing-design.md` 및 추천 계약을 따른다. 이 Dataset은
 Vector 자체를 저장하지 않는다.
 
-## 14. `dim_product`
+## 16. `dim_product`
 
 `dim_product`는 Processed Fact의 상품 속성 보강 입력이다. unique key는
 `product_id`이며 partition하지 않는다.
@@ -448,7 +551,7 @@ Vector 자체를 저장하지 않는다.
 | `caution_ingredient_count` | int | N | 주의 성분 수 |
 | `updated_at` | timestamp | N | 상품 속성 갱신 시각 |
 
-## 15. 구현 정합성 완료 조건
+## 17. 구현 정합성 완료 조건
 
 2026-09-02 기준 최신 Raw/Event/Persona 계약과 현재 `streaming/` 구현을 정적으로
 대조했다. Dataset의 grain, key, partition, 컬럼과 nullable에 새 논리 변경은
@@ -466,3 +569,5 @@ Vector 자체를 저장하지 않는다.
 7. 상품 Dimension Join 전후 row 수가 의도하지 않게 증가하지 않는다.
 8. 같은 입력 범위 재실행 후 Dataset key와 집계값이 변하지 않는다.
 9. 현재 미구현 Dataset은 구현 전까지 소비자가 존재하는 것으로 가정하지 않는다.
+10. `schema_version = 0.3.0-draft` row는 `tenant_id`가 NULL이 아니다.
+11. `tenant_id`와 `brand_id`가 같은 값을 담지 않는다. 후자는 상품 Dimension 파생이다.

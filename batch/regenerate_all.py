@@ -63,6 +63,10 @@ STEPS = [
     (2, "인코딩 어휘집 (148차원)",
      ["batch/ingest/build_feature_vocab.py"],
      [os.path.join(CONTRACTS, "product-feature-vocab.json")], False),
+    # 상품 등록 폼이 쓰는 한국어 라벨. 어휘집에서 값을 읽으므로 2번 뒤다
+    (2.5, "상품 등록 폼 한국어 라벨",
+     ["batch/ingest/build_form_labels.py"],
+     [os.path.join(CONTRACTS, "product-form-labels-ko.json")], False),
     (3, "속성 친화도 4,000행",
      ["batch/ingest/build_affinity_lift.py"],
      [os.path.join(DATA, "affinity_lift.csv")], False),

@@ -1,0 +1,259 @@
+{
+  "_note": "화면은 ko, 서버로 보내는 값은 value. value 는 어휘집 문자열이라 한 글자도 바꾸면 안 된다. 이 파일은 batch/ingest/build_form_labels.py 가 만든다 — 직접 고치지 말 것",
+  "vocab_version": "0.4",
+  "highlights_groups": [
+    {
+      "group": "concern",
+      "ko": "피부 고민",
+      "hint": "가장 중요합니다. 해당하는 것을 모두 고르세요"
+    },
+    {
+      "group": "clean",
+      "ko": "성분 표방",
+      "hint": "해당 없으면 비워도 됩니다"
+    },
+    {
+      "group": "texture",
+      "ko": "제형·마무리",
+      "hint": "해당 없으면 비워도 됩니다"
+    }
+  ],
+  "secondary_category": [
+    {
+      "value": "Cleansers",
+      "ko": "클렌저"
+    },
+    {
+      "value": "Eye Care",
+      "ko": "아이케어"
+    },
+    {
+      "value": "Lip Balms & Treatments",
+      "ko": "립밤·립케어"
+    },
+    {
+      "value": "Masks",
+      "ko": "마스크·팩"
+    },
+    {
+      "value": "Moisturizers",
+      "ko": "보습·크림"
+    },
+    {
+      "value": "Self Tanners",
+      "ko": "셀프 태닝"
+    },
+    {
+      "value": "Sunscreen",
+      "ko": "선케어"
+    },
+    {
+      "value": "Treatments",
+      "ko": "집중 케어(트리트먼트)"
+    }
+  ],
+  "tertiary_category": [
+    {
+      "value": "BB & CC Creams",
+      "ko": "BB·CC 크림"
+    },
+    {
+      "value": "Blemish & Acne Treatments",
+      "ko": "여드름·트러블 케어"
+    },
+    {
+      "value": "Exfoliators",
+      "ko": "각질 제거"
+    },
+    {
+      "value": "Eye Creams & Treatments",
+      "ko": "아이크림"
+    },
+    {
+      "value": "Eye Masks",
+      "ko": "아이패치·아이마스크"
+    },
+    {
+      "value": "Face Masks",
+      "ko": "페이스 마스크·팩"
+    },
+    {
+      "value": "Face Oils",
+      "ko": "페이스 오일"
+    },
+    {
+      "value": "Face Serums",
+      "ko": "세럼·앰플"
+    },
+    {
+      "value": "Face Sunscreen",
+      "ko": "얼굴용 선크림"
+    },
+    {
+      "value": "Face Wash & Cleansers",
+      "ko": "클렌징 폼·워시"
+    },
+    {
+      "value": "Face Wipes",
+      "ko": "클렌징 티슈"
+    },
+    {
+      "value": "Facial Peels",
+      "ko": "필링"
+    },
+    {
+      "value": "For Face",
+      "ko": "얼굴용 (기타)"
+    },
+    {
+      "value": "Lip Balms & Treatments",
+      "ko": "립밤·립케어"
+    },
+    {
+      "value": "Makeup Removers",
+      "ko": "메이크업 리무버"
+    },
+    {
+      "value": "Mists & Essences",
+      "ko": "미스트·에센스"
+    },
+    {
+      "value": "Moisturizers",
+      "ko": "수분크림·로션"
+    },
+    {
+      "value": "Night Creams",
+      "ko": "나이트 크림"
+    },
+    {
+      "value": "Toners",
+      "ko": "토너·스킨"
+    }
+  ],
+  "concern": [
+    {
+      "value": "Dullness/Uneven Texture",
+      "ko": "칙칙함·피부결"
+    },
+    {
+      "value": "Dryness",
+      "ko": "건조함"
+    },
+    {
+      "value": "Anti-Aging",
+      "ko": "주름·안티에이징"
+    },
+    {
+      "value": "Pores",
+      "ko": "모공"
+    },
+    {
+      "value": "Loss of firmness",
+      "ko": "탄력 저하"
+    },
+    {
+      "value": "Dark Circles",
+      "ko": "다크서클"
+    },
+    {
+      "value": "Acne/Blemishes",
+      "ko": "여드름·트러블"
+    },
+    {
+      "value": "Redness",
+      "ko": "홍조"
+    },
+    {
+      "value": "Dark spots",
+      "ko": "색소침착·잡티"
+    }
+  ],
+  "clean": [
+    {
+      "value": "Clean at Sephora",
+      "ko": "클린 뷰티 인증"
+    },
+    {
+      "value": "Vegan",
+      "ko": "비건"
+    },
+    {
+      "value": "Without Parabens",
+      "ko": "파라벤 무첨가"
+    },
+    {
+      "value": "Cruelty-Free",
+      "ko": "동물실험 반대"
+    },
+    {
+      "value": "Clean + Planet Positive",
+      "ko": "친환경 클린"
+    },
+    {
+      "value": "Fragrance Free",
+      "ko": "무향"
+    },
+    {
+      "value": "Oil Free",
+      "ko": "오일 프리"
+    },
+    {
+      "value": "Without Sulfates SLS & SLES",
+      "ko": "설페이트(SLS·SLES) 무첨가"
+    },
+    {
+      "value": "Without Silicones",
+      "ko": "실리콘 무첨가"
+    },
+    {
+      "value": "Refill Available",
+      "ko": "리필 가능"
+    },
+    {
+      "value": "Without Phthalates",
+      "ko": "프탈레이트 무첨가"
+    },
+    {
+      "value": "Alcohol Free",
+      "ko": "알코올 무첨가"
+    },
+    {
+      "value": "Without Mineral Oil",
+      "ko": "미네랄 오일 무첨가"
+    },
+    {
+      "value": "Gluten Free",
+      "ko": "글루텐 프리"
+    },
+    {
+      "value": "Hypoallergenic",
+      "ko": "저자극"
+    },
+    {
+      "value": "Without Oxybenzone",
+      "ko": "옥시벤존 무첨가"
+    }
+  ],
+  "texture": [
+    {
+      "value": "Hydrating",
+      "ko": "촉촉한"
+    },
+    {
+      "value": "Plumping",
+      "ko": "탄탄한(플럼핑)"
+    },
+    {
+      "value": "Radiant Finish",
+      "ko": "광채 마무리"
+    },
+    {
+      "value": "Natural Finish",
+      "ko": "자연스러운 마무리"
+    },
+    {
+      "value": "High Shine Finish",
+      "ko": "윤광 마무리"
+    }
+  ]
+}

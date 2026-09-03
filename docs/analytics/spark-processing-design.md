@@ -33,7 +33,7 @@ Frontend
 | 화면 Trigger·KPI 연결 | [`event-logging-design.md`](./event-logging-design.md) |
 | Kafka payload | Front JSON을 유지하고 Collector가 `received_at`, `source`, `request_id`, `event_index` 보강 |
 | 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
-| Schema version | 현재 E2E 구현은 `0.2.0-draft`; 변경은 Raw 계약과 함께 검토 |
+| Schema version | `0.2.0-draft`와 `0.3.0-draft` 허용. 후자는 `tenant_id` 필수 |
 | Kafka message grain | 현재 Backend 구현은 Event 1건 |
 | Kafka key | `session_id` |
 | Raw 중복 | 수신 원본을 보존하고 Processed에서 `event_id` 기준 제거 |
@@ -53,6 +53,8 @@ raw_events
       ├─ sessionized_events
       ├─ product_event_fact
       ├─ search_event_fact
+      ├─ purchase_fact
+      ├─ purchase_reason_fact
       ├─ section_dwell_agg → content_interest_fact
       ├─ funnel_session_fact
       └─ persona_behavior_feature_delta
@@ -105,6 +107,7 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 `properties`는 JSON으로 보존한다.
 
 - 공통 Envelope: Event, 사용자, 세션, 페이지, 시간 축
+- Tenant 축: `tenant_id`. 격리와 Mart partition의 기준 key
 - Collector metadata: `received_at`, `source`, `request_id`, `event_index`
 - Synthetic metadata: `scenario_id`, `simulation_run_id`, `generator_type`
 - 상품·콘텐츠 축: `product_id`, `section_id`, `content_kind`, `position` 등
@@ -112,6 +115,11 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 
 정확한 컬럼과 nullable은 Processed 계약을 따른다. Event별 필수 properties가 없거나
 타입 변환이 불가능하면 `bad_events`로 분리한다.
+
+`tenant_id`는 `schema_version = 0.3.0-draft`부터 Envelope에 실린다. `0.2.0-draft`
+Event에는 없으므로 컬럼이 NULL이며 값을 추정해 채우지 않는다. 상품 브랜드 `brand_id`는
+`dim_product` Join 파생이라 격리 key로 쓰지 않는다. 두 값을 서로 대체하면 상품이 없는
+Event에서 격리가 깨진다.
 
 ### 4.4 `source`와 Synthetic 처리
 
@@ -180,13 +188,16 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 | `section_dwell_agg` | 미구현 | delta 합산 grain 구현 |
 | `content_interest_fact` | 미구현 | 관심도 산식과 vocab 연결 |
 | `persona_behavior_feature_delta` | 미구현 | 추천 계약 기준 delta 구현 |
+| `purchase_fact` | 미구현 | `items[]` explode와 `item_revenue` 파생 구현 |
+| `purchase_reason_fact` | 미구현 | `reasons[]` explode, 건너뛰기 row 보존 구현 |
 
 현재 Q1~Q4는 주로 Parquet output을 사용한다. 목표 저장 엔진은 Delta Lake이며 실제
 Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
 
-`search`, `begin_checkout`, `purchase`는 최신 Event properties 계약에서도 Planned
-Event다. 따라서 관련 Processed/DW Dataset은 논리 계약을 유지하되 활성 Event에서
-실데이터가 들어오는 것으로 간주하지 않는다. `dead_click`은 최신 Dashboard 기준
+`begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event가 됐다. 다만 Front
+결제·설문 화면과 Generator 방출이 아직이라 실데이터는 들어오지 않는다. `search`와
+`compare_products`는 여전히 Planned Event다. 관련 Processed/DW Dataset은 논리 계약을
+유지하되 지금 실데이터가 있는 것으로 간주하지 않는다. `dead_click`은 최신 Dashboard 기준
 실사용자 전용이므로 집계 소비자는 `actor_type='user'`를 명시해야 한다.
 
 ## 7. 구현 전에 닫아야 하는 의존성

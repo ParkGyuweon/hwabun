@@ -43,6 +43,7 @@ Parquet를 최종 저장 방식이나 exactly-once 저장소로 해석하지 않
 | 중복 제거 후 집계 | Raw를 직접 집계하지 않고 `cleaned_events`와 파생 Dataset만 사용 |
 | grain 우선 | 서로 다른 Processed Dataset은 목표 grain으로 먼저 집계한 뒤 결합 |
 | Event일과 Funnel일 분리 | 일반 성과는 Event 발생일, Funnel은 최초 단계 도달일 기준 |
+| Tenant 격리 | 모든 Mart가 `tenant_id`를 집계 축으로 가지며 이 값으로만 격리 |
 | Web/Synthetic 분리 | `actor_type`, `source`, `simulation_run_id`로 필터 |
 | 상품 속성 스냅샷 | Mart에 `category_id`, `brand_id`를 집계 시점 값으로 보존 |
 | NULL 의미 보존 | 입력 부재와 분모 0을 숫자 0으로 꾸미지 않음 |
