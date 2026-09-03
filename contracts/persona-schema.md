@@ -229,8 +229,16 @@ grain = persona_id + canonical_product_id
 | `last_reviewed_at` | date | Y | 최근 seed 리뷰일 |
 | `avg_seed_rating` | double | Y | seed 상품 평균 평점 |
 | `is_positive_seed` | boolean | Y | 긍정 seed 여부 |
-| `initial_event_weight` | double | Y | 초기 Vector 가중치 |
+| `initial_event_weight` | double | Y | 항상 NULL. 아래 참조 |
 | `is_seen` | boolean | N | 추천 후보 하드 제외 여부 |
+
+`initial_event_weight`는 **의도적으로 비운다.** Seed 상품은 스칼라 가중치로 주입되지
+않는다. 생성기가 Seed를 실제 Event로 펼치고, 그 뒤로는 일반 Event와 같은 행동
+가중치 표로 누적된다. 따라서 이 컬럼에 채울 값이 없는 것이 정상이며 산식이 정해지지
+않아 비어 있는 것이 아니다. 누적 규칙은 §12.1이 참조하는
+[`recommendation-io-spec.md`](./recommendation-io-spec.md) §2를 따른다.
+
+컬럼 자체는 Seed에 스칼라 초기값을 주는 방식으로 바뀔 경우를 위해 남겨 둔다.
 
 ### 7.3 `persona_holdout_target`
 
