@@ -68,7 +68,7 @@ restock           쓰던 걸 다시 사서
 
 | event_name | 추가 속성 | 왜 |
 |---|---|---|
-| **모든 이벤트** | `brand_id: string` (공통 선택, `storefront_*` 옆) | 봉투에 브랜드가 없다. 상품 없는 이벤트(`page_view`·`filter_change`)의 브랜드가 정해지지 않는다 |
+| **모든 이벤트** | ~~`brand_id`~~ → **`tenant_id`** (봉투 top-level, `0.3.0-draft` 부터 필수, slug `^[a-z0-9]+(-[a-z0-9]+)*$`) | 데이터 파트 확정(2026-09-03): 격리 키는 "이 쇼핑몰이 누구 것인가"인 `tenant_id`. 상품 브랜드 `brand_id`는 봉투에 넣지 않고 `product_id → dim_product` 조인으로 파생한다. 프론트는 표시명에서 NFKD slug 를 한 번 만들어 저장하고 봉투에 싣는다 (`storefront.ts` `slugifyTenant`) |
 | `text_selection` / `text_copy` | `selection_kind: ingredient \| claim \| usage \| price \| other` | 지금은 성분만 매칭, 나머지는 버림. 분류만 남기고 원문은 여전히 저장하지 않는다 |
 | `section_view` / `section_dwell` (`content_kind=highlight_badge`) | `badge_id: string` (clean 태그 16종 값) | "Vegan 배지는 읽히나" 를 재려면 배지 단위 식별이 필요 |
 | `variant_select` | `variant_kind: size \| shade \| other` | 용량 선택(충성 신호)과 색상 선택(톤 신호)을 구분 |

@@ -10,7 +10,10 @@ import {
   STOREFRONT_PRESETS,
   STOREFRONT_PROMOS,
   STOREFRONT_THEMES,
+  DEFAULT_TENANT_ID,
+  TENANT_ID_PATTERN,
   matchPreset,
+  slugifyTenant,
 } from '../lib/storefront';
 import type {
   StorefrontDensity,
@@ -206,7 +209,15 @@ export default function Onboarding({
           <button
             type="button"
             className="onboard__btn"
-            onClick={() => onDone({ ...prefs, brandName: prefs.brandName.trim() })}
+            onClick={() => {
+              const brandName = prefs.brandName.trim();
+              // slug 는 처음 한 번만 만든다. 이미 배정된 slug 가 있으면 이름을 고쳐도 유지한다 —
+              // 파티션 키가 이름 편집마다 흔들리면 안 된다 (계약 §1.1.1). 기본값은 "아직 없음" 이다
+              const assigned =
+                TENANT_ID_PATTERN.test(prefs.tenantId) && prefs.tenantId !== DEFAULT_TENANT_ID;
+              const tenantId = assigned ? prefs.tenantId : slugifyTenant(brandName);
+              onDone({ ...prefs, brandName, tenantId });
+            }}
           >
             {onCancel ? '쇼핑몰에 적용' : '이 설정으로 시작'}
           </button>

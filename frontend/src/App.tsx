@@ -12,6 +12,7 @@ import {
   applyStorefront,
   loadStorefront,
   storefrontEventProps,
+  tenantIdOf,
 } from './lib/storefront';
 import type { StorefrontPrefs } from './lib/storefront';
 import productsData from './mocks/products.sample.json';
@@ -332,7 +333,11 @@ export default function App() {
   useEffect(() => {
     applyStorefront(storefront);
     // 진열이 바뀌면 그 다음 이벤트부터 새 진열로 기록된다
-    setLoggerContext({ storefront: storefrontEventProps(storefront) });
+    setLoggerContext({
+      storefront: storefrontEventProps(storefront),
+      // 봉투 top-level tenant_id. 진열(properties)과 달리 격리 키라 봉투에 실린다
+      tenantId: tenantIdOf(storefront),
+    });
   }, [storefront]);
 
   useEffect(() => {
