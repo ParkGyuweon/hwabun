@@ -114,7 +114,14 @@ py contracts/persona/compare_holdout_rules.py --require-zero
 규칙이나 원천이 바뀌면 다시 갈라지므로 회귀 확인용으로 남긴다. 불일치가 1건이라도
 있으면 종료 코드 2 로 실패한다.
 
-## 아직 결정되지 않은 것
+## 의도적으로 비우는 값
 
-- **`initial_event_weight` 산식.** 계약상 nullable=Y 이고 `recommendation-io-spec.md`
-  에 정의가 없어 NULL 로 둔다.
+`persona_seed_product.initial_event_weight` 는 **항상 NULL 이다.** 산식이 정해지지
+않아 비워 둔 것이 아니다.
+
+Seed 상품은 스칼라 가중치로 주입되지 않는다. 생성기가 Seed 를 실제 Event 로 펼치고,
+그 뒤로는 일반 Event 와 같은 행동 가중치 표로 누적된다. 그래서 이 컬럼에 채울 값이
+없는 것이 정상이다 (AI 담당 확인, 2026-09-03). 누적 규칙은 계약 §12.1 이 참조하는
+`recommendation-io-spec.md` §2 에 있다.
+
+컬럼은 Seed 에 스칼라 초기값을 주는 방식으로 바뀔 경우를 위해 계약에 남아 있다.

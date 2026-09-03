@@ -174,12 +174,12 @@ Mart.simulation_run_id
   양쪽 모두 0건이다. 회귀 확인은 `compare_holdout_rules.py --require-zero`로 한다.
 - **PA 100명의 평가 정본이 생겼다.** `eval_metadata_agent.jsonl` 100행이다. PC 평가
   표본에 PA가 섞이면 안 되므로 파일은 분리해 유지한다.
+- **`initial_event_weight`는 미결 항목이 아니다.** Seed 상품은 스칼라 가중치로 주입되지
+  않고 생성기가 실제 Event로 펼쳐 일반 Event와 같은 행동 가중치 표로 누적된다. 채울
+  값이 없는 것이 정상이며 계약 §7.2에 그 이유를 명시했다.
 
 남은 차이:
 
-- `persona_seed_product.initial_event_weight`의 산식이
-  [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md)에 없어 NULL로
-  둔다. 값을 임의로 채우지 않는다.
 - `products_200.json`의 일부 리뷰 통계에는 `hair_color='brunette'`가 남아 있어 DW에서
   읽을 때 `brown`으로 합산해야 한다.
 - Recommendation 계약의 missing affinity 0.5 표기와 현재 변환식 결과 0.40이
