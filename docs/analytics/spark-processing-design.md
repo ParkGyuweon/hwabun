@@ -33,7 +33,7 @@ Frontend
 | 화면 Trigger·KPI 연결 | [`event-logging-design.md`](./event-logging-design.md) |
 | Kafka payload | Front JSON을 유지하고 Collector가 `received_at`, `source`, `request_id`, `event_index` 보강 |
 | 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
-| Schema version | 현재 E2E 구현은 `0.2.0-draft`; 변경은 Raw 계약과 함께 검토 |
+| Schema version | `0.2.0-draft`와 `0.3.0-draft` 허용. 후자는 `tenant_id` 필수 |
 | Kafka message grain | 현재 Backend 구현은 Event 1건 |
 | Kafka key | `session_id` |
 | Raw 중복 | 수신 원본을 보존하고 Processed에서 `event_id` 기준 제거 |
@@ -105,6 +105,7 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 `properties`는 JSON으로 보존한다.
 
 - 공통 Envelope: Event, 사용자, 세션, 페이지, 시간 축
+- Tenant 축: `tenant_id`. 격리와 Mart partition의 기준 key
 - Collector metadata: `received_at`, `source`, `request_id`, `event_index`
 - Synthetic metadata: `scenario_id`, `simulation_run_id`, `generator_type`
 - 상품·콘텐츠 축: `product_id`, `section_id`, `content_kind`, `position` 등
@@ -112,6 +113,11 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 
 정확한 컬럼과 nullable은 Processed 계약을 따른다. Event별 필수 properties가 없거나
 타입 변환이 불가능하면 `bad_events`로 분리한다.
+
+`tenant_id`는 `schema_version = 0.3.0-draft`부터 Envelope에 실린다. `0.2.0-draft`
+Event에는 없으므로 컬럼이 NULL이며 값을 추정해 채우지 않는다. 상품 브랜드 `brand_id`는
+`dim_product` Join 파생이라 격리 key로 쓰지 않는다. 두 값을 서로 대체하면 상품이 없는
+Event에서 격리가 깨진다.
 
 ### 4.4 `source`와 Synthetic 처리
 
