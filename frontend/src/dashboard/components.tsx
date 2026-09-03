@@ -92,22 +92,37 @@ export function Kpi({
 }
 
 /** 가로 막대 목록. 최댓값 기준 상대 폭 */
+/**
+ * 순위 목록.
+ *
+ * 막대가 주인공이 아니다. 상위 다섯 개의 값은 대개 서로 비슷해서(872 · 799 · 796 …)
+ * 막대 길이로는 차이를 못 읽는다. 길게 늘린 막대는 가로 공간만 먹고 답을 안 준다.
+ * 그래서 **이름과 숫자를 앞세우고 막대는 짧게 옆에 둔다.**
+ *
+ * 이름도 둘로 나눈다. "브랜드 — 상품명" 을 한 줄에 붙이면 폭이 모자라 상품명이 잘리는데,
+ * 정작 알아야 할 것이 상품명이다. 상품명을 위에 크게, 브랜드를 아래 작게 둔다.
+ */
 export function BarList({
   items,
   format,
+  rank = false,
 }: {
-  items: Array<{ label: string; value: number; hint?: string }>;
+  items: Array<{ label: string; value: number; hint?: string; sub?: string }>;
   format?: (value: number) => string;
+  /** 순위 번호를 붙인다. TOP N 목록에만 쓰고 분포 목록에는 쓰지 않는다 */
+  rank?: boolean;
 }) {
   const max = Math.max(1, ...items.map((item) => item.value));
   return (
-    <ul className="bars">
-      {items.map((item) => (
+    <ul className={`bars${rank ? ' bars--rank' : ''}`}>
+      {items.map((item, index) => (
         <li key={item.label} className="bars__row">
-          <span className="bars__label" title={item.label}>
-            {item.label}
+          {rank ? <span className="bars__rank">{index + 1}</span> : null}
+          <span className="bars__name">
+            <b title={item.label}>{item.label}</b>
+            {item.sub ? <small title={item.sub}>{item.sub}</small> : null}
           </span>
-          <span className="bars__track">
+          <span className="bars__track" aria-hidden="true">
             <span className="bars__fill" style={{ width: `${(item.value / max) * 100}%` }} />
           </span>
           <span className="bars__value">

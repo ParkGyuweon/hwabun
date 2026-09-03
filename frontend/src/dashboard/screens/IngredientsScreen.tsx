@@ -15,19 +15,23 @@ export default function IngredientsScreen({
 
   return (
     <div className="stack">
-      <Panel title="상품 선택" aside="성분 정보는 데이터셋 실측">
-        <select
-          value={product.product_id}
-          onChange={(e) => onProductChange(e.target.value)}
-          aria-label="상품 선택"
-        >
-          {products.map((p) => (
-            <option key={p.product_id} value={p.product_id}>
-              {p.brand_name} — {p.product_name}
-            </option>
-          ))}
-        </select>
-      </Panel>
+      <div className="scope">
+        <label className="scope__field">
+          <span className="scope__label">상품 선택</span>
+          <select
+            value={product.product_id}
+            onChange={(e) => onProductChange(e.target.value)}
+            aria-label="상품 선택"
+          >
+            {products.map((p) => (
+              <option key={p.product_id} value={p.product_id}>
+                {p.product_name} — {p.brand_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="scope__meta">성분 정보는 데이터셋 실측</p>
+      </div>
 
       <div className="grid grid--kpi">
         <Kpi label="전체 성분 수" value={fmt.int(stats.totalCount)} source="real" />
@@ -89,10 +93,12 @@ export default function IngredientsScreen({
             )
             .slice(0, 10)
             .map((m) => ({
-              label: `${m.product.brand_name} — ${m.product.product_name}`,
+              label: m.product.product_name,
+              sub: m.product.brand_name,
               value: Math.round(m.ingredientViewRate * m.detailViews),
               hint: fmt.pct(m.ingredientViewRate, 0),
             }))}
+          rank
           format={fmt.compact}
         />
         <p className="note">

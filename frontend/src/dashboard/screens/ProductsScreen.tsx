@@ -16,11 +16,13 @@ export default function ProductsScreen() {
             .sort((a, b) => b.addToCart / b.detailViews - a.addToCart / a.detailViews)
             .slice(0, 10)
             .map((m) => ({
-              label: `${m.product.brand_name} — ${m.product.product_name}`,
+              label: m.product.product_name,
+              sub: m.product.brand_name,
               value: (m.addToCart / m.detailViews) * 100,
               hint: `표본 ${fmt.compact(m.detailViews)}`,
             }))}
           format={(v) => `${v.toFixed(1)}%`}
+          rank
         />
         <p className="note">상세 조회 200건 미만 상품은 제외했다. 표본이 작으면 비율이 요동친다.</p>
       </Panel>

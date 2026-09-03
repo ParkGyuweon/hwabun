@@ -257,13 +257,86 @@ body {
 
 /* ---------- 자료 ---------- */
 
+/* ---------- 순위 목록 ----------
+ *
+ * 상위 다섯 개의 값은 대개 비슷해서(872 · 799 · 796 …) 막대 길이로는 차이를 못 읽는다.
+ * 길게 늘린 막대는 가로 공간만 먹고 답을 안 준다. 그래서 순위·이름·숫자를 앞세우고
+ * 막대는 짧게 옆에 둔다. 막대는 이제 대략의 감을 주는 보조 표시다.
+ */
+
+.bars {
+  gap: 1px;
+}
+
+.bars__row {
+  grid-template-columns: minmax(0, 1fr) 116px 74px;
+  gap: 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.bars--rank .bars__row {
+  grid-template-columns: 18px minmax(0, 1fr) 116px 74px;
+  gap: 10px 14px;
+}
+
+.bars__row:hover {
+  background: var(--ground);
+}
+
+.bars__rank {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* 상품명이 주인공, 브랜드는 아래 작게. 한 줄에 붙이면 정작 상품명이 잘린다 */
+.bars__name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.bars__name b {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bars__name small {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .bars__track {
-  height: 8px;
+  height: 6px;
   background: var(--line-soft);
 }
 
-.bars__label {
+.bars__value {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--ink);
+  min-width: 0;
+}
+
+.bars__value em {
+  display: block;
+  margin: 1px 0 0;
+  font-size: 10.5px;
+  font-weight: 400;
 }
 
 .funnel__bar {
@@ -419,4 +492,67 @@ table.data tr:hover td {
   .main__head h1 {
     font-size: 28px;
   }
+}
+
+/* ==========================================================================
+   범위 바 — 화면 맨 위의 상품 선택
+   패널로 감싸면 셀렉트 하나짜리 빈 카드가 되고, 폭을 다 쓰면 브라우저가 띄우는
+   목록도 화면을 가로지른다. 얇은 줄 하나로 줄이고 셀렉트에 상한을 준다.
+   ========================================================================== */
+
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--lift);
+}
+
+.scope__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.scope__label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.scope select {
+  min-width: 0;
+  width: 100%;
+  max-width: 400px;
+  padding: 7px 30px 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+
+.scope__meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.scope__note {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
 }

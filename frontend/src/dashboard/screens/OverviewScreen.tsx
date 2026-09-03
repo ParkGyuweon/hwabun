@@ -79,10 +79,12 @@ export default function OverviewScreen({ days }: { days: number }) {
       >
         <BarList
           items={productMetrics.slice(0, 5).map((m) => ({
-            label: `${m.product.brand_name} — ${m.product.product_name}`,
+            label: m.product.product_name,
+            sub: m.product.brand_name,
             value: m.interestScore,
             hint: `담기 ${m.addToCart}`,
           }))}
+          rank
         />
         <p className="note">
           관심도 = 행동별 발생 수 × 가중치. 가중치의 단일 출처는 frontend/src/types/log.ts 이며

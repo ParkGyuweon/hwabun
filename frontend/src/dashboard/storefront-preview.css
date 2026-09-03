@@ -11,109 +11,224 @@
  */
 
 /* ==========================================================================
-   두 열 배치
+   두 열 — 왼쪽 미리보기, 오른쪽 컨트롤 레일
    ========================================================================== */
 
+.onboard {
+  padding: 32px 20px 64px;
+}
+
 .onboard__card {
-  width: min(1180px, 100%);
+  width: min(1200px, 100%);
+  gap: 20px;
+  padding: 26px 30px 22px;
+}
+
+.onboard__head {
+  gap: 14px;
+  align-items: center;
+}
+
+.onboard__head h1 {
+  font-size: 24px;
+  letter-spacing: -0.025em;
 }
 
 .onboard__split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
-  gap: 32px;
+  grid-template-columns: minmax(0, 1fr) 366px;
+  gap: 28px;
   align-items: start;
 }
 
 .onboard__preview {
   position: sticky;
-  top: 24px;
+  top: 20px;
+  min-width: 0;
+}
+
+.onboard__rail {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
 
-.onboard__options {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  min-width: 0;
+.onboard__rail .motif {
+  margin: 2px 0;
 }
 
-.onboard__opts {
+/* ---------- 축 한 줄 ---------- */
+
+.ax {
   display: grid;
-  gap: 8px;
-}
-
-.onboard__opts--2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.onboard__opts--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-/* 도식과 글을 가로로 놓는다. 크기·색 옵션은 좁아서 세로로 쌓는다 */
-.onboard__opt {
-  flex-direction: row;
+  grid-template-columns: 46px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  padding: 10px 11px;
-  border-radius: 12px;
 }
 
-.onboard__opt--stack,
-.onboard__opt--theme {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  text-align: center;
+.ax__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  letter-spacing: 0.01em;
+  text-align: right;
 }
 
-.onboard__opt-text {
+.ax__opts {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
-.onboard__opt-text strong {
-  margin-top: 0;
-  font-size: 13px;
+.ax__opts--wrap {
+  flex-wrap: wrap;
+}
+
+/*
+ * 옵션 하나. 설명은 안 적는다 — 손이 닿으면 레일 맨 아래 한 줄에 뜬다.
+ * 여덟 축에 설명을 다 달면 화면이 다시 세로로 길어진다.
+ */
+.ax__opt {
+  flex: 1 1 0;
+  min-width: 0;
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--ground);
+  color: var(--ink-faint);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.ax__opt em {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.ax__opt:hover {
+  background: var(--line-soft);
   color: var(--ink);
 }
 
-.onboard__opt-text > span {
-  font-size: 11px;
-  color: var(--ink-faint);
-  line-height: 1.4;
+.ax__opt.is-on {
+  background: var(--panel);
+  border-color: var(--brand);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px rgb(var(--brand-rgb) / 0.28);
 }
 
-.onboard__opt--stack .sfg,
-.onboard__opt--stack .onboard__opt-text {
-  align-self: center;
-  text-align: center;
+.ax__opt:focus-visible,
+.ax__preset:focus-visible,
+.ax__swatch:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
-.onboard__opt--stack .onboard__opt-text > span {
-  font-size: 10.5px;
-}
+/* ---------- 시작점 ---------- */
 
-.onboard__opt--theme {
-  padding: 9px 8px;
-}
-
-.onboard__opt--theme strong {
+.ax__preset {
+  appearance: none;
+  font: inherit;
   font-size: 12px;
-  margin-top: 0;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-soft);
 }
 
-.onboard__swatch {
-  height: 18px;
+.ax__preset:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
 }
 
-@media (max-width: 1080px) {
+.ax__preset.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+
+/* ---------- 색 ---------- */
+
+.ax__swatch {
+  appearance: none;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sw) 0 60%, var(--sw2) 60% 100%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.ax__swatch.is-on {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 0 0 2px var(--panel),
+    0 0 0 4px var(--ink);
+}
+
+/* ---------- 이름 ---------- */
+
+.ax--name .onboard__input {
+  width: 100%;
+  padding: 7px 11px;
+  font-size: 13.5px;
+  border-radius: 9px;
+}
+
+/* ---------- 설명 한 줄 ---------- */
+
+.onboard__hint {
+  min-height: 32px;
+  margin: 2px 0 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--ground);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ---------- 바닥 ---------- */
+
+.onboard__foot {
+  align-items: center;
+}
+
+.onboard__reset {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  margin-right: auto;
+  padding: 6px 2px;
+}
+
+.onboard__reset:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+@media (max-width: 1120px) {
   .onboard__split {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -129,41 +244,44 @@
 
 .sfg {
   flex: 0 0 auto;
-  width: 48px;
-  height: 34px;
-  padding: 4px;
+  width: 42px;
+  height: 26px;
+  padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--panel);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 
 .sfg__cells {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   grid-auto-rows: 1fr;
   min-height: 0;
 }
 
 .sfg__cells i,
-.sfg__rail {
+.sfg__rail,
+.sfg__dot {
   display: block;
   background: var(--line);
-  border-radius: 2px;
+  border-radius: 1.5px;
   min-height: 0;
 }
 
-.onboard__opt.is-active .sfg__cells i {
-  background: rgb(var(--brand-rgb) / 0.55);
+.ax__opt.is-on .sfg__cells i {
+  background: rgb(var(--brand-rgb) / 0.6);
 }
 
-.onboard__opt.is-active .sfg__rail {
-  background: rgb(var(--brand-rgb) / 0.3);
+.ax__opt.is-on .sfg__rail,
+.ax__opt.is-on .sfg__band,
+.ax__opt.is-on .sfg__dot {
+  background: var(--brand);
 }
 
-/* ---------- 배열 ---------- */
+/* 배열 */
 
 .sfg[data-kind='layout'][data-value='grid'] .sfg__cells {
   grid-template-columns: repeat(4, 1fr);
@@ -174,7 +292,7 @@
 }
 
 .sfg[data-kind='layout'][data-value='catalog'] {
-  grid-template-columns: 9px minmax(0, 1fr);
+  grid-template-columns: 7px minmax(0, 1fr);
 }
 
 .sfg[data-kind='layout'][data-value='catalog'] .sfg__cells {
@@ -185,20 +303,20 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* ---------- 기획전 위치: 진짜 화면과 같은 grid-area 방식 ---------- */
+/* 기획전 자리 — 진짜 화면과 같은 grid-area 방식 */
 
 .sfg[data-kind='promo'] {
   grid-template-areas:
     'band'
     'cells';
-  grid-template-rows: 8px minmax(0, 1fr);
+  grid-template-rows: 6px minmax(0, 1fr);
 }
 
 .sfg[data-kind='promo'] .sfg__band {
   grid-area: band;
-  border-radius: 2px;
-  background: var(--brand);
-  opacity: 0.6;
+  display: block;
+  border-radius: 1.5px;
+  background: var(--line);
 }
 
 .sfg[data-kind='promo'] .sfg__cells {
@@ -210,12 +328,12 @@
   grid-template-areas:
     'cells'
     'band';
-  grid-template-rows: minmax(0, 1fr) 8px;
+  grid-template-rows: minmax(0, 1fr) 6px;
 }
 
 .sfg[data-kind='promo'][data-value='side'] {
   grid-template-areas: 'cells band';
-  grid-template-columns: minmax(0, 1fr) 11px;
+  grid-template-columns: minmax(0, 1fr) 8px;
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -228,21 +346,211 @@
   display: none;
 }
 
-/* ---------- 크기 ---------- */
+/* 크기 */
 
 .sfg[data-kind='density'][data-value='airy'] .sfg__cells {
   grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
+  gap: 4px;
 }
 
 .sfg[data-kind='density'][data-value='cozy'] .sfg__cells {
   grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 
 .sfg[data-kind='density'][data-value='compact'] .sfg__cells {
   grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
+  gap: 1px;
+}
+
+/* 모서리 · 카드 */
+
+.sfg[data-kind='corner'] .sfg__cells,
+.sfg[data-kind='card'] .sfg__cells {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+}
+
+.sfg[data-kind='corner'][data-value='sharp'] .sfg__cells i {
+  border-radius: 0;
+}
+
+.sfg[data-kind='corner'][data-value='soft'] .sfg__cells i {
+  border-radius: 2.5px;
+}
+
+.sfg[data-kind='corner'][data-value='round'] .sfg__cells i {
+  border-radius: 999px;
+}
+
+.sfg[data-kind='card'] .sfg__cells i {
+  border-radius: 2.5px;
+}
+
+.sfg[data-kind='card'][data-value='line'] .sfg__cells i {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.ax__opt.is-on .sfg[data-kind='card'][data-value='line'] .sfg__cells i {
+  background: transparent;
+  border-color: var(--brand);
+}
+
+.sfg[data-kind='card'][data-value='shadow'] .sfg__cells i {
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+/* 헤더 — 로고 점의 자리와 띠 높이 */
+
+.sfg[data-kind='header'] {
+  grid-template-areas:
+    'dot'
+    'cells';
+  grid-template-rows: 7px minmax(0, 1fr);
+  align-items: center;
+}
+
+.sfg[data-kind='header'] .sfg__dot {
+  grid-area: dot;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.sfg[data-kind='header'] .sfg__cells {
+  grid-area: cells;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.sfg[data-kind='header'][data-value='center'] .sfg__dot {
+  justify-self: center;
+}
+
+.sfg[data-kind='header'][data-value='mini'] {
+  grid-template-rows: 5px minmax(0, 1fr);
+}
+
+.sfg[data-kind='header'][data-value='mini'] .sfg__dot {
+  width: 5px;
+  height: 5px;
+}
+
+/* 글꼴은 도형으로 못 보여준다. 글자를 그대로 보여준다 */
+
+.sfg--text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.sfg--text[data-value='serif'] {
+  font-family: 'Nanum Myeongjo', 'Batang', 'Apple SD Gothic Neo', serif;
+}
+
+.sfg--text[data-value='wide'] {
+  letter-spacing: 0.1em;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+/* ==========================================================================
+   끌어서 옮기기 — 기획전 덩어리
+   ========================================================================== */
+
+.sfp {
+  position: relative;
+}
+
+.sfp__grip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--ground);
+  color: var(--support);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: grab;
+  white-space: nowrap;
+}
+
+.sfp__promo {
+  cursor: grab;
+}
+
+.sfp__promo:hover .sfp__grip {
+  background: rgb(var(--brand-rgb) / 0.2);
+  color: var(--ink);
+}
+
+.sfp.is-dragging .sfp__promo {
+  opacity: 0.35;
+}
+
+/* 자리들. 끌기 시작할 때만 나타난다 */
+.sfp__zones {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 108px;
+  grid-template-rows: 72px minmax(0, 1fr) 72px;
+  grid-template-areas:
+    'top top side'
+    'off off side'
+    'bottom bottom side';
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+}
+
+.sfp__zone {
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sfp__zone[data-zone='top'] {
+  grid-area: top;
+}
+
+.sfp__zone[data-zone='side'] {
+  grid-area: side;
+}
+
+.sfp__zone[data-zone='bottom'] {
+  grid-area: bottom;
+}
+
+.sfp__zone[data-zone='off'] {
+  grid-area: off;
+  border-style: dotted;
+}
+
+.sfp__zone.is-current {
+  border-color: var(--brand);
+  color: var(--ink);
+  background: rgb(var(--brand-rgb) / 0.16);
+}
+
+.sfp__zone:hover {
+  border-color: var(--brand);
+  border-style: solid;
+  background: rgb(var(--brand-rgb) / 0.24);
+  color: var(--ink);
 }
 
 /* ==========================================================================
@@ -539,7 +847,7 @@
   font-style: normal;
   font-size: 7px;
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: var(--sfp-r-badge);
   color: #ffffff;
   background: var(--t-accent);
 }
@@ -596,6 +904,7 @@
   --sfp-r-img: min(7%, 10px);
   --sfp-r-card: 5px;
   --sfp-r-chip: 999px;
+  --sfp-r-badge: 3px;
   --sfp-card-line: var(--line-soft);
   --sfp-card-lift: none;
   --sfp-card-bg: transparent;
@@ -605,12 +914,14 @@
   --sfp-r-img: 0;
   --sfp-r-card: 0;
   --sfp-r-chip: 0;
+  --sfp-r-badge: 0;
 }
 
 .sfp[data-corner='round'] {
   --sfp-r-img: min(16%, 24px);
   --sfp-r-card: 11px;
   --sfp-r-chip: 999px;
+  --sfp-r-badge: 999px;
 }
 
 .sfp[data-card='shadow'] {

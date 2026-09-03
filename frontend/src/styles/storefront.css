@@ -132,6 +132,11 @@
   --sf-r-card: 12px;
   --sf-r-chip: 999px;
   --sf-r-input: 999px;
+  /*
+   * 배지는 축의 **가운데 단계**를 맡는다. 기본에서 이미 알약이면 '둥글게' 로 갈 데가
+   * 없어서 두 단계가 같아 보인다. 각지게 0 · 기본 8px · 둥글게 알약으로 벌린다.
+   */
+  --sf-r-badge: 8px;
   /* 카드 표면 — card 축 */
   --sf-card-line: var(--color-line);
   --sf-card-lift: none;
@@ -177,6 +182,10 @@
 .list__filters select,
 .list__sort select {
   border-radius: var(--sf-r-input);
+}
+
+.card__badge {
+  border-radius: var(--sf-r-badge);
 }
 
 /* ---------- 크기 ---------- */
@@ -276,6 +285,14 @@
  */
 :root[data-promo='off'] .list__promo {
   display: none;
+}
+
+/*
+ * 행 정의도 같이 줄인다. 숨기기만 하면 `'promo' 'catalog'` 두 행이 그대로 남아
+ * 빈 0px 행과 그 아래 64px 행 간격이 화면 맨 위에 구멍으로 보인다.
+ */
+:root[data-promo='off'] .list {
+  grid-template-areas: 'catalog';
 }
 
 /*
@@ -537,6 +554,7 @@
   --sf-r-card: 0px;
   --sf-r-chip: 0px;
   --sf-r-input: 0px;
+  --sf-r-badge: 0px;
 }
 
 :root[data-corner='round'] {
@@ -544,6 +562,7 @@
   --sf-r-card: 26px;
   --sf-r-chip: 999px;
   --sf-r-input: 999px;
+  --sf-r-badge: 999px;
 }
 
 /* 각진 쇼핑몰은 버튼까지 같이 각져야 한 벌로 읽힌다 */
@@ -607,4 +626,56 @@
 :root[data-font='wide'] .card__brand,
 :root[data-font='wide'] .card__name {
   letter-spacing: 0.05em;
+}
+
+/* ==========================================================================
+   헤더 — 로고 자리와 높이
+   섹션끼리 자리를 바꾸는 것이라 order 를 써도 된다. 로고·메뉴·계정에는 순위가 없다.
+   (순위가 있는 것은 상품 카드뿐이고, 그건 이 파일 어디서도 건드리지 않는다)
+   ========================================================================== */
+
+:root[data-header='center'] .site-header__main {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 62px;
+  gap: 16px;
+}
+
+:root[data-header='center'] .site-header__nav {
+  order: 1;
+  justify-content: flex-start;
+}
+
+:root[data-header='center'] .site-header__logo {
+  order: 2;
+  justify-self: center;
+}
+
+:root[data-header='center'] .site-header__account {
+  order: 3;
+  justify-self: end;
+}
+
+/* 얇게: 띠 배너를 빼고 높이를 줄인다. 첫 화면에 상품이 더 많이 들어온다 */
+:root[data-header='mini'] .site-header__promo {
+  display: none;
+}
+
+:root[data-header='mini'] .site-header__main {
+  height: 40px;
+  gap: 20px;
+}
+
+:root[data-header='mini'] .site-header__logo img {
+  width: 20px;
+  height: 20px;
+}
+
+:root[data-header='mini'] .site-header__logo span {
+  font-size: 13px;
+}
+
+:root[data-header='mini'] .site-header__nav {
+  font-size: 12.5px;
 }

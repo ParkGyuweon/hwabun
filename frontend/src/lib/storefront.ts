@@ -20,10 +20,16 @@
  *   corner   모서리 — 각지게 · 둥글게       sharp · soft · round
  *   card     카드 — 테두리 · 그림자 · 민무늬 line · shadow · plain
  *   font     글꼴 — 기본 · 명조 · 넓은 자간  sans · serif · wide
+ *   header   헤더 — 로고 자리와 높이         plain · center · mini
  *   theme    색                            9종
  *
- * 4 x 4 x 3 x 3 x 3 x 3 x 9 = 34,992 가지. 규칙은 축마다 한 벌씩,
+ * 4 x 4 x 3 x 3 x 3 x 3 x 3 x 9 = 104,976 가지. 규칙은 축마다 한 벌씩,
  * 전부 src/styles/storefront.css 안에 있다.
+ *
+ * 축이 여덟이면 고르는 화면이 서류가 된다. 그래서 **시작점(프리셋)** 을 따로 둔다.
+ * 하나 누르면 뼈대 축이 한 번에 정해지고, 거기서 마음에 안 드는 축만 손대면 된다.
+ * 색과 브랜드 이름은 프리셋이 건드리지 않는다 — 그건 브랜드마다 다른 것이지
+ * 스타일의 일부가 아니다.
  *
  * ## 이벤트를 건드리지 않는 이유
  *
@@ -51,6 +57,7 @@ export type StorefrontDensity = 'airy' | 'cozy' | 'compact';
 export type StorefrontCorner = 'sharp' | 'soft' | 'round';
 export type StorefrontCard = 'line' | 'shadow' | 'plain';
 export type StorefrontFont = 'sans' | 'serif' | 'wide';
+export type StorefrontHeader = 'plain' | 'center' | 'mini';
 export type StorefrontTheme =
   | 'bloom'
   | 'rose'
@@ -69,6 +76,7 @@ export interface StorefrontPrefs {
   corner: StorefrontCorner;
   card: StorefrontCard;
   font: StorefrontFont;
+  header: StorefrontHeader;
   theme: StorefrontTheme;
   /** 쇼핑몰 헤더에 표시되는 브랜드 이름. 비우면 BLOOM 워드마크 */
   brandName: string;
@@ -138,6 +146,12 @@ export const STOREFRONT_FONTS: Array<Option<StorefrontFont>> = [
   { key: 'wide', label: '넓게', desc: '자간을 넓혀 잡지처럼' },
 ];
 
+export const STOREFRONT_HEADERS: Array<Option<StorefrontHeader>> = [
+  { key: 'plain', label: '왼쪽 로고', desc: '로고 왼쪽, 메뉴 옆에. 가장 익숙하다' },
+  { key: 'center', label: '가운데 로고', desc: '로고를 가운데 세운다. 브랜드를 앞세울 때' },
+  { key: 'mini', label: '얇게', desc: '띠 배너를 빼고 높이를 줄인다. 상품이 먼저 보인다' },
+];
+
 /**
  * 색 9종.
  *
@@ -160,6 +174,57 @@ export const STOREFRONT_THEMES: Array<
   { key: 'mono', label: '모노', desc: '무채색. 상품 사진 색만 살린다', swatch: ['#1d1d1f', '#6e6e73', '#e8e8ed'] },
 ];
 
+/** 프리셋이 정하는 축. 색과 이름은 뺀다 */
+export type StorefrontStyle = Omit<StorefrontPrefs, 'theme' | 'brandName'>;
+
+export const STOREFRONT_PRESETS: Array<{
+  key: string;
+  label: string;
+  desc: string;
+  style: StorefrontStyle;
+}> = [
+  {
+    key: 'clean',
+    label: '심플',
+    desc: '4열 그리드에 기획전이 맨 위. 무난하고 익숙하다',
+    style: { layout: 'grid', promo: 'top', density: 'cozy', corner: 'soft', card: 'line', font: 'sans', header: 'plain' },
+  },
+  {
+    key: 'magazine',
+    label: '매거진',
+    desc: '큰 사진 2열, 상자 없이 사진만. 각진 모서리에 명조 제목',
+    style: { layout: 'showcase', promo: 'top', density: 'airy', corner: 'sharp', card: 'plain', font: 'serif', header: 'center' },
+  },
+  {
+    key: 'boutique',
+    label: '부티크',
+    desc: '기획전을 옆에 세우고 카드를 크게. 둥근 모서리와 그림자',
+    style: { layout: 'showcase', promo: 'side', density: 'airy', corner: 'round', card: 'shadow', font: 'wide', header: 'center' },
+  },
+  {
+    key: 'catalog',
+    label: '카탈로그',
+    desc: '왼쪽 필터에 4열 촘촘한 목록. 기획전 없이 상품만',
+    style: { layout: 'catalog', promo: 'off', density: 'compact', corner: 'sharp', card: 'line', font: 'sans', header: 'mini' },
+  },
+  {
+    key: 'market',
+    label: '마켓',
+    desc: '한 줄에 하나씩 훑어보고 기획전은 맨 아래',
+    style: { layout: 'list', promo: 'bottom', density: 'compact', corner: 'soft', card: 'line', font: 'sans', header: 'plain' },
+  },
+];
+
+/** 지금 설정이 어느 프리셋과 같은가. 없으면 null (직접 고른 조합) */
+export function matchPreset(prefs: StorefrontPrefs): string | null {
+  const found = STOREFRONT_PRESETS.find((preset) =>
+    (Object.keys(preset.style) as Array<keyof StorefrontStyle>).every(
+      (axis) => preset.style[axis] === prefs[axis],
+    ),
+  );
+  return found?.key ?? null;
+}
+
 export const DEFAULT_STOREFRONT: StorefrontPrefs = {
   layout: 'grid',
   promo: 'top',
@@ -167,6 +232,7 @@ export const DEFAULT_STOREFRONT: StorefrontPrefs = {
   corner: 'soft',
   card: 'line',
   font: 'sans',
+  header: 'plain',
   theme: 'bloom',
   brandName: '',
 };
@@ -197,6 +263,7 @@ export function loadStorefront(): StorefrontPrefs | null {
       corner: keyOf(STOREFRONT_CORNERS, p.corner, DEFAULT_STOREFRONT.corner),
       card: keyOf(STOREFRONT_CARDS, p.card, DEFAULT_STOREFRONT.card),
       font: keyOf(STOREFRONT_FONTS, p.font, DEFAULT_STOREFRONT.font),
+      header: keyOf(STOREFRONT_HEADERS, p.header, DEFAULT_STOREFRONT.header),
       theme: keyOf(STOREFRONT_THEMES, p.theme, DEFAULT_STOREFRONT.theme),
       brandName: typeof p.brandName === 'string' ? p.brandName : '',
     };
@@ -247,6 +314,7 @@ export function storefrontEventProps(prefs: StorefrontPrefs): Record<string, str
     storefront_corner: prefs.corner,
     storefront_card: prefs.card,
     storefront_font: prefs.font,
+    storefront_header: prefs.header,
     storefront_theme: prefs.theme,
   };
 }
@@ -263,5 +331,6 @@ export function applyStorefront(prefs: StorefrontPrefs): void {
   root.dataset.corner = prefs.corner;
   root.dataset.card = prefs.card;
   root.dataset.font = prefs.font;
+  root.dataset.header = prefs.header;
   root.dataset.theme = prefs.theme;
 }
