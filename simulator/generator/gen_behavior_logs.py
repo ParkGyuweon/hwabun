@@ -60,6 +60,9 @@ BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 PERSONA_DIR = os.path.join(ROOT, "simulator", "personas", "data")
 PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
+FRONTEND_PRODUCTS = os.path.join(ROOT, "frontend", "src", "mocks", "products.sample.json")
+PROPERTIES_CONTRACT = os.path.join(ROOT, "contracts", "event-properties-schema.md")
+sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 import behavior_weights as BW
 
@@ -80,6 +83,9 @@ DEFAULT_SCENARIO_ID = "normal_day"
 DEFAULT_GENERATOR_TYPE = "python_batch"
 NOW = datetime(2026, 8, 28, 12, 0, 0)
 CHECKPOINT_MS = 15000                # 목록 체류 중 dwell 재발화 주기
+LIST_IMPRESSION_HOLD_MS = 300
+RECOMMENDATION_IMPRESSION_HOLD_MS = 1000
+IMPRESSION_VISIBLE_RATIO = 0.5
 
 
 def default_simulation_run_id(now=None):
@@ -347,10 +353,9 @@ class Emitter:
 
     def emit(self, name, _pid=None, **props):
         self.n += 1
-        properties = {
-            k: v for k, v in props.items()
-            if v is not None or k in ("content_kind", "content_ref", "section_id")
-        }
+        # 선택 property가 없으면 key 자체를 보내지 않는다. ``string``으로 선언된
+        # 선택값을 null로 보내는 것은 "미제공"이 아니라 타입 위반이다.
+        properties = {k: v for k, v in props.items() if v is not None}
         # These fields are required for every synthetic Event.  Assign rather
         # than setdefault so an event-specific property cannot contradict the
         # run metadata carried by its Emitter.
@@ -381,7 +386,18 @@ class Emitter:
 
 
 # ── 상세 페이지 방문 ──────────────────────────────────────────────────────
-def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=SCENARIO):
+def selectable_variants(product):
+    """Return variants that can produce the same selection event as the Frontend.
+
+    VariantPicker starts with the first variant selected and does not emit when it is
+    clicked again, so only the remaining variants are valid simulated selections.
+    """
+
+    return list(product.get("variants") or [])[1:]
+
+
+def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
+                 entry_source, SC=SCENARIO):
     """depth_target = 도달할 최대 스크롤 %. 10% 단위로 로그를 남긴다"""
     e.new_page("product_detail")
     e.tick(300, 1200)
@@ -403,7 +419,7 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
         if rng.random() < SC["p_scroll_pause"]:
             e.emit("scroll_pause", gid, section_id=section,
                    content_kind=blocks[0][0], content_ref=blocks[0][1],
-                   visible_content_kinds=",".join(b[0] for b in blocks[:3] if b[0]),
+                   visible_content_kinds=[b[0] for b in blocks[:3] if b[0]],
                    depth_percent=depth, direction="down",
                    distance_px=int(rng.integers(100, 1500)),
                    duration_ms=int(rng.integers(400, 2500)),
@@ -435,7 +451,9 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
                 e.tick(20, 120)
                 e.emit("recommendation_impression", rid,
                        recommendation_id=rec_batch, list_id="similar_products",
-                       algorithm="same_category_v0", position=pos)
+                       algorithm="same_category_v0", position=pos,
+                       hold_ms=RECOMMENDATION_IMPRESSION_HOLD_MS,
+                       visible_ratio=IMPRESSION_VISIBLE_RATIO)
                 # 화면에 얼마나 머물렀나. 위쪽일수록 오래 보인다
                 if rng.random() < SC["p_impression_dwell"]:
                     e.emit("impression_dwell", rid,
@@ -458,7 +476,7 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
         if engaged and section == "about_product":
             if rng.random() < SC["p_accordion"]:
                 e.tick(); e.emit("accordion_toggle", gid, section_id=section,
-                                 content_kind="ingredient_list", open=True)
+                                 content_kind="ingredient_list", action="expand")
             if rng.random() < SC["p_text_selection"]:
                 tlen = int(rng.integers(20, 200))
                 e.tick(); e.emit("text_selection", gid, section_id=section,
@@ -484,16 +502,19 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
             for idx in range(int(rng.integers(2, 8))):
                 e.tick(150, 800)
                 e.emit("media_view", gid, media_index=idx + 1, media_type="image")
-            if rng.random() < SC["p_variant_select"]:
-                e.tick(); e.emit("variant_select", gid, section_id=section,
-                                 content_kind="variant_option")
+            variants = selectable_variants(product)
+            if variants and rng.random() < SC["p_variant_select"]:
+                variant = variants[int(rng.integers(0, len(variants)))]
+                e.tick(); e.emit("variant_select", gid,
+                                 sku_id=variant["sku_id"], label=variant["label"],
+                                 section_id=section, content_kind="variant_option")
         if engaged and section == "reviews":
             for _ in range(int(rng.integers(1, 5))):
                 e.tick(); e.emit("review_expand", gid, section_id=section,
-                                 content_kind="user_review")
+                                 content_kind="user_review", target="review_text")
             if rng.random() < SC["p_review_filter"]:
                 e.tick(); e.emit("review_filter_apply", gid, section_id=section,
-                                 content_kind="review_filter", filter_kind="same_skin_type")
+                                 content_kind="review_filter", filter="same_skin_type")
         # 되돌아 읽기
         if engaged and rng.random() < SC["p_scroll_backtrack"]:
             e.tick(); e.emit("scroll_backtrack", gid, section_id=section,
@@ -504,12 +525,13 @@ def visit_detail(e, gid, rec_ids, rng, depth_target, engaged, entry_source, SC=S
 
 
 # ── 목록 페이지 체류 ──────────────────────────────────────────────────────
-def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
+def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
+                SC=SCENARIO, qrng=None):
     e.new_page("product_list")
     e.tick(300, 1200)
     if first:
         e.emit("session_start")
-    e.emit("page_view", navigation_source="in_app" if not first else "direct")
+    e.emit("page_view", navigation_source="in_app" if not first else "session_start")
 
     blocks = []
     for section, kind in LIST_LAYOUT:
@@ -525,13 +547,14 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
     # 목록 노출 — 화면에 보이는 상품 전부
     for pos, g in enumerate(grid, 1):
         e.tick(20, 120)
-        e.emit("product_impression", None, product_id=g, position=pos,
-               list_id="list_grid")
+        e.emit("product_impression", g, position=pos, list_id="list_grid",
+               hold_ms=LIST_IMPRESSION_HOLD_MS,
+               visible_ratio=IMPRESSION_VISIBLE_RATIO)
         # 노출 대비 클릭을 재려면 "얼마나 보였나" 가 있어야 한다. 가중 0 이다.
         # 노출 정책은 여기에 싣는다 — 계약이 impression_dwell 의 선택 필드로
         # algorithm 을 허용한다 (product_impression 에는 그 필드가 없다).
         if rng.random() < SC["p_impression_dwell"]:
-            e.emit("impression_dwell", None, product_id=g, position=pos,
+            e.emit("impression_dwell", g, position=pos,
                    list_id="list_grid", algorithm=EXPOSURE_NAME,
                    visible_ms=int(rng.integers(400, 5000) / (1 + 0.12 * (pos - 1))))
     # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
@@ -546,12 +569,17 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
             # 프론트도 목록에서 열면 entry_source=list_grid 를 싣는다
             e.emit("quick_look", g, position=pos,
                    entry_source="list_grid", list_id="list_grid")
-            n_var = 0
-            if qrng.random() < SC["p_ql_variant"]:
-                n_var = int(qrng.integers(1, 4))
-                for _ in range(n_var):
+            variants = selectable_variants(catalog[g])
+            selected_variants = []
+            if variants and qrng.random() < SC["p_ql_variant"]:
+                n_var = min(int(qrng.integers(1, 4)), len(variants))
+                indexes = qrng.choice(len(variants), size=n_var, replace=False)
+                selected_variants = [variants[int(index)] for index in np.atleast_1d(indexes)]
+                for variant in selected_variants:
                     e.tick(200, 1200, rng=qrng)
-                    e.emit("variant_select", g, entry_source="quick_look")
+                    e.emit("variant_select", g, sku_id=variant["sku_id"],
+                           label=variant["label"], entry_source="quick_look")
+            n_var = len(selected_variants)
             added = qrng.random() < SC["p_ql_add"]
             wished = qrng.random() < SC["p_ql_wish"]
             if added:
@@ -562,15 +590,15 @@ def browse_list(e, promo, grid, rng, dwell_ms, first, SC=SCENARIO, qrng=None):
                 e.emit("wishlist_toggle", g, action="add", entry_source="quick_look")
             dwell = int(qrng.integers(1200, 25000))
             e.tick(200, 1500, rng=qrng)
-            # 닫는 방식. 프론트는 backdrop / esc / button / navigate 를 남긴다
+            # 닫는 방식. Frontend QuickLook과 같은 enum을 사용한다.
             e.emit("quick_look_close", g,
-                   close_reason=str(qrng.choice(["backdrop", "esc", "button", "navigate"],
+                   close_reason=str(qrng.choice(["backdrop", "escape", "close_button", "open_detail"],
                                                 p=[0.42, 0.13, 0.35, 0.10])),
                    dwell_ms=dwell, variants_viewed=n_var,
                    added_to_cart=bool(added), wishlisted=bool(wished))
 
     if rng.random() < SC["p_list_filter"]:
-        e.tick(); e.emit("filter_change", filter_kind="category")
+        e.tick(); e.emit("filter_change", filter_kind="category", filter_value="all")
     if rng.random() < SC["p_list_sort"]:
         e.tick(); e.emit("sort_change", sort_key="popular")
 
@@ -614,6 +642,36 @@ def post_events(base_url, events, rps=0, timeout=40):
     st = client.stats
     log(client.summary())
     return st["sent"], st["dropped"] + st["gave_up"], time.time() - t0
+
+
+def validate_property_contract(events):
+    """Fail before file output or HTTP delivery when generated properties drift."""
+
+    from contracts.coverage_report import check_properties, parse_property_contract
+
+    spec, enums, source = parse_property_contract(PROPERTIES_CONTRACT)
+    if source is None:
+        raise RuntimeError(f"Properties contract not found: {PROPERTIES_CONTRACT}")
+
+    result = check_properties(events, spec, enums)
+    violation_count = sum(result["events_with_violations"].values())
+    if violation_count:
+        details = []
+        if result["missing"]:
+            (event_name, field), count = result["missing"][0]
+            details.append(f"missing {event_name}.{field} ({count})")
+        if result["invalid_types"]:
+            (event_name, field, expected, actual), count = result["invalid_types"][0]
+            details.append(
+                f"type {event_name}.{field} {expected}/{actual} ({count})"
+            )
+        if result["invalid_enums"]:
+            (event_name, field, value), count = result["invalid_enums"][0]
+            details.append(f"enum {event_name}.{field}={value} ({count})")
+        raise ValueError(
+            f"Event Properties 계약 위반 {violation_count:,}건: " + "; ".join(details)
+        )
+    return result
 
 
 # ── 노출 정책 ────────────────────────────────────────────────────────────
@@ -734,11 +792,12 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         # new_page / page_view 는 visit_detail 이 낸다. 여기서 또 내면 상세 진입 한 번에
         # page_view 가 2건, page_view_id 가 2개 생겨 프론트와 어긋난다.
         # 시드 표시는 Emitter가 모든 seed Event에 seeded=true로 남긴다.
-        visit_detail(e, g, [], rng,
+        visit_detail(e, g, catalog[g], [], rng,
                      depth_target=int(rng.choice(SC["neg_seed_depth_choices"])),
                      engaged=False, entry_source="direct", SC=SC)
         e.tick(); e.emit("scroll_backtrack", g, section_id="about_product",
-                         depth_percent=int(rng.integers(10, 30)), seeded=True)
+                         depth_percent=int(rng.integers(10, 30)),
+                         distance_px=int(rng.integers(150, 400)), seeded=True)
         if rng.random() < SC["neg_seed_p_rage"]:
             e.tick(); e.emit("rage_click", g, section_id="product_hero",
                              click_count=int(rng.integers(3, 6)), seeded=True)
@@ -814,7 +873,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             grid = list(rng.choice(cards, size=min(PAGE_SIZE, len(cards)),
                                    replace=False))
             grid = [g] + [x for x in grid if x != g]
-            browse_list(e, promo, grid[:PAGE_SIZE], rng,
+            browse_list(e, promo, grid[:PAGE_SIZE], catalog, rng,
                         dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0),
                         SC=SC, qrng=qrng)
             e.tick(); e.emit("product_click", g,
@@ -845,7 +904,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             depth = SC["deep_bounce_depth"]
         else:
             depth = int(rng.choice(SC["bounce_depth_choices"]))
-        visit_detail(e, g, rec_ids, rng, depth_target=depth,
+        visit_detail(e, g, catalog[g], rec_ids, rng, depth_target=depth,
                      engaged=is_target, entry_source="in_app", SC=SC)
         if hidden is not None:
             if wish:
@@ -897,7 +956,12 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
 
     e.new_page("product_list")
     e.tick(); e.emit("page_view", navigation_source="in_app")
-    e.emit("exit_summary", products_viewed=len(route),
+    exit_started = e.t
+    e.tick(300, 1500)
+    e.emit("exit_summary",
+           dwell_ms=int((e.t - exit_started).total_seconds() * 1000),
+           max_scroll_percent=0,
+           products_viewed=len(route),
            converted=True, wishlisted=liked)
     return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
 
@@ -917,9 +981,21 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         f"generator_type={context.generator_type}"
     )
     prods = json.load(open(PRODUCTS, encoding="utf-8"))
-    catalog = {p["product_id"]: {"cat": p["secondary_category"], "name": p["product_name"],
-                                 "price": p["price_usd"], "n": p["_review_stats"]["review_count"]}
-               for p in prods}
+    frontend_products = {
+        product["product_id"]: product
+        for product in json.load(open(FRONTEND_PRODUCTS, encoding="utf-8"))
+    }
+    catalog = {
+        p["product_id"]: {
+            "cat": p["secondary_category"],
+            "name": p["product_name"],
+            "price": p["price_usd"],
+            "n": p["_review_stats"]["review_count"],
+            "sku_id": frontend_products[p["product_id"]]["sku_id"],
+            "variants": frontend_products[p["product_id"]].get("variants") or [],
+        }
+        for p in prods
+    }
     by_cat = {}
     for g, v in catalog.items():
         by_cat.setdefault(v["cat"], []).append(g)
@@ -983,6 +1059,9 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         if not limit and (i + 1) % 2000 == 0:
             log(f"  {i+1:,}명 / 이벤트 {len(sink):,}건")
     log(f"이벤트 {len(sink):,}건 — {time.time()-t0:.1f}초")
+
+    property_result = validate_property_contract(sink)
+    log(f"Event Properties 계약 {property_result['checked']:,}건 통과")
 
     if out:
         with open(out, "w", encoding="utf-8") as f:
