@@ -155,7 +155,8 @@ def check_enums(tables, rep):
         scan("persona_attribute_affinity_input", col, allowed, col in ("skin_type", "skin_tone"))
 
     scan("persona_review_history", "evaluation_role", ROLE_ENUM, True)
-    scan("persona_holdout_target", "target_label", LABEL_ENUM, True)
+    scan("persona_profile", "latest_review_label", LABEL_ENUM, True)
+    scan("persona_holdout_target", "target_label", {hr.POSITIVE}, True)   # §11-11
     scan("persona_evaluation_split", "evaluation_split", SPLIT_ENUM, True)
     scan("bridge_persona_segment", "segment_type", set(SEGMENT_TYPES), True)   # §11-8
     scan("persona_profile", "profile_scope", {"full"}, True)
@@ -205,6 +206,10 @@ def check_contract_11(tables, product_ids, rep):
         if missing:
             rep.fail("D.11-6", f"{name}.{col} 이 Product Feature 에 없음 {len(missing)}건 예: {sorted(missing)[:3]}")
 
+    for _, row in tables["persona_holdout_target"]:                        # §11-11
+        if not row.get("is_holdout_eligible"):
+            rep.fail("D.11-11", f"{row['persona_id']} is_holdout_eligible 이 true 가 아님")
+
     rep.note("§11-9·10(Simulation Run 일관성, PA/PC generator_type)은 Event 축 검증이라 "
              "이 산출물의 범위 밖이다. Event 계약 검증기가 담당한다.")
     rep.ok("D")
@@ -226,6 +231,11 @@ def check_leakage(tables, product_ids, personas_by_id, rep):
         if row["evaluation_role"] == hr.SEED:
             seed_reviews[row["persona_id"]].add(row["review_id"])
 
+    seed_dates = defaultdict(list)
+    for _, row in tables["persona_review_history"]:
+        if row["evaluation_role"] == hr.SEED and row.get("submission_time"):
+            seed_dates[row["persona_id"]].append(row["submission_time"])
+
     for _, row in tables["persona_holdout_target"]:
         pid = row["persona_id"]
         target = row["target_canonical_product_id"]
@@ -233,6 +243,14 @@ def check_leakage(tables, product_ids, personas_by_id, rep):
             rep.fail("E.leak-product", f"{pid} target 상품 {target} 이 seed 에도 있음")
         if row["target_review_id"] in seed_reviews.get(pid, ()):
             rep.fail("E.leak-review", f"{pid} target 리뷰가 seed 에도 있음")
+
+        # §11-12 시간 절단 — target 보다 나중에 쓴 리뷰는 seed 가 될 수 없다
+        target_date = row.get("target_submission_time")
+        if target_date:
+            later = [d for d in seed_dates.get(pid, ()) if d > target_date]
+            if later:
+                rep.fail("E.time-cut",
+                         f"{pid} target({target_date}) 이후 리뷰 {len(later)}건이 seed 에 있음")
 
     for _, row in tables["persona_profile_eval"]:
         persona = personas_by_id.get(row["persona_id"])
@@ -263,6 +281,17 @@ def check_leakage(tables, product_ids, personas_by_id, rep):
         if row["avg_rating_seed"] != expected_avg:
             rep.fail("E.eval-profile",
                      f"{row['persona_id']} avg_rating_seed={row['avg_rating_seed']} 기대={expected_avg}")
+
+    for _, row in tables["persona_profile"]:                                # §11-13
+        persona = personas_by_id.get(row["persona_id"])
+        if persona is None:
+            continue
+        _, dec = hr.classify(persona.get("reviews", []), product_ids)
+        expected = dec["latest_review_label"] if dec else None
+        if row["latest_review_label"] != expected:
+            rep.fail("E.latest-label",
+                     f"{row['persona_id']} latest_review_label={row['latest_review_label']!r} "
+                     f"기대={expected!r}")
     rep.ok("E")
 
 

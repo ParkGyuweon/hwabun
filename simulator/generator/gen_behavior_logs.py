@@ -1040,7 +1040,9 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         if hp is not None:
             seeds = [g for g in dict.fromkeys(r["group_id"] for r in p["reviews"])
                      if g in hp.index]
-            # target(마지막 긍정 리뷰)은 입력에서 빼고 점수를 만든다 — 누출 방지
+            # 마지막 상품을 입력에서 빼고 점수를 만든다 — 누출 방지.
+            # 평가의 target 정의(계약 §7.1)와 정확히 같지는 않은 근사다.
+            # 여기서 필요한 것은 "정답을 그대로 먹이지 않는다" 뿐이다
             scores = hp.score_all(p, seeds[:-1] if len(seeds) > 1 else seeds)
             hidden = {gid: float(scores[hp.index[gid]]) for gid in hp.index}
         r = gen_persona(

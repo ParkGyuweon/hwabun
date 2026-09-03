@@ -180,7 +180,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 
 중복이 있는 만큼 secondary 가중치를 tertiary보다 낮게(0.06 vs 0.11) 둡니다.
 
-> **주의:** `tertiary_category`는 12개 상품에서 원본이 비어 있어 `secondary_category` 값으로 채운 결과입니다. 상세 기준은 `Research/DATA_CLEANING.md`(개인 폴더) 5-2 참조.
+> **주의:** `tertiary_category`는 12개 상품에서 원본이 비어 있어 `secondary_category` 값으로 채운 결과입니다. 상세 기준은 `Research/docs/DATA_CLEANING.md`(개인 폴더) 5-2 참조.
 
 ### 2-2. highlights
 
@@ -476,7 +476,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
 
 ### 3-5. 어휘집 파일
 
-인코딩에 필요한 어휘·문서빈도·가중치는 [`product-feature-vocab.json`](product-feature-vocab.json)에 정의되어 있습니다. `batch/jobs/product_feature_job.py`가 이 파일을 읽어 인코딩합니다.
+인코딩에 필요한 어휘·문서빈도·가중치는 [`product-feature-vocab.json`](product-feature-vocab.json)에 정의되어 있습니다. `batch/jobs/product_encoder.py`가 이 파일을 읽어 인코딩하고, `batch/jobs/export_features.py`가 서빙 산출물로 내보냅니다.
 
 ```json
 {
@@ -598,8 +598,8 @@ CREATE TABLE product_feature (
 
 | 문서 | 내용 |
 |---|---|
-| `Research/DATA_CLEANING.md` | 상품 200개 선정·병합·결측 보완 기준 |
-| `Research/PERSONA_SAMPLING.md` | 페르소나 10,000명 층화추출 기준 |
+| `Research/docs/DATA_CLEANING.md` | 상품 200개 선정·병합·결측 보완 기준 |
+| `Research/docs/PERSONA_SAMPLING.md` | 페르소나 10,000명 층화추출 기준 |
 | [`recommendation-design.md`](../docs/ai/recommendation-design.md) | 추천 점수 설계 (이 벡터의 소비처) |
 
 **재현**

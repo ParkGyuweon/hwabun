@@ -21,7 +21,7 @@
     4. concern_from_reviews.npz   <- 1 + 리뷰 원본 (GPU. 임베딩)
     5. personas_9900/100.json     <- 1 + 리뷰 원본
     6. persona_style.json         <- 5
-    7. eval_metadata.jsonl        <- 5
+    7. eval_metadata.jsonl        <- 5   (PA 대조군 eval_metadata_agent.jsonl 포함)
     8. feature_sample.json + 문서 <- 1 2 3 4
     9. serving/ (3종)             <- 1 2 3 4 5
 
@@ -80,6 +80,11 @@ STEPS = [
     (7, "평가 seed/target 정본",
      ["batch/jobs/eval_metadata.py"],
      [os.path.join(DATA, "eval_metadata.jsonl")], False),
+    # PA 100명은 PC 9,900명의 대조군이라 **같은 규칙으로** 만들어야 한다.
+    # 여기에 넣어 두지 않으면 PC 만 재생성되고 두 파일의 정의가 갈린다
+    (7.5, "평가 seed/target 정본 (PA 100명 대조군)",
+     ["batch/jobs/eval_metadata.py", "--agent"],
+     [os.path.join(DATA, "eval_metadata_agent.jsonl")], False),
     (8, "인코딩 샘플 6개 + 문서",
      ["batch/ingest/build_feature_sample.py"],
      [os.path.join(DATA, "feature_sample.json")], False),
