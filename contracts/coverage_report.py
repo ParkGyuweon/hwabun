@@ -335,6 +335,20 @@ def check_properties(events, spec, enums):
             if field not in props or field in type_errors:
                 continue
             value = props[field]
+
+            # 배열 원소에 걸리는 enum 이 있다 (purchase_reason_select.reasons).
+            # 계약이 string[] 로 선언했으면 원소 하나하나를 대조한다.
+            if rule["types"].get(field) == "string[]":
+                if not isinstance(value, list):
+                    invalid_types[(name, field, "string[]", _actual_type(value))] += 1
+                    type_errors.append(field)
+                    continue
+                bad = [v for v in value if v not in allowed]
+                if bad:
+                    invalid_enums[(name, field, str(bad[0]))] += 1
+                    enum_errors.append(field)
+                continue
+
             if not isinstance(value, str):
                 invalid_types[(name, field, "string", _actual_type(value))] += 1
                 type_errors.append(field)

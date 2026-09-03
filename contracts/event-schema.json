@@ -74,7 +74,10 @@
         "text_copy",
         "hover_dwell",
         "rage_click",
-        "dead_click"
+        "dead_click",
+        "begin_checkout",
+        "purchase",
+        "purchase_reason_select"
       ]
     },
     "intent": {
@@ -365,7 +368,8 @@
               "review_expand",
               "review_filter_apply",
               "text_selection",
-              "text_copy"
+              "text_copy",
+              "purchase_reason_select"
             ]
           }
         },
@@ -411,7 +415,9 @@
               "wishlist_toggle",
               "quantity_change",
               "add_to_cart",
-              "view_cart"
+              "view_cart",
+              "begin_checkout",
+              "purchase"
             ]
           }
         },
