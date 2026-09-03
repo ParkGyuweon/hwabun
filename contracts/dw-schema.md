@@ -33,6 +33,8 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 | `search_event_fact` | `event_id` | 검색 집계 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 체류 검증·재집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 콘텐츠 관심 집계 |
+| `purchase_fact` | `order_id + product_id` | 구매·매출·재구매 집계 |
+| `purchase_reason_fact` | `order_id + reason` | 구매 이유 집계, 행동 추론 대조 |
 | `funnel_session_fact` | `session_id + product_id` | 단계 도달·이탈 집계 |
 | `persona_behavior_feature_delta` | `event_id + user_id + product_id` | Persona 관심도 집계 |
 | `bad_events` | 격리 Event 1건 | Spark에서 관측한 오류 집계 |
@@ -186,7 +188,7 @@ source = event-properties-schema.md
 
 ```text
 key = event_date_kst + tenant_id + product_id + actor_type + source + scenario_id + simulation_run_id
-input = product_event_fact, persona_behavior_feature_delta, dim_product
+input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_product
 ```
 
 | column | type | nullable | 설명 |
@@ -332,7 +334,9 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
    KPI 의미를 바꾸지 않는다.
 3. `category_id`, `brand_id`는 `dim_product`에서 보강한 집계 시점 스냅샷이다.
 4. 주문 총액 `order_value`를 explode된 상품 row에서 합산하지 않는다. 상품 매출은
-   `purchase` Event의 `item_revenue`만 합산한다.
+   `purchase_fact.item_revenue`만 합산한다. `item_revenue`는 Event가 운반하지 않고
+   `quantity * unit_price`로 Processed에서 파생한 값이다.
+   `purchase_count`는 `order_id` 기준 고유 주문 수이며 상품 row 수가 아니다.
 5. `generator_type`, `scenario_id`, `simulation_run_id`는 Processed에서 승격된
    synthetic metadata를 사용한다.
 6. 모든 Mart는 `tenant_id`를 집계 축으로 포함하고 소비자는 이 값으로만 격리한다.
