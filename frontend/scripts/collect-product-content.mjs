@@ -145,8 +145,10 @@ async function findArchived(productId) {
       // 상품 JSON 의 구조와 skuId 는 같다.
       .filter(([url]) => SEPHORA_PRODUCT.test(url ?? ''))
       // 주소 끝의 상품 ID 로 같은 상품인지 확인한다. 와일드카드로 찾은 경우
-      // 이름이 비슷한 다른 상품이 섞여 들어올 수 있다
-      .filter(([url]) => url.toLowerCase().includes(low))
+      // 이름이 비슷한 다른 상품이 섞여 들어올 수 있다.
+      // 주소를 아는 상품은 건너뛴다 — 주소표가 곧 신뢰 소스이고, 재등록으로
+      // ID 가 바뀐 상품(P456207 -> P459718)은 주소에 원래 ID 가 없다.
+      .filter(([url]) => known || url.toLowerCase().includes(low))
       .map(([url, timestamp]) => ({ url, timestamp }));
 
     if (rows.length > 0) break;
