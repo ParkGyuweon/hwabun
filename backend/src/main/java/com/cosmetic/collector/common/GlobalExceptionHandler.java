@@ -2,6 +2,8 @@ package com.cosmetic.collector.common;
 
 import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
+import com.cosmetic.collector.event.api.validation.InvalidEventBatchException;
+import com.cosmetic.collector.event.api.validation.EventBatchTooLargeException;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,6 +59,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new ErrorResponse(
                 "MALFORMED_JSON",
                 "JSON 형식 또는 시간 값이 올바르지 않습니다.",
+                List.of()
+        ));
+    }
+
+    @ExceptionHandler(InvalidEventBatchException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBatch(InvalidEventBatchException exception) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(
+                "INVALID_EVENT_BATCH",
+                "이벤트 배치 형식이 올바르지 않습니다.",
+                List.of()
+        ));
+    }
+
+    @ExceptionHandler(EventBatchTooLargeException.class)
+    public ResponseEntity<ErrorResponse> handleBatchTooLarge(EventBatchTooLargeException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ErrorResponse(
+                "EVENT_BATCH_TOO_LARGE",
+                "한 요청에는 이벤트를 최대 100건까지 담을 수 있습니다.",
                 List.of()
         ));
     }

@@ -181,6 +181,27 @@ class EventValidationTest {
                 .contains("properties");
     }
 
+    @Test
+    void validatesPurchaseEventItemsAndPurchaseReasonEnums() throws Exception {
+        ActivityEvent invalidPurchase = new ActivityEvent(
+                "0.2.0-draft", "evt-purchase", "purchase", "conversion",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-001","items":[{"product_id":"product-001","quantity":0,"unit_price":10}]}
+                        """)
+        );
+        ActivityEvent invalidReasons = new ActivityEvent(
+                "0.2.0-draft", "evt-reason", "purchase_reason_select", "validation",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-001","reasons":["not_a_reason"]}
+                        """)
+        );
+
+        assertThat(validator.validate(invalidPurchase)).isNotEmpty();
+        assertThat(validator.validate(invalidReasons)).isNotEmpty();
+    }
+
     private ActivityEvent validEvent() {
         return new ActivityEvent(
                 "0.2.0-draft",

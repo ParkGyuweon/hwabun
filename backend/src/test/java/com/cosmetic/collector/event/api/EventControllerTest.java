@@ -5,6 +5,7 @@ import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
+import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class EventControllerTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
-        mockMvc = standaloneSetup(new EventController(publisher, metrics))
+        mockMvc = standaloneSetup(new EventController(publisher, metrics, new EventBatchSemanticValidator(validator)))
                 .setControllerAdvice(new GlobalExceptionHandler(metrics))
                 .setValidator(validator)
                 .build();
@@ -132,6 +133,48 @@ class EventControllerTest {
     }
 
     @Test
+    void discardsOnlyInvalidEventsAndPublishesTheRest() throws Exception {
+        when(publisher.publish(anyString(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-valid",
+                                      "event_name": "purchase_reason_select", "intent": "validation",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 1, "page_type": "cart",
+                                      "actor_type": "user", "environment": "local",
+                                      "properties": {"order_id": "order-001", "reasons": ["ingredient"]}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-invalid",
+                                      "event_name": "purchase_reason_select", "intent": "validation",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 2, "page_type": "cart",
+                                      "actor_type": "user", "environment": "local",
+                                      "properties": {"order_id": "order-001", "reasons": ["invalid_reason"]}
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(1));
+
+        verify(metrics).recordValidationFailure("invalid_event_contract");
+        verify(publisher).publish(anyString(), any());
+    }
+
+    @Test
     void rejectsAnEmptyBatch() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -176,8 +219,8 @@ class EventControllerTest {
     }
 
     @Test
-    void rejectsAnEventWithoutRequiredIdentifiers() throws Exception {
-        mockMvc.perform(post("/api/events")
+    void discardsAnEventWithoutRequiredIdentifiers() throws Exception {
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -191,10 +234,15 @@ class EventControllerTest {
                                   }]
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-        verify(metrics).recordValidationFailure("invalid_event_batch");
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(0))
+                .andExpect(jsonPath("$.rejected").value(1));
+
+        verify(metrics).recordValidationFailure("invalid_event_contract");
     }
 
     @Test

@@ -13,7 +13,7 @@ public record EventAcceptedResponse(
         @Schema(description = "Kafka 발행에 성공한 이벤트 수", example = "2")
         int accepted,
 
-        @Schema(description = "거부된 이벤트 수. 현재 정책에서는 부분 성공을 사용하지 않아 항상 0", example = "0")
+        @Schema(description = "의미 계약 위반으로 폐기된 이벤트 수. 프론트 재전송 대상이 아니다", example = "1")
         int rejected
 ) {
 }

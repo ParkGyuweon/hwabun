@@ -3,6 +3,9 @@ package com.cosmetic.collector.event.api;
 import com.cosmetic.collector.common.ErrorResponse;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
+import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
+import com.cosmetic.collector.event.api.validation.InvalidEventBatchException;
+import com.cosmetic.collector.event.api.validation.EventBatchTooLargeException;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -10,7 +13,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +31,7 @@ public class EventController {
 
     private final EventPublisher eventPublisher;
     private final CollectorMetrics metrics;
+    private final EventBatchSemanticValidator semanticValidator;
 
     @PostMapping
     @Operation(
@@ -63,20 +66,39 @@ public class EventController {
             )
     })
     public CompletableFuture<ResponseEntity<EventAcceptedResponse>> collect(
-            @Valid @RequestBody EventBatchRequest request
+            @RequestBody EventBatchRequest request
     ) {
         String requestId = UUID.randomUUID().toString();
-        metrics.recordReceived(request.events().size());
+        int receivedCount = request.events() == null ? 0 : request.events().size();
+        metrics.recordReceived(receivedCount);
+        if (request.events() != null && request.events().size() > 100) {
+            metrics.recordValidationFailure("event_batch_too_large");
+            throw new EventBatchTooLargeException();
+        }
 
-        return eventPublisher.publish(requestId, request)
-                .thenApply(summary -> accepted(requestId, summary));
+        EventBatchSemanticValidator.ValidationResult validation = semanticValidator.validate(request);
+        if (validation.invalidBatch()) {
+            metrics.recordValidationFailure("invalid_event_batch");
+            throw new InvalidEventBatchException();
+        }
+        if (validation.rejectedCount() > 0) {
+            metrics.recordValidationFailure("invalid_event_contract");
+        }
+        if (validation.acceptedRequest().events().isEmpty()) {
+            return CompletableFuture.supplyAsync(
+                    () -> accepted(requestId, new PublishSummary(0), validation.rejectedCount())
+            );
+        }
+
+        return eventPublisher.publish(requestId, validation.acceptedRequest())
+                .thenApply(summary -> accepted(requestId, summary, validation.rejectedCount()));
     }
 
-    private ResponseEntity<EventAcceptedResponse> accepted(String requestId, PublishSummary summary) {
+    private ResponseEntity<EventAcceptedResponse> accepted(String requestId, PublishSummary summary, int rejectedCount) {
         EventAcceptedResponse body = new EventAcceptedResponse(
                 requestId,
                 summary.publishedCount(),
-                0
+                rejectedCount
         );
 
         return ResponseEntity.accepted()
