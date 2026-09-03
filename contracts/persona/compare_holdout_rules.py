@@ -2,17 +2,15 @@
 """계약 §7.1 과 평가 정본이 같은 정답을 고르는지 확인한다.
 
 계약과 `batch/jobs/eval_metadata.py` 는 원래 서로 다른 정답을 골랐다 (PC 9,900명 중
-752명). 계약을 정본 정의(마지막 긍정 리뷰)로 맞추기로 AI 담당과 합의했고, 그 과정에서
-계약이 두 가지를 더 명시했다.
+752명). 계약을 정본 정의(마지막 긍정 리뷰)로 맞추면서 두 가지를 더 명시했고, 정본도
+같은 기준을 반영했다.
 
     §7.1.1  긍정 조건에 is_recommended 를 포함한다 (평점 3 이상일 때만)
     §7.1.2  같은 날짜 리뷰의 tie-break 은 review_id DESC 다
 
-정본은 아직 이 둘을 반영하지 않았다. 그래서 지금 남는 차이는 **정본이 따라오면
-사라질 차이**이고, 이 스크립트는 그것을 원인별로 분해해 보여준다. 설명되지 않는
-잔여가 나오면 어느 한쪽에 다른 문제가 있다는 뜻이다.
-
-정본 재생성 후에는 `--require-zero` 로 돌려 0건을 인수 기준으로 쓴다.
+2026-09-03 기준 PC 9,900명 · PA 100명 모두 target 불일치 0건이다. 규칙이나 원천이
+바뀌면 여기서 다시 갈라지므로 회귀 확인용으로 남긴다. `--require-zero` 는 불일치가
+1건이라도 있으면 종료 코드 2 로 실패한다.
 
 `batch/jobs/eval_metadata.py` 는 읽기만 하고 고치지 않는다.
 
@@ -43,6 +41,9 @@ PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.js
 AGENT_PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_100_agent.json")
 PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
 EVAL_METADATA = os.path.join(ROOT, "batch", "ingest", "data", "eval_metadata.jsonl")
+EVAL_METADATA_AGENT = os.path.join(ROOT, "batch", "ingest", "data", "eval_metadata_agent.jsonl")
+
+# PC 와 PA 는 파일이 분리돼 있다. PC 평가 표본에 PA 가 섞이면 안 되기 때문이다.
 
 CAUSE_RECOMMENDED = "정본이 is_recommended 를 인정하지 않음 (계약 §7.1.1)"
 CAUSE_TIE = "정본에 tie-break 기준이 없음 (계약 §7.1.2)"
@@ -54,9 +55,12 @@ def _load(path):
         return json.load(f)
 
 
-def _load_eval_metadata():
+def _load_eval_metadata(path):
+    """정본 파일 하나를 persona_id -> row 로 읽는다. 없으면 빈 dict."""
     rows = {}
-    with open(EVAL_METADATA, encoding="utf-8") as f:
+    if not os.path.exists(path):
+        return rows
+    with open(path, encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 row = json.loads(line)
@@ -144,14 +148,15 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     product_ids = {p["product_id"] for p in _load(PRODUCTS)}
-    metadata = _load_eval_metadata()
 
     pc = sorted(_load(PERSONAS), key=lambda p: p["persona_id"])
     pa = sorted(_load(AGENT_PERSONAS), key=lambda p: p["persona_id"])
 
     unexplained = 0
     total_mismatch = 0
-    for title, personas in (("PC", pc), ("PA", pa)):
+    for title, personas, meta_path in (("PC", pc, EVAL_METADATA),
+                                       ("PA", pa, EVAL_METADATA_AGENT)):
+        metadata = _load_eval_metadata(meta_path)
         stats, causes, examples = compare(personas, product_ids, metadata)
         unexplained += report(title, stats, causes, examples)
         total_mismatch += stats["target 불일치"]
