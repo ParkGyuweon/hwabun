@@ -118,7 +118,25 @@ validation에서 검사한다.
 
 `backdrop`, `escape`, `close_button`, `open_detail`
 
-### 3.6 `review_expand.target`
+### 3.6 `selection_kind`
+
+`ingredient`, `claim`, `usage`, `price`, `other`
+
+선택·복사한 텍스트가 어떤 종류의 정보인지 분류한다. 원문은 전송하지 않으므로
+`matched_ingredients`로 잡히지 않는 주장·사용법·가격 문구의 관심을 이 값으로만
+구분할 수 있다.
+
+### 3.7 `variant_kind`
+
+`size`, `shade`, `other`
+
+상품 원천의 `variation_type`을 매핑한다. `Size`는 `size`, `Color`는 `shade`,
+그 외와 결측은 `other`다. 용량 선택과 색상 선택은 각각 재구매·톤 신호로 의미가
+달라 구분한다.
+
+`badge_id`는 표시 배지의 식별자이며 값 목록이 확정되지 않아 enum을 두지 않는다.
+
+### 3.8 `review_expand.target`
 
 `review_text`, `jump_to_reviews`, `ingredients`
 
@@ -156,15 +174,15 @@ validation에서 검사한다.
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `section_view` | `section_id: string` 또는 `content_kind: string` | `content_ref: string`, `visible_duration_ms: integer`, `visible_ratio: number` |
-| `section_dwell` | `section_id: string` 또는 `content_kind: string`, `dwell_ms: integer` | `content_ref: string`, `co_visible_blocks: integer`, `reason: string` |
+| `section_view` | `section_id: string` 또는 `content_kind: string` | `content_ref: string`, `visible_duration_ms: integer`, `visible_ratio: number`, `badge_id: string` |
+| `section_dwell` | `section_id: string` 또는 `content_kind: string`, `dwell_ms: integer` | `content_ref: string`, `co_visible_blocks: integer`, `reason: string`, `badge_id: string` |
 | `scroll_depth` | `depth_percent: number` | `section_id: string`, `content_kind: string` |
 | `scroll_pause` | `depth_percent: number`, `direction: string`, `distance_px: number`, `duration_ms: integer` | `section_id: string`, `content_kind: string`, `visible_content_kinds: string[]`, `velocity_px_per_sec: number` |
 | `scroll_backtrack` | `depth_percent: number`, `distance_px: number` | `section_id: string`, `content_kind: string` |
 | `media_view` | `media_type: string`, `media_index: integer` | `media_id: string`, `image_url_hash: string` |
 | `accordion_toggle` | `section_id: string`, `action: string` | `content_kind: string` |
-| `text_selection` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
-| `text_copy` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
+| `text_selection` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `selection_kind: string`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
+| `text_copy` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `selection_kind: string`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
 
 `text_snippet` 원문은 전송하지 않는다.
 
@@ -185,7 +203,7 @@ validation에서 검사한다.
 | `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `price_usd: number` |
 | `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
-| `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string` |
+| `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
