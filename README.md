@@ -88,8 +88,17 @@ S15P21A306/
 │   ├── persona-schema.md                Persona·평가 split·Simulation Run 계약
 │   ├── dw-schema.md                     DW Dimension·Mart grain·컬럼 계약
 │   ├── validate_events.py               이벤트 파일을 스키마로 검증하는 CLI
+│   ├── coverage_report.py               한 실행이 계약의 어디를 밟았는지 + properties 위반
 │   ├── requirements-validator.txt       검증기 의존성 (jsonschema[format])
 │   ├── samples/ · tests/                유효/무효 이벤트 표본과 계약 테스트
+│   ├── persona/                     ★ 중첩 Persona JSON → 계약 평탄 테이블 8종 (데이터)
+│   │   ├── build_persona_tables.py      평탄화. 계약 컬럼표(TABLE_SPECS)의 단일 출처
+│   │   ├── holdout_rule.py              계약 §7.1 seed / holdout_target / excluded 판정
+│   │   ├── validate_persona_tables.py   계약 §11·grain·nullable·enum·누출 검사
+│   │   ├── compare_holdout_rules.py     계약 §7.1과 eval_metadata 정답 규칙 대조
+│   │   ├── test_persona_tables.py       원천에 드문 경우의 단위 테스트
+│   │   ├── README.md                    실행 방법·표본 검증 결과·미결 항목
+│   │   └── data/                        JSONL 산출물 — 커밋하지 않는다 (결정론적 재생성)
 │   ├── product-feature-spec.md          상품 벡터 148차원 명세 — 블록 구성·인코딩·가중치
 │   ├── product-feature-vocab.json       인코딩 어휘집 `0.4` — 9개 블록 (brand 포함)
 │   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·가중치 스케줄

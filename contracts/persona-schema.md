@@ -1,7 +1,8 @@
 # Persona Schema 계약
 
 작성일: 2026-09-02
-상태: Draft, 샘플 생성·추천·E2E 검증 대기
+최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
+상태: Draft, §7.1 target 선택 규칙 합의·추천·E2E 검증 대기
 설계 설명: [`persona-design.md`](../docs/analytics/persona-design.md)
 
 ## 1. 범위와 우선순위
@@ -171,9 +172,16 @@ grain = persona_id + review_id
 2. 후보의 `canonical_product_id`가 Product Feature에 존재하는지 확인한다.
 3. `rating >= 4` 또는 `is_recommended=true`인지 확인한다.
 4. 2·3 통과 시 `holdout_target`, `target_label='positive'`, eligible=true다.
-5. Join은 성공하고 3만 실패하면 `negative` 또는 `diagnostic`, eligible=false다.
+5. Join은 성공하고 3만 실패하면 eligible=false다. `rating <= 2`이면 `negative`,
+   `rating = 3`이거나 `rating`이 없으면 `diagnostic`이다. 극성 경계는
+   [`recommendation-io-spec.md`](./recommendation-io-spec.md)의 리뷰 극성 정의를 따른다.
 6. Product Join 실패 시 `excluded`이며 holdout 테이블에 넣지 않는다.
-7. 후보를 제외한 이전 리뷰는 `seed`다.
+7. 후보를 제외한 이전 리뷰 중 후보와 `canonical_product_id`가 **다른** 리뷰가 `seed`다.
+   후보와 같은 상품의 이전 리뷰는 `excluded`이며 `persona_seed_product`에 넣지 않는다.
+
+7번에서 같은 상품을 제외하는 이유는 seed 상품이 `is_seen=true`로 추천 후보에서 하드
+제외되기 때문이다. 같은 상품에 리뷰를 두 번 이상 쓴 Persona가 있으므로, 상품 단위로
+제외하지 않으면 target 상품이 후보에서 빠져 정답을 맞힐 수 없는 평가가 된다.
 
 ### 7.2 `persona_seed_product`
 
@@ -337,7 +345,7 @@ grain = scenario_id
 4. Persona 모집단은 `n_reviews >= 3`, `n_products >= 3`, `n_positive >= 3`이다.
 5. `review_bucket`은 `n_positive=3 → 3`, `4 → 4`, `5~6 → 5-6`, `7 이상 → 7+`다.
 6. `canonical_product_id`가 Product Feature에 존재한다.
-7. Holdout과 eval Profile에서 target 리뷰 정보가 seed 입력에 포함되지 않는다.
+7. Holdout과 eval Profile에서 target 리뷰와 target 상품이 seed 입력에 포함되지 않는다.
 8. `bridge_persona_segment.segment_type`은 허용 6종만 사용한다.
 9. 한 Simulation Run 안에서 `persona_source`, `generator_type`, `scenario_id`가 일관된다.
 10. PA와 PC Event가 각각 `agent_llm`, `python_batch`를 사용한다.

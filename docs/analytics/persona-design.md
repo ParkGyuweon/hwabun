@@ -1,8 +1,10 @@
 # Persona 생성·분석 설계
 
 작성일: 2026-09-02
-상태: 계약 분리 완료, 10명 smoke sample·100명 sample·E2E 검증 대기
+최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
+상태: 표본 평탄화 검증 완료, §7.1 target 선택 규칙 합의·E2E 검증 대기
 계약 원본: [`contracts/persona-schema.md`](../../contracts/persona-schema.md)
+평탄화 구현: [`contracts/persona/`](../../contracts/persona/README.md)
 
 ## 1. 문서 목적
 
@@ -147,29 +149,53 @@ Mart.simulation_run_id
 현재 허용 사용자 속성은 총 20개 segment 값이며 `affinity_lift.csv`는 200개 상품 ×
 20개 segment = 4,000행으로 구성된다.
 
-확인된 차이:
+해소된 차이:
 
-- 현재 `personas_100_agent.json`, `personas_9900.json`에는 `persona_source`,
-  `profile_version`, `user_id`가 명시되어 있지 않다. Profile 적재 시 파일·ID prefix로
-  추론하지 말고 생성 산출물 또는 명시적 projection에서 채워야 한다.
-- `profile_scope`, `created_at`, `updated_at`은 저장 Profile 컬럼이며 현재 Persona JSON
-  원천에는 없다. 적재 단계에서 생성해야 한다.
+- Profile 식별·버전 필드 6종(`user_id`, `persona_source`, `profile_version`,
+  `profile_scope`, `created_at`, `updated_at`)이 생성기에 반영되어 두 표본 10,000명
+  전원에 존재한다. 파일명이나 ID prefix로 추론하지 않는다.
+- 중첩 JSON을 계약 테이블 8종으로 평탄화하는 구현이 `contracts/persona/`에 생겼다.
+  PA 10·100명과 PC 100명 표본에서 계약 §11 조건과 grain·nullable·enum·누출 검사가
+  위반 0건으로 통과했다.
+
+남은 차이:
+
+- **§7.1의 target 선택 규칙이 `batch/jobs/eval_metadata.py`와 다르다.** 계약은 가장
+  최신 리뷰를, 정본은 마지막 긍정 리뷰를 고른다. PC 9,900명 중 752명(7.6%)에서 다른
+  상품이 나오고, 계약 규칙에서는 598명(6.0%)이 `is_holdout_eligible=false`가 된다.
+  `contracts/persona/compare_holdout_rules.py`가 수치를 낸다. AI/추천 담당과 합의 전이다.
+- `persona_seed_product.initial_event_weight`의 산식이
+  [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md)에 없어 NULL로
+  둔다. 값을 임의로 채우지 않는다.
+- `eval_metadata.jsonl`은 PC 9,900명만 담는다. PA 100명의 평가 정본이 없다.
 - `products_200.json`의 일부 리뷰 통계에는 `hair_color='brunette'`가 남아 있어 DW에서
   읽을 때 `brown`으로 합산해야 한다.
 - Recommendation 계약의 missing affinity 0.5 표기와 현재 변환식 결과 0.40이
   불일치한다. AI/Product Feature 담당과 기준 통일이 필요하다.
-- PA/PC 샘플이 계약의 필수 필드와 version을 실제로 포함하는지 E2E 확인이 필요하다.
+- `simulation_run`·`scenario`(계약 §10)는 생성기 실행 산출물이라 평탄화 단계에 원천이
+  없다. 실행 시점에 run manifest를 남길지 정해야 한다.
+
+평탄화를 실제로 돌려 계약 §7.1의 결함 두 가지를 찾아 고쳤다. `negative`/`diagnostic`
+경계가 없던 것과, 같은 상품에 리뷰를 두 번 이상 쓴 Persona(PC 2,160명·21.8%)의 target
+상품이 seed에 남아 추천 후보에서 하드 제외되던 것이다. 자세한 근거는
+[`contracts/persona/README.md`](../../contracts/persona/README.md)에 있다.
 
 ## 10. 샘플·E2E 검증 체크리스트
 
-1. 10명 smoke sample에서 Persona Schema와 enum을 검증한다.
-2. PA·PC 전체 `persona_id` 교집합과 중복이 0인지 확인한다.
-3. Profile 통계와 review bucket이 원천 리뷰에서 재현되는지 확인한다.
-4. Holdout 리뷰가 eval Profile과 seed Product에 포함되지 않는지 확인한다.
-5. 모든 canonical Product가 Product Feature에 Join되는지 확인한다.
+평탄화 산출물로 확인 완료:
+
+1. ~~10명 smoke sample에서 Persona Schema와 enum을 검증한다.~~ PA 10명 위반 0건.
+2. ~~PA·PC 전체 `persona_id` 교집합과 중복이 0인지 확인한다.~~ 표본 기준 0건.
+3. ~~Profile 통계와 review bucket이 원천 리뷰에서 재현되는지 확인한다.~~ 위반 0건.
+4. ~~Holdout 리뷰가 eval Profile과 seed Product에 포함되지 않는지 확인한다.~~
+   상품 단위 누출까지 검사하도록 계약 §7.1-7과 §11-7을 고친 뒤 통과.
+5. ~~모든 canonical Product가 Product Feature에 Join되는지 확인한다.~~ 위반 0건.
+
+Event·Run 축이라 평탄화 산출물로 확인할 수 없는 항목:
+
 6. PA Event가 `agent_llm`, PC Event가 `python_batch`를 사용하는지 확인한다.
 7. 같은 run에서 Scenario, Persona source, generator type이 일관되는지 확인한다.
 8. `persona_source` 필터가 DW/Mart까지 연결되는지 확인한다.
 9. Sampling report의 층화 분포와 생성 결과가 일치하는지 확인한다.
 
-검증이 완료되기 전까지 Persona Schema 상태는 Draft로 유지한다.
+§7.1 규칙 합의와 6~9번이 끝나기 전까지 Persona Schema 상태는 Draft로 유지한다.
