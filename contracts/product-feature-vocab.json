@@ -380,119 +380,183 @@
     }
   ],
   "ingredient_source": {
-    "_note": "highlights 태그가 없어도 전성분 문자열에서 성분을 복원한다. 태그로 표시된 성분은 1.0, 전성분에서만 찾은 성분은 위치 기반 감쇠.",
+    "_note": "highlights 태그가 없어도 전성분 문자열에서 성분을 복원한다. 태그로 표시된 성분은 1.0, 전성분에서만 찾은 성분은 위치 기반 감쇠. 국내 브랜드가 한글 전성분표를 붙여넣는 경우가 있어 한국어 표기도 동의어에 넣는다 (2026-09-03).",
     "synonyms": {
       "Hyaluronic Acid": [
         "hyaluronic acid",
         "sodium hyaluronate",
-        "hyaluronate"
+        "hyaluronate",
+        "히알루론산",
+        "하이알루로닉애씨드",
+        "하이알루로네이트",
+        "소듐하이알루로네이트"
       ],
       "Vitamin C": [
         "ascorbic acid",
         "ascorbyl",
-        "ascorbate"
+        "ascorbate",
+        "아스코빅애씨드",
+        "아스코빌",
+        "아스코르브산"
       ],
       "Niacinamide": [
-        "niacinamide"
+        "niacinamide",
+        "나이아신아마이드",
+        "니아신아마이드"
       ],
       "Retinol": [
         "retinol",
-        "retinyl"
+        "retinyl",
+        "레티놀",
+        "레티닐"
       ],
       "Salicylic Acid": [
-        "salicylic acid"
+        "salicylic acid",
+        "살리실릭애씨드",
+        "살리실산"
       ],
       "AHA/Glycolic Acid": [
-        "glycolic acid"
+        "glycolic acid",
+        "글라이콜릭애씨드",
+        "글리콜산"
       ],
       "Lactic Acid": [
-        "lactic acid"
+        "lactic acid",
+        "락틱애씨드",
+        "젖산"
       ],
       "Collagen": [
-        "collagen"
+        "collagen",
+        "콜라겐"
       ],
       "Silicone": [
         "dimethicone",
-        "cyclopentasiloxane"
+        "cyclopentasiloxane",
+        "다이메티콘",
+        "디메치콘",
+        "사이클로펜타실록세인",
+        "사이클로메티콘"
       ],
       "Squalane": [
         "squalane",
-        "squalene"
+        "squalene",
+        "스쿠알란",
+        "스쿠알렌"
       ],
       "Probiotic / Ferment": [
         "ferment filtrate",
         "lactobacillus",
-        "bifida"
+        "bifida",
+        "발효여과물",
+        "락토바실러스",
+        "비피다",
+        "효모발효"
       ],
       "Green Tea": [
-        "camellia sinensis"
+        "camellia sinensis",
+        "녹차",
+        "카멜리아시넨시스"
       ],
       "Peptides": [
         "peptide",
         "palmitoyl tripeptide",
         "acetyl hexapeptide",
-        "copper tripeptide"
+        "copper tripeptide",
+        "펩타이드",
+        "펩티드"
       ],
       "Aloe": [
         "aloe barbadensis",
-        "aloe vera"
+        "aloe vera",
+        "알로에"
       ],
       "Licorice": [
         "glycyrrhiza",
-        "licorice"
+        "licorice",
+        "감초",
+        "글리시리자"
       ],
       "Panthenol (B5)": [
         "panthenol",
-        "pantothenic"
+        "pantothenic",
+        "판테놀",
+        "판토텐"
       ],
       "Shea Butter": [
         "butyrospermum",
-        "shea butter"
+        "shea butter",
+        "시어버터",
+        "부티로스퍼멈"
       ],
       "Jojoba": [
-        "jojoba"
+        "jojoba",
+        "호호바"
       ],
       "Ceramide": [
-        "ceramide"
+        "ceramide",
+        "세라마이드"
       ],
       "Rosehip / Rose": [
         "rosa canina",
         "rosa damascena",
-        "rose flower"
+        "rose flower",
+        "로즈힙",
+        "로사카니나",
+        "로사다마세나",
+        "장미꽃"
       ],
       "Caffeine": [
-        "caffeine"
+        "caffeine",
+        "카페인"
       ],
       "Urea": [
-        "urea"
+        "urea",
+        "요소",
+        "유레아"
       ],
       "Allantoin": [
-        "allantoin"
+        "allantoin",
+        "알란토인"
       ],
       "Adenosine": [
-        "adenosine"
+        "adenosine",
+        "아데노신"
       ],
       "Zinc": [
         "zinc pca",
         "zinc oxide",
-        "zinc gluconate"
+        "zinc gluconate",
+        "징크피씨에이",
+        "징크옥사이드",
+        "산화아연"
       ],
       "Alcohol Denat": [
-        "alcohol denat"
+        "alcohol denat",
+        "변성알코올"
       ],
       "Centella (Cica)": [
         "centella",
         "asiaticoside",
         "madecassoside",
-        "asiatic acid"
+        "asiatic acid",
+        "병풀",
+        "센텔라",
+        "아시아티코사이드",
+        "마데카소사이드"
       ],
       "Willow Bark": [
         "salix",
-        "willow bark"
+        "willow bark",
+        "버드나무",
+        "살릭스"
       ],
       "Mineral Oil / Petrolatum": [
         "petrolatum",
-        "mineral oil"
+        "mineral oil",
+        "미네랄오일",
+        "광물유",
+        "페트롤라툼",
+        "바셀린"
       ]
     },
     "tag_value": 1.0,
