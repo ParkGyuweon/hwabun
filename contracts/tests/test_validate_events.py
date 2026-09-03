@@ -87,13 +87,53 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "[enum] $.event_name")
 
-    def test_schema_version_mismatch(self) -> None:
+    def test_schema_version_must_be_known(self) -> None:
         event = copy.deepcopy(self.user_event)
         event["schema_version"] = "1.0.0-draft"
 
         result = self.validate_values(event)
 
-        self.assert_has_error(result.errors, "[const] $.schema_version")
+        self.assert_has_error(result.errors, "[enum] $.schema_version")
+
+    def test_legacy_schema_version_does_not_require_tenant(self) -> None:
+        """0.2.0-draft 는 tenant_id 없이 통과해야 한다.
+
+        모듈이 각자 버전을 올릴 수 있어야 하므로 두 버전이 공존한다.
+        여기가 깨지면 계약을 올리는 순간 기존 Event 가 전부 위반이 된다.
+        """
+        event = copy.deepcopy(self.user_event)
+        event.pop("tenant_id", None)
+
+        result = self.validate_values(event)
+
+        self.assertEqual(result.errors, [])
+
+    def test_tenant_id_required_from_0_3_0(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["schema_version"] = "0.3.0-draft"
+        event.pop("tenant_id", None)
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[required] $")
+
+    def test_tenant_id_must_be_slug(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["schema_version"] = "0.3.0-draft"
+        event["tenant_id"] = "Estee Lauder"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[pattern] $.tenant_id")
+
+    def test_tenant_id_accepts_slug(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["schema_version"] = "0.3.0-draft"
+        event["tenant_id"] = "estee-lauder"
+
+        result = self.validate_values(event)
+
+        self.assertEqual(result.errors, [])
 
     def test_event_name_and_intent_must_match(self) -> None:
         event = copy.deepcopy(self.user_event)
