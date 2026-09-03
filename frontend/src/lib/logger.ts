@@ -152,6 +152,40 @@ let flushTimer: number | undefined;
  */
 const firedOnceKeys = new Set<string>();
 
+/**
+ * 계약이 `string|null` 로 선언한 property. **이 셋만** null 을 실어 보낸다.
+ * (`contracts/event-properties-schema.md` §4)
+ *
+ * 나머지는 전부 `string` 이라 null 을 실으면 "값을 안 줬다" 가 아니라 **타입 위반**이다.
+ * 검증기가 `_matches_type(None, "string")` 을 False 로 보고 격리한다.
+ * 선택 property 는 값이 없으면 키 자체를 빼는 것이 계약이 말하는 "미제공" 이다.
+ *
+ * 화면 코드는 이걸 신경 쓰지 않아도 된다. 구역 판정(regionOfNode)은 못 찾으면 null 을
+ * 돌려주고 호출부는 그걸 그대로 펼쳐 넣는데, 어디서 무엇이 null 이 될지 호출부마다
+ * 따지게 하면 언젠가 빠뜨린다. 나가는 길목인 여기서 한 번에 거른다.
+ */
+const NULLABLE_PROPERTIES: Record<string, ReadonlySet<string>> = {
+  hover_dwell: new Set(['action']),
+  rage_click: new Set(['action']),
+  dead_click: new Set(['target_tag']),
+};
+
+/** 계약이 허용하지 않는 null 을 걷어낸다. 봉투를 만들기 직전에 한 번 */
+function dropDisallowedNulls(
+  eventName: EventName,
+  properties: Record<string, unknown>,
+): Record<string, unknown> {
+  const allowed = NULLABLE_PROPERTIES[eventName];
+  const cleaned: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === null && !allowed?.has(key)) continue;
+    cleaned[key] = value;
+  }
+
+  return cleaned;
+}
+
 export function setLoggerContext(patch: Partial<LoggerContext>): void {
   context = { ...context, ...patch };
 }
@@ -299,7 +333,7 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     actor_type: context.actorType,
     environment: context.environment,
 
-    properties: finalProperties,
+    properties: dropDisallowedNulls(eventName, finalProperties),
   };
 
   queue.push(event);
