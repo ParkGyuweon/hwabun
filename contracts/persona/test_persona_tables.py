@@ -71,44 +71,62 @@ class OrderByRecency(unittest.TestCase):
 
 
 class Classify(unittest.TestCase):
-    def test_최신_긍정은_positive_eligible(self):
+    def test_마지막_긍정_리뷰가_target이다(self):
         rows = [review("r1", "P1", submitted="2019-01-01"),
                 review("r2", "P2", rating=5, submitted="2021-01-01")]
         roles, decision = hr.classify(rows, CATALOG)
+        self.assertEqual(decision["review"]["review_id"], "r2")
         self.assertEqual(decision["label"], hr.POSITIVE)
         self.assertTrue(decision["is_holdout_eligible"])
         self.assertEqual(roles["r1"], hr.SEED)
         self.assertEqual(roles["r2"], hr.HOLDOUT_TARGET)
 
-    def test_평점이_낮아도_추천이면_positive(self):
-        """계약 §7.1-3 은 rating>=4 '또는' is_recommended=true 다."""
-        rows = [review("r1", "P1"), review("r2", "P2", rating=2,
-                                           is_recommended=True, submitted="2021-01-01")]
-        _, decision = hr.classify(rows, CATALOG)
-        self.assertEqual(decision["label"], hr.POSITIVE)
-
-    def test_별점_1_2는_negative(self):
-        rows = [review("r1", "P1"), review("r2", "P2", rating=2, submitted="2021-01-01")]
-        _, decision = hr.classify(rows, CATALOG)
-        self.assertEqual(decision["label"], hr.NEGATIVE)
-        self.assertFalse(decision["is_holdout_eligible"])
-
-    def test_별점_3은_diagnostic(self):
-        rows = [review("r1", "P1"), review("r2", "P2", rating=3, submitted="2021-01-01")]
-        _, decision = hr.classify(rows, CATALOG)
-        self.assertEqual(decision["label"], hr.DIAGNOSTIC)
-
-    def test_평점이_없으면_diagnostic(self):
-        rows = [review("r1", "P1"), review("r2", "P2", rating=None, submitted="2021-01-01")]
-        _, decision = hr.classify(rows, CATALOG)
-        self.assertEqual(decision["label"], hr.DIAGNOSTIC)
-
-    def test_카탈로그에_없는_상품은_excluded(self):
-        rows = [review("r1", "P1"), review("r2", "P999", submitted="2021-01-01")]
+    def test_최신이_부정이면_그_앞의_긍정을_고른다(self):
+        """계약 §7.1-2. 최신 리뷰를 고르던 옛 규칙과 갈리는 지점이다."""
+        rows = [review("r1", "P1", rating=5, submitted="2019-01-01"),
+                review("r2", "P2", rating=1, submitted="2021-01-01")]
         roles, decision = hr.classify(rows, CATALOG)
-        self.assertEqual(decision["role"], hr.EXCLUDED)
-        self.assertIsNone(decision["label"])
+        self.assertEqual(decision["review"]["review_id"], "r1")
+        self.assertEqual(decision["label"], hr.POSITIVE)
+        self.assertEqual(roles["r2"], hr.EXCLUDED)      # target 이후 — 시간 절단
+        self.assertEqual(decision["latest_review_label"], hr.NEGATIVE)
+
+    def test_target_이후_리뷰는_seed가_아니다(self):
+        rows = [review("r1", "P1", rating=5, submitted="2018-01-01"),
+                review("r2", "P2", rating=5, submitted="2019-01-01"),
+                review("r3", "P3", rating=2, submitted="2021-01-01")]
+        roles, decision = hr.classify(rows, CATALOG)
+        self.assertEqual(decision["review"]["review_id"], "r2")
+        self.assertEqual(roles["r1"], hr.SEED)
+        self.assertEqual(roles["r3"], hr.EXCLUDED)
+
+    def test_평점_3에_추천이면_긍정이다(self):
+        """계약 §7.1.1 — 명시적 추천 의사는 긍정 신호다."""
+        rows = [review("r1", "P1", rating=5, submitted="2019-01-01"),
+                review("r2", "P2", rating=3, is_recommended=True, submitted="2021-01-01")]
+        _, decision = hr.classify(rows, CATALOG)
+        self.assertEqual(decision["review"]["review_id"], "r2")
+
+    def test_평점_2에_추천은_긍정이_아니다(self):
+        """모순되는 입력이라 정답으로 쓰지 않는다 (PC 9,900명 중 8명)."""
+        rows = [review("r1", "P1", rating=5, submitted="2019-01-01"),
+                review("r2", "P2", rating=2, is_recommended=True, submitted="2021-01-01")]
+        _, decision = hr.classify(rows, CATALOG)
+        self.assertEqual(decision["review"]["review_id"], "r1")
+
+    def test_평점_3에_추천이_없으면_diagnostic(self):
+        rows = [review("r1", "P1", rating=5, submitted="2019-01-01"),
+                review("r2", "P2", rating=3, submitted="2021-01-01")]
+        _, decision = hr.classify(rows, CATALOG)
+        self.assertEqual(decision["review"]["review_id"], "r1")
+        self.assertEqual(decision["latest_review_label"], hr.DIAGNOSTIC)
+
+    def test_카탈로그에_없는_리뷰는_excluded(self):
+        rows = [review("r1", "P1", rating=5, submitted="2019-01-01"),
+                review("r2", "P999", rating=5, submitted="2021-01-01")]
+        roles, decision = hr.classify(rows, CATALOG)
         self.assertEqual(roles["r2"], hr.EXCLUDED)
+        self.assertEqual(decision["review"]["review_id"], "r1")
 
     def test_target과_같은_상품의_이전_리뷰는_seed가_아니다(self):
         """누출 방지. seed 로 남기면 is_seen=true 로 후보에서 빠져 정답을 못 맞힌다."""
@@ -120,6 +138,14 @@ class Classify(unittest.TestCase):
         self.assertEqual(roles["r3"], hr.HOLDOUT_TARGET)
         self.assertEqual(roles["r1"], hr.EXCLUDED)      # 같은 상품 P2
         self.assertEqual(roles["r2"], hr.SEED)
+
+    def test_긍정_리뷰가_없으면_target이_없다(self):
+        rows = [review("r1", "P1", rating=2, submitted="2019-01-01"),
+                review("r2", "P2", rating=1, submitted="2021-01-01")]
+        roles, decision = hr.classify(rows, CATALOG)
+        self.assertIsNone(decision["review"])
+        self.assertFalse(decision["is_holdout_eligible"])
+        self.assertEqual(set(roles.values()), {hr.SEED})
 
     def test_group_id가_대표_상품이다(self):
         rows = [review("r1", "P1"),
@@ -231,11 +257,12 @@ class TableShape(unittest.TestCase):
         tables = bp.build([persona(rows)], CATALOG)
         self.assertEqual(len(tables["persona_holdout_target"]), 1)
 
-    def test_excluded_후보는_holdout_행을_만들지_않는다(self):
-        rows = [review("r1", "P1", submitted="2018-01-01"),
-                review("r2", "P999", submitted="2021-01-01")]
+    def test_긍정_리뷰가_없으면_holdout_행을_만들지_않는다(self):
+        rows = [review("r1", "P1", rating=2, submitted="2018-01-01"),
+                review("r2", "P3", rating=1, submitted="2021-01-01")]
         tables = bp.build([persona(rows)], CATALOG)
         self.assertEqual(tables["persona_holdout_target"], [])
+        self.assertEqual(tables["persona_profile"][0]["latest_review_label"], hr.NEGATIVE)
 
 
 if __name__ == "__main__":
