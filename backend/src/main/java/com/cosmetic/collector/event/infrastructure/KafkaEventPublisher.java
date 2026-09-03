@@ -1,10 +1,10 @@
 package com.cosmetic.collector.event.infrastructure;
 
 import com.cosmetic.collector.event.api.ActivityEvent;
-import com.cosmetic.collector.event.api.EventBatchRequest;
 import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
+import com.cosmetic.collector.event.application.IndexedActivityEvent;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
-import java.util.stream.IntStream;
+import java.util.List;
 
 @Component
 @Slf4j
@@ -95,14 +95,14 @@ public class KafkaEventPublisher implements EventPublisher {
     }
 
     @Override
-    public CompletableFuture<PublishSummary> publish(String requestId, EventBatchRequest request) {
+    public CompletableFuture<PublishSummary> publish(String requestId, List<IndexedActivityEvent> events) {
         if (!inFlightBatches.tryAcquire()) {
-            metrics.recordPublishRejected(request.events().size());
+            metrics.recordPublishRejected(events.size());
             log.warn(
                     "Kafka 이벤트 배치 발행 작업이 포화되었습니다. topic={}, requestId={}, batchSize={}",
                     topic,
                     requestId,
-                    request.events().size()
+                    events.size()
             );
             return CompletableFuture.failedFuture(new EventPublishOverloadedException(
                     "Kafka 발행 중인 이벤트 배치 수가 한도를 초과했습니다.",
@@ -119,12 +119,12 @@ public class KafkaEventPublisher implements EventPublisher {
                     () -> {
                         metrics.recordPublishQueueWait(
                                 Duration.ofNanos(System.nanoTime() - queuedAtNanos));
-                        return initiateSends(requestId, request, receivedAt);
+                        return initiateSends(requestId, events, receivedAt);
                     },
                     kafkaPublisherExecutor
             );
         } catch (RejectedExecutionException exception) {
-            metrics.recordPublishRejected(request.events().size());
+            metrics.recordPublishRejected(events.size());
             dispatch = CompletableFuture.failedFuture(new EventPublishOverloadedException(
                     "Kafka 발행 작업 대기열이 가득 찼습니다.",
                     exception
@@ -134,8 +134,8 @@ public class KafkaEventPublisher implements EventPublisher {
         CompletableFuture<PublishSummary> result = dispatch
                 .thenCompose(sends -> CompletableFuture.allOf(sends))
                 .thenApply(ignored -> {
-                    metrics.recordPublished(request.events().size());
-                    return new PublishSummary(request.events().size());
+                    metrics.recordPublished(events.size());
+                    return new PublishSummary(events.size());
                 })
                 .exceptionally(cause -> {
                     Throwable failure = unwrap(cause);
@@ -144,16 +144,16 @@ public class KafkaEventPublisher implements EventPublisher {
                                 "Kafka 이벤트 배치 발행 작업이 포화되었습니다. topic={}, requestId={}, batchSize={}",
                                 topic,
                                 requestId,
-                                request.events().size()
+                                events.size()
                         );
                         throw new CompletionException(failure);
                     }
-                    metrics.recordPublishFailure(request.events().size());
+                    metrics.recordPublishFailure(events.size());
                     log.error(
                             "Kafka 이벤트 배치 발행에 실패했습니다. topic={}, requestId={}, batchSize={}",
                             topic,
                             requestId,
-                            request.events().size(),
+                            events.size(),
                             failure
                     );
                     throw new CompletionException(
@@ -166,15 +166,15 @@ public class KafkaEventPublisher implements EventPublisher {
 
     private CompletableFuture<?>[] initiateSends(
             String requestId,
-            EventBatchRequest request,
+            List<IndexedActivityEvent> events,
             Instant receivedAt
     ) {
-        return IntStream.range(0, request.events().size())
-                .mapToObj(eventIndex -> send(
-                        request.events().get(eventIndex),
+        return events.stream()
+                .map(indexedEvent -> send(
+                        indexedEvent.event(),
                         receivedAt,
                         requestId,
-                        eventIndex
+                        indexedEvent.eventIndex()
                 ))
                 .toArray(CompletableFuture[]::new);
     }

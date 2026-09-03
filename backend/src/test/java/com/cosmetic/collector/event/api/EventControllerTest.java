@@ -5,10 +5,12 @@ import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
+import com.cosmetic.collector.event.application.RejectedEventPublisher;
 import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -16,7 +18,9 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.concurrent.CompletableFuture;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -33,18 +37,23 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 class EventControllerTest {
 
     private EventPublisher publisher;
+    private RejectedEventPublisher rejectedEventPublisher;
     private CollectorMetrics metrics;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         publisher = mock(EventPublisher.class);
+        rejectedEventPublisher = mock(RejectedEventPublisher.class);
         metrics = mock(CollectorMetrics.class);
+        when(rejectedEventPublisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
-        mockMvc = standaloneSetup(new EventController(publisher, metrics, new EventBatchSemanticValidator(validator)))
+        mockMvc = standaloneSetup(new EventController(
+                        publisher, rejectedEventPublisher, metrics, new EventBatchSemanticValidator(validator)))
                 .setControllerAdvice(new GlobalExceptionHandler(metrics))
                 .setValidator(validator)
                 .build();
@@ -52,7 +61,7 @@ class EventControllerTest {
 
     @Test
     void acceptsAValidBatchAfterPublishing() throws Exception {
-        when(publisher.publish(anyString(), any()))
+        when(publisher.publish(anyString(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
@@ -88,12 +97,12 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.rejected").value(0));
 
         verify(metrics).recordReceived(1);
-        verify(publisher).publish(anyString(), any());
+        verify(publisher).publish(anyString(), anyList());
     }
 
     @Test
     void acceptsNavigationClickWithSessionIntent() throws Exception {
-        when(publisher.publish(anyString(), any()))
+        when(publisher.publish(anyString(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
@@ -129,12 +138,12 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.rejected").value(0));
 
         verify(metrics).recordReceived(1);
-        verify(publisher).publish(anyString(), any());
+        verify(publisher).publish(anyString(), anyList());
     }
 
     @Test
     void discardsOnlyInvalidEventsAndPublishesTheRest() throws Exception {
-        when(publisher.publish(anyString(), any()))
+        when(publisher.publish(anyString(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
@@ -170,8 +179,12 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.accepted").value(1))
                 .andExpect(jsonPath("$.rejected").value(1));
 
-        verify(metrics).recordValidationFailure("invalid_event_contract");
-        verify(publisher).publish(anyString(), any());
+        verify(metrics).recordValidationFailure("invalid_event_contract", 1);
+        ArgumentCaptor<java.util.List> rejectedCaptor = ArgumentCaptor.forClass(java.util.List.class);
+        verify(rejectedEventPublisher).publish(anyString(), rejectedCaptor.capture());
+        assertThat(((com.cosmetic.collector.event.application.RejectedEvent) rejectedCaptor.getValue().getFirst())
+                .eventIndex()).isEqualTo(1);
+        verify(publisher).publish(anyString(), anyList());
     }
 
     @Test
@@ -242,12 +255,12 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.accepted").value(0))
                 .andExpect(jsonPath("$.rejected").value(1));
 
-        verify(metrics).recordValidationFailure("invalid_event_contract");
+        verify(metrics).recordValidationFailure("invalid_event_contract", 1);
     }
 
     @Test
     void returnsServiceUnavailableWhenKafkaPublishingFails() throws Exception {
-        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
+        when(publisher.publish(anyString(), anyList())).thenReturn(CompletableFuture.failedFuture(
                 new EventPublishException("publish failed", new RuntimeException("Kafka unavailable"))
         ));
 
@@ -284,7 +297,7 @@ class EventControllerTest {
 
     @Test
     void returnsTooManyRequestsWhenThePublisherIsOverloaded() throws Exception {
-        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
+        when(publisher.publish(anyString(), anyList())).thenReturn(CompletableFuture.failedFuture(
                 new EventPublishOverloadedException("publisher overloaded", new RuntimeException("executor saturated"))
         ));
 

@@ -274,8 +274,10 @@ Event는 `reasons`를 빈 배열로 보낼 수 있으며, 이 경우에만 1~2�
    `generator_type`이 필요하다. 이 공통 규칙은 JSON Schema에서도 검사한다.
 5. `actor_type='user'`에 synthetic runtime metadata가 있으면 경고하고 분석에는
    사용하지 않는다.
-6. 위반 Event는 아래 표준 오류 코드로 `bad_events`에 격리한다. 한 Event에 여러
-   위반이 있으면 원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
+6. Collector가 동기 검증한 위반 Event는 `activity-events-rejected` topic으로 원문,
+   `request_id`, 원본 `event_index`, 위반 상세와 함께 발행하고 Spark는 이를 `bad_events`에
+   적재한다. Spark 검증 위반도 같은 `bad_events`에 격리한다. 한 Event에 여러 위반이 있으면
+   원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
 7. Collector는 `begin_checkout`, `purchase`, `purchase_reason_select`의 required key,
    타입, 양수 수량·가격, `reasons` 길이 및 enum을 동기 검증한다. 이 밖의 Event별
    properties는 Spark가 방어적으로 검사한다.

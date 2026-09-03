@@ -4,6 +4,7 @@ import com.cosmetic.collector.event.api.ActivityEvent;
 import com.cosmetic.collector.event.api.EventBatchRequest;
 import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
+import com.cosmetic.collector.event.application.IndexedActivityEvent;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.Test;
@@ -137,10 +138,10 @@ class KafkaEventPublisherTest {
                 Runnable::run
         );
 
-        publisher.publish("request-001", new EventBatchRequest("0.2.0-draft", List.of(
-                event("evt-001", null),
-                event("evt-002", null)
-        ))).join();
+        publisher.publish("request-001", List.of(
+                new IndexedActivityEvent(event("evt-001", null), 0),
+                new IndexedActivityEvent(event("evt-002", null), 2)
+        )).join();
 
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
         verify(kafkaTemplate, times(2)).send(
@@ -163,7 +164,7 @@ class KafkaEventPublisherTest {
         assertThat(first.receivedAt()).isEqualTo(Instant.parse("2026-08-27T15:00:00Z"));
         assertThat(second.receivedAt()).isEqualTo(Instant.parse("2026-08-27T15:00:00Z"));
         assertThat(first.eventIndex()).isZero();
-        assertThat(second.eventIndex()).isEqualTo(1);
+        assertThat(second.eventIndex()).isEqualTo(2);
         assertThat(first.source()).isEqualTo("web");
         assertThat(second.source()).isEqualTo("web");
     }

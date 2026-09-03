@@ -46,6 +46,10 @@ public class CollectorMetrics {
     }
 
     public void recordValidationFailure(String reason) {
-        registry.counter("collector.events.validation.failures", "reason", reason).increment();
+        recordValidationFailure(reason, 1);
+    }
+
+    public void recordValidationFailure(String reason, int count) {
+        registry.counter("collector.events.validation.failures", "reason", reason).increment(count);
     }
 }

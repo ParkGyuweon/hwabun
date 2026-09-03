@@ -137,7 +137,7 @@ Q1과 Q2를 하나의 Job으로 합칠지는 저장 엔진과 트랜잭션 방�
 | `occurred_at` | 클라이언트 발생 시각. 클라이언트 시계 오차 가능 |
 | `received_at` | 현재 구현에서는 검증 후 Producer의 `publish()` 진입 시 얻는 서버 시각 |
 | `request_id` | HTTP 요청마다 생성. 같은 Event 재시도라도 달라질 수 있음 |
-| `event_index` | 해당 HTTP 배열 안의 0부터 시작하는 위치 |
+| `event_index` | 해당 HTTP 배열 안의 0부터 시작하는 원본 위치. 부분 수락으로 값 사이에 gap이 있을 수 있음 |
 | `source` | 현재 코드에서 `user → web`, `synthetic → simulator`로 생성 |
 | `schema_version` | 해석 계약의 버전. 현재 예시 버전은 `0.2.0-draft` |
 
@@ -147,7 +147,7 @@ Q1과 Q2를 하나의 Job으로 합칠지는 저장 엔진과 트랜잭션 방�
 `+09:00` 등)을 허용한다. timezone 없는 값은 거부하고, Raw 원문은 보존하되
 Parsed/Processed timestamp는 UTC로 정규화한다.
 
-`request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. 현재 Collector는 `schema_version`이 비어 있지 않은지만 검사하고, 지원 버전 목록과 배치·Event 버전 일치까지 강제하지는 않는다. 이벤트별 `properties` 의미 검증도 별도로 구현해야 한다.
+`request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. Collector는 배치·Event의 `schema_version` 일치와 일부 활성 Event의 properties 의미를 검증한다. 계약 위반 Event는 정상 topic 대신 `activity-events-rejected`로 원문·검증 상세와 함께 발행된다.
 
 근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md).
 

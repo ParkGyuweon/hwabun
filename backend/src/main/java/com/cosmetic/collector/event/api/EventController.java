@@ -3,6 +3,7 @@ package com.cosmetic.collector.event.api;
 import com.cosmetic.collector.common.ErrorResponse;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
+import com.cosmetic.collector.event.application.RejectedEventPublisher;
 import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
 import com.cosmetic.collector.event.api.validation.InvalidEventBatchException;
 import com.cosmetic.collector.event.api.validation.EventBatchTooLargeException;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,10 +28,12 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 @RequestMapping("/api/events")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Activity Events", description = "프론트엔드 활동 로그 수집 API")
 public class EventController {
 
     private final EventPublisher eventPublisher;
+    private final RejectedEventPublisher rejectedEventPublisher;
     private final CollectorMetrics metrics;
     private final EventBatchSemanticValidator semanticValidator;
 
@@ -82,16 +86,33 @@ public class EventController {
             throw new InvalidEventBatchException();
         }
         if (validation.rejectedCount() > 0) {
-            metrics.recordValidationFailure("invalid_event_contract");
+            metrics.recordValidationFailure("invalid_event_contract", validation.rejectedCount());
+            publishRejectedEvents(requestId, validation.rejectedEvents());
         }
-        if (validation.acceptedRequest().events().isEmpty()) {
+        if (validation.acceptedEvents().isEmpty()) {
             return CompletableFuture.supplyAsync(
                     () -> accepted(requestId, new PublishSummary(0), validation.rejectedCount())
             );
         }
 
-        return eventPublisher.publish(requestId, validation.acceptedRequest())
+        return eventPublisher.publish(requestId, validation.acceptedEvents())
                 .thenApply(summary -> accepted(requestId, summary, validation.rejectedCount()));
+    }
+
+    private void publishRejectedEvents(String requestId, java.util.List<com.cosmetic.collector.event.application.RejectedEvent> rejectedEvents) {
+        try {
+            rejectedEventPublisher.publish(requestId, rejectedEvents)
+                    .exceptionally(exception -> {
+                        metrics.recordValidationFailure("rejected_event_publish_failure", rejectedEvents.size());
+                        log.error("거부 이벤트 보존에 실패했습니다. requestId={}, rejectedCount={}",
+                                requestId, rejectedEvents.size(), exception);
+                        return null;
+                    });
+        } catch (RuntimeException exception) {
+            metrics.recordValidationFailure("rejected_event_publish_failure", rejectedEvents.size());
+            log.error("거부 이벤트 보존을 시작하지 못했습니다. requestId={}, rejectedCount={}",
+                    requestId, rejectedEvents.size(), exception);
+        }
     }
 
     private ResponseEntity<EventAcceptedResponse> accepted(String requestId, PublishSummary summary, int rejectedCount) {

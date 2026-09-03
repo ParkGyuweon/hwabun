@@ -30,4 +30,21 @@ public class KafkaTopicConfig {
                 ))
                 .build();
     }
+
+    @Bean
+    NewTopic activityEventsRejectedTopic(
+            @Value("${collector.kafka.rejected-topic}") String topic,
+            @Value("${collector.kafka.partitions}") int partitions,
+            @Value("${collector.kafka.replication-factor}") int replicationFactor,
+            @Value("${collector.kafka.retention-ms}") long retentionMs
+    ) {
+        return TopicBuilder.name(topic)
+                .partitions(partitions)
+                .replicas(replicationFactor)
+                .configs(Map.of(
+                        TopicConfig.CLEANUP_POLICY_CONFIG, "delete",
+                        TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs)
+                ))
+                .build();
+    }
 }

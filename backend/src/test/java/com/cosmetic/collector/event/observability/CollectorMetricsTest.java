@@ -43,6 +43,17 @@ class CollectorMetricsTest {
         assertThat(counter(registry, "collector.events.received")).isEqualTo(50);
     }
 
+    @Test
+    void countsEachRejectedEventInsteadOfOnlyTheContainingBatch() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        CollectorMetrics metrics = new CollectorMetrics(registry);
+
+        metrics.recordValidationFailure("invalid_event_contract", 3);
+
+        assertThat(registry.get("collector.events.validation.failures")
+                .tag("reason", "invalid_event_contract").counter().count()).isEqualTo(3);
+    }
+
     private double counter(SimpleMeterRegistry registry, String name) {
         return registry.get(name).counter().count();
     }
