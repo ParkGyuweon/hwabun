@@ -2,7 +2,7 @@
 
 작성일: 2026-09-02
 최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
-상태: 표본 평탄화 검증 완료, §7.1 target 선택 규칙 합의·E2E 검증 대기
+상태: §7.1 target 선택 규칙 확정. 평가 정본 재생성 대조·E2E 검증 대기
 계약 원본: [`contracts/persona-schema.md`](../../contracts/persona-schema.md)
 평탄화 구현: [`contracts/persona/`](../../contracts/persona/README.md)
 
@@ -53,7 +53,7 @@ Review 원천
 | 최신 리뷰 대표값 | 프로필 변경을 현재 상태에 반영 |
 
 동일 사용자의 최신값과 최빈값이 다른 경우가 있어 full Profile은 최신 리뷰를
-사용한다. 하지만 평가에서는 마지막 리뷰를 holdout으로 숨기므로 최신 seed 리뷰로
+사용한다. 하지만 평가에서는 마지막 긍정 리뷰를 holdout으로 숨기므로 최신 seed 리뷰로
 Profile을 다시 만들어 정보 누수를 차단한다.
 
 ## 4. 모집단과 표본 설계
@@ -83,9 +83,17 @@ full profile = 전체 리뷰 기준
 eval profile = holdout 제외 seed 리뷰 기준
 ```
 
-holdout 후보는 최신 리뷰 한 건이다. Product Feature Join이 불가능하면 평가에서
-제외하고, Join은 가능하지만 긍정 조건을 만족하지 않으면 negative/diagnostic target으로
-보존한다. 이 순서를 고정해야 실행마다 평가 대상 수가 달라지지 않는다.
+holdout target은 마지막 긍정 리뷰 한 건이다. 우리가 만드는 것은 선호 상품을 맞히는
+추천기이므로 정답은 긍정 상호작용이어야 한다. 1~2점을 준 상품을 맞히라는 것은 다른
+과제다.
+
+target보다 나중에 쓴 리뷰는 시간 절단 대상이라 seed로 쓰지 않는다. PC 9,900명 중
+450명(4.5%)이 여기 해당하며 리뷰 665건이다. 이 신호를 통째로 버리지 않기 위해 최신
+리뷰의 극성은 `persona_profile.latest_review_label`로 남긴다. PC 기준 `negative` 369명,
+`diagnostic` 237명이며 Dashboard의 이탈 직전 segment가 이 값을 쓴다.
+
+긍정 조건에 `is_recommended`를 포함하되 `rating >= 3`일 때만 인정한다. 1~2점에 추천
+표기가 함께 있는 경우는 서로 모순되는 입력이라 정답으로 쓰지 않는다(PC 8명).
 
 생성된 Synthetic 로그로 생성 규칙 자체를 평가하면 순환 검증이 되므로 추천 품질은
 실제 리뷰 holdout으로 검증한다.
@@ -160,10 +168,11 @@ Mart.simulation_run_id
 
 남은 차이:
 
-- **§7.1의 target 선택 규칙이 `batch/jobs/eval_metadata.py`와 다르다.** 계약은 가장
-  최신 리뷰를, 정본은 마지막 긍정 리뷰를 고른다. PC 9,900명 중 752명(7.6%)에서 다른
-  상품이 나오고, 계약 규칙에서는 598명(6.0%)이 `is_holdout_eligible=false`가 된다.
-  `contracts/persona/compare_holdout_rules.py`가 수치를 낸다. AI/추천 담당과 합의 전이다.
+- **평가 정본이 계약 §7.1.1·§7.1.2를 아직 반영하지 않았다.** 계약을 정본 정의로 맞춰
+  target 불일치가 752명에서 162명(1.6%)으로 줄었고, 남은 162명은 정본이
+  `is_recommended`를 인정하지 않아서 157명, tie-break 기준이 없어서 5명이다. 설명되지
+  않는 차이는 0건이다. AI 담당이 `eval_metadata.py`를 반영하고 재생성하면
+  `compare_holdout_rules.py --require-zero`로 0건을 확인한다.
 - `persona_seed_product.initial_event_weight`의 산식이
   [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md)에 없어 NULL로
   둔다. 값을 임의로 채우지 않는다.
@@ -175,9 +184,10 @@ Mart.simulation_run_id
 - `simulation_run`·`scenario`(계약 §10)는 생성기 실행 산출물이라 평탄화 단계에 원천이
   없다. 실행 시점에 run manifest를 남길지 정해야 한다.
 
-평탄화를 실제로 돌려 계약 §7.1의 결함 두 가지를 찾아 고쳤다. `negative`/`diagnostic`
-경계가 없던 것과, 같은 상품에 리뷰를 두 번 이상 쓴 Persona(PC 2,160명·21.8%)의 target
-상품이 seed에 남아 추천 후보에서 하드 제외되던 것이다. 자세한 근거는
+평탄화를 실제로 돌려 계약 §7.1의 결함을 찾아 고쳤다. `negative`/`diagnostic` 경계가
+없던 것, 같은 상품에 리뷰를 두 번 이상 쓴 Persona(PC 2,137명·21.6%)의 target 상품이
+seed에 남아 추천 후보에서 하드 제외되던 것, 그리고 target 선택 규칙이 평가 정본과
+달랐던 것이다. 자세한 근거는
 [`contracts/persona/README.md`](../../contracts/persona/README.md)에 있다.
 
 ## 10. 샘플·E2E 검증 체크리스트

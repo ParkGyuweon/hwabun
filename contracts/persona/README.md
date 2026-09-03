@@ -50,6 +50,7 @@ py contracts/persona/build_persona_tables.py --sample PA:100
 py contracts/persona/build_persona_tables.py --sample PC:100
 
 py contracts/persona/validate_persona_tables.py contracts/persona/data
+py contracts/persona/compare_holdout_rules.py
 py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 ```
 
@@ -62,39 +63,55 @@ py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 저장 엔진이 확정된 뒤에 붙인다 (`docs/analytics/dw-design.md` §5).
 
 **산출물은 커밋하지 않는다.** 난수가 없어 누가 돌려도 같은 결과가 나오고, 아직 이
-테이블을 읽는 모듈이 없다. 아래 §7.1 규칙이 확정되면 산출물이 바뀌므로 그때까지는
-필요할 때 로컬에서 다시 만든다. 9,900명 전량은 약 70MB 다.
+테이블을 읽는 모듈이 없다. 필요할 때 로컬에서 다시 만든다. 9,900명 전량은 약 70MB 다.
 
 ## 검증 결과 (2026-09-03)
 
 | 표본 | 페르소나 | 검사 행 | 위반 |
 |---|---:|---:|---:|
 | `pa010` | 10 | 200 | 0 |
-| `pa100` | 100 | 2,031 | 0 |
-| `pc100` | 100 | 1,770 | 0 |
+| `pa100` | 100 | 2,025 | 0 |
+| `pc100` | 100 | 1,760 | 0 |
 
 계약 §11 조건 9·10 은 Simulation Run 과 Event 의 `generator_type` 을 보는 항목이라
 이 산출물의 범위 밖이다. Event 계약 검증기가 담당한다.
 
 ## 계약을 고치게 만든 것
 
-평탄화를 실제로 돌려 보고 계약 §7.1 의 결함 두 가지를 찾아 고쳤다.
+평탄화를 실제로 돌려 보고 계약 §7.1 의 결함 세 가지를 찾아 고쳤다.
 
-1. **`negative` / `diagnostic` 경계가 없었다.** §7.1-5 가 둘 중 하나라고만 쓰고
-   기준을 정하지 않았다. `recommendation-io-spec.md` 의 리뷰 극성(1~2 부정 / 3 중립)
-   을 따르도록 계약에 명시했다.
-2. **정답 상품이 seed 에 남았다.** §7.1-7 을 글자대로 적용하면, 같은 상품에 리뷰를
-   두 번 이상 쓴 사람(PC 9,900명 중 2,160명 · 21.8%)의 target 상품이 seed 에도
-   들어간다. seed 상품은 `is_seen=true` 로 추천 후보에서 하드 제외되므로 정답을
-   절대 맞힐 수 없는 평가가 된다. 후보와 같은 상품의 이전 리뷰를 `excluded` 로
-   돌리도록 계약과 구현을 함께 고쳤다. `batch/jobs/eval_metadata.py` 도 같은 방어를
-   이미 하고 있었다.
+1. **`negative` / `diagnostic` 경계가 없었다.** 둘 중 하나라고만 쓰고 기준을 정하지
+   않았다. `recommendation-io-spec.md` 의 리뷰 극성(1~2 부정 / 3 중립)을 따르도록
+   계약에 명시했다.
+2. **정답 상품이 seed 에 남았다.** 이전 리뷰를 전부 seed 로 두면, 같은 상품에 리뷰를
+   두 번 이상 쓴 사람(PC 2,137명 · 21.6%)의 target 상품이 seed 에도 들어간다. seed
+   상품은 `is_seen=true` 로 추천 후보에서 하드 제외되므로 정답을 절대 맞힐 수 없는
+   평가가 된다. target 과 같은 상품의 이전 리뷰를 `excluded` 로 돌렸다.
+3. **정답 선택 규칙이 평가 정본과 달랐다.** 계약은 가장 최신 리뷰를,
+   `batch/jobs/eval_metadata.py` 는 마지막 긍정 리뷰를 골라 PC 9,900명 중 752명(7.6%)
+   에서 다른 상품이 나왔다. 우리가 만드는 것은 선호 상품을 맞히는 추천기이므로
+   계약을 정본 정의로 맞췄다. 불만 리뷰는 정답이 아니라
+   `persona_profile.latest_review_label` 로 사람 속성에 남긴다.
+
+## 정답 규칙 정렬 현황
+
+`compare_holdout_rules.py` 가 계약과 평가 정본이 같은 정답을 고르는지 확인한다.
+
+| | 인원 | 비고 |
+|---|---:|---|
+| 계약 개정 전 target 불일치 | 752명 | 7.6% |
+| 개정 후 남은 불일치 | **162명** | 1.6% |
+| 정본이 `is_recommended` 미인정 (§7.1.1) | 157명 | 정본 반영 시 해소 |
+| 정본에 tie-break 기준 없음 (§7.1.2) | 5명 | 정본 반영 시 해소 |
+| 설명되지 않는 차이 | **0명** | |
+
+AI 담당이 `eval_metadata.py` 에 §7.1.1·§7.1.2 를 반영하고 재생성하면
+`py contracts/persona/compare_holdout_rules.py --require-zero` 로 0건을 인수 기준으로
+쓴다. 설명되지 않는 차이가 나오면 이 스크립트가 종료 코드 2 로 실패한다.
 
 ## 아직 결정되지 않은 것
 
-- **§7.1 의 target 선택 규칙.** 계약(가장 최신 리뷰)과 `batch/jobs/eval_metadata.py`
-  (마지막 긍정 리뷰)가 PC 9,900명 중 752명(7.6%)에서 다른 상품을 고른다.
-  `compare_holdout_rules.py` 가 수치를 낸다. AI/추천 담당과 합의 전이다.
 - **`initial_event_weight` 산식.** 계약상 nullable=Y 이고 `recommendation-io-spec.md`
   에 정의가 없어 NULL 로 둔다.
-- **PA 100명의 평가 정본.** `eval_metadata.jsonl` 은 PC 9,900명만 담는다.
+- **PA 100명의 평가 정본.** `eval_metadata.jsonl` 은 PC 9,900명만 담아 PA 는 대조군이
+  없다. AI 담당에게 같은 규칙으로 생성을 요청했다.
