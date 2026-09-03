@@ -35,9 +35,25 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | 재실행 | 같은 입력 범위 재실행 시 Dataset key 기준 동일 결과로 수렴 |
 | 업무 중복 | `cleaned_events` 생성 전에 `event_id` 정본 1건 선택 |
 | Schema 확장 | 신규 컬럼은 nullable 추가를 기본으로 하고 기존 컬럼 의미·타입 변경 금지 |
+| Tenant 격리 | 모든 Dataset은 `tenant_id`를 보유하고 소비자는 이 값으로만 격리한다 |
 
 환경별 Delta root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
 하위 경로는 환경이 달라도 유지한다.
+
+### 2.1 `tenant_id`와 `brand_id`
+
+두 값은 뜻이 다르므로 서로 대체하지 않는다.
+
+| 컬럼 | 뜻 | 원천 |
+| --- | --- | --- |
+| `tenant_id` | 그 Event가 발생한 Storefront의 소유 Tenant | Raw Envelope에서 승격 |
+| `brand_id` | 그 Event가 대상으로 한 상품의 브랜드 | `product_id` → `dim_product` Join 파생 |
+
+격리, partition, Mart 집계 key는 `tenant_id`만 사용한다. `brand_id`는 상품 속성이며
+`page_view`처럼 상품이 없는 Event에서는 NULL이다.
+
+`schema_version = 0.2.0-draft` Event에는 `tenant_id`가 없다. 이 경우 컬럼은 NULL이며
+Tenant 격리가 필요한 소비자는 해당 row를 제외한다. 값을 임의로 추정해 채우지 않는다.
 
 ## 3. Dataset 카탈로그
 
@@ -148,6 +164,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `request_id` | string | Y | Collector batch ID |
 | `event_index` | int | Y | batch 내부 순서 |
 | `source` | string | N | Raw payload 우선, 누락 시 fallback |
+| `tenant_id` | string | Y | Storefront 소유 Tenant. `0.2.0-draft` Event는 NULL |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `is_synthetic` | boolean | N | synthetic 판정 결과 |
 | `user_id` | string | Y | synthetic이면 `persona_id`; Web 정책 확정 전 NULL |
@@ -188,6 +205,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `event_date_kst` | date | N | Partition |
 | `session_id` | string | N | 세션 ID |
 | `page_view_id` | string | N | 페이지 방문 ID |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -233,6 +251,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `event_name` | string | N | Event 이름 |
 | `intent` | string | N | Event 의미 |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -278,6 +297,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `search_id` | string | Y | 검색 1회 ID |
 | `event_time` | timestamp | N | 검색 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -304,6 +324,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `section_id` | string | Y | Grain |
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -334,6 +355,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `section_id` | string | Y | Grain |
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -365,6 +387,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `funnel_date_kst` | date | N | 최초 non-null Funnel 단계의 KST 날짜 |
 | `session_id` | string | N | Unique key |
 | `product_id` | string | N | Unique key |
+| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -466,3 +489,5 @@ Vector 자체를 저장하지 않는다.
 7. 상품 Dimension Join 전후 row 수가 의도하지 않게 증가하지 않는다.
 8. 같은 입력 범위 재실행 후 Dataset key와 집계값이 변하지 않는다.
 9. 현재 미구현 Dataset은 구현 전까지 소비자가 존재하는 것으로 가정하지 않는다.
+10. `schema_version = 0.3.0-draft` row는 `tenant_id`가 NULL이 아니다.
+11. `tenant_id`와 `brand_id`가 같은 값을 담지 않는다. 후자는 상품 Dimension 파생이다.
