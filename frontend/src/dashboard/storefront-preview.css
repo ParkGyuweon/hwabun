@@ -444,7 +444,13 @@
   align-items: center;
   justify-content: center;
   font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
   color: var(--ink);
+}
+
+.sfg--text[data-value='serif'] {
+  font-size: 12px;
 }
 
 .sfg--text[data-value='serif'] {
@@ -974,62 +980,4 @@
 .sfp[data-font='wide'] .sfp__h2 {
   letter-spacing: 0.16em;
   font-weight: 500;
-}
-
-/* ---------- 모서리·카드·글꼴 도식 ---------- */
-
-.sfg[data-kind='corner'] .sfg__cells,
-.sfg[data-kind='card'] .sfg__cells {
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px;
-}
-
-.sfg[data-kind='corner'][data-value='sharp'] .sfg__cells i {
-  border-radius: 0;
-}
-
-.sfg[data-kind='corner'][data-value='soft'] .sfg__cells i {
-  border-radius: 3px;
-}
-
-.sfg[data-kind='corner'][data-value='round'] .sfg__cells i {
-  border-radius: 999px;
-}
-
-.sfg[data-kind='card'] .sfg__cells i {
-  border-radius: 3px;
-}
-
-.sfg[data-kind='card'][data-value='line'] .sfg__cells i {
-  background: transparent;
-  border: 1px solid var(--line);
-}
-
-.sfg[data-kind='card'][data-value='shadow'] .sfg__cells i {
-  background: var(--panel);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
-}
-
-.onboard__opt.is-active .sfg[data-kind='card'][data-value='line'] .sfg__cells i {
-  background: transparent;
-  border-color: var(--brand);
-}
-
-/* 글꼴은 글자로 보여준다 */
-.sfg--text {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  color: var(--ink);
-}
-
-.sfg--text[data-value='serif'] {
-  font-family: 'Nanum Myeongjo', 'Batang', 'Apple SD Gothic Neo', serif;
-}
-
-.sfg--text[data-value='wide'] {
-  letter-spacing: 0.12em;
-  font-weight: 500;
-  font-size: 13px;
 }
