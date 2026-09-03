@@ -28,7 +28,12 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | Persona·리뷰·평가 split·segment·Simulation Run | `persona-schema.md` |
 | DW Dimension·Mart grain·key·컬럼·타입·nullable | `dw-schema.md` |
 | Product Feature | `product-feature-spec.md`, `product-feature-vocab.json` |
+| 상품 등록 입력 필드·어휘 제약·파생값 | `product-registration-spec.md` |
+| 상품 등록 폼 어휘와 한국어 표시 문구 | `product-form-labels-ko.json` |
 | Recommendation 입출력과 행동 집계 | `recommendation-io-spec.md` |
+
+`product-form-labels-ko.json`은 `batch/ingest/build_form_labels.py`가 어휘집에서
+생성한다. 직접 편집하지 않는다.
 
 ## 변경 규칙
 
@@ -39,7 +44,9 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 4. 계약이 바뀌는 경우 관련 설명 문서는 계약을 복사하지 않고 변경된 계약을
    참조하도록 갱신한다.
 
-## Event 검증 명령
+## 검증 명령
+
+### Event
 
 ```bash
 python contracts/validate_events.py contracts/samples/raw-event.user.valid.json
@@ -49,3 +56,20 @@ python contracts/coverage_report.py contracts/samples/event-properties.invalid.j
 
 마지막 명령은 의도적인 required property·타입·enum 위반을 탐지하므로 종료 코드 2가
 정상이다.
+
+### 상품 등록
+
+```bash
+python contracts/validate_product_registration.py <상품 JSON 또는 JSONL>
+```
+
+**등록 입력에만 사용한다.** 기존 카탈로그 `products_200.json`은 Sephora 원천이라
+`highlights`에 성분 태그가 들어 있어 `product-registration-spec.md` §3.1 위반으로
+잡힌다. 두 집합의 규칙이 다르기 때문이며 결함이 아니다.
+
+### Persona
+
+```bash
+python contracts/persona/validate_persona_tables.py contracts/persona/data
+python contracts/persona/compare_holdout_rules.py --require-zero
+```
