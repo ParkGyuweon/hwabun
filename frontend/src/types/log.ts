@@ -112,6 +112,29 @@ export type LogSection =
  * 구매 판단에서 각각이 하는 역할이 전혀 다르다.
  * 레이아웃을 바꿔도 "성분을 오래 봤다" 가 유지되도록 콘텐츠 종류를 따로 남긴다.
  */
+/**
+ * `filter_change.filter_kind` — 무엇으로 좁혔는가.
+ *
+ * 무엇을 눌렀는지보다 **무엇으로 좁혔는지**가 취향을 말해준다.
+ * 가격으로 좁히는 사람과 고민으로 좁히는 사람은 다른 고객이다.
+ *
+ * 이 목록이 프론트의 단일 출처다. 전에는 `applyFilter(kind: string)` 이라
+ * 호출부를 하나씩 세어야만 값 범위를 알 수 있었고, 계약의 enum 과 조용히
+ * 어긋날 수 있었다. 여기에 없는 값은 이제 컴파일이 막는다.
+ *
+ * 계약(`contracts/event-properties-schema.md`)에 `ingredient_exclude` 와
+ * `skin_type` 도 함께 등재하기로 했지만 그 필터는 아직 화면에 없다.
+ * 화면이 생길 때 여기에 더한다 — 안 쓰는 값을 미리 넣으면 이 표가
+ * "무엇을 내보내는가" 가 아니라 "무엇을 내보낼 수도 있는가" 가 된다.
+ */
+export type FilterKind =
+  /** 카테고리 탭과 헤더 메뉴. 값은 'all' 또는 중분류 이름 */
+  | 'category'
+  /** 고민 셀렉트. 값은 'all' 또는 skincare_concerns 의 값 */
+  | 'concern'
+  /** 가격대 버튼. 값은 all · under20 · 20to50 · 50to100 · over100 */
+  | 'price';
+
 export type LogContentKind =
   | 'product_image'
   | 'price'

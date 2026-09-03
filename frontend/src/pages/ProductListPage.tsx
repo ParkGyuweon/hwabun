@@ -8,6 +8,7 @@ import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
+import type { FilterKind } from '../types/log';
 import { track } from '../lib/logger';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
@@ -324,7 +325,7 @@ export default function ProductListPage({
   };
 
   /** 무엇으로 좁혔는지가 취향을 말해준다. 필터 종류를 함께 남긴다 */
-  const applyFilter = (kind: string, value: string, reset = true) => {
+  const applyFilter = (kind: FilterKind, value: string, reset = true) => {
     track('filter_change', { filter_kind: kind, filter_value: value });
     if (reset) setShown(PAGE_SIZE);
   };
