@@ -535,21 +535,43 @@ Vector 자체를 저장하지 않는다.
 `dim_product`는 Processed Fact의 상품 속성 보강 입력이다. unique key는
 `product_id`이며 partition하지 않는다.
 
+Sephora 원천 카탈로그와 Tenant가 직접 등록한 상품을 **같은 Dimension에 둔다.** Fact가
+`product_id`로 Join하는데 Dimension을 나누면 모든 소비자가 두 번 Join해 합쳐야 하고,
+합치는 규칙이 소비자마다 갈린다. 출처는 `product_source` 컬럼으로 구분한다.
+
 | column | type | nullable | source / rule |
 | --- | --- | --- | --- |
 | `product_id` | string | N | Unique key |
 | `product_name` | string | N | 상품명 |
+| `tenant_id` | string | Y | 등록 Tenant. 원천 카탈로그 상품은 NULL |
+| `product_source` | string | N | `seed_catalog`, `tenant_registered` |
 | `brand_id` | string | N | 브랜드 ID |
 | `brand_name` | string | N | 브랜드명 |
 | `category_id` | string | N | 카테고리 ID |
 | `category_name` | string | N | 카테고리명 |
+| `secondary_category` | string | Y | 어휘 8종. Product Feature 인코딩 축 |
+| `tertiary_category` | string | Y | 어휘 19종. Product Feature 인코딩 축 |
 | `base_price` | decimal(18,2) | N | 기준 가격 |
 | `currency` | string | N | 통화 |
+| `price_krw` | decimal(18,2) | Y | Tenant 입력 원가. 등록 상품만 |
 | `skin_type_tags` | array<string> | N | 피부 타입 태그 |
 | `concern_tags` | array<string> | N | 고민 태그 |
 | `ingredient_ids` | array<string> | N | 성분 ID 목록 |
 | `caution_ingredient_count` | int | N | 주의 성분 수 |
+| `rating` | double | Y | 평균 평점 |
+| `rating_source` | string | N | `observed`, `injected` |
+| `loves_count` | bigint | Y | 관심 수 |
+| `registered_at` | timestamp | Y | 등록 시각. 등록 상품만 |
 | `updated_at` | timestamp | N | 상품 속성 갱신 시각 |
+
+`rating_source`가 필요한 이유는 등록 상품의 `rating`이 실측이 아니라 카테고리 중앙값을
+주입한 값이기 때문이다([`product-registration-spec.md`](./product-registration-spec.md) §4.2).
+Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품이 실제로 좋은 평가를 받은
+것처럼 읽힌다. 리뷰가 쌓이면 `observed`로 바뀐다.
+
+`tenant_id`가 NULL인 상품은 시연·검증용 원천 카탈로그다. Tenant별 Storefront에 어떤
+상품을 진열할지는 이 Dimension이 아니라 진열 설정에서 정한다. `product_source`는
+"누가 만든 데이터인가"이지 "누가 파는가"가 아니다.
 
 ## 17. 구현 정합성 완료 조건
 
@@ -571,3 +593,7 @@ Vector 자체를 저장하지 않는다.
 9. 현재 미구현 Dataset은 구현 전까지 소비자가 존재하는 것으로 가정하지 않는다.
 10. `schema_version = 0.3.0-draft` row는 `tenant_id`가 NULL이 아니다.
 11. `tenant_id`와 `brand_id`가 같은 값을 담지 않는다. 후자는 상품 Dimension 파생이다.
+12. `dim_product.rating_source`가 `injected`인 row는 Dashboard 평균 평점 집계에서
+    제외하거나 별도로 표시한다.
+13. `dim_product.product_source`가 `tenant_registered`인 row는 `tenant_id`가 NULL이
+    아니다.
