@@ -67,6 +67,41 @@ function initialProductId(): string | null {
 }
 
 /**
+ * 첫 진입 주소에 페르소나가 있으면 그 사람으로 시작한다.
+ *
+ * 페르소나를 화면 상태로만 들고 있으면 새 탭은 늘 첫 번째 사람으로 열린다. 그래서
+ * 부하 생성기는 화면을 먼저 열고 드롭다운으로 사람을 바꾸는데, **바꾸기 전에 이미
+ * 렌더된 화면의 이벤트가 첫 번째 사람 앞으로 기록된다.** 딥링크(`?product=`)로 상세에
+ * 바로 들어가면 그 화면의 노출과 추천 스냅샷까지 남의 것이 된다.
+ * (PA 100명 실행에서 49,749건 중 21,767건이 PA00001 로 쏠렸다 — 데이터 파트 실측)
+ *
+ * 전환을 앞당기는 것으로는 못 고친다. 뒤이은 이동이 선택을 되돌린다.
+ * 그래서 상품과 똑같이 **주소로 정한다.** 목록에 없는 값은 무시하고 기본값으로 가는
+ * 규칙도 `initialProductId` 와 같다.
+ *
+ * `actor=synthetic` 계열과 달리 개발 서버로 제한하지 않는다. 이 값이 하는 일은 화면의
+ * 페르소나 드롭다운과 똑같아서, 주소로 고르든 눌러서 고르든 결과가 다르지 않다.
+ * 로그의 출처(actor_type)를 바꾸는 값이 아니므로 위장에 쓰일 여지도 없다.
+ */
+function initialPersonaId(): string {
+  const fallback = personas[0]?.persona_id ?? '';
+  const requested = new URLSearchParams(window.location.search).get('persona');
+  return requested && personas.some((p) => p.persona_id === requested) ? requested : fallback;
+}
+
+/**
+ * 로거에 먼저 꽂아 둔다.
+ *
+ * 자식 컴포넌트의 effect 는 부모(App)의 effect 보다 먼저 돈다. 그래서 `startSession` 이
+ * 돌기 전에 진입 화면의 `recommendation_snapshot` 과 `scroll_depth` 두 건이 이미 나간다.
+ * 그때 persona 가 비어 있으면 **딥링크로 들어온 방문의 첫 노출이 주인 없는 로그**가 된다.
+ * 추천 스냅샷은 그 사람 기준으로 계산해 놓고 누구 것인지는 안 적히는 셈이라 더 나쁘다.
+ *
+ * 모듈을 읽을 때 한 번 정한다 — 로거가 synthetic 표시를 정하는 방식과 같다.
+ */
+setLoggerContext({ personaId: initialPersonaId() });
+
+/**
  * 라우터는 아직 붙이지 않았다.
  *
  * 화면이 목록과 상세 둘뿐이라 상태 전환으로 충분하다.
@@ -77,7 +112,7 @@ export default function App() {
   // effect 로 늦게 세팅하면 목록을 한 번 그린 뒤 상세로 바뀌어서
   // page_view 가 목록·상세 두 번 찍힌다. 처음부터 올바른 값으로 시작한다.
   const [productId, setProductId] = useState<string | null>(initialProductId);
-  const [personaId, setPersonaId] = useState(personas[0]?.persona_id ?? '');
+  const [personaId, setPersonaId] = useState(initialPersonaId);
   // 헤더 메뉴와 목록 탭이 같은 값을 바꾸므로 여기서 소유한다
   const [listCategory, setListCategory] = useState('all');
   /** 장바구니 화면이 열려 있는지. 상품 상태와 별개로 겹쳐 둔다 */

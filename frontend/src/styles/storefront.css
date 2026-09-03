@@ -128,8 +128,8 @@
   --sf-gap-col: 24px;
   --sf-name: 15px;
   /* 모서리는 corner 축이 소유한다. 크기(density) 축은 건드리지 않는다 */
-  --sf-r-img: 16px;
-  --sf-r-card: 14px;
+  --sf-r-img: 14px;
+  --sf-r-card: 12px;
   --sf-r-chip: 999px;
   --sf-r-input: 999px;
   /* 카드 표면 — card 축 */
@@ -540,8 +540,8 @@
 }
 
 :root[data-corner='round'] {
-  --sf-r-img: 26px;
-  --sf-r-card: 22px;
+  --sf-r-img: 30px;
+  --sf-r-card: 26px;
   --sf-r-chip: 999px;
   --sf-r-input: 999px;
 }

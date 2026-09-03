@@ -588,8 +588,13 @@
    ========================================================================== */
 
 .sfp {
-  --sfp-r-img: 6px;
-  --sfp-r-card: 7px;
+  /*
+   * 사진 모서리는 비율에 상한을 걸어 준다. 미리보기 카드는 배열·크기 축에 따라
+   * 30~330px 로 널뛴다. px 로만 주면 작을 때 차이가 안 보이고, % 로만 주면 큰 카드가
+   * 실제 화면보다 훨씬 둥글어져서 미리보기가 거짓말을 한다.
+   */
+  --sfp-r-img: min(7%, 10px);
+  --sfp-r-card: 5px;
   --sfp-r-chip: 999px;
   --sfp-card-line: var(--line-soft);
   --sfp-card-lift: none;
@@ -597,13 +602,13 @@
 }
 
 .sfp[data-corner='sharp'] {
-  --sfp-r-img: 0px;
-  --sfp-r-card: 0px;
-  --sfp-r-chip: 0px;
+  --sfp-r-img: 0;
+  --sfp-r-card: 0;
+  --sfp-r-chip: 0;
 }
 
 .sfp[data-corner='round'] {
-  --sfp-r-img: 12px;
+  --sfp-r-img: min(16%, 24px);
   --sfp-r-card: 11px;
   --sfp-r-chip: 999px;
 }
@@ -629,19 +634,23 @@
   border-radius: var(--sfp-r-chip);
 }
 
-.sfp[data-layout='list'] .sfp__card,
-.sfp[data-card='shadow'] .sfp__cards .sfp__card {
+/*
+ * 진짜 화면의 .card 는 기본(테두리)에서도 상자를 그린다. 미리보기가 상자를 안 그리면
+ * 모서리 축이 작은 사진에만 걸려서 '기본'과 '둥글게'가 같아 보인다. 똑같이 그린다.
+ */
+.sfp__card {
   border: 1px solid var(--sfp-card-line);
   border-radius: var(--sfp-r-card);
   box-shadow: var(--sfp-card-lift);
   background: var(--sfp-card-bg);
-  padding: 5px;
+  padding: 4px;
 }
 
-.sfp[data-card='plain'] .sfp__cards .sfp__card {
+.sfp[data-card='plain'] .sfp__card {
   border-color: transparent;
   box-shadow: none;
   background: transparent;
+  padding: 0;
 }
 
 .sfp[data-font='serif'] .sfp__logo,
