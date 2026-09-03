@@ -4,7 +4,7 @@
 최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
 상태: 표본 평탄화 검증 완료, §7.1 target 선택 규칙 합의·E2E 검증 대기
 계약 원본: [`contracts/persona-schema.md`](../../contracts/persona-schema.md)
-평탄화 구현: [`batch/persona/`](../../batch/persona/README.md)
+평탄화 구현: [`contracts/persona/`](../../contracts/persona/README.md)
 
 ## 1. 문서 목적
 
@@ -154,7 +154,7 @@ Mart.simulation_run_id
 - Profile 식별·버전 필드 6종(`user_id`, `persona_source`, `profile_version`,
   `profile_scope`, `created_at`, `updated_at`)이 생성기에 반영되어 두 표본 10,000명
   전원에 존재한다. 파일명이나 ID prefix로 추론하지 않는다.
-- 중첩 JSON을 계약 테이블 8종으로 평탄화하는 구현이 `batch/persona/`에 생겼다.
+- 중첩 JSON을 계약 테이블 8종으로 평탄화하는 구현이 `contracts/persona/`에 생겼다.
   PA 10·100명과 PC 100명 표본에서 계약 §11 조건과 grain·nullable·enum·누출 검사가
   위반 0건으로 통과했다.
 
@@ -163,7 +163,7 @@ Mart.simulation_run_id
 - **§7.1의 target 선택 규칙이 `batch/jobs/eval_metadata.py`와 다르다.** 계약은 가장
   최신 리뷰를, 정본은 마지막 긍정 리뷰를 고른다. PC 9,900명 중 752명(7.6%)에서 다른
   상품이 나오고, 계약 규칙에서는 598명(6.0%)이 `is_holdout_eligible=false`가 된다.
-  `batch/persona/compare_holdout_rules.py`가 수치를 낸다. AI/추천 담당과 합의 전이다.
+  `contracts/persona/compare_holdout_rules.py`가 수치를 낸다. AI/추천 담당과 합의 전이다.
 - `persona_seed_product.initial_event_weight`의 산식이
   [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md)에 없어 NULL로
   둔다. 값을 임의로 채우지 않는다.
@@ -178,7 +178,7 @@ Mart.simulation_run_id
 평탄화를 실제로 돌려 계약 §7.1의 결함 두 가지를 찾아 고쳤다. `negative`/`diagnostic`
 경계가 없던 것과, 같은 상품에 리뷰를 두 번 이상 쓴 Persona(PC 2,160명·21.8%)의 target
 상품이 seed에 남아 추천 후보에서 하드 제외되던 것이다. 자세한 근거는
-[`batch/persona/README.md`](../../batch/persona/README.md)에 있다.
+[`contracts/persona/README.md`](../../contracts/persona/README.md)에 있다.
 
 ## 10. 샘플·E2E 검증 체크리스트
 

@@ -6,7 +6,7 @@
 카탈로그에 없는 상품 — 를 손으로 만들어 규칙이 무너지지 않는지 본다.
 
 실행
-    py -m unittest batch/persona/test_persona_tables.py
+    py -m unittest contracts/persona/test_persona_tables.py
 """
 from __future__ import annotations
 

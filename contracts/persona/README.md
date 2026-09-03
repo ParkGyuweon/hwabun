@@ -7,7 +7,7 @@
 simulator/personas/data/personas_*.json      사람 1명 + reviews[] 배열
         |  build_persona_tables.py
         v
-batch/persona/data/<sample>/*.jsonl          테이블 8종
+contracts/persona/data/<sample>/*.jsonl          테이블 8종
         |  validate_persona_tables.py
         v
 계약 §11 · grain · nullable · enum · 누출 검사
@@ -45,16 +45,16 @@ DW 의 `dim_persona_segment` 도, Processed 의 persona join 도 평탄 테이�
 ## 실행
 
 ```bash
-py batch/persona/build_persona_tables.py --sample PA:10
-py batch/persona/build_persona_tables.py --sample PA:100
-py batch/persona/build_persona_tables.py --sample PC:100
+py contracts/persona/build_persona_tables.py --sample PA:10
+py contracts/persona/build_persona_tables.py --sample PA:100
+py contracts/persona/build_persona_tables.py --sample PC:100
 
-py batch/persona/validate_persona_tables.py batch/persona/data
-py -m unittest discover -s batch/persona -t batch/persona -p "test_*.py"
+py contracts/persona/validate_persona_tables.py contracts/persona/data
+py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 ```
 
 `--sample` 은 `대역:인원` 이다 (`PA:10` · `PC:100` · `PC:all`). 산출은
-`batch/persona/data/<sample_id>/` 아래에 테이블당 JSONL 한 개와 `_manifest.json`
+`contracts/persona/data/<sample_id>/` 아래에 테이블당 JSONL 한 개와 `_manifest.json`
 (원천 파일·행 수·규칙 버전) 이다.
 
 포맷이 JSONL 인 이유는 의존성이 필요 없고 저장소의 다른 배치 산출물

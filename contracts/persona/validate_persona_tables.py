@@ -17,8 +17,8 @@ TABLE_SPECS(컬럼·타입·nullable)와 원천 파일을 **다시 읽어** 대�
 위반이 하나라도 있으면 종료 코드 2 다.
 
 실행
-    py batch/persona/validate_persona_tables.py batch/persona/data
-    py batch/persona/validate_persona_tables.py batch/persona/data/pa010
+    py contracts/persona/validate_persona_tables.py contracts/persona/data
+    py contracts/persona/validate_persona_tables.py contracts/persona/data/pa010
 """
 from __future__ import annotations
 

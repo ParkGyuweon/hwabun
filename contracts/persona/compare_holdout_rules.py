@@ -12,7 +12,7 @@
 `batch/jobs/eval_metadata.py` 는 읽기만 하고 고치지 않는다.
 
 실행
-    py batch/persona/compare_holdout_rules.py --out docs/analytics/persona-holdout-rule-conflict.md
+    py contracts/persona/compare_holdout_rules.py --out docs/analytics/persona-holdout-rule-conflict.md
 """
 from __future__ import annotations
 
@@ -125,7 +125,7 @@ def render(full, sample, agent, examples):
         "# Holdout 규칙 불일치 — 결정 요청",
         "",
         "> **임시 문서.** 박규원 님과 결정한 뒤 삭제한다. 커밋 대상이 아니다.",
-        f"> 생성: `batch/persona/compare_holdout_rules.py` · 대상 PC {n:,}명 · PA {as_['personas']}명",
+        f"> 생성: `contracts/persona/compare_holdout_rules.py` · 대상 PC {n:,}명 · PA {as_['personas']}명",
         "",
         "## 1. 무엇이 다른가",
         "",

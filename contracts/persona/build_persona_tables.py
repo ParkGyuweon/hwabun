@@ -4,7 +4,7 @@
     simulator/personas/data/personas_*.json      사람 1명 + reviews[] 배열
         |
         v
-    batch/persona/data/<sample>/<table>.jsonl    grain 별 평탄 테이블
+    contracts/persona/data/<sample>/<table>.jsonl    grain 별 평탄 테이블
 
 계약 원본은 `contracts/persona-schema.md` 다. 컬럼·타입·nullable 은 이 파일의
 TABLE_SPECS 에 그대로 옮겨 두었고, `validate_persona_tables.py` 가 같은 표를 읽어
@@ -21,8 +21,8 @@ TABLE_SPECS 에 그대로 옮겨 두었고, `validate_persona_tables.py` 가 같
     평탄화 단계에 원천이 없다.
 
 실행
-    py batch/persona/build_persona_tables.py --sample PA:10
-    py batch/persona/build_persona_tables.py --sample PC:100 --out batch/persona/data
+    py contracts/persona/build_persona_tables.py --sample PA:10
+    py contracts/persona/build_persona_tables.py --sample PC:100 --out contracts/persona/data
 """
 from __future__ import annotations
 
