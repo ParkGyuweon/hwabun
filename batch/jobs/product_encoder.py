@@ -14,7 +14,7 @@ REVIEW_CONCERN = os.path.join(ROOT, "batch", "ingest", "data", "concern_from_rev
 REVIEW_CONCERN_TOPK = 2
 
 _PAREN = re.compile(r"\([^)]*\)")
-_NOISE = re.compile(r"^(water|aqua|eau)$|^\d|^and$|^or$|^may contain")
+_NOISE = re.compile(r"^(water|aqua|eau|정제수|물)$|^\d|^and$|^or$|^may contain")
 _SPLIT = re.compile("[,;" + chr(10) + "]")
 _POP = re.compile(r"allure|Best of Beauty|Community Favorite|Award|Winner", re.I)
 
@@ -89,9 +89,13 @@ class Encoder:
         txt = _PAREN.sub(" ", " ".join(x["ingredients"]))
         out = []
         for tok in _SPLIT.split(txt):
-            s = re.sub(r"[^A-Za-z0-9 \-/]", " ", tok).strip().lower()
+            # **한글을 남긴다.** 국내 브랜드는 한글 전성분표를 붙여넣는다.
+            # 지우면 토큰이 통째로 사라져 성분 매칭이 0 이 된다 (가중치 0.27)
+            s = re.sub(r"[^A-Za-z0-9가-힣 \-/]", " ", tok).strip().lower()
             s = re.sub(r"\s+", " ", s)
-            if not s or len(s) < 3 or len(s) > 45 or _NOISE.match(s):
+            # 한글 성분명은 영문보다 짧다 (세라마이드 5자, 판테놀 3자)
+            floor = 2 if any("\uac00" <= c <= "\ud7a3" for c in s) else 3
+            if not s or len(s) < floor or len(s) > 45 or _NOISE.match(s):
                 continue
             out.append(s)
         return out
