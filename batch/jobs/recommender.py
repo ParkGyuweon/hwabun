@@ -81,16 +81,43 @@ def schedule_for(n_seed):
     return SCHEDULE[-1][1:]
 
 
+def prior_in_catalog(prior, rows):
+    """인기도를 **그 사이트 카탈로그 안에서** 다시 0~1 로 편다 (2026-09-03).
+
+    prior 는 카탈로그 200개 전체에서 잰 값이다. 사이트가 자기 상품 20개만 판다면
+    그 20개가 전역 순위에서 아래쪽에 몰려 있을 수 있고, 그러면 인기도 항이 전
+    후보에 비슷한 값을 줘서 **아무것도 구분하지 못한다.** 신규 브랜드일수록 심하다.
+    사이트 안에서 다시 펴면 그 안의 상대 인기도가 된다.
+
+    minmax 는 아핀 변환이라 이미 정규화된 값에 다시 걸어도 원본 log1p 에 건 것과
+    같다. 상품이 하나뿐이면 펼 수 없으므로 0 을 준다 — 후보가 하나면 인기도 항이
+    순위에 영향을 주지 않는 것이 맞다.
+    """
+    out = np.zeros_like(np.asarray(prior, float))
+    if len(rows) == 0:
+        return out
+    sub = np.asarray(prior, float)[rows]
+    lo, hi = float(sub.min()), float(sub.max())
+    out[rows] = (sub - lo) / (hi - lo) if hi > lo else 0.0
+    return out
+
+
 class Recommender:
-    def __init__(self, matrix, index, prior, affinity=None, lam=LAMBDA):
+    def __init__(self, matrix, index, prior, affinity=None, lam=LAMBDA,
+                 catalog=None):
         """matrix (상품수, 차원) · index product_id->행 · prior 인기도 0~1
-           affinity: 페르소나 속성 친화도를 내주는 함수 f(persona) -> (상품수,) 배열"""
+           affinity: 페르소나 속성 친화도를 내주는 함수 f(persona) -> (상품수,) 배열
+           catalog: 이 사이트가 파는 상품(id 또는 행 번호). 주면 후보를 그것으로
+                    제한하고 **인기도를 그 안에서 다시 편다**"""
         self.M = matrix
         self.idx = index
         self.ids = [None] * len(index)
         for g, i in index.items():
             self.ids[i] = g
-        self.prior = prior
+        self.catalog = None if catalog is None else sorted(
+            {index[g] if isinstance(g, str) else int(g) for g in catalog})
+        self.prior = (prior if self.catalog is None
+                      else prior_in_catalog(prior, self.catalog))
         self.affinity = affinity
         self.lam = lam
 
@@ -146,6 +173,10 @@ class Recommender:
              review_products=(), view_cap=VIEW_CAP, lam_mmr=LAMBDA_MMR):
         """추천 목록 상위 k개. evaluation=True 면 본 상품을 전부 뺀다(leakage 차단)"""
         s = self.score(state, persona).copy()
+        if self.catalog is not None:        # 이 사이트가 파는 상품만 후보다
+            keep = np.zeros(len(s), bool)
+            keep[self.catalog] = True
+            s[~keep] = -np.inf
         blocked = set(review_products) | set(state.converted)
         if evaluation:
             blocked |= state.viewed
