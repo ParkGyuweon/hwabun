@@ -138,6 +138,7 @@ S15P21A306/
 │   │   └── data/
 │   │       ├── products_200.json            상품 200개 (원본 27컬럼 + 병합 이력 + 리뷰 통계)
 │   │       ├── affinity_lift.csv            속성 친화도 4,000행 (200상품 × 20세그먼트)
+│   │       ├── affinity_power.csv           속성별 판별력 비교 (분석용)
 │   │       ├── concern_from_reviews.npz     리뷰에서 뽑은 concern 점수
 │   │       ├── excluded_products.json       제외 상품 목록과 사유
 │   │       ├── eval_metadata.jsonl          평가 seed/target 정본 (9,900행)
@@ -150,7 +151,7 @@ S15P21A306/
 │   │           └── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
 │   └── jobs/
 │       ├── product_encoder.py           상품 → 148차원 콘텐츠 벡터 인코더
-│       ├── behavior_weights.py          `types/log.ts` 를 직접 읽는 행동 가중치 로더
+│       ├── behavior_weights.py          `frontend/src/types/log.ts` 를 직접 읽는 행동 가중치 로더
 │       ├── user_vector.py               이벤트 → v_u⁺ / v_u⁻ 집계
 │       ├── build_user_vectors.py        Spark 산출물·JSONL → 사용자 벡터 상태 (Redis 형태)
 │       ├── persona_feature.py           페르소나 속성 → 상품별 친화도 (200,)
@@ -185,6 +186,7 @@ S15P21A306/
 │   │   └── test_gen_behavior_logs.py · README.md
 │   ├── agents/
 │   │   ├── agent_runner.py               PA 100명 — 실제 브라우저로 프론트를 조작
+│   │   ├── analyze_run_quality.py        실행 두 개를 대 보고 로그 품질을 재는 도구
 │   │   ├── model_server.py               GPU 서버에 모델만 올리는 최소 서버 (--api-base 로 연결)
 │   │   └── README.md                     모델 선택 세 가지·러너가 지키는 계약
 │   └── personas/

@@ -98,7 +98,7 @@ dry                71    6.7%     19.2%     0.38    0.000   -10.35
 
 ## 원본 데이터셋
 
-Sephora 원본 CSV(약 520MB)는 커밋하지 않습니다. Kaggle "Sephora Products and Skincare Reviews" 데이터셋이며, 정제 기준은 개인 폴더의 `DATA_CLEANING.md`에 있습니다.
+Sephora 원본 CSV(약 520MB)는 커밋하지 않습니다. Kaggle "Sephora Products and Skincare Reviews" 데이터셋이며, 정제 기준은 개인 폴더의 `Research/docs/DATA_CLEANING.md`에 있습니다.
 
 ## 재생성
 
