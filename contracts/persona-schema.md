@@ -1,8 +1,8 @@
 # Persona Schema 계약
 
 작성일: 2026-09-02
-최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
-상태: Draft, §7.1 target 선택 규칙 확정. 평가 정본 재생성 대조·E2E 검증 대기
+최종 검증: 2026-09-03, 표본 평탄화 위반 0건 · 평가 정본 대조 PC 9,900명 PA 100명 0건
+상태: Draft, §7.1 확정·정본 정렬 완료. Event·Run 축 E2E 검증 대기
 설계 설명: [`persona-design.md`](../docs/analytics/persona-design.md)
 
 ## 1. 범위와 우선순위

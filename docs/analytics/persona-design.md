@@ -1,8 +1,8 @@
 # Persona 생성·분석 설계
 
 작성일: 2026-09-02
-최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
-상태: §7.1 target 선택 규칙 확정. 평가 정본 재생성 대조·E2E 검증 대기
+최종 검증: 2026-09-03, 표본 평탄화 위반 0건 · 평가 정본 대조 PC 9,900명 PA 100명 0건
+상태: §7.1 target 선택 규칙 확정·정본 정렬 완료. Event·Run 축 E2E 검증 대기
 계약 원본: [`contracts/persona-schema.md`](../../contracts/persona-schema.md)
 평탄화 구현: [`contracts/persona/`](../../contracts/persona/README.md)
 
@@ -169,18 +169,17 @@ Mart.simulation_run_id
 - 중첩 JSON을 계약 테이블 8종으로 평탄화하는 구현이 `contracts/persona/`에 생겼다.
   PA 10·100명과 PC 100명 표본에서 계약 §11 조건과 grain·nullable·enum·누출 검사가
   위반 0건으로 통과했다.
+- **계약과 평가 정본이 같은 정답을 고른다.** target 불일치가 752명(7.6%)에서 계약 개정
+  후 162명, 정본이 §7.1.1·§7.1.2를 반영한 뒤 **0명**이 됐다. PC 9,900명과 PA 100명
+  양쪽 모두 0건이다. 회귀 확인은 `compare_holdout_rules.py --require-zero`로 한다.
+- **PA 100명의 평가 정본이 생겼다.** `eval_metadata_agent.jsonl` 100행이다. PC 평가
+  표본에 PA가 섞이면 안 되므로 파일은 분리해 유지한다.
 
 남은 차이:
 
-- **평가 정본이 계약 §7.1.1·§7.1.2를 아직 반영하지 않았다.** 계약을 정본 정의로 맞춰
-  target 불일치가 752명에서 162명(1.6%)으로 줄었고, 남은 162명은 정본이
-  `is_recommended`를 인정하지 않아서 157명, tie-break 기준이 없어서 5명이다. 설명되지
-  않는 차이는 0건이다. AI 담당이 `eval_metadata.py`를 반영하고 재생성하면
-  `compare_holdout_rules.py --require-zero`로 0건을 확인한다.
 - `persona_seed_product.initial_event_weight`의 산식이
   [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md)에 없어 NULL로
   둔다. 값을 임의로 채우지 않는다.
-- `eval_metadata.jsonl`은 PC 9,900명만 담는다. PA 100명의 평가 정본이 없다.
 - `products_200.json`의 일부 리뷰 통계에는 `hair_color='brunette'`가 남아 있어 DW에서
   읽을 때 `brown`으로 합산해야 한다.
 - Recommendation 계약의 missing affinity 0.5 표기와 현재 변환식 결과 0.40이

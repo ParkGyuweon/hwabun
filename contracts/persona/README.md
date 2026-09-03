@@ -97,21 +97,24 @@ py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 
 `compare_holdout_rules.py` 가 계약과 평가 정본이 같은 정답을 고르는지 확인한다.
 
-| | 인원 | 비고 |
-|---|---:|---|
-| 계약 개정 전 target 불일치 | 752명 | 7.6% |
-| 개정 후 남은 불일치 | **162명** | 1.6% |
-| 정본이 `is_recommended` 미인정 (§7.1.1) | 157명 | 정본 반영 시 해소 |
-| 정본에 tie-break 기준 없음 (§7.1.2) | 5명 | 정본 반영 시 해소 |
-| 설명되지 않는 차이 | **0명** | |
+| 단계 | PC 9,900명 | PA 100명 |
+|---|---:|---:|
+| 계약 개정 전 | 752명 (7.6%) | 정본 없음 |
+| 계약을 정본 정의로 개정 | 162명 (1.6%) | 정본 없음 |
+| 정본이 §7.1.1·§7.1.2 반영 | **0명** | **0명** |
 
-AI 담당이 `eval_metadata.py` 에 §7.1.1·§7.1.2 를 반영하고 재생성하면
-`py contracts/persona/compare_holdout_rules.py --require-zero` 로 0건을 인수 기준으로
-쓴다. 설명되지 않는 차이가 나오면 이 스크립트가 종료 코드 2 로 실패한다.
+2026-09-03 양쪽 모두 0건으로 정렬됐다. 정본은 PC 가 `eval_metadata.jsonl`,
+PA 가 `eval_metadata_agent.jsonl` 로 분리돼 있다. PC 평가 표본에 PA 가 섞이면 안 되기
+때문이며 이 도구는 두 파일을 각각 읽는다.
+
+```bash
+py contracts/persona/compare_holdout_rules.py --require-zero
+```
+
+규칙이나 원천이 바뀌면 다시 갈라지므로 회귀 확인용으로 남긴다. 불일치가 1건이라도
+있으면 종료 코드 2 로 실패한다.
 
 ## 아직 결정되지 않은 것
 
 - **`initial_event_weight` 산식.** 계약상 nullable=Y 이고 `recommendation-io-spec.md`
   에 정의가 없어 NULL 로 둔다.
-- **PA 100명의 평가 정본.** `eval_metadata.jsonl` 은 PC 9,900명만 담아 PA 는 대조군이
-  없다. AI 담당에게 같은 규칙으로 생성을 요청했다.
