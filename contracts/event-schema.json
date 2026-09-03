@@ -27,7 +27,10 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "0.2.0-draft"
+      "enum": [
+        "0.2.0-draft",
+        "0.3.0-draft"
+      ]
     },
     "event_id": {
       "type": "string",
@@ -92,7 +95,10 @@
       "format": "date-time"
     },
     "persona_id": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "session_id": {
       "type": "string",
@@ -108,14 +114,31 @@
     },
     "page_type": {
       "type": "string",
-      "enum": ["product_detail", "product_list", "cart"]
+      "enum": [
+        "product_detail",
+        "product_list",
+        "cart"
+      ]
     },
     "product_id": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tenant_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
     },
     "actor_type": {
       "type": "string",
-      "enum": ["user", "synthetic"]
+      "enum": [
+        "user",
+        "synthetic"
+      ]
     },
     "environment": {
       "type": "string",
@@ -127,7 +150,10 @@
     },
     "source": {
       "type": "string",
-      "enum": ["web", "simulator"]
+      "enum": [
+        "web",
+        "simulator"
+      ]
     },
     "request_id": {
       "type": "string",
@@ -145,15 +171,48 @@
     {
       "if": {
         "properties": {
-          "actor_type": { "const": "synthetic" }
+          "schema_version": {
+            "const": "0.3.0-draft"
+          }
         },
-        "required": ["actor_type"]
+        "required": [
+          "schema_version"
+        ]
+      },
+      "then": {
+        "required": [
+          "tenant_id"
+        ],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "actor_type": {
+            "const": "synthetic"
+          }
+        },
+        "required": [
+          "actor_type"
+        ]
       },
       "then": {
         "properties": {
-          "source": { "const": "simulator" },
+          "source": {
+            "const": "simulator"
+          },
           "properties": {
-            "required": ["scenario_id", "simulation_run_id", "generator_type"],
+            "required": [
+              "scenario_id",
+              "simulation_run_id",
+              "generator_type"
+            ],
             "properties": {
               "scenario_id": {
                 "type": "string",
@@ -165,7 +224,10 @@
               },
               "generator_type": {
                 "type": "string",
-                "enum": ["python_batch", "agent_llm"]
+                "enum": [
+                  "python_batch",
+                  "agent_llm"
+                ]
               }
             }
           }
@@ -175,13 +237,19 @@
     {
       "if": {
         "properties": {
-          "actor_type": { "const": "user" }
+          "actor_type": {
+            "const": "user"
+          }
         },
-        "required": ["actor_type"]
+        "required": [
+          "actor_type"
+        ]
       },
       "then": {
         "properties": {
-          "source": { "const": "web" }
+          "source": {
+            "const": "web"
+          }
         }
       }
     },
@@ -197,11 +265,15 @@
             ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "session" }
+          "intent": {
+            "const": "session"
+          }
         }
       }
     },
@@ -218,11 +290,15 @@
             ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "exposure" }
+          "intent": {
+            "const": "exposure"
+          }
         }
       }
     },
@@ -241,11 +317,15 @@
             ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "interest" }
+          "intent": {
+            "const": "interest"
+          }
         }
       }
     },
@@ -263,11 +343,15 @@
             ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "comparison" }
+          "intent": {
+            "const": "comparison"
+          }
         }
       }
     },
@@ -285,11 +369,15 @@
             ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "validation" }
+          "intent": {
+            "const": "validation"
+          }
         }
       }
     },
@@ -297,14 +385,21 @@
       "if": {
         "properties": {
           "event_name": {
-            "enum": ["hover_dwell", "remove_from_cart"]
+            "enum": [
+              "hover_dwell",
+              "remove_from_cart"
+            ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "hesitation" }
+          "intent": {
+            "const": "hesitation"
+          }
         }
       }
     },
@@ -312,14 +407,23 @@
       "if": {
         "properties": {
           "event_name": {
-            "enum": ["wishlist_toggle", "quantity_change", "add_to_cart", "view_cart"]
+            "enum": [
+              "wishlist_toggle",
+              "quantity_change",
+              "add_to_cart",
+              "view_cart"
+            ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "conversion" }
+          "intent": {
+            "const": "conversion"
+          }
         }
       }
     },
@@ -327,14 +431,21 @@
       "if": {
         "properties": {
           "event_name": {
-            "enum": ["rage_click", "dead_click"]
+            "enum": [
+              "rage_click",
+              "dead_click"
+            ]
           }
         },
-        "required": ["event_name"]
+        "required": [
+          "event_name"
+        ]
       },
       "then": {
         "properties": {
-          "intent": { "const": "friction" }
+          "intent": {
+            "const": "friction"
+          }
         }
       }
     }

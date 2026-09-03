@@ -1,7 +1,7 @@
 # Event Properties 계약
 
 작성일: 2026-09-03
-상태: v0.2 Properties 기준 확정, 모듈별 구현 반영·E2E 검증 대기
+상태: v0.2 Properties 기준 확정, `0.3.0-draft` Tenant 필드 추가. 모듈별 구현 반영 대기
 실행 Envelope 계약: [`event-schema.json`](./event-schema.json)
 설계 설명: [`event-logging-design.md`](../docs/analytics/event-logging-design.md)
 
@@ -22,6 +22,53 @@ validation에서 검사한다.
 - `string|null`은 키는 필수지만 값은 null일 수 있다는 뜻이다.
 - 상품 대상 Event의 top-level `product_id`는 필수다.
 - Planned Event는 `event-schema.json` enum에 등록되기 전까지 전송하지 않는다.
+
+## 1.1 Tenant와 상품 브랜드는 다른 값이다
+
+`schema_version = 0.3.0-draft`부터 top-level `tenant_id`가 필수다. 두 값을 혼동하면
+격리가 깨지므로 여기서 경계를 명시한다.
+
+| 값 | 뜻 | 위치 | 얻는 법 |
+| --- | --- | --- | --- |
+| `tenant_id` | 이 Storefront가 **누구 것인가** | top-level Envelope | Event가 직접 싣는다 |
+| `brand_id` | 그 Event가 **무엇을 대상으로 했나**의 상품 브랜드 | Processed 컬럼 | `product_id` → `dim_product` Join 파생 |
+
+`brand_id`를 Envelope에 넣지 않는 이유는 `page_view`, `filter_change`처럼 상품이 없는
+Event에서 값이 정해지지 않기 때문이다. 그런 Event도 어느 Storefront에서 일어났는지는
+정해지므로 격리 키는 `tenant_id`여야 한다. 데이터 격리와 Mart partition은
+`tenant_id`만 사용한다.
+
+### 1.1.1 `tenant_id` 형식
+
+소문자 영숫자와 하이픈만 사용하는 slug다. 정규식은 `^[a-z0-9]+(-[a-z0-9]+)*$`이며
+`event-schema.json`이 직접 검사한다.
+
+생성 규칙은 표시명을 NFKD 정규화해 악센트를 제거하고 ASCII로 접은 뒤, 영숫자가 아닌
+구간을 하이픈으로 바꾸고 앞뒤 하이픈을 제거하는 것이다.
+
+```text
+Estée Lauder → estee-lauder
+Lancôme      → lancome
+Dr. Jart+    → dr-jart
+```
+
+악센트를 떼지 않으면 `est-e-lauder`처럼 파티션 경로가 깨져 보인다.
+
+**slug는 한 번 생성해 Tenant Dimension에 고정하고 조회할 때마다 다시 계산하지 않는다.**
+정규화 규칙을 바꾸거나 표시명이 바뀌면 partition이 조용히 갈라지기 때문이다. 충돌이
+발생하면 뒤에 순번을 붙인다. 화면 표시는 `tenant_id`가 아니라 Dimension의 표시명을
+사용한다.
+
+Tenant를 다른 Tenant에게 보일 때는 `tenant_id`가 아니라 되돌릴 수 없는 가명을
+사용한다. 같은 값을 쓰면 익명 집계에서 경쟁 Tenant의 식별자가 그대로 노출된다.
+Dimension 정의는 [`dw-schema.md`](./dw-schema.md)를 따른다.
+
+### 1.1.2 Schema version 전환
+
+`event-schema.json`의 `schema_version`은 `0.2.0-draft`와 `0.3.0-draft`를 모두 허용하며,
+`0.3.0-draft`일 때만 `tenant_id`를 필수로 검사한다. 모듈은 준비되는 대로 각자 버전을
+올리면 되고 동시에 이동하지 않아도 된다. 두 버전이 Raw에 섞여도 `schema_version`으로
+구분한다.
 
 ## 2. 활성 Event Taxonomy
 
@@ -118,7 +165,37 @@ validation에서 검사한다.
 
 `backdrop`, `escape`, `close_button`, `open_detail`
 
-### 3.6 `review_expand.target`
+### 3.6 `selection_kind`
+
+`ingredient`, `claim`, `usage`, `price`, `other`
+
+선택·복사한 텍스트가 어떤 종류의 정보인지 분류한다. 원문은 전송하지 않으므로
+`matched_ingredients`로 잡히지 않는 주장·사용법·가격 문구의 관심을 이 값으로만
+구분할 수 있다.
+
+### 3.7 `variant_kind`
+
+`size`, `shade`, `other`
+
+상품 원천의 `variation_type`을 매핑한다. `Size`는 `size`, `Color`는 `shade`,
+그 외와 결측은 `other`다. 용량 선택과 색상 선택은 각각 재구매·톤 신호로 의미가
+달라 구분한다.
+
+`badge_id`는 표시 배지의 식별자이며 값 목록이 확정되지 않아 enum을 두지 않는다.
+
+### 3.8 `filter_kind`
+
+`category`, `concern`, `price`
+
+Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `FilterKind` union이
+단일 출처다. Generator도 `category`를 사용한다.
+
+기피 성분 필터(`ingredient_exclude`)와 피부 타입 필터(`skin_type`)는 화면이 아직
+없으므로 등록하지 않는다. 구현되지 않은 값을 미리 넣으면 이 표가 "무엇을 내보내는가"가
+아니라 "무엇을 내보낼 수도 있는가"가 되어, 실제 수집 범위를 이 문서로 알 수 없게 된다.
+화면이 생기면 계약을 먼저 고치고 구현을 올린다.
+
+### 3.9 `review_expand.target`
 
 `review_text`, `jump_to_reviews`, `ingredients`
 
@@ -156,15 +233,15 @@ validation에서 검사한다.
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `section_view` | `section_id: string` 또는 `content_kind: string` | `content_ref: string`, `visible_duration_ms: integer`, `visible_ratio: number` |
-| `section_dwell` | `section_id: string` 또는 `content_kind: string`, `dwell_ms: integer` | `content_ref: string`, `co_visible_blocks: integer`, `reason: string` |
+| `section_view` | `section_id: string` 또는 `content_kind: string` | `content_ref: string`, `visible_duration_ms: integer`, `visible_ratio: number`, `badge_id: string` |
+| `section_dwell` | `section_id: string` 또는 `content_kind: string`, `dwell_ms: integer` | `content_ref: string`, `co_visible_blocks: integer`, `reason: string`, `badge_id: string` |
 | `scroll_depth` | `depth_percent: number` | `section_id: string`, `content_kind: string` |
 | `scroll_pause` | `depth_percent: number`, `direction: string`, `distance_px: number`, `duration_ms: integer` | `section_id: string`, `content_kind: string`, `visible_content_kinds: string[]`, `velocity_px_per_sec: number` |
 | `scroll_backtrack` | `depth_percent: number`, `distance_px: number` | `section_id: string`, `content_kind: string` |
 | `media_view` | `media_type: string`, `media_index: integer` | `media_id: string`, `image_url_hash: string` |
 | `accordion_toggle` | `section_id: string`, `action: string` | `content_kind: string` |
-| `text_selection` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
-| `text_copy` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
+| `text_selection` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `selection_kind: string`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
+| `text_copy` | `text_length: integer` | `section_id: string`, `content_kind: string`, `content_ref: string`, `truncated: boolean`, `selection_kind: string`, `matched_ingredients: string[]`, `matched_keywords: string[]`, `matched_count: integer`, `vocab_version: string` |
 
 `text_snippet` 원문은 전송하지 않는다.
 
@@ -185,7 +262,7 @@ validation에서 검사한다.
 | `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `price_usd: number` |
 | `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
-| `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string` |
+| `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
