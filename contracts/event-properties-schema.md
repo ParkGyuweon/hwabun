@@ -85,6 +85,9 @@ validation에서 검사한다.
 | `quantity_change` | `conversion` | 수량 변경 | 구매 의도 |
 | `remove_from_cart` | `hesitation` | 장바구니 상품 제거 | 전환 마찰 |
 | `hover_dwell` | `hesitation` | CTA hover 체류 | 구매 전 망설임 |
+| `begin_checkout` | `conversion` | 결제 시작 | 결제 시작 전환 |
+| `purchase` | `conversion` | 테스트 주문 완료 | 구매 전환·매출 |
+| `purchase_reason_select` | `validation` | 구매 이유 설문 선택 | 선언 구매 이유 |
 | `rage_click` | `friction` | 같은 지점 반복 클릭 | UI 마찰 |
 | `dead_click` | `friction` | 클릭 불가 영역 클릭 | 기대 기능 부재 |
 
@@ -189,6 +192,9 @@ validation에서 검사한다.
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
+| `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
+| `purchase` | `order_id: string`, `items: object[]` | `order_value: number`, `currency: string` |
+| `purchase_reason_select` | `order_id: string`, `reasons: string[]` (1~2개) | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 
 ## 5. 배열과 Object 구조
 
@@ -197,10 +203,20 @@ validation에서 검사한다.
 | `ranking[]` | object[] | `product_id: string`, `position: integer` | 추천 스냅샷 상품 순위 |
 | `matched_ingredients[]` | string[] | 해당 없음 | 정규화된 성분 ID 또는 이름 |
 | `matched_keywords[]` | string[] | 해당 없음 | 정규화된 분석 키워드 |
+| `items[]` | object[] | `product_id: string`, `quantity: positive integer`, `unit_price: positive number` | 주문·결제 시작 상품. `sku_id: string`은 선택 |
+| `reasons[]` | string[] | 1~2개, 각 값은 §5.1 enum | 구매 이유 설문 선택 |
 
 `section_dwell.dwell_ms`는 누적값이 아니라 구간 체류시간 delta다. 여러 Event는
 Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 `added_to_cart`, `wishlisted`와 함께 해석한다.
+
+### 5.1 `purchase_reason_select.reasons`
+
+`ingredient`, `skin_fit`, `reviews`, `review_same_skin`, `price`, `brand_trust`,
+`texture_finish`, `clean_claim`, `recommendation`, `restock`
+
+`primary_reason`이 있으면 반드시 `reasons[]` 중 하나여야 한다. `skipped=true`인
+Event는 `reasons`를 빈 배열로 보낼 수 있으며, 이 경우에만 1~2개 제한의 예외다.
 
 ## 6. Planned Event
 
@@ -210,12 +226,8 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 | --- | --- | --- | --- |
 | `search` | `comparison` | 검색 화면·Trigger 구현 | `query_text: string`; 선택 `result_count`, `normalized_query` |
 | `compare_products` | `comparison` | 비교 기능 구현 | `compared_product_ids: string[]`; 선택 `base_product_id`, `compare_count` |
-| `begin_checkout` | `conversion` | Checkout 구현 | `items: object[]`; 선택 `cart_value`, `currency` |
-| `purchase` | `conversion` | 테스트 주문 완료 구현 | `order_id: string`, `items: object[]`; 선택 `order_value`, `currency` |
 
-`items[]`의 필수 child는 `product_id: string`, `quantity: integer`,
-`unit_price: number`이며 `sku_id: string`은 선택이다. 활성화할 때
-`event-schema.json`의 event enum과 intent 조건도 함께 변경한다.
+`search`, `compare_products`가 Planned Event다.
 
 ## 6-2. 공통 선택 properties: 쇼핑몰 진열 (`storefront_*`)
 
@@ -231,6 +243,7 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 | `storefront_card` | `line` \| `shadow` \| `plain` | 카드 표면 |
 | `storefront_font` | `sans` \| `serif` \| `wide` | 글꼴 |
 | `storefront_theme` | `bloom` `rose` `coral` `lavender` `mint` `earth` `sand` `clinic` `mono` | 색 |
+| `brand_id` | string | 상품이 없는 이벤트에도 적용할 수 있는 브랜드 식별자 |
 
 규칙:
 
