@@ -38,6 +38,23 @@ export type P0EventName =
   | 'add_to_cart'
   /** 장바구니 화면 진입. GA4 표준 퍼널 단계 */
   | 'view_cart'
+  /**
+   * 주문 확인 단계 진입. 담기와 주문 사이의 마지막 문턱이다.
+   * `purchase` 와 같은 `order_id` 를 실어야 "확인까지 갔다가 안 한 사람" 을 셀 수 있다.
+   */
+  | 'begin_checkout'
+  /**
+   * 테스트 주문 완료. 결제 연동은 없다 — 이 화면의 목적은 전환 신호다.
+   *
+   * `order_id` 는 **프론트가 만든다**(`crypto.randomUUID`). 여기서 이 값이 하는 일은
+   * `purchase` 와 `purchase_reason_select` 를 묶는 조인 키뿐이고, 그건 이미 프론트가
+   * 만들어 싣는 `session_id`·`page_view_id` 와 같은 층이다. 주문 번호가 고객에게
+   * 보이거나 환불 조회에 쓰이거나 실제 주문 테이블의 키가 되는 날 서버 발급으로 옮긴다.
+   * 계약은 `order_id: string` 이라 그때도 안 바뀐다.
+   */
+  | 'purchase'
+  /** 구매 직후 이유 설문. 왜 샀는지는 행동 로그가 답하지 못하는 유일한 질문이다 */
+  | 'purchase_reason_select'
   | 'exit_summary';
 
 /** 우선순위 P1. 관심 강도를 보조하는 이벤트 */
@@ -207,6 +224,10 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   quantity_change: 'conversion',
   add_to_cart: 'conversion',
   view_cart: 'conversion',
+  begin_checkout: 'conversion',
+  purchase: 'conversion',
+  // 왜 샀는지는 스스로 밝힌 이유다. 행동이 아니라 진술이라 validation 축에 둔다
+  purchase_reason_select: 'validation',
   // 담았다 뺀 것은 재고(再考)다. 좌절(friction)이 아니라 망설임 축에 둔다
   remove_from_cart: 'hesitation',
 
@@ -227,7 +248,19 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
  * 값이 확정값이라는 뜻은 아니다. 초기 가설이고 Ablation 으로 검증해야 한다.
  */
 export const EVENT_WEIGHT: Record<EventName, number> = {
-  // 전환 — 구매 데이터가 없는 환경에서 가장 강한 신호
+  /**
+   * 전환. 척도는 AI 추천 설계서를 따른다 (page_view 1.0 · LIKE 3.0 · CART 4.0).
+   * 구매가 생기면서 담기가 더는 최상단이 아니다 — 담고 안 산 것과 산 것을 같은 무게로
+   * 두면 그 둘의 차이가 점수에서 사라진다.
+   */
+  purchase: 6.0,
+  // 확인까지 갔으면 담기보다 강하지만 완료보다는 약하다
+  begin_checkout: 4.5,
+  /**
+   * 설문은 스스로 밝힌 이유다. 상품 선호 점수에는 넣지 않는다 —
+   * 행동 신호와 섞으면 같은 구매가 두 번 세어진다. 이유별 집계로만 쓴다.
+   */
+  purchase_reason_select: 0,
   add_to_cart: 4.0,
   // 장바구니를 열어본 것 자체가 구매 검토 신호다
   view_cart: 1.0,

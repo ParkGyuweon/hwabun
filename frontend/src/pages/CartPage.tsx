@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import EmptyState from '../components/common/EmptyState';
+import PurchaseSurvey from '../components/cart/PurchaseSurvey';
 import { IMAGE_WIDTH_SWATCH, sizedImage } from '../lib/image';
 import { formatPrice } from '../lib/format';
 import { useSectionView } from '../hooks/useSectionView';
@@ -6,6 +8,7 @@ import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import type { CartItem } from '../types/cart';
+import type { PlacedOrder } from '../lib/checkout';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
 
@@ -17,6 +20,16 @@ interface CartPageProps {
   onSelectProduct: (productId: string) => void;
   /** 비었을 때 목록으로 돌려보낸다 */
   onContinue: () => void;
+  /** 주문 확인 단계에 들어섰다. begin_checkout 은 App 이 남긴다 */
+  onBeginCheckout: () => void;
+  /** 확인 화면에서 되돌아왔다. 이벤트는 없다 — 취소는 화면 상태일 뿐이다 */
+  onCancelCheckout: () => void;
+  /** 주문 완료. purchase 는 App 이 남기고 order_id 도 App 이 만든다 */
+  onPlaceOrder: () => void;
+  /** 완료 화면이 떠 있으면 그 주문. 없으면 null */
+  order: PlacedOrder | null;
+  onSurveySubmit: (reasons: string[]) => void;
+  onSurveySkip: () => void;
 }
 
 /**
@@ -34,7 +47,21 @@ export default function CartPage({
   onRemove,
   onSelectProduct,
   onContinue,
+  onBeginCheckout,
+  onCancelCheckout,
+  onPlaceOrder,
+  order,
+  onSurveySubmit,
+  onSurveySkip,
 }: CartPageProps) {
+  /**
+   * 주문 확인 단계에 있는지. 화면 상태라 여기서 들고 있는다.
+   *
+   * 담기 다음에 문턱을 하나 두는 이유는 `begin_checkout` 과 `purchase` 가 같은 순간에
+   * 나가면 그 사이의 전환율이 항상 100% 라 아무 말도 안 하기 때문이다.
+   * 확인까지 갔다가 되돌아간 사람이 잡혀야 문턱이 의미가 있다.
+   */
+  const [confirming, setConfirming] = useState(false);
   useSectionView('cart');
   useTextSelection('cart');
   useInteractionSignals('cart');
@@ -42,6 +69,31 @@ export default function CartPage({
 
   const subtotal = items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0);
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (order) {
+    return (
+      <main className="page cart">
+        <section className="done" data-log-section="order_complete">
+          <p className="done__eyebrow">주문 완료</p>
+          <h1 className="done__title">주문이 접수되었습니다</h1>
+          <p className="done__meta">
+            주문번호 {order.orderId.slice(0, 8)} · 상품 {order.count}개 ·{' '}
+            {formatPrice(order.total)}
+          </p>
+          {/* 없는 기능을 있는 것처럼 두지 않는다. 여기서 멈추는 것이 이 쇼핑몰의 경계다 */}
+          <p className="done__note">
+            결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않고 실제로 청구되지 않습니다.
+          </p>
+
+          <PurchaseSurvey onSubmit={onSurveySubmit} onSkip={onSurveySkip} />
+
+          <button type="button" className="cart__continue" onClick={onContinue}>
+            쇼핑 계속하기
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="page cart">
@@ -141,8 +193,52 @@ export default function CartPage({
                 <dd>{formatPrice(subtotal)}</dd>
               </div>
             </dl>
-            {/* 결제는 프로젝트 범위 밖이다. 없는 기능을 있는 것처럼 두면 dead_click 만 쌓인다 */}
-            <p className="cart__note">결제는 이 테스트 쇼핑몰의 범위 밖입니다.</p>
+            {confirming ? (
+              <div className="cart__confirm">
+                <p className="cart__confirm-title">이 주문으로 진행할까요?</p>
+                <p className="cart__confirm-meta">
+                  상품 {count}개 · {formatPrice(subtotal)}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn--primary cart__order"
+                  data-log-action="place_order"
+                  onClick={() => {
+                    setConfirming(false);
+                    onPlaceOrder();
+                  }}
+                >
+                  주문 완료
+                </button>
+                <button
+                  type="button"
+                  className="cart__back"
+                  data-log-action="cancel_checkout"
+                  onClick={() => {
+                    setConfirming(false);
+                    onCancelCheckout();
+                  }}
+                >
+                  다시 담기로
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--primary cart__order"
+                data-log-action="begin_checkout"
+                onClick={() => {
+                  setConfirming(true);
+                  onBeginCheckout();
+                }}
+              >
+                주문하기
+              </button>
+            )}
+            {/* 결제 연동은 없다. 없는 기능을 있는 것처럼 두면 dead_click 만 쌓인다 */}
+            <p className="cart__note">
+              결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않습니다.
+            </p>
           </aside>
         </div>
       )}

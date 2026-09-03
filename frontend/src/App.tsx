@@ -6,6 +6,8 @@ import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
+import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
+import type { PlacedOrder } from './lib/checkout';
 import {
   DEFAULT_STOREFRONT,
   STOREFRONT_KEY,
@@ -124,6 +126,20 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   /** 다음 page_view 가 어떻게 발생했는지. 뒤로가기와 화면 안 이동을 구분한다 */
   const navigationSourceRef = useRef('in_app');
+
+  /**
+   * 완료된 테스트 주문. 완료 화면과 설문이 이 값으로 뜬다.
+   *
+   * 결제 연동은 없다. 여기서 만드는 것은 전환 신호뿐이다 — 담기까지만 있는 로그로는
+   * "담고 안 산 사람" 과 "산 사람" 이 같은 무게로 세어진다.
+   */
+  const [order, setOrder] = useState<PlacedOrder | null>(null);
+  /**
+   * 주문 확인 단계에서 만든 주문 번호. `begin_checkout` 과 `purchase` 가 **같은 값**을
+   * 실어야 "확인까지 갔다가 안 한 사람" 을 셀 수 있다.
+   * ref 인 이유는 이 값이 화면을 바꾸지 않기 때문이다.
+   */
+  const pendingOrderIdRef = useRef<string | null>(null);
 
   /**
    * 화면별로 마지막 스크롤 위치를 기억한다.
@@ -282,6 +298,75 @@ export default function App() {
     },
     [cartItems],
   );
+
+  /* ---------- 테스트 주문 ---------- */
+
+  /**
+   * 주문 확인 단계 진입.
+   *
+   * 주문 번호를 **여기서 한 번** 만든다. 확인 화면에서 되돌아갔다가 다시 들어와도
+   * 같은 번호를 쓴다 — 그래야 한 번의 주문 시도가 한 건으로 남는다.
+   */
+  const beginCheckout = useCallback(() => {
+    if (cartItems.length === 0) return;
+    const orderId = pendingOrderIdRef.current ?? createOrderId();
+    pendingOrderIdRef.current = orderId;
+
+    const { total } = orderTotals(cartItems);
+    track('begin_checkout', {
+      // 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다.
+      // 이게 없으면 "확인까지 갔다가 안 산 사람" 을 purchase 와 이어 셀 수 없다
+      order_id: orderId,
+      items: toOrderItems(cartItems),
+      cart_value: Number(total.toFixed(2)),
+      currency: 'USD',
+    });
+  }, [cartItems]);
+
+  /** 확인 화면에서 되돌아감. 이벤트는 남기지 않는다 — 이탈은 begin_checkout 대비로 센다 */
+  const cancelCheckout = useCallback(() => {}, []);
+
+  const placeOrder = useCallback(() => {
+    if (cartItems.length === 0) return;
+    const orderId = pendingOrderIdRef.current ?? createOrderId();
+    const items = toOrderItems(cartItems);
+    const { count, total } = orderTotals(cartItems);
+
+    track('purchase', {
+      order_id: orderId,
+      items,
+      order_value: Number(total.toFixed(2)),
+      currency: 'USD',
+    });
+
+    setOrder({ orderId, items, count, total });
+    setCartItems([]);
+    // 다음 주문은 새 번호를 받는다
+    pendingOrderIdRef.current = null;
+  }, [cartItems]);
+
+  const submitPurchaseReasons = useCallback(
+    (reasons: string[]) => {
+      if (!order) return;
+      track('purchase_reason_select', {
+        order_id: order.orderId,
+        reasons,
+        // 첫 번째로 고른 것을 주된 이유로 본다
+        primary_reason: reasons[0],
+        skipped: false,
+      });
+    },
+    [order],
+  );
+
+  /**
+   * 건너뛰기도 남긴다.
+   * 응답률을 모르면 답변 분포를 전체 구매자의 것으로 읽는 실수를 한다.
+   */
+  const skipPurchaseReasons = useCallback(() => {
+    if (!order) return;
+    track('purchase_reason_select', { order_id: order.orderId, reasons: [], skipped: true });
+  }, [order]);
 
   /**
    * 브라우저 뒤로/앞으로.
@@ -492,7 +577,16 @@ export default function App() {
           onQuantityChange={changeCartQuantity}
           onRemove={removeFromCart}
           onSelectProduct={openProduct}
-          onContinue={goHome}
+          onContinue={() => {
+            setOrder(null);
+            goHome();
+          }}
+          onBeginCheckout={beginCheckout}
+          onCancelCheckout={cancelCheckout}
+          onPlaceOrder={placeOrder}
+          order={order}
+          onSurveySubmit={submitPurchaseReasons}
+          onSurveySkip={skipPurchaseReasons}
         />
       ) : product ? (
         <>

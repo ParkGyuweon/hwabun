@@ -247,3 +247,202 @@
     justify-content: flex-start;
   }
 }
+
+/* ==========================================================================
+   테스트 주문 — 주문 버튼 · 확인 단계 · 완료 화면 · 설문
+   결제 연동은 없다. 이 흐름이 만드는 것은 전환 신호뿐이다.
+   ========================================================================== */
+
+.cart__order {
+  width: 100%;
+  margin-top: var(--space-5);
+}
+
+/*
+ * 확인 단계. 담기와 주문 사이에 문턱을 하나 둔다.
+ * begin_checkout 과 purchase 가 같은 순간에 나가면 그 사이 전환율이 늘 100% 라
+ * 아무 말도 안 한다. 되돌아간 사람이 잡혀야 문턱이 의미가 있다.
+ */
+.cart__confirm {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+
+.cart__confirm-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.cart__confirm-meta {
+  margin: 4px 0 var(--space-4);
+  font-size: 13px;
+  color: var(--color-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.cart__confirm .cart__order {
+  margin-top: 0;
+}
+
+.cart__back {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-ink-faint);
+  cursor: pointer;
+}
+
+.cart__back:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+/* ---------- 완료 화면 ---------- */
+
+.done {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--space-8) 0;
+  text-align: center;
+}
+
+.done__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-brand-deep);
+}
+
+.done__title {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+}
+
+.done__meta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.done__note {
+  margin: var(--space-3) 0 0;
+  font-size: 12.5px;
+  color: var(--color-ink-faint);
+}
+
+/* ---------- 구매 이유 설문 ---------- */
+
+.survey {
+  margin: var(--space-7) 0 var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: left;
+}
+
+.survey--done {
+  text-align: center;
+  color: var(--color-ink-soft);
+  font-size: 14px;
+}
+
+.survey--done p {
+  margin: 0;
+}
+
+.survey__head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+.survey__head p {
+  margin: 5px 0 var(--space-5);
+  font-size: 12.5px;
+  color: var(--color-ink-faint);
+}
+
+.survey__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.survey__chip {
+  appearance: none;
+  cursor: pointer;
+  padding: 9px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+
+.survey__chip:hover {
+  border-color: var(--color-ink-faint);
+  color: var(--color-ink);
+}
+
+.survey__chip.is-on {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+.survey__chip:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+.survey__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.survey__skip {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-ink-faint);
+  cursor: pointer;
+  margin-right: auto;
+  padding: 6px 2px;
+}
+
+.survey__skip:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+.survey__actions .btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
