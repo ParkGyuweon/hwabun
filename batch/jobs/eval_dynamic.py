@@ -43,8 +43,8 @@ from hidden_preference import (PROFILES, TEXT_EMBEDDING,      # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
-from recommender import (LAMBDA, LAMBDA_MMR, Recommender,    # noqa: E402
-                         schedule_for)
+from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
+                         Recommender, brand_match, schedule_for)
 from user_vector import UserVector                           # noqa: E402
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -149,7 +149,7 @@ def served_top(scores, blocked, recommender, k=K, lam_mmr=LAMBDA_MMR):
 
 def run_persona(persona, seeds, target, ctx, rng):
     """한 사람의 탐색을 돌리고 step 별 target 순위를 돌려준다"""
-    M, index, prior, affinity, hp, recommender, meta = ctx
+    M, index, prior, affinity, hp, recommender, meta, brands, known = ctx
     state = UserVector()
     # seed 는 이미 좋아한 상품이다. 전환으로 넣고 후보에서 뺀다
     for gid in seeds:
@@ -171,6 +171,11 @@ def run_persona(persona, seeds, target, ctx, rng):
             s += w1 * (M @ vp.astype(np.float32))
         if vn is not None:
             s -= LAMBDA * (M @ vn.astype(np.float32))
+        # brand 관계 항 — 전환한 상품의 브랜드가 이 사람이 쓰던 브랜드다
+        rows = [index[g] for g in state.converted if g in index]
+        bm = brand_match(brands, rows, known) if rows else None
+        if bm is not None:
+            s = s + BRAND_W * bm
         return s + w2 * affinity(persona) + w3 * prior
 
     scores = score_now()
@@ -268,7 +273,9 @@ def main():
     index = {p["product_id"]: i for i, p in enumerate(encoder.products)}
     prior = np.asarray(encoder.prior(), dtype=np.float32)
     affinity = load_affinity(index)
-    recommender = Recommender(M, index, prior, affinity=affinity)
+    recommender = Recommender(M, index, prior, affinity=affinity,
+                              brands=[p["brand_name"] for p in encoder.products],
+                              known_brands=set(encoder.blk["brand"]["vocab"]))
     hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed,
                           weights=PROFILES[a.pref_profile],
                           text_backend=a.text_backend,
@@ -276,7 +283,9 @@ def main():
     meta = [{"product_id": p["product_id"],
              "tertiary_category": p.get("tertiary_category")}
             for p in encoder.products]
-    ctx = (M, index, prior, affinity, hp, recommender, meta)
+    brands = [p["brand_name"] for p in encoder.products]
+    known = set(encoder.blk["brand"]["vocab"])
+    ctx = (M, index, prior, affinity, hp, recommender, meta, brands, known)
 
     profiles = {p["persona_id"]: p
                 for p in json.load(open(PERSONAS, encoding="utf-8"))}

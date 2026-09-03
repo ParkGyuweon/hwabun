@@ -1,6 +1,17 @@
 # Product Feature 후보표 및 Encoding 초안
 
-> 버전 `0.4` · 2026-08-27 (최종 갱신 2026-08-31)
+> 버전 `0.5` · 2026-08-27 (최종 갱신 2026-09-03)
+
+> **0.5 에서 바뀐 것 (차원은 그대로 148)**
+> - 성분 동의어에 **한국어 표기**를 넣었습니다. 국내 브랜드가 한글 전성분표를
+>   붙여넣어도 매칭됩니다 — 같은 성분표를 한글·영문으로 넣으면 위치가중값까지
+>   소수점이 같습니다.
+> - **`SPF` 에 동의어를 넣었습니다.** 그 전에는 동의어가 없어 `highlights` 태그로만
+>   켜졌습니다. 등록 폼은 성분 태그를 받지 않으므로, 없으면 등록된 선크림은 SPF 축이
+>   영구히 0 이 됩니다. 자외선차단 성분은 법정 표기라 전성분에서 잡는 것이 맞습니다.
+> - 어휘집에 **없는** 브랜드를 위한 폴백(`brand_unknown_fallback`)을 명시했습니다.
+>   상품 벡터는 그대로고, 추천 점수에 항이 하나 붙습니다 —
+>   [`recommendation-io-spec.md`](recommendation-io-spec.md) 1장 참조.
 > 대상: 상위 200개 Sephora 스킨케어 상품
 > 소비처: `batch/jobs/product_encoder.py` (인코딩) → `batch/jobs/export_features.py` (서빙 산출물) → MySQL → `backend/recommend/RankingService`
 > 어휘집: [`product-feature-vocab.json`](product-feature-vocab.json)
