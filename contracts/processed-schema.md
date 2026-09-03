@@ -452,10 +452,37 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `matched_ingredients` | array<string> | N | 매칭 성분, 없으면 빈 배열 |
 | `matched_keywords` | array<string> | N | 매칭 키워드, 없으면 빈 배열 |
 | `vocab_version` | string | Y | 어휘집 버전 |
-| `content_interest_score` | double | N | 확정 산식 결과 |
+| `content_interest_score` | double | N | §13.1 산식 결과 |
 | `processed_at` | timestamp | N | 처리 시각 |
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
+
+### 13.1 `content_interest_score` 산식
+
+```text
+content_interest_score
+  = SECTION_DWELL_WEIGHT[section_id]
+    x ( ln(1 + dwell_ms_sum / 1000)
+        + Σ EVENT_WEIGHT[event_name] x 해당 Event 발생 수 )
+```
+
+행동 가중치 `EVENT_WEIGHT`와 섹션 가중치 `SECTION_DWELL_WEIGHT`의 실행 원본은
+`frontend/src/types/log.ts`다. 이 계약에 숫자를 복제하지 않는다.
+`batch/jobs/behavior_weights.py`가 그 파일을 직접 파싱하므로 Front가 값을 고치면
+집계도 따라간다.
+
+체류시간에 `ln(1 + x)`를 쓰는 이유는 선형 합산이면 오래 켜 둔 탭 하나가 다른 모든
+행동을 압도하기 때문이다. 초 단위로 환산한 뒤 로그를 취해 긴 체류의 기여를 눌러 둔다.
+
+집계 대상 Event는 이 grain에서 관측되는 것으로 한정한다 — `accordion_toggle`,
+`review_filter_apply`, `text_selection`, `text_copy`. `remove_from_cart`처럼 음수
+가중치를 가진 Event는 콘텐츠 grain에 속하지 않으므로 여기 들어오지 않는다.
+
+`section_id`가 NULL이면 섹션 가중치를 곱할 수 없다. 이 경우 가중치 `1.0`을 사용하고
+`quality_flags`에 표시한다. 임의의 섹션으로 추정해 채우지 않는다.
+
+점수는 정규화하지 않은 절대값이다. Mart에서 브랜드 간 비교에 쓸 때는 분모를 함께
+제시해야 한다. 조회 수가 많은 상품이 자동으로 높은 점수를 받기 때문이다.
 
 ## 14. `funnel_session_fact`
 

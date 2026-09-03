@@ -64,6 +64,44 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 `source`를 우선 사용하며 누락된 과거 데이터만 `synthetic → simulator`, 그 외
 `web`으로 보정한다.
 
+### 2.3 관심도 산식
+
+`*_interest_score` 컬럼은 조회 수가 아니라 **행동 가중 관심도**다. 단순 조회 순위는
+"인기 상품이 인기 상품이다"만 말하고 어떤 행동이 관심을 뜻하는지 구분하지 못한다.
+
+| 컬럼 | 정의 |
+| --- | --- |
+| `content_interest_score` | [`processed-schema.md`](./processed-schema.md) §13.1 결과를 Mart grain으로 합산 |
+| `product_interest_score` | `Σ EVENT_WEIGHT[event_name] x 해당 Event 발생 수` (상품 grain) |
+| `avg_interest_score`, `avg_product_interest_score`, `avg_content_interest_score` | 위 값을 세션 수로 나눈 평균 |
+| `category_interest_score` | segment x 카테고리로 `product_interest_score`를 합산 |
+
+행동 가중치 `EVENT_WEIGHT`의 실행 원본은 `frontend/src/types/log.ts`이며 이 계약에
+숫자를 복제하지 않는다. `add_to_cart`가 가장 크고 `remove_from_cart`·`rage_click`
+등은 음수이므로 **점수가 음수가 될 수 있다.** 0으로 잘라내지 않는다. 담았다 뺀 상품과
+아무 반응 없는 상품은 다른 신호다.
+
+`product_interest_score`는 정규화하지 않은 절대값이라 노출이 많은 상품이 자동으로
+높다. Dashboard가 순위로 쓸 때는 노출 수를 함께 제시한다.
+
+### 2.4 표기 정규화
+
+원천 데이터의 표기 변형은 집계 전에 병합한다. Persona 속성과 상품 리뷰 통계가 같은
+어휘를 써야 segment Join이 성립하기 때문이다.
+
+| 대상 | 병합 |
+| --- | --- |
+| `hair_color` | `brunette` → `brown` |
+| `eye_color` | `Grey` → `gray` |
+| `skin_tone` | 원본 14종을 5버킷으로 |
+
+규칙 원본은 [`persona-schema.md`](./persona-schema.md) §3.2다.
+
+**Persona 쪽은 이미 병합되어 있으나 상품 리뷰 통계에는 남아 있다.**
+`products_200.json`의 `_review_stats.segment_counts.hair_color`에 `brunette` 키를
+가진 상품이 200개 중 137개다. `dim_product`와 segment Mart를 만들 때 병합하지 않으면
+같은 사람이 `brown`과 `brunette`로 나뉘어 집계된다.
+
 ## 3. Dimension
 
 ### 3.1 `dim_tenant`
@@ -346,3 +384,6 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
    상품 브랜드 `brand_id`를 격리 키로 사용하지 않는다.
 7. `tenant_id`가 NULL인 row는 Tenant 격리가 필요한 Mart에 넣지 않는다.
    `schema_version = 0.2.0-draft` Event가 여기 해당한다.
+8. `*_interest_score`를 0으로 하한 절단하지 않는다. 음수는 부정 행동의 신호다.
+9. §2.4의 표기 병합을 집계 전에 적용한다. 특히 상품 리뷰 통계의 `brunette`를
+   `brown`으로 합치지 않으면 segment Join이 같은 사람을 둘로 나눈다.
