@@ -91,6 +91,47 @@ class EventControllerTest {
     }
 
     @Test
+    void acceptsNavigationClickWithSessionIntent() throws Exception {
+        when(publisher.publish(anyString(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [{
+                                    "schema_version": "0.2.0-draft",
+                                    "event_id": "evt-navigation-001",
+                                    "event_name": "navigation_click",
+                                    "intent": "session",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "session_id": "session-001",
+                                    "page_view_id": "page-view-001",
+                                    "sequence_no": 1,
+                                    "page_type": "product_list",
+                                    "actor_type": "user",
+                                    "environment": "local",
+                                    "properties": {
+                                      "target": "/cart",
+                                      "entry_source": "header"
+                                    }
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(0));
+
+        verify(metrics).recordReceived(1);
+        verify(publisher).publish(anyString(), any());
+    }
+
+    @Test
     void rejectsAnEmptyBatch() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)

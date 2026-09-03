@@ -13,6 +13,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
     private static final Map<String, String> EVENT_INTENTS = Map.ofEntries(
             Map.entry("session_start", "session"),
             Map.entry("page_view", "session"),
+            Map.entry("navigation_click", "session"),
             Map.entry("exit_summary", "session"),
             Map.entry("product_impression", "exposure"),
             Map.entry("recommendation_impression", "exposure"),
