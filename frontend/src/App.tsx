@@ -6,7 +6,13 @@ import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
-import { DEFAULT_STOREFRONT, STOREFRONT_KEY, applyStorefront, loadStorefront } from './lib/storefront';
+import {
+  DEFAULT_STOREFRONT,
+  STOREFRONT_KEY,
+  applyStorefront,
+  loadStorefront,
+  storefrontEventProps,
+} from './lib/storefront';
 import type { StorefrontPrefs } from './lib/storefront';
 import productsData from './mocks/products.sample.json';
 import reviewsData from './mocks/reviews.sample.json';
@@ -290,6 +296,8 @@ export default function App() {
 
   useEffect(() => {
     applyStorefront(storefront);
+    // 진열이 바뀌면 그 다음 이벤트부터 새 진열로 기록된다
+    setLoggerContext({ storefront: storefrontEventProps(storefront) });
   }, [storefront]);
 
   useEffect(() => {

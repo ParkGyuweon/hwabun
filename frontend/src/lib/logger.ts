@@ -19,6 +19,17 @@ interface LoggerContext {
   environment: string;
   /** synthetic 실행 정보. 실사용자 방문이면 null */
   synthetic: SyntheticContext | null;
+  /**
+   * 이 방문이 어떤 진열의 쇼핑몰에서 일어났는지 (src/lib/storefront.ts).
+   *
+   * 브랜드마다 진열이 다르기 때문에 필요하다. 같은 `product_click` 이라도 4열 그리드에서
+   * 나온 것과 옆에 붙은 기획전 레일에서 나온 것은 다른 화면의 결과다. 안 실으면 브랜드
+   * 50개 로그를 합쳤을 때 그 차이가 노이즈로 남고, 실으면 "어느 진열이 더 잘 팔리나" 가
+   * group by 한 줄이 된다.
+   *
+   * 쇼핑몰만 채운다. 대시보드·플랫폼 화면은 로그를 남기지 않는다.
+   */
+  storefront: Record<string, string> | null;
 }
 
 /**
@@ -122,6 +133,7 @@ let context: LoggerContext = {
   actorType: syntheticContext ? 'synthetic' : 'user',
   environment: 'local',
   synthetic: syntheticContext,
+  storefront: null,
 };
 
 let sessionId = createId();
@@ -254,6 +266,19 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     finalProperties.generator_type ??= generatorType;
     finalProperties.simulation_run_id ??= simulationRunId;
     finalProperties.scenario_id ??= scenarioId;
+  }
+
+  /**
+   * 진열 정보도 어느 이벤트에나 실린다.
+   *
+   * **이벤트 정의는 하나도 바뀌지 않는다.** `properties` 는 계약상 열린 객체라
+   * (contracts/event-schema.json — `"properties": {"type": "object"}`) 키를 더해도
+   * 검증기·수집 서버·기존 소비자가 그대로 통과한다. 읽지 않는 쪽은 없는 것처럼 동작한다.
+   */
+  if (context.storefront !== null) {
+    for (const [key, value] of Object.entries(context.storefront)) {
+      finalProperties[key] ??= value;
+    }
   }
 
   const event: LogEnvelope = {

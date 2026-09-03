@@ -8,7 +8,7 @@ import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
 import Onboarding from './Onboarding';
 import { MotifLine } from './components';
-import { DEFAULT_STOREFRONT, STOREFRONT_LAYOUTS, STOREFRONT_THEMES, loadStorefront, saveStorefront } from '../lib/storefront';
+import { DEFAULT_STOREFRONT, describeStorefront, loadStorefront, saveStorefront } from '../lib/storefront';
 import type { StorefrontPrefs } from '../lib/storefront';
 
 type ScreenKey =
@@ -85,8 +85,7 @@ export default function DashboardApp() {
   }
 
   const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
-  const layoutLabel = STOREFRONT_LAYOUTS.find((l) => l.key === storefront.layout)?.label ?? '';
-  const themeLabel = STOREFRONT_THEMES.find((t) => t.key === storefront.theme)?.label ?? '';
+  const storefrontSummary = describeStorefront(storefront);
 
   return (
     <div className="console">
@@ -118,7 +117,7 @@ export default function DashboardApp() {
         <div className="sidebar__shop">
           <p className="sidebar__shop-label">내 쇼핑몰</p>
           <p className="sidebar__shop-state">
-            {layoutLabel} · {themeLabel}
+            {storefrontSummary}
           </p>
           <div className="sidebar__shop-actions">
             <button type="button" className="sidebar__settings" onClick={() => setEditing(true)}>
