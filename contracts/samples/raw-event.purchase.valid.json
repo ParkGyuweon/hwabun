@@ -1,0 +1,103 @@
+[
+  {
+    "schema_version": "0.2.0-draft",
+    "event_id": "b1f0a5c8-2d34-4a91-8e77-0c5b2f1a9d10",
+    "event_name": "begin_checkout",
+    "intent": "conversion",
+    "occurred_at": "2026-08-31T05:10:00.000Z",
+    "persona_id": null,
+    "session_id": "session-user-0001",
+    "page_view_id": "page-view-user-0001",
+    "sequence_no": 12,
+    "page_type": "cart",
+    "product_id": null,
+    "actor_type": "user",
+    "environment": "dev",
+    "received_at": "2026-08-31T05:10:00.120Z",
+    "source": "web",
+    "request_id": "request-user-0001",
+    "event_index": 0,
+    "properties": {
+      "items": [
+        {
+          "product_id": "P420652",
+          "quantity": 1,
+          "unit_price": 24.0
+        },
+        {
+          "product_id": "P54509",
+          "quantity": 2,
+          "unit_price": 47.5,
+          "sku_id": "1974565"
+        }
+      ],
+      "cart_value": 119.0,
+      "currency": "USD"
+    }
+  },
+  {
+    "schema_version": "0.2.0-draft",
+    "event_id": "c2e1b6d9-3e45-4b02-9f88-1d6c3a2b0e21",
+    "event_name": "purchase",
+    "intent": "conversion",
+    "occurred_at": "2026-08-31T05:10:00.000Z",
+    "persona_id": null,
+    "session_id": "session-user-0001",
+    "page_view_id": "page-view-user-0001",
+    "sequence_no": 12,
+    "page_type": "cart",
+    "product_id": null,
+    "actor_type": "user",
+    "environment": "dev",
+    "received_at": "2026-08-31T05:10:00.120Z",
+    "source": "web",
+    "request_id": "request-user-0001",
+    "event_index": 0,
+    "properties": {
+      "order_id": "ORD-20260903-0001",
+      "items": [
+        {
+          "product_id": "P420652",
+          "quantity": 1,
+          "unit_price": 24.0
+        },
+        {
+          "product_id": "P54509",
+          "quantity": 2,
+          "unit_price": 47.5,
+          "sku_id": "1974565"
+        }
+      ],
+      "order_value": 119.0,
+      "currency": "USD"
+    }
+  },
+  {
+    "schema_version": "0.2.0-draft",
+    "event_id": "d3f2c7ea-4f56-4c13-a099-2e7d4b3c1f32",
+    "event_name": "purchase_reason_select",
+    "intent": "validation",
+    "occurred_at": "2026-08-31T05:10:00.000Z",
+    "persona_id": null,
+    "session_id": "session-user-0001",
+    "page_view_id": "page-view-user-0001",
+    "sequence_no": 12,
+    "page_type": "cart",
+    "product_id": null,
+    "actor_type": "user",
+    "environment": "dev",
+    "received_at": "2026-08-31T05:10:00.120Z",
+    "source": "web",
+    "request_id": "request-user-0001",
+    "event_index": 0,
+    "properties": {
+      "order_id": "ORD-20260903-0001",
+      "reasons": [
+        "ingredient",
+        "review_same_skin"
+      ],
+      "primary_reason": "ingredient",
+      "skipped": false
+    }
+  }
+]
