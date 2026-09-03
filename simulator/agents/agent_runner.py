@@ -188,6 +188,46 @@ def load_dotenv(path=None):
         print(f"  .env 를 읽지 못했습니다 ({exc}) — 환경변수로 주십시오")
 
 
+def load_prices():
+    """상품별 가격.
+
+    페르소나 레코드에는 가격이 없다. 리뷰에는 `product_id` 만 있어 카탈로그와
+    조인해야 값이 나온다. 실측: 100명 **전원**이 카탈로그 상품을 리뷰했고
+    (1인 평균 4.6개) 개인 상한의 중앙값은 $77 이다.
+    """
+    try:
+        with io.open(PRODUCTS_FILE, encoding="utf-8") as f:
+            return {q["product_id"]: float(q["price_usd"])
+                    for q in json.load(f)
+                    if q.get("product_id") and q.get("price_usd")}
+    except Exception:
+        return {}
+
+
+PRICES = None       # 워커 프로세스마다 한 번만 읽는다
+
+
+def prices():
+    global PRICES
+    if PRICES is None:
+        PRICES = load_prices()
+    return PRICES
+
+
+def budget_of(p):
+    """이 사람이 실제로 낸 것 중 가장 큰 값. 이력이 없으면 None.
+
+    예산선을 지어내지 않는다 — **자기가 이미 그 값을 낸 적이 있다** 는 것이
+    부담스럽지 않다는 가장 단순한 증거다. 카탈로그의 16%(중앙값)가 개인 상한을
+    넘는다. 2명은 상한이 최고가라 아무것도 비싸지 않고, 10명은 상한이 카탈로그
+    중앙값($46)보다 낮다 — 사람마다 다르게 걸린다.
+    """
+    tab = prices()
+    own = [tab[r["product_id"]] for r in p.get("reviews", [])
+           if r.get("product_id") in tab]
+    return max(own) if own else None
+
+
 def load_catalog():
     """딥링크로 보낼 상품 ID 목록. 프론트 목록과 같은 200개다"""
     try:
@@ -269,10 +309,16 @@ def profile_text(p):
         mark = "만족" if r["rating"] >= 4 else ("불만" if r["rating"] <= 2 else "보통")
         bought.append(f"{r['brand_name']} {r['product_name']} ({mark})")
 
-    prices = [r.get("price_usd") for r in revs if r.get("price_usd")]
+    # 페르소나 레코드에는 price_usd 가 없다 — 이 줄은 카탈로그와 조인하기
+    # 전까지 **한 번도 붙은 적이 없었다.** 그런데 행동 기준은 "가격대도
+    # 부담스럽지 않다면" 이라고 말하고 있었다. 예산을 모르는 채로 가격 판단을
+    # 시킨 셈이다 (2026-09-03 확인)
+    tab = prices()
+    own = [tab[r["product_id"]] for r in revs if r.get("product_id") in tab]
     price_line = ""
-    if prices:
-        price_line = f"\n- 주로 사는 가격대: ${min(prices):.0f} ~ ${max(prices):.0f}"
+    if own:
+        price_line = (f"\n- 지금까지 낸 가격: ${min(own):.0f} ~ ${max(own):.0f}"
+                      f" (${max(own):.0f} 까지는 내 본 적이 있다)")
 
     return (f"- 피부 타입: {TYPE_KR.get(p['skin_type'], p['skin_type'])}\n"
             f"- 피부 톤: {TONE_KR.get(p['skin_tone'], p['skin_tone'])}"
@@ -306,7 +352,9 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 궁금하지만 상세까지 볼 정도는 아니면 quick_look 으로 요약만 열어보십시오.
 - 상세에서 마음에 들지만 지금 사기는 망설여지면 wishlist_toggle 로 찜하십시오.
   이미 찜한 상품이 마음에서 멀어졌으면 다시 눌러 해제하십시오.
-- 장바구니에 담아둔 것 중 다시 보니 아닌 것이 있으면 remove_from_cart 로 빼십시오.
+- 장바구니에는 각 상품의 가격이 적혀 있고, 평소 가격대를 넘는 것에는 그 사실이
+  함께 적힙니다. 넘는다고 못 사는 것은 아닙니다 — 다만 합계가 부담스러워졌거나
+  마음이 식었다면 remove_from_cart 로 빼십시오. 그대로 두어도 됩니다.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
@@ -842,7 +890,7 @@ def has_unvisited_in_list(page, visited):
 
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
-                    n_details=0, has_unvisited=True):
+                    n_details=0, has_unvisited=True, cart_over=False):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -869,8 +917,11 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     acts.append("scroll")
     if quick_looks < QUICK_LOOK_MAX:
         acts.append("quick_look")
-    # 담은 것이 하나뿐일 때 빼기를 열면 전환이 0 으로 돌아갈 수 있다
-    if cart_size >= CART_MIN_TO_REMOVE:
+    # 담은 것이 하나뿐일 때 빼기를 열면 전환이 0 으로 돌아갈 수 있다.
+    # 다만 **평소 가격대를 넘는 것을 담았다면** 하나여도 연다 — 뺄 이유가
+    # 화면에 적혀 있는 상태이고, 그때도 안 열면 부정 신호가 나올 자리가
+    # 없어진다 (2026-09-03 20명 실측: 세 조건이 겹친 사람이 1명뿐이었다)
+    if cart_size >= CART_MIN_TO_REMOVE or (cart_over and cart_size >= 1):
         acts.append("remove_from_cart")
     # **leave 를 일찍 열지 않는다.** 시작 위치를 흩으면서 목록 아래쪽에서 출발하는
     # 사람이 생겼는데, 화면에 "목록 끝" 이 보이면 첫 턴부터 나가버렸다.
@@ -886,6 +937,22 @@ def detail_title(user):
     if len(parts) > 1:
         return parts[1].split(" — ")[0].strip()
     return ""
+
+
+def detail_price(user):
+    """상세 화면 프롬프트에서 가격만 뽑는다.
+
+    화면 줄이 "브랜드 상품명 — $38.00" 이라 상품명과 같은 자리에서 나온다.
+    DOM 을 다시 읽지 않는 이유는 **화면이 진실**이기 때문이다 — 담긴 값과
+    모델이 본 값이 다르면 판단 근거를 맞춰볼 수 없다.
+    """
+    parts = user.split(NL + NL)
+    if len(parts) < 2 or " — " not in parts[1]:
+        return None
+    try:
+        return float(parts[1].split(" — ")[-1].strip().lstrip("$").replace(",", ""))
+    except ValueError:
+        return None
 
 
 class DecisionLog:
@@ -946,6 +1013,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
+    cart_prices = {}         # 담은 상품의 화면 가격. 부담 판단에 쓴다
+    budget = budget_of(persona)   # 이 사람이 실제로 내 본 최고가
     wished = set()           # 찜한 상품. 상품당 한 번만 열어준다
     peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
@@ -980,7 +1049,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         acts = allowed_actions(kind, pct, scroll_run, carted_here, has_more,
                                wished_here=wished_here, quick_looks=quick_looks,
                                cart_size=len(cart), n_details=len(visited),
-                               has_unvisited=has_unvisited)
+                               has_unvisited=has_unvisited,
+                               cart_over=any(
+                                   budget is not None and v > budget
+                                   for v in cart_prices.values()))
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -1001,7 +1073,23 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             user = (f"[찜한 상품] {', '.join(sorted(wished))}{NL}"
                     f"이미 찜한 상품을 다시 누르면 찜이 해제됩니다.{NL}{NL}") + user
         if cart:
-            user = f"[장바구니] {', '.join(cart)}{NL}{NL}" + user
+            # **화면에 답을 적어 준다.** "가격이 부담스러우면 빼십시오" 라고
+            # 말만 해서는 모델이 못 한다 — 9/3 에 [이미 봄] 표시로 재진입을
+            # 12.2% -> 1.1% 로 줄인 것과 같은 방식이다. 합계와 개인 상한을
+            # 나란히 두고, 넘는 품목에는 표시를 붙인다
+            items = []
+            for c in cart:
+                pr = cart_prices.get(c)
+                over = budget is not None and pr is not None and pr > budget
+                items.append(f"{c}" + (f" ${pr:.0f}" if pr is not None else "")
+                             + (f"  (평소 최대 ${budget:.0f})" if over else ""))
+            total = sum(v for v in cart_prices.values())
+            tail = ""
+            if total:
+                tail = f" — 합계 ${total:.0f}"
+                if budget is not None:
+                    tail += f" (지금까지 한 개에 최대 ${budget:.0f} 까지 내 봤다)"
+            user = (f"[장바구니] {', '.join(items)}{tail}{NL}{NL}") + user
         if history:
             recent = NL.join(f"  {i}. {h}" for i, h in
                              enumerate(history[-6:], max(1, len(history) - 5)))
@@ -1070,6 +1158,9 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             nm = here or (" ".join(str(tgt).split()[:4]) if tgt else "")
             if nm and nm not in cart:
                 cart.append(nm)
+                pr = detail_price(user)
+                if pr is not None:
+                    cart_prices[nm] = pr
         if okd and act == "wishlist_toggle":
             # 같은 상품을 다시 누르면 해제다. 상태를 뒤집어 둬야 프롬프트가 맞는다
             nm = here or (str(tgt) if tgt else "")
@@ -1083,6 +1174,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             gone = str(tgt) if tgt else (cart[-1] if cart else None)
             if gone in cart:
                 cart.remove(gone)
+                cart_prices.pop(gone, None)
         done += okd
         failed += (not okd)
         if okd and act == "add_to_cart":
