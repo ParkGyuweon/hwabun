@@ -217,6 +217,41 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 `unit_price: number`이며 `sku_id: string`은 선택이다. 활성화할 때
 `event-schema.json`의 event enum과 intent 조건도 함께 변경한다.
 
+## 6-2. 공통 선택 properties: 쇼핑몰 진열 (`storefront_*`)
+
+브랜드마다 쇼핑몰 진열이 달라져서(가입 때 소상공인이 고른다) **모든 Event**의
+`properties`에 진열 정보가 실린다. 검증 대상이 아닌 **선택 항목**이다.
+
+| key | 값 | 뜻 |
+| --- | --- | --- |
+| `storefront_layout` | `grid` \| `showcase` \| `catalog` \| `list` | 상품 배열 |
+| `storefront_promo` | `top` \| `side` \| `bottom` \| `off` | 기획전 섹션 위치 |
+| `storefront_density` | `airy` \| `cozy` \| `compact` | 카드 크기·열 수 |
+| `storefront_corner` | `sharp` \| `soft` \| `round` | 모서리 |
+| `storefront_card` | `line` \| `shadow` \| `plain` | 카드 표면 |
+| `storefront_font` | `sans` \| `serif` \| `wide` | 글꼴 |
+| `storefront_theme` | `bloom` `rose` `coral` `lavender` `mint` `earth` `sand` `clinic` `mono` | 색 |
+
+규칙:
+
+1. `event-schema.json`은 바뀌지 않는다. `properties`가 열린 object이므로
+   (`"properties": {"type": "object"}`) 기존 검증기·Collector·소비자가 그대로 통과한다.
+2. **required가 아니다.** 없다고 격리하지 않는다. 쇼핑몰 화면이 아닌 출처(시뮬레이터
+   등)에서는 비어 있을 수 있다.
+3. 호출부가 같은 키를 이미 실었으면 덮지 않는다 (synthetic runtime metadata와 같은 규칙).
+4. 화면 구조를 바꾸는 축은 `layout`·`promo`·`density` 셋이다. 나머지 넷은 겉모습만
+   바꾼다. 진열별 지표를 비교할 때는 앞의 셋을 기준으로 묶는 것이 의미가 있다.
+
+해석 주의:
+
+- `storefront_promo='off'`인 브랜드는 기획전 섹션 자체가 없다. `promo_pick` 목록의
+  `product_impression`이 0이므로 CTR 분모가 0이다. 브랜드 간 평균을 낼 때 제외한다.
+- `section_dwell`·`scroll_depth`의 분포는 진열에 따라 달라진다. 브랜드를 가로질러
+  비교할 때는 진열을 통제 변수로 넣어야 한다.
+- 반대로 `section_id`·`content_kind` 목록은 진열이 바뀌어도 **변하지 않는다**.
+  로그는 좌표가 아니라 의미(`data-log-section` / `data-log-content`)에 묶여 있고,
+  진열은 CSS 자리 이동으로만 구현되기 때문이다. 기존 집계는 그대로 유효하다.
+
 ## 7. Semantic Validation
 
 1. 활성 Event의 intent가 `event-schema.json` 조건과 일치해야 한다.

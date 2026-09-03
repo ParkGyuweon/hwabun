@@ -253,14 +253,17 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+/* Primary Button = Fresh Green (브랜딩 가이드 UI Token). 검정 CTA 자리를 대신한다 */
 .btn--primary {
   flex: 1;
-  background: var(--color-ink);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
   color: #fff;
 }
 
 .btn--primary:hover {
-  background: #333;
+  background: var(--color-brand-deep);
+  border-color: var(--color-brand-deep);
 }
 
 .btn--icon {
@@ -799,9 +802,21 @@
 }
 
 .site-header__logo {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
   font-weight: 700;
-  letter-spacing: 0.28em;
+  /* BLOOM 워드마크는 자간을 넓게 쓴다 (로고 가이드) */
+  letter-spacing: 0.26em;
+  color: var(--color-support);
+}
+
+.site-header__logo img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
 }
 
 .site-header__nav {

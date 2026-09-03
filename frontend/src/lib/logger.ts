@@ -19,6 +19,17 @@ interface LoggerContext {
   environment: string;
   /** synthetic 실행 정보. 실사용자 방문이면 null */
   synthetic: SyntheticContext | null;
+  /**
+   * 이 방문이 어떤 진열의 쇼핑몰에서 일어났는지 (src/lib/storefront.ts).
+   *
+   * 브랜드마다 진열이 다르기 때문에 필요하다. 같은 `product_click` 이라도 4열 그리드에서
+   * 나온 것과 옆에 붙은 기획전 레일에서 나온 것은 다른 화면의 결과다. 안 실으면 브랜드
+   * 50개 로그를 합쳤을 때 그 차이가 노이즈로 남고, 실으면 "어느 진열이 더 잘 팔리나" 가
+   * group by 한 줄이 된다.
+   *
+   * 쇼핑몰만 채운다. 대시보드·플랫폼 화면은 로그를 남기지 않는다.
+   */
+  storefront: Record<string, string> | null;
 }
 
 /**
@@ -122,6 +133,7 @@ let context: LoggerContext = {
   actorType: syntheticContext ? 'synthetic' : 'user',
   environment: 'local',
   synthetic: syntheticContext,
+  storefront: null,
 };
 
 let sessionId = createId();
@@ -139,6 +151,40 @@ let flushTimer: number | undefined;
  * 스크롤을 위아래로 반복해도 section_view 가 다시 찍히지 않게 한다.
  */
 const firedOnceKeys = new Set<string>();
+
+/**
+ * 계약이 `string|null` 로 선언한 property. **이 셋만** null 을 실어 보낸다.
+ * (`contracts/event-properties-schema.md` §4)
+ *
+ * 나머지는 전부 `string` 이라 null 을 실으면 "값을 안 줬다" 가 아니라 **타입 위반**이다.
+ * 검증기가 `_matches_type(None, "string")` 을 False 로 보고 격리한다.
+ * 선택 property 는 값이 없으면 키 자체를 빼는 것이 계약이 말하는 "미제공" 이다.
+ *
+ * 화면 코드는 이걸 신경 쓰지 않아도 된다. 구역 판정(regionOfNode)은 못 찾으면 null 을
+ * 돌려주고 호출부는 그걸 그대로 펼쳐 넣는데, 어디서 무엇이 null 이 될지 호출부마다
+ * 따지게 하면 언젠가 빠뜨린다. 나가는 길목인 여기서 한 번에 거른다.
+ */
+const NULLABLE_PROPERTIES: Record<string, ReadonlySet<string>> = {
+  hover_dwell: new Set(['action']),
+  rage_click: new Set(['action']),
+  dead_click: new Set(['target_tag']),
+};
+
+/** 계약이 허용하지 않는 null 을 걷어낸다. 봉투를 만들기 직전에 한 번 */
+function dropDisallowedNulls(
+  eventName: EventName,
+  properties: Record<string, unknown>,
+): Record<string, unknown> {
+  const allowed = NULLABLE_PROPERTIES[eventName];
+  const cleaned: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === null && !allowed?.has(key)) continue;
+    cleaned[key] = value;
+  }
+
+  return cleaned;
+}
 
 export function setLoggerContext(patch: Partial<LoggerContext>): void {
   context = { ...context, ...patch };
@@ -256,6 +302,19 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     finalProperties.scenario_id ??= scenarioId;
   }
 
+  /**
+   * 진열 정보도 어느 이벤트에나 실린다.
+   *
+   * **이벤트 정의는 하나도 바뀌지 않는다.** `properties` 는 계약상 열린 객체라
+   * (contracts/event-schema.json — `"properties": {"type": "object"}`) 키를 더해도
+   * 검증기·수집 서버·기존 소비자가 그대로 통과한다. 읽지 않는 쪽은 없는 것처럼 동작한다.
+   */
+  if (context.storefront !== null) {
+    for (const [key, value] of Object.entries(context.storefront)) {
+      finalProperties[key] ??= value;
+    }
+  }
+
   const event: LogEnvelope = {
     schema_version: SCHEMA_VERSION,
     event_id: createId(),
@@ -274,7 +333,7 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     actor_type: context.actorType,
     environment: context.environment,
 
-    properties: finalProperties,
+    properties: dropDisallowedNulls(eventName, finalProperties),
   };
 
   queue.push(event);

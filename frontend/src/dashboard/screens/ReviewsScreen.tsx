@@ -16,26 +16,29 @@ export default function ReviewsScreen({
 
   return (
     <div className="stack">
-      <Panel
-        title="분석 범위"
-        aside={`리뷰 ${fmt.int(stats.sampleSize)}건 · 본문 있는 리뷰 ${fmt.int(stats.withText)}건`}
-      >
-        <select
-          value={productId ?? 'all'}
-          onChange={(e) => onProductChange(e.target.value === 'all' ? null : e.target.value)}
-          aria-label="상품 선택"
-        >
-          <option value="all">전체 상품</option>
-          {products.map((p) => (
-            <option key={p.product_id} value={p.product_id}>
-              {p.brand_name} — {p.product_name}
-            </option>
-          ))}
-        </select>
-        <p className="note">
+      <div className="scope">
+        <label className="scope__field">
+          <span className="scope__label">분석 범위</span>
+          <select
+            value={productId ?? 'all'}
+            onChange={(e) => onProductChange(e.target.value === 'all' ? null : e.target.value)}
+            aria-label="상품 선택"
+          >
+            <option value="all">전체 상품</option>
+            {products.map((p) => (
+              <option key={p.product_id} value={p.product_id}>
+                {p.product_name} — {p.brand_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="scope__meta">
+          리뷰 {fmt.int(stats.sampleSize)}건 · 본문 있는 리뷰 {fmt.int(stats.withText)}건
+        </p>
+        <p className="scope__note">
           상품당 리뷰가 10건이라 개별 상품 수치는 표본이 작다. 비율만 보지 말고 건수를 함께 볼 것.
         </p>
-      </Panel>
+      </div>
 
       <div className="grid grid--kpi">
         <Kpi label="평균 평점" value={stats.avgRating.toFixed(2)} source="real" />

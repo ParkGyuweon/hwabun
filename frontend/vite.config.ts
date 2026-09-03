@@ -12,13 +12,18 @@ export default defineConfig({
   build: {
     rollupOptions: {
       /*
-       * 쇼핑몰과 관리자 대시보드를 별도 진입점으로 나눈다.
-       * 대시보드는 쇼핑몰 어디에서도 링크되지 않는다 — 브랜드 담당자 전용이고,
-       * 실제 접근 제어(로그인)는 백엔드 범위다.
+       * 세 진입점을 나눈다. 서로 어디에서도 링크되지 않는다.
+       *
+       *   shop       BLOOM  — 테스트 쇼핑몰. 가상 소비자와 실사용자가 들어온다
+       *   dashboard  HWABUN — 참여 브랜드(소상공인) 담당자의 분석 화면
+       *   platform   HWABUN Platform — 운영자(우리 팀)가 참여 브랜드 전체를 보는 화면
+       *
+       * 실제 접근 제어(로그인·권한)는 백엔드 범위다.
        */
       input: {
         shop: fileURLToPath(new URL('./index.html', import.meta.url)),
         dashboard: fileURLToPath(new URL('./dashboard.html', import.meta.url)),
+        platform: fileURLToPath(new URL('./platform.html', import.meta.url)),
       },
     },
   },

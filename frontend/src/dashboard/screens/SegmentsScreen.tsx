@@ -75,7 +75,8 @@ export default function SegmentsScreen() {
                     style={{
                       // 브랜드 초록 한 색의 농도로만 표현한다. 다색 히트맵은
                       // 좋고 나쁨을 화면이 단정해 버린다
-                      background: `rgba(168, 201, 110, ${(cell.cartRate / maxRate) * 0.85})`,
+                      // 테마가 바뀌면 같이 바뀌어야 한다. 값을 박아두면 테마 색과 어긋난다
+                      background: `rgb(var(--brand-rgb) / ${(cell.cartRate / maxRate) * 0.85})`,
                     }}
                     title={`표본 ${cell.sessions}건`}
                   >
