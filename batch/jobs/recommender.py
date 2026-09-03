@@ -25,6 +25,38 @@ sys.path.insert(0, BD)
 
 LAMBDA = 0.15
 VIEW_CAP = 2
+
+# 어휘집에 **없는** 브랜드를 위한 폴백 (어휘집 0.5, 2026-09-03).
+#
+# brand 는 55개 고정 원핫이라 목록에 없는 브랜드는 그 55차원이 전부 0 이 된다.
+# 브랜드가 등록될 때마다 차원을 늘리고 기존 상품 200개를 다시 인코딩하는 것은
+# 서비스 운영 중에 할 수 없다. 그래서 **어휘집 밖 브랜드에만** 점수 항을 더한다.
+#
+#   score += BRAND_W   이 상품 브랜드가 사용자의 시드 브랜드에 있고, 어휘집에 없을 때
+#
+# 목록에 있는 브랜드는 지금처럼 원핫으로 계산한다. 그래서 **기존 카탈로그의 벡터와
+# 점수가 한 자리도 바뀌지 않는다** — 대표 지표가 흔들리지 않는다.
+#
+# 가중치는 원핫 블록과 같은 0.60 이다. 관계 항으로 **전면 교체**하는 안도 재봤다.
+# valid 에서는 구분되지 않았지만(24.20% vs 24.30%) test 에서 -0.81%p 였다.
+# 신규 브랜드 지원만 필요하다면 폴백으로 충분하고 기존 수치를 지킬 수 있다.
+# 재현: Research/eval/eval_brand_relation_feature_20260903.py
+BRAND_W = 0.60
+
+
+def brand_match(brands, rows, known=None):
+    """rows 의 브랜드 집합에 속하면 1, 아니면 0 인 (상품수,) 배열.
+
+    known 을 주면 **그 목록에 없는 브랜드에만** 1 을 준다 (어휘집 밖 폴백).
+    문자열만 비교하므로 처음 보는 브랜드도 그대로 동작한다 — 그게 존재 이유다.
+    """
+    seen = {brands[i] for i in rows}
+    if known is not None:
+        seen = {b for b in seen if b not in known}
+    if not seen:
+        return None
+    return np.fromiter((1.0 if b in seen else 0.0 for b in brands),
+                       np.float32, len(brands))
 # MMR 다양성 계수. **값이 클수록 약하게 건다** — 헷갈리기 쉬운 방향이다.
 #
 #     선택 = argmax [ λ_mmr x score(i) - (1-λ_mmr) x max cos(v_i, 이미 고른 것) ]
@@ -82,9 +114,14 @@ def schedule_for(n_seed):
 
 
 class Recommender:
-    def __init__(self, matrix, index, prior, affinity=None, lam=LAMBDA):
+    def __init__(self, matrix, index, prior, affinity=None, lam=LAMBDA,
+                 brands=None, known_brands=None):
         """matrix (상품수, 차원) · index product_id->행 · prior 인기도 0~1
-           affinity: 페르소나 속성 친화도를 내주는 함수 f(persona) -> (상품수,) 배열"""
+           affinity: 페르소나 속성 친화도를 내주는 함수 f(persona) -> (상품수,) 배열
+           brands: 행 번호 -> brand_name. 주면 brand 관계 항이 켜진다"""
+        self.brands = list(brands) if brands is not None else None
+        # 어휘집에 있는 브랜드. 여기 있는 것은 원핫이 처리하므로 폴백을 안 건다
+        self.known_brands = set(known_brands) if known_brands is not None else set()
         self.M = matrix
         self.idx = index
         self.ids = [None] * len(index)
@@ -103,6 +140,12 @@ class Recommender:
         s = np.full(len(self.M), 0.0)
         if vp is not None:
             s += w1 * (self.M @ vp)
+        if self.brands is not None:
+            # 전환한 상품의 브랜드를 그 사람이 "쓰던 브랜드" 로 본다
+            rows = [self.idx[g] for g in state.converted if g in self.idx]
+            bm = brand_match(self.brands, rows, self.known_brands) if rows else None
+            if bm is not None:
+                s += BRAND_W * bm
         if vn is not None:
             s -= self.lam * (self.M @ vn)
         if self.affinity is not None and persona is not None:

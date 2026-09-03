@@ -1,6 +1,6 @@
 # Product Feature 샘플 — 실제 상품 6개
 
-> 어휘집 `0.4` · 콘텐츠 벡터 148차원
+> 어휘집 `0.5` · 콘텐츠 벡터 148차원
 > 원본 데이터: [`batch/ingest/data/feature_sample.json`](../../batch/ingest/data/feature_sample.json) (벡터 전체 값 포함)
 > **이 문서는 생성물입니다.** 고칠 일이 있으면 `batch/ingest/build_feature_sample.py` 를 고치고 다시 실행하세요.
 
@@ -68,14 +68,14 @@
 
 | | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---:|---:|---:|---:|---:|---:|
-| **0** Balancing Force Oil Control To (OLEHENRIKSEN) | 1.000 | 0.061 | 0.005 | 0.166 | 0.001 | 0.687 |
-| **1** Cicapair Tiger Grass Cream (Dr. Jart+) | 0.061 | 1.000 | 0.188 | 0.266 | 0.011 | 0.003 |
-| **2** Lip Sleeping Mask Intense Hydr (LANEIGE) | 0.005 | 0.188 | 1.000 | 0.090 | 0.022 | 0.004 |
-| **3** Greek Yoghurt Foaming Cream Cl (KORRES) | 0.166 | 0.266 | 0.090 | 1.000 | 0.001 | 0.067 |
-| **4** Smart Clinical Repair Wrinkle  (CLINIQUE) | 0.001 | 0.011 | 0.022 | 0.001 | 1.000 | 0.051 |
-| **5** Glow2OH Dark Spot Toner (OLEHENRIKSEN) | 0.687 | 0.003 | 0.004 | 0.067 | 0.051 | 1.000 |
+| **0** Balancing Force Oil Control To (OLEHENRIKSEN) | 1.000 | 0.061 | 0.005 | 0.165 | 0.001 | 0.687 |
+| **1** Cicapair Tiger Grass Cream (Dr. Jart+) | 0.061 | 1.000 | 0.183 | 0.266 | 0.011 | 0.003 |
+| **2** Lip Sleeping Mask Intense Hydr (LANEIGE) | 0.005 | 0.183 | 1.000 | 0.102 | 0.022 | 0.004 |
+| **3** Greek Yoghurt Foaming Cream Cl (KORRES) | 0.165 | 0.266 | 0.102 | 1.000 | 0.002 | 0.066 |
+| **4** Smart Clinical Repair Wrinkle  (CLINIQUE) | 0.001 | 0.011 | 0.022 | 0.002 | 1.000 | 0.051 |
+| **5** Glow2OH Dark Spot Toner (OLEHENRIKSEN) | 0.687 | 0.003 | 0.004 | 0.066 | 0.051 | 1.000 |
 
-**OLEHENRIKSEN 형제 두 개(0·5)가 0.687** 입니다. 같은 상품 0 와 다른 브랜드들의 코사인은 0.001~0.166 입니다.
+**OLEHENRIKSEN 형제 두 개(0·5)가 0.687** 입니다. 같은 상품 0 와 다른 브랜드들의 코사인은 0.001~0.165 입니다.
 
 브랜드가 같으면 55차원 원핫이 정확히 겹치고 그 축의 가중치가 0.60 이라, 카테고리나 성분이 달라도 코사인이 크게 올라갑니다. 브랜드 재구매를 잡아내는 힘이 여기서 나오고, 새 브랜드 추천이 어려운 이유도 같습니다 — 원핫이라 시드와 직교하면 그 축의 기여가 0 입니다.
 

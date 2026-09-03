@@ -39,8 +39,8 @@ from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
-from recommender import (LAMBDA, LAMBDA_MMR, Recommender,    # noqa: E402
-                         schedule_for)
+from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
+                         Recommender, brand_match, schedule_for)
 from user_vector import UserVector                           # noqa: E402
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -122,6 +122,12 @@ def run_persona(persona, history, target, ctx):
         scores += w1 * (M @ vp.astype(np.float32))
     if vn is not None:
         scores -= LAMBDA * (M @ vn.astype(np.float32))
+    if recommender.brands is not None:            # brand 관계 항
+        rows = [index[g] for g in state.converted if g in index]
+        bm = brand_match(recommender.brands, rows,
+                         recommender.known_brands) if rows else None
+        if bm is not None:
+            scores = scores + BRAND_W * bm
     scores += w2 * affinity(persona) + w3 * prior
 
     # seed(재생한 상품)는 후보에서 뺀다. target 은 정답이라 빼지 않는다
@@ -150,7 +156,9 @@ def main():
     index = {p["product_id"]: i for i, p in enumerate(encoder.products)}
     prior = np.asarray(encoder.prior(), dtype=np.float32)
     affinity = load_affinity(index)
-    recommender = Recommender(M, index, prior, affinity=affinity)
+    recommender = Recommender(M, index, prior, affinity=affinity,
+                              brands=[p["brand_name"] for p in encoder.products],
+                              known_brands=set(encoder.blk["brand"]["vocab"]))
     ctx = (M, index, prior, affinity, recommender)
 
     profiles = {p["persona_id"]: p

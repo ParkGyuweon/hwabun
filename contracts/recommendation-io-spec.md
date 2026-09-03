@@ -10,7 +10,36 @@ score(u, i) = w1 x cos(v_u⁺, v_i)       <- Product Vector,  User Behavior Vect
             − λ  x cos(v_u⁻, v_i)       <- User Behavior Vector (부정 축), λ = 0.15
             + w2 x attr_affinity(u, i)  <- Attribute Affinity
             + w3 x prior(i)             <- Product Prior
+            + w_b x brand_unknown(u, i) <- 어휘집 밖 브랜드 폴백, w_b = 0.60
 ```
+
+### `brand_unknown` — 어휘집에 없는 브랜드를 위한 폴백 (2026-09-03)
+
+```
+brand_unknown(u, i) = 1   상품 i 의 brand_name 이
+                          (a) 어휘집 brand 목록에 **없고**
+                          (b) 사용자 u 가 전환한 상품의 브랜드 집합에 **있을 때**
+                      0   그 밖에는 전부 0
+```
+
+`brand` 는 어휘집에 담긴 55개 고정 원핫입니다. 브랜드가 상품을 직접 등록하는
+구조가 되면서 **목록에 없는 브랜드는 그 55차원이 전부 0** 이 되는 문제가 생겼습니다.
+정확도에 가장 크게 기여하는 신호를 신규 브랜드만 못 받게 됩니다
+(브랜드 블록이 없을 때 Recall@10 23.6% → 11.4%).
+
+브랜드가 등록될 때마다 차원을 늘리고 기존 상품 200개를 다시 인코딩하는 것은 서비스
+운영 중에 할 수 없으므로, **어휘집 밖 브랜드에만** 점수 항을 하나 더합니다.
+문자열 비교라 어휘집이 필요 없습니다.
+
+**어휘집에 있는 브랜드는 지금처럼 원핫으로 계산합니다.** 그래서 기존 카탈로그의
+벡터와 점수는 한 자리도 바뀌지 않습니다 — 대표 지표 Recall@10 **23.39%** 그대로입니다.
+
+> 관계 항으로 **전면 교체**하는 안(brand 블록을 지우고 148 → 93차원)도 측정했습니다.
+> valid 에서는 구분되지 않았지만(24.20% vs 24.30%) **test 에서 −0.81%p** 였습니다.
+> 신규 브랜드 지원만 필요하다면 폴백으로 충분합니다.
+> 재현: `Research/eval/eval_brand_relation_feature_20260903.py`
+
+구현은 `batch/jobs/recommender.py` 의 `BRAND_W` · `brand_match(brands, rows, known)` 입니다.
 
 ---
 
@@ -65,7 +94,9 @@ reviews_*.csv                                │
 
 ```
 1. highlights 를 concern / clean / texture 3개 블록으로 분류
-2. ingredient 는 태그 + 전성분 문자열 파싱으로 값 생성 (위치 가중)
+2. ingredient 는 태그 + 전성분 문자열 파싱으로 값 생성 (위치 가중).
+   **전성분은 한글·영문 모두 받습니다** — 성분 29종에 한국어 표기가 동의어로
+   들어 있어 같은 성분표를 한글로 넣어도 매칭과 위치가중값이 같습니다
 3. 블록별 인코딩 (원핫 또는 멀티핫 + IDF)
 4. 블록별 L2 정규화 -> 블록 가중치 곱
 5. 전체 이어붙인 후 L2 정규화
