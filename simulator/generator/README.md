@@ -26,6 +26,12 @@ python simulator/generator/gen_behavior_logs.py --behavior hidden_preference
 전부 통과하는 것을 확인했다. `actor_type` 은 항상 `synthetic` 이라
 실제 사용자 로그와 섞이지 않는다.
 
+생성 직후에는 `contracts/event-properties-schema.md`를 읽어 Event별 required
+property, 타입, enum도 검사한다. 위반이 하나라도 있으면 파일 저장이나 Collector
+전송 전에 실행을 실패시킨다. 100명 생성 결과 99,672건에서 Properties 위반 0건을
+확인했다. 생성하지 않은 `navigation_click`, `dead_click`을 제외한 34/36 Event가
+해당 표본에 포함됐다.
+
 ## 무엇이 화면에 노출되는가 — `--exposure`
 
 사람은 위에 있는 것을 본다. 그런데 기본값(`popular_v0`)은 **전원에게 같은 인기순
@@ -139,7 +145,9 @@ Kafka 가 안 떠 있으면 백엔드가 발행을 기다리다 **25초쯤 뒤�
 | `simulator/personas/data/personas_100_agent.json` | 속성을 무작위로 부여한 검증용 에이전트 |
 | `simulator/personas/data/persona_style.json` | 페르소나 성향 6축. 리뷰 텍스트에서 도출 |
 | `batch/ingest/data/products_200.json` | 상품 카탈로그 |
+| `frontend/src/mocks/products.sample.json` | 실제 SKU와 variant label |
 | `frontend/src/types/log.ts` | **이벤트 가중치·intent 의 단일 소스.** 생성기가 직접 읽는다 |
+| `contracts/event-properties-schema.md` | Event별 required property, 타입, enum 계약 |
 
 마지막 항목이 중요하다. 가중치를 파이썬 쪽에 복사해두지 않고 `log.ts` 를 파싱하므로,
 프론트가 이벤트를 추가하거나 이름을 바꾸면 생성기가 **자동으로 따라간다.**

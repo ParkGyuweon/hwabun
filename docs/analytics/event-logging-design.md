@@ -184,7 +184,7 @@ Properties 계약에 반영한 Front 실제 값:
 | 담당 모듈 | 현재 차이 | 완료 기준 |
 | --- | --- | --- |
 | Backend Collector | `navigation_click`이 Java Event 허용 목록에서 누락 | `session` intent로 수집되고 회귀 테스트 통과 |
-| PC Generator | impression 필수값, 일부 required property, 타입·enum 불일치 | 생성 로그의 Properties 위반 0건 |
+| PC Generator | 계약 정합화 완료: 100명·99,672건 Properties 위반 0건 | 완료 |
 | PA Agent | Agent 행동 Event의 동일 계약 준수 여부 미검증 | PA 샘플을 같은 검증기로 확인 |
 | Spark Q2 | 공통 필드·synthetic metadata만 검사 | required/type/enum 위반을 `bad_events`로 격리 |
 

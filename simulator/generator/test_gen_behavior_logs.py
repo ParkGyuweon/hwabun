@@ -14,6 +14,8 @@ if np is not None:
         SimulationContext,
         default_simulation_run_id,
         seed_session_id,
+        selectable_variants,
+        validate_property_contract,
     )
 
 
@@ -76,6 +78,75 @@ class SyntheticEventMetadataTest(unittest.TestCase):
 
         self.assertEqual("seed:run_test_001:PC00001:P00001", events[0]["session_id"])
         self.assertTrue(events[0]["properties"]["seeded"])
+
+    def test_emitter_omits_absent_optional_properties(self):
+        events = []
+        emitter = Emitter(
+            events,
+            "PC00001",
+            datetime(2026, 8, 31, 1, 0, 0),
+            np.random.default_rng(42),
+            self.context,
+        )
+
+        emitter.emit(
+            "section_view",
+            "P00001",
+            section_id="ingredients",
+            content_kind=None,
+            content_ref=None,
+        )
+
+        self.assertEqual("ingredients", events[0]["properties"]["section_id"])
+        self.assertNotIn("content_kind", events[0]["properties"])
+        self.assertNotIn("content_ref", events[0]["properties"])
+
+    def test_selectable_variants_excludes_initial_frontend_selection(self):
+        product = {
+            "variants": [
+                {"sku_id": "SKU-1", "label": "30ml"},
+                {"sku_id": "SKU-2", "label": "50ml"},
+                {"sku_id": "SKU-3", "label": "100ml"},
+            ]
+        }
+
+        self.assertEqual(product["variants"][1:], selectable_variants(product))
+        self.assertEqual([], selectable_variants({}))
+
+    def test_property_contract_accepts_valid_event(self):
+        events = [
+            {
+                "event_name": "quick_look_close",
+                "properties": {
+                    "close_reason": "escape",
+                    "dwell_ms": 1200,
+                    "variants_viewed": 1,
+                    "added_to_cart": False,
+                    "wishlisted": False,
+                },
+            }
+        ]
+
+        result = validate_property_contract(events)
+
+        self.assertEqual(1, result["checked"])
+
+    def test_property_contract_rejects_invalid_enum(self):
+        events = [
+            {
+                "event_name": "quick_look_close",
+                "properties": {
+                    "close_reason": "esc",
+                    "dwell_ms": 1200,
+                    "variants_viewed": 1,
+                    "added_to_cart": False,
+                    "wishlisted": False,
+                },
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "Event Properties"):
+            validate_property_contract(events)
 
 
 if __name__ == "__main__":
