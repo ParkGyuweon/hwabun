@@ -73,9 +73,27 @@ PRODUCTS_FILE = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json
 #   * 목록은 25개씩 끊어 보여주고 나머지는 "더 보기" 버튼 뒤에 있다
 #   * 100명 전원이 같은 첫 화면에서 시작하니 보이는 후보가 늘 같은 25개다
 # 프롬프트로 "더 내려보라" 고 부탁하지 않고 코드로 시작 지점을 흩는다.
-DEEP_LINK_P = 0.5       # 이 확률로 상품 상세에서 시작한다 (검색·광고 유입에 해당)
+# **딥링크로 시작하지 않는다.** 우리 서비스에는 검색도 광고도 없다 — 없는 유입
+# 경로를 흉내 내면 로그가 실제로 일어날 수 없는 동선을 담는다. 전원 목록에서
+# 출발한다 (2026-09-03 지시).
+#
+# 딥링크는 9/1 에 상품 커버리지를 고치려고 넣은 것이었다(27개 -> 200개). 그
+# 몫은 이제 spread_start() 가 진다 — 카테고리 탭 · "더 보기" · 시작 스크롤
+# 위치. **커버리지는 본실행에서 다시 재야 한다.**
+#
+# 경로 자체는 남겨 둔다. --entry detail 로 상세 진입을 재현할 때 쓴다.
+DEEP_LINK_P = 0.0
 CATEGORY_P = 0.6        # 목록에서 시작할 때 이 확률로 카테고리 탭을 하나 고른다
 MAX_MORE_CLICKS = 3     # "더 보기" 한도. 25 -> 최대 100개까지 늘린다
+
+# 한 번 굴릴 때 내려가는 px 의 **사람별 중심값** 범위.
+#
+# 예전에는 시작 스크롤 위치를 사람마다 다르게 흩었다. 그건 현실에 없는
+# 상태다 — 검색도 광고도 없으니 **모두 목록 맨 위에서 시작한다.** 사람마다
+# 다른 것은 출발점이 아니라 **얼마나 내려보는가** 다. 그래서 스크롤 폭에
+# 사람별 성향을 준다. 성향은 persona_id 로 시드해 같은 사람은 늘 같다.
+SCROLL_CENTER_MIN = 350
+SCROLL_CENTER_MAX = 1500
 
 GMS_BASE = "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
 MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
@@ -214,18 +232,82 @@ def prices():
     return PRICES
 
 
-def budget_of(p):
-    """이 사람이 실제로 낸 것 중 가장 큰 값. 이력이 없으면 None.
+VOCAB_FILE = os.path.join(ROOT, "contracts", "product-feature-vocab.json")
 
-    예산선을 지어내지 않는다 — **자기가 이미 그 값을 낸 적이 있다** 는 것이
-    부담스럽지 않다는 가장 단순한 증거다. 카탈로그의 16%(중앙값)가 개인 상한을
-    넘는다. 2명은 상한이 최고가라 아무것도 비싸지 않고, 10명은 상한이 카탈로그
-    중앙값($46)보다 낮다 — 사람마다 다르게 걸린다.
+
+def price_bin_edges():
+    """가격 구간 경계. **계약에서 직접 읽는다.**
+
+    상품 벡터의 `price_bin` 이 쓰는 것과 같은 구간이어야 한다. 코드에 복사해
+    두면 계약이 바뀔 때 조용히 어긋나고, 어긋난 줄 모른 채 돌아간다.
+    """
+    try:
+        with io.open(VOCAB_FILE, encoding="utf-8") as f:
+            return json.load(f)["price_bin_edges"]
+    except Exception:
+        return []
+
+
+CATEGORIES = None
+
+
+def categories():
+    """상품별 카테고리(`secondary_category`). 프론트 탭과 같은 값이다."""
+    global CATEGORIES
+    if CATEGORIES is None:
+        try:
+            with io.open(PRODUCTS_FILE, encoding="utf-8") as f:
+                CATEGORIES = {q["product_id"]: q.get("secondary_category")
+                              for q in json.load(f) if q.get("product_id")}
+        except Exception:
+            CATEGORIES = {}
+    return CATEGORIES
+
+
+def preferred_categories(p):
+    """이 사람이 실제로 사 온 카테고리를, 많이 산 순서로.
+
+    **무작위로 탭을 고르지 않기 위해서다.** 사람은 아무 카테고리나 열지
+    않는다 — 쓰던 것을 본다. 무작위로 고르면 커버리지는 넓어지지만 그건
+    아무도 하지 않는 행동이고, 상단 노출이 더 많이 보이는 자연스러운 편향까지
+    지워 버린다. 그 편향은 노출 정책 실험이 재려는 대상이다.
+
+    100명 전원이 이력에서 카테고리가 나온다 (실측).
+    """
+    tab = categories()
+    own = [tab[r["product_id"]] for r in p.get("reviews", [])
+           if tab.get(r.get("product_id"))]
+    if not own:
+        return []
+    seen = {}
+    for c in own:
+        seen[c] = seen.get(c, 0) + 1
+    return [c for c, _ in sorted(seen.items(), key=lambda kv: -kv[1])]
+
+
+def budget_of(p):
+    """이 사람이 익숙한 가격대의 **상한**. 없으면 None.
+
+    낸 적 있는 최고가를 그대로 쓰면 안 된다 — $24 를 내 본 사람에게 $25 가
+    부담이 되어 버린다. **사람은 늘 같은 값만 내지 않는다.** 그래서 최고가가
+    속한 구간(`price_bin`, 계약이 정한 5구간)의 상한을 쓴다.
+
+        ~$20 / $20-35 / $35-50 / $50-80 / $80+
+
+    최상위 구간에서 산 적이 있으면 상한이 없다 — 그 사람에게는 가격 부담을
+    표시하지 않는다. 100명 중 47명이 여기 해당한다. 표시가 뜨는 53명에게는
+    **정말로 습관 밖** 이라는 뜻이 된다.
     """
     tab = prices()
     own = [tab[r["product_id"]] for r in p.get("reviews", [])
            if r.get("product_id") in tab]
-    return max(own) if own else None
+    if not own:
+        return None
+    top = max(own)
+    for edge in price_bin_edges()[1:]:
+        if top < edge:
+            return float(edge)
+    return None
 
 
 def load_catalog():
@@ -237,15 +319,13 @@ def load_catalog():
         return []
 
 
-def spread_start(page, rng):
-    """목록에서 시작하는 사람의 출발 지점을 흩는다.
+def spread_start(page, rng, prefer=()):
+    """목록에서 시작하는 사람이 무엇을 먼저 하는가.
 
-    100명 전원이 같은 첫 화면(25개)에서 시작하면 그 25개만 후보가 된다.
-    카테고리 탭을 고르고, "더 보기" 로 목록을 늘리고, 시작 스크롤 위치를 옮긴다.
-    전부 화면에 실제로 있는 조작이라 로그도 실제 사용자와 같은 모양으로 남는다.
-
-    스크롤은 한 번에 뛰지 않고 여러 번에 나눠 내린다. 한 번에 뛰면 프론트의
-    scroll_depth 25/50/75 단계가 통째로 건너뛰어져 로그가 사람 같지 않다.
+    100명 전원이 같은 첫 화면(25개)에서 시작하면 그 25개만 후보가 된다. 다만
+    **출발점을 흩는 것은 답이 아니다** — 검색도 광고도 없으니 모두 맨 위에서
+    시작하는 것이 맞다. 여기서는 사람이 실제로 하는 것만 한다: 카테고리 탭을
+    고른다. 목록을 늘리는 "더 보기" 는 바닥에 닿았을 때 do_action 이 누른다.
     """
     tabs = page.locator(".list__tabs button")
     if not tabs.count():
@@ -253,32 +333,41 @@ def spread_start(page, rng):
 
     picked = None
     if rng.random() < CATEGORY_P:
-        i = rng.randrange(tabs.count())
+        # **자기가 사 온 카테고리를 먼저 본다.** 무작위로 고르면 커버리지는
+        # 넓어지지만 아무도 하지 않는 행동이 되고, 상단 노출이 더 많이 보이는
+        # 자연스러운 편향까지 지워진다 — 그 편향이 노출 정책 실험의 대상이다
+        labels = []
+        for n in range(tabs.count()):
+            try:
+                labels.append(tabs.nth(n).inner_text(timeout=1500).split(NL)[0].strip())
+            except Exception:
+                labels.append("")
+        # 탭 글자는 "Treatments 33" 처럼 개수가 붙는다. 개수를 떼고 **이름이
+        # 똑같은 탭을 먼저** 찾는다 — 부분 일치로만 찾으면 "Treatments" 를
+        # 쓰던 사람이 "Lip Balms & Treatments" 탭으로 끌려간다
+        names = [re.sub(r"\s*\d+$", "", t).strip() for t in labels]
+        idx = next((n for c in prefer for n, t in enumerate(names)
+                    if t and c and t.lower() == c.lower()), None)
+        if idx is None:                       # 이름이 딱 맞는 탭이 없을 때만
+            idx = next((n for c in prefer for n, t in enumerate(names)
+                        if t and c and c.lower() in t.lower()), None)
+        if idx is None:                       # 이력의 카테고리가 탭에 없으면
+            idx = rng.randrange(tabs.count())  # 그때만 무작위
         try:
-            picked = tabs.nth(i).inner_text(timeout=1500).split(NL)[0].strip()
-            tabs.nth(i).click(timeout=3000)
+            picked = labels[idx] or None
+            tabs.nth(idx).click(timeout=3000)
             page.wait_for_timeout(700)
         except Exception:
             picked = None
 
-    for _ in range(rng.randint(0, MAX_MORE_CLICKS)):
-        more = page.locator(".list__more")
-        if not more.count():
-            break
-        try:
-            more.first.click(timeout=3000)
-            page.wait_for_timeout(500)
-        except Exception:
-            break
+    # **"더 보기" 를 미리 눌러 두지 않는다.** 버튼은 목록 바닥에 있어서 스크롤
+    # 없이는 닿지 않는다. 눌러 두면 아무도 겪지 않은 상태에서 시작하게 된다.
+    # 바닥까지 내려간 사람만 누르게 두는 것이 맞다 (do_action 의 scroll).
 
-    height = page.evaluate("() => document.body.scrollHeight")
-    view = page.evaluate("() => window.innerHeight")
-    # 0.75 까지 내렸더니 첫 화면부터 "목록 끝" 이 떠서 곧장 leave 하는 사고가 났다
-    # (실측: 9명 중 6명이 2~5턴 만에 종료). 바닥 근처에서 시작하지 않게 한다
-    target = int(max(0, height - view) * rng.uniform(0, 0.55))
-    while page.evaluate("() => window.scrollY") + 40 < target:
-        page.mouse.wheel(0, rng.randint(500, 900))
-        page.wait_for_timeout(rng.randint(180, 420))
+    # **시작 스크롤 위치를 흩지 않는다.** 목록 맨 위에서 시작하는 것이 사람이
+    # 실제로 겪는 상태다. 예전에는 0~55% 지점으로 옮겼는데, 그건 아무도
+    # 겪지 않는 화면이었다. 사람을 가르는 것은 출발점이 아니라 스크롤 폭이고
+    # 그건 do_action("scroll") 이 사람별 성향으로 처리한다 (2026-09-03).
     return picked
 
 NL = "\n"
@@ -317,8 +406,10 @@ def profile_text(p):
     own = [tab[r["product_id"]] for r in revs if r.get("product_id") in tab]
     price_line = ""
     if own:
-        price_line = (f"\n- 지금까지 낸 가격: ${min(own):.0f} ~ ${max(own):.0f}"
-                      f" (${max(own):.0f} 까지는 내 본 적이 있다)")
+        band = budget_of(p)
+        price_line = f"\n- 지금까지 낸 가격: ${min(own):.0f} ~ ${max(own):.0f}"
+        price_line += (f" (${band:.0f} 아래가 익숙한 가격대다)" if band
+                       else " (비싼 것도 사 본 적이 있다)")
 
     return (f"- 피부 타입: {TYPE_KR.get(p['skin_type'], p['skin_type'])}\n"
             f"- 피부 톤: {TONE_KR.get(p['skin_tone'], p['skin_tone'])}"
@@ -711,7 +802,7 @@ def find_card(page, target):
     return None
 
 
-def do_action(page, act, target):
+def do_action(page, act, target, scroll_center=None):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
 
@@ -721,7 +812,11 @@ def do_action(page, act, target):
         at_bottom = page.evaluate(
             "() => window.scrollY + window.innerHeight"
             " >= document.body.scrollHeight - 40")
-        step = random.randint(500, 1200)
+        # **사람마다 내려보는 폭이 다르다.** 조금씩 훑는 사람과 성큼 내리는
+        # 사람은 같은 15턴에서 보는 상품 수가 다르다. 중심값은 persona_id 로
+        # 시드해 같은 사람은 늘 같고, 매번 ±30% 흔들어 기계처럼 보이지 않게 한다
+        c = scroll_center or 850
+        step = random.randint(int(c * 0.7), int(c * 1.3))
         page.mouse.wheel(0, -step if at_bottom else step)
         page.wait_for_timeout(random.randint(700, 2500))
         # 목록 바닥에 닿았고 "더 보기" 가 보이면 눌러 준다. 사람은 더 볼 게
@@ -1015,6 +1110,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
     cart_prices = {}         # 담은 상품의 화면 가격. 부담 판단에 쓴다
     budget = budget_of(persona)   # 이 사람이 실제로 내 본 최고가
+    # 내려보는 폭의 사람별 중심값. **전용 스트림에서 뽑는다** — 기본 스트림을
+    # 소비하면 이 값을 넣은 것만으로 이후 궤적이 통째로 달라져 A/B 가 깨진다
+    scroll_center = random.Random(persona["persona_id"] + "|scroll").randint(
+        SCROLL_CENTER_MIN, SCROLL_CENTER_MAX)
     wished = set()           # 찜한 상품. 상품당 한 번만 열어준다
     peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
@@ -1082,13 +1181,13 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 pr = cart_prices.get(c)
                 over = budget is not None and pr is not None and pr > budget
                 items.append(f"{c}" + (f" ${pr:.0f}" if pr is not None else "")
-                             + (f"  (평소 최대 ${budget:.0f})" if over else ""))
+                             + (f"  (익숙한 가격대 ${budget:.0f} 위)" if over else ""))
             total = sum(v for v in cart_prices.values())
             tail = ""
             if total:
                 tail = f" — 합계 ${total:.0f}"
                 if budget is not None:
-                    tail += f" (지금까지 한 개에 최대 ${budget:.0f} 까지 내 봤다)"
+                    tail += f" (익숙한 가격대는 한 개에 ${budget:.0f} 아래다)"
             user = (f"[장바구니] {', '.join(items)}{tail}{NL}{NL}") + user
         if history:
             recent = NL.join(f"  {i}. {h}" for i, h in
@@ -1145,7 +1244,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             break
 
         try:
-            okd = do_action(page, act, tgt)
+            okd = do_action(page, act, tgt, scroll_center)
         except Exception as e:            # 셀렉터가 바뀌었거나 화면이 예상 밖일 때
             okd = False
             if verbose:
@@ -1451,7 +1550,7 @@ def main():
                 continue
             gate["persona_id"] = p["persona_id"]   # 여기부터 이 사람의 로그다
 
-            spread_start(page, rng)              # 목록에서 시작하면 자리를 흩는다
+            spread_start(page, rng, preferred_categories(p))   # 자기가 쓰던 카테고리부터
 
             print(f"  {p['persona_id']}  {TYPE_KR.get(p['skin_type'], '')}/"
                   f"{p['skin_tone']}  구매 {p['n_products']}개")
