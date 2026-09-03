@@ -23,6 +23,11 @@ ORDER = ["secondary_category", "tertiary_category", "concern",
          "ingredient", "clean", "texture", "price_bin", "rating", "brand"]
 
 
+# 카테고리 중앙값을 쓰려면 표본이 이만큼은 있어야 한다 (등록 계약 §4.2 와 동일).
+# 미만이면 전체 중앙값으로 내려간다
+RATING_MIN_N = 3
+
+
 class Encoder:
     def __init__(self, vocab_path=None, products_path=None, review_concern_path=None):
         vocab_path = vocab_path or VOCAB
@@ -141,15 +146,23 @@ class Encoder:
         return min(max(v, 0.0), 1.0)
 
     def _rating_median(self, category):
-        """카테고리별 평점 중앙값. 카테고리가 없거나 처음 보면 전체 중앙값"""
+        """카테고리별 평점 중앙값. **표본이 RATING_MIN_N 미만이면 전체 중앙값**.
+
+        상품이 1~2개뿐인 카테고리의 "중앙값" 은 그 상품 한둘의 평점일 뿐이다.
+        카탈로그 200개에서 19개 카테고리 중 7개가 표본 3개 미만이고, 전체
+        중앙값과 최대 0.489 까지 벌어진다 (For Face n=2 -> 3.833, 전체 4.322).
+        등록 상품이 그 카테고리에 들어오면 남의 상품 한 개 평점을 물려받는다.
+        데이터 파트 등록 계약 §4.2 와 같은 기준이다.
+        """
         if self._rating_med is None:
             by = {}
             for p in self.products:
                 if p.get("rating") is None:
                     continue
                 by.setdefault(p.get("tertiary_category"), []).append(p["rating"])
-            self._rating_med = {c: float(np.median(v)) for c, v in by.items()}
             allv = [p["rating"] for p in self.products if p.get("rating") is not None]
+            self._rating_med = {c: float(np.median(v)) for c, v in by.items()
+                                if len(v) >= RATING_MIN_N}
             self._rating_med[None] = float(np.median(allv)) if allv else self.rmin
         return self._rating_med.get(category, self._rating_med[None])
 

@@ -11,6 +11,7 @@
 자기 상품 20개만 파는 사이트는 그 20개가 전역 순위 아래쪽에 몰려 **인기도 항이
 아무것도 구분하지 못한다.**
 """
+import collections
 import os
 import sys
 import unittest
@@ -20,7 +21,7 @@ import numpy as np
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
-from batch.jobs.product_encoder import Encoder                   # noqa: E402
+from batch.jobs.product_encoder import Encoder, RATING_MIN_N     # noqa: E402
 from batch.jobs.recommender import Recommender, prior_in_catalog  # noqa: E402
 
 
@@ -43,6 +44,22 @@ class RatingDefaultTest(unittest.TestCase):
             (self.e._rating_median(None) - self.e.rmin)
             / (self.e.rmax - self.e.rmin),
             self.e.rating_value(x), places=6)
+
+    def test_thin_category_falls_back_to_global_median(self):
+        """상품 1~2개짜리 카테고리의 중앙값은 그 상품 한둘의 평점일 뿐이다.
+
+        카탈로그 19개 카테고리 중 7개가 표본 3개 미만이고 전체 중앙값과 최대
+        0.489 벌어진다. 등록 계약 §4.2 와 같은 기준(n >= 3)을 쓴다.
+        """
+        self.assertEqual(3, RATING_MIN_N)
+        thin = collections.Counter(
+            p.get("tertiary_category") for p in self.e.products
+            if p.get("rating") is not None)
+        small = [c for c, n in thin.items() if n < RATING_MIN_N]
+        self.assertTrue(small, "표본이 얇은 카테고리가 있어야 이 규칙이 의미가 있다")
+        for c in small:
+            self.assertEqual(self.e._rating_median(None),
+                             self.e._rating_median(c), c)
 
     def test_out_of_range_rating_is_clamped(self):
         """카탈로그에서 잰 min/max 라 실제 리뷰가 쌓이면 범위를 벗어날 수 있다"""
