@@ -141,6 +141,7 @@ S15P21A306/
 │   │       ├── concern_from_reviews.npz     리뷰에서 뽑은 concern 점수
 │   │       ├── excluded_products.json       제외 상품 목록과 사유
 │   │       ├── eval_metadata.jsonl          평가 seed/target 정본 (9,900행)
+│   │       ├── eval_metadata_agent.jsonl    같은 규칙의 PA 대조군 (100행)
 │   │       ├── text_embeddings.npz         seed 리뷰·상품 임베딩 384차원 (13.7MB)
 │   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력

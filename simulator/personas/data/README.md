@@ -41,6 +41,15 @@ PA 에 합성 로그를 쏘면 1인당 약 590건이 미리 쌓여, 사람이 10
 테이블입니다. 평탄화·적재와 E2E 검증은 데이터 파트가 이 산출물을 입력으로 받아
 수행합니다. `evaluation_role`(seed/holdout_target/excluded)은 여기 없고
 `batch/ingest/data/eval_metadata.jsonl` 이 정본입니다.
+PA 에이전트 100명의 대조군은 같은 규칙으로 만든 `eval_metadata_agent.jsonl` 입니다
+(`python batch/jobs/eval_metadata.py --agent`).
+
+> **2026-09-03.** 계약 §7.1 과 정본이 같은 정답을 고르도록 정렬했습니다.
+> target 은 **가장 마지막 긍정 리뷰**이고, 긍정은 `rating >= 4` 또는
+> (`is_recommended` 그리고 `rating >= 3`), 같은 날짜 tie-break 은 `review_id DESC`
+> 입니다 (§7.1.1 · §7.1.2). 이 둘로 PC 162명의 target 이 바뀌었고 남은 불일치는
+> **0건**입니다 (`contracts/persona/compare_holdout_rules.py --require-zero`).
+> 모수는 PC 9,900행 · PA 100행 그대로입니다.
 
 ## 추출 기준
 
