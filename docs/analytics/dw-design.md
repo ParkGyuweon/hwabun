@@ -47,6 +47,8 @@ Parquet를 최종 저장 방식이나 exactly-once 저장소로 해석하지 않
 | Web/Synthetic 분리 | `actor_type`, `source`, `simulation_run_id`로 필터 |
 | 상품 속성 스냅샷 | Mart에 `category_id`, `brand_id`를 집계 시점 값으로 보존 |
 | NULL 의미 보존 | 입력 부재와 분모 0을 숫자 0으로 꾸미지 않음 |
+| 관심도는 행동 가중 | 조회 수가 아니라 `EVENT_WEIGHT` 합산. 음수를 절단하지 않음 |
+| 표기 병합 선행 | `brunette`→`brown` 등을 집계 전에 적용 |
 | 생성 표본 구분 | `simulation_run_id → dim_simulation_run.persona_source`로 구분 |
 
 Raw에서 `scenario_id`, `simulation_run_id`, `generator_type`은 `properties` 안에 있고
@@ -87,6 +89,8 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 단계별 이탈률 | `1 - next_step_sessions / current_step_sessions` | `funnel_daily_kpi` |
 | 검색→클릭 | `search_click_session_count / search_session_count` | `search_daily_kpi` |
 | 평균 체류시간 | `dwell_ms_sum / section_view_sessions` | `content_daily_kpi` |
+| 콘텐츠 관심도 | `processed-schema.md` §13.1 | `content_daily_kpi` |
+| 상품 관심도 | `Σ EVENT_WEIGHT x 발생 수` | `product_daily_kpi` |
 
 Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기능 판단 시
 `actor_type=user`에서 Quick Look 사용/미사용 arm의 표본 수와 장바구니 전환율을
