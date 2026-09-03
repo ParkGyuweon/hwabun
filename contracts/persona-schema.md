@@ -1,8 +1,8 @@
 # Persona Schema 계약
 
 작성일: 2026-09-02
-최종 검증: 2026-09-03, PA 10·100명과 PC 100명 표본 평탄화 (위반 0건)
-상태: Draft, §7.1 target 선택 규칙 합의·추천·E2E 검증 대기
+최종 검증: 2026-09-03, 표본 평탄화 위반 0건 · 평가 정본 대조 PC 9,900명 PA 100명 0건
+상태: Draft, §7.1 확정·정본 정렬 완료. Event·Run 축 E2E 검증 대기
 설계 설명: [`persona-design.md`](../docs/analytics/persona-design.md)
 
 ## 1. 범위와 우선순위
@@ -101,10 +101,20 @@ profile_scope = full
 | `n_negative` | int | N | 부정 상품 수 |
 | `n_neutral` | int | N | 중립 상품 수 |
 | `avg_rating` | double | Y | 평균 평점 |
+| `latest_review_label` | string | N | 가장 최신 리뷰의 극성. `positive`, `negative`, `diagnostic` |
 | `profile_version` | string | N | 생성·정규화 버전 |
 | `profile_scope` | string | N | `full` |
 | `created_at` | timestamp | N | 생성·적재 시각 |
 | `updated_at` | timestamp | N | 갱신 시각 |
+
+`latest_review_label`은 §7.1 정렬 기준의 첫 리뷰에 §7.1.1 긍정 조건과
+[`recommendation-io-spec.md`](./recommendation-io-spec.md)의 리뷰 극성을 적용한 값이다.
+긍정이면 `positive`, `rating <= 2`면 `negative`, 그 외는 `diagnostic`이다.
+
+Holdout target이 마지막 긍정 리뷰로 바뀌면서 최신 리뷰의 극성은 target 판정에서
+쓰이지 않는다. 그러나 "가장 최근에 불만이었던 고객"은 Dashboard의 이탈 직전 segment
+신호이므로 Persona 속성으로 보존한다. `negative`와 `diagnostic`을 하나의 boolean으로
+합치지 않는 이유는 불만과 미온적 반응의 마케팅 의미가 다르기 때문이다.
 
 ## 5. `persona_profile_eval`
 
@@ -168,20 +178,41 @@ grain = persona_id + review_id
 
 ### 7.1 판정 순서
 
-1. `submission_time DESC NULLS LAST → review_id DESC`의 첫 리뷰를 holdout 후보로 고른다.
-2. 후보의 `canonical_product_id`가 Product Feature에 존재하는지 확인한다.
-3. `rating >= 4` 또는 `is_recommended=true`인지 확인한다.
-4. 2·3 통과 시 `holdout_target`, `target_label='positive'`, eligible=true다.
-5. Join은 성공하고 3만 실패하면 eligible=false다. `rating <= 2`이면 `negative`,
-   `rating = 3`이거나 `rating`이 없으면 `diagnostic`이다. 극성 경계는
-   [`recommendation-io-spec.md`](./recommendation-io-spec.md)의 리뷰 극성 정의를 따른다.
-6. Product Join 실패 시 `excluded`이며 holdout 테이블에 넣지 않는다.
-7. 후보를 제외한 이전 리뷰 중 후보와 `canonical_product_id`가 **다른** 리뷰가 `seed`다.
-   후보와 같은 상품의 이전 리뷰는 `excluded`이며 `persona_seed_product`에 넣지 않는다.
+Holdout target은 **가장 마지막 긍정 리뷰**다. 추천은 선호 상품을 맞히는 과제이므로
+정답은 긍정 상호작용이어야 한다. 불만 리뷰는 정답이 아니라 §4의
+`latest_review_label`로 Persona 속성에 남긴다.
 
-7번에서 같은 상품을 제외하는 이유는 seed 상품이 `is_seen=true`로 추천 후보에서 하드
+1. `canonical_product_id`가 Product Feature에 존재하는 리뷰만 남기고,
+   `submission_time DESC NULLS LAST → review_id DESC`로 정렬한다. Join에 실패한
+   리뷰는 `excluded`이며 이후 단계에서 제외한다.
+2. 정렬 순서대로 §7.1.1의 긍정 조건을 만족하는 첫 리뷰를 target으로 고른다.
+   이때 `holdout_target`, `target_label='positive'`, `is_holdout_eligible=true`다.
+3. 긍정 리뷰가 하나도 없으면 target이 없다. 이 Persona는 `persona_holdout_target`에
+   넣지 않고 `is_holdout_eligible` 대상에서 제외한다.
+4. target보다 나중에 작성된 리뷰는 `excluded`다. 시간 절단을 위반하므로 seed로 쓰지
+   않는다.
+5. target보다 먼저 작성된 리뷰 중 target과 `canonical_product_id`가 **다른** 리뷰가
+   `seed`다.
+6. target과 같은 상품의 이전 리뷰는 `excluded`이며 `persona_seed_product`에 넣지
+   않는다.
+
+6번에서 같은 상품을 제외하는 이유는 seed 상품이 `is_seen=true`로 추천 후보에서 하드
 제외되기 때문이다. 같은 상품에 리뷰를 두 번 이상 쓴 Persona가 있으므로, 상품 단위로
 제외하지 않으면 target 상품이 후보에서 빠져 정답을 맞힐 수 없는 평가가 된다.
+
+#### 7.1.1 긍정 조건
+
+```text
+rating >= 4  또는  (is_recommended = true 그리고 rating >= 3)
+```
+
+`is_recommended`는 명시적인 추천 의사이므로 `rating = 3`과 함께 있으면 긍정으로
+본다. `rating <= 2`와 함께 있는 경우는 서로 모순되는 입력이므로 긍정으로 보지 않는다.
+
+#### 7.1.2 정렬 tie-break
+
+`submission_time`은 날짜 단위라 같은 날 작성된 리뷰의 선후를 가릴 수 없다.
+`review_id DESC`를 tie-break으로 사용해 실행마다 결과가 달라지지 않게 한다.
 
 ### 7.2 `persona_seed_product`
 
@@ -217,8 +248,13 @@ grain = persona_id + target_canonical_product_id
 | `target_rating` | int | Y | 정답 평점 |
 | `target_is_recommended` | boolean | Y | 정답 추천 여부 |
 | `target_submission_time` | date | Y | 정답 작성일 |
-| `target_label` | string | N | `positive`, `negative`, `diagnostic` |
+| `target_label` | string | N | `positive` |
 | `is_holdout_eligible` | boolean | N | Positive 평가 대상 여부 |
+
+§7.1이 긍정 리뷰만 target으로 고르므로 이 테이블의 `target_label`은 항상 `positive`,
+`is_holdout_eligible`은 항상 `true`다. 두 컬럼은 소비처가 규칙을 몰라도 평가 대상을
+필터할 수 있도록 유지하며, §11이 이 불변식을 검사한다. 긍정 리뷰가 없어 target을
+만들 수 없는 Persona는 행 자체가 없다.
 
 ### 7.4 `persona_evaluation_split`
 
@@ -349,6 +385,11 @@ grain = scenario_id
 8. `bridge_persona_segment.segment_type`은 허용 6종만 사용한다.
 9. 한 Simulation Run 안에서 `persona_source`, `generator_type`, `scenario_id`가 일관된다.
 10. PA와 PC Event가 각각 `agent_llm`, `python_batch`를 사용한다.
+11. `persona_holdout_target`의 `target_label`이 모두 `positive`이고
+    `is_holdout_eligible`이 모두 `true`다.
+12. seed 리뷰의 `submission_time`이 target보다 나중이 아니다. target 이후 리뷰는
+    `evaluation_role='excluded'`다.
+13. `latest_review_label`이 §7.1 정렬 기준 첫 리뷰의 극성과 일치한다.
 
 ## 12. 추천 행동 상태 연결
 

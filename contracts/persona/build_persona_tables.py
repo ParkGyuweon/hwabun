@@ -78,9 +78,9 @@ TABLE_SPECS = OrderedDict([
             ("eye_color", S, Y), ("hair_color", S, Y), ("stratum", S, N),
             ("review_bucket", S, N), ("n_reviews", "int", N), ("n_products", "int", N),
             ("n_positive", "int", N), ("n_negative", "int", N), ("n_neutral", "int", N),
-            ("avg_rating", "double", Y), ("profile_version", S, N),
-            ("profile_scope", S, N), ("created_at", "timestamp", N),
-            ("updated_at", "timestamp", N),
+            ("avg_rating", "double", Y), ("latest_review_label", S, N),
+            ("profile_version", S, N), ("profile_scope", S, N),
+            ("created_at", "timestamp", N), ("updated_at", "timestamp", N),
         ],
     }),
     ("persona_profile_eval", {
@@ -171,8 +171,10 @@ def _row(spec, values):
     return OrderedDict((col, values.get(col)) for col, _, _ in spec["columns"])
 
 
-def build_profile(persona):
-    return _row(TABLE_SPECS["persona_profile"], persona)
+def build_profile(persona, decision):
+    values = dict(persona)
+    values["latest_review_label"] = decision["latest_review_label"] if decision else None
+    return _row(TABLE_SPECS["persona_profile"], values)
 
 
 def build_review_history(persona, roles, product_ids):
@@ -233,7 +235,7 @@ def build_seed_product(persona, roles):
 
 
 def build_holdout_target(persona, decision):
-    if decision is None or decision["role"] != hr.HOLDOUT_TARGET:
+    if decision is None or decision["review"] is None:
         return []
     review = decision["review"]
     return [_row(TABLE_SPECS["persona_holdout_target"], {
@@ -329,7 +331,7 @@ def build(personas, product_ids):
         reviews = persona.get("reviews", [])
         roles, decision = hr.classify(reviews, product_ids)
 
-        tables["persona_profile"].append(build_profile(persona))
+        tables["persona_profile"].append(build_profile(persona, decision))
         tables["persona_profile_eval"].append(build_profile_eval(persona, roles))
         tables["persona_review_history"].extend(build_review_history(persona, roles, product_ids))
         tables["persona_seed_product"].extend(build_seed_product(persona, roles))
