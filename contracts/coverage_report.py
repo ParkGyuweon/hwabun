@@ -14,15 +14,15 @@
     1. Event 커버리지    계약 Event 중 몇 종이 실제로 나왔나 (분류별)
     2. 계약 밖 Event      enum 에 없는 이름으로 나간 Event
     3. 봉투 검증          event-schema.json (validate_events.py 와 같은 기준)
-    4. 필수 property      Event 별 required properties 위반
+    4. property 계약      Event 별 required properties·타입·enum 위반
 
-3번은 검증기와 겹치지만 4번은 겹치지 않는다. 검증기가 명시적으로 범위 밖에
-두었고(properties 계약은 구현과 조율 전), Collector 도 properties 를 JsonNode 로
+3번은 검증기와 겹치지만 4번은 겹치지 않는다. 실행 JSON Schema가 명시적으로 범위
+밖에 두었고(모듈별 semantic validation 반영 전), Collector도 properties를 JsonNode로
 통과시킨다. 그래서 이 위반은 **bad_events 에도 안 남고 Processed 까지 그냥 흘러간다**
 (event-properties-schema.md §4). 세는 곳이 없으면 아무도 모른다.
 
-필수 property 표는 문서에서 직접 읽는다. 여기에 복사해 두면 문서가 바뀔 때
-조용히 어긋나고, 어긋난 줄 모른 채 "통과" 가 나온다.
+required property와 타입은 문서 §4, enum은 §3에서 직접 읽는다. 코드에 복사해 두면
+문서가 바뀔 때 조용히 어긋나고, 어긋난 줄 모른 채 "통과"가 나온다.
 
 입력
     .jsonl (한 줄 한 Event) · JSON 배열 · API 배치 본문({schema_version, events})
@@ -127,30 +127,49 @@ def load_schema():
         return json.load(f)
 
 
-TOKEN = re.compile(r"`([a-z_][a-z0-9_]*)\s*:\s*[^`]+`")
+TYPED_TOKEN = re.compile(r"`([a-z_][a-z0-9_]*)\s*:\s*([^`]+)`")
 ROW = re.compile(r"^\|\s*`([a-z_][a-z0-9_]*)`\s*\|(.*)\|(.*)\|\s*$")
 
 
-def parse_required_properties(path):
-    """문서 §4의 표에서 Event별 필수 property를 읽는다.
+def parse_property_contract(path):
+    """문서 §3 enum과 §4 Event별 required/type 계약을 읽는다.
 
     돌려주는 값
-        {event_name: {"section": "4.2 ...", "all": [...], "any_of": [[...], ...]}}
+        ({event_name: {"section", "all", "any_of", "types"}}, {enum_key: set})
 
     `A 또는 B`는 둘 중 하나 이상이라는 뜻이라(§4 머리말) 따로 담는다.
     `A 또는 B, C` 처럼 섞여 나오므로 '또는' 양옆 토큰만 묶고 나머지는 개별 필수다.
     """
     if not os.path.exists(path):
-        return {}, None
+        return {}, {}, None
 
     with open(path, encoding="utf-8") as f:
         lines = f.read().replace("\r\n", "\n").split("\n")
 
     spec = {}
+    enums = {}
     section = None
     in_properties = False
+    enum_key = None
+    enum_started = False
 
     for line in lines:
+        enum_heading = re.match(r"^###\s+3\.\d+\s+`([^`]+)`", line)
+        if enum_heading:
+            enum_key = enum_heading.group(1)
+            enums[enum_key] = set()
+            enum_started = False
+            continue
+        if enum_key is not None:
+            if line.startswith("#") or (not line.strip() and enum_started):
+                enum_key = None
+            elif line.strip():
+                values = re.findall(r"`([a-z_][a-z0-9_]*)`", line)
+                if values:
+                    enums[enum_key].update(values)
+                    enum_started = True
+                continue
+
         h2 = re.match(r"^##\s+(\d+)\.", line)
         if h2:
             in_properties = h2.group(1) == "4"
@@ -167,18 +186,29 @@ def parse_required_properties(path):
         m = ROW.match(line)
         if not m:
             continue
-        name, req_cell, _opt = m.group(1), m.group(2), m.group(3)
+        name, req_cell, opt_cell = m.group(1), m.group(2), m.group(3)
         if name == "event_name" or section is None:
             # 그 밖의 표는 필수 property 명세가 아니다.
             continue
 
-        toks = TOKEN.findall(req_cell)
+        required_fields = TYPED_TOKEN.findall(req_cell)
+        optional_fields = TYPED_TOKEN.findall(opt_cell)
+        toks = [field for field, _type in required_fields]
+        types = {
+            field: type_name.replace(r"\|", "|").strip()
+            for field, type_name in required_fields + optional_fields
+        }
         if not toks or "없음" in req_cell.strip()[:6]:
-            spec[name] = {"section": section, "all": [], "any_of": []}
+            spec[name] = {
+                "section": section,
+                "all": [],
+                "any_of": [],
+                "types": types,
+            }
             continue
 
         # '또는' 양옆 토큰을 묶는다. 위치로 가른다
-        spans = [(m2.start(), m2.group(1)) for m2 in TOKEN.finditer(req_cell)]
+        spans = [(m2.start(), m2.group(1)) for m2 in TYPED_TOKEN.finditer(req_cell)]
         pairs = []
         for om in re.finditer(r"또는", req_cell):
             before = [t for p, t in spans if p < om.start()]
@@ -190,9 +220,10 @@ def parse_required_properties(path):
             "section": section,
             "all": [t for t in toks if t not in grouped],
             "any_of": pairs,
+            "types": types,
         }
 
-    return spec, path
+    return spec, enums, path
 
 
 # ── 검사 ────────────────────────────────────────────────────────────────────
@@ -223,10 +254,52 @@ def validate_envelopes(events, schema):
     return {"checked": len(events), "invalid": bad, "top": failures.most_common(12)}, None
 
 
-def check_properties(events, spec):
-    """Event 별 필수 property 위반을 센다. 검증기가 안 보는 자리다"""
+def _matches_type(value, expected):
+    nullable = expected.endswith("|null")
+    base = expected[:-5] if nullable else expected
+    if value is None:
+        return nullable
+    if base == "string":
+        return isinstance(value, str)
+    if base == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if base == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if base == "boolean":
+        return isinstance(value, bool)
+    if base == "object":
+        return isinstance(value, dict)
+    if base == "string[]":
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
+    if base == "object[]":
+        return isinstance(value, list) and all(isinstance(item, dict) for item in value)
+    return False
+
+
+def _actual_type(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return type(value).__name__
+
+
+def check_properties(events, spec, enums):
+    """Event 별 required property, 타입 및 enum 위반을 센다."""
     missing = Counter()
-    offenders = defaultdict(int)
+    invalid_types = Counter()
+    invalid_enums = Counter()
+    offenders = Counter()
     checked = 0
     for ev in events:
         name = ev.get("event_name")
@@ -241,12 +314,45 @@ def check_properties(events, spec):
         for group in rule["any_of"]:
             if not any(k in props for k in group):
                 gaps.append(" 또는 ".join(group))
-        if gaps:
+        for gap in gaps:
+            missing[(name, gap)] += 1
+
+        type_errors = []
+        for field, expected in rule["types"].items():
+            if field in props and not _matches_type(props[field], expected):
+                actual = _actual_type(props[field])
+                invalid_types[(name, field, expected, actual)] += 1
+                type_errors.append(field)
+
+        enum_errors = []
+        for enum_name, allowed in enums.items():
+            if "." in enum_name:
+                scoped_event, field = enum_name.split(".", 1)
+                if scoped_event != name:
+                    continue
+            else:
+                field = enum_name
+            if field not in props or field in type_errors:
+                continue
+            value = props[field]
+            if not isinstance(value, str):
+                invalid_types[(name, field, "string", _actual_type(value))] += 1
+                type_errors.append(field)
+                continue
+            if value not in allowed:
+                invalid_enums[(name, field, str(value))] += 1
+                enum_errors.append(field)
+
+        if gaps or type_errors or enum_errors:
             offenders[name] += 1
-            for g in gaps:
-                missing[(name, g)] += 1
-    return {"checked": checked, "events_with_gaps": dict(offenders),
-            "missing": missing.most_common(30)}
+
+    return {
+        "checked": checked,
+        "events_with_violations": dict(offenders),
+        "missing": missing.most_common(30),
+        "invalid_types": invalid_types.most_common(30),
+        "invalid_enums": invalid_enums.most_common(30),
+    }
 
 
 # ── 출력 ────────────────────────────────────────────────────────────────────
@@ -281,7 +387,7 @@ def main(argv=None):
 
     schema = load_schema()
     contract = list(schema["properties"]["event_name"]["enum"])
-    spec, spec_path = parse_required_properties(PROPERTIES_CONTRACT_PATH)
+    spec, property_enums, spec_path = parse_property_contract(PROPERTIES_CONTRACT_PATH)
 
     filled = enrich(events)
 
@@ -371,27 +477,42 @@ def main(argv=None):
             for msg, c in env["top"]:
                 print(f"      · {c:>6,}  {msg}")
 
-    # 4. 필수 property
+    # 4. Event별 property 계약
     print()
     print(rule())
-    print("  4. Event별 필수 property")
+    print("  4. Event별 property 계약")
     print(rule())
     if not spec:
         props = None
         print(f"      명세를 못 읽었다: {PROPERTIES_CONTRACT_PATH}")
     else:
-        props = check_properties(events, spec)
-        print(f"      명세 출처 {os.path.relpath(spec_path, ROOT)}  ·  Event {len(spec)}종 규칙")
+        props = check_properties(events, spec, property_enums)
+        print(f"      명세 출처 {os.path.relpath(spec_path, ROOT)}  ·  "
+              f"Event {len(spec)}종 · enum {len(property_enums)}개 규칙")
         print(f"      검사 대상 {props['checked']:,}건 / 전체 {len(events):,}건 (규칙 있는 Event 만)")
-        if not props["missing"]:
+        has_violations = any(
+            props[key] for key in ("missing", "invalid_types", "invalid_enums")
+        )
+        if not has_violations:
             print("      위반 없다.")
         else:
-            total_bad = sum(props["events_with_gaps"].values())
+            total_bad = sum(props["events_with_violations"].values())
             print(f"      위반 {total_bad:,}건")
-            print()
-            print(f"      {'event_name':<28} {'누락 property':<34} {'건수':>8}")
-            for (n, k), c in props["missing"]:
-                print(f"      {n:<28} {k:<34} {c:>8,}")
+            if props["missing"]:
+                print()
+                print(f"      {'event_name':<28} {'누락 property':<34} {'건수':>8}")
+                for (n, k), c in props["missing"]:
+                    print(f"      {n:<28} {k:<34} {c:>8,}")
+            if props["invalid_types"]:
+                print()
+                print(f"      {'event_name':<28} {'property':<24} {'기대/실제 타입':<24} {'건수':>8}")
+                for (n, k, expected, actual), c in props["invalid_types"]:
+                    print(f"      {n:<28} {k:<24} {expected + '/' + actual:<24} {c:>8,}")
+            if props["invalid_enums"]:
+                print()
+                print(f"      {'event_name':<28} {'property':<24} {'허용 밖 값':<24} {'건수':>8}")
+                for (n, k, value), c in props["invalid_enums"]:
+                    print(f"      {n:<28} {k:<24} {value:<24} {c:>8,}")
             print()
             print("      이 위반은 Collector 를 그냥 통과한다 (properties 를 JsonNode 로 넘김).")
             print("      bad_events 에도 안 남으므로 여기서 세지 않으면 아무도 모른다.")
@@ -427,12 +548,21 @@ def main(argv=None):
                      "missing": missing_names},
         "off_contract": off_contract,
         "envelope": env,
-        "required_properties": (
+        "property_contract": (
             None if not spec else
             {"checked": props["checked"],
-             "events_with_gaps": props["events_with_gaps"],
+             "events_with_violations": props["events_with_violations"],
              "missing": [{"event": n, "property": k, "count": c}
-                         for (n, k), c in props["missing"]]}),
+                         for (n, k), c in props["missing"]],
+             "invalid_types": [
+                 {"event": n, "property": k, "expected": expected,
+                  "actual": actual, "count": c}
+                 for (n, k, expected, actual), c in props["invalid_types"]
+             ],
+             "invalid_enums": [
+                 {"event": n, "property": k, "value": value, "count": c}
+                 for (n, k, value), c in props["invalid_enums"]
+             ]}),
         "collector_fields_filled": filled,
     }
     if a.json:
@@ -441,11 +571,13 @@ def main(argv=None):
         print(f"  JSON 저장 → {a.json}")
         print()
 
-    # 계약 밖 Event 나 봉투 실패가 있으면 실패로 끝낸다 (CI 에서 쓸 수 있게).
+    # 계약 밖 Event, 봉투 실패, property 계약 위반은 실패로 끝낸다 (CI 에서 쓸 수 있게).
     # 커버리지가 낮은 것은 실패가 아니다 — 짧은 실행에서는 정상이다.
     if off_contract:
         return 2
     if env and env["invalid"]:
+        return 2
+    if spec and any(props[key] for key in ("missing", "invalid_types", "invalid_enums")):
         return 2
     return 0
 

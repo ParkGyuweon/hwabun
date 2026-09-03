@@ -1,0 +1,53 @@
+{
+  "schema_version": "0.2.0-draft",
+  "events": [
+    {
+      "schema_version": "0.2.0-draft",
+      "event_id": "evt-properties-invalid-navigation",
+      "event_name": "navigation_click",
+      "intent": "session",
+      "occurred_at": "2026-09-03T01:10:00.000Z",
+      "persona_id": null,
+      "session_id": "session-properties-invalid",
+      "page_view_id": "page-properties-invalid",
+      "sequence_no": 1,
+      "page_type": "product_detail",
+      "product_id": null,
+      "actor_type": "user",
+      "environment": "dev",
+      "received_at": "2026-09-03T01:10:00.100Z",
+      "source": "web",
+      "request_id": "request-properties-invalid",
+      "event_index": 0,
+      "properties": {
+        "target": 100,
+        "entry_source": "footer_link"
+      }
+    },
+    {
+      "schema_version": "0.2.0-draft",
+      "event_id": "evt-properties-invalid-quick-look-close",
+      "event_name": "quick_look_close",
+      "intent": "interest",
+      "occurred_at": "2026-09-03T01:10:01.000Z",
+      "persona_id": null,
+      "session_id": "session-properties-invalid",
+      "page_view_id": "page-properties-invalid",
+      "sequence_no": 2,
+      "page_type": "product_list",
+      "product_id": "P200",
+      "actor_type": "user",
+      "environment": "dev",
+      "received_at": "2026-09-03T01:10:01.100Z",
+      "source": "web",
+      "request_id": "request-properties-invalid",
+      "event_index": 1,
+      "properties": {
+        "close_reason": "esc",
+        "dwell_ms": "1200",
+        "variants_viewed": 1,
+        "added_to_cart": false
+      }
+    }
+  ]
+}
