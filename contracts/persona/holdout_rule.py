@@ -4,39 +4,39 @@
 계약 원본은 `contracts/persona-schema.md` §7.1 이다. 이 파일은 그 판정 순서를
 **그대로** 옮긴 것이고, 다른 곳에서 같은 판정을 다시 구현하지 않는다.
 
-    정렬  submission_time DESC NULLS LAST -> review_id DESC
-          -> 첫 리뷰가 holdout 후보다
-    2     후보의 canonical_product_id 가 Product Feature 에 있는가
-          없으면 excluded. holdout 테이블에 넣지 않는다
-    3     rating >= 4 또는 is_recommended = true 인가
-          맞으면 positive / eligible=true
-          아니면 eligible=false 로 남긴다 (버리지 않는다)
-    7     후보를 제외한 이전 리뷰가 seed 다
+    1  카탈로그에 있는 리뷰만 남기고 submission_time DESC NULLS LAST -> review_id DESC
+       로 정렬한다. Join 실패 리뷰는 excluded 다
+    2  정렬 순서대로 긍정 조건을 만족하는 첫 리뷰가 target 이다
+    3  긍정 리뷰가 없으면 target 이 없다. holdout 테이블에 넣지 않는다
+    4  target 보다 나중에 쓴 리뷰는 excluded 다 (시간 절단)
+    5  target 보다 먼저 쓴 리뷰 중 target 과 다른 상품이 seed 다
+    6  target 과 같은 상품의 이전 리뷰는 excluded 다
 
-계약이 정하지 않아 여기서 정한 것 세 가지 — 문서에 근거를 남겼다.
+왜 "마지막 긍정 리뷰" 인가
+    우리가 만드는 것은 선호 상품을 맞히는 추천기다. 1점 준 상품을 맞히라는 것은
+    다른 과제다. 그래서 정답은 긍정 상호작용이어야 하고, 불만 리뷰는 정답이
+    아니라 사람의 속성(`latest_review_label`)으로 남긴다. AI 담당과 합의했고
+    `batch/jobs/eval_metadata.py` 가 이미 같은 정의를 쓴다.
 
-    negative / diagnostic 경계
-        §7.1-5 는 "negative 또는 diagnostic" 이라고만 쓰고 경계를 정하지 않는다.
-        `contracts/recommendation-io-spec.md` "리뷰 극성의 처리" 가 별점 1~2 를
-        부정, 3 을 중립으로 두므로 그것을 따른다.
+계약이 정하지 않아 여기서 정한 것 — 지금은 모두 계약에 명시했다.
 
-    같은 상품의 이전 리뷰 (누출 방지)
-        §7.1-7 을 글자대로 적용하면 **정답 상품이 seed 에도 남는다.** 같은 상품에
-        리뷰를 두 번 이상 쓴 사람이 PC 9,900명 중 2,160명(21.8%) 있다. seed 상품은
-        `is_seen=true` 로 추천 후보에서 하드 제외되므로(persona-design.md §6),
-        그대로 두면 정답을 절대 맞힐 수 없는 평가가 된다.
-        후보와 canonical_product_id 가 같은 이전 리뷰는 seed 가 아니라 excluded 다.
-        `batch/jobs/eval_metadata.py` 도 같은 이유로 같은 방어를 하고 있다.
-        → 계약 §7.1-7 에 이 조건을 명시하는 수정이 필요하다.
+    긍정 조건 (§7.1.1)
+        rating >= 4 또는 (is_recommended = true 그리고 rating >= 3).
+        평점 3에 "추천한다" 는 정상적인 긍정 신호지만, 1~2점에 추천은 서로
+        모순되는 입력이라 긍정으로 보지 않는다 (PC 9,900명 중 8명).
+
+    tie-break (§7.1.2)
+        submission_time 이 날짜 단위라 같은 날 리뷰의 선후를 못 가린다.
+        review_id DESC 로 고정해 실행마다 결과가 달라지지 않게 한다.
+
+    같은 상품의 이전 리뷰 (§7.1-6)
+        seed 상품은 is_seen=true 로 추천 후보에서 하드 제외된다. 같은 상품에
+        리뷰를 두 번 이상 쓴 사람이 PC 21.8% 라 상품 단위로 빼지 않으면 정답을
+        절대 맞힐 수 없는 평가가 된다.
 
     is_simulation_context
         seed 만 true 다. 정답 상품이 행동 생성에 새어들면 그 로그로 추천을
-        평가할 때 자기실현이 된다 (`simulator/generator/README.md` 가 같은
-        이유로 --behavior hidden_preference 를 둔다).
-
-`batch/jobs/eval_metadata.py` 는 **다른 규칙**이다 (마지막 *긍정* 리뷰를 target 으로
-삼는다). 두 규칙의 차이는 `compare_holdout_rules.py` 가 수치로 낸다. 어느 쪽을
-정본으로 삼을지는 아직 팀 결정 전이므로 이 파일이 계약을 이긴다고 보지 않는다.
+        평가할 때 자기실현이 된다.
 """
 from __future__ import annotations
 
@@ -48,7 +48,8 @@ POSITIVE = "positive"
 NEGATIVE = "negative"
 DIAGNOSTIC = "diagnostic"
 
-POSITIVE_RATING_MIN = 4        # 계약 §7.1-3
+POSITIVE_RATING_MIN = 4        # 계약 §7.1.1
+RECOMMENDED_RATING_MIN = 3     # is_recommended 를 인정하는 하한
 NEGATIVE_RATING_MAX = 2        # recommendation-io-spec.md 리뷰 극성
 
 
@@ -72,14 +73,24 @@ def order_by_recency(reviews):
     return dated + undated
 
 
-def _label(review):
-    """계약 §7.1-3~5 — 후보가 정답이 될 수 있는가."""
+def is_positive(review):
+    """계약 §7.1.1 긍정 조건."""
     rating = review.get("rating")
-    if (rating is not None and rating >= POSITIVE_RATING_MIN) or review.get("is_recommended") is True:
-        return POSITIVE, True
+    if rating is None:
+        return False
+    if rating >= POSITIVE_RATING_MIN:
+        return True
+    return review.get("is_recommended") is True and rating >= RECOMMENDED_RATING_MIN
+
+
+def polarity(review):
+    """리뷰 하나의 극성. `latest_review_label` 과 진단용 라벨에 쓴다."""
+    if is_positive(review):
+        return POSITIVE
+    rating = review.get("rating")
     if rating is not None and rating <= NEGATIVE_RATING_MAX:
-        return NEGATIVE, False
-    return DIAGNOSTIC, False       # 평점 3 또는 평점 없음
+        return NEGATIVE
+    return DIAGNOSTIC              # 평점 3인데 추천 안 함, 또는 평점 없음
 
 
 def classify(reviews, product_ids):
@@ -92,38 +103,50 @@ def classify(reviews, product_ids):
     Returns:
         (roles, decision)
         roles    : review_id -> "seed" | "holdout_target" | "excluded"
-        decision : 후보 판정 결과. 후보가 없으면 None
-                   {"review", "canonical_product_id", "role", "label",
-                    "is_holdout_eligible"}
+        decision : {"review", "canonical_product_id", "label",
+                    "is_holdout_eligible", "latest_review_label"}
+                   긍정 리뷰가 없으면 target 관련 키가 None 이다.
+                   카탈로그에 든 리뷰가 하나도 없으면 None 이다.
     """
-    ordered = order_by_recency(reviews)
+    joinable = [r for r in reviews if canonical_product_id(r) in product_ids]
+    roles = {r["review_id"]: EXCLUDED
+             for r in reviews if canonical_product_id(r) not in product_ids}
+
+    ordered = order_by_recency(joinable)                    # 최신 -> 오래된
     if not ordered:
-        return {}, None
+        return roles, None
 
-    candidate = ordered[0]
-    canonical = canonical_product_id(candidate)
+    target = next((r for r in ordered if is_positive(r)), None)
+    latest_label = polarity(ordered[0])
 
-    if canonical not in product_ids:
-        role, label, eligible = EXCLUDED, None, False
-    else:
-        role = HOLDOUT_TARGET
-        label, eligible = _label(candidate)
+    if target is None:
+        # 긍정 리뷰가 없다. target 없이 전부 이력으로만 쓴다 (계약 §7.1-3)
+        for r in ordered:
+            roles[r["review_id"]] = SEED
+        return roles, {
+            "review": None, "canonical_product_id": None, "label": None,
+            "is_holdout_eligible": False, "latest_review_label": latest_label,
+        }
 
-    # 후보와 같은 상품의 이전 리뷰는 seed 가 아니다 (위 누출 방지 참조)
-    roles = {}
-    for review in ordered[1:]:
-        roles[review["review_id"]] = (
-            EXCLUDED if canonical_product_id(review) == canonical else SEED)
-    roles[candidate["review_id"]] = role
+    canonical = canonical_product_id(target)
+    cut = ordered.index(target)
+    for i, r in enumerate(ordered):
+        if i < cut:
+            roles[r["review_id"]] = EXCLUDED                # target 이후 — 시간 절단
+        elif i == cut:
+            roles[r["review_id"]] = HOLDOUT_TARGET
+        elif canonical_product_id(r) == canonical:
+            roles[r["review_id"]] = EXCLUDED                # 같은 상품 — 누출 방지
+        else:
+            roles[r["review_id"]] = SEED
 
-    decision = {
-        "review": candidate,
+    return roles, {
+        "review": target,
         "canonical_product_id": canonical,
-        "role": role,
-        "label": label,
-        "is_holdout_eligible": eligible,
+        "label": POSITIVE,
+        "is_holdout_eligible": True,
+        "latest_review_label": latest_label,
     }
-    return roles, decision
 
 
 def is_simulation_context(role):
