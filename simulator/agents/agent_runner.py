@@ -73,7 +73,16 @@ PRODUCTS_FILE = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json
 #   * 목록은 25개씩 끊어 보여주고 나머지는 "더 보기" 버튼 뒤에 있다
 #   * 100명 전원이 같은 첫 화면에서 시작하니 보이는 후보가 늘 같은 25개다
 # 프롬프트로 "더 내려보라" 고 부탁하지 않고 코드로 시작 지점을 흩는다.
-DEEP_LINK_P = 0.5       # 이 확률로 상품 상세에서 시작한다 (검색·광고 유입에 해당)
+# **딥링크로 시작하지 않는다.** 우리 서비스에는 검색도 광고도 없다 — 없는 유입
+# 경로를 흉내 내면 로그가 실제로 일어날 수 없는 동선을 담는다. 전원 목록에서
+# 출발한다 (2026-09-03 지시).
+#
+# 딥링크는 9/1 에 상품 커버리지를 고치려고 넣은 것이었다(27개 -> 200개). 그
+# 몫은 이제 spread_start() 가 진다 — 카테고리 탭 · "더 보기" · 시작 스크롤
+# 위치. **커버리지는 본실행에서 다시 재야 한다.**
+#
+# 경로 자체는 남겨 둔다. --entry detail 로 상세 진입을 재현할 때 쓴다.
+DEEP_LINK_P = 0.0
 CATEGORY_P = 0.6        # 목록에서 시작할 때 이 확률로 카테고리 탭을 하나 고른다
 MAX_MORE_CLICKS = 3     # "더 보기" 한도. 25 -> 최대 100개까지 늘린다
 
@@ -214,18 +223,45 @@ def prices():
     return PRICES
 
 
-def budget_of(p):
-    """이 사람이 실제로 낸 것 중 가장 큰 값. 이력이 없으면 None.
+VOCAB_FILE = os.path.join(ROOT, "contracts", "product-feature-vocab.json")
 
-    예산선을 지어내지 않는다 — **자기가 이미 그 값을 낸 적이 있다** 는 것이
-    부담스럽지 않다는 가장 단순한 증거다. 카탈로그의 16%(중앙값)가 개인 상한을
-    넘는다. 2명은 상한이 최고가라 아무것도 비싸지 않고, 10명은 상한이 카탈로그
-    중앙값($46)보다 낮다 — 사람마다 다르게 걸린다.
+
+def price_bin_edges():
+    """가격 구간 경계. **계약에서 직접 읽는다.**
+
+    상품 벡터의 `price_bin` 이 쓰는 것과 같은 구간이어야 한다. 코드에 복사해
+    두면 계약이 바뀔 때 조용히 어긋나고, 어긋난 줄 모른 채 돌아간다.
+    """
+    try:
+        with io.open(VOCAB_FILE, encoding="utf-8") as f:
+            return json.load(f)["price_bin_edges"]
+    except Exception:
+        return []
+
+
+def budget_of(p):
+    """이 사람이 익숙한 가격대의 **상한**. 없으면 None.
+
+    낸 적 있는 최고가를 그대로 쓰면 안 된다 — $24 를 내 본 사람에게 $25 가
+    부담이 되어 버린다. **사람은 늘 같은 값만 내지 않는다.** 그래서 최고가가
+    속한 구간(`price_bin`, 계약이 정한 5구간)의 상한을 쓴다.
+
+        ~$20 / $20-35 / $35-50 / $50-80 / $80+
+
+    최상위 구간에서 산 적이 있으면 상한이 없다 — 그 사람에게는 가격 부담을
+    표시하지 않는다. 100명 중 47명이 여기 해당한다. 표시가 뜨는 53명에게는
+    **정말로 습관 밖** 이라는 뜻이 된다.
     """
     tab = prices()
     own = [tab[r["product_id"]] for r in p.get("reviews", [])
            if r.get("product_id") in tab]
-    return max(own) if own else None
+    if not own:
+        return None
+    top = max(own)
+    for edge in price_bin_edges()[1:]:
+        if top < edge:
+            return float(edge)
+    return None
 
 
 def load_catalog():
@@ -317,8 +353,10 @@ def profile_text(p):
     own = [tab[r["product_id"]] for r in revs if r.get("product_id") in tab]
     price_line = ""
     if own:
-        price_line = (f"\n- 지금까지 낸 가격: ${min(own):.0f} ~ ${max(own):.0f}"
-                      f" (${max(own):.0f} 까지는 내 본 적이 있다)")
+        band = budget_of(p)
+        price_line = f"\n- 지금까지 낸 가격: ${min(own):.0f} ~ ${max(own):.0f}"
+        price_line += (f" (${band:.0f} 아래가 익숙한 가격대다)" if band
+                       else " (비싼 것도 사 본 적이 있다)")
 
     return (f"- 피부 타입: {TYPE_KR.get(p['skin_type'], p['skin_type'])}\n"
             f"- 피부 톤: {TONE_KR.get(p['skin_tone'], p['skin_tone'])}"
@@ -1082,13 +1120,13 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 pr = cart_prices.get(c)
                 over = budget is not None and pr is not None and pr > budget
                 items.append(f"{c}" + (f" ${pr:.0f}" if pr is not None else "")
-                             + (f"  (평소 최대 ${budget:.0f})" if over else ""))
+                             + (f"  (익숙한 가격대 ${budget:.0f} 위)" if over else ""))
             total = sum(v for v in cart_prices.values())
             tail = ""
             if total:
                 tail = f" — 합계 ${total:.0f}"
                 if budget is not None:
-                    tail += f" (지금까지 한 개에 최대 ${budget:.0f} 까지 내 봤다)"
+                    tail += f" (익숙한 가격대는 한 개에 ${budget:.0f} 아래다)"
             user = (f"[장바구니] {', '.join(items)}{tail}{NL}{NL}") + user
         if history:
             recent = NL.join(f"  {i}. {h}" for i, h in
