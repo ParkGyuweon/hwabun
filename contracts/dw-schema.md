@@ -100,13 +100,15 @@ source = 입점 Tenant 등록 정보
 
 ```text
 grain/key = product_id
-source = batch/ingest/data/products_200.json, Processed dim_product
+source = batch/ingest/data/products_200.json, Tenant 등록 상품, Processed dim_product
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `product_id` | string | N | 상품 ID |
 | `product_name` | string | N | 상품명 |
+| `tenant_id` | string | Y | 등록 Tenant. 원천 카탈로그 상품은 NULL |
+| `product_source` | string | N | `seed_catalog`, `tenant_registered` |
 | `brand_id`, `brand_name` | string | Y | 브랜드 식별자·표시명 |
 | `primary_category`, `secondary_category`, `tertiary_category` | string | Y | 카테고리 계층 |
 | `category_id` | string | Y | Dashboard 필터 ID |
@@ -114,6 +116,7 @@ source = batch/ingest/data/products_200.json, Processed dim_product
 | `base_price` | decimal(18,2) | Y | 기준 가격 |
 | `currency` | string | Y | 가격 통화 |
 | `rating` | double | Y | 평균 평점 |
+| `rating_source` | string | Y | `observed`, `injected`. 주입값을 실측과 섞지 않는다 |
 | `review_count`, `loves_count` | bigint | Y | 리뷰·관심 수 |
 | `skin_type_tags`, `concern_tags`, `ingredient_ids` | array<string> | Y | 상품 속성 |
 | `caution_ingredient_count` | int | Y | 주의 성분 수 |
