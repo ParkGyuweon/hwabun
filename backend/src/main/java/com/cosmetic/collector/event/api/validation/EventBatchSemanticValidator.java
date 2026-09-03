@@ -56,12 +56,21 @@ public class EventBatchSemanticValidator {
         }
         Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(event);
         return violations.stream()
-                .map(violation -> new ValidationViolation(
-                        "collector_validation_failure",
-                        violation.getPropertyPath().toString(),
-                        violation.getMessage()
-                ))
+                .map(violation -> toValidationViolation(violation))
                 .toList();
+    }
+
+    private ValidationViolation toValidationViolation(ConstraintViolation<ActivityEvent> violation) {
+        String message = violation.getMessage();
+        int separator = message.indexOf('|');
+        if (separator > 0) {
+            return new ValidationViolation(
+                    message.substring(0, separator),
+                    violation.getPropertyPath().toString(),
+                    message.substring(separator + 1)
+            );
+        }
+        return new ValidationViolation("collector_validation_failure", violation.getPropertyPath().toString(), message);
     }
 
     public record ValidationResult(

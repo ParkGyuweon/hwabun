@@ -26,7 +26,8 @@ public record KafkaEventMessage(
         String source,
         String requestId,
         int eventIndex,
-        JsonNode properties
+        JsonNode properties,
+        String tenantId
 ) {
     static KafkaEventMessage from(
             ActivityEvent event,
@@ -52,7 +53,8 @@ public record KafkaEventMessage(
                 sourceOf(event),
                 requestId,
                 eventIndex,
-                event.properties()
+                event.properties(),
+                event.tenantId()
         );
     }
 

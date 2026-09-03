@@ -5,222 +5,50 @@ import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import tools.jackson.databind.JsonNode;
 
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
+/** event-properties-schema.md §2~§5의 활성 39종 단건 계약을 검사한다. */
 public class EventContractValidator implements ConstraintValidator<ValidEventContract, ActivityEvent> {
+    private static final Map<String, String> INTENTS = Map.ofEntries(
+            Map.entry("session_start","session"),Map.entry("page_view","session"),Map.entry("navigation_click","session"),Map.entry("exit_summary","session"),Map.entry("product_impression","exposure"),Map.entry("recommendation_impression","exposure"),Map.entry("scroll_depth","exposure"),Map.entry("impression_dwell","exposure"),Map.entry("recommendation_snapshot","exposure"),Map.entry("product_view","interest"),Map.entry("section_view","interest"),Map.entry("section_dwell","interest"),Map.entry("scroll_pause","interest"),Map.entry("media_view","interest"),Map.entry("quick_look","interest"),Map.entry("quick_look_close","interest"),Map.entry("scroll_backtrack","comparison"),Map.entry("variant_select","comparison"),Map.entry("product_click","comparison"),Map.entry("recommendation_click","comparison"),Map.entry("filter_change","comparison"),Map.entry("sort_change","comparison"),Map.entry("accordion_toggle","validation"),Map.entry("ingredient_view_mode_change","validation"),Map.entry("review_expand","validation"),Map.entry("review_filter_apply","validation"),Map.entry("text_selection","validation"),Map.entry("text_copy","validation"),Map.entry("hover_dwell","hesitation"),Map.entry("remove_from_cart","hesitation"),Map.entry("wishlist_toggle","conversion"),Map.entry("quantity_change","conversion"),Map.entry("add_to_cart","conversion"),Map.entry("view_cart","conversion"),Map.entry("begin_checkout","conversion"),Map.entry("purchase","conversion"),Map.entry("purchase_reason_select","validation"),Map.entry("rage_click","friction"),Map.entry("dead_click","friction"));
+    private static final Set<String> PRODUCT_EVENTS = Set.of("product_view","product_impression","impression_dwell","product_click","recommendation_impression","recommendation_click","quick_look","quick_look_close","section_view","section_dwell","scroll_depth","scroll_pause","scroll_backtrack","media_view","variant_select","accordion_toggle","text_selection","text_copy","wishlist_toggle","add_to_cart","remove_from_cart","quantity_change","hover_dwell","rage_click","dead_click");
+    private static final Map<String, Set<String>> ENUMS = Map.of(
+            "section_id", Set.of("product_hero","highlights","about_product","ingredients","how_to_use","similar_products","reviews","promo_row","list_controls","product_grid","cart_items"),
+            "content_kind", Set.of("product_image","price","variant_option","cta","highlight_badge","what_it_is","what_else","ingredient_list","ingredient_callout","clinical_claim","usage_guide","brand_story","persona_match","product_meta","user_review","review_stats","review_filter","recommendation_card","product_card","cart_item","navigation"),
+            "entry_source", Set.of("list_grid","promo_pick","similar_products","quick_look","cart","breadcrumb"),
+            "navigation_source", Set.of("session_start","in_app","history_back","direct"),
+            "filter_kind", Set.of("category","concern","price"), "selection_kind", Set.of("ingredient","claim","usage","price","other"), "variant_kind", Set.of("size","shade","other"));
+    private static final Set<String> REASONS = Set.of("ingredient","skin_fit","reviews","review_same_skin","price","brand_trust","texture_finish","clean_claim","recommendation","restock");
+    private static final Map<String, Rule> RULES = rules();
 
-    private static final Map<String, String> EVENT_INTENTS = Map.ofEntries(
-            Map.entry("session_start", "session"),
-            Map.entry("page_view", "session"),
-            Map.entry("navigation_click", "session"),
-            Map.entry("exit_summary", "session"),
-            Map.entry("product_impression", "exposure"),
-            Map.entry("recommendation_impression", "exposure"),
-            Map.entry("scroll_depth", "exposure"),
-            Map.entry("impression_dwell", "exposure"),
-            Map.entry("recommendation_snapshot", "exposure"),
-            Map.entry("product_view", "interest"),
-            Map.entry("section_view", "interest"),
-            Map.entry("section_dwell", "interest"),
-            Map.entry("scroll_pause", "interest"),
-            Map.entry("media_view", "interest"),
-            Map.entry("quick_look", "interest"),
-            Map.entry("quick_look_close", "interest"),
-            Map.entry("scroll_backtrack", "comparison"),
-            Map.entry("variant_select", "comparison"),
-            Map.entry("product_click", "comparison"),
-            Map.entry("recommendation_click", "comparison"),
-            Map.entry("filter_change", "comparison"),
-            Map.entry("sort_change", "comparison"),
-            Map.entry("accordion_toggle", "validation"),
-            Map.entry("ingredient_view_mode_change", "validation"),
-            Map.entry("review_expand", "validation"),
-            Map.entry("review_filter_apply", "validation"),
-            Map.entry("text_selection", "validation"),
-            Map.entry("text_copy", "validation"),
-            Map.entry("hover_dwell", "hesitation"),
-            Map.entry("remove_from_cart", "hesitation"),
-            Map.entry("wishlist_toggle", "conversion"),
-            Map.entry("quantity_change", "conversion"),
-            Map.entry("add_to_cart", "conversion"),
-            Map.entry("view_cart", "conversion"),
-            Map.entry("begin_checkout", "conversion"),
-            Map.entry("purchase", "conversion"),
-            Map.entry("purchase_reason_select", "validation"),
-            Map.entry("rage_click", "friction"),
-            Map.entry("dead_click", "friction")
-    );
-    private static final Set<String> GENERATOR_TYPES = Set.of("python_batch", "agent_llm");
-
-    @Override
-    public boolean isValid(ActivityEvent event, ConstraintValidatorContext context) {
-        if (event == null) {
-            return true;
-        }
-
-        boolean valid = true;
-        context.disableDefaultConstraintViolation();
-
-        JsonNode properties = event.properties();
-        if (properties != null && !properties.isObject()) {
-            valid = false;
-            addViolation(context, "properties", "properties는 JSON object여야 합니다.");
-        }
-
-        String expectedIntent = EVENT_INTENTS.get(event.eventName());
-        if (expectedIntent == null) {
-            valid = false;
-            addViolation(context, "eventName", "등록되지 않은 event_name입니다.");
-        } else if (!expectedIntent.equals(event.intent())) {
-            valid = false;
-            addViolation(context, "intent", "event_name과 intent 조합이 올바르지 않습니다.");
-        }
-
-        if (properties != null && properties.isObject()) {
-            valid &= validateEventProperties(context, event.eventName(), properties);
-        }
-
-        if ("synthetic".equals(event.actorType())) {
-            if (isBlank(event.personaId())) {
-                valid = false;
-                addViolation(context, "personaId", "synthetic 이벤트에는 persona_id가 필요합니다.");
-            }
-            if (properties == null || !properties.isObject()) {
-                return valid;
-            }
-            valid &= requireNonBlankProperty(context, properties, "scenario_id");
-            valid &= requireNonBlankProperty(context, properties, "simulation_run_id");
-
-            JsonNode generatorType = properties.get("generator_type");
-            if (generatorType == null || !generatorType.isTextual()
-                    || isBlank(generatorType.textValue())
-                    || !GENERATOR_TYPES.contains(generatorType.textValue())) {
-                valid = false;
-                addViolation(context, "properties", "synthetic 이벤트의 generator_type이 올바르지 않습니다.");
-            }
-        }
-
-        return valid;
+    @Override public boolean isValid(ActivityEvent e, ConstraintValidatorContext c) {
+        if (e == null) return true; c.disableDefaultConstraintViolation(); boolean ok = true; JsonNode p = e.properties();
+        if (p == null || !p.isObject()) { add(c,"invalid_property_type","properties","properties는 JSON object여야 합니다."); return false; }
+        String expected = INTENTS.get(e.eventName());
+        if (expected == null) { add(c,"unregistered_event","eventName","등록되지 않은 event_name입니다."); ok=false; }
+        else if (!expected.equals(e.intent())) { add(c,"event_intent_mismatch","intent","event_name과 intent 조합이 올바르지 않습니다."); ok=false; }
+        if ("0.3.0-draft".equals(e.schemaVersion()) && blank(e.tenantId())) { add(c,"missing_required_property","tenantId","0.3.0-draft에는 tenant_id가 필요합니다."); ok=false; }
+        if (PRODUCT_EVENTS.contains(e.eventName()) && blank(e.productId())) { add(c,"missing_required_property","productId","상품 대상 이벤트에는 product_id가 필요합니다."); ok=false; }
+        Rule r = RULES.get(e.eventName()); if (r == null) return false;
+        for (Map.Entry<String,T> x:r.required.entrySet()) ok &= require(c,p,x.getKey(),x.getValue());
+        for (List<String> group:r.any) if(group.stream().noneMatch(p::has)) { add(c,"missing_required_property","properties",String.join(" 또는 ",group)+" 중 하나가 필요합니다."); ok=false; }
+        for (Map.Entry<String,Set<String>> x:ENUMS.entrySet()) if(p.has(x.getKey()) && (!p.get(x.getKey()).isTextual() || !x.getValue().contains(p.get(x.getKey()).textValue()))) { add(c,"invalid_property_enum","properties",x.getKey()+" 값이 계약 enum에 없습니다."); ok=false; }
+        if ("quick_look_close".equals(e.eventName())) ok &= enumValue(c,p,"close_reason",Set.of("backdrop","escape","close_button","open_detail"));
+        if ("review_expand".equals(e.eventName())) ok &= enumValue(c,p,"target",Set.of("review_text","jump_to_reviews","ingredients"));
+        if ("recommendation_snapshot".equals(e.eventName())) ok &= children(c,p.path("ranking"),"ranking");
+        if ("begin_checkout".equals(e.eventName()) || "purchase".equals(e.eventName())) ok &= children(c,p.path("items"),"items");
+        if ("purchase_reason_select".equals(e.eventName())) ok &= reasons(c,p);
+        if ("synthetic".equals(e.actorType())) ok &= synthetic(c,e,p);
+        return ok;
     }
 
-    private boolean validateEventProperties(
-            ConstraintValidatorContext context,
-            String eventName,
-            JsonNode properties
-    ) {
-        return switch (eventName) {
-            case "begin_checkout" -> requireItems(context, properties);
-            case "purchase" -> requireNonBlankProperty(context, properties, "order_id")
-                    & requireItems(context, properties);
-            case "purchase_reason_select" -> requirePurchaseReasons(context, properties);
-            default -> true;
-        };
-    }
-
-    private boolean requireItems(ConstraintValidatorContext context, JsonNode properties) {
-        JsonNode items = properties.get("items");
-        if (items == null || !items.isArray() || items.isEmpty()) {
-            addViolation(context, "properties", "items는 비어 있지 않은 배열이어야 합니다.");
-            return false;
-        }
-
-        boolean valid = true;
-        for (JsonNode item : items) {
-            if (!item.isObject()
-                    || !isNonBlankText(item.get("product_id"))
-                    || !isPositiveInteger(item.get("quantity"))
-                    || !isPositiveNumber(item.get("unit_price"))) {
-                addViolation(context, "properties", "items 원소에는 product_id, 양수 quantity, 양수 unit_price가 필요합니다.");
-                valid = false;
-                break;
-            }
-        }
-        return valid;
-    }
-
-    private boolean requirePurchaseReasons(ConstraintValidatorContext context, JsonNode properties) {
-        if (!requireNonBlankProperty(context, properties, "order_id")) {
-            return false;
-        }
-
-        JsonNode skipped = properties.get("skipped");
-        if (skipped != null && !skipped.isBoolean()) {
-            addViolation(context, "properties", "skipped는 boolean이어야 합니다.");
-            return false;
-        }
-
-        JsonNode reasons = properties.get("reasons");
-        boolean isSkipped = skipped != null && skipped.booleanValue();
-        if (reasons == null || !reasons.isArray() || (!isSkipped && (reasons.isEmpty() || reasons.size() > 2))) {
-            addViolation(context, "properties", "reasons는 건너뛰기가 아닐 때 1~2개의 배열이어야 합니다.");
-            return false;
-        }
-        if (isSkipped && !reasons.isEmpty()) {
-            addViolation(context, "properties", "건너뛴 설문에는 reasons가 비어 있어야 합니다.");
-            return false;
-        }
-
-        for (JsonNode reason : reasons) {
-            if (!reason.isTextual() || !PURCHASE_REASONS.contains(reason.textValue())) {
-                addViolation(context, "properties", "reasons에 허용되지 않은 구매 이유가 있습니다.");
-                return false;
-            }
-        }
-        JsonNode primaryReason = properties.get("primary_reason");
-        if (primaryReason != null && (!primaryReason.isTextual() || !containsText(reasons, primaryReason.textValue()))) {
-            addViolation(context, "properties", "primary_reason은 reasons 중 하나여야 합니다.");
-            return false;
-        }
-        return true;
-    }
-
-    private static final Set<String> PURCHASE_REASONS = Set.of(
-            "ingredient", "skin_fit", "reviews", "review_same_skin", "price",
-            "brand_trust", "texture_finish", "clean_claim", "recommendation", "restock"
-    );
-
-    private boolean isNonBlankText(JsonNode node) {
-        return node != null && node.isTextual() && !isBlank(node.textValue());
-    }
-
-    private boolean isPositiveInteger(JsonNode node) {
-        return node != null && node.isIntegralNumber() && node.longValue() > 0;
-    }
-
-    private boolean isPositiveNumber(JsonNode node) {
-        return node != null && node.isNumber() && node.decimalValue().signum() > 0;
-    }
-
-    private boolean containsText(JsonNode nodes, String value) {
-        for (JsonNode node : nodes) {
-            if (node.isTextual() && value.equals(node.textValue())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean requireNonBlankProperty(
-            ConstraintValidatorContext context,
-            JsonNode properties,
-            String propertyName
-    ) {
-        JsonNode value = properties.get(propertyName);
-        if (value != null && value.isTextual() && !isBlank(value.textValue())) {
-            return true;
-        }
-        addViolation(context, "properties", "synthetic 이벤트에는 " + propertyName + "가 필요합니다.");
-        return false;
-    }
-
-    private void addViolation(ConstraintValidatorContext context, String property, String message) {
-        context.buildConstraintViolationWithTemplate(message)
-                .addPropertyNode(property)
-                .addConstraintViolation();
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
+    private boolean synthetic(ConstraintValidatorContext c, ActivityEvent e, JsonNode p) { boolean ok=true; if(blank(e.personaId())) {add(c,"missing_required_property","personaId","synthetic 이벤트에는 persona_id가 필요합니다.");ok=false;} ok &= require(c,p,"scenario_id",T.STRING); ok &= require(c,p,"simulation_run_id",T.STRING); if(!enumValue(c,p,"generator_type",Set.of("python_batch","agent_llm"))) ok=false; return ok; }
+    private boolean reasons(ConstraintValidatorContext c, JsonNode p) { JsonNode skipped=p.get("skipped"), values=p.get("reasons"); boolean skip=skipped!=null&&skipped.booleanValue(); if(skipped!=null&&!skipped.isBoolean()){add(c,"invalid_property_type","properties","skipped는 boolean이어야 합니다.");return false;} if(values==null||!values.isArray()||(skip?!values.isEmpty():values.isEmpty()||values.size()>2)){add(c,"invalid_property_type","properties","reasons 길이가 올바르지 않습니다.");return false;} for(JsonNode v:values)if(!v.isTextual()||!REASONS.contains(v.textValue())){add(c,"invalid_property_enum","properties","reasons 값이 계약 enum에 없습니다.");return false;} JsonNode primary=p.get("primary_reason"); if(primary!=null&&(!primary.isTextual()||!contains(values,primary.textValue()))){add(c,"invalid_property_enum","properties","primary_reason은 reasons 중 하나여야 합니다.");return false;} return true; }
+    private boolean children(ConstraintValidatorContext c, JsonNode values, String name) { if(!values.isArray()||values.isEmpty()){add(c,"missing_required_property","properties",name+"는 비어 있지 않은 배열이어야 합니다.");return false;} for(JsonNode x:values){boolean items="items".equals(name);if(!x.isObject()||!T.STRING.matches(x.get("product_id"))||!(items?T.POSITIVE_INTEGER:T.INTEGER).matches(x.get(items?"quantity":"position"))||(items&&!T.POSITIVE_NUMBER.matches(x.get("unit_price")))){add(c,"invalid_property_type","properties",name+" 원소 형식이 올바르지 않습니다.");return false;}}return true; }
+    private boolean require(ConstraintValidatorContext c,JsonNode p,String key,T type){JsonNode v=p.get(key);if(v==null||!type.matches(v)){add(c,v==null?"missing_required_property":"invalid_property_type","properties",key+"의 타입이 올바르지 않습니다.");return false;}return true;}
+    private boolean enumValue(ConstraintValidatorContext c,JsonNode p,String key,Set<String> set){JsonNode v=p.get(key);if(v==null||!v.isTextual()||!set.contains(v.textValue())){add(c,"invalid_property_enum","properties",key+" 값이 계약 enum에 없습니다.");return false;}return true;}
+    private static boolean contains(JsonNode a,String v){for(JsonNode x:a)if(x.isTextual()&&v.equals(x.textValue()))return true;return false;} private static boolean blank(String s){return s==null||s.isBlank();} private static void add(ConstraintValidatorContext c,String code,String field,String message){c.buildConstraintViolationWithTemplate(code+"|"+message).addPropertyNode(field).addConstraintViolation();}
+    private static Map<String,Rule> rules(){Map<String,Rule> r=new LinkedHashMap<>(); rule(r,"session_start");rule(r,"page_view");rule(r,"navigation_click","target",T.STRING,"entry_source",T.STRING);rule(r,"product_view","navigation_source",T.STRING);rule(r,"exit_summary","dwell_ms",T.INTEGER,"max_scroll_percent",T.NUMBER);rule(r,"product_impression","list_id",T.STRING,"position",T.INTEGER,"hold_ms",T.INTEGER,"visible_ratio",T.NUMBER);rule(r,"product_click");rule(r,"recommendation_impression","recommendation_id",T.STRING,"list_id",T.STRING,"position",T.INTEGER,"algorithm",T.STRING,"hold_ms",T.INTEGER,"visible_ratio",T.NUMBER);rule(r,"recommendation_click","recommendation_id",T.STRING,"list_id",T.STRING,"position",T.INTEGER,"algorithm",T.STRING);rule(r,"impression_dwell","list_id",T.STRING,"position",T.INTEGER,"visible_ms",T.INTEGER);rule(r,"recommendation_snapshot","recommendation_id",T.STRING,"list_id",T.STRING,"algorithm",T.STRING,"size",T.INTEGER,"ranking",T.OBJECT_ARRAY);rule(r,"quick_look","entry_source",T.STRING,"position",T.INTEGER);rule(r,"quick_look_close","close_reason",T.STRING,"dwell_ms",T.INTEGER,"variants_viewed",T.INTEGER,"added_to_cart",T.BOOLEAN,"wishlisted",T.BOOLEAN);rule(r,"filter_change","filter_kind",T.STRING,"filter_value",T.STRING);rule(r,"sort_change","sort_key",T.STRING);any(r,"section_view","section_id","content_kind");rule(r,"section_dwell","dwell_ms",T.INTEGER);r.get("section_dwell").any.add(List.of("section_id","content_kind"));rule(r,"scroll_depth","depth_percent",T.NUMBER);rule(r,"scroll_pause","depth_percent",T.NUMBER,"direction",T.STRING,"distance_px",T.INTEGER,"duration_ms",T.INTEGER);rule(r,"scroll_backtrack","depth_percent",T.NUMBER,"distance_px",T.INTEGER);rule(r,"media_view","media_type",T.STRING,"media_index",T.INTEGER);rule(r,"accordion_toggle","section_id",T.STRING,"action",T.STRING);rule(r,"text_selection","text_length",T.INTEGER);rule(r,"text_copy","text_length",T.INTEGER);rule(r,"review_expand","target",T.STRING);any(r,"review_filter_apply","filter","sort");rule(r,"ingredient_view_mode_change","mode",T.STRING);rule(r,"wishlist_toggle","action",T.STRING);rule(r,"add_to_cart","quantity",T.INTEGER);rule(r,"remove_from_cart","quantity",T.INTEGER,"cart_size_after",T.INTEGER);rule(r,"view_cart","item_count",T.INTEGER,"distinct_products",T.INTEGER,"cart_value",T.NUMBER);rule(r,"quantity_change","quantity",T.INTEGER);rule(r,"begin_checkout","items",T.OBJECT_ARRAY);rule(r,"purchase","order_id",T.STRING,"items",T.OBJECT_ARRAY);rule(r,"purchase_reason_select","order_id",T.STRING,"reasons",T.STRING_ARRAY);rule(r,"variant_select","sku_id",T.STRING,"label",T.STRING);rule(r,"hover_dwell","dwell_ms",T.INTEGER,"action",T.NULLABLE_STRING);rule(r,"rage_click","click_count",T.INTEGER,"action",T.NULLABLE_STRING);rule(r,"dead_click","target_tag",T.NULLABLE_STRING);return r;}
+    private static void rule(Map<String,Rule> r,String name,Object... v){Rule x=new Rule();for(int i=0;i<v.length;i+=2)x.required.put((String)v[i],(T)v[i+1]);r.put(name,x);} private static void any(Map<String,Rule> r,String name,String... keys){Rule x=new Rule();x.any.add(List.of(keys));r.put(name,x);} private static final class Rule{final Map<String,T> required=new LinkedHashMap<>();final List<List<String>> any=new ArrayList<>();}
+    private enum T{STRING,INTEGER,NUMBER,BOOLEAN,OBJECT_ARRAY,STRING_ARRAY,NULLABLE_STRING,POSITIVE_INTEGER,POSITIVE_NUMBER;boolean matches(JsonNode n){if(n==null)return false;return switch(this){case STRING->n.isTextual()&&!n.textValue().isBlank();case INTEGER->n.isIntegralNumber();case NUMBER->n.isNumber();case BOOLEAN->n.isBoolean();case OBJECT_ARRAY->n.isArray()&&!n.isEmpty();case STRING_ARRAY->strings(n);case NULLABLE_STRING->n.isNull()||n.isTextual();case POSITIVE_INTEGER->n.isIntegralNumber()&&n.longValue()>0;case POSITIVE_NUMBER->n.isNumber()&&n.decimalValue().signum()>0;};}private static boolean strings(JsonNode n){if(!n.isArray())return false;for(JsonNode item:n)if(!item.isTextual())return false;return true;}}
 }

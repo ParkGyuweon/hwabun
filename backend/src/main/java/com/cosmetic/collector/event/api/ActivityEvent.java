@@ -16,8 +16,8 @@ import java.time.Instant;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @ValidEventContract
 public record ActivityEvent(
-        @Schema(description = "이벤트 계약 버전", example = "0.2.0-draft")
-        @NotBlank @Pattern(regexp = "^0\\.2\\.0-draft$") String schemaVersion,
+        @Schema(description = "이벤트 계약 버전", example = "0.3.0-draft")
+        @NotBlank @Pattern(regexp = "^0\\.(2|3)\\.0-draft$") String schemaVersion,
 
         @Schema(description = "중복 제거에 사용하는 이벤트 고유 ID", example = "evt-001")
         @NotBlank String eventId,
@@ -64,6 +64,18 @@ public record ActivityEvent(
         @NotBlank String environment,
 
         @Schema(description = "이벤트 종류별 추가 속성", example = "{\"position\": 1}")
-        @NotNull JsonNode properties
+        @NotNull JsonNode properties,
+
+        @Schema(description = "0.3.0-draft부터 필수인 Storefront tenant 식별자", example = "estee-lauder", nullable = true)
+        @Pattern(regexp = "^[a-z0-9]+(-[a-z0-9]+)*$") String tenantId
 ) {
+    /** 0.2.0 호출부와 호환되는 생성자다. */
+    public ActivityEvent(
+            String schemaVersion, String eventId, String eventName, String intent, Instant occurredAt,
+            String personaId, String sessionId, String pageViewId, Integer sequenceNo, String pageType,
+            String productId, String actorType, String environment, JsonNode properties
+    ) {
+        this(schemaVersion, eventId, eventName, intent, occurredAt, personaId, sessionId, pageViewId,
+                sequenceNo, pageType, productId, actorType, environment, properties, null);
+    }
 }

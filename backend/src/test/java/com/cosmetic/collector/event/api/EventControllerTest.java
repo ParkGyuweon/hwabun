@@ -124,7 +124,7 @@ class EventControllerTest {
                                     "environment": "local",
                                     "properties": {
                                       "target": "/cart",
-                                      "entry_source": "header"
+                                      "entry_source": "breadcrumb"
                                     }
                                   }]
                                 }
