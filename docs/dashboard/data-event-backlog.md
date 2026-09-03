@@ -44,7 +44,7 @@
 | event_name | intent | required | optional | 왜 |
 |---|---|---|---|---|
 | `begin_checkout` (Planned → 활성) | `conversion` | `items: object[]` | `cart_value`, `currency` | 이미 정의됨. enum 등록만 |
-| `purchase` (Planned → 활성) | `conversion` | `order_id: string`, `items: object[]` | `order_value`, `currency` | 이미 정의됨. `items[]` 원소에 `product_id`, `quantity`, `item_revenue` |
+| `purchase` (Planned → 활성) | `conversion` | `order_id: string`, `items: object[]` | `order_value`, `currency` | 이미 정의됨. `items[]` 원소는 계약 §6대로 `product_id`, `quantity`, `unit_price`(선택 `sku_id`). DW의 `item_revenue`는 `unit_price × quantity`로 파생 — 데이터 파트 확정 필요 |
 | **`purchase_reason_select`** (신규) | `validation` | `order_id: string`, `reasons: string[]` (1~2개) | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` | 구매 직후 한 번, 클릭 설문. 원문 자유 입력은 저장하지 않고 분류만(`free_text_kind`) |
 
 `reasons` enum (뷰티 특화, 10개 이하로 고정):
@@ -218,7 +218,7 @@ trend_daily/2026-09-03.json   →  (1) DW `trend_daily` 마트 append
 | S1 | 긍정 시드 → `add_to_cart` 1회 | 긍정 시드 → `add_to_cart` → `begin_checkout` → `purchase` → `purchase_reason_select` | 구매·재구매·설문 세 지표의 원천 |
 | S2 | 같은 상품 중복 리뷰를 평균으로 합침 | 중복 리뷰 = 시간 간격을 둔 **재구매**로 방출 (`restock` 이유) | 리뷰 데이터에 이미 있는 재구매 신호를 살린다 |
 | S3 | 한 페르소나 = 시드 세션들 + "지금" 세션 1개 | 마지막 5일 안에 **재방문 2~3회**(둘러보기만, 담기만, 구매) | 실사용자는 한 번에 안 산다. 세션 간 hesitation 이 생긴다 |
-| S4 | 라인 재구매 없음 | 브랜드 재구매 확률 30.6% 로 같은 브랜드 다른 상품 구매 | 실측값 그대로 |
+| S4 | 라인 재구매 없음 | 같은 브랜드 다른 상품 구매 확률 30.6% | 실측 정의: holdout 정답이 시드와 같은 브랜드인 비율(무작위 3.5%). 200개·55브랜드 조건값 — 인용 시 recommendation-design.md 4-1 주의 문구 병기 |
 | S5 | `brand_id` 없음 | 상품의 `brand_name` 을 `brand_id` 로 모든 이벤트에 | §2-2 |
 | S6 | 설문 없음 | 스타일 축 → 이유 확률 + 건너뛰기 30% | §4-3 |
 | S7 | 진열 `storefront_*` 는 프론트만 실음 | 브랜드별 진열 프리셋을 생성기도 실음 | 진열 효과 분석이 합성 로그에서도 되게 |
