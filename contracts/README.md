@@ -64,8 +64,9 @@ python contracts/validate_product_registration.py <상품 JSON 또는 JSONL>
 ```
 
 **등록 입력에만 사용한다.** 기존 카탈로그 `products_200.json`은 Sephora 원천이라
-`highlights`에 성분 태그가 들어 있어 `product-registration-spec.md` §3.1 위반으로
-잡힌다. 두 집합의 규칙이 다르기 때문이며 결함이 아니다.
+`highlights`에 성분 태그가 남아 있어 `product-registration-spec.md` §3.1 위반으로
+잡힌다. 인코더는 그 태그를 쓰지 않으므로 결함이 아니며, 앞으로 무엇을 받을지에 대한
+규칙과 과거 데이터의 차이일 뿐이다.
 
 ### Persona
 
