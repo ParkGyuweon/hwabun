@@ -1133,6 +1133,12 @@
   color: #1a7f4b;
 }
 
+/* 찜은 담기와 같은 자리, 다른 색 — 두 알림이 겹쳐도 어느 쪽인지 바로 갈린다 */
+.summary__toast--wish {
+  background: #fbeaf0;
+  color: #a63d5c;
+}
+
 .similar__link {
   width: 100%;
   padding: 0;

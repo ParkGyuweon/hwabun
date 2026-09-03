@@ -120,10 +120,13 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
     });
   };
 
+  const [wishNotice, setWishNotice] = useState<'add' | 'remove' | null>(null);
+
   const toggleWishlist = () => {
     const next = !loved;
     lovedRef.current = next;
     setLoved(next);
+    setWishNotice(next ? 'add' : 'remove');
     track('wishlist_toggle', {
       product_id: product.product_id,
       action: next ? 'add' : 'remove',
@@ -249,6 +252,11 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
               </button>
             </div>
 
+            {wishNotice !== null ? (
+              <p className="qlook__toast qlook__toast--wish" role="status">
+                {wishNotice === 'add' ? '찜 목록에 담았습니다 ♥' : '찜을 해제했습니다'}
+              </p>
+            ) : null}
             {addedAt !== null ? (
               <p className="qlook__toast" role="status">
                 장바구니에 담았습니다 · 수량 {quantity}

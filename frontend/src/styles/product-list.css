@@ -661,6 +661,10 @@
   color: var(--color-ink-soft);
 }
 
+.qlook__toast--wish {
+  color: #a63d5c;
+}
+
 @media (max-width: 720px) {
   .qlook__dialog {
     grid-template-columns: 1fr;
