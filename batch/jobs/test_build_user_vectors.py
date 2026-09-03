@@ -53,6 +53,12 @@ class BuildUserVectorsTest(unittest.TestCase):
         self.assertGreater(r["positive_w_sum"], 0.0)
 
     def test_remove_from_cart_undoes_conversion(self):
+        """담았다 빼면 전환은 취소된다. 다만 감점 상품이 되지는 않는다.
+
+        담기까지 갔다는 것은 **관여도가 가장 높은 상태**다 (규칙 7 이 원래
+        가장 약한 감점을 주던 자리). 2026-09-03 개정으로 이 자리는 감점이
+        아니라 **약한 긍정**이 됐다.
+        """
         rows, _ = self.run_build([
             ev("PC1", "add_to_cart", self.A, 1),
             ev("PC1", "remove_from_cart", self.A, 2),
@@ -60,6 +66,39 @@ class BuildUserVectorsTest(unittest.TestCase):
         r = rows["PC1"]
         self.assertEqual([], r["converted"])
         self.assertIn(self.A, r["viewed"])            # 뺐어도 본 것은 사실이다
+        self.assertGreater(r["positive_w_sum"], 0.0)
+        self.assertEqual(0.0, r["negative_w_sum"])
+
+    def test_engaged_non_converted_is_weak_positive(self):
+        """오래 붙들고 있었던 미전환 상품은 약한 긍정이다 (규칙 5 개정).
+
+        감점 축이 카탈로그 평균 방향이 되어 정답까지 밀어내던 것을 고친 것이다.
+        valid 1,975명에서 순위 개선/악화가 38.5:54.2 -> 47.5:45.2 로 바뀐다.
+        """
+        from batch.jobs.user_vector import ENGAGED_MIN, ENGAGED_POS_W
+        self.assertEqual(3.0, ENGAGED_MIN)
+        self.assertEqual(0.6, ENGAGED_POS_W)
+
+        rows, _ = self.run_build([
+            ev("PC1", "product_view", self.A, 1),
+            ev("PC1", "section_dwell", self.A, 2,
+               section_id="ingredients", dwell_ms=30000),
+            ev("PC1", "section_dwell", self.A, 3,
+               section_id="reviews", dwell_ms=30000),
+            ev("PC1", "scroll_depth", self.A, 4, depth_percent=100),
+        ])
+        r = rows["PC1"]
+        self.assertEqual([], r["converted"])           # 담지는 않았다
+        self.assertGreater(r["positive_w_sum"], 0.0)   # 그래도 긍정 쪽이다
+        self.assertEqual(0.0, r["negative_w_sum"])
+
+    def test_bounce_is_still_negative(self):
+        """열자마자 나간 상품은 그대로 감점이다. 임계값 아래는 안 바뀐다"""
+        rows, _ = self.run_build([
+            ev("PC1", "product_view", self.A, 1),
+            ev("PC1", "add_to_cart", self.B, 2),       # 긍정 신호 하나는 있어야 한다
+        ])
+        r = rows["PC1"]
         self.assertGreater(r["negative_w_sum"], 0.0)
 
     def test_order_is_restored_from_sequence(self):

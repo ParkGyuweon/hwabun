@@ -1537,13 +1537,17 @@ def main():
 
             # **페르소나 전환은 마지막 화면 이동 뒤여야 한다.** App.tsx 가
             # `useState(personas[0])` 로 들고 있어 페이지를 새로 열면 선택이
-            # PA00001 로 돌아간다 (URL 파라미터도 저장소도 없다). 전환을 앞으로
-            # 옮겼더니 goto 가 되돌려 다른 사람 로그가 통째로 사라졌다.
+            # PA00001 로 돌아간다. 전환을 앞으로 옮겼더니 goto 가 되돌려
+            # 다른 사람 로그가 통째로 사라졌다.
             #
             # 그래서 전환 **전** 화면의 이벤트는 게이트로 버린다. 그게 44%를
-            # PA00001 에 쌓이게 하던 것이다 (2026-09-03 규명). 근본 수정은
-            # 프론트가 `?persona=` 를 읽는 것이고 제안 패치를 넘겼다 —
-            # Research/handoff/frontend-persona-url-param.md
+            # PA00001 에 쌓이게 하던 것이다 (2026-09-03 규명).
+            #
+            # 근본 수정으로 제안했던 `?persona=` 는 프론트가 받아들였다
+            # (dev `10dd3b3`, Research/handoff/frontend-persona-url-param.md).
+            # 러너는 아직 화면을 먼저 열고 고르는 순서라 게이트를 그대로 둔다 —
+            # 게이트는 배치 전송으로 섞여 오는 남의 이벤트도 같이 막는다.
+            # 러너가 `?persona=` 로 바로 들어가게 바꾸는 것은 별건이다.
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
