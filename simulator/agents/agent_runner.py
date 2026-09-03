@@ -1318,7 +1318,10 @@ def main():
         browser = pw.chromium.launch(headless=not a.headed)
         for p in personas:
             ctx = browser.new_context()          # 페르소나마다 새 세션
-            sink.attach(ctx)                     # 백엔드 없이도 로그를 건진다
+            # 게이트가 비어 있는 동안의 이벤트는 버린다. 페르소나를 고른 뒤
+            # 채운다 (LogSink._gate 주석 참고)
+            gate = {"persona_id": None}
+            sink.attach(ctx, gate)               # 백엔드 없이도 로그를 건진다
             page = ctx.new_page()
 
             # 출발 지점은 페르소나마다 다르되 **같은 사람은 늘 같은 곳**에서
@@ -1330,6 +1333,7 @@ def main():
                 deep = a.entry == "detail"
             entry = entry_url(a.url, a.scenario_id, simulation_run_id,
                               product_id=rng.choice(catalog) if deep else None)
+
             page.goto(entry, wait_until="networkidle")
 
             # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
@@ -1340,10 +1344,20 @@ def main():
                 page.goto(LIST_URL, wait_until="networkidle")
                 page.wait_for_timeout(800)
 
+            # **페르소나 전환은 마지막 화면 이동 뒤여야 한다.** App.tsx 가
+            # `useState(personas[0])` 로 들고 있어 페이지를 새로 열면 선택이
+            # PA00001 로 돌아간다 (URL 파라미터도 저장소도 없다). 전환을 앞으로
+            # 옮겼더니 goto 가 되돌려 다른 사람 로그가 통째로 사라졌다.
+            #
+            # 그래서 전환 **전** 화면의 이벤트는 게이트로 버린다. 그게 44%를
+            # PA00001 에 쌓이게 하던 것이다 (2026-09-03 규명). 근본 수정은
+            # 프론트가 `?persona=` 를 읽는 것이고 제안 패치를 넘겼다 —
+            # Research/handoff/frontend-persona-url-param.md
             if not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
                 continue
+            gate["persona_id"] = p["persona_id"]   # 여기부터 이 사람의 로그다
 
             spread_start(page, rng)              # 목록에서 시작하면 자리를 흩는다
 
@@ -1384,7 +1398,10 @@ def main():
     print(f"  actor_type=synthetic  {sink.n}건 "
           f"(러너가 채움 {sink.stamped} · 봉투에 이미 있었음 {sink.already})")
     if sink.dropped:
-        print(f"  페르소나 선택 전 이벤트 {sink.dropped}건은 전송 제외 (파일에는 있음)")
+        print(f"  persona_id 가 없는 이벤트 {sink.dropped}건은 전송 제외 (파일에는 있음)")
+    if sink.pre_switch or sink.foreign:
+        print(f"  페르소나 전환 전 {sink.pre_switch}건 · 다른 사람 몫 {sink.foreign}건 버림"
+              f"  (프론트 기본 페르소나로 찍히던 것. 파일에도 남기지 않는다)")
     if a.post:
         print(f"  수집 API 전송  성공 {sink.sent}건 / 실패 {sink.send_failed}건")
         if sink.send_failed:
@@ -1436,6 +1453,10 @@ class LogSink:
         self.sent = 0
         self.send_failed = 0
         self.dropped = 0
+        # 페르소나를 고르기 전 화면의 이벤트는 프론트 기본 페르소나(PA00001)로
+        # 찍힌다. 세어 두고 버린다 — 아래 _handle 주석에 이유를 적었다
+        self.pre_switch = 0
+        self.foreign = 0
         self.client = None          # 첫 전송 때 만든다 (백프레셔 상태를 들고 있다)
         self.schema_version = None
         self.queue = None
@@ -1447,8 +1468,15 @@ class LogSink:
             self.worker = threading.Thread(target=self._drain, daemon=True)
             self.worker.start()
 
-    def attach(self, ctx):
-        ctx.route("**/api/events", self._handle)
+    def attach(self, ctx, gate=None):
+        """이 컨텍스트의 로그를 가로챈다.
+
+        `gate` 는 `{"persona_id": None}` 인 dict 다. 러너가 페르소나를 고른 뒤
+        거기에 이름을 채우고, 그 전에 들어온 이벤트는 버린다. 게이트를 주지
+        않으면 예전처럼 전부 받는다 (리허설·스크립트 실행용).
+        """
+        ctx.route("**/api/events", lambda route, request:
+                  self._handle(route, request, gate))
 
     def _stamp(self, ev):
         """봉투에 synthetic 표시를 채운다. 이미 붙어 있으면 건드리지 않는다"""
@@ -1469,11 +1497,35 @@ class LogSink:
         props.setdefault("generator_type", GENERATOR_TYPE)
         return ev
 
-    def _handle(self, route, request):
+    def _gate(self, events, gate):
+        """이 페르소나의 행동이 아닌 이벤트를 걸러낸다.
+
+        러너는 화면을 먼저 열고 페르소나를 골랐다. 그 사이에 렌더된 화면의
+        이벤트를 프론트는 **기본 페르소나(PA00001)** 로 남긴다. 세션이 섞이지는
+        않지만 앞 세션 통째로가 PA00001 몫이 되어, 2026-09-02 100명 실행에서
+        **전체 이벤트의 44%(21,767건)가 한 사람에게 쌓였다.** 사람 단위 지표가
+        전부 틀어지고, `persona_id` 가 채워져 있어 전송 필터도 통과한다.
+
+        진입 순서를 고쳐(페르소나 먼저) 원인을 없앴지만, 프론트가 배치를
+        모아 보내기 때문에 전환 직후 배치에 전환 전 이벤트가 섞여 올 수 있다.
+        그래서 여기서 **이벤트 단위로** 한 번 더 본다.
+        """
+        if gate is None:
+            return events
+        pid = gate.get("persona_id")
+        if pid is None:
+            self.pre_switch += len(events)
+            return []
+        keep = [ev for ev in events if ev.get("persona_id") in (pid, None)]
+        self.foreign += len(events) - len(keep)
+        return keep
+
+    def _handle(self, route, request, gate=None):
         try:
             payload = json.loads(request.post_data or "{}")
             self.schema_version = payload.get("schema_version") or self.schema_version
             events = [self._stamp(ev) for ev in payload.get("events", [])]
+            events = self._gate(events, gate)
             for ev in events:
                 self.f.write(json.dumps(ev, ensure_ascii=False) + NL)
                 self.n += 1
