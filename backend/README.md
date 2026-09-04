@@ -2,7 +2,7 @@
 
 프론트엔드의 활동 로그를 배치로 받아 검증하고 Kafka로 비동기 발행하는 Spring Boot 애플리케이션입니다.
 
-프론트엔드의 `LogEnvelope` 공통 필드를 검증하고, 이벤트별 `properties`는 자유로운 JSON 객체로 받습니다.
+프론트엔드의 `LogEnvelope` 공통 필드를 검증하고, 구매 계열 이벤트의 `properties`만 동기 검증합니다. 전체 수집 정책은 [BACKEND_INGESTION_POLICY.md](./BACKEND_INGESTION_POLICY.md)에 고정합니다.
 
 ## IntelliJ에서 실행
 
@@ -85,13 +85,20 @@ Invoke-RestMethod `
   -Body $body
 ```
 
-성공하면 Kafka가 모든 이벤트를 확인한 후 `202 Accepted`와 다음 형태의 응답을 반환합니다.
+정상 이벤트의 Kafka ACK를 모두 확인한 뒤 `202 Accepted`를 반환합니다. 배치 안의 영구 검증 오류는 정상 이벤트를 막지 않으며, `rejections`에 표시된 이벤트는 프론트가 재전송하지 않습니다.
 
 ```json
 {
   "request_id": "생성된 UUID",
   "accepted": 1,
-  "rejected": 0
+  "rejected": 1,
+  "rejections": [
+    {
+      "event_index": 1,
+      "event_id": "evt-invalid",
+      "code": "invalid_property_enum"
+    }
+  ]
 }
 ```
 
@@ -100,8 +107,11 @@ Invoke-RestMethod `
 ```text
 GET http://localhost:8080/actuator/health
 GET http://localhost:8080/actuator/metrics/collector.events.received
-GET http://localhost:8080/actuator/metrics/collector.events.published
-GET http://localhost:8080/actuator/metrics/collector.events.publish.failures
+GET http://localhost:8080/actuator/metrics/collector.events.accepted
+GET http://localhost:8080/actuator/metrics/collector.events.rejected
+GET http://localhost:8080/actuator/metrics/collector.events.validation.rejected
+GET http://localhost:8080/actuator/metrics/collector.kafka.publish.failures
+GET http://localhost:8080/actuator/metrics/collector.kafka.publish.overloaded
 ```
 
 ## 테스트
@@ -129,9 +139,7 @@ OpenApiConfigTest         Swagger 기본 정보
 ## 아직 확정하지 않은 부분
 
 - 최종 Event Taxonomy
-- 이벤트별 `properties` 검증 규칙
 - Persona와 Session 생성 정책
-- DLQ 정책
 - 운영 Kafka의 Partition/Replication 설정
 
-이벤트별 `properties`와 중복 제거 정책이 확정되면 세부 검증 및 적재 규칙을 보완합니다.
+이벤트별 `properties`의 Collector 검증 확대가 필요하면 먼저 `BACKEND_INGESTION_POLICY.md`를 갱신합니다.

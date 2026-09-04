@@ -180,7 +180,7 @@ class EventValidationTest {
     }
 
     @Test
-    void defersPurchasePropertySemanticsToTheDownstreamValidator() throws Exception {
+    void rejectsInvalidPurchasePropertySemantics() throws Exception {
         ActivityEvent invalidPurchase = new ActivityEvent(
                 "0.2.0-draft", "evt-purchase", "purchase", "conversion",
                 Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
@@ -196,12 +196,16 @@ class EventValidationTest {
                         """)
         );
 
-        assertThat(validator.validate(invalidPurchase)).isEmpty();
-        assertThat(validator.validate(invalidReasons)).isEmpty();
+        assertThat(validator.validate(invalidPurchase))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
+        assertThat(validator.validate(invalidReasons))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
     }
 
     @Test
-    void permitsTheFourNewlyActivatedEventContractsWithoutCollectorPropertySemantics() {
+    void permitsNewlyActivatedEventsWhenPurchasePropertiesMeetTheCollectorPolicy() {
         List<ActivityEvent> events = List.of(
                 event("navigation_click", "session"),
                 event("begin_checkout", "conversion"),
@@ -217,10 +221,23 @@ class EventValidationTest {
     }
 
     private ActivityEvent event(String eventName, String intent) {
+        var properties = objectMapper.createObjectNode();
+        if ("begin_checkout".equals(eventName) || "purchase".equals(eventName)) {
+            var item = properties.putArray("items").addObject();
+            item.put("product_id", "product-001");
+            item.put("quantity", 1);
+            item.put("unit_price", 10);
+        }
+        if ("purchase".equals(eventName) || "purchase_reason_select".equals(eventName)) {
+            properties.put("order_id", "order-001");
+        }
+        if ("purchase_reason_select".equals(eventName)) {
+            properties.putArray("reasons").add("ingredient");
+        }
         return new ActivityEvent(
                 "0.2.0-draft", "evt-" + eventName, eventName, intent,
                 Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
-                "cart", null, "user", "local", objectMapper.createObjectNode()
+                "cart", null, "user", "local", properties
         );
     }
 

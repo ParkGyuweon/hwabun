@@ -4,7 +4,7 @@ import com.cosmetic.collector.event.api.ActivityEvent;
 
 import java.util.List;
 
-/** Kafka 정상 topic에는 넣지 않지만 원인 분석을 위해 보존할 이벤트다. */
+/** Kafka 정상 topic에서 제외하고 HTTP 응답 요약에 사용하는 이벤트다. */
 public record RejectedEvent(
         ActivityEvent event,
         int eventIndex,

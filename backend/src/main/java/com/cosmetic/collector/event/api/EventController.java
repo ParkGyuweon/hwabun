@@ -3,7 +3,7 @@ package com.cosmetic.collector.event.api;
 import com.cosmetic.collector.common.ErrorResponse;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
-import com.cosmetic.collector.event.application.RejectedEventPublisher;
+import com.cosmetic.collector.event.application.RejectedEvent;
 import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
 import com.cosmetic.collector.event.api.validation.InvalidEventBatchException;
 import com.cosmetic.collector.event.api.validation.EventBatchTooLargeException;
@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -33,19 +34,18 @@ import java.util.concurrent.CompletableFuture;
 public class EventController {
 
     private final EventPublisher eventPublisher;
-    private final RejectedEventPublisher rejectedEventPublisher;
     private final CollectorMetrics metrics;
     private final EventBatchSemanticValidator semanticValidator;
 
     @PostMapping
     @Operation(
             summary = "활동 로그 배치 수집",
-            description = "최대 100개의 활동 이벤트를 검증하고 Kafka에 비동기로 발행합니다. 모든 Kafka ACK를 확인한 후 202를 반환합니다."
+            description = "최대 100개의 활동 이벤트를 검증합니다. 영구 계약 위반 이벤트는 제외하고, 정상 이벤트의 Kafka ACK를 모두 확인한 후 202를 반환합니다."
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "202",
-                    description = "모든 이벤트를 Kafka에 발행함",
+                    description = "정상 이벤트를 Kafka에 발행함. 계약 위반 이벤트는 rejections에 표시됨",
                     content = @Content(schema = @Schema(implementation = EventAcceptedResponse.class))
             ),
             @ApiResponse(
@@ -76,50 +76,50 @@ public class EventController {
         int receivedCount = request.events() == null ? 0 : request.events().size();
         metrics.recordReceived(receivedCount);
         if (request.events() != null && request.events().size() > 100) {
-            metrics.recordValidationFailure("event_batch_too_large");
+            metrics.recordValidationRejected("event_batch_too_large");
             throw new EventBatchTooLargeException();
         }
 
         EventBatchSemanticValidator.ValidationResult validation = semanticValidator.validate(request);
         if (validation.invalidBatch()) {
-            metrics.recordValidationFailure("invalid_event_batch");
+            metrics.recordValidationRejected("invalid_event_batch");
             throw new InvalidEventBatchException();
         }
         if (validation.rejectedCount() > 0) {
-            metrics.recordValidationFailure("invalid_event_contract", validation.rejectedCount());
-            publishRejectedEvents(requestId, validation.rejectedEvents());
+            metrics.recordEventRejected(validation.rejectedCount());
+            validation.rejectedEvents().forEach(rejectedEvent -> {
+                String code = rejectedEvent.violations().getFirst().code();
+                metrics.recordValidationRejected(code);
+                log.info("이벤트를 계약 위반으로 제외했습니다. requestId={}, eventIndex={}, eventId={}, code={}",
+                        requestId, rejectedEvent.eventIndex(), rejectedEvent.event().eventId(), code);
+            });
         }
         if (validation.acceptedEvents().isEmpty()) {
-            return CompletableFuture.supplyAsync(
-                    () -> accepted(requestId, new PublishSummary(0), validation.rejectedCount())
+            return CompletableFuture.completedFuture(
+                    accepted(requestId, new PublishSummary(0), validation.rejectedEvents())
             );
         }
 
         return eventPublisher.publish(requestId, validation.acceptedEvents())
-                .thenApply(summary -> accepted(requestId, summary, validation.rejectedCount()));
+                .thenApply(summary -> accepted(requestId, summary, validation.rejectedEvents()));
     }
 
-    private void publishRejectedEvents(String requestId, java.util.List<com.cosmetic.collector.event.application.RejectedEvent> rejectedEvents) {
-        try {
-            rejectedEventPublisher.publish(requestId, rejectedEvents)
-                    .exceptionally(exception -> {
-                        metrics.recordValidationFailure("rejected_event_publish_failure", rejectedEvents.size());
-                        log.error("거부 이벤트 보존에 실패했습니다. requestId={}, rejectedCount={}",
-                                requestId, rejectedEvents.size(), exception);
-                        return null;
-                    });
-        } catch (RuntimeException exception) {
-            metrics.recordValidationFailure("rejected_event_publish_failure", rejectedEvents.size());
-            log.error("거부 이벤트 보존을 시작하지 못했습니다. requestId={}, rejectedCount={}",
-                    requestId, rejectedEvents.size(), exception);
-        }
-    }
-
-    private ResponseEntity<EventAcceptedResponse> accepted(String requestId, PublishSummary summary, int rejectedCount) {
+    private ResponseEntity<EventAcceptedResponse> accepted(
+            String requestId,
+            PublishSummary summary,
+            List<RejectedEvent> rejectedEvents
+    ) {
         EventAcceptedResponse body = new EventAcceptedResponse(
                 requestId,
                 summary.publishedCount(),
-                rejectedCount
+                rejectedEvents.size(),
+                rejectedEvents.stream()
+                        .map(rejectedEvent -> new EventRejectionResponse(
+                                rejectedEvent.eventIndex(),
+                                rejectedEvent.event().eventId(),
+                                rejectedEvent.violations().getFirst().code()
+                        ))
+                        .toList()
         );
 
         return ResponseEntity.accepted()

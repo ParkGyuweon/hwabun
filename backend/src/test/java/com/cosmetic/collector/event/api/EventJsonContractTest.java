@@ -53,12 +53,16 @@ class EventJsonContractTest {
 
     @Test
     void serializesTheResponseUsingSnakeCaseNames() throws Exception {
-        EventAcceptedResponse response = new EventAcceptedResponse("request-001", 50, 0);
+        EventAcceptedResponse response = new EventAcceptedResponse(
+                "request-001", 49, 1,
+                java.util.List.of(new EventRejectionResponse(3, "evt-004", "invalid_property_enum"))
+        );
 
         String json = objectMapper.writeValueAsString(response);
 
         assertThat(json)
                 .contains("\"request_id\":\"request-001\"")
+                .contains("\"event_index\":3")
                 .doesNotContain("requestId");
     }
 }

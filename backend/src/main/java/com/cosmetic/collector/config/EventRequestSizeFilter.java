@@ -96,7 +96,7 @@ public class EventRequestSizeFilter extends OncePerRequestFilter {
     }
 
     private void writePayloadTooLarge(HttpServletResponse response) throws IOException {
-        metrics.recordValidationFailure("event_request_too_large");
+        metrics.recordValidationRejected("event_request_too_large");
         response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), new ErrorResponse(

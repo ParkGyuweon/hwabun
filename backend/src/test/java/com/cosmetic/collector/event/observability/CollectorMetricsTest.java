@@ -10,25 +10,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CollectorMetricsTest {
 
     @Test
-    void countsReceivedPublishedAndFailedEventsSeparately() {
+    void separatesAcceptedRejectedValidationAndKafkaMetrics() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         CollectorMetrics metrics = new CollectorMetrics(registry);
 
         metrics.recordReceived(50);
-        metrics.recordPublished(45);
-        metrics.recordPublishFailure(5);
-        metrics.recordPublishRejected(2);
-        metrics.recordValidationFailure("invalid_event_batch");
+        metrics.recordAccepted(45);
+        metrics.recordEventRejected(3);
+        metrics.recordKafkaPublishFailure(5);
+        metrics.recordKafkaPublishOverloaded(2);
+        metrics.recordValidationRejected("invalid_event_batch");
         metrics.recordPublishQueueWait(Duration.ofMillis(25));
 
         assertThat(counter(registry, "collector.events.received")).isEqualTo(50);
-        assertThat(counter(registry, "collector.events.published")).isEqualTo(45);
-        assertThat(counter(registry, "collector.events.publish.failures")).isEqualTo(5);
-        assertThat(counter(registry, "collector.events.publish.rejected")).isEqualTo(2);
-        assertThat(registry.get("collector.events.validation.failures")
-                .tag("reason", "invalid_event_batch").counter().count()).isEqualTo(1);
-        assertThat(registry.get("collector.events.publish.queue.wait").timer().count()).isEqualTo(1);
-        assertThat(registry.get("collector.events.publish.queue.wait").timer()
+        assertThat(counter(registry, "collector.events.accepted")).isEqualTo(45);
+        assertThat(counter(registry, "collector.events.rejected")).isEqualTo(3);
+        assertThat(counter(registry, "collector.kafka.publish.failures")).isEqualTo(5);
+        assertThat(counter(registry, "collector.kafka.publish.overloaded")).isEqualTo(2);
+        assertThat(registry.get("collector.events.validation.rejected")
+                .tag("code", "invalid_event_batch").counter().count()).isEqualTo(1);
+        assertThat(registry.get("collector.kafka.publish.queue.wait").timer().count()).isEqualTo(1);
+        assertThat(registry.get("collector.kafka.publish.queue.wait").timer()
                 .totalTime(TimeUnit.MILLISECONDS)).isEqualTo(25);
     }
 
@@ -44,14 +46,19 @@ class CollectorMetricsTest {
     }
 
     @Test
-    void countsEachRejectedEventInsteadOfOnlyTheContainingBatch() {
+    void recordsValidationCodesIndependentlyFromRejectedEventCounts() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         CollectorMetrics metrics = new CollectorMetrics(registry);
 
-        metrics.recordValidationFailure("invalid_event_contract", 3);
+        metrics.recordEventRejected(3);
+        metrics.recordValidationRejected("missing_required_property");
+        metrics.recordValidationRejected("invalid_property_enum");
 
-        assertThat(registry.get("collector.events.validation.failures")
-                .tag("reason", "invalid_event_contract").counter().count()).isEqualTo(3);
+        assertThat(counter(registry, "collector.events.rejected")).isEqualTo(3);
+        assertThat(registry.get("collector.events.validation.rejected")
+                .tag("code", "missing_required_property").counter().count()).isEqualTo(1);
+        assertThat(registry.get("collector.events.validation.rejected")
+                .tag("code", "invalid_property_enum").counter().count()).isEqualTo(1);
     }
 
     private double counter(SimpleMeterRegistry registry, String name) {

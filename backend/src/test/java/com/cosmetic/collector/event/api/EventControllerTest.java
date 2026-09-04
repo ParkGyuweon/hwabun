@@ -5,7 +5,6 @@ import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
-import com.cosmetic.collector.event.application.RejectedEventPublisher;
 import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,23 +36,19 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 class EventControllerTest {
 
     private EventPublisher publisher;
-    private RejectedEventPublisher rejectedEventPublisher;
     private CollectorMetrics metrics;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         publisher = mock(EventPublisher.class);
-        rejectedEventPublisher = mock(RejectedEventPublisher.class);
         metrics = mock(CollectorMetrics.class);
-        when(rejectedEventPublisher.publish(anyString(), anyList()))
-                .thenReturn(CompletableFuture.completedFuture(null));
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
         mockMvc = standaloneSetup(new EventController(
-                        publisher, rejectedEventPublisher, metrics, new EventBatchSemanticValidator(validator)))
+                        publisher, metrics, new EventBatchSemanticValidator(validator)))
                 .setControllerAdvice(new GlobalExceptionHandler(metrics))
                 .setValidator(validator)
                 .build();
@@ -142,9 +137,9 @@ class EventControllerTest {
     }
 
     @Test
-    void defersInvalidPurchaseReasonsToTheDownstreamValidator() throws Exception {
+    void rejectsInvalidPurchaseReasonsWithoutRepublishingTheInvalidEvent() throws Exception {
         when(publisher.publish(anyString(), anyList()))
-                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(2)));
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -176,10 +171,15 @@ class EventControllerTest {
 
         mockMvc.perform(asyncDispatch(asyncResult))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.accepted").value(2))
-                .andExpect(jsonPath("$.rejected").value(0));
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_id").value("evt-invalid"))
+                .andExpect(jsonPath("$.rejections[0].code").value("invalid_property_enum"));
 
         verify(publisher).publish(anyString(), anyList());
+        verify(metrics).recordEventRejected(1);
+        verify(metrics).recordValidationRejected("invalid_property_enum");
     }
 
     @Test
@@ -195,7 +195,7 @@ class EventControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
 
-        verify(metrics).recordValidationFailure("invalid_event_batch");
+        verify(metrics).recordValidationRejected("invalid_event_batch");
     }
 
     @Test
@@ -223,7 +223,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.code").value("EVENT_BATCH_TOO_LARGE"));
 
         verifyNoInteractions(publisher);
-        verify(metrics).recordValidationFailure("event_batch_too_large");
+        verify(metrics).recordValidationRejected("event_batch_too_large");
     }
 
     @Test
@@ -248,9 +248,10 @@ class EventControllerTest {
         mockMvc.perform(asyncDispatch(asyncResult))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.accepted").value(0))
-                .andExpect(jsonPath("$.rejected").value(1));
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(0));
 
-        verify(metrics).recordValidationFailure("invalid_event_contract", 1);
+        verify(metrics).recordEventRejected(1);
     }
 
     @Test
@@ -317,7 +318,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.code").value("MALFORMED_JSON"));
 
         verifyNoInteractions(publisher);
-        verify(metrics).recordValidationFailure("malformed_json");
+        verify(metrics).recordValidationRejected("malformed_json");
     }
 
     private String validEventBatch() {

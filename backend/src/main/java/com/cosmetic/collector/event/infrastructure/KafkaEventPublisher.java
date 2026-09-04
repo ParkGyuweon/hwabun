@@ -97,7 +97,7 @@ public class KafkaEventPublisher implements EventPublisher {
     @Override
     public CompletableFuture<PublishSummary> publish(String requestId, List<IndexedActivityEvent> events) {
         if (!inFlightBatches.tryAcquire()) {
-            metrics.recordPublishRejected(events.size());
+            metrics.recordKafkaPublishOverloaded(events.size());
             log.warn(
                     "Kafka 이벤트 배치 발행 작업이 포화되었습니다. topic={}, requestId={}, batchSize={}",
                     topic,
@@ -124,7 +124,7 @@ public class KafkaEventPublisher implements EventPublisher {
                     kafkaPublisherExecutor
             );
         } catch (RejectedExecutionException exception) {
-            metrics.recordPublishRejected(events.size());
+            metrics.recordKafkaPublishOverloaded(events.size());
             dispatch = CompletableFuture.failedFuture(new EventPublishOverloadedException(
                     "Kafka 발행 작업 대기열이 가득 찼습니다.",
                     exception
@@ -134,7 +134,7 @@ public class KafkaEventPublisher implements EventPublisher {
         CompletableFuture<PublishSummary> result = dispatch
                 .thenCompose(sends -> CompletableFuture.allOf(sends))
                 .thenApply(ignored -> {
-                    metrics.recordPublished(events.size());
+                    metrics.recordAccepted(events.size());
                     return new PublishSummary(events.size());
                 })
                 .exceptionally(cause -> {
@@ -148,7 +148,7 @@ public class KafkaEventPublisher implements EventPublisher {
                         );
                         throw new CompletionException(failure);
                     }
-                    metrics.recordPublishFailure(events.size());
+                    metrics.recordKafkaPublishFailure(events.size());
                     log.error(
                             "Kafka 이벤트 배치 발행에 실패했습니다. topic={}, requestId={}, batchSize={}",
                             topic,

@@ -23,7 +23,6 @@ spring:
 collector:
   kafka:
     topic: ${ACTIVITY_EVENTS_TOPIC:activity-events}
-    rejected-topic: ${ACTIVITY_EVENTS_REJECTED_TOPIC:activity-events-rejected}
     partitions: ${ACTIVITY_EVENTS_PARTITIONS:3}
     replication-factor: ${KAFKA_TOPIC_REPLICATION_FACTOR:1}
     retention-ms: ${KAFKA_TOPIC_RETENTION_MS:86400000}
