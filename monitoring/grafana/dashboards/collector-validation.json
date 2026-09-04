@@ -27,12 +27,12 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(collector_events_validation_failures_total{application=\"log-connector\"}[5m]))",
+          "expr": "sum(increase(collector_events_validation_rejected_total{application=\"log-connector\"}[5m]))",
           "legendFormat": "last 5m",
           "refId": "A"
         }
       ],
-      "title": "Validation failures (5m)",
+      "title": "Validation rejections (5m)",
       "type": "stat"
     },
     {
@@ -49,12 +49,12 @@
       },
       "targets": [
         {
-          "expr": "sum by (reason) (rate(collector_events_validation_failures_total{application=\"log-connector\"}[1m]))",
-          "legendFormat": "{{reason}}",
+          "expr": "sum by (code) (rate(collector_events_validation_rejected_total{application=\"log-connector\"}[1m]))",
+          "legendFormat": "{{code}}",
           "refId": "A"
         }
       ],
-      "title": "Validation failures by reason",
+      "title": "Validation rejections by code",
       "type": "timeseries"
     }
   ],
