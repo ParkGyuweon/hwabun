@@ -25,6 +25,11 @@ Collector는 **정상 이벤트의 Kafka 발행**과 **요청·이벤트 검증*
 그리고 안정적인 오류 `code`를 제공한다. 프론트는 `202`의 rejected 이벤트를 재전송하지
 않는다.
 
+하나의 이벤트에 오류가 여러 개면 아래 우선순위가 가장 높은 `code`를 `rejections`와
+`collector.events.validation.rejected`에 사용한다: `null_event`, `schema_version_mismatch`,
+`unregistered_event`, `event_intent_mismatch`, `missing_required_property`,
+`invalid_property_type`, `invalid_property_enum`, `collector_validation_failure`.
+
 Kafka 발행은 at-least-once다. `429` 또는 `503` 이후 전체 배치를 재시도할 수 있으므로,
 소비 단계는 `event_id` 기반 중복 제거를 유지해야 한다.
 

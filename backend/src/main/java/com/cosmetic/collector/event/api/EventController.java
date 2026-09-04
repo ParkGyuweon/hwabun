@@ -91,7 +91,7 @@ public class EventController {
                 String code = rejectedEvent.violations().getFirst().code();
                 metrics.recordValidationRejected(code);
                 log.info("이벤트를 계약 위반으로 제외했습니다. requestId={}, eventIndex={}, eventId={}, code={}",
-                        requestId, rejectedEvent.eventIndex(), rejectedEvent.event().eventId(), code);
+                        requestId, rejectedEvent.eventIndex(), eventIdOf(rejectedEvent), code);
             });
         }
         if (validation.acceptedEvents().isEmpty()) {
@@ -116,7 +116,7 @@ public class EventController {
                 rejectedEvents.stream()
                         .map(rejectedEvent -> new EventRejectionResponse(
                                 rejectedEvent.eventIndex(),
-                                rejectedEvent.event().eventId(),
+                                eventIdOf(rejectedEvent),
                                 rejectedEvent.violations().getFirst().code()
                         ))
                         .toList()
@@ -125,5 +125,9 @@ public class EventController {
         return ResponseEntity.accepted()
                 .header("X-Request-Id", requestId)
                 .body(body);
+    }
+
+    private String eventIdOf(RejectedEvent rejectedEvent) {
+        return rejectedEvent.event() == null ? null : rejectedEvent.event().eventId();
     }
 }

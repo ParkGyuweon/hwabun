@@ -74,7 +74,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
         }
 
         boolean valid = validateEnvelope(event, context);
-        if (PURCHASE_EVENTS.contains(event.eventName())) {
+        if (event.eventName() != null && PURCHASE_EVENTS.contains(event.eventName())) {
             valid &= validatePurchaseProperties(event, properties, context);
         }
         return valid;
@@ -82,13 +82,19 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
 
     private boolean validateEnvelope(ActivityEvent event, ConstraintValidatorContext context) {
         boolean valid = true;
-        String expectedIntent = INTENTS.get(event.eventName());
-        if (expectedIntent == null) {
-            add(context, "unregistered_event", "eventName", "등록되지 않은 event_name입니다.");
+        String eventName = event.eventName();
+        if (blank(eventName)) {
+            add(context, "missing_required_property", "eventName", "event_name이 필요합니다.");
             valid = false;
-        } else if (!expectedIntent.equals(event.intent())) {
-            add(context, "event_intent_mismatch", "intent", "event_name과 intent 조합이 올바르지 않습니다.");
-            valid = false;
+        } else {
+            String expectedIntent = INTENTS.get(eventName);
+            if (expectedIntent == null) {
+                add(context, "unregistered_event", "eventName", "등록되지 않은 event_name입니다.");
+                valid = false;
+            } else if (!expectedIntent.equals(event.intent())) {
+                add(context, "event_intent_mismatch", "intent", "event_name과 intent 조합이 올바르지 않습니다.");
+                valid = false;
+            }
         }
         if ("0.3.0-draft".equals(event.schemaVersion()) && blank(event.tenantId())) {
             add(context, "missing_required_property", "tenantId", "0.3.0-draft에는 tenant_id가 필요합니다.");

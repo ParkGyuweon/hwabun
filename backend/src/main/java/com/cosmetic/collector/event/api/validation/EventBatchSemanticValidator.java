@@ -10,12 +10,31 @@ import jakarta.validation.Validator;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** 요청 envelope 오류와 이벤트별 폐기 대상을 분리한다. */
 @Component
 public class EventBatchSemanticValidator {
+
+    private static final Map<String, Integer> REJECTION_CODE_PRIORITIES = Map.ofEntries(
+            Map.entry("null_event", 1),
+            Map.entry("schema_version_mismatch", 2),
+            Map.entry("unregistered_event", 3),
+            Map.entry("event_intent_mismatch", 4),
+            Map.entry("missing_required_property", 5),
+            Map.entry("invalid_property_type", 6),
+            Map.entry("invalid_property_enum", 7),
+            Map.entry("collector_validation_failure", 8)
+    );
+    private static final Comparator<ValidationViolation> REJECTION_PRIORITY = Comparator
+            .comparingInt((ValidationViolation violation) -> REJECTION_CODE_PRIORITIES
+                    .getOrDefault(violation.code(), Integer.MAX_VALUE))
+            .thenComparing(ValidationViolation::code)
+            .thenComparing(ValidationViolation::field)
+            .thenComparing(ValidationViolation::message);
 
     private final Validator validator;
 
@@ -57,6 +76,7 @@ public class EventBatchSemanticValidator {
         Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(event);
         return violations.stream()
                 .map(violation -> toValidationViolation(violation))
+                .sorted(REJECTION_PRIORITY)
                 .toList();
     }
 
