@@ -42,7 +42,11 @@ ING_SYNONYMS = {
     # 잡히게 동의어를 준다 (2026-09-03). 등록 폼은 성분 태그를 받지 않으므로,
     # 이게 없으면 등록된 선크림은 SPF 축이 영구히 0 이 된다
     "SPF": ["spf", "titanium dioxide", "zinc oxide", "octocrylene", "avobenzone",
-            "homosalate", "octisalate"],
+            "homosalate", "octisalate",
+            # 국내 선크림은 한글 전성분표에 이 이름으로 적힌다
+            "자외선차단", "티타늄디옥사이드", "티타늄옥사이드", "징크옥사이드",
+            "산화아연", "옥토크릴렌", "아보벤존", "호모살레이트", "옥티살레이트",
+            "에칠헥실메톡시신나메이트", "비스에칠헥실옥시페놀메톡시페닐트리아진"],
     "Silicone": ["dimethicone", "cyclopentasiloxane"],
     "Squalane": ["squalane", "squalene"],
     "Probiotic / Ferment": ["ferment filtrate", "lactobacillus", "bifida"],
@@ -226,7 +230,7 @@ for name, _, _, vocab in BLOCKS:
 
 spec = {
     "version": "0.5",
-    "generated_from": "artifacts/products_200.json",
+    "generated_from": "batch/ingest/data/products_200.json",
     "n_products": N,
     "min_tag_freq": MIN_FREQ,
     "idf_formula": "log(N / (1 + df))  -- 블록 내 L2 정규화 후 적용",
@@ -262,7 +266,7 @@ spec = {
     "attribute_affinity": {
         "_note": "콘텐츠 벡터가 아니라 추천 점수의 속성 항(attr_affinity)에서 소비된다. "
                  "사용자 속성으로 조회하는 테이블이므로 사용자별 가중치 분기가 가능하다.",
-        "table": "artifacts/affinity_lift.csv",
+        "table": "batch/ingest/data/affinity_lift.csv",
         "attributes": ["skin_type", "skin_tone", "hair_color", "eye_color"],
         "source": "리뷰의 사용자 속성 구성비 (highlights 태그 아님)",
         "formula": "clip((share_in_product / share_overall - LO) / (HI - LO), 0, 1)",
