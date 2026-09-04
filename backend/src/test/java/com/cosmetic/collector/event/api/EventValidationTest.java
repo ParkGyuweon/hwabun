@@ -167,7 +167,7 @@ class EventValidationTest {
     }
 
     @Test
-    void requiresSyntheticRuntimeMetadata() {
+    void defersSyntheticRuntimeMetadataToTheDownstreamValidator() {
         ActivityEvent invalidEvent = new ActivityEvent(
                 "0.2.0-draft", "evt-001", "product_click", "comparison",
                 Instant.parse("2026-08-27T14:30:00Z"), "persona-001", "session-001", "page-view-001", 1,
@@ -176,13 +176,11 @@ class EventValidationTest {
 
         Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(invalidEvent);
 
-        assertThat(violations)
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("properties");
+        assertThat(violations).isEmpty();
     }
 
     @Test
-    void validatesPurchaseEventItemsAndPurchaseReasonEnums() throws Exception {
+    void defersPurchasePropertySemanticsToTheDownstreamValidator() throws Exception {
         ActivityEvent invalidPurchase = new ActivityEvent(
                 "0.2.0-draft", "evt-purchase", "purchase", "conversion",
                 Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
@@ -198,8 +196,32 @@ class EventValidationTest {
                         """)
         );
 
-        assertThat(validator.validate(invalidPurchase)).isNotEmpty();
-        assertThat(validator.validate(invalidReasons)).isNotEmpty();
+        assertThat(validator.validate(invalidPurchase)).isEmpty();
+        assertThat(validator.validate(invalidReasons)).isEmpty();
+    }
+
+    @Test
+    void permitsTheFourNewlyActivatedEventContractsWithoutCollectorPropertySemantics() {
+        List<ActivityEvent> events = List.of(
+                event("navigation_click", "session"),
+                event("begin_checkout", "conversion"),
+                event("purchase", "conversion"),
+                event("purchase_reason_select", "validation")
+        );
+
+        for (ActivityEvent event : events) {
+            assertThat(validator.validate(event))
+                    .as("%s should be accepted by the Collector allow-list", event.eventName())
+                    .isEmpty();
+        }
+    }
+
+    private ActivityEvent event(String eventName, String intent) {
+        return new ActivityEvent(
+                "0.2.0-draft", "evt-" + eventName, eventName, intent,
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "cart", null, "user", "local", objectMapper.createObjectNode()
+        );
     }
 
     private ActivityEvent validEvent() {

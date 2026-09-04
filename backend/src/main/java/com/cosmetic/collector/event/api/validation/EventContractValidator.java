@@ -28,6 +28,15 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
         if (expected == null) { add(c,"unregistered_event","eventName","등록되지 않은 event_name입니다."); ok=false; }
         else if (!expected.equals(e.intent())) { add(c,"event_intent_mismatch","intent","event_name과 intent 조합이 올바르지 않습니다."); ok=false; }
         if ("0.3.0-draft".equals(e.schemaVersion()) && blank(e.tenantId())) { add(c,"missing_required_property","tenantId","0.3.0-draft에는 tenant_id가 필요합니다."); ok=false; }
+        // properties의 required/type/enum과 product_id 분석 규칙은 Spark/coverage_report가 담당한다.
+        // 아래 계약 구현은 재도입 시 validatePropertyContract()만 호출하면 되도록 보존한다.
+        return ok;
+    }
+
+    /** Collector가 properties semantic validation을 맡기로 결정되면 isValid()에서 opt-in 한다. */
+    @SuppressWarnings("unused")
+    private boolean validatePropertyContract(ActivityEvent e, ConstraintValidatorContext c, JsonNode p) {
+        boolean ok = true;
         if (PRODUCT_EVENTS.contains(e.eventName()) && blank(e.productId())) { add(c,"missing_required_property","productId","상품 대상 이벤트에는 product_id가 필요합니다."); ok=false; }
         Rule r = RULES.get(e.eventName()); if (r == null) return false;
         for (Map.Entry<String,T> x:r.required.entrySet()) ok &= require(c,p,x.getKey(),x.getValue());

@@ -142,9 +142,9 @@ class EventControllerTest {
     }
 
     @Test
-    void discardsOnlyInvalidEventsAndPublishesTheRest() throws Exception {
+    void defersInvalidPurchaseReasonsToTheDownstreamValidator() throws Exception {
         when(publisher.publish(anyString(), anyList()))
-                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(2)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -176,14 +176,9 @@ class EventControllerTest {
 
         mockMvc.perform(asyncDispatch(asyncResult))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.accepted").value(1))
-                .andExpect(jsonPath("$.rejected").value(1));
+                .andExpect(jsonPath("$.accepted").value(2))
+                .andExpect(jsonPath("$.rejected").value(0));
 
-        verify(metrics).recordValidationFailure("invalid_event_contract", 1);
-        ArgumentCaptor<java.util.List> rejectedCaptor = ArgumentCaptor.forClass(java.util.List.class);
-        verify(rejectedEventPublisher).publish(anyString(), rejectedCaptor.capture());
-        assertThat(((com.cosmetic.collector.event.application.RejectedEvent) rejectedCaptor.getValue().getFirst())
-                .eventIndex()).isEqualTo(1);
         verify(publisher).publish(anyString(), anyList());
     }
 
