@@ -230,6 +230,40 @@ class KafkaEventPublisherTest {
     }
 
     @Test
+    void recordsKafkaAcknowledgementsAndFailuresPerEventWhenOnlyPartOfABatchFails() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        Clock clock = Clock.fixed(Instant.parse("2026-08-27T15:00:00Z"), ZoneOffset.UTC);
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(
+                        CompletableFuture.completedFuture(null),
+                        CompletableFuture.failedFuture(new RuntimeException("Kafka unavailable"))
+                );
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                clock,
+                "activity-events",
+                Runnable::run
+        );
+        EventBatchRequest request = new EventBatchRequest("draft", List.of(
+                event("evt-001", "persona-001"),
+                event("evt-002", "persona-002")
+        ));
+
+        assertThatThrownBy(() -> publisher.publish("request-001", request).join())
+                .hasCauseInstanceOf(EventPublishException.class);
+
+        verify(metrics).recordAccepted(1);
+        verify(metrics).recordKafkaPublishFailure(1);
+    }
+
+    @Test
     void convertsASynchronousKafkaSendFailureIntoAFailedFuture() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);

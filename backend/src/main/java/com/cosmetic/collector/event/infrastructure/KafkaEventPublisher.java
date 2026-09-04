@@ -18,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -132,11 +133,7 @@ public class KafkaEventPublisher implements EventPublisher {
         }
 
         CompletableFuture<PublishSummary> result = dispatch
-                .thenCompose(sends -> CompletableFuture.allOf(sends))
-                .thenApply(ignored -> {
-                    metrics.recordAccepted(events.size());
-                    return new PublishSummary(events.size());
-                })
+                .thenCompose(sends -> completeSends(requestId, events, sends))
                 .exceptionally(cause -> {
                     Throwable failure = unwrap(cause);
                     if (failure instanceof EventPublishOverloadedException) {
@@ -146,6 +143,9 @@ public class KafkaEventPublisher implements EventPublisher {
                                 requestId,
                                 events.size()
                         );
+                        throw new CompletionException(failure);
+                    }
+                    if (failure instanceof EventPublishException) {
                         throw new CompletionException(failure);
                     }
                     metrics.recordKafkaPublishFailure(events.size());
@@ -162,6 +162,51 @@ public class KafkaEventPublisher implements EventPublisher {
                 });
 
         return result.whenComplete((ignored, exception) -> inFlightBatches.release());
+    }
+
+    private CompletableFuture<PublishSummary> completeSends(
+            String requestId,
+            List<IndexedActivityEvent> events,
+            CompletableFuture<?>[] sends
+    ) {
+        List<CompletableFuture<SendOutcome>> outcomes = Arrays.stream(sends)
+                .map(send -> send.handle((ignored, failure) -> new SendOutcome(failure)))
+                .toList();
+
+        return CompletableFuture.allOf(outcomes.toArray(CompletableFuture[]::new))
+                .thenCompose(ignored -> {
+                    long acceptedCount = outcomes.stream()
+                            .map(CompletableFuture::join)
+                            .filter(SendOutcome::succeeded)
+                            .count();
+                    long failedCount = outcomes.size() - acceptedCount;
+
+                    if (acceptedCount > 0) {
+                        metrics.recordAccepted((int) acceptedCount);
+                    }
+                    if (failedCount == 0) {
+                        return CompletableFuture.completedFuture(new PublishSummary((int) acceptedCount));
+                    }
+
+                    metrics.recordKafkaPublishFailure((int) failedCount);
+                    Throwable firstFailure = outcomes.stream()
+                            .map(CompletableFuture::join)
+                            .map(SendOutcome::failure)
+                            .filter(java.util.Objects::nonNull)
+                            .findFirst()
+                            .orElseThrow();
+                    log.error(
+                            "Kafka 이벤트 배치 발행에 일부 또는 전체 실패했습니다. topic={}, requestId={}, acceptedCount={}, failedCount={}",
+                            topic,
+                            requestId,
+                            acceptedCount,
+                            failedCount,
+                            firstFailure
+                    );
+                    return CompletableFuture.failedFuture(
+                            new EventPublishException("Kafka에 이벤트를 전송하지 못했습니다.", firstFailure)
+                    );
+                });
     }
 
     private CompletableFuture<?>[] initiateSends(
@@ -199,5 +244,11 @@ public class KafkaEventPublisher implements EventPublisher {
             return cause.getCause();
         }
         return cause;
+    }
+
+    private record SendOutcome(Throwable failure) {
+        boolean succeeded() {
+            return failure == null;
+        }
     }
 }

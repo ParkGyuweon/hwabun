@@ -33,6 +33,11 @@ Collector는 **정상 이벤트의 Kafka 발행**과 **요청·이벤트 검증*
 Kafka 발행은 at-least-once다. `429` 또는 `503` 이후 전체 배치를 재시도할 수 있으므로,
 소비 단계는 `event_id` 기반 중복 제거를 유지해야 한다.
 
+한 배치에서 일부 Kafka ACK가 성공한 뒤 다른 이벤트가 실패할 수 있다. 이 경우 HTTP는
+`503`이지만 `collector.events.accepted`와 `collector.kafka.publish.failures`는 실제 ACK와
+실패 이벤트 수를 각각 기록한다. HTTP 응답은 재시도 가능 여부만 나타내며, ACK된 개별
+이벤트 목록을 반환하지 않는다.
+
 ## 3. Collector가 검증하는 계약
 
 ### 3.1 배치 전체
