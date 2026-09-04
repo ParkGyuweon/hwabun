@@ -68,12 +68,12 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
 
         context.disableDefaultConstraintViolation();
         JsonNode properties = event.properties();
+        boolean valid = validateEnvelope(event, context);
         if (properties == null || !properties.isObject()) {
             add(context, "invalid_property_type", "properties", "properties는 JSON object여야 합니다.");
             return false;
         }
 
-        boolean valid = validateEnvelope(event, context);
         if (event.eventName() != null && PURCHASE_EVENTS.contains(event.eventName())) {
             valid &= validatePurchaseProperties(event, properties, context);
         }

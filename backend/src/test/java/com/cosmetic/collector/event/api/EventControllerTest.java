@@ -298,6 +298,35 @@ class EventControllerTest {
     }
 
     @Test
+    void prioritizesMissingTenantOverAnInvalidPropertiesType() throws Exception {
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.3.0-draft",
+                                  "events": [{
+                                    "schema_version": "0.3.0-draft", "event_id": "evt-invalid",
+                                    "event_name": "product_click", "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                    "page_view_id": "page-view-001", "sequence_no": 1,
+                                    "page_type": "product_list", "actor_type": "user", "environment": "local",
+                                    "properties": []
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(0))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].code").value("missing_required_property"));
+
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
     void returnsPayloadTooLargeWhenTheBatchExceedsTheEventLimit() throws Exception {
         String events = String.join(",", java.util.Collections.nCopies(101, """
                 {

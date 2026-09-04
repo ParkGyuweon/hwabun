@@ -29,6 +29,9 @@ Collector는 **정상 이벤트의 Kafka 발행**과 **요청·이벤트 검증*
 `collector.events.validation.rejected`에 사용한다: `null_event`, `schema_version_mismatch`,
 `unregistered_event`, `event_intent_mismatch`, `missing_required_property`,
 `invalid_property_type`, `invalid_property_enum`, `collector_validation_failure`.
+Collector는 `properties`의 존재·타입 오류가 있더라도 먼저 envelope 오류를 함께 수집한 뒤
+이 우선순위를 적용한다. 예를 들어 `0.3.0-draft`의 `tenant_id` 누락과 `properties` 배열이
+동시에 발생하면 대표 code는 `missing_required_property`다.
 
 Kafka 발행은 at-least-once다. `429` 또는 `503` 이후 전체 배치를 재시도할 수 있으므로,
 소비 단계는 `event_id` 기반 중복 제거를 유지해야 한다.
