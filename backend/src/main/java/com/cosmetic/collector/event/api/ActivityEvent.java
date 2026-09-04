@@ -1,6 +1,8 @@
 package com.cosmetic.collector.event.api;
 
 import com.cosmetic.collector.event.api.validation.ValidEventContract;
+import com.cosmetic.collector.event.api.serialization.LenientInstantDeserializer;
+import com.cosmetic.collector.event.api.serialization.LenientIntegerDeserializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -9,6 +11,7 @@ import jakarta.validation.constraints.Positive;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 import java.time.Instant;
 
@@ -33,6 +36,7 @@ public record ActivityEvent(
         String intent,
 
         @Schema(description = "클라이언트에서 행동이 발생한 UTC 시각", example = "2026-08-27T14:30:00Z")
+        @JsonDeserialize(using = LenientInstantDeserializer.class)
         @NotNull Instant occurredAt,
 
         @Schema(description = "가상 소비자 식별자", example = "persona-001", nullable = true)
@@ -45,6 +49,7 @@ public record ActivityEvent(
         @NotBlank String pageViewId,
 
         @Schema(description = "세션 내 이벤트 발생 순번", example = "45")
+        @JsonDeserialize(using = LenientIntegerDeserializer.class)
         @NotNull @Positive Integer sequenceNo,
 
         @Schema(description = "이벤트가 발생한 페이지 유형", example = "product_list")

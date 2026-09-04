@@ -53,6 +53,8 @@ Kafka 발행은 at-least-once다. `429` 또는 `503` 이후 전체 배치를 재
 
 - 배치와 이벤트의 `schema_version`은 같아야 한다.
 - 필수 top-level 필드, 타입, enum, `sequence_no > 0`을 검사한다.
+- `occurred_at`과 `sequence_no`의 JSON 변환 오류는 요청 전체 오류로 만들지 않고 해당 이벤트의
+  validation 오류로 누적한다. 같은 배치의 정상 이벤트는 계속 발행한다.
 - `event_name`은 등록된 이벤트여야 하고 정해진 `intent`와 일치해야 한다.
 - `0.3.0-draft`는 유효한 slug 형식의 `tenant_id`가 필요하다.
 - `properties`는 JSON object여야 한다.

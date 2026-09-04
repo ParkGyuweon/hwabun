@@ -327,6 +327,59 @@ class EventControllerTest {
     }
 
     @Test
+    void rejectsMalformedEventFieldTypesWithoutDiscardingValidEventsInTheBatch() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-valid",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 1,
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-invalid-time",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "not-a-time", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 2,
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-invalid-sequence",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": "not-an-int",
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(2))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(1))
+                .andExpect(jsonPath("$.rejections[0].code").value("collector_validation_failure"))
+                .andExpect(jsonPath("$.rejections[1].event_index").value(2))
+                .andExpect(jsonPath("$.rejections[1].code").value("collector_validation_failure"));
+
+        verify(publisher).publish(anyString(), anyList());
+    }
+
+    @Test
     void returnsPayloadTooLargeWhenTheBatchExceedsTheEventLimit() throws Exception {
         String events = String.join(",", java.util.Collections.nCopies(101, """
                 {
