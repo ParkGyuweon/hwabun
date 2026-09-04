@@ -101,6 +101,9 @@ S15P21A306/
 │   │   └── data/                        JSONL 산출물 — 커밋하지 않는다 (결정론적 재생성)
 │   ├── product-feature-spec.md          상품 벡터 148차원 명세 — 블록 구성·인코딩·가중치
 │   ├── product-feature-vocab.json       인코딩 어휘집 `0.4` — 9개 블록 (brand 포함)
+│   ├── product-registration-spec.md     브랜드가 상품을 등록할 때의 입력 필드·어휘 제약·파생값
+│   ├── product-form-labels-ko.json      등록 폼 어휘의 한국어 표시 문구 57개 (어휘집에서 생성)
+│   ├── validate_product_registration.py 등록 상품 JSON 을 계약으로 검증하는 CLI
 │   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·가중치 스케줄
 │
 ├── docs/
@@ -109,6 +112,7 @@ S15P21A306/
 │   │   ├── cbf-technical-review.md      코사인 계산 구조 실측 검증서
 │   │   ├── product-feature-sample.md    상품 6개 인코딩 샘플 (생성물 — build_feature_sample.py)
 │   │   ├── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
+│   │   ├── exposure-role.md             노출이 어느 자리에서 무엇을 하는가 — 다섯 자리와 섞어 말하면 안 되는 것
 │   │   └── evaluation-framework.md     ★ 추천 평가 체계 (팀 합의) — 오프라인/동적/LLM 3축 분리
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
@@ -133,6 +137,7 @@ S15P21A306/
 │   │   ├── build_feature_vocab.py       어휘집 생성 (문서빈도·블록 가중치)
 │   │   ├── build_products_json.py       상품 200개 카탈로그 생성 (사이즈 변형 병합)
 │   │   ├── build_affinity_lift.py       속성 친화도 4,000행 (lift 기반) — 개인 폴더에서 이관
+│   │   ├── build_form_labels.py         등록 폼의 한국어 라벨 생성 (regenerate_all 2.5단계)
 │   │   ├── build_feature_sample.py      샘플 6개 산출물 + 문서 생성
 │   │   ├── test_feature_sample.py       산출물·문서가 코드와 어긋나지 않았는지
 │   │   └── data/

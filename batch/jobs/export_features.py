@@ -29,7 +29,8 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from persona_feature import AFFINITY_CSV, ATTRS, load as load_affinity  # noqa: E402
 from product_encoder import Encoder                                     # noqa: E402
-from recommender import LAMBDA, SCHEDULE, schedule_for                  # noqa: E402
+from recommender import (BRAND_W, LAMBDA, SCHEDULE,                     # noqa: E402
+                         brand_match, schedule_for)
 
 OUT_DIR = os.path.join(ROOT, "batch", "ingest", "data", "serving")
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -94,6 +95,8 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
     행동 로그 없이 리뷰 시드만으로 만든 사용자 벡터를 쓴다. 자바 구현이 이 파일을
     재현하면 벡터·가중치·정규화가 전부 맞다는 뜻이다.
     """
+    brands = [q["brand_name"] for q in e.products]
+    known = set(e.blk["brand"]["vocab"])       # 어휘집 밖 브랜드에만 폴백을 건다
     cases = []
     for p in personas:
         seeds = []
@@ -109,6 +112,9 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
         cos = matrix @ (u / nu) if nu > 1e-9 else np.zeros(len(matrix), np.float32)
         w1, w2, w3 = schedule_for(len(si))
         score = w1 * cos + w2 * affinity(p) + w3 * prior
+        bm = brand_match(brands, si, known)   # 어휘집 밖 브랜드 폴백 (0.5)
+        if bm is not None:
+            score = score + BRAND_W * bm
         score[si] = -np.inf                      # 시드는 후보에서 뺀다
         top = np.argsort(-score)[:TOP_K]
         cases.append({

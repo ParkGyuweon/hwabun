@@ -38,7 +38,15 @@ ING_SYNONYMS = {
     "AHA/Glycolic Acid": ["glycolic acid"],
     "Lactic Acid": ["lactic acid"],
     "Collagen": ["collagen"],
-    "SPF": [],
+    # 자외선차단 성분은 법정 표기라 전성분표에 반드시 들어간다. 태그가 없어도
+    # 잡히게 동의어를 준다 (2026-09-03). 등록 폼은 성분 태그를 받지 않으므로,
+    # 이게 없으면 등록된 선크림은 SPF 축이 영구히 0 이 된다
+    "SPF": ["spf", "titanium dioxide", "zinc oxide", "octocrylene", "avobenzone",
+            "homosalate", "octisalate",
+            # 국내 선크림은 한글 전성분표에 이 이름으로 적힌다
+            "자외선차단", "티타늄디옥사이드", "티타늄옥사이드", "징크옥사이드",
+            "산화아연", "옥토크릴렌", "아보벤존", "호모살레이트", "옥티살레이트",
+            "에칠헥실메톡시신나메이트", "비스에칠헥실옥시페놀메톡시페닐트리아진"],
     "Silicone": ["dimethicone", "cyclopentasiloxane"],
     "Squalane": ["squalane", "squalene"],
     "Probiotic / Ferment": ["ferment filtrate", "lactobacillus", "bifida"],
@@ -62,6 +70,47 @@ ING_SYNONYMS = {
     "Willow Bark": ["salix", "willow bark"],
     "Mineral Oil / Petrolatum": ["petrolatum", "mineral oil"],
 }
+
+# 한국어 표기 (2026-09-03). 국내 브랜드가 상품을 등록할 때 한글 전성분표를
+# 붙여넣는다. 파서가 한글을 남기게 고쳤고(product_encoder.parse_ingredients),
+# 여기에 표기를 넣어야 매칭된다. 같은 성분표를 한글·영문으로 넣으면 매칭 결과와
+# 위치가중값이 소수점까지 같은 것을 확인했다.
+#
+# **"알코올" 은 넣지 않는다** — 세틸알코올 같은 지방알코올이 걸린다. 변성알코올만.
+ING_SYNONYMS_KO = {
+    "Hyaluronic Acid": ["히알루론산", "하이알루로닉애씨드", "하이알루로네이트", "소듐하이알루로네이트"],
+    "Vitamin C": ["아스코빅애씨드", "아스코빌", "아스코르브산"],
+    "Niacinamide": ["나이아신아마이드", "니아신아마이드"],
+    "Retinol": ["레티놀", "레티닐"],
+    "Salicylic Acid": ["살리실릭애씨드", "살리실산"],
+    "AHA/Glycolic Acid": ["글라이콜릭애씨드", "글리콜산"],
+    "Lactic Acid": ["락틱애씨드", "젖산"],
+    "Collagen": ["콜라겐"],
+    "Silicone": ["다이메티콘", "디메치콘", "사이클로펜타실록세인", "사이클로메티콘"],
+    "Squalane": ["스쿠알란", "스쿠알렌"],
+    "Probiotic / Ferment": ["발효여과물", "락토바실러스", "비피다", "효모발효"],
+    "Green Tea": ["녹차", "카멜리아시넨시스"],
+    "Peptides": ["펩타이드", "펩티드"],
+    "Aloe": ["알로에"],
+    "Licorice": ["감초", "글리시리자"],
+    "Shea Butter": ["시어버터", "부티로스퍼멈"],
+    "Panthenol (B5)": ["판테놀", "판토텐"],
+    "Jojoba": ["호호바"],
+    "Ceramide": ["세라마이드"],
+    "Rosehip / Rose": ["로즈힙", "로사카니나", "로사다마세나", "장미꽃"],
+    "Caffeine": ["카페인"],
+    "Urea": ["요소", "유레아"],
+    "Adenosine": ["아데노신"],
+    "Allantoin": ["알란토인"],
+    "Zinc": ["징크피씨에이", "징크옥사이드", "산화아연"],
+    "Alcohol Denat": ["변성알코올"],
+    "Centella (Cica)": ["병풀", "센텔라", "아시아티코사이드", "마데카소사이드"],
+    "Willow Bark": ["버드나무", "살릭스"],
+    "Mineral Oil / Petrolatum": ["미네랄오일", "광물유", "페트롤라툼", "바셀린"],
+}
+
+for _name, _ko in ING_SYNONYMS_KO.items():
+    ING_SYNONYMS[_name].extend(_ko)
 POS_MIN = 0.10          # 전성분 뒤쪽 성분의 하한 (미량 성분 과대평가 방지)
 PAREN_RE = re.compile(r"\([^)]*\)")
 NOISE_RE = re.compile(r"^(water|aqua|eau)$|^\d|^and$|^or$|^may contain")
@@ -180,8 +229,8 @@ for name, _, _, vocab in BLOCKS:
         df[name] = {t: int(counts[name][t]) for t in vocab}
 
 spec = {
-    "version": "0.4",
-    "generated_from": "artifacts/products_200.json",
+    "version": "0.5",
+    "generated_from": "batch/ingest/data/products_200.json",
     "n_products": N,
     "min_tag_freq": MIN_FREQ,
     "idf_formula": "log(N / (1 + df))  -- 블록 내 L2 정규화 후 적용",
@@ -217,7 +266,7 @@ spec = {
     "attribute_affinity": {
         "_note": "콘텐츠 벡터가 아니라 추천 점수의 속성 항(attr_affinity)에서 소비된다. "
                  "사용자 속성으로 조회하는 테이블이므로 사용자별 가중치 분기가 가능하다.",
-        "table": "artifacts/affinity_lift.csv",
+        "table": "batch/ingest/data/affinity_lift.csv",
         "attributes": ["skin_type", "skin_tone", "hair_color", "eye_color"],
         "source": "리뷰의 사용자 속성 구성비 (highlights 태그 아님)",
         "formula": "clip((share_in_product / share_overall - LO) / (HI - LO), 0, 1)",
@@ -234,9 +283,29 @@ spec = {
         "combination_note": "combination은 상품 200개 전부 lift 0.85~1.19(표준편차 0.053)로 "
                             "판별력이 없어 가중치 0. 해당 몫을 skin_tone으로 이관한다."
     },
+    "brand_unknown_fallback": {
+        "encoding": "match",
+        "weight": 0.60,
+        "note": "어휘집 brand 목록에 **없는** 브랜드에만 적용한다. 상품 벡터의 brand "
+                "블록은 그 상품에서 전부 0 이 되므로, 대신 추천 점수에 "
+                "'이 상품 브랜드가 사용자의 시드 브랜드에 있으면 1' 을 더한다. "
+                "가중치는 원핫 블록과 같은 0.60 이다. 목록에 있는 브랜드는 지금처럼 "
+                "원핫으로 계산하므로 기존 벡터와 점수가 한 자리도 바뀌지 않는다. "
+                "값을 구매 횟수 비중으로 바꾸면 나빠진다 (valid -2.68 ~ -5.82%p) — "
+                "원핫이 하던 것은 횟수가 아니라 이진 판정이다.",
+        "why": "브랜드가 등록될 때마다 차원을 늘리고 기존 상품을 다시 인코딩하는 것은 "
+               "서비스 운영 중에 할 수 없다. 폴백은 문자열 비교라 어휘집이 필요 없다.",
+    },
     "price_bin_edges": PRICE_EDGES,
     "total_content_dim": sum(len(v) for _, _, _, v in BLOCKS) + 1,
     "changelog": [
+        {"version": "0.5",
+         "change": "성분 동의어에 한국어 표기와 SPF 를 넣고, 어휘집에 없는 브랜드를 "
+                   "위한 관계 폴백(brand_unknown_fallback)을 명시한다",
+         "evidence": "한글·영문 전성분을 같이 넣으면 매칭과 위치가중값이 소수점까지 "
+                     "같다. 신규 브랜드 폴백은 기존 200개 벡터를 바꾸지 않는다 "
+                     "(카탈로그 브랜드는 전부 어휘집에 있어 폴백이 발동하지 않는다). "
+                     "재현: Research/eval/eval_brand_relation_feature_20260903.py"},
         {"version": "0.4",
          "change": "brand 블록 추가 (55종, 가중치 0.60)",
          "evidence": "Recall@10 11.4% -> 23.6% (+12.28%p, 95% CI [+11.41, +13.10], "

@@ -452,10 +452,37 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `matched_ingredients` | array<string> | N | 매칭 성분, 없으면 빈 배열 |
 | `matched_keywords` | array<string> | N | 매칭 키워드, 없으면 빈 배열 |
 | `vocab_version` | string | Y | 어휘집 버전 |
-| `content_interest_score` | double | N | 확정 산식 결과 |
+| `content_interest_score` | double | N | §13.1 산식 결과 |
 | `processed_at` | timestamp | N | 처리 시각 |
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
+
+### 13.1 `content_interest_score` 산식
+
+```text
+content_interest_score
+  = SECTION_DWELL_WEIGHT[section_id]
+    x ( ln(1 + dwell_ms_sum / 1000)
+        + Σ EVENT_WEIGHT[event_name] x 해당 Event 발생 수 )
+```
+
+행동 가중치 `EVENT_WEIGHT`와 섹션 가중치 `SECTION_DWELL_WEIGHT`의 실행 원본은
+`frontend/src/types/log.ts`다. 이 계약에 숫자를 복제하지 않는다.
+`batch/jobs/behavior_weights.py`가 그 파일을 직접 파싱하므로 Front가 값을 고치면
+집계도 따라간다.
+
+체류시간에 `ln(1 + x)`를 쓰는 이유는 선형 합산이면 오래 켜 둔 탭 하나가 다른 모든
+행동을 압도하기 때문이다. 초 단위로 환산한 뒤 로그를 취해 긴 체류의 기여를 눌러 둔다.
+
+집계 대상 Event는 이 grain에서 관측되는 것으로 한정한다 — `accordion_toggle`,
+`review_filter_apply`, `text_selection`, `text_copy`. `remove_from_cart`처럼 음수
+가중치를 가진 Event는 콘텐츠 grain에 속하지 않으므로 여기 들어오지 않는다.
+
+`section_id`가 NULL이면 섹션 가중치를 곱할 수 없다. 이 경우 가중치 `1.0`을 사용하고
+`quality_flags`에 표시한다. 임의의 섹션으로 추정해 채우지 않는다.
+
+점수는 정규화하지 않은 절대값이다. Mart에서 브랜드 간 비교에 쓸 때는 분모를 함께
+제시해야 한다. 조회 수가 많은 상품이 자동으로 높은 점수를 받기 때문이다.
 
 ## 14. `funnel_session_fact`
 
@@ -535,21 +562,43 @@ Vector 자체를 저장하지 않는다.
 `dim_product`는 Processed Fact의 상품 속성 보강 입력이다. unique key는
 `product_id`이며 partition하지 않는다.
 
+Sephora 원천 카탈로그와 Tenant가 직접 등록한 상품을 **같은 Dimension에 둔다.** Fact가
+`product_id`로 Join하는데 Dimension을 나누면 모든 소비자가 두 번 Join해 합쳐야 하고,
+합치는 규칙이 소비자마다 갈린다. 출처는 `product_source` 컬럼으로 구분한다.
+
 | column | type | nullable | source / rule |
 | --- | --- | --- | --- |
 | `product_id` | string | N | Unique key |
 | `product_name` | string | N | 상품명 |
+| `tenant_id` | string | Y | 등록 Tenant. 원천 카탈로그 상품은 NULL |
+| `product_source` | string | N | `seed_catalog`, `tenant_registered` |
 | `brand_id` | string | N | 브랜드 ID |
 | `brand_name` | string | N | 브랜드명 |
 | `category_id` | string | N | 카테고리 ID |
 | `category_name` | string | N | 카테고리명 |
+| `secondary_category` | string | Y | 어휘 8종. Product Feature 인코딩 축 |
+| `tertiary_category` | string | Y | 어휘 19종. Product Feature 인코딩 축 |
 | `base_price` | decimal(18,2) | N | 기준 가격 |
 | `currency` | string | N | 통화 |
+| `price_krw` | decimal(18,2) | Y | Tenant 입력 원가. 등록 상품만 |
 | `skin_type_tags` | array<string> | N | 피부 타입 태그 |
 | `concern_tags` | array<string> | N | 고민 태그 |
 | `ingredient_ids` | array<string> | N | 성분 ID 목록 |
 | `caution_ingredient_count` | int | N | 주의 성분 수 |
+| `rating` | double | Y | 평균 평점 |
+| `rating_source` | string | N | `observed`, `injected` |
+| `loves_count` | bigint | Y | 관심 수 |
+| `registered_at` | timestamp | Y | 등록 시각. 등록 상품만 |
 | `updated_at` | timestamp | N | 상품 속성 갱신 시각 |
+
+`rating_source`가 필요한 이유는 등록 상품의 `rating`이 실측이 아니라 카테고리 중앙값을
+주입한 값이기 때문이다([`product-registration-spec.md`](./product-registration-spec.md) §4.2).
+Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품이 실제로 좋은 평가를 받은
+것처럼 읽힌다. 리뷰가 쌓이면 `observed`로 바뀐다.
+
+`tenant_id`가 NULL인 상품은 시연·검증용 원천 카탈로그다. Tenant별 Storefront에 어떤
+상품을 진열할지는 이 Dimension이 아니라 진열 설정에서 정한다. `product_source`는
+"누가 만든 데이터인가"이지 "누가 파는가"가 아니다.
 
 ## 17. 구현 정합성 완료 조건
 
@@ -571,3 +620,7 @@ Vector 자체를 저장하지 않는다.
 9. 현재 미구현 Dataset은 구현 전까지 소비자가 존재하는 것으로 가정하지 않는다.
 10. `schema_version = 0.3.0-draft` row는 `tenant_id`가 NULL이 아니다.
 11. `tenant_id`와 `brand_id`가 같은 값을 담지 않는다. 후자는 상품 Dimension 파생이다.
+12. `dim_product.rating_source`가 `injected`인 row는 Dashboard 평균 평점 집계에서
+    제외하거나 별도로 표시한다.
+13. `dim_product.product_source`가 `tenant_registered`인 row는 `tenant_id`가 NULL이
+    아니다.
