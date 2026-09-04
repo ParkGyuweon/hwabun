@@ -53,6 +53,8 @@ raw_events
       ├─ sessionized_events
       ├─ product_event_fact
       ├─ search_event_fact
+      ├─ purchase_fact
+      ├─ purchase_reason_fact
       ├─ section_dwell_agg → content_interest_fact
       ├─ funnel_session_fact
       └─ persona_behavior_feature_delta
@@ -184,15 +186,18 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 | `funnel_session_fact` | Q4에서 생성 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
 | `search_event_fact` | 미구현 | Trigger와 원천 필드 확인 후 구현 |
 | `section_dwell_agg` | 미구현 | delta 합산 grain 구현 |
-| `content_interest_fact` | 미구현 | 관심도 산식과 vocab 연결 |
+| `content_interest_fact` | 미구현 | 산식은 계약 §13.1로 확정. vocab 연결 구현 |
 | `persona_behavior_feature_delta` | 미구현 | 추천 계약 기준 delta 구현 |
+| `purchase_fact` | 미구현 | `items[]` explode와 `item_revenue` 파생 구현 |
+| `purchase_reason_fact` | 미구현 | `reasons[]` explode, 건너뛰기 row 보존 구현 |
 
 현재 Q1~Q4는 주로 Parquet output을 사용한다. 목표 저장 엔진은 Delta Lake이며 실제
 Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
 
-`search`, `begin_checkout`, `purchase`는 최신 Event properties 계약에서도 Planned
-Event다. 따라서 관련 Processed/DW Dataset은 논리 계약을 유지하되 활성 Event에서
-실데이터가 들어오는 것으로 간주하지 않는다. `dead_click`은 최신 Dashboard 기준
+`begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event가 됐다. 다만 Front
+결제·설문 화면과 Generator 방출이 아직이라 실데이터는 들어오지 않는다. `search`와
+`compare_products`는 여전히 Planned Event다. 관련 Processed/DW Dataset은 논리 계약을
+유지하되 지금 실데이터가 있는 것으로 간주하지 않는다. `dead_click`은 최신 Dashboard 기준
 실사용자 전용이므로 집계 소비자는 `actor_type='user'`를 명시해야 한다.
 
 ## 7. 구현 전에 닫아야 하는 의존성

@@ -31,8 +31,8 @@ from eval_metadata import load as load_metadata            # noqa: E402
 from persona_feature import load as load_affinity          # noqa: E402
 from persona_split import select as select_split           # noqa: E402
 from product_encoder import Encoder                        # noqa: E402
-from recommender import (LAMBDA_MMR, SCHEDULE,             # noqa: E402
-                         Recommender, schedule_for)
+from recommender import (BRAND_W, LAMBDA_MMR, SCHEDULE,    # noqa: E402
+                         Recommender, brand_match, schedule_for)
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
 K = 10
@@ -59,7 +59,8 @@ def weights(schedule, n_seed):
     return schedule[-1][1:]
 
 
-def evaluate(personas, V, prior, pop_rank, affinity, index, recommender):
+def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
+             brands=None, known=None):
     """조건별 적중 여부를 사람 단위로 모은다. 같은 사람을 여러 조건에 쓰므로 짝비교가 된다
 
     조건은 **우리가 골랐던 것들**이다. valid 에서 같은 선택이 나오는지 확인하고,
@@ -84,6 +85,8 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender):
         u = V[si].mean(0)
         nu = np.linalg.norm(u)
         cos = V @ (u / nu) if nu > 1e-9 else np.zeros(n, np.float32)
+        # brand 관계 항 — 벡터가 아니라 점수에 붙는다 (어휘집 0.5)
+        bm = brand_match(brands, si, known) if brands is not None else None
         t0 = time.perf_counter()
         at = affinity(p)
         elapsed += time.perf_counter() - t0
@@ -92,7 +95,10 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender):
             w1, w2, w3 = weights(sch, len(si))
             if not use_attr:
                 w1, w2, w3 = w1 + w2, 0.0, w3
-            x = np.where(cand, w1 * cos + w2 * at + w3 * prior, -np.inf)
+            base = w1 * cos + w2 * at + w3 * prior
+            if bm is not None:
+                base = base + BRAND_W * bm
+            x = np.where(cand, base, -np.inf)
             if lam_mmr >= 1.0:
                 top = np.argsort(-x)[:K]
             else:
@@ -132,7 +138,10 @@ def main():
     pop_rank[np.argsort(-nrev)] = np.arange(len(V))
 
     affinity = load_affinity(index)
-    recommender = Recommender(V, index, prior, affinity=affinity)
+    brands = [p["brand_name"] for p in e.products]
+    known = set(e.blk["brand"]["vocab"])       # 어휘집에 있는 브랜드
+    recommender = Recommender(V, index, prior, affinity=affinity, brands=brands,
+                              known_brands=known)
     profiles = {p["persona_id"]: p
                 for p in json.load(open(PERSONAS, encoding="utf-8"))}
     rows = load_metadata(split=a.split)
@@ -152,7 +161,7 @@ def main():
         print("  ⚠ 전원 집합이다. 파라미터 선택에도 최종 보고에도 쓰지 말 것")
 
     hits, lt, seeds, elapsed = evaluate(personas, V, prior, pop_rank, affinity,
-                                        index, recommender)
+                                        index, recommender, brands, known)
     rng = np.random.default_rng(42)
     base = hits["현행 (스케줄+MMR)"]
 

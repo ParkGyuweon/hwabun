@@ -79,6 +79,53 @@ class PropertyContractCoverageTest(unittest.TestCase):
             result["invalid_types"],
         )
 
+    def _reason_event(self, reasons, **extra):
+        props = {"order_id": "ORD-1", "reasons": reasons}
+        props.update(extra)
+        return {"event_name": "purchase_reason_select", "properties": props}
+
+    def test_array_enum_accepts_contract_values(self) -> None:
+        """reasons 는 계약 최초의 배열 원소 enum 이다.
+
+        enum 검사가 스칼라 문자열만 가정하면 배열이 통째로 타입 오류가 된다.
+        """
+        result = check_properties(
+            [self._reason_event(["ingredient", "review_same_skin"])], self.spec, self.enums
+        )
+
+        self.assertEqual(result["invalid_types"], [])
+        self.assertEqual(result["invalid_enums"], [])
+
+    def test_array_enum_rejects_unknown_element(self) -> None:
+        result = check_properties([self._reason_event(["ingredient", "gift"])],
+                                  self.spec, self.enums)
+
+        self.assertIn(
+            (("purchase_reason_select", "reasons", "gift"), 1),
+            result["invalid_enums"],
+        )
+
+    def test_array_enum_rejects_non_array(self) -> None:
+        result = check_properties([self._reason_event("ingredient")], self.spec, self.enums)
+
+        self.assertIn(
+            (("purchase_reason_select", "reasons", "string[]", "string"), 1),
+            result["invalid_types"],
+        )
+
+    def test_skipped_survey_sends_empty_reasons(self) -> None:
+        """건너뛰기는 위반이 아니다.
+
+        건너뛴 것과 응답이 유실된 것을 구분해야 응답률을 셀 수 있어, reasons 키는
+        항상 존재하고 값만 빈 배열이다 (계약 §5).
+        """
+        result = check_properties([self._reason_event([], skipped=True)],
+                                  self.spec, self.enums)
+
+        self.assertEqual(result["invalid_types"], [])
+        self.assertEqual(result["invalid_enums"], [])
+        self.assertEqual(result["missing"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

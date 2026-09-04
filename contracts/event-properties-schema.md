@@ -1,7 +1,7 @@
 # Event Properties 계약
 
 작성일: 2026-09-03
-상태: v0.2 Properties 기준 확정, `0.3.0-draft` Tenant 필드 추가. 모듈별 구현 반영 대기
+상태: v0.2 Properties 기준 확정, `0.3.0-draft` Tenant 필드와 구매 Event 3종 추가. 모듈별 구현 반영 대기
 실행 Envelope 계약: [`event-schema.json`](./event-schema.json)
 설계 설명: [`event-logging-design.md`](../docs/analytics/event-logging-design.md)
 
@@ -130,6 +130,9 @@ Dimension 정의는 [`dw-schema.md`](./dw-schema.md)를 따른다.
 | `add_to_cart` | `conversion` | 장바구니 담기 | 장바구니 전환 |
 | `view_cart` | `conversion` | 장바구니 화면 진입 | Cart 확인율 |
 | `quantity_change` | `conversion` | 수량 변경 | 구매 의도 |
+| `begin_checkout` | `conversion` | 주문 시작 | Checkout 진입 |
+| `purchase` | `conversion` | 주문 완료 | 구매 전환, 매출 |
+| `purchase_reason_select` | `validation` | 구매 직후 이유 선택 | 선언 이유와 행동 추론 대조 |
 | `remove_from_cart` | `hesitation` | 장바구니 상품 제거 | 전환 마찰 |
 | `hover_dwell` | `hesitation` | CTA hover 체류 | 구매 전 망설임 |
 | `rage_click` | `friction` | 같은 지점 반복 클릭 | UI 마찰 |
@@ -195,7 +198,32 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 아니라 "무엇을 내보낼 수도 있는가"가 되어, 실제 수집 범위를 이 문서로 알 수 없게 된다.
 화면이 생기면 계약을 먼저 고치고 구현을 올린다.
 
-### 3.9 `review_expand.target`
+### 3.9 `purchase_reason_select.reasons`
+
+`ingredient`, `skin_fit`, `reviews`, `review_same_skin`, `price`, `brand_trust`,
+`texture_finish`, `clean_claim`, `recommendation`, `restock`
+
+구매 직후 클릭 설문의 선택지다. `primary_reason`도 같은 값을 사용한다.
+
+| 값 | 뜻 |
+| --- | --- |
+| `ingredient` | 성분이 마음에 들어서 |
+| `skin_fit` | 내 피부 타입·톤에 맞아서 |
+| `reviews` | 리뷰가 좋아서 |
+| `review_same_skin` | 나와 같은 피부의 리뷰를 보고 |
+| `price` | 가격이 맞아서 |
+| `brand_trust` | 이 브랜드를 믿어서 |
+| `texture_finish` | 제형·마감이 좋아서 |
+| `clean_claim` | 무향·비건 등 성분 배제 조건 때문에 |
+| `recommendation` | 추천을 받아서 |
+| `restock` | 쓰던 것을 다시 사서 |
+
+10개로 고정한다. 선택지가 늘면 응답이 흩어져 행동 추론과 대조할 표본이 줄어든다.
+
+`restock`은 재구매의 **선언 신호**다. 행동으로 관측한 재구매와 교차 검증할 때
+사용하며, 둘이 갈리는 구간이 행동 추론의 한계를 보여준다.
+
+### 3.10 `review_expand.target`
 
 `review_text`, `jump_to_reviews`, `ingredients`
 
@@ -262,6 +290,9 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `price_usd: number` |
 | `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
+| `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
+| `purchase` | `order_id: string`, `items: object[]` | `order_value: number`, `currency: string` |
+| `purchase_reason_select` | `order_id: string`, `reasons: string[]` | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 | `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
@@ -274,6 +305,24 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `ranking[]` | object[] | `product_id: string`, `position: integer` | 추천 스냅샷 상품 순위 |
 | `matched_ingredients[]` | string[] | 해당 없음 | 정규화된 성분 ID 또는 이름 |
 | `matched_keywords[]` | string[] | 해당 없음 | 정규화된 분석 키워드 |
+| `items[]` | object[] | `product_id: string`, `quantity: integer`, `unit_price: number` | 주문 상품. `sku_id: string`은 선택 |
+| `reasons[]` | string[] | 해당 없음 | §3.9 enum. 1~2개, `skipped=true`면 빈 배열 |
+
+`items[]`는 `unit_price`를 싣고 매출액을 싣지 않는다. 상품별 매출
+`item_revenue = quantity * unit_price`는 Processed에서 파생하며 Event가 직접
+운반하지 않는다. 파생값을 Event에 실으면 단가가 사라져 가격 분석을 할 수 없고,
+`order_value`와 합계가 어긋났을 때 어느 쪽이 맞는지 판단할 근거도 없어진다.
+
+`purchase.order_value`는 주문 전체 금액이다. `items[]`를 상품 row로 explode한 뒤
+합산하면 상품 수만큼 중복되므로, 상품 매출은 `item_revenue`만 합산한다
+([`dw-schema.md`](./dw-schema.md) §6).
+
+`purchase_reason_select`는 주문 하나당 한 번만 발생한다. `reasons` 키는 항상
+존재해야 하며, 사용자가 설문을 건너뛰면 `skipped=true`와 함께 빈 배열을 보낸다.
+건너뛴 것과 응답이 유실된 것을 구분해야 응답률을 셀 수 있기 때문이다. 건너뛰지
+않았다면 1~2개다.
+
+자유 입력 원문은 전송하지 않고 분류값 `free_text_kind`만 남긴다.
 
 `section_dwell.dwell_ms`는 누적값이 아니라 구간 체류시간 delta다. 여러 Event는
 Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
@@ -287,12 +336,9 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 | --- | --- | --- | --- |
 | `search` | `comparison` | 검색 화면·Trigger 구현 | `query_text: string`; 선택 `result_count`, `normalized_query` |
 | `compare_products` | `comparison` | 비교 기능 구현 | `compared_product_ids: string[]`; 선택 `base_product_id`, `compare_count` |
-| `begin_checkout` | `conversion` | Checkout 구현 | `items: object[]`; 선택 `cart_value`, `currency` |
-| `purchase` | `conversion` | 테스트 주문 완료 구현 | `order_id: string`, `items: object[]`; 선택 `order_value`, `currency` |
 
-`items[]`의 필수 child는 `product_id: string`, `quantity: integer`,
-`unit_price: number`이며 `sku_id: string`은 선택이다. 활성화할 때
-`event-schema.json`의 event enum과 intent 조건도 함께 변경한다.
+`begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event로 이동했다.
+§2.5와 §4.5를 따른다.
 
 ## 6-2. 공통 선택 properties: 쇼핑몰 진열 (`storefront_*`)
 
