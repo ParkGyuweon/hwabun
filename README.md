@@ -112,6 +112,7 @@ S15P21A306/
 │   │   ├── cbf-technical-review.md      코사인 계산 구조 실측 검증서
 │   │   ├── product-feature-sample.md    상품 6개 인코딩 샘플 (생성물 — build_feature_sample.py)
 │   │   ├── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
+│   │   ├── exposure-role.md             노출이 어느 자리에서 무엇을 하는가 — 다섯 자리와 섞어 말하면 안 되는 것
 │   │   └── evaluation-framework.md     ★ 추천 평가 체계 (팀 합의) — 오프라인/동적/LLM 3축 분리
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
