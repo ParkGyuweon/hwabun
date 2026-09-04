@@ -28,9 +28,9 @@ $env:ACTIVITY_EVENTS_TOPIC='activity-events'
 $env:ACTIVITY_EVENTS_PARTITIONS='3'
 $env:KAFKA_TOPIC_REPLICATION_FACTOR='1'
 $env:KAFKA_TOPIC_RETENTION_MS='86400000'
-$env:KAFKA_PUBLISHER_CORE_POOL_SIZE='4'
+$env:KAFKA_PUBLISHER_CORE_POOL_SIZE='16'
 $env:KAFKA_PUBLISHER_MAX_POOL_SIZE='16'
-$env:KAFKA_PUBLISHER_QUEUE_CAPACITY='0'
+$env:KAFKA_PUBLISHER_QUEUE_CAPACITY='200'
 ./gradlew.bat bootRun
 ```
 
@@ -38,7 +38,7 @@ Topic은 기본적으로 인프라에서 미리 생성한다고 가정합니다.
 
 Kafka가 실행되지 않아도 애플리케이션은 시작되지만, 이벤트 발행 요청은 `503 Service Unavailable`로 실패합니다.
 
-`KafkaTemplate.send()` 호출은 Tomcat 요청 스레드가 아니라 `kafka-publisher-*` 전용 스레드에서 실행합니다. 기본 전용 풀은 core 4개, 최대 16개이며 대기열을 사용하지 않습니다. Kafka 장애로 전용 풀이 모두 막히면 새 발행 요청을 쌓아두지 않고 `503 Service Unavailable`로 빠르게 거절합니다. HTTP 응답은 요청 스레드를 점유하지 않은 상태로 Kafka ACK 또는 실패 결과를 기다립니다.
+`KafkaTemplate.send()` 호출은 Tomcat 요청 스레드가 아니라 `kafka-publisher-*` 전용 스레드에서 실행합니다. 기본 전용 풀은 core 16개, 최대 16개, 대기열 200건이며 동시에 처리하는 배치는 최대 232개입니다. 전용 executor 대기열 또는 동시 처리 한도가 포화되면 `429 Too Many Requests`와 `Retry-After: 1`을 반환합니다. Kafka 장애·ACK 실패는 `503 Service Unavailable`로 반환합니다. HTTP 응답은 요청 스레드를 점유하지 않은 상태로 Kafka ACK 또는 실패 결과를 기다립니다.
 
 HTTP batch는 Kafka에서 Event 1건당 메시지 1개로 펼쳐집니다. Kafka key는 필수값인 `session_id`를 사용하며, Collector는 각 메시지에 `received_at`, `source`, `request_id`, `event_index`를 추가합니다. `source`는 `actor_type=user`이면 `web`, `actor_type=synthetic`이면 `simulator`로 기록합니다. Raw Event의 중복은 허용하고 Spark Processed 단계에서 `event_id` 기준으로 제거합니다.
 
