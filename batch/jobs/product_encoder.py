@@ -23,6 +23,11 @@ ORDER = ["secondary_category", "tertiary_category", "concern",
          "ingredient", "clean", "texture", "price_bin", "rating", "brand"]
 
 
+# 카테고리 중앙값을 쓰려면 표본이 이만큼은 있어야 한다 (등록 계약 §4.2 와 동일).
+# 미만이면 전체 중앙값으로 내려간다
+RATING_MIN_N = 3
+
+
 class Encoder:
     def __init__(self, vocab_path=None, products_path=None, review_concern_path=None):
         vocab_path = vocab_path or VOCAB
@@ -42,6 +47,7 @@ class Encoder:
         self.clean_set = set(self.blk["clean"]["vocab"])
         self.tex_set = set(self.blk["texture"]["vocab"])
         self.review_concern = self._load_review_concern(review_concern_path)
+        self._rating_med = None      # 카테고리별 평점 중앙값 (등록 상품 기본값)
 
     # ---------- 태그 분류 ----------
     def _load_review_concern(self, path):
@@ -120,6 +126,46 @@ class Encoder:
         return vals
 
     # ---------- 블록 인코딩 ----------
+    def rating_value(self, x):
+        """평점을 0~1 로. **등록 상품은 평점이 없다** (2026-09-03).
+
+        신규 상품은 리뷰가 0건이라 `rating` 이 없다. 그대로 두면 정규화식이
+        터지고(None), 0 을 넣으면 -2.22 라는 음수가 나온다. 브랜드에게 직접
+        입력받을 수도 없다 — 자기 평점을 적으면 그게 곧 추천 점수가 된다.
+
+        그래서 **같은 카테고리의 중앙값**을 채운다. 그 카테고리 상품들 사이에서
+        평균적인 위치에 놓이므로 유리하지도 불리하지도 않다.
+
+        범위 밖 값은 잘라 낸다. 카탈로그에서 잰 min/max 라, 등록 상품에 실제
+        리뷰가 쌓이면 그 범위를 벗어날 수 있다.
+        """
+        r = x.get("rating")
+        if r is None:
+            r = self._rating_median(x.get("tertiary_category"))
+        v = (r - self.rmin) / (self.rmax - self.rmin)
+        return min(max(v, 0.0), 1.0)
+
+    def _rating_median(self, category):
+        """카테고리별 평점 중앙값. **표본이 RATING_MIN_N 미만이면 전체 중앙값**.
+
+        상품이 1~2개뿐인 카테고리의 "중앙값" 은 그 상품 한둘의 평점일 뿐이다.
+        카탈로그 200개에서 19개 카테고리 중 7개가 표본 3개 미만이고, 전체
+        중앙값과 최대 0.489 까지 벌어진다 (For Face n=2 -> 3.833, 전체 4.322).
+        등록 상품이 그 카테고리에 들어오면 남의 상품 한 개 평점을 물려받는다.
+        데이터 파트 등록 계약 §4.2 와 같은 기준이다.
+        """
+        if self._rating_med is None:
+            by = {}
+            for p in self.products:
+                if p.get("rating") is None:
+                    continue
+                by.setdefault(p.get("tertiary_category"), []).append(p["rating"])
+            allv = [p["rating"] for p in self.products if p.get("rating") is not None]
+            self._rating_med = {c: float(np.median(v)) for c, v in by.items()
+                                if len(v) >= RATING_MIN_N}
+            self._rating_med[None] = float(np.median(allv)) if allv else self.rmin
+        return self._rating_med.get(category, self._rating_med[None])
+
     def _onehot(self, val, name):
         v = np.zeros(self.blk[name]["dim"])
         vocab = self.blk[name]["vocab"]
@@ -155,7 +201,7 @@ class Encoder:
         pl = self.blk["price_bin"]["vocab"]
         raw["price_bin"] = self._onehot(
             pl[int(np.digitize(x["price_usd"], self.edges[1:], right=False))], "price_bin")
-        raw["rating"] = np.array([(x["rating"] - self.rmin) / (self.rmax - self.rmin)])
+        raw["rating"] = np.array([self.rating_value(x)])
 
         # brand — 다음 구매에서 유지되는 속성 중 lift 가 압도적이다 (6.08x).
         # 리뷰 15만 연속쌍에서 재보니 2위 price_bin 이 1.30x 였다.
@@ -187,7 +233,8 @@ class Encoder:
         return np.vstack([self.encode(x, weights) for x in self.products]).astype(dtype)
 
     def prior(self):
-        lv = np.array([x["loves_count"] for x in self.products], dtype=float)
+        """인기도 0~1. **등록 상품은 loves_count 가 없다** — 0 으로 본다"""
+        lv = np.array([x.get("loves_count") or 0 for x in self.products], dtype=float)
         lg = np.log1p(lv)
         return (lg - lg.min()) / (lg.max() - lg.min())
 
