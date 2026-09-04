@@ -135,9 +135,6 @@ Dimension 정의는 [`dw-schema.md`](./dw-schema.md)를 따른다.
 | `purchase_reason_select` | `validation` | 구매 직후 이유 선택 | 선언 이유와 행동 추론 대조 |
 | `remove_from_cart` | `hesitation` | 장바구니 상품 제거 | 전환 마찰 |
 | `hover_dwell` | `hesitation` | CTA hover 체류 | 구매 전 망설임 |
-| `begin_checkout` | `conversion` | 결제 시작 | 결제 시작 전환 |
-| `purchase` | `conversion` | 테스트 주문 완료 | 구매 전환·매출 |
-| `purchase_reason_select` | `validation` | 구매 이유 설문 선택 | 선언 구매 이유 |
 | `rage_click` | `friction` | 같은 지점 반복 클릭 | UI 마찰 |
 | `dead_click` | `friction` | 클릭 불가 영역 클릭 | 기대 기능 부재 |
 
@@ -300,9 +297,6 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
-| `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
-| `purchase` | `order_id: string`, `items: object[]` | `order_value: number`, `currency: string` |
-| `purchase_reason_select` | `order_id: string`, `reasons: string[]` (1~2개) | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 
 ## 5. 배열과 Object 구조
 
@@ -311,18 +305,28 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `ranking[]` | object[] | `product_id: string`, `position: integer` | 추천 스냅샷 상품 순위 |
 | `matched_ingredients[]` | string[] | 해당 없음 | 정규화된 성분 ID 또는 이름 |
 | `matched_keywords[]` | string[] | 해당 없음 | 정규화된 분석 키워드 |
+| `items[]` | object[] | `product_id: string`, `quantity: integer`, `unit_price: number` | 주문 상품. `sku_id: string`은 선택 |
+| `reasons[]` | string[] | 해당 없음 | §3.9 enum. 1~2개, `skipped=true`면 빈 배열 |
+
+`items[]`는 `unit_price`를 싣고 매출액을 싣지 않는다. 상품별 매출
+`item_revenue = quantity * unit_price`는 Processed에서 파생하며 Event가 직접
+운반하지 않는다. 파생값을 Event에 실으면 단가가 사라져 가격 분석을 할 수 없고,
+`order_value`와 합계가 어긋났을 때 어느 쪽이 맞는지 판단할 근거도 없어진다.
+
+`purchase.order_value`는 주문 전체 금액이다. `items[]`를 상품 row로 explode한 뒤
+합산하면 상품 수만큼 중복되므로, 상품 매출은 `item_revenue`만 합산한다
+([`dw-schema.md`](./dw-schema.md) §6).
+
+`purchase_reason_select`는 주문 하나당 한 번만 발생한다. `reasons` 키는 항상
+존재해야 하며, 사용자가 설문을 건너뛰면 `skipped=true`와 함께 빈 배열을 보낸다.
+건너뛴 것과 응답이 유실된 것을 구분해야 응답률을 셀 수 있기 때문이다. 건너뛰지
+않았다면 1~2개다.
+
+자유 입력 원문은 전송하지 않고 분류값 `free_text_kind`만 남긴다.
 
 `section_dwell.dwell_ms`는 누적값이 아니라 구간 체류시간 delta다. 여러 Event는
 Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 `added_to_cart`, `wishlisted`와 함께 해석한다.
-
-### 5.1 `purchase_reason_select.reasons`
-
-`ingredient`, `skin_fit`, `reviews`, `review_same_skin`, `price`, `brand_trust`,
-`texture_finish`, `clean_claim`, `recommendation`, `restock`
-
-`primary_reason`이 있으면 반드시 `reasons[]` 중 하나여야 한다. `skipped=true`인
-Event는 `reasons`를 빈 배열로 보낼 수 있으며, 이 경우에만 1~2개 제한의 예외다.
 
 ## 6. Planned Event
 
@@ -333,9 +337,8 @@ Event는 `reasons`를 빈 배열로 보낼 수 있으며, 이 경우에만 1~2�
 | `search` | `comparison` | 검색 화면·Trigger 구현 | `query_text: string`; 선택 `result_count`, `normalized_query` |
 | `compare_products` | `comparison` | 비교 기능 구현 | `compared_product_ids: string[]`; 선택 `base_product_id`, `compare_count` |
 
-`items[]`의 필수 child는 `product_id: string`, `quantity: integer`,
-`unit_price: number`이며 `sku_id: string`은 선택이다. 활성화할 때
-`event-schema.json`의 event enum과 intent 조건도 함께 변경한다.
+`begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event로 이동했다.
+§2.5와 §4.5를 따른다.
 
 ## 6-2. 공통 선택 properties: 쇼핑몰 진열 (`storefront_*`)
 
@@ -351,7 +354,6 @@ Event는 `reasons`를 빈 배열로 보낼 수 있으며, 이 경우에만 1~2�
 | `storefront_card` | `line` \| `shadow` \| `plain` | 카드 표면 |
 | `storefront_font` | `sans` \| `serif` \| `wide` | 글꼴 |
 | `storefront_theme` | `bloom` `rose` `coral` `lavender` `mint` `earth` `sand` `clinic` `mono` | 색 |
-| `brand_id` | string | 상품이 없는 이벤트에도 적용할 수 있는 브랜드 식별자 |
 
 규칙:
 
@@ -382,10 +384,10 @@ Event는 `reasons`를 빈 배열로 보낼 수 있으며, 이 경우에만 1~2�
    `generator_type`이 필요하다. 이 공통 규칙은 JSON Schema에서도 검사한다.
 5. `actor_type='user'`에 synthetic runtime metadata가 있으면 경고하고 분석에는
    사용하지 않는다.
-6. Collector가 동기 검증한 위반 Event는 `activity-events-rejected` topic으로 원문,
-   `request_id`, 원본 `event_index`, 위반 상세와 함께 발행하고 Spark는 이를 `bad_events`에
-   적재한다. Spark 검증 위반도 같은 `bad_events`에 격리한다. 한 Event에 여러 위반이 있으면
-   원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
+6. Collector가 동기 검증한 위반 Event는 Kafka에 발행하지 않는다. HTTP `202`의
+   `rejections`와 Collector 구조화 로그·메트릭으로만 기록한다. Kafka에 발행된 Event를
+   Spark가 추가 검증하다 위반을 발견한 경우에만 `bad_events`에 격리한다. 한 Event에 여러
+   위반이 있으면 원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
 7. Collector는 `begin_checkout`, `purchase`, `purchase_reason_select`의 required key,
    타입, 양수 수량·가격, `reasons` 길이 및 enum을 동기 검증한다. 이 밖의 Event별
    properties는 Spark가 방어적으로 검사한다.

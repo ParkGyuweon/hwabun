@@ -436,19 +436,6 @@
     {
       "if": {
         "properties": {
-          "event_name": { "const": "purchase_reason_select" }
-        },
-        "required": ["event_name"]
-      },
-      "then": {
-        "properties": {
-          "intent": { "const": "validation" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "event_name": {
             "enum": [
               "rage_click",

@@ -147,7 +147,7 @@ Q1과 Q2를 하나의 Job으로 합칠지는 저장 엔진과 트랜잭션 방�
 `+09:00` 등)을 허용한다. timezone 없는 값은 거부하고, Raw 원문은 보존하되
 Parsed/Processed timestamp는 UTC로 정규화한다.
 
-`request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. Collector는 배치·Event의 `schema_version` 일치와 일부 활성 Event의 properties 의미를 검증한다. 계약 위반 Event는 정상 topic 대신 `activity-events-rejected`로 원문·검증 상세와 함께 발행된다.
+`request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. Collector는 배치·Event의 `schema_version` 일치와 일부 활성 Event의 properties 의미를 검증한다. 계약 위반 Event는 Kafka에 발행하지 않으며, HTTP `202` 응답의 `rejections`와 Collector 구조화 로그·메트릭으로 확인한다. `bad_events`는 Kafka에 발행된 Event를 Spark가 추가 검증하다 위반을 발견했을 때만 사용하는 격리 Dataset이다.
 
 근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md).
 
