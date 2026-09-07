@@ -32,6 +32,7 @@ BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from build_user_vectors import build, load_events        # noqa: E402
+from ltr_features import LtrFeatures, load_ltr          # noqa: E402
 from persona_feature import AffinityTable                # noqa: E402
 from product_encoder import Encoder                      # noqa: E402
 from recommender import (CF_BETA, LAMBDA, LAMBDA_MMR, VIEW_CAP,   # noqa: E402
@@ -57,15 +58,23 @@ def vectors_from_snapshot(snapshot):
 
 
 def score_from_snapshot(snapshot, persona, matrix, prior, affinity,
-                        index=None, cooc=None, supporters=None):
+                        index=None, cooc=None, supporters=None, ltr=None):
     """계약 §API 4단계. 상태와 페르소나만으로 점수를 만든다
 
     CF 가점(§4-1)도 **스냅샷에 저장된 `converted` 만으로** 낸다. 서빙이 가진 것도
     그것뿐이므로, 여기서 UserVector 를 다시 들추면 "저장한 것만으로 되는가" 를
     검증하지 못한다.
     """
-    positive, negative = vectors_from_snapshot(snapshot)
     w1, w2, w3 = schedule_for(snapshot["n_products"])
+    if ltr is not None and index is not None:
+        clf, F = ltr
+        # 시드는 스냅샷의 긍정 집합이다 (계약 §2 positive). 전환만 쓰면
+        # 점수가 전환 사이에 안 움직인다
+        rows = [index[g] for g in snapshot.get("positive")
+                or snapshot["converted"] if g in index]
+        if rows:
+            return clf.predict_proba(F.make(persona, rows))[:, 1], (w1, w2, w3)
+    positive, negative = vectors_from_snapshot(snapshot)
     score = np.zeros(len(matrix), dtype=np.float32)
     if positive is not None:
         score += w1 * (matrix @ positive)
@@ -84,10 +93,10 @@ def score_from_snapshot(snapshot, persona, matrix, prior, affinity,
 
 def serve(snapshot, persona, matrix, prior, affinity, recommender,
           k=K, lam_mmr=LAMBDA_MMR, view_cap=VIEW_CAP,
-          cooc=None, supporters=None):
+          cooc=None, supporters=None, ltr=None):
     """노출 정책(5) -> MMR(6) -> 상위 k(7)"""
     score, weights = score_from_snapshot(snapshot, persona, matrix, prior, affinity,
-                                         recommender.idx, cooc, supporters)
+                                         recommender.idx, cooc, supporters, ltr)
     score = score.copy()
 
     # 전환한 상품은 후보에서 완전히 제외한다
@@ -123,6 +132,8 @@ def main():
     # 4단계에 CF 가 빠져 있으면 검증 자체가 낡은 계약을 보게 된다.
     ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
                     help="CF 가점을 끄고 CBF 단독으로 돈다 (옛 수치 재현용)")
+    ap.add_argument("--no-ltr", dest="ltr", action="store_false", default=True,
+                    help="학습 결합을 끄고 선형 결합으로 돈다 (옛 수치 재현용)")
     a = ap.parse_args()
 
     encoder = Encoder()
@@ -134,6 +145,7 @@ def main():
     prior = np.asarray(encoder.prior(), dtype=np.float32)
     affinity = AffinityTable(index)
     recommender = Recommender(matrix, index, prior, affinity=affinity)
+    ltr = load_ltr() if a.ltr else None
     cooc, supporters = load_cooc() if a.cf else (None, None)
     if a.cf and cooc is None:
         print("⚠️ CF 가점이 켜져 있는데 item_cooc.npz 가 없습니다 — "
@@ -142,6 +154,13 @@ def main():
         print("CF 가점 켬 (β=1.0 · 가점 전용 · 계약 §4-1)")
     else:
         print("CF 가점 끔 — CBF 단독")
+    if a.ltr and ltr is None:
+        print("⚠️ 학습 결합이 켜져 있는데 ltr_model.pkl 이 없습니다 — 선형으로 돕니다")
+    elif a.ltr:
+        print(f"학습 결합 켬 (트리 {ltr[1]['n_trees']}개 · 계약 §5 처리 4단계)")
+        ltr = (ltr[0], LtrFeatures(encoder, matrix, prior, affinity, cooc, supporters))
+    else:
+        print("학습 결합 끔 — 선형 결합")
     personas = {p["persona_id"]: p
                 for p in json.load(open(PERSONAS, encoding="utf-8"))}
 
@@ -165,7 +184,7 @@ def main():
         t0 = time.perf_counter()
         picked, weights, _ = serve(snap, persona, matrix, prior, affinity,
                                    recommender, k=a.k, lam_mmr=a.lam_mmr,
-                                   cooc=cooc, supporters=supporters)
+                                   cooc=cooc, supporters=supporters, ltr=ltr)
         elapsed += time.perf_counter() - t0
         ids = [recommender.ids[i] for i in picked]
         lists.append((snap, ids))

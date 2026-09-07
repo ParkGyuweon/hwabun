@@ -32,6 +32,7 @@ BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from eval_metadata import load as load_metadata            # noqa: E402
+from ltr_features import LtrFeatures, load_ltr             # noqa: E402
 from persona_feature import load as load_affinity          # noqa: E402
 from persona_split import select as select_split           # noqa: E402
 from product_encoder import Encoder                        # noqa: E402
@@ -42,6 +43,7 @@ from recommender import (load_cooc, cf_bonus, CF_BETA,
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
 K = 10
 BOOT = 300
+LTR_NAME = "학습 결합 (LTR)"
 PREV_SCHEDULE = [(0, 0.00, 0.30, 0.70), (5, 0.70, 0.25, 0.05),
                  (10 ** 9, 0.40, 0.55, 0.05)]
 
@@ -65,7 +67,7 @@ def weights(schedule, n_seed):
 
 
 def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
-             brands=None, known=None, cooc=None, supporters=None):
+             brands=None, known=None, cooc=None, supporters=None, ltr=None):
     """조건별 적중 여부를 사람 단위로 모은다. 같은 사람을 여러 조건에 쓰므로 짝비교가 된다
 
     조건은 **우리가 골랐던 것들**이다. valid 에서 같은 선택이 나오는지 확인하고,
@@ -77,6 +79,8 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
              "속성 항 제거(w2=0)": (SCHEDULE, False, LAMBDA_MMR),
              "MMR 끔(λ=1.0)": (SCHEDULE, True, 1.0)}
     hits = {c: [] for c in conds}
+    if ltr is not None:
+        hits[LTR_NAME] = []       # 학습 결합. 선형 조건들과 **같은 사람**을 쓴다
     longtail, seeds, elapsed = [], [], 0.0
     for p in personas:
         s = seq_of(p["_meta"], index)
@@ -116,6 +120,14 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
                 order = [int(i) for i in np.argsort(-x)[:K * 3] if np.isfinite(x[i])]
                 top = recommender.mmr(x, order, K, lam_mmr)
             hits[name].append(1 if ti in list(top) else 0)
+        if ltr is not None:
+            clf, F = ltr
+            # 피처도 **후보 안에서** 만든다 (cf·cf_rank 가 후보에 의존한다)
+            sc = clf.predict_proba(F.make(p, si, cand))[:, 1]
+            x = np.where(cand, sc, -np.inf)
+            order = [int(i) for i in np.argsort(-x)[:K * 3] if np.isfinite(x[i])]
+            top = recommender.mmr(x, order, K, LAMBDA_MMR)
+            hits[LTR_NAME].append(1 if ti in list(top) else 0)
         longtail.append(pop_rank[ti] >= 101)
         seeds.append(len(si))
     return ({k: np.array(v) for k, v in hits.items()},
@@ -135,13 +147,18 @@ def main():
     # CF 가점은 **채택됐다** (2026-09-07). 기본이 켬이고 끄려면 --no-cf 다.
     # 산출물이 없으면 조용히 꺼지지 않고 경고를 찍는다 — 조용히 꺼지면
     # "CF 를 켰다고 생각한 수치" 가 사실은 CBF 값이 된다.
+    ap.add_argument("--no-ltr", dest="ltr", action="store_false", default=True,
+                    help="학습 결합을 끄고 선형 결합만 본다 (옛 수치 재현용)")
     ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
                     help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
-    ap.add_argument("--split", choices=("train", "valid", "test", "all"),
+    ap.add_argument("--split",
+                    choices=("train", "valid", "test", "all",
+                             "holdout_a", "holdout_b"),
                     default="valid",
                     help="기본은 valid — 파라미터를 고르는 집합이다. "
                          "test 는 선택이 끝난 뒤 최종 보고에만 쓴다 (docs/ai/"
-                         "evaluation-framework.md 1절)")
+                         "evaluation-framework.md 1절). holdout_a 에서 고르고 "
+                         "holdout_b 에서 확인한다 — test 는 소진됐다 (부록 Q)")
     a = ap.parse_args()
 
     e = Encoder()
@@ -167,16 +184,48 @@ def main():
     recommender = Recommender(V, index, prior, affinity=affinity, brands=brands,
                               known_brands=known,
                               cooc=cooc, supporters=supporters)
-    profiles = {p["persona_id"]: p
-                for p in json.load(open(PERSONAS, encoding="utf-8"))}
-    rows = load_metadata(split=a.split)
+    ltr = load_ltr() if a.ltr else None
+    if a.ltr and ltr is None:
+        print("⚠️ 학습 결합이 켜져 있는데 ltr_model.pkl 이 없습니다 — "
+              "선형만 봅니다. `python batch/jobs/train_ltr.py` 를 먼저 도십시오")
+    elif a.ltr:
+        clf_, meta_ = ltr
+        print(f"학습 결합 켬 (트리 {meta_['n_trees']}개 · 학습 {meta_['split']} "
+              f"{meta_['n_persona']:,}명 · 증강 {meta_['augment_fraction']:.0%})")
+        ltr = (clf_, LtrFeatures(e, V, prior, affinity, cooc, supporters))
+    else:
+        print("학습 결합 끔 — 선형 결합")
+    # 홀드아웃은 페르소나 파일도 정본 파일도 따로다. test 를 소진했으므로
+    # 고르기는 holdout_a, 확인은 holdout_b 에서 한다 (부록 Q).
+    if a.split.startswith("holdout_"):
+        tag = a.split.split("_")[1]
+        persona_path = os.path.join(ROOT, "simulator", "personas", "data",
+                                    f"personas_holdout_{tag}.json")
+        meta_path = os.path.join(ROOT, "batch", "ingest", "data",
+                                 f"eval_metadata_holdout_{tag}.jsonl")
+        for f_ in (persona_path, meta_path):
+            if not os.path.exists(f_):
+                seed = "43" if tag == "a" else "44"
+                raise SystemExit(
+                    os.path.relpath(f_, ROOT) + " 가 없습니다." + chr(10) +
+                    "  python simulator/personas/build_personas.py "
+                    "--holdout 2000 --seed " + seed + " --tag " + tag + chr(10) +
+                    "  python batch/jobs/eval_metadata.py --personas "
+                    + persona_path + " --tag " + a.split)
+        profiles = {p["persona_id"]: p
+                    for p in json.load(open(persona_path, encoding="utf-8"))}
+        rows = load_metadata(path=meta_path, split=a.split)
+    else:
+        profiles = {p["persona_id"]: p
+                    for p in json.load(open(PERSONAS, encoding="utf-8"))}
+        rows = load_metadata(split=a.split)
     personas = [dict(profiles[r["persona_id"]], _meta=r) for r in rows
                 if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
 
     print(f"상품 {V.shape[0]}개 x {V.shape[1]}차원")
-    print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
+    print(f"**{a.split}** 집합 {len(personas):,}명 ·"
           f" 친화도 {affinity.n_rows:,}행")
     print(f"스케줄 {SCHEDULE} · λ_mmr {LAMBDA_MMR}")
     if a.split == "test":
@@ -187,7 +236,7 @@ def main():
 
     hits, lt, seeds, elapsed = evaluate(personas, V, prior, pop_rank, affinity,
                                         index, recommender, brands, known,
-                                        cooc=cooc, supporters=supporters)
+                                        cooc=cooc, supporters=supporters, ltr=ltr)
     rng = np.random.default_rng(42)
     base = hits["현행 (스케줄+MMR)"]
 

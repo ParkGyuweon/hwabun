@@ -104,6 +104,13 @@ STEPS = [
     (8, "인코딩 샘플 6개 + 문서",
      ["batch/ingest/build_feature_sample.py"],
      [os.path.join(DATA, "feature_sample.json")], False),
+    # 학습 결합 모델. eval_metadata 의 train 분할과 동시발생을 읽으므로 7·5.5 뒤다.
+    # **9번의 골든이 이 모델로 만들어지므로 반드시 그 앞이어야 한다** — 없으면
+    # 골든이 조용히 선형 기준으로 나오고, 자바가 그것을 재현하면 서빙이 틀린다.
+    (8.5, "학습 결합 모델 (LTR)",
+     ["batch/jobs/train_ltr.py"],
+     [os.path.join(DATA, "serving", "ltr_model.pkl"),
+      os.path.join(DATA, "serving", "ltr_model_meta.json")], False),
     (9, "서빙 산출물 + 순위 대조 기준",
      ["batch/jobs/export_features.py"],
      [os.path.join(DATA, "serving", "product_feature.jsonl"),

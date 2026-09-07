@@ -36,12 +36,14 @@
 [ 추천 ]  batch/ — 위 파이프라인과 분리된 오프라인 배치
    Sephora 리뷰 844,865건
      → 상품 벡터 148차원 · 페르소나 9,900명 · 속성 친화도 4,000행
+     → train_ltr.py    학습 결합 모델 (트리 278개)
      → recommender.py  점수 + MMR
      → batch/ingest/data/serving/  서빙용 산출물
           ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
-   대표 지표 Recall@10 = 38.86% (롱테일 40.61%) — CBF + CF 가점, test 1,971명
-   ┈┈▶ CBF 단독이던 23.39% 에서 CF 채택으로 올랐다 (부록 S)
-   ┈┈▶ 학습 결합(LTR)까지 얹으면 43.9% — 팀 검토 중, 미채택
+   대표 지표 Recall@10 = 43.95% — CBF + CF 가점 + 학습 결합, holdout_a 2,000명
+   ┈┈▶ 확인 집합 holdout_b 43.20% · 선형 대비 +5.80 / +3.95%p (둘 다 CI 가 0 제외)
+   ┈┈▶ 23.39%(CBF 단독) → 38%대(CF 채택) → 43%대(학습 결합) 순으로 올랐다 (부록 S·T)
+   ┈┈▶ 세 평가 축이 0.6%p 안에 모인다 — 오프라인 43.95 · 재생 43.95 · 동적 44.05%
 
 [ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
 ```

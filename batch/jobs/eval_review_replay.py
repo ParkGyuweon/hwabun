@@ -43,6 +43,7 @@ from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
+from ltr_features import LtrFeatures, load_ltr                # noqa: E402
 from recommender import (load_cooc, cf_bonus,
                         BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for)
@@ -139,6 +140,27 @@ def run_persona(persona, history, target, ctx):
     blocked = {index[r["group_id"]] for r in history}
     blocked.discard(index[target])
 
+    # 학습 결합이 켜져 있으면 **위 선형 합을 통째로 대체**한다 (계약 §5 처리 4단계).
+    # 시드는 서빙과 같게 전환한 상품을 쓴다.
+    if recommender.ltr is not None and recommender.ltr_feat is not None:
+        cand = np.ones(len(M), bool)
+        cand[list(blocked)] = False
+        pos, _neg = state.weights()
+        rows = [index[g] for g in pos if g in index] or [
+            index[g] for g in state.converted if g in index]
+        if rows:
+            scores = recommender.ltr.predict_proba(
+                recommender.ltr_feat.make(persona, rows, cand))[:, 1].astype(np.float32)
+        top = served_top(scores, blocked, recommender)
+        masked = scores.copy()
+        for i in blocked:
+            masked[i] = -np.inf
+        target_i = index[target]
+        rank = int((masked > masked[target_i]).sum()) + 1
+        return {"hit": target_i in top, "rank": rank,
+                "n_seed": len(blocked), "n_converted": len(state.converted),
+                "n_negative": len(state.viewed) - len(state.converted)}
+
     # CF 가점 — 서빙과 같게 **전환한 상품**을 쓴다.
     # 이 축은 이벤트를 실제로 재생하므로 state.converted 가 채워져 있다.
     if recommender.cooc is not None:
@@ -166,7 +188,10 @@ def main():
     # "CF 를 켰다고 생각한 수치" 가 사실은 CBF 값이 된다.
     ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
                     help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
-    ap.add_argument("--split", choices=("train", "valid", "test", "all"),
+    ap.add_argument("--no-ltr", dest="ltr", action="store_false", default=True,
+                    help="학습 결합을 끄고 선형 결합으로 돈다 (옛 수치 재현용)")
+    ap.add_argument("--split", choices=("train", "valid", "test", "all",
+                                        "holdout_a", "holdout_b"),
                     default="valid")
     ap.add_argument("--limit", type=int, default=None)
     a = ap.parse_args()
@@ -184,19 +209,40 @@ def main():
         print("CF 가점 켬 (β=1.0 · 가점 전용)")
     else:
         print("CF 가점 끔 — CBF 단독")
+    ltr = load_ltr() if a.ltr else None
+    if a.ltr and ltr is None:
+        print("⚠️ 학습 결합이 켜져 있는데 ltr_model.pkl 이 없습니다 — "
+              "선형으로 돕니다. `python batch/jobs/train_ltr.py` 를 먼저 도십시오")
+    elif a.ltr:
+        print(f"학습 결합 켬 (트리 {ltr[1]['n_trees']}개)")
+    else:
+        print("학습 결합 끔 — 선형 결합")
     recommender = Recommender(M, index, prior, affinity=affinity,
                               brands=[p["brand_name"] for p in encoder.products],
                               known_brands=set(encoder.blk["brand"]["vocab"]),
-                              cooc=cooc, supporters=supporters)
+                              cooc=cooc, supporters=supporters,
+                              ltr=None if ltr is None else ltr[0],
+                              ltr_feat=None if ltr is None else LtrFeatures(
+                                  encoder, M, prior, affinity, cooc, supporters))
     ctx = (M, index, prior, affinity, recommender)
 
+    # 홀드아웃은 페르소나 파일도 정본 파일도 따로다 (부록 Q)
+    if a.split.startswith("holdout_"):
+        tag = a.split.split("_")[1]
+        ppath = os.path.join(ROOT, "simulator", "personas", "data",
+                             f"personas_holdout_{tag}.json")
+        mpath = os.path.join(ROOT, "batch", "ingest", "data",
+                             f"eval_metadata_holdout_{tag}.jsonl")
+        meta_rows = load_metadata(path=mpath, split=a.split)
+    else:
+        ppath, meta_rows = PERSONAS, load_metadata(split=a.split)
     profiles = {p["persona_id"]: p
-                for p in json.load(open(PERSONAS, encoding="utf-8"))}
+                for p in json.load(open(ppath, encoding="utf-8"))}
     personas = [dict(profiles[r["persona_id"]], _meta=r)
-                for r in load_metadata(split=a.split) if r["persona_id"] in profiles]
+                for r in meta_rows if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
-    print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
+    print(f"**{a.split}** 집합 {len(personas):,}명 ·"
           f" 리뷰를 시간순 이벤트로 재생")
     if a.split == "test":
         print("  ⚠ test 는 최종 보고용이다")
