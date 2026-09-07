@@ -51,10 +51,18 @@ class ServingArtifactTest(unittest.TestCase):
             self.assertTrue(0.0 <= float(r["affinity"]) <= 1.0)
 
     def test_golden_is_reproducible(self):
-        """기준 결과를 지금 코드로 다시 계산해도 같은 순위·점수가 나와야 한다"""
+        """기준 결과를 지금 코드로 다시 계산해도 같은 순위·점수가 나와야 한다
+
+        **검사식이 골든과 다르면 "재현된다" 는 확인 자체가 거짓이 된다.**
+        골든이 무엇으로 만들어졌는지는 파일이 `scorer` 로 말한다 — 그 값을 보고
+        같은 경로로 다시 계산한다. 여기를 하드코딩하면 결합 방식을 바꿀 때마다
+        테스트가 조용히 옛 식을 검사하게 된다.
+        """
         import sys
         sys.path.insert(0, BD)
+        from ltr_features import LtrFeatures, load_ltr
         from persona_feature import AffinityTable
+        from product_encoder import Encoder
         from recommender import CF_BETA, cf_bonus, load_cooc, schedule_for
 
         index = {p["product_id"]: i for i, p in enumerate(self.products)}
@@ -63,21 +71,40 @@ class ServingArtifactTest(unittest.TestCase):
         affinity = AffinityTable(index)
         cooc, supporters = load_cooc()
 
+        scorer = self.golden.get("scorer", "linear")
+        feat = clf = None
+        if scorer == "ltr":
+            ltr = load_ltr()
+            self.assertIsNotNone(ltr, "골든이 LTR 기준인데 ltr_model.pkl 이 없다")
+            clf, meta = ltr
+            self.assertEqual(meta["feature_names"],
+                             self.golden["ltr_model"]["feature_names"],
+                             "모델의 피처 구성이 골든을 만들 때와 다르다")
+            # 블록 경계는 어휘집(계약)에서 온다 — 자바도 같은 파일을 읽는다
+            feat = LtrFeatures(Encoder(), M, prior, affinity, cooc, supporters)
+
         for case in self.golden["cases"]:
             si = [index[g] for g in case["seed_product_ids"]]
-            u = M[si].mean(0)
-            cos = M @ (u / np.linalg.norm(u))
-            w1, w2, w3 = schedule_for(len(si))
-            self.assertEqual(w1, case["weights"]["w1_cosine"], case["persona_id"])
-            score = w1 * cos + w2 * affinity(case["attributes"]) + w3 * prior
-            # CF 가점 — 골든이 CF 기준으로 만들어지므로 검사식도 같아야 한다.
-            # 여기가 갈리면 "재현된다" 는 확인이 거짓이 된다
-            if cooc is not None:
+            self.assertEqual(scorer, case.get("scorer", "linear"),
+                             case["persona_id"])
+            if scorer == "ltr":
                 cand = np.ones(len(M), bool)
                 cand[si] = False
-                cfb = cf_bonus(cooc, si, cand, supporters)
-                if cfb is not None:
-                    score = score + CF_BETA * cfb
+                score = clf.predict_proba(
+                    feat.make(case["attributes"], si, cand))[:, 1]
+            else:
+                u = M[si].mean(0)
+                cos = M @ (u / np.linalg.norm(u))
+                w1, w2, w3 = schedule_for(len(si))
+                self.assertEqual(w1, case["weights"]["w1_cosine"], case["persona_id"])
+                score = w1 * cos + w2 * affinity(case["attributes"]) + w3 * prior
+                if cooc is not None:
+                    cand = np.ones(len(M), bool)
+                    cand[si] = False
+                    cfb = cf_bonus(cooc, si, cand, supporters)
+                    if cfb is not None:
+                        score = score + CF_BETA * cfb
+            score = np.asarray(score, np.float64)
             score[si] = -np.inf
             top = np.argsort(-score)[:len(case["expected_top10"])]
             got = [self.products[i]["product_id"] for i in top]

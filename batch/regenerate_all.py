@@ -78,6 +78,18 @@ STEPS = [
      [os.path.join(PERSONA, "personas_9900.json"),
       os.path.join(PERSONA, "personas_100_agent.json"),
       os.path.join(PERSONA, "persona_sampling_report.json")], False),
+    # 동시발생은 리뷰 원본을 읽으므로 SEPHORA_DATASET 이 필요하다.
+    #
+    # **자리가 여기인 이유가 둘이다.**
+    #   - 앞: 누출 차단이 `personas_*.json` 을 훑어 author_id 를 빼므로 5번 뒤여야
+    #     한다. **페르소나 파일이 늘면 반드시 다시 만들어야 한다** — 새 홀드아웃이
+    #     동시발생에 남아 있으면 그 홀드아웃으로 잰 수치가 전부 거짓이 된다
+    #   - 뒤: 9번의 `ranking_golden.json` 이 CF 항을 포함하므로 **이것보다 먼저
+    #     돌면 골든이 조용히 CBF 기준으로 만들어진다.** 자바가 그 골든을 재현하면
+    #     검증이 통과해도 서빙이 틀린다
+    (5.5, "아이템-아이템 동시발생 (CF 가점 입력)",
+     ["batch/jobs/build_cooc.py"],
+     [os.path.join(DATA, "serving", "item_cooc.npz")], False),
     (6, "페르소나 성향 6축",
      ["simulator/generator/build_persona_style.py"],
      [os.path.join(PERSONA, "persona_style.json")], False),
@@ -92,6 +104,13 @@ STEPS = [
     (8, "인코딩 샘플 6개 + 문서",
      ["batch/ingest/build_feature_sample.py"],
      [os.path.join(DATA, "feature_sample.json")], False),
+    # 학습 결합 모델. eval_metadata 의 train 분할과 동시발생을 읽으므로 7·5.5 뒤다.
+    # **9번의 골든이 이 모델로 만들어지므로 반드시 그 앞이어야 한다** — 없으면
+    # 골든이 조용히 선형 기준으로 나오고, 자바가 그것을 재현하면 서빙이 틀린다.
+    (8.5, "학습 결합 모델 (LTR)",
+     ["batch/jobs/train_ltr.py"],
+     [os.path.join(DATA, "serving", "ltr_model.pkl"),
+      os.path.join(DATA, "serving", "ltr_model_meta.json")], False),
     (9, "서빙 산출물 + 순위 대조 기준",
      ["batch/jobs/export_features.py"],
      [os.path.join(DATA, "serving", "product_feature.jsonl"),
@@ -108,12 +127,6 @@ STEPS = [
      [os.path.join(DATA, "serving", "product_ingredient_position.csv"),
       os.path.join(DATA, "serving", "product_concern_top2.csv"),
       os.path.join(DATA, "serving", "ingredient_skin_lift.csv")], False),
-    # 동시발생은 리뷰 원본을 읽으므로 SEPHORA_DATASET 이 필요하다.
-    # **페르소나 파일이 늘면 반드시 다시 만들어야 한다** — 새 홀드아웃이
-    # 동시발생에 남아 있으면 그 홀드아웃으로 잰 수치가 전부 거짓이 된다.
-    (12, "아이템-아이템 동시발생 (CF 가점 입력)",
-     ["batch/jobs/build_cooc.py"],
-     [os.path.join(DATA, "serving", "item_cooc.npz")], False),
 ]
 
 
@@ -152,9 +165,9 @@ def main():
     if not todo:
         raise SystemExit("실행할 단계가 없습니다.")
 
-    if not os.environ.get("SEPHORA_DATASET") and any(s[0] in (1, 3, 4, 5) for s in todo):
+    if not os.environ.get("SEPHORA_DATASET") and any(s[0] in (1, 3, 4, 5, 5.5) for s in todo):
         raise SystemExit(
-            "SEPHORA_DATASET 환경변수가 필요합니다 (1·3·4·5 단계가 리뷰 원본을 읽습니다).\n"
+            "SEPHORA_DATASET 환경변수가 필요합니다 (1·3·4·5·5.5 단계가 리뷰 원본을 읽습니다).\n"
             "  예) SEPHORA_DATASET=.../Research/dataset/sephora python batch/regenerate_all.py")
 
     print("=" * 72)

@@ -712,21 +712,38 @@ POOL_MIX = {"top": POOL_SIZE // 2,
 
 
 class CbfExposure:
-    """추천 점수로 방문 후보를 뽑는다. 무엇을 고를지가 아니라 무엇이 보일지를 정한다."""
+    """추천 점수로 방문 후보를 뽑는다. 무엇을 고를지가 아니라 무엇이 보일지를 정한다.
+
+    **정본 서빙과 같은 점수를 써야 한다** (2026-09-07). 여기가 CBF 단독이면
+    생성기는 **이미 없는 시스템의 화면**을 만든다 — 그 로그로 잰 노출 정책·퍼널
+    수치가 전부 다른 알고리즘 이야기가 된다. 그래서 브랜드 폴백과 CF 가점을
+    정본과 똑같이 켠다 (계약 §4-1).
+
+    산출물(`item_cooc.npz`)이 없으면 CF 항이 통째로 꺼지고 경고를 찍는다.
+    조용히 꺼지면 "CF 를 켠 로그" 라고 부른 것이 사실은 CBF 로그가 된다.
+    """
 
     def __init__(self, catalog):
         sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
         from product_encoder import Encoder
         from persona_feature import load as load_affinity
-        from recommender import Recommender
+        from recommender import Recommender, load_cooc
         from user_vector import UserVector
         self.UserVector = UserVector
         enc = Encoder()
         self.M = np.asarray(enc.matrix(), np.float32)
         self.index = {x["product_id"]: i for i, x in enumerate(enc.products)}
         self.prior = np.asarray(enc.prior(), dtype=np.float32)
+        cooc, supporters = load_cooc()
+        if cooc is None:
+            print("⚠️ item_cooc.npz 가 없어 CF 가점 없이 노출을 만듭니다 — "
+                  "`python batch/jobs/build_cooc.py` 를 먼저 도십시오",
+                  file=sys.stderr)
         self.rec = Recommender(self.M, self.index, self.prior,
-                               affinity=load_affinity(self.index))
+                               affinity=load_affinity(self.index),
+                               brands=[x["brand_name"] for x in enc.products],
+                               known_brands=set(enc.blk["brand"]["vocab"]),
+                               cooc=cooc, supporters=supporters)
         self.ids = [None] * len(self.index)
         for g, i in self.index.items():
             self.ids[i] = g

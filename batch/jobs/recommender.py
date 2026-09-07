@@ -146,6 +146,11 @@ def brand_match(brands, rows, known=None):
 # (test 에서는 끄면 -0.91%p 로 유의하게 나왔다. 두 분할의 표본 변동이 효과만 하다는
 #  뜻이라 근거는 다양성 쪽에 둔다)
 # 측정: docs/ai/recommendation-design.md 8절
+#
+# ⚠ 위 표는 **CBF 단독** 기준이다 (2026-09-03). CF 채택 후 다시 스윕하지 않았다 —
+# 근거를 정확도가 아니라 다양성에 두었고, CF 는 브랜드 쏠림을 오히려 풀어 주므로
+# (최다 브랜드 5.92 -> 4.43칸, 부록 S) 0.8 을 바꿀 이유가 생기지 않았다.
+# **재스윕한다면 홀드아웃에서 한다. test 는 소진됐다** (부록 Q).
 LAMBDA_MMR = 0.8
 
 # 시드(리뷰) 상품 개수 -> (w1 콘텐츠, w2 속성, w3 인기)
@@ -159,12 +164,18 @@ LAMBDA_MMR = 0.8
 #
 # leave-last-out **test 집합 1,971명** (부트스트랩 300회, 짝비교).
 # 선택은 valid 에서 하고 test 는 한 번만 본다 (docs/ai/evaluation-framework.md 1절):
-#   이 스케줄          23.39%  (롱테일 31.29%)   시드 6개 이상 구간 25.00%
+#   이 스케줄          23.39%  (롱테일 31.29%)   시드 6개 이상 구간 25.00%   <- CBF 단독
 #   이전 스케줄        22.43%  (롱테일 30.91%)   시드 6개 이상 구간 17.46%
 #   속성 항 제거       22.58%  (롱테일 30.91%)   -0.81%p CI [-1.52, -0.02]
 # 2026-09-03 재측정. 계약 §7.1.1(is_recommended) · §7.1.2(tie-break) 를 정본이
 # 받으면서 162명의 target 이 바뀌었다 (eval_metadata.py 머리말). 결론은 그대로다.
 # 속성 항은 정확도를 올리는 장치가 아니라 **롱테일 보험**이라 남긴다.
+#
+# ⚠ 위 세 줄은 **CBF 단독** 값이다. 이 스케줄은 그대로 쓰지만 **현재 성능이
+# 아니다** — CF 가점 채택 후 대표 지표는 Recall@10 38.86% (롱테일 40.61%) 다
+# (docs/ai/evaluation-framework.md 부록 S). 스케줄 자체는 CF 를 얹어도 판단이
+# 바뀌지 않아 다시 고르지 않았다: CF 는 가점 전용이라 w1/w2/w3 의 상대 비중을
+# 건드리지 않는다.
 # 측정: docs/ai/persona-feature-port.md §7 · batch/jobs/eval_persona_feature.py
 SCHEDULE = [(0, 0.00, 0.30, 0.70),
             (5, 0.70, 0.25, 0.05),
@@ -202,7 +213,8 @@ def prior_in_catalog(prior, rows):
 class Recommender:
     def __init__(self, matrix, index, prior, affinity=None, lam=LAMBDA,
                  catalog=None, brands=None, known_brands=None,
-                 cooc=None, supporters=None, cf_beta=CF_BETA):
+                 cooc=None, supporters=None, cf_beta=CF_BETA,
+                 ltr=None, ltr_feat=None):
         """matrix (상품수, 차원) · index product_id->행 · prior 인기도 0~1
            affinity: 페르소나 속성 친화도를 내주는 함수 f(persona) -> (상품수,) 배열
            catalog: 이 사이트가 파는 상품(id 또는 행 번호). 주면 후보를 그것으로
@@ -226,9 +238,16 @@ class Recommender:
         self.cooc = cooc
         self.supporters = supporters
         self.cf_beta = cf_beta
+        # 학습 결합 (2026-09-07 채택). 주면 **선형 합을 통째로 대체**한다 —
+        # 가중치 스케줄도 CF 가점도 타지 않는다. 그 값들은 모델의 피처로 들어간다.
+        # 안 주면 항이 통째로 꺼져 이전과 한 자리도 다르지 않다.
+        self.ltr = ltr
+        self.ltr_feat = ltr_feat
 
     def score(self, state, persona=None, n_seed=None):
         """state: user_vector.UserVector"""
+        if self.ltr is not None and self.ltr_feat is not None:
+            return self._score_ltr(state, persona)
         vp, vn = state.vectors(self.idx, self.M)
         pos, _ = state.weights()
         w1, w2, w3 = schedule_for(len(pos) if n_seed is None else n_seed)
@@ -257,6 +276,33 @@ class Recommender:
             if bonus is not None:
                 s = s + self.cf_beta * bonus
         return s
+
+    def _score_ltr(self, state, persona):
+        """학습 결합. 선형 합 대신 모델이 점수를 낸다 (계약 §5 처리 4단계)
+
+        **피처를 후보 안에서 만들어야 한다.** `cf` 와 `cf_rank` 가 후보 집합에
+        의존하므로, 사이트가 자기 상품만 판다면 그 안에서 다시 매겨야 한다.
+        후보 밖까지 넣어 등수를 매기면 에러 없이 순위만 틀린다.
+        """
+        # 시드는 **긍정 가중이 붙은 상품 전부**다 (전환 + 정독한 미전환, 규칙 5-1).
+        #
+        # ⚠ 전환한 상품만 쓰면 안 된다. 그러면 점수가 전환과 전환 사이에 한 발짝도
+        #   안 움직여서 **"행동이 쌓일수록 좋아진다" 가 깨진다** — 동적 축에서
+        #   시작 실패자 구제율이 4.5% -> 0.4% 로 주저앉는 것을 확인했다.
+        #   긍정 집합을 쓰면 9.7% 로 오히려 선형을 넘는다 (부록 T).
+        pos, _ = state.weights()
+        rows = [self.idx[g] for g in pos if g in self.idx]
+        if not rows:
+            rows = [self.idx[g] for g in state.converted if g in self.idx]
+        cand = np.ones(len(self.M), bool)
+        if self.catalog is not None:
+            cand[:] = False
+            cand[self.catalog] = True
+        if not rows:
+            # 시드가 없으면 모델이 볼 것이 없다. 인기도만 남긴다 (스케줄 0개 구간)
+            return np.asarray(self.prior, float) * 0.70
+        X = self.ltr_feat.make(persona, rows, cand)
+        return self.ltr.predict_proba(X)[:, 1]
 
     def mmr(self, scores, order, k, lam):
         """다양성 보정 — 점수 1등만 줄세우지 않고 서로 덜 닮은 것을 섞는다.

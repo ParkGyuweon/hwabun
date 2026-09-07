@@ -132,6 +132,10 @@ def snapshot(persona_id, state, index, matrix, n_events):
         "negative_u_sum": [round(float(x), 6) for x in un],
         "negative_w_sum": round(wn, 6),
         "converted": sorted(state.converted),
+        # 긍정 가중이 붙은 상품 집합 (전환 + 정독한 미전환, 규칙 5-1).
+        # **학습 결합의 시드가 이것이다** — 전환만 쓰면 점수가 전환과 전환
+        # 사이에 한 발짝도 안 움직여서 "행동이 쌓일수록 좋아진다" 가 깨진다.
+        "positive": sorted(pos),
         "viewed": viewed,
         # 가중치 스케줄 판정용. 접촉한 고유 상품 수다 (converted 포함)
         "n_products": len(viewed),

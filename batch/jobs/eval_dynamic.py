@@ -34,6 +34,10 @@ import sys
 
 import numpy as np
 
+# 콘솔이 cp949 면 "—" 나 "⚠️" 에서 UnicodeEncodeError 로 죽는다.
+# 하필 CF 경고문이 그 문자를 쓰므로, 경고를 못 보고 죽는 일이 생긴다.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
@@ -46,6 +50,7 @@ from product_encoder import Encoder                          # noqa: E402
 from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for,
                          load_cooc, cf_bonus, CF_BETA)
+from ltr_features import LtrFeatures, load_ltr             # noqa: E402
 from user_vector import UserVector                           # noqa: E402
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -151,7 +156,8 @@ def served_top(scores, blocked, recommender, k=K, lam_mmr=LAMBDA_MMR):
 def run_persona(persona, seeds, target, ctx, rng):
     """한 사람의 탐색을 돌리고 step 별 target 순위를 돌려준다"""
     (M, index, prior, affinity, hp, recommender, meta, brands, known,
-     cooc, supporters) = ctx
+     cooc, supporters) = ctx[:11]
+    ltr = ctx[11] if len(ctx) > 11 else None
     state = UserVector()
     # seed 는 이미 좋아한 상품이다. 전환으로 넣고 후보에서 뺀다
     for gid in seeds:
@@ -166,6 +172,17 @@ def run_persona(persona, seeds, target, ctx, rng):
     stop_reason = "steps"
 
     def score_now():
+        # 학습 결합이 켜져 있으면 선형 합을 통째로 대체한다 (계약 §5 처리 4단계)
+        if ltr is not None:
+            clf, F = ltr
+            # 시드는 **긍정 가중이 붙은 상품 전부**다 — 전환만 쓰면 점수가
+            # 전환과 전환 사이에 한 발짝도 안 움직인다 (아래 ⚠ 참조)
+            pos, _neg = state.weights()
+            cr = [index[g] for g in pos if g in index]
+            if not cr:
+                cr = [index[g] for g in state.converted if g in index]
+            if cr:
+                return clf.predict_proba(F.make(persona, cr))[:, 1].astype(np.float32)
         vp, vn = state.vectors(index, M)
         w1, w2, w3 = schedule_for(len(state.viewed))
         s = np.zeros(len(M), dtype=np.float32)
@@ -262,11 +279,14 @@ def summarize(results, label):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--split", choices=("train", "valid", "test", "all"),
+    ap.add_argument("--split", choices=("train", "valid", "test", "all",
+                                        "holdout_a", "holdout_b"),
                     default="valid")
     # CF 가점은 **채택됐다** (2026-09-07). 기본이 켬이고 끄려면 --no-cf 다.
     ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
                     help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
+    ap.add_argument("--no-ltr", dest="ltr", action="store_false", default=True,
+                    help="학습 결합을 끄고 선형 결합으로 돈다 (옛 수치 재현용)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
@@ -305,18 +325,35 @@ def main():
         print("CF 가점 켬 (β=1.0 · 가점 전용)")
     else:
         print("CF 가점 끔 — CBF 단독")
+    ltr = load_ltr() if a.ltr else None
+    if a.ltr and ltr is None:
+        print("⚠️ 학습 결합이 켜져 있는데 ltr_model.pkl 이 없습니다 — 선형으로 돕니다")
+    elif a.ltr:
+        print(f"학습 결합 켬 (트리 {ltr[1]['n_trees']}개)")
+        ltr = (ltr[0], LtrFeatures(encoder, M, prior, affinity, cooc, supporters))
+    else:
+        print("학습 결합 끔 — 선형 결합")
     ctx = (M, index, prior, affinity, hp, recommender, meta, brands, known,
-           cooc, supporters)
+           cooc, supporters, ltr)
 
+    # 홀드아웃은 페르소나 파일도 정본 파일도 따로다 (부록 Q)
+    if a.split.startswith("holdout_"):
+        tag = a.split.split("_")[1]
+        ppath = os.path.join(ROOT, "simulator", "personas", "data",
+                             f"personas_holdout_{tag}.json")
+        meta_rows = load_metadata(
+            path=os.path.join(ROOT, "batch", "ingest", "data",
+                              f"eval_metadata_holdout_{tag}.jsonl"), split=a.split)
+    else:
+        ppath, meta_rows = PERSONAS, load_metadata(split=a.split)
     profiles = {p["persona_id"]: p
-                for p in json.load(open(PERSONAS, encoding="utf-8"))}
+                for p in json.load(open(ppath, encoding="utf-8"))}
     personas = [dict(profiles[r["persona_id"]], _meta=r)
-                for r in load_metadata(split=a.split) if r["persona_id"] in profiles]
+                for r in meta_rows if r["persona_id"] in profiles]
     if a.limit:
         personas = personas[:a.limit]
 
-    print(f"**{a.split}** 집합 {len(personas):,}명 (PC 페르소나) ·"
-          f" 상품 {len(M)}개")
+    print(f"**{a.split}** 집합 {len(personas):,}명 · 상품 {len(M)}개")
     print(f"노출: 추천 점수 · 행동: hidden preference"
           f"({a.pref_profile}, {hp.text_backend}, seed {a.noise_seed})"
           f" · 탐색 seed {a.rng_seed}")
