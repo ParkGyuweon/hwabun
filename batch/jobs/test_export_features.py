@@ -55,12 +55,13 @@ class ServingArtifactTest(unittest.TestCase):
         import sys
         sys.path.insert(0, BD)
         from persona_feature import AffinityTable
-        from recommender import schedule_for
+        from recommender import CF_BETA, cf_bonus, load_cooc, schedule_for
 
         index = {p["product_id"]: i for i, p in enumerate(self.products)}
         M = np.array([p["vector"] for p in self.products], np.float32)
         prior = np.array([p["prior_score"] for p in self.products], np.float32)
         affinity = AffinityTable(index)
+        cooc, supporters = load_cooc()
 
         for case in self.golden["cases"]:
             si = [index[g] for g in case["seed_product_ids"]]
@@ -69,6 +70,14 @@ class ServingArtifactTest(unittest.TestCase):
             w1, w2, w3 = schedule_for(len(si))
             self.assertEqual(w1, case["weights"]["w1_cosine"], case["persona_id"])
             score = w1 * cos + w2 * affinity(case["attributes"]) + w3 * prior
+            # CF 가점 — 골든이 CF 기준으로 만들어지므로 검사식도 같아야 한다.
+            # 여기가 갈리면 "재현된다" 는 확인이 거짓이 된다
+            if cooc is not None:
+                cand = np.ones(len(M), bool)
+                cand[si] = False
+                cfb = cf_bonus(cooc, si, cand, supporters)
+                if cfb is not None:
+                    score = score + CF_BETA * cfb
             score[si] = -np.inf
             top = np.argsort(-score)[:len(case["expected_top10"])]
             got = [self.products[i]["product_id"] for i in top]
