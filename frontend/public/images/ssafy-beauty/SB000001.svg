@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="제로 포어 토닝 패드">
+  <rect width="800" height="800" fill="#f4f1ea"/>
+  <ellipse cx="400" cy="690" rx="220" ry="26" fill="#000" fill-opacity="0.06"/>
+  
+  <rect x="222" y="270" width="356" height="52" rx="16" fill="#6f8f6b"/>
+  <path d="M230 322 h340 v238 a40 40 0 0 1 -40 40 h-260 a40 40 0 0 1 -40 -40z" fill="#c9d8c4"/>
+  <rect x="230" y="380" width="340" height="120" fill="#ffffff" fill-opacity="0.85"/>
+  
+  <g font-family="'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif" text-anchor="middle" fill="#2f3a2f">
+    <text x="400" y="420" font-size="22" letter-spacing="4" font-weight="600">SSAFY BEAUTY</text>
+    <line x1="280.0" y1="434" x2="520.0" y2="434" stroke="#2f3a2f" stroke-opacity="0.35" stroke-width="1.5"/>
+    <text x="400" y="464" font-size="24" font-weight="500">제로 포어 토닝 패드</text>
+    <text x="400" y="492" font-size="16" fill-opacity="0.65">70매 / 155g</text>
+  </g>
+  <circle cx="86" cy="86" r="30" fill="#8fae8b"/>
+  <text x="86" y="93" font-family="'Pretendard','Noto Sans KR',sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">SB</text>
+</svg>

@@ -12,14 +12,22 @@
  * 화면을 검토하는 사람이 변화의 원인을 찾느라 시간을 버린다.
  */
 import vocab from '../../../../contracts/product-feature-vocab.json';
-import productsData from '../../mocks/products.sample.json';
+import { DEMO_BRAND, products as catalogData } from '../../mocks/products';
 import reviewsData from '../../mocks/reviews.sample.json';
 import { EVENT_WEIGHT } from '../../types/log';
 import type { EventName } from '../../types/log';
 import type { Product } from '../../types/product';
 import type { Review } from '../../types/review';
 
-export const products = productsData as unknown as Product[];
+/**
+ * 브랜드 대시보드는 **내 브랜드** 상품만 본다. 시연 브랜드는 SSAFY Beauty 다.
+ *
+ * 다른 브랜드 상품은 이름·절대치를 보이지 않는다는 데이터 경계
+ * (collective-insight-data-boundary.md A층). 플랫폼 전체를 분모로 쓰는 지표
+ * (주의 성분 보급률 같은 커먼즈)는 `catalogProducts` 를 쓴다.
+ */
+export const catalogProducts = catalogData as unknown as Product[];
+export const products = catalogProducts.filter((p) => p.brand_name === DEMO_BRAND);
 export const reviews = reviewsData as unknown as Review[];
 
 /* ---------- 시드 고정 난수 ---------- */
@@ -372,10 +380,10 @@ export function ingredientStats(product: Product): IngredientStats {
   };
 }
 
-/** 주의 성분 유형별 포함 상품 수 (전 상품 실측) */
+/** 주의 성분 유형별 포함 상품 수 (플랫폼 전 상품 실측 — 커먼즈 지표) */
 export const cautionPrevalence = CAUTION_INGREDIENTS.map(({ label, pattern }) => ({
   label,
-  count: products.filter((p) => pattern.test(p.ingredients.join(' '))).length,
+  count: catalogProducts.filter((p) => pattern.test(p.ingredients.join(' '))).length,
 })).sort((a, b) => b.count - a.count);
 
 /* ---------- 세그먼트 (리뷰 실측 + 전환 모의) ---------- */

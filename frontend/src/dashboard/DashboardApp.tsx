@@ -10,6 +10,7 @@ import Onboarding from './Onboarding';
 import { MotifLine } from './components';
 import { DEFAULT_STOREFRONT, describeStorefront, loadStorefront, saveStorefront } from '../lib/storefront';
 import type { StorefrontPrefs } from '../lib/storefront';
+import { DEMO_BRAND } from '../mocks/products';
 
 type ScreenKey =
   | 'overview'
@@ -94,7 +95,7 @@ export default function DashboardApp() {
           <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />
           <div>
             <strong>HWABUN</strong>
-            <span>{storefront.brandName || '화분 · Beauty Data, Naturally Yours'}</span>
+            <span>{storefront.brandName || DEMO_BRAND}</span>
           </div>
         </div>
 
