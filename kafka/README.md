@@ -389,8 +389,8 @@ Replay 절차는 대상 Raw 날짜/Offset, 처리 버전, 예상 Event ID 수를
 | --- | --- | --- |
 | HTTP 요청률 | Collector 요청 수/초 | 배치 크기가 달라 Event TPS와 다름 |
 | 수신 Event TPS | `collector.events.received`의 변화율 | 현재는 검증 후 Collector에 들어온 건수 |
-| 발행 완료 Event TPS | `collector.events.published`의 변화율 | 현재 구현은 배치 전체 성공 때 배치 크기 증가 |
-| 발행 실패 | `collector.events.publish.failures` | 전체 실패 배치 크기를 기록하므로 실제 유실 건수와 다름 |
+| 발행 완료 Event TPS | `collector.events.accepted`의 변화율 | Kafka ACK를 받은 이벤트 수를 개별적으로 기록 |
+| 발행 실패 | `collector.kafka.publish.failures` | Kafka 발행에 실패한 이벤트 수를 개별적으로 기록 |
 | Kafka 적재율 | Topic/Partition에 기록된 레코드 수 | 업무 중복을 포함한 수신 건수 |
 | Spark 처리 적체 | Kafka Log End Offset − 마지막 성공 Batch의 다음 처리 Offset | Kafka Group Commit만 보고 측정하지 않음 |
 | Raw 이후 적체 | 미처리 Raw 범위와 가장 오래된 미처리 시각 | Q1이 따라잡아도 Q2가 지연될 수 있음 |
