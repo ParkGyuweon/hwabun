@@ -127,6 +127,14 @@ STEPS = [
      [os.path.join(DATA, "serving", "product_ingredient_position.csv"),
       os.path.join(DATA, "serving", "product_concern_top2.csv"),
       os.path.join(DATA, "serving", "ingredient_skin_lift.csv")], False),
+    # 백엔드 적재용 정규화 테이블. 어휘집·인코더·concern·친화도에서 나온다.
+    # 11번(대시보드용)과 같은 값을 다른 모양으로 내는 것이라 자리도 같은 뒤쪽이다 —
+    # 대시보드는 이름을 붙여 바로 그리고, 여기는 키만 내고 조인하게 한다.
+    (11.5, "백엔드 적재용 정규화 테이블 6종 + DDL",
+     ["batch/jobs/export_backend_tables.py"],
+     [os.path.join(DATA, "serving", "ingredient_vocab.csv"),
+      os.path.join(DATA, "serving", "product_ingredient.csv"),
+      os.path.join(DATA, "serving", "backend_tables.sql")], False),
 ]
 
 

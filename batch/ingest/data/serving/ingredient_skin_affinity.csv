@@ -1,0 +1,77 @@
+skin_type,ingredient_id,ingredient,share,n_products,vocab_version
+dry,0,Hyaluronic Acid,0.13789,16,0.5
+dry,3,Squalane,0.11956,12,0.5
+dry,1,Silicone,0.1067,9,0.5
+dry,11,Shea Butter,0.09198,9,0.5
+dry,12,Panthenol (B5),0.06098,11,0.5
+dry,13,Niacinamide,0.06097,6,0.5
+dry,5,Green Tea,0.04416,7,0.5
+dry,7,Aloe,0.0418,6,0.5
+dry,4,Probiotic / Ferment,0.039,5,0.5
+dry,9,Licorice,0.03241,6,0.5
+dry,26,Centella (Cica),0.03222,3,0.5
+dry,22,Allantoin,0.02908,5,0.5
+dry,18,Rosehip / Rose,0.02578,3,0.5
+dry,2,Vitamin C,0.02487,2,0.5
+dry,10,SPF,0.02445,3,0.5
+dry,17,Ceramide,0.02417,5,0.5
+dry,6,Peptides,0.02147,3,0.5
+dry,21,Adenosine,0.01383,2,0.5
+dry,25,Alcohol Denat,0.01257,2,0.5
+dry,29,Mineral Oil / Petrolatum,0.01219,1,0.5
+dry,14,Jojoba,0.01155,1,0.5
+dry,8,Lactic Acid,0.00907,1,0.5
+dry,15,AHA/Glycolic Acid,0.00857,1,0.5
+dry,24,Zinc,0.00811,2,0.5
+dry,20,Urea,0.00528,1,0.5
+dry,16,Salicylic Acid,0.00136,1,0.5
+normal,0,Hyaluronic Acid,0.12918,10,0.5
+normal,2,Vitamin C,0.11318,11,0.5
+normal,1,Silicone,0.09239,6,0.5
+normal,13,Niacinamide,0.08473,5,0.5
+normal,7,Aloe,0.06687,5,0.5
+normal,11,Shea Butter,0.05847,4,0.5
+normal,21,Adenosine,0.05046,6,0.5
+normal,6,Peptides,0.04209,5,0.5
+normal,10,SPF,0.03975,4,0.5
+normal,3,Squalane,0.03918,3,0.5
+normal,25,Alcohol Denat,0.03542,2,0.5
+normal,23,Retinol,0.03438,2,0.5
+normal,4,Probiotic / Ferment,0.02706,3,0.5
+normal,24,Zinc,0.02455,2,0.5
+normal,15,AHA/Glycolic Acid,0.02098,2,0.5
+normal,17,Ceramide,0.02075,2,0.5
+normal,9,Licorice,0.0203,3,0.5
+normal,20,Urea,0.01964,2,0.5
+normal,8,Lactic Acid,0.01899,2,0.5
+normal,19,Caffeine,0.01685,2,0.5
+normal,14,Jojoba,0.01224,1,0.5
+normal,12,Panthenol (B5),0.01089,2,0.5
+normal,5,Green Tea,0.01077,1,0.5
+normal,18,Rosehip / Rose,0.00716,1,0.5
+normal,26,Centella (Cica),0.00371,1,0.5
+oily,16,Salicylic Acid,0.15632,11,0.5
+oily,0,Hyaluronic Acid,0.10683,13,0.5
+oily,1,Silicone,0.10241,7,0.5
+oily,15,AHA/Glycolic Acid,0.08703,6,0.5
+oily,8,Lactic Acid,0.06518,6,0.5
+oily,13,Niacinamide,0.05774,4,0.5
+oily,10,SPF,0.05495,8,0.5
+oily,7,Aloe,0.05021,5,0.5
+oily,18,Rosehip / Rose,0.04307,3,0.5
+oily,9,Licorice,0.03876,6,0.5
+oily,14,Jojoba,0.03065,4,0.5
+oily,24,Zinc,0.02759,4,0.5
+oily,5,Green Tea,0.02703,5,0.5
+oily,4,Probiotic / Ferment,0.02426,3,0.5
+oily,25,Alcohol Denat,0.01833,1,0.5
+oily,19,Caffeine,0.01769,3,0.5
+oily,20,Urea,0.01655,2,0.5
+oily,22,Allantoin,0.01604,2,0.5
+oily,23,Retinol,0.01565,2,0.5
+oily,21,Adenosine,0.01114,1,0.5
+oily,28,Collagen,0.00891,1,0.5
+oily,27,Willow Bark,0.00839,1,0.5
+oily,12,Panthenol (B5),0.00674,1,0.5
+oily,11,Shea Butter,0.00453,1,0.5
+oily,6,Peptides,0.00401,1,0.5

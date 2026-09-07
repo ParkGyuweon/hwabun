@@ -1,0 +1,10 @@
+block_name,block_offset,dim,block_weight,encoding,vocab_version
+secondary_category,0,8,0.06,one_hot,0.5
+tertiary_category,8,19,0.11,one_hot,0.5
+concern,27,9,0.42,multi_hot_idf,0.5
+ingredient,36,30,0.27,multi_hot_idf_position,0.5
+clean,66,16,0.06,multi_hot_idf,0.5
+texture,82,5,0.02,multi_hot_idf,0.5
+price_bin,87,5,0.04,one_hot,0.5
+brand,92,55,0.6,one_hot,0.5
+rating,147,1,,scalar,0.5
