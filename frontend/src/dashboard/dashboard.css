@@ -731,6 +731,11 @@ table.data tr:hover td {
 .reg-list {
   display: grid;
   gap: 8px;
+/* ---------- 고객 피드백 인박스 ---------- */
+
+.feedback-inbox {
+  display: grid;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -751,6 +756,20 @@ table.data tr:hover td {
 
 .reg-list__meta {
   grid-column: 1;
+.feedback-inbox__item {
+  padding: 12px 14px;
+  border: 1px solid var(--line, #e5e5ea);
+  border-radius: 12px;
+}
+
+.feedback-inbox__item.is-new {
+  border-left: 4px solid var(--accent, #8fae8b);
+}
+
+.feedback-inbox__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   font-size: 12px;
   color: var(--ink-soft, #6e6e73);
 }
@@ -773,4 +792,50 @@ table.data tr:hover td {
   .register__iframe {
     height: 720px;
   }
+.feedback-inbox__product {
+  font-weight: 600;
+  color: inherit;
+}
+
+.feedback-inbox__status--new {
+  color: var(--accent-deep, #4f7a4b);
+  font-weight: 600;
+}
+
+.feedback-inbox__status--reflected {
+  color: var(--ink-soft, #6e6e73);
+}
+
+.feedback-inbox__text {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.feedback-inbox__reply {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft, #6e6e73);
+}
+
+.feedback-inbox__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.feedback-inbox__reply-input {
+  flex: 1 1 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #e5e5ea);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.feedback-inbox__empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft, #6e6e73);
 }
