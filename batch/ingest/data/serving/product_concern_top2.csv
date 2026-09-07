@@ -1,0 +1,364 @@
+product_id,product_name,brand_name,rank,concern,score
+P126301,Take The Day Off Cleansing Balm Makeup Remover,CLINIQUE,1,Acne/Blemishes,0.6278
+P248404,Pure Skin Face Cleanser,First Aid Beauty,1,Acne/Blemishes,1.4724
+P248404,Pure Skin Face Cleanser,First Aid Beauty,2,Redness,1.1152
+P248407,Ultra Repair Cream Intense Hydration,First Aid Beauty,1,Dryness,1.5913
+P248407,Ultra Repair Cream Intense Hydration,First Aid Beauty,2,Redness,0.7346
+P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,1,Acne/Blemishes,1.8037
+P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,2,Anti-Aging,1.495
+P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,1,Loss of firmness,0.3763
+P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,2,Dryness,0.1687
+P278317,Facial Radiance Pads,First Aid Beauty,1,Acne/Blemishes,1.1893
+P278317,Facial Radiance Pads,First Aid Beauty,2,Redness,1.176
+P297516,Checks and Balances Frothy Face Wash,Origins,1,Acne/Blemishes,0.9181
+P297516,Checks and Balances Frothy Face Wash,Origins,2,Pores,0.4512
+P297524,Clear Improvement Active Charcoal Mask to Clear Pores,Origins,1,Pores,3.1555
+P297524,Clear Improvement Active Charcoal Mask to Clear Pores,Origins,2,Acne/Blemishes,1.5347
+P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,1,Anti-Aging,1.8718
+P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,2,Dark spots,1.3296
+P375849,Facial Treatment Essence (Pitera Essence),SK-II,1,Redness,0.6656
+P375849,Facial Treatment Essence (Pitera Essence),SK-II,2,Dullness/Uneven Texture,0.6473
+P378852,GinZing Ultra-Hydrating Energy-Boosting Cream,Origins,1,Dryness,1.3941
+P378852,GinZing Ultra-Hydrating Energy-Boosting Cream,Origins,2,Loss of firmness,1.0031
+P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,1,Anti-Aging,2.1447
+P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,2,Dullness/Uneven Texture,1.3549
+P392235,The Camellia Oil 2-in-1 Makeup Remover & Cleanser,Tatcha,1,Acne/Blemishes,0.8406
+P392235,The Camellia Oil 2-in-1 Makeup Remover & Cleanser,Tatcha,2,Dark spots,0.0412
+P392245,Virgin Marula Luxury Face Oil,Drunk Elephant,1,Redness,0.2911
+P392245,Virgin Marula Luxury Face Oil,Drunk Elephant,2,Dryness,0.2491
+P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,1,Acne/Blemishes,1.806
+P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,2,Dark spots,1.6636
+P393718,Luna Sleeping Retinoid Night Oil,Sunday Riley,1,Dark spots,1.1567
+P393718,Luna Sleeping Retinoid Night Oil,Sunday Riley,2,Anti-Aging,1.1154
+P394624,The True Cream Moisturizing Bomb,belif,1,Dryness,2.0134
+P394624,The True Cream Moisturizing Bomb,belif,2,Loss of firmness,1.32
+P394639,The True Cream Aqua Bomb,belif,1,Dryness,1.6523
+P394639,The True Cream Aqua Bomb,belif,2,Loss of firmness,1.2382
+P397890,Original Skin Retexturizing Mask with Rose Clay,Origins,1,Pores,1.8606
+P397890,Original Skin Retexturizing Mask with Rose Clay,Origins,2,Redness,0.6449
+P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,1,Pores,1.6853
+P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,2,Acne/Blemishes,1.2579
+P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,1,Redness,0.1172
+P405599,SEA drink of H2O hydrating boost moisturizer,tarte,1,Dryness,1.724
+P405599,SEA drink of H2O hydrating boost moisturizer,tarte,2,Loss of firmness,0.8622
+P406712,B-Hydra Intensive Hydration Serum with Hyaluronic Acid,Drunk Elephant,1,Dryness,1.3538
+P406712,B-Hydra Intensive Hydration Serum with Hyaluronic Acid,Drunk Elephant,2,Loss of firmness,0.635
+P410400,U.F.O. Salicylic Acid BHA Acne Treatment Face Oil,Sunday Riley,1,Acne/Blemishes,2.8371
+P410400,U.F.O. Salicylic Acid BHA Acne Treatment Face Oil,Sunday Riley,2,Pores,1.8922
+P411365,Retinol Youth Renewal Serum,Murad,1,Anti-Aging,2.3258
+P411365,Retinol Youth Renewal Serum,Murad,2,Dullness/Uneven Texture,1.1754
+P411387,Superfood Antioxidant Cleanser,Youth To The People,1,Acne/Blemishes,1.1422
+P411387,Superfood Antioxidant Cleanser,Youth To The People,2,Redness,0.657
+P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,1,Dryness,1.6347
+P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,2,Loss of firmness,1.222
+P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,1,Loss of firmness,1.7596
+P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,2,Anti-Aging,1.3798
+P411539,Cicapair Tiger Grass Cream,Dr. Jart+,1,Redness,2.1844
+P411539,Cicapair Tiger Grass Cream,Dr. Jart+,2,Dryness,1.1441
+P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,1,Dark spots,1.621
+P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,2,Redness,1.4433
+P415237,Hello FAB Coconut Skin Smoothie Priming Moisturizer,First Aid Beauty,1,Dullness/Uneven Texture,0.1714
+P415237,Hello FAB Coconut Skin Smoothie Priming Moisturizer,First Aid Beauty,2,Dryness,0.0927
+P415619,Dreamskin Skin Perfector,Dior,1,Anti-Aging,1.4827
+P415619,Dreamskin Skin Perfector,Dior,2,Dullness/Uneven Texture,1.1004
+P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,1,Dryness,1.6092
+P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,2,Loss of firmness,1.2827
+P415771,The Essence Skincare Boosting Treatment,Tatcha,1,Loss of firmness,0.9816
+P415771,The Essence Skincare Boosting Treatment,Tatcha,2,Redness,0.682
+P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,1,Acne/Blemishes,1.2905
+P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,2,Dark spots,1.205
+P416341,Crème de la Mer Moisturizer,La Mer,1,Loss of firmness,0.6454
+P416341,Crème de la Mer Moisturizer,La Mer,2,Dryness,0.5643
+P416563,Squalane + Vitamin C Rose Firming Oil,Biossance,1,Redness,0.9071
+P416563,Squalane + Vitamin C Rose Firming Oil,Biossance,2,Dark spots,0.3011
+P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,1,Acne/Blemishes,1.2239
+P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,2,Redness,0.7871
+P417238,Green Clean Makeup Removing Cleansing Balm,Farmacy,1,Acne/Blemishes,0.51
+P417936,Rose & Hyaluronic Acid Deep Hydration Toner,fresh,1,Redness,0.632
+P417936,Rose & Hyaluronic Acid Deep Hydration Toner,fresh,2,Loss of firmness,0.5948
+P418218,The Water Cream Oil-Free Pore Minimizing Moisturizer,Tatcha,1,Dryness,1.1246
+P418218,The Water Cream Oil-Free Pore Minimizing Moisturizer,Tatcha,2,Loss of firmness,1.0058
+P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,1,Dark spots,1.3179
+P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,2,Dullness/Uneven Texture,1.3083
+P419222,Umbra Sheer Physical Daily Defense SPF 30,Drunk Elephant,1,Dark spots,1.139
+P419222,Umbra Sheer Physical Daily Defense SPF 30,Drunk Elephant,2,Dullness/Uneven Texture,0.1414
+P421235,Double Serum Firming & Smoothing Anti-Aging Concentrate,Clarins,1,Anti-Aging,1.1397
+P421235,Double Serum Firming & Smoothing Anti-Aging Concentrate,Clarins,2,Dullness/Uneven Texture,0.8709
+P421275,Salicylic Acid Acne Healing Dots,Peace Out,1,Acne/Blemishes,2.523
+P421275,Salicylic Acid Acne Healing Dots,Peace Out,2,Dark spots,1.1578
+P421276,ExfoliKate Glow Moisturizer,Kate Somerville,1,Dullness/Uneven Texture,1.715
+P421276,ExfoliKate Glow Moisturizer,Kate Somerville,2,Loss of firmness,1.2892
+P421277,GENIUS Liquid Collagen Serum,Algenist,1,Anti-Aging,1.1729
+P421277,GENIUS Liquid Collagen Serum,Algenist,2,Loss of firmness,0.3928
+P421996,Ultra Facial Moisturizing Cream with Squalane,Kiehl's Since 1851,1,Dryness,1.6188
+P421996,Ultra Facial Moisturizing Cream with Squalane,Kiehl's Since 1851,2,Loss of firmness,1.3325
+P421998,Midnight Recovery Concentrate Moisturizing Face Oil,Kiehl's Since 1851,1,Redness,0.9263
+P421998,Midnight Recovery Concentrate Moisturizing Face Oil,Kiehl's Since 1851,2,Acne/Blemishes,0.7093
+P422000,Creamy Eye Treatment with Avocado,Kiehl's Since 1851,1,Dark Circles,2.3591
+P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,1,Dryness,1.8305
+P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,2,Loss of firmness,1.6708
+P422536,Original Skin Matte Moisturizer with Willowherb,Origins,1,Dryness,1.7431
+P422536,Original Skin Matte Moisturizer with Willowherb,Origins,2,Loss of firmness,1.2124
+P422905,Moisturizing Eye Bomb with Squalane,belif,1,Dark Circles,2.2344
+P422905,Moisturizing Eye Bomb with Squalane,belif,2,Anti-Aging,0.1624
+P423148,Precleanse Cleansing Oil,Dermalogica,1,Acne/Blemishes,1.0693
+P423148,Precleanse Cleansing Oil,Dermalogica,2,Dark spots,0.2974
+P423259,Cicapair Tiger Grass Serum,Dr. Jart+,1,Redness,2.7669
+P423259,Cicapair Tiger Grass Serum,Dr. Jart+,2,Dullness/Uneven Texture,1.0473
+P423688,Daily Microfoliant Exfoliator,Dermalogica,1,Anti-Aging,1.9385
+P423688,Daily Microfoliant Exfoliator,Dermalogica,2,Redness,1.6275
+P424948,Auto Correct Brightening + Depuffing Eye Cream for Dark Circles,Sunday Riley,1,Dark Circles,3.462
+P424948,Auto Correct Brightening + Depuffing Eye Cream for Dark Circles,Sunday Riley,2,Anti-Aging,0.0626
+P426340,The Rice Polish Foaming Enzyme Powder,Tatcha,1,Redness,0.9112
+P426340,The Rice Polish Foaming Enzyme Powder,Tatcha,2,Acne/Blemishes,0.6023
+P426707,Hello FAB Coconut Water Cream,First Aid Beauty,1,Dryness,1.6679
+P426707,Hello FAB Coconut Water Cream,First Aid Beauty,2,Loss of firmness,1.1181
+P426836,Beste No. 9 Jelly Cleanser,Drunk Elephant,1,Acne/Blemishes,1.5028
+P426836,Beste No. 9 Jelly Cleanser,Drunk Elephant,2,Redness,0.3786
+P427397,Hydro Biotic Recovery Sleeping Mask,Dr. Brandt Skincare,1,Dryness,1.228
+P427397,Hydro Biotic Recovery Sleeping Mask,Dr. Brandt Skincare,2,Pores,1.0188
+P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,1,Acne/Blemishes,1.1028
+P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,2,Redness,1.0696
+P427410,Vitamin C Suspension 23% + HA Spheres 2%,The Ordinary,1,Dark spots,0.7667
+P427410,Vitamin C Suspension 23% + HA Spheres 2%,The Ordinary,2,Dullness/Uneven Texture,0.565
+P427413,Lactic Acid 10% + HA 2% Exfoliating Serum,The Ordinary,1,Redness,1.6637
+P427413,Lactic Acid 10% + HA 2% Exfoliating Serum,The Ordinary,2,Acne/Blemishes,1.5127
+P427414,Natural Moisturizing Factors + HA,The Ordinary,1,Dryness,1.4351
+P427414,Natural Moisturizing Factors + HA,The Ordinary,2,Loss of firmness,1.0791
+P427415,100% Organic Cold-Pressed Rose Hip Seed Oil,The Ordinary,1,Redness,0.7174
+P427415,100% Organic Cold-Pressed Rose Hip Seed Oil,The Ordinary,2,Dryness,0.2881
+P427416,Caffeine 5% + EGCG Depuffing Eye Serum,The Ordinary,1,Dark Circles,3.5055
+P427416,Caffeine 5% + EGCG Depuffing Eye Serum,The Ordinary,2,Dark spots,0.0855
+P427417,Niacinamide 10% + Zinc 1% Oil Control Serum,The Ordinary,1,Acne/Blemishes,2.5277
+P427417,Niacinamide 10% + Zinc 1% Oil Control Serum,The Ordinary,2,Pores,1.8782
+P427419,Hyaluronic Acid 2% + B5 Hydrating Serum,The Ordinary,1,Dryness,0.9049
+P427419,Hyaluronic Acid 2% + B5 Hydrating Serum,The Ordinary,2,Loss of firmness,0.3341
+P427420,Multi-Peptide + HA Serum,The Ordinary,1,Anti-Aging,1.0911
+P427420,Multi-Peptide + HA Serum,The Ordinary,2,Acne/Blemishes,0.6524
+P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,1,Dryness,0.9887
+P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,2,Loss of firmness,0.9594
+P427536,The Deep Cleanse Gentle Exfoliating Cleanser,Tatcha,1,Acne/Blemishes,1.0883
+P427536,The Deep Cleanse Gentle Exfoliating Cleanser,Tatcha,2,Redness,0.5962
+P428095,Ready Steady Glow Daily AHA Tonic,REN Clean Skincare,1,Dullness/Uneven Texture,1.4846
+P428095,Ready Steady Glow Daily AHA Tonic,REN Clean Skincare,2,Redness,1.391
+P428250,Oil-Absorbing Pore Treatment Strips,Peace Out,1,Pores,2.7445
+P428250,Oil-Absorbing Pore Treatment Strips,Peace Out,2,Acne/Blemishes,1.1424
+P428819,Watermelon Pink Juice Oil-Free Moisturizer,Glow Recipe,1,Dryness,1.1047
+P428819,Watermelon Pink Juice Oil-Free Moisturizer,Glow Recipe,2,Loss of firmness,0.8182
+P429515,C-Tango Vitamin C Eye Cream,Drunk Elephant,1,Dark Circles,3.0084
+P429515,C-Tango Vitamin C Eye Cream,Drunk Elephant,2,Anti-Aging,0.4402
+P429952,Jet Lag Mask,Summer Fridays,1,Pores,0.6311
+P429952,Jet Lag Mask,Summer Fridays,2,Dryness,0.5352
+P430146,Superberry Hydrate + Glow Dream Oil,Youth To The People,1,Dryness,0.6299
+P430146,Superberry Hydrate + Glow Dream Oil,Youth To The People,2,Redness,0.3078
+P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,1,Dryness,1.1239
+P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,2,Dullness/Uneven Texture,0.8319
+P431180,Self Tanning Bronzing Face Drops,Isle of Paradise,1,Dark spots,1.2921
+P431180,Self Tanning Bronzing Face Drops,Isle of Paradise,2,Dullness/Uneven Texture,0.7944
+P431181,Self-Tanning Water,Isle of Paradise,1,Dark spots,0.5893
+P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,1,Pores,2.4008
+P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,2,Redness,0.8229
+P432668,D-Bronzi Anti-Pollution Bronzing Drops with Peptides,Drunk Elephant,1,Dullness/Uneven Texture,1.2668
+P432668,D-Bronzi Anti-Pollution Bronzing Drops with Peptides,Drunk Elephant,2,Dark spots,0.774
+P432829,Adaptogen Deep Moisturizing Cream with Ashwagandha + Reishi,Youth To The People,1,Dryness,1.6644
+P432829,Adaptogen Deep Moisturizing Cream with Ashwagandha + Reishi,Youth To The People,2,Loss of firmness,1.1763
+P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,1,Dark spots,0.6258
+P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,2,Anti-Aging,0.0105
+P433443,Aqua Bomb Sleeping Mask,belif,1,Dryness,0.8998
+P433443,Aqua Bomb Sleeping Mask,belif,2,Pores,0.5618
+P433444,Clear Improvement Charcoal Honey Mask to Purify and Nourish,Origins,1,Pores,1.8247
+P433444,Clear Improvement Charcoal Honey Mask to Purify and Nourish,Origins,2,Acne/Blemishes,0.7427
+P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,1,Loss of firmness,1.2907
+P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,2,Dryness,0.8127
+P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,1,Dryness,1.0996
+P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,2,Loss of firmness,0.6464
+P434545,Glow Cycle Retin-ALT Power Serum,OLEHENRIKSEN,1,Dullness/Uneven Texture,1.8983
+P434545,Glow Cycle Retin-ALT Power Serum,OLEHENRIKSEN,2,Anti-Aging,1.6496
+P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,1,Dullness/Uneven Texture,1.9484
+P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,2,Redness,1.611
+P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,1,Acne/Blemishes,0.8033
+P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,2,Redness,0.6736
+P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,1,Loss of firmness,1.7027
+P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,2,Anti-Aging,1.3017
+P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,1,Dullness/Uneven Texture,1.5622
+P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,2,Dark spots,1.4815
+P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,1,Dark spots,2.5435
+P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,2,Dullness/Uneven Texture,1.5146
+P439926,A-Passioni Retinol Cream,Drunk Elephant,1,Dark spots,1.7234
+P439926,A-Passioni Retinol Cream,Drunk Elephant,2,Acne/Blemishes,1.387
+P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,1,Pores,0.8371
+P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,2,Dryness,0.7796
+P440312,Lotus Anti-Aging Night Moisturizer,fresh,1,Loss of firmness,1.1121
+P440312,Lotus Anti-Aging Night Moisturizer,fresh,2,Dryness,0.6738
+P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,1,Dryness,1.2451
+P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,2,Loss of firmness,0.9786
+P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,1,Redness,1.6443
+P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,2,Acne/Blemishes,1.3932
+P442566,Slaai  Makeup-Melting Butter Cleanser,Drunk Elephant,1,Acne/Blemishes,0.5418
+P442594,Ultra Glow Serum: Glow + Strengthen Vitamin C Serum,SEPHORA COLLECTION,1,Dullness/Uneven Texture,1.143
+P442594,Ultra Glow Serum: Glow + Strengthen Vitamin C Serum,SEPHORA COLLECTION,2,Dark spots,0.4361
+P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,1,Dryness,1.6213
+P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,2,Loss of firmness,1.2473
+P442858,Rose Deep Hydration Sleeping Mask,fresh,1,Dryness,0.8864
+P442858,Rose Deep Hydration Sleeping Mask,fresh,2,Redness,0.818
+P443833,Salicylic Acid Acne + Pore Cleanser,The INKEY List,1,Acne/Blemishes,2.5741
+P443833,Salicylic Acid Acne + Pore Cleanser,The INKEY List,2,Redness,1.4792
+P443840,Caffeine Eye Cream,The INKEY List,1,Dark Circles,3.0834
+P443842,Retinol Anti-Aging Serum,The INKEY List,1,Anti-Aging,1.6969
+P443842,Retinol Anti-Aging Serum,The INKEY List,2,Dark spots,0.86
+P443845,Hyaluronic Acid Hydrating Serum,The INKEY List,1,Loss of firmness,0.7963
+P443845,Hyaluronic Acid Hydrating Serum,The INKEY List,2,Dryness,0.6407
+P445827,Sugar Strawberry Exfoliating Face Wash,fresh,1,Redness,0.9791
+P445827,Sugar Strawberry Exfoliating Face Wash,fresh,2,Acne/Blemishes,0.0335
+P446421,Clear Improvement Pore Clearing Moisturizer with Salicylic Acid,Origins,1,Pores,1.6304
+P446421,Clear Improvement Pore Clearing Moisturizer with Salicylic Acid,Origins,2,Acne/Blemishes,1.5346
+P446930,Cream Skin Toner & Moisturizer,LANEIGE,1,Loss of firmness,1.3921
+P446930,Cream Skin Toner & Moisturizer,LANEIGE,2,Dryness,1.0295
+P446938,Lala Retro Whipped Refillable Moisturizer with Ceramides,Drunk Elephant,1,Dryness,1.1383
+P446938,Lala Retro Whipped Refillable Moisturizer with Ceramides,Drunk Elephant,2,Loss of firmness,0.9555
+P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,1,Dark Circles,2.4325
+P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,2,Anti-Aging,1.1346
+P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,1,Pores,4.5867
+P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,2,Anti-Aging,2.3847
+P447780,The Silk Peony Melting Eye Cream,Tatcha,1,Dark Circles,1.9617
+P447780,The Silk Peony Melting Eye Cream,Tatcha,2,Anti-Aging,0.8197
+P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,1,Dark Circles,2.9153
+P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,2,Anti-Aging,0.2627
+P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,1,Dark Circles,2.4323
+P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,2,Anti-Aging,1.5976
+P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,1,Pores,1.5634
+P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,2,Dullness/Uneven Texture,1.5037
+P448802,Brighten-i Eye Cream,The INKEY List,1,Dark Circles,2.3448
+P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,1,Loss of firmness,1.1615
+P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,2,Dryness,1.1094
+P449175,Aqua Bomb Hydrating Toner,belif,1,Loss of firmness,1.3035
+P449175,Aqua Bomb Hydrating Toner,belif,2,Dullness/Uneven Texture,0.1613
+P453253,Vegan Milk Moisturizer,MILK MAKEUP,1,Dryness,1.5934
+P453253,Vegan Milk Moisturizer,MILK MAKEUP,2,Loss of firmness,1.4508
+P453825,Hydra Zen Glow Liquid Lightweight Moisturizer with Hyaluronic Acid,Lancôme,1,Dryness,1.6174
+P453825,Hydra Zen Glow Liquid Lightweight Moisturizer with Hyaluronic Acid,Lancôme,2,Loss of firmness,1.4696
+P454018,The Serum Stick: Treatment & Touch Up Balm,Tatcha,1,Dryness,0.4634
+P454018,The Serum Stick: Treatment & Touch Up Balm,Tatcha,2,Anti-Aging,0.2315
+P454120,F-Balm Electrolyte Waterfacial Mask,Drunk Elephant,1,Dryness,1.313
+P454120,F-Balm Electrolyte Waterfacial Mask,Drunk Elephant,2,Pores,0.6836
+P454378,Lotus Anti- Aging Daily Moisturizer,fresh,1,Dryness,1.313
+P454378,Lotus Anti- Aging Daily Moisturizer,fresh,2,Loss of firmness,1.1927
+P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,1,Dark spots,1.1083
+P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,2,Dullness/Uneven Texture,0.3408
+P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,1,Dark Circles,4.1706
+P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,2,Anti-Aging,1.1824
+P455364,Oat Cleansing Balm,The INKEY List,1,Acne/Blemishes,0.6427
+P455676,Yo Glow AHA & BHA Facial Enzyme Scrub,Wishful,1,Redness,1.2485
+P455676,Yo Glow AHA & BHA Facial Enzyme Scrub,Wishful,2,Acne/Blemishes,0.8428
+P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,1,Anti-Aging,2.1664
+P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,2,Dark spots,1.5885
+P456207,Greek Yoghurt Nourishing Probiotic Gel-Cream,KORRES,1,Dryness,1.3367
+P456207,Greek Yoghurt Nourishing Probiotic Gel-Cream,KORRES,2,Loss of firmness,1.212
+P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,1,Dullness/Uneven Texture,1.5384
+P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,2,Redness,1.3738
+P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,1,Dullness/Uneven Texture,1.1738
+P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,2,Redness,1.1675
+P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,1,Dullness/Uneven Texture,1.695
+P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,2,Dark spots,1.0271
+P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,1,Dark spots,1.041
+P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,2,Dullness/Uneven Texture,0.4851
+P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,1,Dark spots,0.4979
+P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,2,Dullness/Uneven Texture,0.135
+P456412,Greek Yoghurt Foaming Cream Cleanser,KORRES,1,Acne/Blemishes,0.8797
+P456412,Greek Yoghurt Foaming Cream Cleanser,KORRES,2,Redness,0.6222
+P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,1,Dullness/Uneven Texture,1.3108
+P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,2,Dark spots,1.0859
+P458209,Daily Greens Oil-Free Gel Moisturizer with Moringa and Papaya,Farmacy,1,Dryness,1.1751
+P458209,Daily Greens Oil-Free Gel Moisturizer with Moringa and Papaya,Farmacy,2,Loss of firmness,0.8923
+P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,1,Pores,1.2152
+P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,2,Loss of firmness,1.0696
+P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,1,Dullness/Uneven Texture,1.0926
+P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,2,Anti-Aging,1.0047
+P460515,E-Rase Milki Micellar Water,Drunk Elephant,1,Acne/Blemishes,0.3536
+P460516,Papaya Sorbet Smoothing Enzyme Cleansing Balm & Makeup Remover,Glow Recipe,1,Acne/Blemishes,0.3568
+P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,1,Anti-Aging,1.6314
+P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,2,Dullness/Uneven Texture,1.3024
+P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,1,Anti-Aging,1.3098
+P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,2,Dullness/Uneven Texture,1.1217
+P461537,The Rice Wash Skin-Softening Cleanser,Tatcha,1,Redness,0.6799
+P461537,The Rice Wash Skin-Softening Cleanser,Tatcha,2,Acne/Blemishes,0.521
+P462336,Aqua Bomb Cleansing Balm,belif,1,Acne/Blemishes,0.682
+P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,1,Loss of firmness,1.255
+P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,2,Dullness/Uneven Texture,0.9308
+P463036,Honey Halo Ultra-Hydrating Ceramide Moisturizer,Farmacy,1,Dryness,1.4072
+P463036,Honey Halo Ultra-Hydrating Ceramide Moisturizer,Farmacy,2,Loss of firmness,1.3065
+P466123,Watermelon Glow Niacinamide Dew Drops,Glow Recipe,1,Dullness/Uneven Texture,1.9814
+P466123,Watermelon Glow Niacinamide Dew Drops,Glow Recipe,2,Dark spots,0.2712
+P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,1,Redness,1.6191
+P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,2,Acne/Blemishes,0.5409
+P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,1,Anti-Aging,1.6771
+P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,2,Loss of firmness,1.5476
+P467038,Retinol Eye Stick,Peace Out,1,Dark Circles,1.6034
+P467038,Retinol Eye Stick,Peace Out,2,Anti-Aging,0.7613
+P467602,Triple Algae Eye Renewal Balm Eye Cream,Algenist,1,Dark Circles,2.8788
+P467602,Triple Algae Eye Renewal Balm Eye Cream,Algenist,2,Anti-Aging,1.5321
+P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,1,Dryness,1.8831
+P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,2,Loss of firmness,1.5092
+P468658,Volcanic AHA Pore Clearing Clay Mask,innisfree,1,Pores,2.7802
+P468658,Volcanic AHA Pore Clearing Clay Mask,innisfree,2,Acne/Blemishes,1.1033
+P469502,Skin Perfecting 2% BHA Liquid Exfoliant,Paula's Choice,1,Pores,2.5128
+P469502,Skin Perfecting 2% BHA Liquid Exfoliant,Paula's Choice,2,Acne/Blemishes,2.1809
+P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,1,Redness,2.9942
+P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,2,Dullness/Uneven Texture,2.0879
+P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,1,Loss of firmness,1.5806
+P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,2,Dryness,1.2286
+P471535,Aqua Bomb Brightening Vitamin C Cream,belif,1,Loss of firmness,0.8645
+P471535,Aqua Bomb Brightening Vitamin C Cream,belif,2,Redness,0.774
+P472028,Capture Totale Super Potent Eye Serum,Dior,1,Dark Circles,2.3602
+P472028,Capture Totale Super Potent Eye Serum,Dior,2,Anti-Aging,0.8543
+P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,1,Loss of firmness,1.5827
+P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,2,Dryness,1.4071
+P472454,Vinosource-Hydra Moisturizing Sorbet,Caudalie,1,Dryness,1.2122
+P472454,Vinosource-Hydra Moisturizing Sorbet,Caudalie,2,Loss of firmness,1.0686
+P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,1,Anti-Aging,2.1481
+P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,2,Dullness/Uneven Texture,0.8363
+P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,1,Dullness/Uneven Texture,1.605
+P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,2,Redness,1.4391
+P473820,Advanced Night Repair Eye Concentrate Matrix Synchronized Multi-Recovery Complex,Estée Lauder,1,Dark Circles,2.1612
+P473820,Advanced Night Repair Eye Concentrate Matrix Synchronized Multi-Recovery Complex,Estée Lauder,2,Anti-Aging,1.1916
+P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,1,Loss of firmness,1.0344
+P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,2,Dryness,0.7601
+P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,1,Pores,2.6588
+P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,2,Acne/Blemishes,1.8348
+P474953,Abeille Royale Advanced Youth Watery Oil,GUERLAIN,1,Loss of firmness,0.7739
+P474953,Abeille Royale Advanced Youth Watery Oil,GUERLAIN,2,Dryness,0.4901
+P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,1,Dark Circles,3.1995
+P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,1,Dark Circles,2.1936
+P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,2,Anti-Aging,0.9079
+P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,1,Loss of firmness,1.5731
+P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,2,Dullness/Uneven Texture,1.0692
+P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,1,Dark Circles,1.744
+P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,2,Anti-Aging,1.4716
+P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,1,Loss of firmness,1.8631
+P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,2,Anti-Aging,0.8642
+P479841,Floral Recovery Overnight Mask with Squalane,fresh,1,Redness,2.4229
+P479841,Floral Recovery Overnight Mask with Squalane,fresh,2,Dryness,0.5133
+P480612,Santorini Grape Poreless Skin Cream,KORRES,1,Loss of firmness,1.5242
+P480612,Santorini Grape Poreless Skin Cream,KORRES,2,Pores,1.504
+P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,1,Dullness/Uneven Texture,1.409
+P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,2,Dark spots,0.946
+P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,1,Dark spots,0.6913
+P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,2,Dullness/Uneven Texture,0.2533
+P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,1,Dark spots,0.7423
+P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,2,Dullness/Uneven Texture,0.5145
+P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,1,Loss of firmness,1.6685
+P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,2,Dullness/Uneven Texture,1.61
+P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,1,Dark Circles,2.6251
+P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,2,Anti-Aging,0.8863
+P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,1,Anti-Aging,1.8418
+P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,2,Loss of firmness,0.7794
+P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,1,Anti-Aging,2.1981
+P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,2,Dark Circles,0.4194
+P500777,Sugar Lip Balm Hydrating Treatment,fresh,1,Loss of firmness,0.4411
+P500777,Sugar Lip Balm Hydrating Treatment,fresh,2,Anti-Aging,0.2581
+P54509,Tonique Confort Re-Hydrating Comforting Toner with Acacia Honey,Lancôme,1,Loss of firmness,1.4532
+P54509,Tonique Confort Re-Hydrating Comforting Toner with Acacia Honey,Lancôme,2,Dullness/Uneven Texture,0.3895
+P7880,Soy Hydrating Gentle Face Cleanser,fresh,1,Acne/Blemishes,0.9037
+P7880,Soy Hydrating Gentle Face Cleanser,fresh,2,Redness,0.5331
+P94421,Vinoperfect Radiance Dark Spot Serum Vitamin C Alternative,Caudalie,1,Dark spots,2.1873
+P94421,Vinoperfect Radiance Dark Spot Serum Vitamin C Alternative,Caudalie,2,Dullness/Uneven Texture,1.3372

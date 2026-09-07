@@ -204,9 +204,16 @@ SCENARIO = {
     "p_list_filter": 0.35,
     "p_list_sort": 0.20,
 
-    # [미정] 세션 구성. 현재는 상품 하나당 목록->상세->복귀를 한 세션에서 처리한다
-    #   BEHAVIOR_SCENARIO 4-2절은 "며칠에 걸친 1~3회 방문"을 권고하나 미반영
-    "sessions_per_persona": 1,
+    # 세션 구성 — BEHAVIOR_SCENARIO 4-2절의 "며칠에 걸친 1~3회 방문" (S3).
+    # 한 세션에 다 몰아넣으면 세션당 체류·전환·재방문 지표가 전부 한 덩어리가 되어
+    # 대시보드에서 "다시 온 사람" 을 셀 수 없다.
+    "visit_weights": (0.35, 0.40, 0.25),   # 1회 / 2회 / 3회
+    "revisit_window_days": 5,              # 최근 이 기간 안에 나눠 담는다
+
+    # 재구매 (S2) — 같은 상품에 리뷰가 2건 이상이면 재구매로 본다.
+    # 실측: 9,900명 중 60.6% 가 해당하고 리뷰 간격 중앙값이 264일이다.
+    # 시드 창(120일) 안에 넣어야 하므로 간격은 압축한다.
+    "restock_gap_days": (20, 60),
 }
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -802,11 +809,15 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             e.tick(); e.emit("rage_click", g, section_id="product_hero",
                              click_count=int(rng.integers(3, 6)), seeded=True)
 
+    # 같은 상품에 리뷰가 몇 건인지 — 2건 이상이면 재구매다 (S2)
+    n_reviews_of = Counter(r["group_id"] for r in p["reviews"])
+
     for i, g in enumerate(seeds):
+        first_at = base + timedelta(days=step * (len(neg) + i))
         e = Emitter(
             sink,
             p["persona_id"],
-            base + timedelta(days=step * (len(neg) + i)),
+            first_at,
             rng,
             context,
             session_id=seed_session_id(context, p["persona_id"], g),
@@ -815,6 +826,31 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         e.new_page("product_detail")
         e.emit("add_to_cart", g, seeded=True, quantity=1,
                price_usd=catalog[g]["price"])
+
+        # ── S2. 재구매 — 같은 상품을 시간 간격을 두고 다시 담는다 ──────────
+        # 리뷰를 두 번 쓴 것은 두 번 샀다는 뜻이다. 지금까지 `dict.fromkeys` 가
+        # 중복을 뭉개 **한 번 산 것으로 보이고 있었다.**
+        #
+        # 세션을 **따로** 만든다. 같은 세션에서 두 번 담으면 그것은 재구매가
+        # 아니라 수량 변경이다.
+        for k in range(1, min(n_reviews_of.get(g, 1), 3)):
+            gap = float(rng.integers(*SC["restock_gap_days"])) * k
+            at = first_at + timedelta(days=gap)
+            if at >= NOW:
+                break                       # 창 밖으로 나가면 만들지 않는다
+            re = Emitter(
+                sink,
+                p["persona_id"],
+                at,
+                rng,
+                context,
+                session_id=seed_session_id(context, p["persona_id"],
+                                           f"{g}#restock{k}"),
+                is_seed=True,
+            )
+            re.new_page("product_detail")
+            re.emit("add_to_cart", g, seeded=True, quantity=1,
+                    price_usd=catalog[g]["price"])
 
     # 이탈 상품 — **노출**로 고른다. 취향으로 고르지 않는다.
     #   popular_v0  같은 카테고리 -> 인기순. 전원이 같은 화면을 본다
@@ -832,18 +868,37 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         pool += [g for g in popular if g not in seq and g not in pool]
         bounce = list(rng.choice(pool, size=min(n_bounce, len(pool)), replace=False))
 
-    e = Emitter(
-        sink,
-        p["persona_id"],
-        NOW - timedelta(days=float(rng.random() * 5)),
-        rng,
-        context,
-    )
+    # ── S3. 최근 며칠에 걸친 1~3회 방문 ─────────────────────────────────
+    # 한 세션에 다 몰아넣으면 "다시 온 사람" 을 셀 수 없다. route 를 쪼개
+    # 세션 경계를 만들고, 각 세션을 최근 `revisit_window_days` 안에 흩는다.
+    #
+    # **장바구니와 찜은 세션을 넘어 유지된다** — 그게 재방문의 의미다.
+    # 반면 `last_rec` 은 끊는다. 지난 세션에 뜬 추천을 이번 세션에서 누를 수 없다.
+    route = list(bounce) + [target]
+    n_visits = int(rng.choice([1, 2, 3], p=SC["visit_weights"]))
+    n_visits = min(n_visits, len(route))
+    splits = set()
+    if n_visits > 1:
+        splits = {int(x) for x in rng.choice(range(1, len(route)),
+                                             size=n_visits - 1, replace=False)}
+    # 세션 시작 시각 — 오래된 것부터. 마지막 방문이 가장 최근이다
+    starts = sorted((float(x) for x in
+                     rng.random(n_visits) * SC["revisit_window_days"]),
+                    reverse=True)
+
+    def new_visit(day_offset):
+        return Emitter(sink, p["persona_id"],
+                       NOW - timedelta(days=day_offset), rng, context)
+
+    visit_i = 0
+    e = new_visit(starts[0])
     promo = popular[:PROMO_SIZE]
     liked = False
-    route = list(bounce) + [target]
     visited = set()
     for i in range(len(route)):
+        if i in splits:
+            visit_i += 1
+            e = new_visit(starts[min(visit_i, len(starts) - 1)])
         g = route[i]
         # 직전 상세에서 추천이 노출됐다면, 목록으로 돌아가는 대신 그 추천을 눌러
         # 다음 상품으로 넘어간다. 이때 다음 상품을 **추천 목록에서 고른다** —
@@ -874,7 +929,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                                    replace=False))
             grid = [g] + [x for x in grid if x != g]
             browse_list(e, promo, grid[:PAGE_SIZE], catalog, rng,
-                        dwell_ms=int(rng.integers(*SC["list_dwell_ms"])), first=(i == 0),
+                        dwell_ms=int(rng.integers(*SC["list_dwell_ms"])),
+                        first=(i == 0 or i in splits),
                         SC=SC, qrng=qrng)
             e.tick(); e.emit("product_click", g,
                              entry_source="list_grid" if rng.random() < 0.8 else "promo_pick",
@@ -963,7 +1019,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
            max_scroll_percent=0,
            products_viewed=len(route),
            converted=True, wishlisted=liked)
-    return {"seeds": len(seeds), "bounce": len(bounce), "regret": int(regret is not None)}
+    return {"seeds": len(seeds), "bounce": len(bounce),
+            "regret": int(regret is not None), "visits": n_visits}
 
 
 def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,

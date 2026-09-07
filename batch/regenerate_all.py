@@ -102,6 +102,12 @@ STEPS = [
     (10, "배너 축 6종 상품 목록",
      ["batch/jobs/banner_axes.py"],
      [os.path.join(DATA, "serving", "banner_axes.json")], False),
+    # 대시보드 파생 산출물. 인코더·친화도·concern 에서 나오므로 그 뒤에 온다.
+    (11, "대시보드용 파생 산출물 4종",
+     ["batch/jobs/export_dashboard.py"],
+     [os.path.join(DATA, "serving", "product_ingredient_position.csv"),
+      os.path.join(DATA, "serving", "product_concern_top2.csv"),
+      os.path.join(DATA, "serving", "ingredient_skin_lift.csv")], False),
 ]
 
 
