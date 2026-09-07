@@ -28,6 +28,8 @@ services:
     volumes:
       - ../../streaming:/opt/project/streaming:ro
       - ../../contracts:/opt/project/contracts:ro
+      - ../../batch:/opt/project/batch:ro
+      - ../../frontend:/opt/project/frontend:ro
       - ../../infra/spark:/opt/project/infra/spark:ro
       - ../../data:/opt/project/data
       - spark-events:/opt/spark-events
@@ -61,6 +63,8 @@ services:
     volumes:
       - ../../streaming:/opt/project/streaming:ro
       - ../../contracts:/opt/project/contracts:ro
+      - ../../batch:/opt/project/batch:ro
+      - ../../frontend:/opt/project/frontend:ro
       - ../../data:/opt/project/data
       - spark-events:/opt/spark-events
       - spark-ivy-cache:/opt/spark/.ivy2

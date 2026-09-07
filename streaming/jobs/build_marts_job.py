@@ -25,6 +25,7 @@ DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
+DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 
 FUNNEL_PRODUCT_EVENTS = (
     "product_impression",
@@ -52,6 +53,7 @@ class BuildMartsConfig:
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
+    behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     time_zone: str = DEFAULT_TIME_ZONE
 
     def __post_init__(self) -> None:
@@ -61,6 +63,7 @@ class BuildMartsConfig:
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
+            "behavior_weights_path": self.behavior_weights_path,
             "time_zone": self.time_zone,
         }
         for name, value in values.items():
@@ -103,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="funnel_daily_kpi output path",
     )
     parser.add_argument(
+        "--behavior-weights-path",
+        default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
+        help="Execution source for EVENT_WEIGHT",
+    )
+    parser.add_argument(
         "--time-zone",
         default=_env("ANALYTICS_TIME_ZONE", DEFAULT_TIME_ZONE),
         help="Time zone used for KST date columns",
@@ -118,6 +126,7 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
+        behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
     )
 
@@ -138,6 +147,9 @@ def _funnel_stage_events(sessionized_df: Any, product_fact_df: Any) -> Any:
         "simulation_run_id",
         "generator_type",
         "product_id",
+        "tenant_id",
+        "category_id",
+        "brand_id",
         "event_name",
         "event_time",
         "actor_type",
@@ -183,6 +195,9 @@ def _funnel_stage_events(sessionized_df: Any, product_fact_df: Any) -> Any:
         "simulation_run_id",
         "generator_type",
         "product_id",
+        "tenant_id",
+        "category_id",
+        "brand_id",
         "event_name",
         "event_time",
         "actor_type",
@@ -211,6 +226,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     grouped = stage_events.groupBy(
         "session_id",
         "product_id",
+        "tenant_id",
         "user_id",
         "persona_id",
         "scenario_id",
@@ -219,6 +235,8 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "actor_type",
         "source",
     ).agg(
+        F.first("category_id", ignorenulls=True).alias("category_id"),
+        F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.min(F.when(F.col("event_name") == "product_impression", F.col("event_time"))).alias(
             "first_impression_at"
         ),
@@ -280,8 +298,9 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "simulation_run_id",
         "generator_type",
         "product_id",
-        F.lit(None).cast("string").alias("category_id"),
-        F.lit(None).cast("string").alias("brand_id"),
+        "tenant_id",
+        "category_id",
+        "brand_id",
         "actor_type",
         "source",
         "first_impression_at",
@@ -312,11 +331,14 @@ def _safe_ratio(numerator: Any, denominator: Any) -> Any:
     ).otherwise(F.lit(None).cast("double"))
 
 
-def _product_daily_kpi(product_fact_df: Any) -> Any:
+def _product_daily_kpi(
+    product_fact_df: Any, event_weights: dict[str, float] | None = None
+) -> Any:
     from pyspark.sql import functions as F
 
     group_columns = [
         "event_date_kst",
+        "tenant_id",
         "product_id",
         "actor_type",
         "source",
@@ -329,9 +351,9 @@ def _product_daily_kpi(product_fact_df: Any) -> Any:
             F.when(F.col("event_name") == F.lit(event_name), F.lit(1)).otherwise(F.lit(0))
         ).cast("long").alias(f"{event_name}_count")
 
-    result = product_fact_df.groupBy(*group_columns).agg(
-        F.lit(None).cast("string").alias("category_id"),
-        F.lit(None).cast("string").alias("brand_id"),
+    aggregations = [
+        F.first("category_id", ignorenulls=True).alias("category_id"),
+        F.first("brand_id", ignorenulls=True).alias("brand_id"),
         count_events("product_impression"),
         count_events("product_click"),
         count_events("quick_look"),
@@ -368,7 +390,22 @@ def _product_daily_kpi(product_fact_df: Any) -> Any:
         F.countDistinct(F.col("user_id")).alias("unique_user_count"),
         F.countDistinct(F.col("session_id")).alias("session_count"),
         F.current_timestamp().alias("mart_processed_at"),
-    )
+    ]
+    if event_weights:
+        product_interest_score = F.lit(0.0)
+        for event_name, weight in event_weights.items():
+            product_interest_score = product_interest_score + F.when(
+                F.col("event_name") == F.lit(event_name), F.lit(float(weight))
+            ).otherwise(F.lit(0.0))
+        aggregations.append(
+            F.sum(product_interest_score)
+            .cast("double")
+            .alias("product_interest_score")
+        )
+    else:
+        aggregations.append(F.lit(None).cast("double").alias("product_interest_score"))
+
+    result = product_fact_df.groupBy(*group_columns).agg(*aggregations)
 
     return (
         result.withColumn(
@@ -380,10 +417,6 @@ def _product_daily_kpi(product_fact_df: Any) -> Any:
         .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("product_impression_count")))
         .withColumn("add_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
         .withColumn("purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("product_view_sessions")))
-        # The persona behavior delta input is not part of this job yet.  Keep
-        # the documented column nullable instead of presenting raw event counts
-        # as the final recommendation interest score.
-        .withColumn("product_interest_score", F.lit(None).cast("double"))
     )
 
 
@@ -392,6 +425,7 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
 
     group_columns = [
         "funnel_date_kst",
+        "tenant_id",
         "product_id",
         "actor_type",
         "source",
@@ -399,8 +433,8 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         "simulation_run_id",
     ]
     result = funnel_session_df.groupBy(*group_columns).agg(
-        F.lit(None).cast("string").alias("category_id"),
-        F.lit(None).cast("string").alias("brand_id"),
+        F.first("category_id", ignorenulls=True).alias("category_id"),
+        F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.sum(F.col("reached_impression").cast("int")).cast("long").alias("impression_sessions"),
         F.sum(F.col("reached_click").cast("int")).cast("long").alias("click_sessions"),
         F.sum(F.col("reached_product_view").cast("int")).cast("long").alias("product_view_sessions"),
@@ -442,32 +476,49 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
 
 
 def build_mart_frames(
-    sessionized_df: Any, product_fact_df: Any, time_zone: str
+    sessionized_df: Any,
+    product_fact_df: Any,
+    time_zone: str,
+    event_weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
+    from pyspark.sql import functions as F
+
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
+    tenant_product_fact = product_fact_df.where(F.col("tenant_id").isNotNull())
+    tenant_funnel_session = funnel_session.where(F.col("tenant_id").isNotNull())
     return {
         "funnel_session_fact": funnel_session,
-        "product_daily_kpi": _product_daily_kpi(product_fact_df),
-        "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
+        "product_daily_kpi": _product_daily_kpi(tenant_product_fact, event_weights),
+        "funnel_daily_kpi": _funnel_daily_kpi(tenant_funnel_session),
     }
 
 
 def run(spark: Any, config: BuildMartsConfig) -> None:
     spark.conf.set("spark.sql.session.timeZone", "UTC")
+    try:
+        from .behavior_weights import load
+    except ImportError:
+        from behavior_weights import load
+
+    event_weights = load(config.behavior_weights_path)["event"]
     frames = build_mart_frames(
-        spark.read.parquet(config.sessionized_path),
-        spark.read.parquet(config.product_fact_path),
+        spark.read.option("mergeSchema", "true").parquet(config.sessionized_path),
+        spark.read.option("mergeSchema", "true").parquet(config.product_fact_path),
         config.time_zone,
+        event_weights,
     )
     frames["funnel_session_fact"].write.mode("overwrite").parquet(
-        config.funnel_session_path
+        config.funnel_session_path,
+        partitionBy="funnel_date_kst",
     )
     frames["product_daily_kpi"].write.mode("overwrite").parquet(
-        config.product_daily_path
+        config.product_daily_path,
+        partitionBy="tenant_id",
     )
     frames["funnel_daily_kpi"].write.mode("overwrite").parquet(
-        config.funnel_daily_path
+        config.funnel_daily_path,
+        partitionBy="tenant_id",
     )
 
 

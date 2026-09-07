@@ -64,7 +64,7 @@ try {
     $now = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
     $eventId = "evt-e2e-$([Guid]::NewGuid().ToString('N'))"
     $event = [ordered]@{
-        schema_version = '0.2.0-draft'
+        schema_version = '0.3.0-draft'
         event_id = $eventId
         event_name = 'product_view'
         intent = 'interest'
@@ -75,10 +75,11 @@ try {
         sequence_no = 1
         page_type = 'product_detail'
         product_id = 'P-E2E-001'
+        tenant_id = 'e2e-store'
         actor_type = 'synthetic'
         environment = 'local'
         received_at = $now
-        source = 'spark-e2e'
+        source = 'simulator'
         request_id = "request-e2e-$eventId"
         event_index = 1
         properties = [ordered]@{
@@ -122,7 +123,7 @@ try {
 
     & $runner run-batch
     if ($LASTEXITCODE -ne 0) {
-        throw 'Q2~Q4 batch 파이프라인 또는 불변성 검증에 실패했습니다.'
+        throw 'Q2~Q5 batch 파이프라인 또는 불변성 검증에 실패했습니다.'
     }
 
     $reportPath = Join-Path $repoRoot 'data\validation\pipeline-report.json'

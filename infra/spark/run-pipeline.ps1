@@ -61,14 +61,20 @@ function Invoke-BatchPipeline {
     Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/derive_facts_job.py' -JobArguments @(
         '--input-path', "$dataRoot/processed/cleaned_events",
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
-        '--product-fact-path', "$dataRoot/processed/product_event_fact"
+        '--product-fact-path', "$dataRoot/processed/product_event_fact",
+        '--section-dwell-path', "$dataRoot/processed/section_dwell_agg",
+        '--content-interest-path', "$dataRoot/processed/content_interest_fact",
+        '--dim-product-path', "$dataRoot/processed/dim_product",
+        '--product-catalog-path', '/opt/project/batch/ingest/data/products_200.json',
+        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
     Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/build_marts_job.py' -JobArguments @(
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",
         '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
         '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
-        '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi"
+        '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
+        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
     Invoke-PipelineValidation
 }
@@ -81,6 +87,9 @@ function Invoke-PipelineValidation {
         '--duplicate-path', "$dataRoot/processed/duplicate_events",
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",
+        '--section-dwell-path', "$dataRoot/processed/section_dwell_agg",
+        '--content-interest-path', "$dataRoot/processed/content_interest_fact",
+        '--dim-product-path', "$dataRoot/processed/dim_product",
         '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
         '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
         '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
