@@ -72,7 +72,6 @@ Kafka tombstone이나 비정상 record도 좌표를 잃지 않도록 `raw_value`
 | `sequence_no` | int | Y | `sequence_no` | 세션 내 Event 순서 |
 | `page_type` | string | Y | `page_type` | 화면 유형 |
 | `product_id` | string | Y | `product_id` | Event 대상 상품 ID |
-| `tenant_id` | string | Y | `tenant_id` | Storefront 소유 Tenant. `0.3.0-draft`부터 필수 |
 | `actor_type` | string | Y | `actor_type` | `user`, `synthetic` |
 | `environment` | string | Y | `environment` | 실행 환경 |
 | `request_id` | string | Y | `request_id` | Collector batch 요청 ID |

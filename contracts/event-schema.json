@@ -28,8 +28,7 @@
   "properties": {
     "schema_version": {
       "enum": [
-        "0.2.0-draft",
-        "0.3.0-draft"
+        "0.2.0-draft"
       ]
     },
     "event_id": {
@@ -129,13 +128,6 @@
         "null"
       ]
     },
-    "tenant_id": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
-    },
     "actor_type": {
       "type": "string",
       "enum": [
@@ -174,20 +166,68 @@
     {
       "if": {
         "properties": {
-          "schema_version": {
-            "const": "0.3.0-draft"
+          "event_name": {
+            "const": "page_view"
+          },
+          "page_type": {
+            "const": "product_detail"
           }
         },
         "required": [
-          "schema_version"
+          "event_name",
+          "page_type"
         ]
       },
       "then": {
-        "required": [
-          "tenant_id"
-        ],
         "properties": {
-          "tenant_id": {
+          "product_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": [
+              "product_view",
+              "product_impression",
+              "product_click",
+              "section_view",
+              "section_dwell",
+              "accordion_toggle",
+              "recommendation_impression",
+              "recommendation_click",
+              "wishlist_toggle",
+              "add_to_cart",
+              "scroll_depth",
+              "impression_dwell",
+              "media_view",
+              "quick_look",
+              "quick_look_close",
+              "remove_from_cart",
+              "variant_select",
+              "quantity_change",
+              "review_filter_apply",
+              "review_expand",
+              "ingredient_view_mode_change",
+              "scroll_pause",
+              "scroll_backtrack",
+              "text_selection",
+              "text_copy",
+              "hover_dwell"
+            ]
+          }
+        },
+        "required": [
+          "event_name"
+        ]
+      },
+      "then": {
+        "properties": {
+          "product_id": {
             "type": "string",
             "minLength": 1
           }
