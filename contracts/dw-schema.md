@@ -2,7 +2,7 @@
 
 작성일: 2026-09-02  
 최종 정적 검증: 2026-09-07
-상태: 통합 쇼핑몰의 사업자·브랜드·상품 귀속 계약 반영. Dimension·Mart 물리 구현은 후속 Jira에서 확정
+상태: 통합 쇼핑몰의 브랜드·상품 귀속 계약 및 물리 구현 반영
 
 ## 1. 범위와 우선순위
 
@@ -53,7 +53,6 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 | `event_date_kst` | date | N | KST 일간 집계일 |
 | `funnel_date_kst` | date | N | 최초 Funnel 단계 도달 시각의 KST 집계일 |
 | `event_minute_kst` | timestamp | N | KST minute truncate |
-| `business_id` | string | Y | 상품이 귀속된 사업자. 상품 미귀속 Mart는 NULL 가능 |
 | `brand_id` | string | Y | Event 대상 상품의 브랜드. 상품 미귀속 Mart는 NULL 가능 |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `source` | string | N | MVP: `web`, `simulator` |
@@ -109,26 +108,7 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 
 ## 3. Dimension
 
-### 3.1 `dim_business`
-
-```text
-grain/key = business_id
-source = Backend 사업자 등록·인증 정보
-```
-
-| column | type | nullable | 설명 |
-| --- | --- | --- | --- |
-| `business_id` | string | N | Backend가 발급한 사업자 식별자 |
-| `business_name` | string | N | 사업자 표시명 |
-| `verification_status` | string | N | `PENDING`, `VERIFIED`, `MISMATCH`, `RETRY_NEEDED`, `INACTIVE` |
-| `created_at` | timestamp | N | 사업자 등록 시각 |
-| `updated_at` | timestamp | Y | 갱신 시각 |
-
-통합몰 전환으로 기존 Storefront 격리 식별자 규칙은 폐기한다. Event에
-`business_id`를 반복하지 않고 상품·브랜드 Dimension에서 사업자 귀속을 파생한다.
-대시보드 조회 인가는 Backend의 사업자→브랜드 소유 관계를 기준으로 한다.
-
-### 3.2 `dim_brand`
+### 3.1 `dim_brand`
 
 ```text
 grain/key = brand_id
@@ -138,7 +118,6 @@ source = Backend 브랜드 등록 정보
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `brand_id` | string | N | 브랜드 식별자 |
-| `business_id` | string | N | 소유 사업자. `dim_business` FK |
 | `brand_name` | string | N | 브랜드 표시명 |
 | `brand_hash` | string | N | Commons Mart용 비가역 가명 |
 | `commons_participating` | boolean | N | 억제 규칙을 충족한 공유 집계 대상 여부 |
@@ -146,9 +125,10 @@ source = Backend 브랜드 등록 정보
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
 `brand_hash`와 `commons_participating`의 산출·억제 규칙은 Commons Mart Jira에서
-확정한다. 원본 `brand_id`는 다른 브랜드에게 노출하지 않는다.
+확정한다. 브랜드 계정과의 1:1 인증 매핑은 Backend가 소유하고 DW에 복제하지 않는다.
+원본 `brand_id`는 다른 브랜드에게 노출하지 않는다.
 
-### 3.3 `dim_product`
+### 3.2 `dim_product`
 
 ```text
 grain/key = product_id
@@ -173,7 +153,7 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 | `caution_ingredient_count` | int | Y | 주의 성분 수 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
-### 3.4 `dim_persona_segment`
+### 3.3 `dim_persona_segment`
 
 ```text
 grain/key = segment_type + segment_value
@@ -193,7 +173,7 @@ source = bridge_persona_segment
 [`persona-schema.md`](./persona-schema.md)의 정의를 그대로 사용한다. Attribute
 Affinity는 상품 축이 있으므로 이 Dimension에 저장하지 않는다.
 
-### 3.5 `dim_date`
+### 3.4 `dim_date`
 
 ```text
 grain/key = event_date_kst
@@ -207,7 +187,7 @@ grain/key = event_date_kst
 | `quarter` | string | N | 분기 |
 | `is_weekend` | boolean | N | 주말 여부 |
 
-### 3.6 `dim_event`
+### 3.5 `dim_event`
 
 ```text
 grain/key = event_name
@@ -223,7 +203,7 @@ source = event-properties-schema.md
 | `is_dashboard_core` | boolean | N | 핵심 KPI 사용 여부 |
 | `description` | string | Y | 설명 |
 
-### 3.7 Simulation Dimension projection
+### 3.6 Simulation Dimension projection
 
 `dim_scenario`와 `dim_simulation_run`의 grain, 필수 필드와 허용값은
 [`persona-schema.md`](./persona-schema.md)의 `scenario`, `simulation_run` 계약을
@@ -241,7 +221,7 @@ source = event-properties-schema.md
 ### 4.1 `product_daily_kpi`
 
 ```text
-key = event_date_kst + business_id + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
 input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_product
 ```
 
@@ -257,7 +237,7 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 ### 4.2 `recommendation_daily_kpi`
 
 ```text
-key = event_date_kst + business_id + brand_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + scenario_id + simulation_run_id
 input = product_event_fact
 ```
 
@@ -287,7 +267,7 @@ input = search_event_fact, product_event_fact
 ### 4.4 `content_daily_kpi`
 
 ```text
-key = event_date_kst + business_id + brand_id + product_id + section_id + content_kind + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + product_id + section_id + content_kind + actor_type + source + scenario_id + simulation_run_id
 input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_product
 ```
 
@@ -309,7 +289,7 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 ### 4.5 `funnel_daily_kpi`
 
 ```text
-key = funnel_date_kst + business_id + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = funnel_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
 input = funnel_session_fact, dim_product
 ```
 
@@ -324,7 +304,7 @@ input = funnel_session_fact, dim_product
 ### 4.6 `persona_segment_daily_kpi`
 
 ```text
-key = event_date_kst + business_id + brand_id + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = funnel_session_fact, persona_behavior_feature_delta, bridge_persona_segment, dim_persona_segment, dim_product
 ```
 
@@ -394,9 +374,9 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
    행동 `purchase_count`는 `order_id` 기준 고유 전환 수이며 상품 row 수가 아니다.
 5. `generator_type`, `scenario_id`, `simulation_run_id`는 Processed에서 승격된
    synthetic metadata를 사용한다.
-6. 상품 대상 Mart는 `product_id`에서 파생한 `brand_id`, `business_id`를
+6. 상품 대상 Mart는 `product_id`에서 파생한 `brand_id`를
    집계 시점 스냅샷으로 보존한다.
-7. 상품이 없는 플랫폼 공통 Event를 특정 상품·사업자·브랜드에 임의 귀속하거나
+7. 상품이 없는 플랫폼 공통 Event를 특정 상품·브랜드에 임의 귀속하거나
    상품·브랜드 KPI에 포함하지 않는다. 플랫폼 공통 콘텐츠는 필요할 때 별도 grain으로
    집계한다. 대시보드 접근 격리는 Backend 인가가 담당한다.
 8. `*_interest_score`를 0으로 하한 절단하지 않는다. 음수는 부정 행동의 신호다.

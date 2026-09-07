@@ -116,10 +116,9 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 정확한 컬럼과 nullable은 Processed 계약을 따른다. Event별 필수 properties가 없거나
 타입 변환이 불가능하면 `bad_events`로 분리한다.
 
-상품 대상 Event의 `brand_id`는 `product_id`를 `dim_product`와 Join해 현재 Spark 구현에서
-보강한다. `business_id`는 `brand_id → dim_brand.business_id` 후속 Join이 필요한
-Fact/Dimension Jira의 범위다. 상품이 없는 Event의 귀속을 추정하지 않으며, 사업자
-대시보드 접근 격리는 Backend 인가가 담당한다.
+상품 대상 Event의 `brand_id`는 `product_id`를 `dim_product`와 Join해 보강한다.
+상품이 없는 Event의 귀속을 추정하지 않으며, 브랜드 대시보드 접근 격리는 Backend가
+로그인 계정에 연결된 단일 `brand_id`로 담당한다.
 
 ### 4.4 `source`와 Synthetic 처리
 
@@ -181,19 +180,19 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 | `duplicate_events` | Q2에서 생성하고 `event_date_kst`를 기록 | Delta key 기반 재실행 검증 |
 | `cleaned_events` | payload `source` 우선, `event_index`·지연·콘텐츠 컬럼을 포함해 생성. tenant 필수·형식 검증은 제거 | Q3 Dimension 결과를 Q2에도 물리는 방식은 별도 검토 |
 | `sessionized_events` | 통합 `session_id` 기준 세션 순서 복원과 seed `dim_product`의 `brand_id` 조인을 수행 | 목표 late Event 규칙 검증 |
-| `product_event_fact` | item grain과 seed `dim_product`의 `brand_id` 조인을 수행 | `dim_brand.business_id` 연결 및 입점 상품 E2E는 후속 Fact Jira |
+| `product_event_fact` | item grain과 seed `dim_product`의 `brand_id` 조인을 수행 | 입점 상품 E2E는 카탈로그 연동 시 확인 |
 | `funnel_session_fact` | Q4에서 생성. tenant 필터·집계 축 없이 상품 세션 Funnel 산출 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
 | `search_event_fact` | 미구현 | Trigger와 원천 필드 확인 후 구현 |
-| `section_dwell_agg` | `dwell_ms` delta를 content grain으로 합산하고 `brand_id`를 보강 | `dim_brand.business_id` 연결과 E2E 확인 |
+| `section_dwell_agg` | `dwell_ms` delta를 content grain으로 합산하고 `brand_id`를 보강 | nullable 상품 E2E 확인 |
 | `content_interest_fact` | 계약 §13.1 산식과 Front 가중치 원본 파싱을 반영 | vocab 정규화 연결과 E2E 확인 |
 | `dim_product` | seed `products_200.json` projection 생성 | 입점 브랜드 등록 상품 union과 전체 속성 보강 |
 | `persona_behavior_feature_delta` | 미구현 | 추천 계약 기준 delta 구현 |
 | `purchase_fact` | 미구현 | `items[]` explode와 `item_revenue` 파생 구현 |
 | `purchase_reason_fact` | 미구현 | `reasons[]` explode, 건너뛰기 row 보존 구현 |
 
-현재 Q1~Q5는 주로 Parquet output을 사용한다. 이번 후속에서는 기존 tenant 필터·집계
-축·물리 partition 의존성을 제거했으며, `business_id`·`brand_id`를 조회 축으로 쓰는
-Fact/Mart 물리 구현은 후속 Jira에서 진행한다. 목표 저장 엔진은 Delta Lake이며 실제
+현재 Q1~Q5는 주로 Parquet output을 사용한다. 기존 tenant 필터·집계 축·물리 partition
+의존성을 제거했으며, Fact/Mart는 `brand_id`를 조회 스냅샷으로 사용한다. 목표 저장
+엔진은 Delta Lake이며 실제
 Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
 
 `begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event가 됐다. 다만 Front

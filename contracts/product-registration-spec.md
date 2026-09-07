@@ -115,7 +115,7 @@ Product Feature 담당이 valid 1,975명으로 측정한 결과 정확도 차이
 | `rating` | §4.2 규칙으로 주입 | NULL이면 정규화가 실패한다 |
 | `loves_count` | `0` | prior 계산 입력. NULL 금지 |
 | `product_id` | 발급 | 기존 ID 체계와 충돌하지 않는 값 |
-| `brand_id` | 사업자가 선택한 소유 브랜드 | Backend가 `business_id → brand_id` 소유 권한을 검증 |
+| `brand_id` | 로그인한 브랜드 계정에 연결된 브랜드 | Backend가 계정의 단일 `brand_id` 권한을 검증 |
 
 ### 4.1 `price_krw` → `price_usd`
 
@@ -182,8 +182,8 @@ Join하므로 Dimension을 나누면 모든 소비자가 두 번 Join해 합쳐�
 | `brand_id` | 등록 브랜드. 모든 판매 상품에 필수 |
 | `rating_source` | `observed` / `injected`. §4.2로 주입한 값을 실측과 섞지 않는다 |
 
-`product_source`는 seed 카탈로그와 입점 브랜드 등록 상품을 구분한다. 사업자 귀속은
-`brand_id → dim_brand.business_id`로 파생하며 상품 입력에서 `business_id`를 중복 저장하지 않는다.
+`product_source`는 seed 카탈로그와 입점 브랜드 등록 상품을 구분한다. 브랜드 계정
+식별자는 인증·인가에만 사용하며 상품과 분석 DW에는 중복 저장하지 않는다.
 
 ## 8. 미확정 항목
 

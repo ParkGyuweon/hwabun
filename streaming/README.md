@@ -166,7 +166,9 @@ Q2 정본 선택 이후 downstream fact에 들어오지 않는다.
 spark-submit streaming/jobs/derive_facts_job.py \
   --input-path data/processed/cleaned_events \
   --sessionized-path data/processed/sessionized_events \
-  --product-fact-path data/processed/product_event_fact
+  --product-fact-path data/processed/product_event_fact \
+  --dim-product-path data/processed/dim_product \
+  --dim-brand-path data/processed/dim_brand
 ```
 
 `sessionized_events`는 `session_id → sequence_no → event_time → received_at →
@@ -179,6 +181,11 @@ event_id` 순으로 `event_order`를 만들고 앞뒤 Event 이름과 sequence g
 `items[].product_id` 기준으로 explode한다. 구매 매출은 `quantity * unit_price`
 인 `item_revenue`만 합산하며 주문 전체 금액 `order_value`를 상품별로 합산하지
 않는다.
+
+상품 Fact와 콘텐츠 Fact의 `brand_id`는 `product_id → dim_product.brand_id` left
+join으로 보강한다. `dim_brand` grain은 `brand_id`, `dim_product` grain은
+`product_id`다. 매칭되지 않는 상품과 `product_id=NULL`인 플랫폼 Event는 row를
+버리거나 세션의 다른 상품을 참조하지 않고 `brand_id=NULL`로 유지한다.
 
 ## Q4 Funnel·DW Mart
 
@@ -226,6 +233,10 @@ spark-submit streaming/jobs/validate_pipeline_job.py --require-events \
 - `duplicate_events`가 실제 canonical Event를 가리키는지
 - `sessionized_events`가 cleaned Event의 1:1 투영인지
 - `product_event_fact`의 product ID와 cleaned Event 참조 무결성
+- `dim_brand`/`dim_product` grain과 모든 상품의 브랜드 참조 무결성
+- 상품 Dimension Join 전후 row 수, 미등록 상품 ID 표본, 브랜드 스냅샷 일치
+- 상품 미귀속 Event가 `brand_id=NULL`을 유지하는지
+- Processed Fact·Mart에 상위 소유 주체 식별 축이 없는지
 - Funnel Session, 상품 일간 Mart, Funnel 일간 Mart의 grain 유일성
 
 K01~K16 시나리오에서 예상 Event ID·Kafka 좌표·정본 ID를 먼저 기록하고 이

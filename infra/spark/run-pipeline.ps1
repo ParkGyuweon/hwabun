@@ -65,6 +65,7 @@ function Invoke-BatchPipeline {
         '--section-dwell-path', "$dataRoot/processed/section_dwell_agg",
         '--content-interest-path', "$dataRoot/processed/content_interest_fact",
         '--dim-product-path', "$dataRoot/processed/dim_product",
+        '--dim-brand-path', "$dataRoot/processed/dim_brand",
         '--product-catalog-path', '/opt/project/batch/ingest/data/products_200.json',
         '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
@@ -90,6 +91,7 @@ function Invoke-PipelineValidation {
         '--section-dwell-path', "$dataRoot/processed/section_dwell_agg",
         '--content-interest-path', "$dataRoot/processed/content_interest_fact",
         '--dim-product-path', "$dataRoot/processed/dim_product",
+        '--dim-brand-path', "$dataRoot/processed/dim_brand",
         '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
         '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
         '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",

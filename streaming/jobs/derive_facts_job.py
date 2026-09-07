@@ -25,6 +25,7 @@ DEFAULT_TIME_ZONE = "Asia/Seoul"
 DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
 DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
 DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
+DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
 DEFAULT_PRODUCT_CATALOG_PATH = "batch/ingest/data/products_200.json"
 DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 
@@ -63,6 +64,7 @@ class DeriveFactsConfig:
     section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
     content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
+    dim_brand_path: str = DEFAULT_DIM_BRAND_PATH
     product_catalog_path: str = DEFAULT_PRODUCT_CATALOG_PATH
     behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     time_zone: str = DEFAULT_TIME_ZONE
@@ -75,6 +77,7 @@ class DeriveFactsConfig:
             "section_dwell_path": self.section_dwell_path,
             "content_interest_path": self.content_interest_path,
             "dim_product_path": self.dim_product_path,
+            "dim_brand_path": self.dim_brand_path,
             "product_catalog_path": self.product_catalog_path,
             "behavior_weights_path": self.behavior_weights_path,
             "time_zone": self.time_zone,
@@ -124,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output path for the seed dim_product projection",
     )
     parser.add_argument(
+        "--dim-brand-path",
+        default=_env("DIM_BRAND_PATH", DEFAULT_DIM_BRAND_PATH),
+        help="Output path for dim_brand (grain=brand_id)",
+    )
+    parser.add_argument(
         "--product-catalog-path",
         default=_env("PRODUCT_CATALOG_PATH", DEFAULT_PRODUCT_CATALOG_PATH),
         help="Seed product catalog JSON used to build dim_product",
@@ -150,6 +158,7 @@ def parse_args(argv: list[str] | None = None) -> DeriveFactsConfig:
         section_dwell_path=args.section_dwell_path,
         content_interest_path=args.content_interest_path,
         dim_product_path=args.dim_product_path,
+        dim_brand_path=args.dim_brand_path,
         product_catalog_path=args.product_catalog_path,
         behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
@@ -221,7 +230,13 @@ def _typed_properties(cleaned_df: Any) -> Any:
 
 
 def _attach_product_dimension(df: Any, dim_product_df: Any | None) -> Any:
-    """Attach product attributes without ever using them as an isolation key."""
+    """Attach a product snapshot while preserving exactly one output row per input row.
+
+    The dimension is collapsed to one deterministic row per ``product_id`` before
+    the left join. Conflicting duplicate attributes become NULL and are surfaced by
+    the validation job instead of multiplying Fact rows or picking an arbitrary
+    brand.
+    """
 
     from pyspark.sql import functions as F
 
@@ -230,10 +245,23 @@ def _attach_product_dimension(df: Any, dim_product_df: Any | None) -> Any:
 
     base_columns = [name for name in df.columns if name not in {"category_id", "brand_id"}]
     base = df.select(*base_columns)
-    dimension = dim_product_df.select(
-        F.col("product_id").alias("_dim_product_id"),
-        F.col("category_id").cast("string").alias("_dim_category_id"),
-        F.col("brand_id").cast("string").alias("_dim_brand_id"),
+    dimension_values = dim_product_df.select(
+        F.trim(F.col("product_id").cast("string")).alias("_dim_product_id"),
+        F.col("category_id").cast("string").alias("_category_id"),
+        F.trim(F.col("brand_id").cast("string")).alias("_brand_id"),
+    ).where(
+        F.col("_dim_product_id").isNotNull()
+        & (F.length(F.col("_dim_product_id")) > 0)
+    )
+    dimension = dimension_values.groupBy("_dim_product_id").agg(
+        F.when(
+            F.countDistinct("_category_id") <= 1,
+            F.first("_category_id", ignorenulls=True),
+        ).alias("_dim_category_id"),
+        F.when(
+            F.countDistinct("_brand_id") <= 1,
+            F.first("_brand_id", ignorenulls=True),
+        ).alias("_dim_brand_id"),
     )
     joined = base.join(
         dimension,
@@ -422,8 +450,8 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
             product_id.alias("product_id"),
             F.col("product_name").cast("string").alias("product_name"),
             F.lit("seed_catalog").alias("product_source"),
-            F.col("brand_id").cast("string").alias("brand_id"),
-            F.col("brand_name").cast("string").alias("brand_name"),
+            F.trim(F.col("brand_id").cast("string")).alias("brand_id"),
+            F.trim(F.col("brand_name").cast("string")).alias("brand_name"),
             F.col("primary_category").cast("string").alias("primary_category"),
             F.col("secondary_category").cast("string").alias("secondary_category"),
             F.col("tertiary_category").cast("string").alias("tertiary_category"),
@@ -447,6 +475,32 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
         )
         .where(F.col("product_id").isNotNull() & (F.length(F.col("product_id")) > 0))
         .dropDuplicates(["product_id"])
+    )
+
+
+def _build_dim_brand(dim_product_df: Any) -> Any:
+    """Build the analytics brand dimension at grain ``brand_id``.
+
+    Account-to-brand authentication is owned by Backend and deliberately is not
+    copied into the DW dimension. Conflicting names resolve deterministically and
+    remain detectable from ``dim_product`` by the validation job.
+    """
+
+    from pyspark.sql import functions as F
+
+    return (
+        dim_product_df.select(
+            F.trim(F.col("brand_id").cast("string")).alias("brand_id"),
+            F.trim(F.col("brand_name").cast("string")).alias("brand_name"),
+        )
+        .where(
+            F.col("brand_id").isNotNull()
+            & (F.length(F.col("brand_id")) > 0)
+        )
+        .groupBy("brand_id")
+        .agg(F.min("brand_name").alias("brand_name"))
+        .withColumn("created_at", F.lit(None).cast("timestamp"))
+        .withColumn("updated_at", F.current_timestamp())
     )
 
 
@@ -774,6 +828,7 @@ def run(spark: Any, config: DeriveFactsConfig) -> None:
         config.product_catalog_path
     )
     dim_product = _build_seed_dim_product(catalog_df)
+    dim_brand = _build_dim_brand(dim_product)
     weights = _load_behavior_weights(config.behavior_weights_path)
     frames = build_derived_frames(
         spark.read.option("mergeSchema", "true").parquet(config.input_path),
@@ -799,6 +854,9 @@ def run(spark: Any, config: DeriveFactsConfig) -> None:
     )
     dim_product.write.mode("overwrite").parquet(
         config.dim_product_path,
+    )
+    dim_brand.write.mode("overwrite").parquet(
+        config.dim_brand_path,
     )
 
 

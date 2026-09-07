@@ -17,6 +17,7 @@ from streaming.jobs.derive_facts_job import (
     CONTENT_INTEREST_EVENTS,
     DEFAULT_CONTENT_INTEREST_PATH,
     DEFAULT_DIM_PRODUCT_PATH,
+    DEFAULT_DIM_BRAND_PATH,
     DEFAULT_PRODUCT_FACT_PATH,
     DEFAULT_SECTION_DWELL_PATH,
     DEFAULT_SESSIONIZED_PATH,
@@ -36,6 +37,7 @@ from streaming.jobs.build_marts_job import (
 from streaming.jobs.validate_pipeline_job import (
     DEFAULT_CONTENT_INTEREST_PATH as DEFAULT_VALIDATE_CONTENT_INTEREST_PATH,
     DEFAULT_DIM_PRODUCT_PATH as DEFAULT_VALIDATE_DIM_PRODUCT_PATH,
+    DEFAULT_DIM_BRAND_PATH as DEFAULT_VALIDATE_DIM_BRAND_PATH,
     DEFAULT_FUNNEL_DAILY_PATH as DEFAULT_VALIDATE_FUNNEL_DAILY_PATH,
     DEFAULT_PRODUCT_DAILY_PATH as DEFAULT_VALIDATE_PRODUCT_DAILY_PATH,
     DEFAULT_SECTION_DWELL_PATH as DEFAULT_VALIDATE_SECTION_DWELL_PATH,
@@ -160,6 +162,7 @@ class DeriveFactsConfigTest(unittest.TestCase):
         self.assertEqual(DEFAULT_SECTION_DWELL_PATH, config.section_dwell_path)
         self.assertEqual(DEFAULT_CONTENT_INTEREST_PATH, config.content_interest_path)
         self.assertEqual(DEFAULT_DIM_PRODUCT_PATH, config.dim_product_path)
+        self.assertEqual(DEFAULT_DIM_BRAND_PATH, config.dim_brand_path)
         self.assertEqual(DEFAULT_BEHAVIOR_WEIGHTS_PATH, config.behavior_weights_path)
 
     def test_content_interest_scope_is_limited_to_contract_events(self):
@@ -225,6 +228,7 @@ class ValidatePipelineConfigTest(unittest.TestCase):
             DEFAULT_VALIDATE_CONTENT_INTEREST_PATH, config.content_interest_path
         )
         self.assertEqual(DEFAULT_VALIDATE_DIM_PRODUCT_PATH, config.dim_product_path)
+        self.assertEqual(DEFAULT_VALIDATE_DIM_BRAND_PATH, config.dim_brand_path)
         self.assertEqual(DEFAULT_VALIDATE_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_VALIDATE_FUNNEL_DAILY_PATH, config.funnel_daily_path)
         self.assertFalse(config.require_events)

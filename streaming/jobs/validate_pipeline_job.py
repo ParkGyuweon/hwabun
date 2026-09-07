@@ -24,6 +24,7 @@ DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
 DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
 DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
 DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
+DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
 DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
@@ -40,6 +41,7 @@ class ValidatePipelineConfig:
     section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
     content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
+    dim_brand_path: str = DEFAULT_DIM_BRAND_PATH
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
@@ -57,6 +59,7 @@ class ValidatePipelineConfig:
             "section_dwell_path": self.section_dwell_path,
             "content_interest_path": self.content_interest_path,
             "dim_product_path": self.dim_product_path,
+            "dim_brand_path": self.dim_brand_path,
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
@@ -110,6 +113,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("DIM_PRODUCT_PATH", DEFAULT_DIM_PRODUCT_PATH),
     )
     parser.add_argument(
+        "--dim-brand-path",
+        default=_env("DIM_BRAND_PATH", DEFAULT_DIM_BRAND_PATH),
+    )
+    parser.add_argument(
         "--funnel-session-path",
         default=_env("FUNNEL_SESSION_FACT_PATH", DEFAULT_FUNNEL_SESSION_PATH),
     )
@@ -146,6 +153,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         section_dwell_path=args.section_dwell_path,
         content_interest_path=args.content_interest_path,
         dim_product_path=args.dim_product_path,
+        dim_brand_path=args.dim_brand_path,
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
@@ -223,6 +231,45 @@ def _check(name: str, passed: bool, details: str) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
 
 
+def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
+    """Measure the row-preserving product-to-brand snapshot contract."""
+
+    from pyspark.sql import functions as F
+
+    dimension = dim_product.select(
+        F.col("product_id").alias("_dim_product_id"),
+        F.col("brand_id").alias("_expected_brand_id"),
+    )
+    joined = fact.alias("fact").join(
+        dimension.alias("dimension"),
+        F.col("fact.product_id") == F.col("dimension._dim_product_id"),
+        "left",
+    )
+    unmatched = joined.where(F.col("_dim_product_id").isNull())
+    mismatched = joined.where(
+        F.col("_dim_product_id").isNotNull()
+        & ~F.col("fact.brand_id").eqNullSafe(F.col("_expected_brand_id"))
+    )
+    samples = [
+        row["product_id"]
+        for row in unmatched.select(F.col("fact.product_id").alias("product_id"))
+        .distinct()
+        .orderBy("product_id")
+        .limit(20)
+        .collect()
+    ]
+    return {
+        "fact_rows": fact.count(),
+        "join_rows": joined.count(),
+        "unmatched_rows": unmatched.count(),
+        "unmatched_product_ids": samples,
+        "brand_mismatch_rows": mismatched.count(),
+        "unmatched_with_brand_rows": unmatched.where(
+            F.col("fact.brand_id").isNotNull()
+        ).count(),
+    }
+
+
 def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dict[str, Any]:
     """Run cross-dataset checks and return a JSON-serializable report."""
 
@@ -237,6 +284,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     section_dwell = frames["section_dwell"]
     content_interest = frames["content_interest"]
     dim_product = frames["dim_product"]
+    dim_brand = frames["dim_brand"]
     funnel_session = frames["funnel_session"]
     product_daily = frames["product_daily"]
     funnel_daily = frames["funnel_daily"]
@@ -251,6 +299,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "section_dwell": section_dwell.count(),
         "content_interest": content_interest.count(),
         "dim_product": dim_product.count(),
+        "dim_brand": dim_brand.count(),
         "funnel_session": funnel_session.count(),
         "product_daily": product_daily.count(),
         "funnel_daily": funnel_daily.count(),
@@ -263,6 +312,73 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "dim_product_key_is_unique",
             _duplicate_count(dim_product, ["product_id"]) == 0,
             "dim_product grain=product_id",
+        )
+    )
+    checks.append(
+        _check(
+            "dim_brand_key_is_unique",
+            _duplicate_count(dim_brand, ["brand_id"]) == 0,
+            "dim_brand grain=brand_id",
+        )
+    )
+    invalid_brands = dim_brand.where(
+        F.col("brand_id").isNull()
+        | (F.length(F.trim(F.col("brand_id"))) == 0)
+        | F.col("brand_name").isNull()
+        | (F.length(F.trim(F.col("brand_name"))) == 0)
+    ).count()
+    checks.append(
+        _check(
+            "dim_brand_required_fields_are_valid",
+            invalid_brands == 0,
+            f"invalid_rows={invalid_brands}; brand_id and brand_name are required",
+        )
+    )
+    invalid_product_ids = dim_product.where(
+        F.col("product_id").isNull()
+        | (F.length(F.trim(F.col("product_id"))) == 0)
+    ).count()
+    checks.append(
+        _check(
+            "dim_product_has_valid_product_id",
+            invalid_product_ids == 0,
+            f"invalid_product_id_rows={invalid_product_ids}",
+        )
+    )
+    invalid_product_brands = dim_product.where(
+        F.col("brand_id").isNull() | (F.length(F.trim(F.col("brand_id"))) == 0)
+    ).count()
+    checks.append(
+        _check(
+            "dim_product_has_valid_brand_id",
+            invalid_product_brands == 0,
+            f"invalid_brand_rows={invalid_product_brands}; every selling product has one brand",
+        )
+    )
+    orphan_product_brands = (
+        dim_product.select("brand_id")
+        .distinct()
+        .join(dim_brand.select("brand_id").distinct(), ["brand_id"], "left_anti")
+        .count()
+    )
+    checks.append(
+        _check(
+            "dim_product_references_dim_brand",
+            orphan_product_brands == 0,
+            f"orphan_brand_ids={orphan_product_brands}",
+        )
+    )
+    brand_name_conflicts = (
+        dim_product.groupBy("brand_id")
+        .agg(F.countDistinct("brand_name").alias("brand_name_count"))
+        .where(F.col("brand_name_count") > 1)
+        .count()
+    )
+    checks.append(
+        _check(
+            "brand_id_has_one_brand_name",
+            brand_name_conflicts == 0,
+            f"conflicting_brand_ids={brand_name_conflicts}",
         )
     )
     checks.append(
@@ -396,6 +512,57 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "product_event_fact grain=event_id+item_index+product_id",
         )
     )
+    attribution = _attribution_quality(product_fact, dim_product)
+    checks.extend(
+        [
+            _check(
+                "product_dimension_join_preserves_row_count",
+                attribution["fact_rows"] == attribution["join_rows"],
+                f"before={attribution['fact_rows']} after={attribution['join_rows']}",
+            ),
+            _check(
+                "product_fact_products_match_dimension",
+                attribution["unmatched_rows"] == 0,
+                "unmatched_rows="
+                f"{attribution['unmatched_rows']} sample_product_ids="
+                f"{attribution['unmatched_product_ids']}",
+            ),
+            _check(
+                "product_fact_brand_snapshot_matches_dimension",
+                attribution["brand_mismatch_rows"] == 0,
+                f"mismatched_rows={attribution['brand_mismatch_rows']}",
+            ),
+            _check(
+                "unmatched_product_does_not_infer_brand",
+                attribution["unmatched_with_brand_rows"] == 0,
+                f"violations={attribution['unmatched_with_brand_rows']}",
+            ),
+        ]
+    )
+    null_product_with_brand = sum(
+        frame.where(F.col("product_id").isNull() & F.col("brand_id").isNotNull()).count()
+        for frame in (sessionized, section_dwell, content_interest)
+    )
+    checks.append(
+        _check(
+            "unattributed_events_keep_null_brand",
+            null_product_with_brand == 0,
+            f"violations={null_product_with_brand}; no previous/session product inference",
+        )
+    )
+    business_columns = {
+        name: "business_id" in frame.columns
+        for name, frame in frames.items()
+        if name not in {"raw", "bad", "duplicates"}
+    }
+    checks.append(
+        _check(
+            "processed_fact_mart_contract_has_no_business_id",
+            not any(business_columns.values()),
+            "datasets_with_business_id="
+            f"{sorted(name for name, present in business_columns.items() if present)}",
+        )
+    )
     checks.append(
         _check(
             "funnel_session_grain_is_unique",
@@ -446,6 +613,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "status": "passed" if not failures else "failed",
         "counts": counts,
         "checks": checks,
+        "product_attribution": attribution,
         "warnings": warnings,
         "failure_count": len(failures),
     }
@@ -462,6 +630,7 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "section_dwell": config.section_dwell_path,
         "content_interest": config.content_interest_path,
         "dim_product": config.dim_product_path,
+        "dim_brand": config.dim_brand_path,
         "funnel_session": config.funnel_session_path,
         "product_daily": config.product_daily_path,
         "funnel_daily": config.funnel_daily_path,

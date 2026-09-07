@@ -42,6 +42,7 @@ validate_pipeline() {
     --section-dwell-path "$data_root/processed/section_dwell_agg" \
     --content-interest-path "$data_root/processed/content_interest_fact" \
     --dim-product-path "$data_root/processed/dim_product" \
+    --dim-brand-path "$data_root/processed/dim_brand" \
     --funnel-session-path "$data_root/processed/funnel_session_fact" \
     --product-daily-path "$data_root/marts/product_daily_kpi" \
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
@@ -63,6 +64,7 @@ run_batch_pipeline() {
     --section-dwell-path "$data_root/processed/section_dwell_agg" \
     --content-interest-path "$data_root/processed/content_interest_fact" \
     --dim-product-path "$data_root/processed/dim_product" \
+    --dim-brand-path "$data_root/processed/dim_brand" \
     --product-catalog-path /opt/project/batch/ingest/data/products_200.json \
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
 

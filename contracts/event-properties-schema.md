@@ -27,10 +27,10 @@ validation에서 검사한다.
   상품 미귀속은 빈 문자열이 아니라 JSON `null`로 표현한다.
 - Planned Event는 `event-schema.json` enum에 등록되기 전까지 전송하지 않는다.
 
-## 1.1 통합 쇼핑몰의 사업자·브랜드·상품 귀속
+## 1.1 통합 쇼핑몰의 브랜드·상품 귀속
 
 소비자 행동은 하나의 통합 쇼핑몰에서 발생하므로 Event를 Storefront Tenant로
-격리하지 않는다. top-level Envelope에는 `tenant_id`, `business_id`, `brand_id`를
+격리하지 않는다. top-level Envelope에는 `tenant_id`, `brand_id`를
 반복하지 않고, 상품에 귀속되는 Event의 `product_id`를 기준으로 Processed 단계에서
 귀속을 파생한다. `product_id = NULL`인 플랫폼 공통 Event에는 이 Join을 적용하지
 않는다.
@@ -38,26 +38,24 @@ validation에서 검사한다.
 ```text
 Event.product_id
 → dim_product.brand_id
-→ dim_brand.business_id
 ```
 
 | 값 | 위치 | 얻는 법 |
 | --- | --- | --- |
 | `product_id` | 상품 대상 Event의 top-level Envelope | Event가 직접 싣는다 |
 | `brand_id` | Processed Fact·Mart | `product_id`를 `dim_product`와 Join해 파생 |
-| `business_id` | Processed Fact·Mart | `brand_id`를 `dim_brand`와 Join해 파생 |
 
 상품 상세 화면의 `page_view`, `section_view`, `section_dwell`은 `product_id`가
 필수다. 홈·검색·장바구니 등 플랫폼 공통 화면의 `page_view`와 상품 목록의
 프로모션·필터·상품 그리드 전체를 측정하는 `section_view`, `section_dwell`은 특정
-상품·사업자·브랜드에 귀속하지 않으며 `product_id = NULL`을 허용한다. 빈 문자열은
+상품·브랜드에 귀속하지 않으며 `product_id = NULL`을 허용한다. 빈 문자열은
 상품 미귀속을 뜻하지 않으며 모든 페이지에서 거부한다. 향후 상품 없이 브랜드 자체가
 명시적 대상인 Event를 도입할 때만 `brand_id` 선택 필드를 별도 계약한다. route,
-표시명, 직전 상품 또는 세션 내 상품으로 사업자·브랜드를 추정하지 않는다.
+표시명, 직전 상품 또는 세션 내 상품으로 브랜드를 추정하지 않는다.
 
-사업자 대시보드의 데이터 접근 격리는 Event 필드가 아니라 Backend의
-`business_id → brand_id` 소유 관계와 인가로 강제한다. Mart는 집계 시점의
-`business_id`, `brand_id`를 조회 축으로 보존하지만 물리 partition은 별도 저장 계약에서
+브랜드 대시보드의 데이터 접근 격리는 Event 필드가 아니라 Backend의
+브랜드 계정과 `brand_id`의 1:1 관계 및 인가로 강제한다. Mart는 집계 시점의
+`brand_id`를 조회 축으로 보존하지만 물리 partition은 별도 저장 계약에서
 결정한다.
 
 ### 1.1.1 Schema version

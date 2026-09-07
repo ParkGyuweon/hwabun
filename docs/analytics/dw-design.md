@@ -43,7 +43,7 @@ Parquet를 최종 저장 방식이나 exactly-once 저장소로 해석하지 않
 | 중복 제거 후 집계 | Raw를 직접 집계하지 않고 `cleaned_events`와 파생 Dataset만 사용 |
 | grain 우선 | 서로 다른 Processed Dataset은 목표 grain으로 먼저 집계한 뒤 결합 |
 | Event일과 Funnel일 분리 | 일반 성과는 Event 발생일, Funnel은 최초 단계 도달일 기준 |
-| 통합몰 귀속·권한 | Event에는 `tenant_id`를 두지 않으며, `brand_id`·`business_id` 귀속은 후속 Dimension Join에서 보강한다. 대시보드 접근은 Backend 권한 검증으로 제한 |
+| 통합몰 귀속·권한 | Event에는 `tenant_id`를 두지 않으며, `brand_id`는 `dim_product` Join에서 보강한다. 대시보드 접근은 계정의 단일 브랜드 권한으로 제한 |
 | Web/Synthetic 분리 | `actor_type`, `source`, `simulation_run_id`로 필터 |
 | 상품 속성 스냅샷 | Mart에 `category_id`, `brand_id`를 집계 시점 값으로 보존 |
 | NULL 의미 보존 | 입력 부재와 분모 0을 숫자 0으로 꾸미지 않음 |
@@ -103,8 +103,8 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 | Collector payload | 관련 구현 병합 완료. Event 단위, `received_at`, `source`, `request_id`, `event_index` 보강과 Kafka key=`session_id`를 코드에서 재확인 | 실제 Kafka payload E2E 캡처 |
 | Kafka | 기본 topic `activity-events`, key `session_id` | 환경별 설정 확인 |
 | Raw Q1 | 로컬 Parquet + checkpoint, `source` projection 포함, tenant projection 제거 | Delta 전환 및 실제 payload E2E 대조 |
-| Processed | tenant 필수 검증·세션 경계 의존성 제거, 기존 `dim_product.brand_id` Join 유지 | `dim_brand.business_id` Fact 귀속과 Delta `printSchema()` 대조 |
-| Delta marts | tenant 필터·집계 축·물리 partition 의존성 제거 | `business_id`·`brand_id` 조회 축과 물리 partition은 후속 Jira에서 확정 |
+| Processed | `session_id` 세션 처리, `dim_product.brand_id` Join, `dim_brand` 생성 및 품질 검증 구현 | Delta `printSchema()` E2E 대조 |
+| Delta marts | 상위 소유 주체 축 없이 `brand_id` 스냅샷 유지 | `brand_id` 조회 축과 물리 partition은 후속 Jira에서 확정 |
 | MySQL `dw` | Dashboard serving 역할 합의 | DDL, 인덱스, 적재 주기, upsert 방식 결정 |
 | 검색·결제 Event | 일부 provisional | 화면·Collector 구현 후 key와 optional 값 재검증 |
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |

@@ -35,20 +35,20 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | 재실행 | 같은 입력 범위 재실행 시 Dataset key 기준 동일 결과로 수렴 |
 | 업무 중복 | `cleaned_events` 생성 전에 `event_id` 정본 1건 선택 |
 | Schema 확장 | 신규 컬럼은 nullable 추가를 기본으로 하고 기존 컬럼 의미·타입 변경 금지 |
-| 통합몰 귀속 | Event에는 `tenant_id`를 두지 않고 상품 Fact가 `business_id`, `brand_id`를 Dimension에서 파생한다 |
+| 통합몰 귀속 | Event에는 `tenant_id`를 두지 않고 상품 Fact가 `brand_id`를 `dim_product`에서 파생한다 |
 
 환경별 Delta root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
 하위 경로는 환경이 달라도 유지한다.
 
-### 2.1 `business_id`, `brand_id`, `product_id`
+### 2.1 `brand_id`, `product_id`
 
-통합 쇼핑몰의 상품 행동은 `product_id → dim_product.brand_id →
-dim_brand.business_id` 순서로 귀속한다. `brand_id`, `business_id`는 Raw Event가 직접
-싣지 않고 상품 Dimension에서 파생해 Fact와 Mart에 집계 시점 스냅샷으로 보존한다.
+통합 쇼핑몰의 상품 행동은 `product_id → dim_product.brand_id` 순서로 귀속한다.
+`brand_id`는 Raw Event가 직접 싣지 않고 상품 Dimension에서 파생해 Fact와 Mart에
+Join 시점 스냅샷으로 보존한다.
 
-상품이 없는 플랫폼 공통 Event는 두 값을 NULL로 유지한다. route, 표시명, 직전 상품으로
-귀속을 추정하지 않는다. 대시보드 접근 제어는 Backend가 로그인 사용자의 `business_id`
-소유 브랜드를 검사해 강제하며 Event partition으로 대신하지 않는다.
+상품이 없는 플랫폼 공통 Event는 `brand_id=NULL`을 유지한다. route, 표시명, 직전 상품
+또는 세션 내 다른 상품으로 귀속을 추정하지 않는다. 대시보드 접근 제어는 Backend가
+로그인 계정과 연결된 단일 `brand_id`를 검사해 강제하며 Event partition으로 대신하지 않는다.
 
 ## 3. Dataset 카탈로그
 
@@ -66,6 +66,7 @@ dim_brand.business_id` 순서로 귀속한다. `brand_id`, `business_id`는 Raw 
 | `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 미구현 |
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
+| `dim_brand` | Dimension | `brand_id` | 없음 | seed 상품 기준 projection 구현 |
 | `dim_product` | Dimension | `product_id` | 없음 | seed 원천 projection 구현, 입점 브랜드 등록 상품 union 대기 |
 
 `section_dwell_agg`와 `content_interest_fact`의 grain은 다음 컬럼 조합이다.
@@ -176,7 +177,6 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `product_id` | string | Y | 상품 대상 Event 필수 |
 | `category_id` | string | Y | `dim_product` Join 결과 |
 | `brand_id` | string | Y | `dim_product` Join 결과 |
-| `business_id` | string | Y | `brand_id` → `dim_brand` Join 결과 |
 | `section_id` | string | Y | properties 승격 |
 | `content_kind` | string | Y | properties 승격 |
 | `position` | int | Y | properties 승격 |
@@ -211,7 +211,6 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `context_product_id` | string | Y | 배경 상품 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `event_name` | string | N | Event 이름 |
 | `event_time` | timestamp | N | 발생 시각 |
 | `received_at` | timestamp | N | 수신 시각 |
@@ -259,7 +258,6 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `context_product_id` | string | Y | 배경 상품 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `sku_id` | string | Y | 상품 옵션 |
 | `list_id` | string | Y | 목록 ID |
 | `entry_source` | string | Y | 진입 경로 |
@@ -308,7 +306,6 @@ unique key는 `order_id + product_id`다.
 | `session_id` | string | N | 세션 ID |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `sku_id` | string | Y | `items[].sku_id` |
 | `quantity` | int | N | `items[].quantity` |
 | `unit_price` | decimal(18,2) | N | `items[].unit_price` |
@@ -405,7 +402,6 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `dwell_ms_sum` | long | N | delta `dwell_ms` 합계 |
 | `dwell_event_count` | long | N | 합산 Event 수 |
 | `max_co_visible_blocks` | int | Y | 동시 노출 블록 최댓값 |
@@ -436,7 +432,6 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `view_count` | long | N | section/content 조회 수 |
 | `dwell_ms_sum` | long | N | 체류시간 합계 |
 | `accordion_expand_count` | long | N | 펼침 수 |
@@ -496,7 +491,6 @@ content_interest_score
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
 | `first_impression_at` | timestamp | Y | 최초 노출 |
@@ -539,7 +533,6 @@ content_interest_score
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
-| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `event_name` | string | N | Event 이름 |
 | `event_time` | timestamp | N | 발생 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
@@ -553,7 +546,20 @@ content_interest_score
 `../docs/analytics/spark-processing-design.md` 및 추천 계약을 따른다. 이 Dataset은
 Vector 자체를 저장하지 않는다.
 
-## 16. `dim_product`
+## 16. `dim_brand`
+
+`dim_brand`는 브랜드 조회와 `dim_product.brand_id` 참조 무결성의 기준 Dimension이다.
+unique key는 `brand_id`이며 partition하지 않는다. 브랜드 계정과의 1:1 인증 매핑은
+Backend가 소유하고 분석 DW에 복제하지 않는다.
+
+| column | type | nullable | source / rule |
+| --- | --- | --- | --- |
+| `brand_id` | string | N | Unique key |
+| `brand_name` | string | N | 브랜드 표시명 |
+| `created_at` | timestamp | Y | 원천에서 제공할 때의 브랜드 등록 시각 |
+| `updated_at` | timestamp | N | Dimension 생성·갱신 시각 |
+
+## 17. `dim_product`
 
 `dim_product`는 Processed Fact의 상품 속성 보강 입력이다. unique key는
 `product_id`이며 partition하지 않는다.
@@ -592,14 +598,13 @@ Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품�
 것처럼 읽힌다. 리뷰가 쌓이면 `observed`로 바뀐다.
 
 `product_source`는 상품이 seed 카탈로그에서 왔는지 입점 브랜드 등록에서 왔는지를
-구분한다. 모든 판매 상품은 `brand_id`가 필수이며 사업자 귀속은 `dim_brand`에서
-파생한다.
+구분한다. 모든 판매 상품은 `brand_id`가 필수이며 유효한 `dim_brand.brand_id`를
+참조한다.
 
-## 17. 구현 정합성 완료 조건
+## 18. 구현 정합성 완료 조건
 
-2026-09-07 통합몰 귀속 계약을 반영했다. 현재 `streaming/` 구현은 이 계약의
-사업자·브랜드 귀속과 tenant 제거를 아직 반영하지 않았다. 아래 조건은 후속
-물리 구현·E2E 완료 판정 기준이다.
+2026-09-07 통합몰 귀속 계약과 브랜드 Dimension Join 구현을 반영했다.
+아래 조건은 물리 구현·E2E 완료 판정 기준이다.
 
 1. 각 Delta Table의 실제 `printSchema()`가 이 문서의 컬럼·타입·nullable과 일치한다.
 2. §3의 unique key 중복이 0건이다.
@@ -612,10 +617,10 @@ Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품�
 7. 상품 Dimension Join 전후 row 수가 의도하지 않게 증가하지 않는다.
 8. 같은 입력 범위 재실행 후 Dataset key와 집계값이 변하지 않는다.
 9. 현재 미구현 Dataset은 구현 전까지 소비자가 존재하는 것으로 가정하지 않는다.
-10. 상품 대상 Event의 `product_id`는 NULL이 아니며 Dimension에서 `brand_id`,
-    `business_id`를 파생할 수 있다.
-11. 플랫폼 공통 Event의 사업자·브랜드 귀속을 임의로 추정하지 않는다.
+10. 상품 대상 Event의 `product_id`는 NULL이 아니며 Dimension에서 `brand_id`를
+    파생할 수 있다.
+11. 플랫폼 공통 Event의 브랜드 귀속을 임의로 추정하지 않는다.
 12. `dim_product.rating_source`가 `injected`인 row는 Dashboard 평균 평점 집계에서
      제외하거나 별도로 표시한다.
 13. `dim_product.product_source`가 `brand_registered`인 row는 유효한 `brand_id`를
-    가지며 해당 브랜드는 `dim_brand`의 `business_id`와 연결된다.
+    가지며 해당 브랜드는 `dim_brand`에 존재한다.
