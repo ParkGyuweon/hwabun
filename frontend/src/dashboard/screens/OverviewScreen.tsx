@@ -75,7 +75,7 @@ export default function OverviewScreen({ days }: { days: number }) {
       <Panel
         title="인기 상품 TOP 5 · 행동 가중 관심도"
         source="mock"
-        aside="EVENT_WEIGHT 합산 (담기 4.0 · 클릭 1.0 · 제거 −2.0)"
+        aside="EVENT_WEIGHT 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)"
       >
         <BarList
           items={productMetrics.slice(0, 5).map((m) => ({
