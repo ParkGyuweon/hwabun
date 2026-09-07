@@ -595,7 +595,20 @@ prior(i) = (log1p(loves_count) - log_min) / (log_max - log_min)
 
 ```
 GET /api/recommend?persona_id={id}&size=10
+                  &banner_slots=6&reserved=2&axes=concern,segment
 ```
+
+| 파라미터 | 기본 | 뜻 |
+|---|---:|---|
+| `size` | 10 | 메인 목록 칸 수 |
+| `banner_slots` | 0 | 배너 칸 수. 0 이면 `banners` 를 안 내린다 |
+| `reserved` | 2 | 그중 **신규·저노출 브랜드 전용** 칸 수 (§5-1) |
+| `axes` | — | 축 배너에 쓸 축 순서. 안 주면 `concern,segment` |
+
+> **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
+> 중복을 배제해야** 합니다. 엔드포인트를 나누면 같은 상품이 두 자리에 뜨거나
+> 중복 제거를 소비자가 하게 됩니다. 히어로 1 + 배너 6 + 메인 10 = 한 화면에
+> **17개**라 이게 특히 중요합니다.
 
 ### 처리
 
@@ -669,9 +682,85 @@ GET /api/recommend?persona_id={id}&size=10
         "content": "회원님이 본 클렌저와 성분 구성이 유사"
       }
     }
+  ],
+
+  "hero": {
+    "product_id": "P420652",
+    "banner_type": "concern",
+    "banner_value": "Pores"
+  },
+  "banners": [
+    { "slot": 1, "banner_type": "concern",   "banner_value": "Pores",
+      "product_id": "P310022", "score": 0.7112 },
+    { "slot": 2, "banner_type": "segment",   "banner_value": "oily",
+      "product_id": "P448821", "score": 0.6640 },
+    { "slot": 5, "banner_type": "new_brand", "banner_value": null,
+      "product_id": "P901133", "score": 0.3104, "reserved": true },
+    { "slot": 6, "banner_type": "new_brand", "banner_value": null,
+      "product_id": "P902470", "score": 0.2988, "reserved": true }
   ]
 }
 ```
+
+## 5-1. 배너 (2026-09-07 신설 · 제안)
+
+> **상태: 제안.** 프론트와 형태를 합의한 단계이고 백엔드 `RankingService` 가
+> 아직 없어 지금은 배치 산출물까지만 나옵니다. **형태를 먼저 확정해 두고 만들 때
+> 이대로 만드는** 순서입니다.
+
+### 배너는 정확도 장치가 아닙니다
+
+축 기준으로 배너 칸을 뽑아도 **그냥 11등을 보여주는 것보다 못합니다.**
+
+| 배너 칸 뽑는 규칙 | Recall@11 | 메인 10칸 대비 |
+|---|---:|---:|
+| 메인 10칸만 | 38.55% | 기준 |
+| 그냥 11등 | 39.90% | +1.35%p |
+| **축 기준** | 39.05% | **+0.50%p** |
+| 무작위 | 38.85% | +0.30%p |
+
+사용자의 시드 상품이 특정 축에서 일관되지 않기 때문입니다 (`concern` 0.336 ·
+`ingredient` 0.155 · `texture` 0.052). **배너의 값은 ① 추천 이유를 말해 주는 것과
+② 신규 브랜드에 자리를 주는 것**이고, 성과는 Recall 이 아니라 **배너 클릭률과
+교차 브랜드 유입**으로 잽니다. 근거는 `evaluation-framework.md` 부록 Q ②.
+
+### `banner_type` 과 `banner_value`
+
+| `banner_type` | `banner_value` | 값 출처 |
+|---|---|---|
+| `concern` | 9종 | `product-feature-vocab.json` `concern` 블록 |
+| `ingredient` | 30종 | 〃 `ingredient` |
+| `clean` | 16종 | 〃 `clean` |
+| `price_bin` | 5구간 | 〃 `price_bin_edges` |
+| `category` | 8 / 19종 | 〃 `secondary` / `tertiary_category` |
+| `segment` | 20종 | `affinity_lift.csv` 의 세그먼트 (skin_type 4 · tone 5 · hair 5 · eye 5) |
+| `new_brand` | `null` | 전용 칸. 축이 아니라 자리 |
+
+**`banner_value` 는 어휘집 문자열 그대로** 내려갑니다. 한국어 표시는 소비자가
+`product-form-labels-ko.json` 으로 변환합니다 — **화면 라벨을 그대로 보내면
+한 글자 차이로 그 축이 통째로 매칭 실패하고 화면에는 아무 표시도 안 납니다.**
+
+### 중복 배제
+
+`items` 와 `banners` 의 `product_id` 는 **서로 겹치지 않습니다.** `hero` 만
+예외입니다 — `items[0]` 에 축 문구를 얹은 것이므로 같은 상품일 수 있습니다.
+
+### 전용 칸 (`reserved`) — 신규 브랜드 비율에 따라 바꿉니다
+
+CF 를 켜면 이력이 없는 신규 브랜드 상품이 밀려납니다. 점수로 싸우게 하는 것보다
+**자리를 떼어 주는 것이 훨씬 쌉니다.**
+
+| 신규 브랜드 비율 | 권장 `reserved` | 전용 칸의 비용 |
+|---|---:|---|
+| ~10% | **2칸** | −1.23%p (3칸은 1.3%p 더 깎임) |
+| 10~30% | 2~3칸 | 이 구간부터 **공짜를 넘어 이득** |
+| 30%+ | **3칸** | +0.81%p — 전체도 3칸이 최고 |
+
+신규 브랜드 10% 조건에서 **전용 2칸이 그 사장님 상품의 적중률을 4.03% → 43.59%**
+로 올립니다. 근거는 `evaluation-framework.md` 부록 P·R-3·R-4.
+
+> **`reserved` 는 설정값으로 두십시오.** 브랜드가 늘면 칸 수를 바꿔야 하는데
+> 코드에 박아 두면 그때 고쳐야 합니다.
 
 `breakdown`을 응답에 포함하는 이유는 **추천 근거를 항별로 분해해 설명**할 수 있기 때문입니다.
 
@@ -694,6 +783,19 @@ GET /api/recommend?persona_id={id}&size=10
 | 추천 1건 (점수 계산 + 상위 10개 추출) | **6.8 μs** |
 | 싱글 코어 처리량 | 146,000 RPS |
 | 사용자 10,000명 전원 일괄 재계산 | 3.8 ms |
+
+> **2026-09-07 재측정 — 위는 점수 계산만입니다.** 사용자별 친화도·CF·MMR 까지
+> 포함한 실제 경로는 이렇습니다 (후보 200개 · 파이썬).
+>
+> | 구성 | 1건당 |
+> |---|---:|
+> | 현행 선형 (CBF + CF 가점) | **0.26 ms** |
+> | 학습 결합 (LTR, 트리 278개) | **4.0 ms** |
+>
+> **200개 전체를 정렬해 달라고 해도 추가 비용이 0 입니다** — Top 10 만 뽑든
+> 전체를 정렬하든 어차피 200개를 전부 채점하기 때문입니다 (LTR 4.03 vs 3.80ms,
+> 측정 노이즈 수준). 다만 LTR 은 선형보다 15배 느려 **사용자별 결과 캐싱이
+> 필요합니다.**
 
 FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서는 numpy 행렬곱 한 줄이 더 빠릅니다.
 
