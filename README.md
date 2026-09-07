@@ -40,6 +40,7 @@
      → batch/ingest/data/serving/  서빙용 산출물
           ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
    대표 지표 test Recall@10 = 23.39% (롱테일 31.29%) — docs/ai/evaluation-framework.md
+   ┈┈▶ CF·학습 결합을 얹으면 깨끗한 홀드아웃에서 24.15% → 43.9% (측정·미채택)
 
 [ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
 ```
@@ -77,7 +78,7 @@
 
 ## 3. 현재 폴더 구조
 
-지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-07)
+지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-07 오후)
 
 ```
 S15P21A306/
@@ -143,6 +144,9 @@ S15P21A306/
 │   │   └── deck-update-plan.md          중간발표 덱 반영 계획
 │   ├── data/                        프론트 초기 UI용 샘플 데이터 (상품 8 · 리뷰 40)
 │   │   └── README.md · field_stats.json · product-images.md
+│   ├── planning/                    ★ 확정 기획 정본 (팀 공통)
+│   │   ├── service-plan.md              최종 기획 — 통합 쇼핑몰 1개에 브랜드가 입점
+│   │   └── feature-spec-status.md       기획 대비 구현 상태 표
 │   ├── backend-ingestion-backpressure.md  수집 과부하 응답 정책 (백엔드)
 │   └── git-convention.md            커밋 메시지·브랜치 전략 (팀 공통)
 │
@@ -164,6 +168,9 @@ S15P21A306/
 │   │       ├── excluded_products.json       제외 상품 목록과 사유
 │   │       ├── eval_metadata.jsonl          평가 seed/target 정본 (9,900행)
 │   │       ├── eval_metadata_agent.jsonl    같은 규칙의 PA 대조군 (100행)
+│   │       ├── eval_metadata_holdout_a.jsonl · _holdout_b.jsonl
+│   │       │                                 ★ 한 번도 안 쓴 리뷰어에서 뗀 홀드아웃
+│   │       │                                 (고르기는 a · 확인은 b)
 │   │       ├── text_embeddings.npz         seed 리뷰·상품 임베딩 384차원 (13.7MB)
 │   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력
@@ -212,8 +219,10 @@ S15P21A306/
 │   │   ├── model_server.py               GPU 서버에 모델만 올리는 최소 서버 (--api-base 로 연결)
 │   │   └── README.md                     모델 선택 세 가지·러너가 지키는 계약
 │   └── personas/
-│       ├── build_personas.py            페르소나 추출
+│       ├── build_personas.py            페르소나 추출 (--holdout 로 미사용 인원에서 홀드아웃)
+│       ├── holdout_exclude_dupaccounts.txt  같은 본문을 쓴 계정 12명 (홀드아웃 제외)
 │       └── data/  personas_9900.json · personas_100_agent.json · persona_style.json
+│                 personas_holdout_a.json · personas_holdout_b.json (각 2,000명)
 │                 persona_sampling_report.json (표본 추출 근거) · README.md
 │
 ├── backend/                         Spring Boot 수집 서버 (백엔드)
