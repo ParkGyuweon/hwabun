@@ -75,6 +75,18 @@ export function useImpression({
       position: Number(el.dataset.position) || null,
       ...(algorithm ? { algorithm } : {}),
       ...(recommendationId ? { recommendation_id: recommendationId } : {}),
+      /**
+       * 배너 카드는 어떤 축·값·칸에서 노출됐는지를 함께 남긴다 (log.ts BannerEventProperties).
+       * `banner_value` 는 어휘집 원문이다. `new_brand` 는 값이 없어 키를 싣지 않는다.
+       */
+      ...(el.dataset.bannerType
+        ? {
+            banner_type: el.dataset.bannerType,
+            ...(el.dataset.bannerValue !== undefined ? { banner_value: el.dataset.bannerValue } : {}),
+            banner_slot: Number(el.dataset.bannerSlot ?? 0),
+            ...(el.dataset.traitSource ? { trait_source: el.dataset.traitSource } : {}),
+          }
+        : {}),
     });
 
     const clearTimer = (el: Element) => {
