@@ -97,6 +97,11 @@ STEPS = [
      [os.path.join(DATA, "serving", "product_feature.jsonl"),
       os.path.join(DATA, "serving", "attribute_affinity.csv"),
       os.path.join(DATA, "serving", "ranking_golden.json")], False),
+    # 배너 축 목록은 어휘집·친화도·인기도에서 나오므로 그 뒤에 온다.
+    # 어휘가 늘었는데 목록을 안 다시 만들면 새 값이 배너에 영영 안 뜬다.
+    (10, "배너 축 6종 상품 목록",
+     ["batch/jobs/banner_axes.py"],
+     [os.path.join(DATA, "serving", "banner_axes.json")], False),
 ]
 
 
