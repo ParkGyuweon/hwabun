@@ -97,6 +97,13 @@ STEPS = [
      [os.path.join(DATA, "serving", "product_feature.jsonl"),
       os.path.join(DATA, "serving", "attribute_affinity.csv"),
       os.path.join(DATA, "serving", "ranking_golden.json")], False),
+    # 대시보드 파생 산출물. 인코더·친화도·concern 에서 나오므로 그 뒤에 온다.
+    # 번호가 겹치면 뒤에 오는 쪽이 밀린다 — 다른 브랜치에서 10번을 쓸 수 있다.
+    (11, "대시보드용 파생 산출물 4종",
+     ["batch/jobs/export_dashboard.py"],
+     [os.path.join(DATA, "serving", "product_ingredient_position.csv"),
+      os.path.join(DATA, "serving", "product_concern_top2.csv"),
+      os.path.join(DATA, "serving", "ingredient_skin_lift.csv")], False),
 ]
 
 
