@@ -87,7 +87,12 @@ def _load(path):
         return json.load(f)
 
 
-def build(personas=None, products=None):
+def build(personas=None, products=None, split_label=None):
+    """split_label 을 주면 split_of() 대신 그 값을 그대로 넣는다.
+
+    홀드아웃 집단용이다. `split_of` 는 persona_id 해시로 train/valid/test 를
+    나누는데, 홀드아웃은 **집단 전체가 하나의 평가 집합**이라 쪼개면 안 된다.
+    """
     personas = personas if personas is not None else _load(PERSONAS)
     products = products if products is not None else _load(PRODUCTS)
     catalog = {p["product_id"]: p for p in products}
@@ -127,7 +132,7 @@ def build(personas=None, products=None):
         target_brand = catalog[target["group_id"]]["brand_name"]
         rows.append({
             "persona_id": persona["persona_id"],
-            "split": split_of(persona["persona_id"]),
+            "split": split_label or split_of(persona["persona_id"]),
             "seed_product_ids": seeds,
             "target_product_id": target["group_id"],
             "n_seed": len(seeds),
@@ -174,12 +179,23 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agent", action="store_true",
                     help="PA 에이전트 100명으로 만든다 (대조군)")
+    ap.add_argument("--personas", default=None,
+                    help="임의의 페르소나 파일로 만든다 (홀드아웃용)")
+    ap.add_argument("--tag", default=None,
+                    help="--personas 와 함께. split 값이자 출력 파일 꼬리표")
     a = ap.parse_args()
 
     global OUT
-    rows, skipped = build(_load(AGENT_PERSONAS) if a.agent else None)
-    if a.agent:
-        OUT = AGENT_OUT
+    if a.personas:
+        if not a.tag:
+            raise SystemExit("--personas 를 쓰려면 --tag 도 필요하다")
+        rows, skipped = build(_load(a.personas), split_label=a.tag)
+        OUT = os.path.join(ROOT, "batch", "ingest", "data",
+                           f"eval_metadata_{a.tag}.jsonl")
+    else:
+        rows, skipped = build(_load(AGENT_PERSONAS) if a.agent else None)
+        if a.agent:
+            OUT = AGENT_OUT
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -191,7 +207,7 @@ def main():
     print(f"  제외 내역 · 긍정 리뷰 없음 {skipped['no_positive']:,}명"
           f" · seed 없음 {skipped['no_seed']:,}명"
           f" · 카탈로그 리뷰 없음 {skipped['no_review']:,}명")
-    for name in ("train", "valid", "test"):
+    for name in ((a.tag,) if a.personas else ("train", "valid", "test")):
         sub = [r for r in rows if r["split"] == name]
         if not sub:
             continue

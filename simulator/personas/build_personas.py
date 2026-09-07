@@ -40,10 +40,25 @@
     페르소나가 바뀌면 성향 파일도 다시 만들어야 한다 — 리뷰에서 파생되기 때문이다.
     python simulator/generator/build_persona_style.py
 """
-import glob, json, os
+import argparse, glob, json, os
 from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
+
+# 홀드아웃 모드 — 페르소나로 이미 쓴 사람을 빼고 남은 인원에서만 뽑는다.
+#   why: test 는 한 번 쓰면 소진되는 자원이라 반복 측정하면 낙관 편향이 붙는다.
+#        풀에는 아직 쓰지 않은 사람이 1만 명 넘게 남아 있고 층화 표본이라
+#        분포가 같다. 독립 홀드아웃을 여러 개 떼어 하나씩 소진한다.
+#   기본 실행(플래그 없음)은 한 글자도 달라지지 않는다.
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--holdout", type=int, default=0,
+                 help="이 인원만큼 미사용 인원에서 홀드아웃을 뽑는다")
+_ap.add_argument("--seed", type=int, default=None, help="홀드아웃용 난수 시드")
+_ap.add_argument("--tag", default="a", help="홀드아웃 이름 꼬리표 (파일명·prefix)")
+_ap.add_argument("--exclude", default="",
+                 help="추가로 뺄 author_id 파일 (한 줄에 하나)")
+_A = _ap.parse_args()
+HOLDOUT = _A.holdout
 
 # 원본 CSV 는 .gitignore 대상이라 레포에 없다. 위치는 환경변수로 넘긴다.
 #   SEPHORA_DATASET=C:\...\Research\dataset\sephora
@@ -58,6 +73,8 @@ os.makedirs(ART, exist_ok=True)
 UF = ["skin_type", "skin_tone", "eye_color", "hair_color"]
 
 SEED = 42                      # 재현을 위해 난수를 고정한다
+if _A.seed is not None:
+    SEED = _A.seed             # 홀드아웃마다 다른 사람이 뽑혀야 한다
 N_TOTAL, N_AGENT = 10000, 100  # 전체 1만 = 코드 9,900 + 에이전트 100
 
 # 계약 `contracts/persona-schema.md` §4 가 요구하는 생성·정규화 버전.
@@ -68,6 +85,11 @@ PROFILE_VERSION = "persona-v1"
 # 표본 구분. 계약 §2.1 이 "분석에서 prefix 를 파싱하지 말고 persona_source 를
 # 쓰라" 고 정해서, PC/PA 접두사와 별개로 필드에 적어 둔다.
 PERSONA_SOURCE = {"PC": "batch_sample", "PA": "agent_sample"}
+# 홀드아웃은 아직 계약(`persona-schema.md` §2.1 · §11)에 없는 대역이다.
+# 계약은 persona_source 를 {batch_sample, agent_sample} 로 하드 검증하므로
+# 이 산출물은 **측정용이고 계약 테이블로 평탄화하지 않는다.**
+# 정식화하려면 데이터 파트가 enum 과 ID 대역을 열어 주어야 한다.
+PERSONA_SOURCE["PH"] = "holdout_sample"
 
 # 생성 시각. 한 번의 실행 안에서는 전원이 같은 값을 갖는다 — 사람마다 초가 달라지면
 # 같은 배치로 만든 것을 나중에 알아볼 수 없다. 재생성하면 이 값은 바뀐다.
@@ -241,6 +263,36 @@ users["stratum"] = users.skin_type + "|" + users.skin_tone + "|" + users.review_
 #   alloc = 일단 내림 (1234명) -> 합계가 10,000 에 못 미친다
 #   rem   = 버린 소수부 (0.7)
 # 소수부가 큰 층부터 1명씩 더 주며 10,000을 채운다. 이것이 최대잔여법이다.
+# --- 홀드아웃: 이미 페르소나로 쓴 사람을 모집단에서 뺀다 -------------------
+# 여기서 빼야 층 비율이 **남은 인원 기준**으로 다시 잡힌다. 뽑고 나서 거르면
+# 층화가 깨진다.
+if HOLDOUT:
+    # 이미 뽑은 **모든** 페르소나 파일을 뺀다. 홀드아웃끼리도 겹치면 안 된다 —
+    # 하나에서 고르고 다른 하나로 확인하는 것이 이 구조의 전부이기 때문이다.
+    used = set()
+    for fn in sorted(os.listdir(ART)):
+        if not (fn.startswith("personas_") and fn.endswith(".json")):
+            continue
+        if fn == f"personas_holdout_{_A.tag}.json":
+            continue                        # 자기 자신은 덮어쓰는 대상이다
+        used |= {r["author_id"] for r in
+                 json.load(open(os.path.join(ART, fn), encoding="utf-8"))
+                 if r.get("author_id")}
+        print(f"  제외: {fn}")
+    extra = set()
+    if _A.exclude and os.path.exists(_A.exclude):
+        extra = {ln.strip() for ln in open(_A.exclude, encoding="utf-8") if ln.strip()}
+    before = len(users)
+    drop = {a for a in users.index if str(a) in used or str(a) in extra}
+    users = users.drop(index=list(drop))
+    N_TOTAL = HOLDOUT
+    N_AGENT = 0                      # 홀드아웃은 에이전트 대역을 만들지 않는다
+    print("")
+    print(f"[홀드아웃] 모집단 {before:,} - 사용 {len(used):,} - 추가제외 "
+          f"{len(extra):,} -> 후보 {len(users):,}명 / {N_TOTAL:,}명 추출 (seed {SEED})")
+    if len(users) < N_TOTAL:
+        raise SystemExit(f"후보 {len(users):,}명 < 요청 {N_TOTAL:,}명")
+
 sizes = users.stratum.value_counts()
 raw = sizes / sizes.sum() * N_TOTAL
 
@@ -392,8 +444,10 @@ def to_records(ids, prefix):
 # sample.index 순서를 그대로 따른다 — 층 순회 순서가 그대로 persona_id 순서가 된다
 code_ids = [a for a in sample.index if a not in agent_set]
 agent_list = [a for a in sample.index if a in agent_set]
-for fn, ids, pf in (("personas_9900.json", code_ids, "PC"),
-                    ("personas_100_agent.json", agent_list, "PA")):
+OUTPUTS = ([(f"personas_holdout_{_A.tag}.json", code_ids, "PH")] if HOLDOUT
+           else [("personas_9900.json", code_ids, "PC"),
+                 ("personas_100_agent.json", agent_list, "PA")])
+for fn, ids, pf in OUTPUTS:
     recs = to_records(ids, pf)
     p = os.path.join(ART, fn)
     # indent=1 — 사람이 읽을 수 있으면서 파일 크기를 억제하는 절충값 (indent=2 면 약 10% 커진다)
@@ -437,5 +491,6 @@ json.dump({"seed": SEED, "n_total": int(len(sample)), "n_agent": len(agent_set),
            "sample_avg_rating": round(float(sample.avg_rating.mean()), 4),
            "population_avg_reviews": round(float(users.n_reviews.mean()), 4),
            "sample_avg_reviews": round(float(sample.n_reviews.mean()), 4)},
-          open(os.path.join(ART, "persona_sampling_report.json"), "w", encoding="utf-8"),
+          open(os.path.join(ART, f"holdout_{_A.tag}_sampling_report.json" if HOLDOUT
+                            else "persona_sampling_report.json"), "w", encoding="utf-8"),
           ensure_ascii=False, indent=2)
