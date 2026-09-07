@@ -14,11 +14,11 @@ import {
   storefrontEventProps,
 } from './lib/storefront';
 import type { StorefrontPrefs } from './lib/storefront';
-import { products as productsData } from './mocks/products';
+import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
+import { useCatalog, useDraft } from './hooks/useCatalog';
 import reviewsData from './mocks/reviews.sample.json';
 import personasData from './mocks/personas.sample.json';
 import type { PersonaProfile } from './types/persona';
-import type { Product } from './types/product';
 import type { Review } from './types/review';
 import type { CartItem } from './types/cart';
 import './styles/product-detail.css';
@@ -29,8 +29,7 @@ import './styles/apple.css';
 // 소상공인이 고른 진열 레이아웃·색. 맨 마지막 — data-storefront / data-theme 로 분기한다
 import './styles/storefront.css';
 
-// JSON 목업은 리터럴 타입으로 추론되므로 unknown 을 거쳐 캐스팅한다.
-const products = productsData as unknown as Product[];
+// 상품은 등록 저장소(초안 + 등록 + 시드 + 세포라)가 준다. 렌더 안에서는 useCatalog() 를 쓴다
 const reviews = reviewsData as unknown as Review[];
 /**
  * 데이터 파트가 만든 PA 대역 100명을 그대로 쓴다.
@@ -51,7 +50,8 @@ const RESTORE_TIMEOUT_MS = 1500;
  */
 const HEADER_CATEGORIES = (() => {
   const counts = new Map<string, number>();
-  for (const p of products) {
+  // 헤더 메뉴는 시작 시점 카탈로그로 정한다. 등록 상품은 기존 중분류 안에 들어오므로 메뉴가 바뀌지 않는다
+  for (const p of catalogSnapshot()) {
     const key = p.category[1];
     if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
@@ -63,7 +63,7 @@ const HEADER_CATEGORIES = (() => {
 /** 첫 진입 주소에 상품이 있으면 그 상세로 시작한다 */
 function initialProductId(): string | null {
   const requested = new URLSearchParams(window.location.search).get('product');
-  return requested && products.some((p) => p.product_id === requested) ? requested : null;
+  return requested && resolveProduct(requested, catalogSnapshot()) ? requested : null;
 }
 
 /**
@@ -112,7 +112,23 @@ export default function App() {
   // effect 로 늦게 세팅하면 목록을 한 번 그린 뒤 상세로 바뀌어서
   // page_view 가 목록·상세 두 번 찍힌다. 처음부터 올바른 값으로 시작한다.
   const [productId, setProductId] = useState<string | null>(initialProductId);
+
   const [personaId, setPersonaId] = useState(initialPersonaId);
+  // 브랜드가 대시보드에서 등록·수정하면 새로고침 없이 따라온다 (lib/productRegistry)
+  const products = useCatalog();
+  const draft = useDraft();
+  /**
+   * 주소의 상품이 나중에 카탈로그에 들어오면 그때 연다.
+   * 등록 폼의 미리보기(iframe)가 초안(`?product=DRAFT`)보다 먼저 로드되는 경우다.
+   * 반대로 초안이 지워지면(폼을 떠남) 목록으로 돌아간다.
+   */
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('product');
+    if (!requested) return;
+    const exists = resolveProduct(requested, products, draft) !== null;
+    if (exists && productId === null) setProductId(requested);
+    if (!exists && productId === requested) setProductId(null);
+  }, [products, draft, productId]);
   // 헤더 메뉴와 목록 탭이 같은 값을 바꾸므로 여기서 소유한다
   const [listCategory, setListCategory] = useState('all');
   /** 장바구니 화면이 열려 있는지. 상품 상태와 별개로 겹쳐 둔다 */
@@ -147,8 +163,8 @@ export default function App() {
   );
 
   const product = useMemo(
-    () => (productId ? (products.find((item) => item.product_id === productId) ?? null) : null),
-    [productId],
+    () => resolveProduct(productId, products, draft),
+    [productId, products, draft],
   );
 
   const productReviews = useMemo(
@@ -317,7 +333,9 @@ export default function App() {
    * 여기서 'user' 로 덮으면 부하 생성기의 방문까지 실사용자로 남는다.
    */
   useEffect(() => {
-    setLoggerContext({ environment: 'local' });
+    // 등록 폼 미리보기(iframe)에서 나온 로그는 소비자 행동이 아니다. environment 로 구분한다
+    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+    setLoggerContext({ environment: isPreview ? 'preview' : 'local' });
   }, []);
 
   /**
