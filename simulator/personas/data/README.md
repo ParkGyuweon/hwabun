@@ -6,6 +6,9 @@
 | `personas_9900.json` | **합성 로그용** 9,900명 (`PC00001`~`PC09900`) | 58.1MB |
 | `persona_style.json` | 페르소나별 성향 6축 (10,000명 전체) | 1.2MB |
 | `persona_sampling_report.json` | 추출 파라미터 · 모집단 대비 표본 분포 검증 | 2KB |
+| `personas_holdout_a.json` | **홀드아웃 A** 2,000명 (`PH00001`~`PH02000`) — 고르는 데 쓴다 | 11.8MB |
+| `personas_holdout_b.json` | **홀드아웃 B** 2,000명 — **확인에만** 쓴다 | 11.6MB |
+| `holdout_{a,b}_sampling_report.json` | 홀드아웃 추출 파라미터·분포 검증 | 2KB |
 
 ## PA / PC 대역 구분
 
@@ -17,6 +20,68 @@
 PA 에 합성 로그를 쏘면 1인당 약 590건이 미리 쌓여, 사람이 10번 클릭해도 벡터의 1.7% 밖에 못 움직입니다. `gen_behavior_logs.py` 는 기본적으로 PC 만 생성하며 `--include-agents` 로만 PA 를 포함합니다.
 
 두 파일은 `persona_id` · `author_id` 가 하나도 겹치지 않습니다.
+
+## 홀드아웃 (2026-09-07 신설)
+
+### 왜 만들었나 — `test` 를 소진했다
+
+하루에 MMR λ 7개 값 · 브랜드 상한 4개 값 · CF 5개 조건을 `test` 1,971명에서
+돌렸다. `persona_split.py` 의 docstring 이 정확히 그 실수를 경고하고 있었는데
+같은 일을 했다.
+
+페르소나 풀에 **한 번도 쓰지 않은 리뷰어가 10,425명** 남아 있어 거기서 뗐다.
+
+```
+풀 20,435명 − 페르소나 10,000명 − 중복계정 12명 = 후보 10,425명
+```
+
+### 쓰는 법 — **A 에서 고르고 B 로 확인한다**
+
+| | 용도 |
+|---|---|
+| `holdout_a` | **후보를 고른다.** 하이퍼파라미터·구성을 여기서 훑는다 |
+| `holdout_b` | **확인만 한다.** 여기서 또 훑으면 같은 오염이 반복된다 |
+
+이 체계가 만든 첫날 바로 값을 했다 — CF 정규화 지수가 `holdout_a` 에서
+**+1.00%p [+0.15, +1.80]** 로 CI 가 0 을 제외했는데 `holdout_b` 에서
+**−0.20%p** 로 뒤집혔다. 없었으면 개선으로 문서에 적었을 것이다.
+
+> **2,000명으로는 1%p 를 못 본다.** 현행 값 자체가 표본 간에 38.15% ↔ 39.25% 로
+> 1.1%p 흔들린다 — 찾던 개선폭과 같은 크기다. **1%p 급 실험은 홀드아웃을 더 크게
+> 잡거나 두 개를 짝지어 판정한다.**
+
+### 검증
+
+| | 결과 |
+|---|---|
+| 분포 (skin_type·tone·review_bucket) | 모집단 대비 **최대 0.10%p** |
+| 시드 평균 | 3.5개 — 기존 세 split 과 같다 |
+| 새 브랜드 target | 69.2 / 70.0% (기존 68.6~69.9% 범위 안) |
+| `eval_metadata` 제외 | **0명** |
+| a·b 교집합 | **0명** |
+
+### ⚠️ 계약에 아직 없는 대역이다
+
+`contracts/persona-schema.md` §2.1 은 `PA`·`PC` 두 대역만, 검증기
+(`validate_persona_tables.py:164`)는 `persona_source` 를
+`{agent_sample, batch_sample}` 로만 압니다. 홀드아웃은 잠정으로
+`PH` · `holdout_sample` 을 씁니다.
+
+**그래서 이 산출물은 측정용이고 계약 평탄 테이블로 내리지 않습니다.**
+정식화하려면 데이터 파트가 enum 과 대역을 열어 주어야 합니다 (요청 전달됨).
+
+### ⚠️ 파일이 늘면 동시발생을 다시 만들어야 한다
+
+CF 가점의 입력인 `batch/ingest/data/serving/item_cooc.npz` 는 **이 디렉터리를
+훑어서** `personas_*.json` 의 `author_id` 를 전부 뺍니다 (현재 14,000명).
+
+**새 홀드아웃이 동시발생에 남아 있으면 그것으로 잰 수치가 전부 거짓이 됩니다.**
+`regenerate_all` 12단계에서 다시 만듭니다.
+
+### 남은 인원
+
+**8,425명.** 2,000명짜리를 4개 더 뗄 수 있습니다. 유한하므로 어느 시점에는
+**대표 지표를 어느 집합으로 고정할지**를 팀이 정해야 합니다.
 
 ## 레코드 필드
 
@@ -93,6 +158,22 @@ python simulator/personas/build_personas.py
 # 2) 성향 6축 — 페르소나에서 파생되므로 1)을 돌렸으면 반드시 같이 돌린다
 python simulator/generator/build_persona_style.py
 ```
+
+### 홀드아웃
+
+```bash
+# 이미 쓴 사람을 전부 뺀 뒤 같은 층화 경로로 뽑는다.
+# --tag 만 다르면 서로 겹치지 않는다 (자기 자신 외의 personas_*.json 을 전부 제외)
+python simulator/personas/build_personas.py --holdout 2000 --seed 43 --tag a        --exclude simulator/personas/holdout_exclude_dupaccounts.txt
+python batch/jobs/eval_metadata.py        --personas simulator/personas/data/personas_holdout_a.json --tag holdout_a
+```
+
+`--exclude` 는 **같은 리뷰 본문을 쓴 계정 12명**입니다. 같은 사람이 계정을 두 개
+쓰는 것은 원리적으로 못 가리지만, 본문이 여러 `author_id` 에 걸친 경우로 상한을
+쟀습니다 — 전체의 0.043% 였고 페르소나/미사용 경계를 넘는 것이 12명이었습니다.
+
+> **플래그를 안 주면 `personas_9900.json` 이 한 바이트도 달라지지 않습니다**
+> (타임스탬프 외 diff 0줄로 확인). 홀드아웃 모드는 기존 경로를 안 건드립니다.
 
 **`batch/ingest/data/products_200.json` 이 먼저 있어야 합니다.** 리뷰를 상품에 조인할 때 `_merged.member_product_ids` 를 쓰기 때문입니다. 카탈로그가 바뀌면 페르소나도 다시 만들어야 합니다.
 
