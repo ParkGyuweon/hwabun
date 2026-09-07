@@ -60,6 +60,12 @@ Kafka 발행은 at-least-once다. `429` 또는 `503` 이후 전체 배치를 재
   validation 오류로 누적한다. 같은 배치의 정상 이벤트는 계속 발행한다.
 - `event_name`은 등록된 이벤트여야 하고 정해진 `intent`와 일치해야 한다.
 - `0.3.0-draft`는 유효한 slug 형식의 `tenant_id`가 필요하다.
+- 상품 대상 Event(`product_view`, `product_impression`, `product_click` 등)는
+  `product_id`가 비어 있지 않은 문자열이어야 한다.
+- `page_type=product_detail`인 `page_view`, `section_view`, `section_dwell`도
+  `product_id`가 비어 있지 않은 문자열이어야 한다.
+- 플랫폼 공통 `page_view`와 상품 목록의 `section_view`, `section_dwell`은
+  `product_id: null`을 허용한다. 빈 문자열과 공백 문자열은 허용하지 않는다.
 - `properties`는 JSON object여야 한다.
 
 ### 3.3 구매 이벤트의 properties

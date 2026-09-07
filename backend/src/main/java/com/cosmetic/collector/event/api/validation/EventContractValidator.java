@@ -52,6 +52,35 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             Map.entry("rage_click", "friction"),
             Map.entry("dead_click", "friction")
     );
+    private static final Set<String> PRODUCT_ID_REQUIRED_EVENTS = Set.of(
+            "product_view",
+            "product_impression",
+            "product_click",
+            "accordion_toggle",
+            "recommendation_impression",
+            "recommendation_click",
+            "wishlist_toggle",
+            "add_to_cart",
+            "scroll_depth",
+            "impression_dwell",
+            "media_view",
+            "quick_look",
+            "quick_look_close",
+            "remove_from_cart",
+            "variant_select",
+            "quantity_change",
+            "review_filter_apply",
+            "review_expand",
+            "ingredient_view_mode_change",
+            "scroll_pause",
+            "scroll_backtrack",
+            "text_selection",
+            "text_copy",
+            "hover_dwell"
+    );
+    private static final Set<String> PRODUCT_DETAIL_SCOPED_EVENTS = Set.of(
+            "page_view", "section_view", "section_dwell"
+    );
     private static final Set<String> PURCHASE_EVENTS = Set.of(
             "begin_checkout", "purchase", "purchase_reason_select"
     );
@@ -69,6 +98,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
         context.disableDefaultConstraintViolation();
         JsonNode properties = event.properties();
         boolean valid = validateEnvelope(event, context);
+        valid &= validateProductId(event, context);
         if (properties == null || !properties.isObject()) {
             add(context, "invalid_property_type", "properties", "properties는 JSON object여야 합니다.");
             return false;
@@ -78,6 +108,27 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             valid &= validatePurchaseProperties(event, properties, context);
         }
         return valid;
+    }
+
+    private boolean validateProductId(ActivityEvent event, ConstraintValidatorContext context) {
+        String productId = event.productId();
+        String eventName = event.eventName();
+        boolean required = eventName != null
+                && (PRODUCT_ID_REQUIRED_EVENTS.contains(eventName)
+                || PRODUCT_DETAIL_SCOPED_EVENTS.contains(eventName)
+                && "product_detail".equals(event.pageType()));
+
+        if (required && blank(productId)) {
+            add(context, "missing_required_property", "productId",
+                    "상품 대상 Event와 상품 상세 페이지 Event에는 product_id가 필요합니다.");
+            return false;
+        }
+        if (productId != null && blank(productId)) {
+            add(context, "invalid_property_type", "productId",
+                    "product_id는 JSON null 또는 비어 있지 않은 문자열이어야 합니다.");
+            return false;
+        }
+        return true;
     }
 
     private boolean validateEnvelope(ActivityEvent event, ConstraintValidatorContext context) {
