@@ -13,6 +13,10 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | 정상·오류 샘플 | 계약 통과 payload와 의도적인 위반 payload | `samples/` |
 | 검증 코드 | 계약 위반과 구현 drift를 탐지 | `validate_events.py`, `coverage_report.py`, `tests/` |
 
+`samples/event-mapping-cases.json`은 활성 Event 39개의 `event_name`, `intent`,
+`product_id` 정책과 Producer를 담은 전 구간 공통 테스트 벡터다. 운영 입력 데이터가
+아니며 `event-schema.json`과의 집합·규칙 일치는 자동 테스트로 보장한다.
+
 `docs/analytics/`는 계약을 선택한 이유, 처리 흐름, 구현 현황, KPI 해석 및 검증 계획을
 설명한다. 동일한 컬럼·enum·산식을 두 위치에 각각 원본으로 복제하지 않는다. 설명
 문서와 계약이 충돌하면 `contracts/`의 해당 계약을 우선한다.
@@ -53,10 +57,11 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 python contracts/validate_events.py contracts/samples/raw-event.user.valid.json
 python contracts/coverage_report.py contracts/samples/event-properties.valid.json
 python contracts/coverage_report.py contracts/samples/event-properties.invalid.json
+python -m unittest discover -s contracts/tests -v
 ```
 
-마지막 명령은 의도적인 required property·타입·enum 위반을 탐지하므로 종료 코드 2가
-정상이다.
+`event-properties.invalid.json`을 검사하는 세 번째 명령은 의도적인 required
+property·타입·enum 위반을 탐지하므로 종료 코드 2가 정상이다.
 
 ### 상품 등록
 
