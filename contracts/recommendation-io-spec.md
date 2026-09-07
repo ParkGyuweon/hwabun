@@ -413,6 +413,23 @@ TTL   없음 (시뮬레이션 종료까지 유지)
 
 ### ⚠️ 구매 Event 도입 시의 개정안 (2026-09-04, 확인 요청 · Jira 112)
 
+> **2026-09-07 진행 상황.** 프론트가 배너 이벤트와 **묶어서 한 번에 반영**하기로
+> 했습니다. 가중치 제안을 넘겼습니다 (`Research/handoff/frontend-banner-purchase-weights.md`).
+>
+> | 이벤트 | 제안 가중치 | 전환 |
+> |---|---:|---|
+> | `purchase` | **8.0** | ✅ `CONVERT` 에 넣음 |
+> | `begin_checkout` | 5.0 | ❌ 시작만 하고 이탈이 있어 매출과 어긋남 |
+> | `add_to_cart` | **4.0 → 3.0** | ✅ 그대로 (최강 자리를 `purchase` 에 내줌) |
+> | `purchase_reason_select` | 0 | ❌ 선호가 아니라 이유 선언 |
+> | `banner_click` | 1.5 | ❌ `recommendation_click` 과 같은 값 |
+> | `banner_impression` | 0 | ❌ 클릭률 **분모** |
+>
+> **AI 쪽 `CONVERT` 는 이미 반영했습니다** (`user_vector.py`). `log.ts` 에 이벤트가
+> 없어도 매칭이 안 될 뿐 안전하고, 반대로 로그가 먼저 오는데 비어 있으면 구매가
+> 조용히 전환에서 빠집니다. **값은 측정이 아니라 제안이고, 첫 구매 로그 1,000건이
+> 쌓이면 담기→구매 실제 전환율로 재조정합니다.**
+
 계약이 `begin_checkout` · `purchase` · `purchase_reason_select` 를 활성 Event 로
 올렸습니다(이벤트 39종). 결제 화면이 생기면 **위 표를 두 군데 고쳐야 합니다.**
 AI 파트 제안이며 **백엔드·데이터·프론트 확인을 기다립니다.**
