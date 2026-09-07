@@ -28,14 +28,15 @@ Event.product_id
 
 | 분류 | 예 | `product_id` | 사업자·브랜드 귀속 |
 | --- | --- | --- | --- |
-| 상품 대상 Event | 상품 노출·클릭·상세·콘텐츠·장바구니 | 필수 | Dimension Join으로 파생 |
-| 상품 상세 `page_view` | `page_type=product_detail` | 필수 | Dimension Join으로 파생 |
-| 플랫폼 공통 Event | 홈·검색·장바구니 화면 진입 | NULL 허용 | 미귀속 |
+| 상품 자체가 대상인 Event | 상품 노출·클릭·상세·장바구니 | 필수 | Dimension Join으로 파생 |
+| 상품 상세 페이지·콘텐츠 Event | `page_view`, `section_view`, `section_dwell` + `page_type=product_detail` | 필수 | Dimension Join으로 파생 |
+| 플랫폼 공통 페이지 Event | 홈·검색·장바구니 화면 진입 | NULL 허용 | 미귀속 |
+| 플랫폼 목록 섹션 Event | 목록의 프로모션·필터·상품 그리드 전체 `section_view`, `section_dwell` | NULL 허용 | 미귀속 |
 | 브랜드 자체 대상 Event | 향후 브랜드관 도입 시 | 선택 | 명시적 `brand_id` 계약을 먼저 추가 |
 
-route, 표시명, 직전 Event 또는 세션의 첫 상품으로 사업자·브랜드를
-임의 추정하지 않는다. 교차 브랜드 유입은 세션 내 상품 Event의 실제
-`brand_id` 순서로 계산한다.
+상품 미귀속은 JSON `null`로 표현하며 빈 문자열은 허용하지 않는다. route, 표시명,
+직전 Event, 세션의 첫 상품 또는 세션 내 다른 상품으로 사업자·브랜드를 임의 추정하지
+않는다. 교차 브랜드 유입은 세션 내 상품 Event의 실제 `brand_id` 순서로 계산한다.
 
 ## 3. Schema version
 
@@ -64,12 +65,14 @@ Delta 구현 Jira에서 검증해 확정한다.
 
 1. `event-schema.json`은 `0.2.0-draft`만 허용하고 top-level `tenant_id`를
    거부한다.
-2. 상품 대상 Event와 `page_type=product_detail`인 Event의 `product_id`는
-   NULL이 아니다.
-3. 플랫폼 공통 `page_view`는 `product_id=NULL`을 허용한다.
+2. 상품 자체가 대상인 Event와 상품 상세의 `page_view`, `section_view`,
+   `section_dwell`은 `product_id`가 비어 있지 않은 string이다.
+3. 플랫폼 공통 `page_view`와 상품 목록의 `section_view`, `section_dwell`은
+   `product_id=NULL`을 허용한다. 빈 문자열은 허용하지 않는다.
 4. 상품 Dimension Join 전후 row 수가 의도하지 않게 증가하지 않는다.
 5. 모든 판매 상품은 하나의 `brand_id`에, 모든 브랜드는 하나의
    `business_id`에 귀속한다.
-6. 플랫폼 공통 Event의 `business_id`, `brand_id`는 NULL을 유지한다.
+6. `product_id=NULL`인 플랫폼 공통 Event의 `business_id`, `brand_id`는 NULL을
+   유지하고 상품 Dimension Join 대상으로 처리하지 않는다.
 7. 사업자 A의 인증으로 사업자 B 소유 브랜드 Mart를 조회할 수 없다.
 8. 행동 `purchase` Event의 금액을 매출·정산 입력으로 사용하지 않는다.

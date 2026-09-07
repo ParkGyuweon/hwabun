@@ -123,9 +123,14 @@
       ]
     },
     "product_id": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "actor_type": {
@@ -167,7 +172,11 @@
       "if": {
         "properties": {
           "event_name": {
-            "const": "page_view"
+            "enum": [
+              "page_view",
+              "section_view",
+              "section_dwell"
+            ]
           },
           "page_type": {
             "const": "product_detail"
@@ -195,8 +204,6 @@
               "product_view",
               "product_impression",
               "product_click",
-              "section_view",
-              "section_dwell",
               "accordion_toggle",
               "recommendation_impression",
               "recommendation_click",
