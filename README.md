@@ -1,4 +1,8 @@
-# S15P21A306 
+# S15P21A306
+
+**HWABUN** — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(**BLOOM**)과
+인사이트 대시보드입니다. 행동 로그를 모아 브랜드에게 지표로 돌려주고,
+그 위에서 상품 추천을 계산합니다.
 
 ## 1. 시스템 아키텍처
 
@@ -35,6 +39,7 @@
      → recommender.py  점수 + MMR
      → batch/ingest/data/serving/  서빙용 산출물
           ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
+   대표 지표 test Recall@10 = 23.39% (롱테일 31.29%) — docs/ai/evaluation-framework.md
 
 [ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
 ```
@@ -72,7 +77,7 @@
 
 ## 3. 현재 폴더 구조
 
-지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-01)
+지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-07)
 
 ```
 S15P21A306/
@@ -105,6 +110,7 @@ S15P21A306/
 │   ├── product-form-labels-ko.json      등록 폼 어휘의 한국어 표시 문구 57개 (어휘집에서 생성)
 │   ├── validate_product_registration.py 등록 상품 JSON 을 계약으로 검증하는 CLI
 │   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·가중치 스케줄
+│                                        규칙 5-1: 정독한 미전환 상품은 약한 긍정 (2026-09-03 개정)
 │
 ├── docs/
 │   ├── ai/                          추천 알고리즘 설계·검증 (AI)
@@ -114,6 +120,7 @@ S15P21A306/
 │   │   ├── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
 │   │   ├── exposure-role.md             노출이 어느 자리에서 무엇을 하는가 — 다섯 자리와 섞어 말하면 안 되는 것
 │   │   └── evaluation-framework.md     ★ 추천 평가 체계 (팀 합의) — 오프라인/동적/LLM 3축 분리
+│   │                                     대표 지표·부록(기각된 안 포함)이 모두 여기 모입니다
 │   │
 │   ├── analytics/                   행동 로그·DW 설계 (프론트·데이터)
 │   │   ├── behavior-log-design.md       왜 그 자리에 그 이벤트를 두었는지
@@ -123,11 +130,19 @@ S15P21A306/
 │   │   ├── dw-design.md · spark-processing-design.md   Mart 적재·Spark 처리 설계
 │   │   ├── persona-design.md             Persona 생성·표본·추천 연결 설계
 │   │   ├── marketing-signal-research.md · event-weight-rationale.html
+│   │   ├── event-guide.html              팀·기획용 행동 기록 안내서 (생성물)
+│   │   └── tools/build-event-guide.mjs   안내서 생성 스크립트
 │   │
 │   ├── dashboard/                   B2B 대시보드 조사·설계 (프론트)
 │   │   ├── b2b-dashboard-research.md    화면의 존재 이유 — 시장 조사와 설계 규칙
 │   │   ├── frontend-dashboard-design.md · metric-basis.md   화면 설계 · 지표별 산출 근거
-│   ├── data/                        데이터 수집 메모 (프론트)
+│   │   ├── collective-insight-data-boundary.md  합동 인사이트 — 공유 범위와 지켜야 할 경계
+│   │   ├── insight-catalog.md           무엇을 어떻게 뽑아 누구에게 주나 (최종 그림)
+│   │   ├── beauty-optimization-backlog.md  성분·피부·산업 특화 제안 목록
+│   │   ├── data-event-backlog.md        AI·백엔드·데이터에 보낸 수집·수정 요청 (S1~S7)
+│   │   └── deck-update-plan.md          중간발표 덱 반영 계획
+│   ├── data/                        프론트 초기 UI용 샘플 데이터 (상품 8 · 리뷰 40)
+│   │   └── README.md · field_stats.json · product-images.md
 │   ├── backend-ingestion-backpressure.md  수집 과부하 응답 정책 (백엔드)
 │   └── git-convention.md            커밋 메시지·브랜치 전략 (팀 공통)
 │
@@ -141,6 +156,7 @@ S15P21A306/
 │   │   ├── build_feature_sample.py      샘플 6개 산출물 + 문서 생성
 │   │   ├── test_feature_sample.py       산출물·문서가 코드와 어긋나지 않았는지
 │   │   └── data/
+│   │       ├── README.md                    산출물 목록과 재생성 방법
 │   │       ├── products_200.json            상품 200개 (원본 27컬럼 + 병합 이력 + 리뷰 통계)
 │   │       ├── affinity_lift.csv            속성 친화도 4,000행 (200상품 × 20세그먼트)
 │   │       ├── affinity_power.csv           속성별 판별력 비교 (분석용)
@@ -151,6 +167,7 @@ S15P21A306/
 │   │       ├── text_embeddings.npz         seed 리뷰·상품 임베딩 384차원 (13.7MB)
 │   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력
+│   │           ├── README.md                    서빙 산출물의 열·갱신 시점
 │   │           ├── product_feature.jsonl        상품 200개 × 148차원 + prior
 │   │           ├── attribute_affinity.csv       친화도 4,000행 (계약 열)
 │   │           └── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
@@ -197,6 +214,7 @@ S15P21A306/
 │   └── personas/
 │       ├── build_personas.py            페르소나 추출
 │       └── data/  personas_9900.json · personas_100_agent.json · persona_style.json
+│                 persona_sampling_report.json (표본 추출 근거) · README.md
 │
 ├── backend/                         Spring Boot 수집 서버 (백엔드)
 │   └── src/main/java/com/cosmetic/collector/   POST /api/events → Kafka activity-events
