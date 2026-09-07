@@ -1,8 +1,8 @@
 # DW / Mart Schema Contract
 
 작성일: 2026-09-02  
-최종 정적 검증: 2026-09-02
-상태: 저장 계층·공통 규칙 확정, Tenant 축 추가. Dashboard Mart·KPI 후보는 협의 후 확정
+최종 정적 검증: 2026-09-07
+상태: 통합 쇼핑몰의 사업자·브랜드·상품 귀속 계약 반영. Dimension·Mart 물리 구현은 후속 Jira에서 확정
 
 ## 1. 범위와 우선순위
 
@@ -33,7 +33,7 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 | `search_event_fact` | `event_id` | 검색 집계 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 체류 검증·재집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 콘텐츠 관심 집계 |
-| `purchase_fact` | `order_id + product_id` | 구매·매출·재구매 집계 |
+| `purchase_fact` | `order_id + product_id` | 행동 Event 기반 구매 전환·재구매 집계. 매출·정산에는 사용 금지 |
 | `purchase_reason_fact` | `order_id + reason` | 구매 이유 집계, 행동 추론 대조 |
 | `funnel_session_fact` | `session_id + product_id` | 단계 도달·이탈 집계 |
 | `persona_behavior_feature_delta` | `event_id + user_id + product_id` | Persona 관심도 집계 |
@@ -49,7 +49,8 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 | `event_date_kst` | date | N | KST 일간 집계일 |
 | `funnel_date_kst` | date | N | 최초 Funnel 단계 도달 시각의 KST 집계일 |
 | `event_minute_kst` | timestamp | N | KST minute truncate |
-| `tenant_id` | string | N | Storefront 소유 Tenant. 모든 Mart의 집계 축 |
+| `business_id` | string | Y | 상품이 귀속된 사업자. 상품 미귀속 Mart는 NULL 가능 |
+| `brand_id` | string | Y | Event 대상 상품의 브랜드. 상품 미귀속 Mart는 NULL 가능 |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `source` | string | N | MVP: `web`, `simulator` |
 | `generator_type` | string | Y | `python_batch`, `agent_llm`; Web은 NULL |
@@ -104,50 +105,58 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 
 ## 3. Dimension
 
-### 3.1 `dim_tenant`
+### 3.1 `dim_business`
 
 ```text
-grain/key = tenant_id
-source = 입점 Tenant 등록 정보
+grain/key = business_id
+source = Backend 사업자 등록·인증 정보
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
-| `tenant_id` | string | N | slug. 생성 후 고정하며 조회 시 재계산하지 않는다 |
-| `display_name` | string | N | 화면 표시명 |
-| `tenant_hash` | string | N | 익명 집계용 가명. `tenant_id`와 다른 값이어야 한다 |
-| `product_count` | int | Y | 진열 상품 수 |
-| `commons_participating` | boolean | N | 익명 집계 기여·조회 대상 여부 |
-| `created_at` | timestamp | N | 입점 시각 |
+| `business_id` | string | N | Backend가 발급한 사업자 식별자 |
+| `business_name` | string | N | 사업자 표시명 |
+| `verification_status` | string | N | `PENDING`, `VERIFIED`, `MISMATCH`, `RETRY_NEEDED`, `INACTIVE` |
+| `created_at` | timestamp | N | 사업자 등록 시각 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
-`tenant_id`는 표시명을 NFKD 정규화해 ASCII로 접고 slug로 바꾼 값이며 생성 규칙은
-[`event-properties-schema.md` §1.1.1](./event-properties-schema.md)을 따른다. **한 번
-생성한 뒤 이 Dimension에 고정한다.** 조회할 때마다 다시 계산하면 정규화 규칙이나
-표시명이 바뀔 때 partition이 조용히 갈라진다. 충돌이 생기면 뒤에 순번을 붙인다.
+통합몰 전환으로 기존 Storefront 격리 식별자 규칙은 폐기한다. Event에
+`business_id`를 반복하지 않고 상품·브랜드 Dimension에서 사업자 귀속을 파생한다.
+대시보드 조회 인가는 Backend의 사업자→브랜드 소유 관계를 기준으로 한다.
 
-`tenant_hash`를 따로 두는 이유는 익명 집계에서 다른 Tenant에게 보이는 값이기
-때문이다. `tenant_id`를 그대로 쓰면 slug에서 실제 Tenant를 알 수 있어 익명성이
-성립하지 않는다. 되돌릴 수 없어야 한다.
+### 3.2 `dim_brand`
 
-`commons_participating`은 진열 상품이 적어 익명 집계에 기여하기 어려운 Tenant를
-구분하기 위한 컬럼이다. 어떤 기준으로 이 값을 정할지는 별도 합의 사항이며 이
-계약은 컬럼만 정의한다.
+```text
+grain/key = brand_id
+source = Backend 브랜드 등록 정보
+```
 
-### 3.2 `dim_product`
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `brand_id` | string | N | 브랜드 식별자 |
+| `business_id` | string | N | 소유 사업자. `dim_business` FK |
+| `brand_name` | string | N | 브랜드 표시명 |
+| `brand_hash` | string | N | Commons Mart용 비가역 가명 |
+| `commons_participating` | boolean | N | 억제 규칙을 충족한 공유 집계 대상 여부 |
+| `created_at` | timestamp | N | 브랜드 등록 시각 |
+| `updated_at` | timestamp | Y | 갱신 시각 |
+
+`brand_hash`와 `commons_participating`의 산출·억제 규칙은 Commons Mart Jira에서
+확정한다. 원본 `brand_id`는 다른 브랜드에게 노출하지 않는다.
+
+### 3.3 `dim_product`
 
 ```text
 grain/key = product_id
-source = batch/ingest/data/products_200.json, Tenant 등록 상품, Processed dim_product
+source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Processed dim_product
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `product_id` | string | N | 상품 ID |
 | `product_name` | string | N | 상품명 |
-| `tenant_id` | string | Y | 등록 Tenant. 원천 카탈로그 상품은 NULL |
-| `product_source` | string | N | `seed_catalog`, `tenant_registered` |
-| `brand_id`, `brand_name` | string | Y | 브랜드 식별자·표시명 |
+| `product_source` | string | N | `seed_catalog`, `brand_registered` |
+| `brand_id`, `brand_name` | string | N | 브랜드 식별자·표시명 |
 | `primary_category`, `secondary_category`, `tertiary_category` | string | Y | 카테고리 계층 |
 | `category_id` | string | Y | Dashboard 필터 ID |
 | `category_path` | array<string> | Y | 카테고리 경로 |
@@ -160,7 +169,7 @@ source = batch/ingest/data/products_200.json, Tenant 등록 상품, Processed di
 | `caution_ingredient_count` | int | Y | 주의 성분 수 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
-### 3.3 `dim_persona_segment`
+### 3.4 `dim_persona_segment`
 
 ```text
 grain/key = segment_type + segment_value
@@ -180,7 +189,7 @@ source = bridge_persona_segment
 [`persona-schema.md`](./persona-schema.md)의 정의를 그대로 사용한다. Attribute
 Affinity는 상품 축이 있으므로 이 Dimension에 저장하지 않는다.
 
-### 3.4 `dim_date`
+### 3.5 `dim_date`
 
 ```text
 grain/key = event_date_kst
@@ -194,7 +203,7 @@ grain/key = event_date_kst
 | `quarter` | string | N | 분기 |
 | `is_weekend` | boolean | N | 주말 여부 |
 
-### 3.5 `dim_event`
+### 3.6 `dim_event`
 
 ```text
 grain/key = event_name
@@ -210,7 +219,7 @@ source = event-properties-schema.md
 | `is_dashboard_core` | boolean | N | 핵심 KPI 사용 여부 |
 | `description` | string | Y | 설명 |
 
-### 3.6 Simulation Dimension projection
+### 3.7 Simulation Dimension projection
 
 `dim_scenario`와 `dim_simulation_run`의 grain, 필수 필드와 허용값은
 [`persona-schema.md`](./persona-schema.md)의 `scenario`, `simulation_run` 계약을
@@ -228,7 +237,7 @@ source = event-properties-schema.md
 ### 4.1 `product_daily_kpi`
 
 ```text
-key = event_date_kst + tenant_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + business_id + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
 input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_product
 ```
 
@@ -238,15 +247,13 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
 | `quick_look_sessions`, `product_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
-| `revenue_amount` | decimal(18,2) | Y | `purchase`의 `item_revenue` 합계 |
-| `currency` | string | Y | 통화 |
 | `product_ctr`, `detail_entry_rate`, `add_to_cart_rate`, `purchase_rate`, `product_interest_score` | double | Y | 비율·관심도 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 ### 4.2 `recommendation_daily_kpi`
 
 ```text
-key = event_date_kst + tenant_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + business_id + brand_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + scenario_id + simulation_run_id
 input = product_event_fact
 ```
 
@@ -260,7 +267,7 @@ input = product_event_fact
 ### 4.3 `search_daily_kpi`
 
 ```text
-key = event_date_kst + tenant_id + search_query_hash + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + search_query_hash + actor_type + source + scenario_id + simulation_run_id
 input = search_event_fact, product_event_fact
 ```
 
@@ -276,7 +283,7 @@ input = search_event_fact, product_event_fact
 ### 4.4 `content_daily_kpi`
 
 ```text
-key = event_date_kst + tenant_id + product_id + section_id + content_kind + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + business_id + brand_id + product_id + section_id + content_kind + actor_type + source + scenario_id + simulation_run_id
 input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_product
 ```
 
@@ -294,7 +301,7 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 ### 4.5 `funnel_daily_kpi`
 
 ```text
-key = funnel_date_kst + tenant_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = funnel_date_kst + business_id + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
 input = funnel_session_fact, dim_product
 ```
 
@@ -309,7 +316,7 @@ input = funnel_session_fact, dim_product
 ### 4.6 `persona_segment_daily_kpi`
 
 ```text
-key = event_date_kst + tenant_id + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
+key = event_date_kst + business_id + brand_id + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = funnel_session_fact, persona_behavior_feature_delta, bridge_persona_segment, dim_persona_segment, dim_product
 ```
 
@@ -324,7 +331,7 @@ input = funnel_session_fact, persona_behavior_feature_delta, bridge_persona_segm
 ### 4.7 `scenario_daily_kpi`
 
 ```text
-key = event_date_kst + tenant_id + scenario_id + simulation_run_id + actor_type + source + generator_type
+key = event_date_kst + scenario_id + simulation_run_id + actor_type + source + generator_type
 input = cleaned_events, product_event_fact, funnel_session_fact, content_interest_fact, persona_behavior_feature_delta
 ```
 
@@ -340,7 +347,7 @@ input = cleaned_events, product_event_fact, funnel_session_fact, content_interes
 ### 5.1 `realtime_event_stats`
 
 ```text
-key = event_minute_kst + tenant_id + event_name + source + actor_type + scenario_id + simulation_run_id
+key = event_minute_kst + event_name + source + actor_type + scenario_id + simulation_run_id
 input = cleaned_events
 ```
 
@@ -354,7 +361,7 @@ input = cleaned_events
 ### 5.2 `realtime_bad_event_stats`
 
 ```text
-key = event_minute_kst + tenant_id + error_stage + error_code + event_name + source + actor_type
+key = event_minute_kst + error_stage + error_code + event_name + source + actor_type
 input = bad_events
 ```
 
@@ -374,16 +381,15 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
 2. MySQL serving table은 API 조회에 불필요한 상세 컬럼을 생략할 수 있지만 key와
    KPI 의미를 바꾸지 않는다.
 3. `category_id`, `brand_id`는 `dim_product`에서 보강한 집계 시점 스냅샷이다.
-4. 주문 총액 `order_value`를 explode된 상품 row에서 합산하지 않는다. 상품 매출은
-   `purchase_fact.item_revenue`만 합산한다. `item_revenue`는 Event가 운반하지 않고
-   `quantity * unit_price`로 Processed에서 파생한 값이다.
-   `purchase_count`는 `order_id` 기준 고유 주문 수이며 상품 row 수가 아니다.
+4. 행동 `purchase` Event와 `purchase_fact`는 전환·재구매 분석에만 사용한다.
+   매출·정산은 Backend의 PAID 주문 상품 Fact만 정본으로 사용한다.
+   행동 `purchase_count`는 `order_id` 기준 고유 전환 수이며 상품 row 수가 아니다.
 5. `generator_type`, `scenario_id`, `simulation_run_id`는 Processed에서 승격된
    synthetic metadata를 사용한다.
-6. 모든 Mart는 `tenant_id`를 집계 축으로 포함하고 소비자는 이 값으로만 격리한다.
-   상품 브랜드 `brand_id`를 격리 키로 사용하지 않는다.
-7. `tenant_id`가 NULL인 row는 Tenant 격리가 필요한 Mart에 넣지 않는다.
-   `schema_version = 0.2.0-draft` Event가 여기 해당한다.
+6. 상품 대상 Mart는 `product_id`에서 파생한 `brand_id`, `business_id`를
+   집계 시점 스냅샷으로 보존한다.
+7. 상품이 없는 플랫폼 공통 Event를 특정 사업자·브랜드에 임의 귀속하지
+   않는다. 대시보드 접근 격리는 Backend 인가가 담당한다.
 8. `*_interest_score`를 0으로 하한 절단하지 않는다. 음수는 부정 행동의 신호다.
 9. §2.4의 표기 병합을 집계 전에 적용한다. 특히 상품 리뷰 통계의 `brunette`를
    `brown`으로 합치지 않으면 segment Join이 같은 사람을 둘로 나눈다.

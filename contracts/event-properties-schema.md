@@ -1,8 +1,9 @@
 # Event Properties 계약
 
 작성일: 2026-09-03
-상태: v0.2 Properties 기준 확정, `0.3.0-draft` Tenant 필드와 구매 Event 3종 추가. 모듈별 구현 반영 대기
+상태: 통합 쇼핑몰 기준 v0.2 Properties와 상품 귀속 규칙 확정. 모듈별 구현 반영 대기
 실행 Envelope 계약: [`event-schema.json`](./event-schema.json)
+귀속 결정·영향 범위: [`event-attribution-contract.md`](./event-attribution-contract.md)
 설계 설명: [`event-logging-design.md`](../docs/analytics/event-logging-design.md)
 
 ## 1. 범위와 우선순위
@@ -23,52 +24,41 @@ validation에서 검사한다.
 - 상품 대상 Event의 top-level `product_id`는 필수다.
 - Planned Event는 `event-schema.json` enum에 등록되기 전까지 전송하지 않는다.
 
-## 1.1 Tenant와 상품 브랜드는 다른 값이다
+## 1.1 통합 쇼핑몰의 사업자·브랜드·상품 귀속
 
-`schema_version = 0.3.0-draft`부터 top-level `tenant_id`가 필수다. 두 값을 혼동하면
-격리가 깨지므로 여기서 경계를 명시한다.
-
-| 값 | 뜻 | 위치 | 얻는 법 |
-| --- | --- | --- | --- |
-| `tenant_id` | 이 Storefront가 **누구 것인가** | top-level Envelope | Event가 직접 싣는다 |
-| `brand_id` | 그 Event가 **무엇을 대상으로 했나**의 상품 브랜드 | Processed 컬럼 | `product_id` → `dim_product` Join 파생 |
-
-`brand_id`를 Envelope에 넣지 않는 이유는 `page_view`, `filter_change`처럼 상품이 없는
-Event에서 값이 정해지지 않기 때문이다. 그런 Event도 어느 Storefront에서 일어났는지는
-정해지므로 격리 키는 `tenant_id`여야 한다. 데이터 격리와 Mart partition은
-`tenant_id`만 사용한다.
-
-### 1.1.1 `tenant_id` 형식
-
-소문자 영숫자와 하이픈만 사용하는 slug다. 정규식은 `^[a-z0-9]+(-[a-z0-9]+)*$`이며
-`event-schema.json`이 직접 검사한다.
-
-생성 규칙은 표시명을 NFKD 정규화해 악센트를 제거하고 ASCII로 접은 뒤, 영숫자가 아닌
-구간을 하이픈으로 바꾸고 앞뒤 하이픈을 제거하는 것이다.
+소비자 행동은 하나의 통합 쇼핑몰에서 발생하므로 Event를 Storefront Tenant로
+격리하지 않는다. top-level Envelope에는 `tenant_id`, `business_id`, `brand_id`를
+반복하지 않고, 상품 대상 Event의 `product_id`를 기준으로 Processed 단계에서 귀속을
+파생한다.
 
 ```text
-Estée Lauder → estee-lauder
-Lancôme      → lancome
-Dr. Jart+    → dr-jart
+Event.product_id
+→ dim_product.brand_id
+→ dim_brand.business_id
 ```
 
-악센트를 떼지 않으면 `est-e-lauder`처럼 파티션 경로가 깨져 보인다.
+| 값 | 위치 | 얻는 법 |
+| --- | --- | --- |
+| `product_id` | 상품 대상 Event의 top-level Envelope | Event가 직접 싣는다 |
+| `brand_id` | Processed Fact·Mart | `product_id`를 `dim_product`와 Join해 파생 |
+| `business_id` | Processed Fact·Mart | `brand_id`를 `dim_brand`와 Join해 파생 |
 
-**slug는 한 번 생성해 Tenant Dimension에 고정하고 조회할 때마다 다시 계산하지 않는다.**
-정규화 규칙을 바꾸거나 표시명이 바뀌면 partition이 조용히 갈라지기 때문이다. 충돌이
-발생하면 뒤에 순번을 붙인다. 화면 표시는 `tenant_id`가 아니라 Dimension의 표시명을
-사용한다.
+상품 상세 화면의 `page_view`와 상세 콘텐츠 Event는 `product_id`가 필수다. 홈·검색·장바구니
+등 플랫폼 공통 화면의 `page_view`는 특정 사업자나 브랜드에 귀속하지 않으며
+`product_id = NULL`을 허용한다. 향후 상품 없이 브랜드 자체가 명시적 대상인 Event를
+도입할 때만 `brand_id` 선택 필드를 별도 계약한다. route, 표시명 또는 직전 상품으로
+사업자·브랜드를 추정하지 않는다.
 
-Tenant를 다른 Tenant에게 보일 때는 `tenant_id`가 아니라 되돌릴 수 없는 가명을
-사용한다. 같은 값을 쓰면 익명 집계에서 경쟁 Tenant의 식별자가 그대로 노출된다.
-Dimension 정의는 [`dw-schema.md`](./dw-schema.md)를 따른다.
+사업자 대시보드의 데이터 접근 격리는 Event 필드가 아니라 Backend의
+`business_id → brand_id` 소유 관계와 인가로 강제한다. Mart는 집계 시점의
+`business_id`, `brand_id`를 조회 축으로 보존하지만 물리 partition은 별도 저장 계약에서
+결정한다.
 
-### 1.1.2 Schema version 전환
+### 1.1.1 Schema version
 
-`event-schema.json`의 `schema_version`은 `0.2.0-draft`와 `0.3.0-draft`를 모두 허용하며,
-`0.3.0-draft`일 때만 `tenant_id`를 필수로 검사한다. 모듈은 준비되는 대로 각자 버전을
-올리면 되고 동시에 이동하지 않아도 된다. 두 버전이 Raw에 섞여도 `schema_version`으로
-구분한다.
+실제 Producer가 사용 중인 `0.2.0-draft`를 유지한다. 통합몰 전환 전에 제안됐던
+`0.3.0-draft`의 `tenant_id` 필수 계약은 Producer에 반영하지 않고 철회한다. 다음 버전은
+실제 Envelope 구조가 추가로 변경될 때 새 계약으로 정의한다.
 
 ## 2. 활성 Event Taxonomy
 
@@ -131,7 +121,7 @@ Dimension 정의는 [`dw-schema.md`](./dw-schema.md)를 따른다.
 | `view_cart` | `conversion` | 장바구니 화면 진입 | Cart 확인율 |
 | `quantity_change` | `conversion` | 수량 변경 | 구매 의도 |
 | `begin_checkout` | `conversion` | 주문 시작 | Checkout 진입 |
-| `purchase` | `conversion` | 주문 완료 | 구매 전환, 매출 |
+| `purchase` | `conversion` | 주문 완료 행동 로그 | 구매 전환. 매출·정산 근거로 사용하지 않음 |
 | `purchase_reason_select` | `validation` | 구매 직후 이유 선택 | 선언 이유와 행동 추론 대조 |
 | `remove_from_cart` | `hesitation` | 장바구니 상품 제거 | 전환 마찰 |
 | `hover_dwell` | `hesitation` | CTA hover 체류 | 구매 전 망설임 |
@@ -308,13 +298,13 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `items[]` | object[] | `product_id: string`, `quantity: integer`, `unit_price: number` | 주문 상품. `sku_id: string`은 선택 |
 | `reasons[]` | string[] | 해당 없음 | §3.9 enum. 1~2개, `skipped=true`면 빈 배열 |
 
-`items[]`는 `unit_price`를 싣고 매출액을 싣지 않는다. 상품별 매출
+`items[]`는 전환 분석용 `unit_price`를 싣을 수 있지만 매출·정산의 정본이 아니다. 상품별 매출은
 `item_revenue = quantity * unit_price`는 Processed에서 파생하며 Event가 직접
 운반하지 않는다. 파생값을 Event에 실으면 단가가 사라져 가격 분석을 할 수 없고,
 `order_value`와 합계가 어긋났을 때 어느 쪽이 맞는지 판단할 근거도 없어진다.
 
 `purchase.order_value`는 주문 전체 금액이다. `items[]`를 상품 row로 explode한 뒤
-합산하면 상품 수만큼 중복되므로, 상품 매출은 `item_revenue`만 합산한다
+행동 Event가 아니라 Backend의 PAID 주문 상품 Fact에서만 합산한다
 ([`dw-schema.md`](./dw-schema.md) §6).
 
 `purchase_reason_select`는 주문 하나당 한 번만 발생한다. `reasons` 키는 항상

@@ -1,7 +1,7 @@
 # Processed Dataset Schema 계약
 
 작성일: 2026-09-01
-최종 정적 검증: 2026-09-07
+최종 계약 갱신: 2026-09-07
 대상 Jira: `[DATA] Spark 처리 결과 및 DW 저장 구조 확정`
 문서 정리 Jira: `[DATA] Analytics 계약 및 설계 문서 구조 정리`
 상태: 논리 Schema 확정, 현재 Spark 구현·Delta 물리화·E2E 정합성 검증 대기
@@ -35,25 +35,20 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | 재실행 | 같은 입력 범위 재실행 시 Dataset key 기준 동일 결과로 수렴 |
 | 업무 중복 | `cleaned_events` 생성 전에 `event_id` 정본 1건 선택 |
 | Schema 확장 | 신규 컬럼은 nullable 추가를 기본으로 하고 기존 컬럼 의미·타입 변경 금지 |
-| Tenant 격리 | 모든 Dataset은 `tenant_id`를 보유하고 소비자는 이 값으로만 격리한다 |
+| 통합몰 귀속 | Event에는 `tenant_id`를 두지 않고 상품 Fact가 `business_id`, `brand_id`를 Dimension에서 파생한다 |
 
 환경별 Delta root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
 하위 경로는 환경이 달라도 유지한다.
 
-### 2.1 `tenant_id`와 `brand_id`
+### 2.1 `business_id`, `brand_id`, `product_id`
 
-두 값은 뜻이 다르므로 서로 대체하지 않는다.
+통합 쇼핑몰의 상품 행동은 `product_id → dim_product.brand_id →
+dim_brand.business_id` 순서로 귀속한다. `brand_id`, `business_id`는 Raw Event가 직접
+싣지 않고 상품 Dimension에서 파생해 Fact와 Mart에 집계 시점 스냅샷으로 보존한다.
 
-| 컬럼 | 뜻 | 원천 |
-| --- | --- | --- |
-| `tenant_id` | 그 Event가 발생한 Storefront의 소유 Tenant | Raw Envelope에서 승격 |
-| `brand_id` | 그 Event가 대상으로 한 상품의 브랜드 | `product_id` → `dim_product` Join 파생 |
-
-격리, partition, Mart 집계 key는 `tenant_id`만 사용한다. `brand_id`는 상품 속성이며
-`page_view`처럼 상품이 없는 Event에서는 NULL이다.
-
-`schema_version = 0.2.0-draft` Event에는 `tenant_id`가 없다. 이 경우 컬럼은 NULL이며
-Tenant 격리가 필요한 소비자는 해당 row를 제외한다. 값을 임의로 추정해 채우지 않는다.
+상품이 없는 플랫폼 공통 Event는 두 값을 NULL로 유지한다. route, 표시명, 직전 상품으로
+귀속을 추정하지 않는다. 대시보드 접근 제어는 Backend가 로그인 사용자의 `business_id`
+소유 브랜드를 검사해 강제하며 Event partition으로 대신하지 않는다.
 
 ## 3. Dataset 카탈로그
 
@@ -62,7 +57,7 @@ Tenant 격리가 필요한 소비자는 해당 row를 제외한다. 값을 임�
 | `bad_events` | Error | Kafka 물리 좌표 1건 | `bad_recorded_date` | 구현, 목표 컬럼 보완 필요 |
 | `duplicate_events` | Audit | 중복 후보 Kafka 물리 좌표 1건 | `event_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `cleaned_events` | Processed Base | `event_id` | `event_date_kst` | 구현, Q3 Dimension 결과는 후속 보강 |
-| `sessionized_events` | Processed Base | `event_id` | `event_date_kst` | 구현, tenant-aware 순서·seed Dimension 조인 |
+| `sessionized_events` | Processed Base | `event_id` | `event_date_kst` | 구현, 통합몰 세션 순서·seed Dimension 조인 동기화 대기 |
 | `product_event_fact` | Processed Fact | `event_id + item_index + product_id` | `event_date_kst` | 구현, seed Dimension Join |
 | `search_event_fact` | Processed Fact | `event_id` | `event_date_kst` | 미구현 |
 | `section_dwell_agg` | Processed Aggregate | section dwell grain | `event_date_kst` | 구현, delta 합산 |
@@ -71,7 +66,7 @@ Tenant 격리가 필요한 소비자는 해당 row를 제외한다. 값을 임�
 | `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 미구현 |
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
-| `dim_product` | Dimension | `product_id` | 없음 | seed 원천 projection 구현, Tenant 등록 union 대기 |
+| `dim_product` | Dimension | `product_id` | 없음 | seed 원천 projection 구현, 입점 브랜드 등록 상품 union 대기 |
 
 `section_dwell_agg`와 `content_interest_fact`의 grain은 다음 컬럼 조합이다.
 
@@ -166,7 +161,6 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `request_id` | string | Y | Collector batch ID |
 | `event_index` | int | Y | batch 내부 순서 |
 | `source` | string | N | Raw payload 우선, 누락 시 fallback |
-| `tenant_id` | string | Y | Storefront 소유 Tenant. `0.2.0-draft` Event는 NULL |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `is_synthetic` | boolean | N | synthetic 판정 결과 |
 | `user_id` | string | Y | synthetic이면 `persona_id`; Web 정책 확정 전 NULL |
@@ -182,6 +176,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `product_id` | string | Y | 상품 대상 Event 필수 |
 | `category_id` | string | Y | `dim_product` Join 결과 |
 | `brand_id` | string | Y | `dim_product` Join 결과 |
+| `business_id` | string | Y | `brand_id` → `dim_brand` Join 결과 |
 | `section_id` | string | Y | properties 승격 |
 | `content_kind` | string | Y | properties 승격 |
 | `position` | int | Y | properties 승격 |
@@ -207,7 +202,6 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `event_date_kst` | date | N | Partition |
 | `session_id` | string | N | 세션 ID |
 | `page_view_id` | string | N | 페이지 방문 ID |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -217,6 +211,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `context_product_id` | string | Y | 배경 상품 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `event_name` | string | N | Event 이름 |
 | `event_time` | timestamp | N | 발생 시각 |
 | `received_at` | timestamp | N | 수신 시각 |
@@ -232,9 +227,9 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `environment` | string | N | 실행 환경 |
 | `properties_json` | string | N | properties 원문 JSON |
 
-세션 정렬은 `tenant_id + session_id` 경계 안에서
-`sequence_no → event_time → received_at → event_id` 순으로 수행한다. 같은
-`session_id` 문자열이 Tenant 사이에서 재사용돼도 세션이 섞이지 않는다.
+세션 정렬은 통합몰의 `session_id` 경계 안에서
+`sequence_no → event_time → received_at → event_id` 순으로 수행한다.
+`session_id`는 통합몰 전체에서 충돌하지 않는 ID여야 한다.
 
 ## 8. `product_event_fact`
 
@@ -254,7 +249,6 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `event_name` | string | N | Event 이름 |
 | `intent` | string | N | Event 의미 |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -265,6 +259,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `context_product_id` | string | Y | 배경 상품 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `sku_id` | string | Y | 상품 옵션 |
 | `list_id` | string | Y | 목록 ID |
 | `entry_source` | string | Y | 진입 경로 |
@@ -277,8 +272,8 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `purchase_quantity` | int | Y | Checkout/구매 item 수량 |
 | `cart_size_after` | int | Y | 변경 후 장바구니 크기 |
 | `unit_price` | decimal(18,2) | Y | 상품 단가 |
-| `order_value` | decimal(18,2) | Y | 주문 전체 금액, 상품 매출 합산 금지 |
-| `item_revenue` | decimal(18,2) | Y | 구매 row의 `quantity * unit_price` |
+| `order_value` | decimal(18,2) | Y | 전환 시점 주문 표시 금액. 매출·정산 합산 금지 |
+| `item_revenue` | decimal(18,2) | Y | 행동 분석용 `quantity * unit_price`. 매출·정산 합산 금지 |
 | `cart_value` | decimal(18,2) | Y | 장바구니 금액 |
 | `currency` | string | Y | 통화 |
 | `cart_id` | string | Y | 장바구니 ID |
@@ -305,7 +300,6 @@ unique key는 `order_id + product_id`다.
 | `event_date_kst` | date | N | Partition |
 | `event_time` | timestamp | N | 주문 완료 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -314,6 +308,7 @@ unique key는 `order_id + product_id`다.
 | `session_id` | string | N | 세션 ID |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `sku_id` | string | Y | `items[].sku_id` |
 | `quantity` | int | N | `items[].quantity` |
 | `unit_price` | decimal(18,2) | N | `items[].unit_price` |
@@ -324,8 +319,8 @@ unique key는 `order_id + product_id`다.
 | `source` | string | N | 유입 경로 |
 
 `item_revenue`는 Event가 운반하지 않고 여기서 파생한다. `order_value`는 주문 단위
-값이므로 explode된 상품 row를 합산하면 상품 수만큼 중복된다. 상품 매출은
-`item_revenue`만 합산한다.
+값이므로 explode된 상품 row를 합산하면 상품 수만큼 중복된다. 두 금액은
+행동 분석용이며, 매출·정산은 Backend PAID 주문 상품 Fact만 사용한다.
 
 같은 `order_id`가 여러 번 수신되면 `cleaned_events` 단계에서 이미 `event_id` 정본
 1건으로 정리된다. 이 Dataset에서 다시 중복 제거하지 않는다.
@@ -347,7 +342,6 @@ unique key는 `order_id + product_id`다.
 | `event_date_kst` | date | N | Partition |
 | `event_time` | timestamp | N | 응답 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -378,7 +372,6 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `search_id` | string | Y | 검색 1회 ID |
 | `event_time` | timestamp | N | 검색 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -405,7 +398,6 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `section_id` | string | Y | Grain |
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -413,6 +405,7 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `dwell_ms_sum` | long | N | delta `dwell_ms` 합계 |
 | `dwell_event_count` | long | N | 합산 Event 수 |
 | `max_co_visible_blocks` | int | Y | 동시 노출 블록 최댓값 |
@@ -436,7 +429,6 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `section_id` | string | Y | Grain |
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -444,6 +436,7 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `view_count` | long | N | section/content 조회 수 |
 | `dwell_ms_sum` | long | N | 체류시간 합계 |
 | `accordion_expand_count` | long | N | 펼침 수 |
@@ -496,7 +489,6 @@ content_interest_score
 | `funnel_date_kst` | date | N | 최초 non-null Funnel 단계의 KST 날짜 |
 | `session_id` | string | N | Unique key |
 | `product_id` | string | N | Unique key |
-| `tenant_id` | string | Y | Storefront 소유 Tenant |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
@@ -504,6 +496,7 @@ content_interest_score
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
 | `first_impression_at` | timestamp | Y | 최초 노출 |
@@ -546,6 +539,7 @@ content_interest_score
 | `generator_type` | string | Y | synthetic 생성 방식 |
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
+| `business_id` | string | Y | 브랜드 소유 사업자 Dimension |
 | `event_name` | string | N | Event 이름 |
 | `event_time` | timestamp | N | 발생 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
@@ -564,7 +558,7 @@ Vector 자체를 저장하지 않는다.
 `dim_product`는 Processed Fact의 상품 속성 보강 입력이다. unique key는
 `product_id`이며 partition하지 않는다.
 
-Sephora 원천 카탈로그와 Tenant가 직접 등록한 상품을 **같은 Dimension에 둔다.** Fact가
+Sephora 원천 카탈로그와 입점 브랜드가 직접 등록한 상품을 **같은 Dimension에 둔다.** Fact가
 `product_id`로 Join하는데 Dimension을 나누면 모든 소비자가 두 번 Join해 합쳐야 하고,
 합치는 규칙이 소비자마다 갈린다. 출처는 `product_source` 컬럼으로 구분한다.
 
@@ -572,8 +566,7 @@ Sephora 원천 카탈로그와 Tenant가 직접 등록한 상품을 **같은 Dim
 | --- | --- | --- | --- |
 | `product_id` | string | N | Unique key |
 | `product_name` | string | N | 상품명 |
-| `tenant_id` | string | Y | 등록 Tenant. 원천 카탈로그 상품은 NULL |
-| `product_source` | string | N | `seed_catalog`, `tenant_registered` |
+| `product_source` | string | N | `seed_catalog`, `brand_registered` |
 | `brand_id` | string | N | 브랜드 ID |
 | `brand_name` | string | N | 브랜드명 |
 | `category_id` | string | N | 카테고리 ID |
@@ -582,7 +575,7 @@ Sephora 원천 카탈로그와 Tenant가 직접 등록한 상품을 **같은 Dim
 | `tertiary_category` | string | Y | 어휘 19종. Product Feature 인코딩 축 |
 | `base_price` | decimal(18,2) | N | 기준 가격 |
 | `currency` | string | N | 통화 |
-| `price_krw` | decimal(18,2) | Y | Tenant 입력 원가. 등록 상품만 |
+| `price_krw` | decimal(18,2) | Y | 입점 브랜드 입력 가격. 등록 상품만 |
 | `skin_type_tags` | array<string> | N | 피부 타입 태그 |
 | `concern_tags` | array<string> | N | 고민 태그 |
 | `ingredient_ids` | array<string> | N | 성분 ID 목록 |
@@ -598,16 +591,15 @@ Sephora 원천 카탈로그와 Tenant가 직접 등록한 상품을 **같은 Dim
 Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품이 실제로 좋은 평가를 받은
 것처럼 읽힌다. 리뷰가 쌓이면 `observed`로 바뀐다.
 
-`tenant_id`가 NULL인 상품은 시연·검증용 원천 카탈로그다. Tenant별 Storefront에 어떤
-상품을 진열할지는 이 Dimension이 아니라 진열 설정에서 정한다. `product_source`는
-"누가 만든 데이터인가"이지 "누가 파는가"가 아니다.
+`product_source`는 상품이 seed 카탈로그에서 왔는지 입점 브랜드 등록에서 왔는지를
+구분한다. 모든 판매 상품은 `brand_id`가 필수이며 사업자 귀속은 `dim_brand`에서
+파생한다.
 
 ## 17. 구현 정합성 완료 조건
 
-2026-09-02 기준 최신 Raw/Event/Persona 계약과 현재 `streaming/` 구현을 정적으로
-대조했다. Dataset의 grain, key, partition, 컬럼과 nullable에 새 논리 변경은
-필요하지 않았다. 아래 조건은 논리 Schema 작성 완료 조건이 아니라, 구현 결과가 이
-계약을 충족했다고 판정하기 위한 물리 구현·E2E 완료 조건이다.
+2026-09-07 통합몰 귀속 계약을 반영했다. 현재 `streaming/` 구현은 이 계약의
+사업자·브랜드 귀속과 tenant 제거를 아직 반영하지 않았다. 아래 조건은 후속
+물리 구현·E2E 완료 판정 기준이다.
 
 1. 각 Delta Table의 실제 `printSchema()`가 이 문서의 컬럼·타입·nullable과 일치한다.
 2. §3의 unique key 중복이 0건이다.
@@ -620,9 +612,10 @@ Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품�
 7. 상품 Dimension Join 전후 row 수가 의도하지 않게 증가하지 않는다.
 8. 같은 입력 범위 재실행 후 Dataset key와 집계값이 변하지 않는다.
 9. 현재 미구현 Dataset은 구현 전까지 소비자가 존재하는 것으로 가정하지 않는다.
-10. `schema_version = 0.3.0-draft` row는 `tenant_id`가 NULL이 아니다.
-11. `tenant_id`와 `brand_id`가 같은 값을 담지 않는다. 후자는 상품 Dimension 파생이다.
+10. 상품 대상 Event의 `product_id`는 NULL이 아니며 Dimension에서 `brand_id`,
+    `business_id`를 파생할 수 있다.
+11. 플랫폼 공통 Event의 사업자·브랜드 귀속을 임의로 추정하지 않는다.
 12. `dim_product.rating_source`가 `injected`인 row는 Dashboard 평균 평점 집계에서
-    제외하거나 별도로 표시한다.
-13. `dim_product.product_source`가 `tenant_registered`인 row는 `tenant_id`가 NULL이
-    아니다.
+     제외하거나 별도로 표시한다.
+13. `dim_product.product_source`가 `brand_registered`인 row는 유효한 `brand_id`를
+    가지며 해당 브랜드는 `dim_brand`의 `business_id`와 연결된다.
