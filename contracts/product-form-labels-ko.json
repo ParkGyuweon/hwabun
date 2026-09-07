@@ -1,6 +1,103 @@
 {
+  "segment": [
+    {
+      "value": "combination",
+      "ko": "복합성 피부",
+      "field": "skin_type"
+    },
+    {
+      "value": "dry",
+      "ko": "건성 피부",
+      "field": "skin_type"
+    },
+    {
+      "value": "normal",
+      "ko": "중성 피부",
+      "field": "skin_type"
+    },
+    {
+      "value": "oily",
+      "ko": "지성 피부",
+      "field": "skin_type"
+    },
+    {
+      "value": "fair",
+      "ko": "밝은 톤",
+      "field": "skin_tone"
+    },
+    {
+      "value": "light",
+      "ko": "라이트 톤",
+      "field": "skin_tone"
+    },
+    {
+      "value": "medium",
+      "ko": "미디엄 톤",
+      "field": "skin_tone"
+    },
+    {
+      "value": "tan",
+      "ko": "탠 톤",
+      "field": "skin_tone"
+    },
+    {
+      "value": "deep",
+      "ko": "딥 톤",
+      "field": "skin_tone"
+    },
+    {
+      "value": "black",
+      "ko": "검은 모발",
+      "field": "hair_color"
+    },
+    {
+      "value": "brown",
+      "ko": "갈색 모발",
+      "field": "hair_color"
+    },
+    {
+      "value": "blonde",
+      "ko": "금발",
+      "field": "hair_color"
+    },
+    {
+      "value": "auburn",
+      "ko": "적갈색 모발",
+      "field": "hair_color"
+    },
+    {
+      "value": "red",
+      "ko": "붉은 모발",
+      "field": "hair_color"
+    },
+    {
+      "value": "blue",
+      "ko": "푸른 눈",
+      "field": "eye_color"
+    },
+    {
+      "value": "brown",
+      "ko": "갈색 눈",
+      "field": "eye_color"
+    },
+    {
+      "value": "green",
+      "ko": "녹색 눈",
+      "field": "eye_color"
+    },
+    {
+      "value": "gray",
+      "ko": "회색 눈",
+      "field": "eye_color"
+    },
+    {
+      "value": "hazel",
+      "ko": "헤이즐 눈",
+      "field": "eye_color"
+    }
+  ],
   "_note": "화면은 ko, 서버로 보내는 값은 value. value 는 어휘집 문자열이라 한 글자도 바꾸면 안 된다. 이 파일은 batch/ingest/build_form_labels.py 가 만든다 — 직접 고치지 말 것",
-  "vocab_version": "0.4",
+  "vocab_version": "0.5",
   "highlights_groups": [
     {
       "group": "concern",
@@ -16,6 +113,150 @@
       "group": "texture",
       "ko": "제형·마무리",
       "hint": "해당 없으면 비워도 됩니다"
+    }
+  ],
+  "ingredient": [
+    {
+      "value": "Hyaluronic Acid",
+      "ko": "히알루론산"
+    },
+    {
+      "value": "Silicone",
+      "ko": "실리콘"
+    },
+    {
+      "value": "Vitamin C",
+      "ko": "비타민C"
+    },
+    {
+      "value": "Squalane",
+      "ko": "스쿠알란"
+    },
+    {
+      "value": "Probiotic / Ferment",
+      "ko": "발효·프로바이오틱"
+    },
+    {
+      "value": "Green Tea",
+      "ko": "녹차"
+    },
+    {
+      "value": "Peptides",
+      "ko": "펩타이드"
+    },
+    {
+      "value": "Aloe",
+      "ko": "알로에"
+    },
+    {
+      "value": "Lactic Acid",
+      "ko": "락틱애시드"
+    },
+    {
+      "value": "Licorice",
+      "ko": "감초"
+    },
+    {
+      "value": "SPF",
+      "ko": "자외선 차단"
+    },
+    {
+      "value": "Shea Butter",
+      "ko": "시어버터"
+    },
+    {
+      "value": "Panthenol (B5)",
+      "ko": "판테놀(B5)"
+    },
+    {
+      "value": "Niacinamide",
+      "ko": "나이아신아마이드"
+    },
+    {
+      "value": "Jojoba",
+      "ko": "호호바"
+    },
+    {
+      "value": "AHA/Glycolic Acid",
+      "ko": "AHA·글리콜산"
+    },
+    {
+      "value": "Salicylic Acid",
+      "ko": "살리실산(BHA)"
+    },
+    {
+      "value": "Ceramide",
+      "ko": "세라마이드"
+    },
+    {
+      "value": "Rosehip / Rose",
+      "ko": "로즈힙·장미"
+    },
+    {
+      "value": "Caffeine",
+      "ko": "카페인"
+    },
+    {
+      "value": "Urea",
+      "ko": "요소(우레아)"
+    },
+    {
+      "value": "Adenosine",
+      "ko": "아데노신"
+    },
+    {
+      "value": "Allantoin",
+      "ko": "알란토인"
+    },
+    {
+      "value": "Retinol",
+      "ko": "레티놀"
+    },
+    {
+      "value": "Zinc",
+      "ko": "아연"
+    },
+    {
+      "value": "Alcohol Denat",
+      "ko": "변성알코올"
+    },
+    {
+      "value": "Centella (Cica)",
+      "ko": "센텔라(시카)"
+    },
+    {
+      "value": "Willow Bark",
+      "ko": "버드나무 껍질"
+    },
+    {
+      "value": "Collagen",
+      "ko": "콜라겐"
+    },
+    {
+      "value": "Mineral Oil / Petrolatum",
+      "ko": "미네랄오일·바셀린"
+    }
+  ],
+  "price_bin": [
+    {
+      "value": "~20",
+      "ko": "2만원대 이하"
+    },
+    {
+      "value": "20-35",
+      "ko": "2~4만원대"
+    },
+    {
+      "value": "35-50",
+      "ko": "4~6만원대"
+    },
+    {
+      "value": "50-80",
+      "ko": "6~10만원대"
+    },
+    {
+      "value": "80+",
+      "ko": "10만원대 이상"
     }
   ],
   "secondary_category": [
