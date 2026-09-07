@@ -6,7 +6,7 @@
 왜 필요한가
     등록이 성공하고 화면에도 보이는데 추천에만 안 뜨는 상황이 가장 나쁘다.
     어휘에 없는 값은 매칭되지 않고, 매칭되지 않으면 그 블록이 0 이 되어 코사인
-    유사도가 낮아진다. 아무 에러도 나지 않으므로 Tenant 도 우리도 모른다.
+    유사도가 낮아진다. 아무 에러도 나지 않으므로 입점 사업자도 우리도 모른다.
     그래서 등록 시점에 두 가지를 본다 — 계약을 지켰는가, 그리고 **실제로 벡터가
     만들어지는가.**
 
@@ -53,7 +53,7 @@ try:
 except Exception:
     pass
 
-# 계약 §3 — Tenant 가 입력하는 필수 필드
+# 계약 §3 — 입점 사업자가 입력하는 필수 필드
 REQUIRED_INPUT = ["product_name", "brand_name", "secondary_category",
                   "tertiary_category", "ingredients", "price_krw"]
 
