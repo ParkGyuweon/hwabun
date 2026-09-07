@@ -39,8 +39,9 @@
      → recommender.py  점수 + MMR
      → batch/ingest/data/serving/  서빙용 산출물
           ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
-   대표 지표 test Recall@10 = 23.39% (롱테일 31.29%) — docs/ai/evaluation-framework.md
-   ┈┈▶ CF·학습 결합을 얹으면 깨끗한 홀드아웃에서 24.15% → 43.9% (측정·미채택)
+   대표 지표 Recall@10 = 38.86% (롱테일 40.61%) — CBF + CF 가점, test 1,971명
+   ┈┈▶ CBF 단독이던 23.39% 에서 CF 채택으로 올랐다 (부록 S)
+   ┈┈▶ 학습 결합(LTR)까지 얹으면 43.9% — 팀 검토 중, 미채택
 
 [ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
 ```

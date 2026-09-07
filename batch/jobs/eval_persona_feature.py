@@ -31,7 +31,8 @@ from eval_metadata import load as load_metadata            # noqa: E402
 from persona_feature import load as load_affinity          # noqa: E402
 from persona_split import select as select_split           # noqa: E402
 from product_encoder import Encoder                        # noqa: E402
-from recommender import (BRAND_W, LAMBDA_MMR, SCHEDULE,    # noqa: E402
+from recommender import (load_cooc, cf_bonus, CF_BETA,
+                        BRAND_W, LAMBDA_MMR, SCHEDULE,    # noqa: E402
                          Recommender, brand_match, schedule_for)
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -60,7 +61,7 @@ def weights(schedule, n_seed):
 
 
 def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
-             brands=None, known=None):
+             brands=None, known=None, cooc=None, supporters=None):
     """조건별 적중 여부를 사람 단위로 모은다. 같은 사람을 여러 조건에 쓰므로 짝비교가 된다
 
     조건은 **우리가 골랐던 것들**이다. valid 에서 같은 선택이 나오는지 확인하고,
@@ -98,6 +99,12 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
             base = w1 * cos + w2 * at + w3 * prior
             if bm is not None:
                 base = base + BRAND_W * bm
+            # CF 가점 — 여기서는 시드가 곧 "전환한 상품" 이다.
+            # 서빙에서는 state.converted 를 쓰고 오프라인에서는 시드를 쓴다
+            if cooc is not None:
+                cfb = cf_bonus(cooc, si, cand, supporters)
+                if cfb is not None:
+                    base = base + CF_BETA * cfb
             x = np.where(cand, base, -np.inf)
             if lam_mmr >= 1.0:
                 top = np.argsort(-x)[:K]
@@ -121,6 +128,11 @@ def paired_ci(a, b, rng, boot=BOOT):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None, help="페르소나 수 (기본 전원)")
+    # CF 가점은 **채택됐다** (2026-09-07). 기본이 켬이고 끄려면 --no-cf 다.
+    # 산출물이 없으면 조용히 꺼지지 않고 경고를 찍는다 — 조용히 꺼지면
+    # "CF 를 켰다고 생각한 수치" 가 사실은 CBF 값이 된다.
+    ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
+                    help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
     ap.add_argument("--split", choices=("train", "valid", "test", "all"),
                     default="valid",
                     help="기본은 valid — 파라미터를 고르는 집합이다. "
@@ -140,8 +152,17 @@ def main():
     affinity = load_affinity(index)
     brands = [p["brand_name"] for p in e.products]
     known = set(e.blk["brand"]["vocab"])       # 어휘집에 있는 브랜드
+    cooc, supporters = load_cooc() if a.cf else (None, None)
+    if a.cf and cooc is None:
+        print("⚠️ CF 가점이 켜져 있는데 item_cooc.npz 가 없습니다 — "
+              "CBF 단독으로 돕니다. `python batch/jobs/build_cooc.py` 를 먼저 도십시오")
+    elif a.cf:
+        print("CF 가점 켬 (β=1.0 · 가점 전용)")
+    else:
+        print("CF 가점 끔 — CBF 단독")
     recommender = Recommender(V, index, prior, affinity=affinity, brands=brands,
-                              known_brands=known)
+                              known_brands=known,
+                              cooc=cooc, supporters=supporters)
     profiles = {p["persona_id"]: p
                 for p in json.load(open(PERSONAS, encoding="utf-8"))}
     rows = load_metadata(split=a.split)
@@ -161,7 +182,8 @@ def main():
         print("  ⚠ 전원 집합이다. 파라미터 선택에도 최종 보고에도 쓰지 말 것")
 
     hits, lt, seeds, elapsed = evaluate(personas, V, prior, pop_rank, affinity,
-                                        index, recommender, brands, known)
+                                        index, recommender, brands, known,
+                                        cooc=cooc, supporters=supporters)
     rng = np.random.default_rng(42)
     base = hits["현행 (스케줄+MMR)"]
 

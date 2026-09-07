@@ -39,7 +39,8 @@ from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
-from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
+from recommender import (load_cooc, cf_bonus,
+                        BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for)
 from user_vector import UserVector                           # noqa: E402
 
@@ -133,6 +134,16 @@ def run_persona(persona, history, target, ctx):
     # seed(재생한 상품)는 후보에서 뺀다. target 은 정답이라 빼지 않는다
     blocked = {index[r["group_id"]] for r in history}
     blocked.discard(index[target])
+
+    # CF 가점 — 서빙과 같게 **전환한 상품**을 쓴다.
+    # 이 축은 이벤트를 실제로 재생하므로 state.converted 가 채워져 있다.
+    if recommender.cooc is not None:
+        cand = np.ones(len(M), bool)
+        cand[list(blocked)] = False
+        rows = [index[g] for g in state.converted if g in index]
+        cfb = cf_bonus(recommender.cooc, rows, cand, recommender.supporters)
+        if cfb is not None:
+            scores = scores + recommender.cf_beta * cfb
     top = served_top(scores, blocked, recommender)
     masked = scores.copy()
     for i in blocked:
@@ -146,6 +157,11 @@ def run_persona(persona, history, target, ctx):
 
 def main():
     ap = argparse.ArgumentParser()
+    # CF 가점은 **채택됐다** (2026-09-07). 기본이 켬이고 끄려면 --no-cf 다.
+    # 산출물이 없으면 조용히 꺼지지 않고 경고를 찍는다 — 조용히 꺼지면
+    # "CF 를 켰다고 생각한 수치" 가 사실은 CBF 값이 된다.
+    ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
+                    help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
     ap.add_argument("--split", choices=("train", "valid", "test", "all"),
                     default="valid")
     ap.add_argument("--limit", type=int, default=None)
@@ -156,9 +172,18 @@ def main():
     index = {p["product_id"]: i for i, p in enumerate(encoder.products)}
     prior = np.asarray(encoder.prior(), dtype=np.float32)
     affinity = load_affinity(index)
+    cooc, supporters = load_cooc() if a.cf else (None, None)
+    if a.cf and cooc is None:
+        print("⚠️ CF 가점이 켜져 있는데 item_cooc.npz 가 없습니다 — "
+              "CBF 단독으로 돕니다. `python batch/jobs/build_cooc.py` 를 먼저 도십시오")
+    elif a.cf:
+        print("CF 가점 켬 (β=1.0 · 가점 전용)")
+    else:
+        print("CF 가점 끔 — CBF 단독")
     recommender = Recommender(M, index, prior, affinity=affinity,
                               brands=[p["brand_name"] for p in encoder.products],
-                              known_brands=set(encoder.blk["brand"]["vocab"]))
+                              known_brands=set(encoder.blk["brand"]["vocab"]),
+                              cooc=cooc, supporters=supporters)
     ctx = (M, index, prior, affinity, recommender)
 
     profiles = {p["persona_id"]: p
