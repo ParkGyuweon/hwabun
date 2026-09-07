@@ -34,6 +34,10 @@ import sys
 
 import numpy as np
 
+# 콘솔이 cp949 면 "—" 나 "⚠️" 에서 UnicodeEncodeError 로 죽는다.
+# 하필 CF 경고문이 그 문자를 쓰므로, 경고를 못 보고 죽는 일이 생긴다.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)

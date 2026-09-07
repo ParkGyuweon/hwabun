@@ -19,7 +19,7 @@
 >
 > 학습 결합(LTR)까지 얹으면 43.9% 인데 **아직 채택 전**입니다 (부록 R).
 
-추천 점수를 구성하는 4개 요소의 **입력 → 처리 → 출력 스키마 → 저장소 → 소비처**를 정의합니다.
+추천 점수를 구성하는 요소의 **입력 → 처리 → 출력 스키마 → 저장소 → 소비처**를 정의합니다.
 
 ```
 score(u, i) = w1 x cos(v_u⁺, v_i)       <- Product Vector,  User Behavior Vector (긍정 축)
@@ -27,7 +27,12 @@ score(u, i) = w1 x cos(v_u⁺, v_i)       <- Product Vector,  User Behavior Vect
             + w2 x attr_affinity(u, i)  <- Attribute Affinity
             + w3 x prior(i)             <- Product Prior
             + w_b x brand_unknown(u, i) <- 어휘집 밖 브랜드 폴백, w_b = 0.60
+            + β  x cf_bonus(u, i)       <- Item Co-occurrence (§4-1), β = 1.0
 ```
+
+> **`cf_bonus` 는 2026-09-07 에 추가된 항입니다** (§4-1). 가점 전용이라
+> 이력이 없는 상품을 끌어내리지 않고, 산출물(`item_cooc.npz`)이 없으면 항이 통째로
+> 꺼져 **이전과 한 자리도 다르지 않게** 동작합니다.
 
 ### `brand_unknown` — 어휘집에 없는 브랜드를 위한 폴백 (2026-09-03)
 
@@ -781,6 +786,7 @@ GET /api/recommend?persona_id={id}&size=10
 3. v_u⁺ = positive_u_sum / positive_w_sum   (positive_w_sum = 0이면 생략)
    v_u⁻ = negative_u_sum / negative_w_sum   (negative_w_sum = 0이면 생략)
 4. scores = w1 x (V @ v_u⁺) − λ x (V @ v_u⁻) + w2 x attr_affinity + w3 x prior
+             + w_b x brand_unknown(전환 상품의 브랜드, 어휘집)    ← 문서 머리말과 같은 항
              + β x cf_bonus(전환 상품, 동시발생)        ← 2026-09-07 추가 (§4-1)
 5. 노출 정책 적용 (아래)
 6. MMR 다양성 보정 (λ_mmr = 0.8, 후보 풀 상위 30개 — λ_mmr 은 점수 쪽 계수라 클수록 약하게 걸리고 1.0 이면 끈 것과 같음)
@@ -839,11 +845,13 @@ GET /api/recommend?persona_id={id}&size=10
       "breakdown": {
         "cosine": 0.6120,
         "attr_affinity": 0.4710,
-        "prior": 1.0000
+        "prior": 1.0000,
+        "cf": 0.8320
       },
       "reason": {
         "attribute": "지성 피부 사용자가 평균보다 2.6배 많이 선택",
-        "content": "회원님이 본 클렌저와 성분 구성이 유사"
+        "content": "회원님이 본 클렌저와 성분 구성이 유사",
+        "cf": "회원님이 담은 상품을 고른 사람들이 같이 고른 상품"
       }
     }
   ],
@@ -980,6 +988,8 @@ FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서
 |---|---|
 | 콘텐츠 벡터 블록 가중치 | 측정 결과 같은 카테고리 이웃 91.1%로 과도. 중간안 A 권고, 담당자 확정 대기 |
 | `hair_color` / `eye_color` 존치 | 판별력 최하위. `hair_color`는 연령 대리변수로 의심 |
-| MMR λ_mmr | **0.8 확정** (2026-09-01). valid 에서 정확도는 어느 λ 에서도 유의차 없음 → **다양성 기준으로 채택**. 목록당 고유 브랜드 3.7 → 4.2개, 한 브랜드 최대 점유 61.3% → 59.0%. 근거는 `docs/ai/recommendation-design.md` 8절 |
+| MMR λ_mmr | **0.8 확정** (2026-09-01). valid 에서 정확도는 어느 λ 에서도 유의차 없음 → **다양성 기준으로 채택**. 목록당 고유 브랜드 3.7 → 4.2개, 한 브랜드 최대 점유 61.3% → 59.0%. 근거는 `docs/ai/recommendation-design.md` 8절. **CF 채택 후 재스윕하지 않았다** — 근거가 다양성 쪽이고 CF 가 브랜드 쏠림을 오히려 풀어 주기 때문 (부록 S) |
 | 시간 감쇠 τ | 30일. 생성 로그의 시간 범위에 따라 조정 |
 | `w1` 항 검증 | 행동 로그 생성 후 가능 |
+| CF 가점 (§4-1) | **채택** (2026-09-07). β = 1.0 · 가점 전용 · 지지자 3명 미만 차단 |
+| 학습 결합 (LTR) | **미채택 · 팀 검토 중.** 채택하면 §5 처리 4단계가 모델 추론으로 바뀌고 `breakdown` 항별 분해가 사라진다. 1·2·5·6·7 단계와 §2·§2-1·§4-1·§5-1 은 그대로 (`docs/ai/evaluation-framework.md` 부록 R) |
