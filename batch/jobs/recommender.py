@@ -43,6 +43,55 @@ VIEW_CAP = 2
 # 재현: Research/eval/eval_brand_relation_feature_20260903.py
 BRAND_W = 0.60
 
+# ── CF 가점 (2026-09-07, Jira 174) ────────────────────────────────────────
+#
+# **가점 전용이다.** 두 점수를 minmax 로 정규화해 섞으면 CF 이력이 없는 상품이
+# 0점(최하위)을 받아 **신규 등록 상품을 밑바닥으로 민다** — 정답이 신규 상품일 때
+# 24.15% -> 1.55% 로 사실상 사라진다. 가점 전용은 CBF 를 안 건드려 18.20% 로
+# 살아 있다. 입점 플랫폼에서 이 차이는 기능의 유무다.
+#
+#     score += CF_BETA x (cf / cf 최대)      이력이 없으면 **중앙값**을 준다
+#
+# 이력 없는 상품에 0 을 주면 "아무도 안 샀다" 가 아니라 "모른다" 를 나쁜 것으로
+# 취급하게 된다. 중앙값을 주면 순위를 흔들지 않고 비켜선다 (15.90 -> 18.20%).
+#
+# 지지자(그 상품을 긍정 평가한 사람 중 다른 상품도 산 사람)가 CF_MIN_SUPPORT
+# 미만이면 가점을 막는다. 0명 구간에서 CF 를 얹으면 -0.46%p 손해다 — 데이터가
+# 거의 없을 때의 CF 값은 노이즈이고 가점 전용이어도 순위를 흔든다.
+#
+# 근거: docs/ai/evaluation-framework.md 부록 N·O·P.
+CF_BETA = 1.0
+CF_MIN_SUPPORT = 3
+
+
+def cf_bonus(cooc, rows, cand=None, supporters=None,
+             min_support=CF_MIN_SUPPORT):
+    """동시발생에서 CF 가점 항을 만든다. 이력이 없는 상품에는 중앙값을 준다.
+
+    cooc:       (상품수, 상품수) 아이템-아이템 유사도. None 이면 항이 꺼진다
+    rows:       사용자가 전환한 상품의 행 번호
+    cand:       후보 마스크. 정규화를 **후보 안에서** 한다 (밖까지 넣으면 흔들린다)
+    supporters: 상품별 지지자 수. 주면 임계 미만 상품의 가점을 막는다
+    """
+    if cooc is None or not rows:
+        return None
+    cf = np.asarray(cooc)[list(rows)].sum(axis=0)
+    if supporters is not None:
+        cf = np.where(np.asarray(supporters) >= min_support, cf, 0.0)
+    m = np.ones(len(cf), bool) if cand is None else np.asarray(cand, bool)
+    if not m.any():
+        return None
+    hi = float(cf[m].max())
+    if hi <= 0:
+        return None
+    v = cf / hi
+    # 중앙값은 **이력이 있는 상품끼리** 잰다. 후보 전체에서 재면 이력 없는 상품이
+    # 많을 때 중앙값이 0 이 되어 중립 가점이 무력화된다 — 신규 브랜드가 대부분인
+    # 플랫폼 초기가 정확히 그 상태다. 필요한 순간에 안 듣는 것을 막는다.
+    seen = v[m & (v > 0)]
+    med = float(np.median(seen)) if seen.size else 0.0
+    return np.where(v > 0, v, med)
+
 
 def brand_match(brands, rows, known=None):
     """rows 의 브랜드 집합에 속하면 1, 아니면 0 인 (상품수,) 배열.
@@ -136,7 +185,8 @@ def prior_in_catalog(prior, rows):
 
 class Recommender:
     def __init__(self, matrix, index, prior, affinity=None, lam=LAMBDA,
-                 catalog=None, brands=None, known_brands=None):
+                 catalog=None, brands=None, known_brands=None,
+                 cooc=None, supporters=None, cf_beta=CF_BETA):
         """matrix (상품수, 차원) · index product_id->행 · prior 인기도 0~1
            affinity: 페르소나 속성 친화도를 내주는 함수 f(persona) -> (상품수,) 배열
            catalog: 이 사이트가 파는 상품(id 또는 행 번호). 주면 후보를 그것으로
@@ -156,6 +206,10 @@ class Recommender:
                       else prior_in_catalog(prior, self.catalog))
         self.affinity = affinity
         self.lam = lam
+        # CF 를 안 주면 항이 통째로 꺼져 **기존과 한 자리도 다르지 않다.**
+        self.cooc = cooc
+        self.supporters = supporters
+        self.cf_beta = cf_beta
 
     def score(self, state, persona=None, n_seed=None):
         """state: user_vector.UserVector"""
@@ -177,6 +231,15 @@ class Recommender:
         if self.affinity is not None and persona is not None:
             s += w2 * self.affinity(persona)
         s += w3 * self.prior
+        if self.cooc is not None:
+            rows = [self.idx[g] for g in state.converted if g in self.idx]
+            cand = None
+            if self.catalog is not None:
+                cand = np.zeros(len(self.M), bool)
+                cand[self.catalog] = True
+            bonus = cf_bonus(self.cooc, rows, cand, self.supporters)
+            if bonus is not None:
+                s = s + self.cf_beta * bonus
         return s
 
     def mmr(self, scores, order, k, lam):
