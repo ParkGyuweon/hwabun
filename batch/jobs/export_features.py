@@ -29,7 +29,8 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from persona_feature import AFFINITY_CSV, ATTRS, load as load_affinity  # noqa: E402
 from product_encoder import Encoder                                     # noqa: E402
-from recommender import (BRAND_W, LAMBDA, SCHEDULE,                     # noqa: E402
+from recommender import (BRAND_W, CF_BETA, LAMBDA, SCHEDULE,            # noqa: E402
+                        cf_bonus, load_cooc,
                          brand_match, schedule_for)
 
 OUT_DIR = os.path.join(ROOT, "batch", "ingest", "data", "serving")
@@ -97,6 +98,9 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
     """
     brands = [q["brand_name"] for q in e.products]
     known = set(e.blk["brand"]["vocab"])       # 어휘집 밖 브랜드에만 폴백을 건다
+    cooc, supporters = load_cooc()
+    print("  골든 " + ("CF 가점 포함" if cooc is not None else
+                       "**CF 없이** (item_cooc.npz 가 없다)"))
     cases = []
     for p in personas:
         seeds = []
@@ -115,6 +119,14 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
         bm = brand_match(brands, si, known)   # 어휘집 밖 브랜드 폴백 (0.5)
         if bm is not None:
             score = score + BRAND_W * bm
+        # CF 가점 (계약 §4-1). **이 파일이 CBF 기준이면 자바 구현이 CBF 순위를
+        # 재현하게 되고, 그러면 검증이 통과해도 서빙이 틀린다.**
+        if cooc is not None:
+            cand = np.ones(len(matrix), bool)
+            cand[si] = False
+            cfb = cf_bonus(cooc, si, cand, supporters)
+            if cfb is not None:
+                score = score + CF_BETA * cfb
         score[si] = -np.inf                      # 시드는 후보에서 뺀다
         top = np.argsort(-score)[:TOP_K]
         cases.append({
