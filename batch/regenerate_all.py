@@ -97,8 +97,12 @@ STEPS = [
      [os.path.join(DATA, "serving", "product_feature.jsonl"),
       os.path.join(DATA, "serving", "attribute_affinity.csv"),
       os.path.join(DATA, "serving", "ranking_golden.json")], False),
+    # 배너 축 목록은 어휘집·친화도·인기도에서 나오므로 그 뒤에 온다.
+    # 어휘가 늘었는데 목록을 안 다시 만들면 새 값이 배너에 영영 안 뜬다.
+    (10, "배너 축 6종 상품 목록",
+     ["batch/jobs/banner_axes.py"],
+     [os.path.join(DATA, "serving", "banner_axes.json")], False),
     # 대시보드 파생 산출물. 인코더·친화도·concern 에서 나오므로 그 뒤에 온다.
-    # 번호가 겹치면 뒤에 오는 쪽이 밀린다 — 다른 브랜치에서 10번을 쓸 수 있다.
     (11, "대시보드용 파생 산출물 4종",
      ["batch/jobs/export_dashboard.py"],
      [os.path.join(DATA, "serving", "product_ingredient_position.csv"),

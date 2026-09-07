@@ -27,6 +27,50 @@ OUT = os.path.join(ROOT, "contracts", "product-form-labels-ko.json")
 
 # 화면 문구. 값(key)은 어휘집과 한 글자도 달라선 안 된다
 KO = {
+    # 배너 문구에 쓰려고 넓혔다 (Jira 172). 등록 폼은 성분을 전성분 텍스트로
+    # 받으므로 폼에는 안 쓰이지만, 배너는 "나이아신아마이드가 들어간" 처럼
+    # 값 하나를 그대로 문구에 넣는다.
+    "ingredient": {
+        "Hyaluronic Acid": "히알루론산",
+        "Silicone": "실리콘",
+        "Vitamin C": "비타민C",
+        "Squalane": "스쿠알란",
+        "Probiotic / Ferment": "발효·프로바이오틱",
+        "Green Tea": "녹차",
+        "Peptides": "펩타이드",
+        "Aloe": "알로에",
+        "Lactic Acid": "락틱애시드",
+        "Licorice": "감초",
+        "SPF": "자외선 차단",
+        "Shea Butter": "시어버터",
+        "Panthenol (B5)": "판테놀(B5)",
+        "Niacinamide": "나이아신아마이드",
+        "Jojoba": "호호바",
+        "AHA/Glycolic Acid": "AHA·글리콜산",
+        "Salicylic Acid": "살리실산(BHA)",
+        "Ceramide": "세라마이드",
+        "Rosehip / Rose": "로즈힙·장미",
+        "Caffeine": "카페인",
+        "Urea": "요소(우레아)",
+        "Adenosine": "아데노신",
+        "Allantoin": "알란토인",
+        "Retinol": "레티놀",
+        "Zinc": "아연",
+        "Alcohol Denat": "변성알코올",
+        "Centella (Cica)": "센텔라(시카)",
+        "Willow Bark": "버드나무 껍질",
+        "Collagen": "콜라겐",
+        "Mineral Oil / Petrolatum": "미네랄오일·바셀린",
+    },
+    # 경계는 어휘집 `price_bin_edges` 가 정본이다. 여기 문구의 숫자를 고칠 때
+    # 경계도 같이 봐야 한다 — 달러 기준이고 원화 전환은 아직 미정이다.
+    "price_bin": {
+        "~20": "2만원대 이하",
+        "20-35": "2~4만원대",
+        "35-50": "4~6만원대",
+        "50-80": "6~10만원대",
+        "80+": "10만원대 이상",
+    },
     "secondary_category": {
         "Cleansers": "클렌저",
         "Eye Care": "아이케어",
@@ -97,6 +141,30 @@ KO = {
 }
 
 # highlights 는 세 갈래가 한 배열로 들어간다. 화면 묶음만 나눠 준다
+# 세그먼트는 어휘집 블록이 아니라 `affinity_lift.csv` 의 세그먼트다.
+# 배너 축 `segment` 문구에 쓴다 — "지성 피부에서 반응이 좋았던".
+SEGMENT_KO = [
+    {"value": "combination", "ko": "복합성 피부", "field": "skin_type"},
+    {"value": "dry", "ko": "건성 피부", "field": "skin_type"},
+    {"value": "normal", "ko": "중성 피부", "field": "skin_type"},
+    {"value": "oily", "ko": "지성 피부", "field": "skin_type"},
+    {"value": "fair", "ko": "밝은 톤", "field": "skin_tone"},
+    {"value": "light", "ko": "라이트 톤", "field": "skin_tone"},
+    {"value": "medium", "ko": "미디엄 톤", "field": "skin_tone"},
+    {"value": "tan", "ko": "탠 톤", "field": "skin_tone"},
+    {"value": "deep", "ko": "딥 톤", "field": "skin_tone"},
+    {"value": "black", "ko": "검은 모발", "field": "hair_color"},
+    {"value": "brown", "ko": "갈색 모발", "field": "hair_color"},
+    {"value": "blonde", "ko": "금발", "field": "hair_color"},
+    {"value": "auburn", "ko": "적갈색 모발", "field": "hair_color"},
+    {"value": "red", "ko": "붉은 모발", "field": "hair_color"},
+    {"value": "blue", "ko": "푸른 눈", "field": "eye_color"},
+    {"value": "brown", "ko": "갈색 눈", "field": "eye_color"},
+    {"value": "green", "ko": "녹색 눈", "field": "eye_color"},
+    {"value": "gray", "ko": "회색 눈", "field": "eye_color"},
+    {"value": "hazel", "ko": "헤이즐 눈", "field": "eye_color"},
+]
+
 GROUPS = [
     {"group": "concern", "ko": "피부 고민",
      "hint": "가장 중요합니다. 해당하는 것을 모두 고르세요"},
@@ -110,6 +178,7 @@ def main():
     blocks = {b["name"]: b for b in vocab["blocks"]}
 
     out = {
+        "segment": SEGMENT_KO,
         "_note": "화면은 ko, 서버로 보내는 값은 value. value 는 어휘집 문자열이라 "
                  "한 글자도 바꾸면 안 된다. 이 파일은 "
                  "batch/ingest/build_form_labels.py 가 만든다 — 직접 고치지 말 것",
