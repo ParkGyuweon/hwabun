@@ -1,0 +1,100 @@
+{
+  "seed": 43,
+  "n_total": 2000,
+  "n_agent": 0,
+  "n_code": 2000,
+  "pool_size": 20435,
+  "min_positive": 3,
+  "polarity_cut": {
+    "pos_min": 4,
+    "neg_max": 2
+  },
+  "n_strata": 80,
+  "inconsistent_attr_users": 2741,
+  "attr_rule": "latest_review",
+  "differs_from_mode": 1077,
+  "distribution": [
+    {
+      "field": "skin_type",
+      "value": "combination",
+      "population_pct": 55.252,
+      "sample_pct": 55.15
+    },
+    {
+      "field": "skin_type",
+      "value": "dry",
+      "population_pct": 19.981,
+      "sample_pct": 20.05
+    },
+    {
+      "field": "skin_type",
+      "value": "normal",
+      "population_pct": 13.103,
+      "sample_pct": 13.15
+    },
+    {
+      "field": "skin_type",
+      "value": "oily",
+      "population_pct": 11.664,
+      "sample_pct": 11.65
+    },
+    {
+      "field": "skin_tone",
+      "value": "light",
+      "population_pct": 52.01,
+      "sample_pct": 52.0
+    },
+    {
+      "field": "skin_tone",
+      "value": "fair",
+      "population_pct": 28.719,
+      "sample_pct": 28.7
+    },
+    {
+      "field": "skin_tone",
+      "value": "medium",
+      "population_pct": 13.803,
+      "sample_pct": 13.8
+    },
+    {
+      "field": "skin_tone",
+      "value": "tan",
+      "population_pct": 3.108,
+      "sample_pct": 3.2
+    },
+    {
+      "field": "skin_tone",
+      "value": "deep",
+      "population_pct": 2.36,
+      "sample_pct": 2.3
+    },
+    {
+      "field": "review_bucket",
+      "value": "3",
+      "population_pct": 54.254,
+      "sample_pct": 54.2
+    },
+    {
+      "field": "review_bucket",
+      "value": "4",
+      "population_pct": 21.257,
+      "sample_pct": 21.25
+    },
+    {
+      "field": "review_bucket",
+      "value": "5-6",
+      "population_pct": 15.463,
+      "sample_pct": 15.5
+    },
+    {
+      "field": "review_bucket",
+      "value": "7+",
+      "population_pct": 9.026,
+      "sample_pct": 9.05
+    }
+  ],
+  "population_avg_rating": 4.6043,
+  "sample_avg_rating": 4.6022,
+  "population_avg_reviews": 5.601,
+  "sample_avg_reviews": 5.629
+}
