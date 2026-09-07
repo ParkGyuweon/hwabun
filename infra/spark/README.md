@@ -112,13 +112,16 @@ PowerShell에서는 아래 명령으로 인프라와 Pipeline을 관리한다.
 
 `run-batch`는 `clean_events_job.py` → `derive_facts_job.py` →
 `build_marts_job.py` → `validate_pipeline_job.py`를 순서대로 실행한다. Q2는
-`source`·`tenant_id`를 반영하고, Q3는 `dim_product`, `section_dwell_agg`,
-`content_interest_fact`를 함께 생성한다. 앞선 Job이 실패하면 다음 Job은 실행하지
-않는다. Validation Report는 `data/validation/pipeline-report.json`에 저장된다.
+`source`를 반영하고, Q3는 `dim_product`, `section_dwell_agg`,
+`content_interest_fact`와 상품의 `brand_id` 보강을 함께 생성한다. 이번 후속 작업은
+`tenant_id` 의존성 제거까지 포함하며, `dim_brand.business_id` 연결과 사업자별 Fact·Mart
+귀속은 후속 Jira에서 진행한다. 앞선 Job이 실패하면 다음 Job은 실행하지 않는다.
+Validation Report는 `data/validation/pipeline-report.json`에 저장된다.
 
 Q3의 가중치는 `frontend/src/types/log.ts`를 실행 원본으로 사용한다. Docker 실행 시
-Spark master/worker에 `frontend/`와 `batch/`를 읽기 전용으로 마운트해야 하며, 현재
-`tenant_id`가 없는 `0.2.0-draft` row는 Tenant 격리 Mart에서 제외된다.
+Spark master/worker에 `frontend/`와 `batch/`를 읽기 전용으로 마운트해야 한다. 상품이
+없는 플랫폼 공통 Event는 사업자·브랜드에 임의 귀속하지 않으며, 사업자 대시보드 접근
+권한은 Backend가 검증한다.
 
 Linux/macOS/Git Bash에서는 `bash infra/spark/run-pipeline.sh <action>`을 사용한다.
 지원 action은 `up`, `start-q1`, `stop-q1`, `run-batch`, `validate`, `status`, `down`이다.

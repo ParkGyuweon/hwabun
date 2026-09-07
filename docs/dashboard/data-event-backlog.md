@@ -68,7 +68,7 @@ restock           쓰던 걸 다시 사서
 
 | event_name | 추가 속성 | 왜 |
 |---|---|---|
-| **모든 이벤트** | `brand_id: string` (공통 선택, `storefront_*` 옆) | 봉투에 브랜드가 없다. 상품 없는 이벤트(`page_view`·`filter_change`)의 브랜드가 정해지지 않는다 |
+| **브랜드 자체 대상 Event(향후)** | `brand_id: string` (선택) | 상품 없는 플랫폼 공통 Event에는 기록하지 않고, 브랜드관 도입 시 별도 계약으로 명시 |
 | `text_selection` / `text_copy` | `selection_kind: ingredient \| claim \| usage \| price \| other` | 지금은 성분만 매칭, 나머지는 버림. 분류만 남기고 원문은 여전히 저장하지 않는다 |
 | `section_view` / `section_dwell` (`content_kind=highlight_badge`) | `badge_id: string` (clean 태그 16종 값) | "Vegan 배지는 읽히나" 를 재려면 배지 단위 식별이 필요 |
 | `variant_select` | `variant_kind: size \| shade \| other` | 용량 선택(충성 신호)과 색상 선택(톤 신호)을 구분 |
@@ -219,7 +219,7 @@ trend_daily/2026-09-03.json   →  (1) DW `trend_daily` 마트 append
 | S2 | 같은 상품 중복 리뷰를 평균으로 합침 | 중복 리뷰 = 시간 간격을 둔 **재구매**로 방출 (`restock` 이유) | 리뷰 데이터에 이미 있는 재구매 신호를 살린다 |
 | S3 | 한 페르소나 = 시드 세션들 + "지금" 세션 1개 | 마지막 5일 안에 **재방문 2~3회**(둘러보기만, 담기만, 구매) | 실사용자는 한 번에 안 산다. 세션 간 hesitation 이 생긴다 |
 | S4 | 라인 재구매 없음 | 같은 브랜드 다른 상품 구매 확률 30.6% | 실측 정의: holdout 정답이 시드와 같은 브랜드인 비율(무작위 3.5%). 200개·55브랜드 조건값 — 인용 시 recommendation-design.md 4-1 주의 문구 병기 |
-| S5 | `brand_id` 없음 | 상품의 `brand_name` 을 `brand_id` 로 모든 이벤트에 | §2-2 |
+| S5 | `brand_id` 없음 | 상품 대상 Event는 `product_id`를 기준으로 `dim_product`에서 `brand_id`를 파생 | 통합몰 귀속 계약 |
 | S6 | 설문 없음 | 스타일 축 → 이유 확률 + 건너뛰기 30% | §4-3 |
 | S7 | 진열 `storefront_*` 는 프론트만 실음 | 브랜드별 진열 프리셋을 생성기도 실음 | 진열 효과 분석이 합성 로그에서도 되게 |
 
@@ -237,11 +237,11 @@ PA 100명은 프론트를 실제로 조작하므로 S1·S6 만 프롬프트에 �
 | **실제 브랜드 55개 = 입점 브랜드 55개** | 브랜드당 평균 3.6개 상품 = 1인 브랜드 규모와 비슷. 재구매·친화도 신호 보존 | ✔ |
 | 55개 중 상품 5개 이상 브랜드만 대시보드 시연 | 표본 규칙(R2)에 걸리지 않는 브랜드로 화면을 보인다. 나머지는 "표본 부족 → 흐림" 이 정직한 화면 | ✔ 시연 전략 |
 
-분산 처리 증명: Kafka 키는 `session_id` 그대로 두고(세션화에 필요), Spark 마트 단계에서
-`partitionBy(tenant_id)` 로 A층 마트를 입점 Tenant별로 쓰고, 커먼즈 마트는 코호트 단위로
-따로 만든다. "브랜드 55개가 각자 파티션을 갖고, 코호트 마트는 그 위에서 규칙을 통과한
-것만 모은다" 가 한 장의 그림으로 나온다. 코호트 최소 5개 규칙은 55개 브랜드에서
-카테고리 × 가격대로 나눠도 대부분 충족된다.
+분산 처리 증명: Kafka 키는 `session_id` 그대로 두고(세션화에 필요), Spark 후속 작업에서는
+기존 `tenant_id` 필터·집계 축·물리 partition 의존성을 제거한다. `business_id`·`brand_id`
+귀속과 물리 저장 레이아웃은 Dimension·Mart 후속 Jira에서 조회 패턴과 함께 확정한다.
+사업자별 접근 권한은 Backend가 검증하고, 코호트 최소 5개 규칙은 Commons Mart에서
+별도로 적용한다.
 
 ---
 
@@ -281,7 +281,7 @@ PA 100명은 프론트를 실제로 조작하므로 S1·S6 만 프롬프트에 �
 
 | 순서 | 일 | 프론트 | 데이터 | 백엔드 | AI/시뮬 |
 |---|---|---|---|---|---|
-| 1 | `brand_id` 공통 속성, `selection_kind`·`badge_id` 등 optional 속성 | 로거 수정 | 마트에 컬럼 | 없음 | 생성기 S5 |
+| 1 | 브랜드 자체 대상 Event 계약, `selection_kind`·`badge_id` 등 optional 속성 | 로거 수정 | 마트에 컬럼 | 없음 | 생성기 S5 |
 | 2 | `purchase`·`begin_checkout` 활성 + 결제 화면 + 설문 | 화면 2장 | `purchase_fact`, `repurchase_kpi`, `purchase_reason_daily` | 주문 번호 발급 엔드포인트 1개 | 생성기 S1·S2·S4·S6, PA 프롬프트 |
 | 3 | 트렌드 피드 | ⑥ 화면 fetch | `trend_daily` append | 없음 (nginx 정적) | `batch/jobs/trend_daily.py` |
 | 4 | 커먼즈 마트 + 코호트 규칙 | 배지·⑥ 화면 | `brand_cohort_dim`, `mart_commons_*` | 없음 | — |

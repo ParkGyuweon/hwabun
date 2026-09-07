@@ -167,7 +167,7 @@ def _synthetic_session_persona_conflict_count(cleaned: Any) -> int:
 
     return (
         cleaned.where(F.col("actor_type") == F.lit("synthetic"))
-        .groupBy("tenant_id", "simulation_run_id", "session_id")
+        .groupBy("simulation_run_id", "session_id")
         .agg(F.countDistinct("persona_id").alias("persona_count"))
         .where(F.col("persona_count") > 1)
         .count()
@@ -181,7 +181,7 @@ def _session_sequence_collision_count(cleaned: Any) -> int:
 
     return (
         cleaned.where(F.col("sequence_no").isNotNull())
-        .groupBy("tenant_id", "simulation_run_id", "session_id", "sequence_no")
+        .groupBy("simulation_run_id", "session_id", "sequence_no")
         .count()
         .where(F.col("count") > 1)
         .count()
@@ -258,26 +258,6 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
 
-    tenant_datasets = (
-        "cleaned",
-        "sessionized",
-        "product_fact",
-        "section_dwell",
-        "content_interest",
-        "funnel_session",
-        "product_daily",
-        "funnel_daily",
-    )
-    missing_tenant_columns = [
-        name for name in tenant_datasets if "tenant_id" not in frames[name].columns
-    ]
-    checks.append(
-        _check(
-            "tenant_id_is_present_in_processed_outputs",
-            not missing_tenant_columns,
-            "missing_columns=" + ",".join(missing_tenant_columns),
-        )
-    )
     checks.append(
         _check(
             "dim_product_key_is_unique",
@@ -293,30 +273,6 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "content_interest_fact score is non-null for every content grain",
         )
     )
-    if not missing_tenant_columns:
-        legacy_tenant_rows = cleaned.where(
-            (F.col("schema_version") == F.lit("0.3.0-draft"))
-            & F.col("tenant_id").isNull()
-        ).count()
-        checks.append(
-            _check(
-                "schema_0_3_events_have_tenant_id",
-                legacy_tenant_rows == 0,
-                f"violating_rows={legacy_tenant_rows}",
-            )
-        )
-        mart_tenant_nulls = sum(
-            frames[name].where(F.col("tenant_id").isNull()).count()
-            for name in ("product_daily", "funnel_daily")
-        )
-        checks.append(
-            _check(
-                "tenant_scoped_marts_have_no_null_tenant",
-                mart_tenant_nulls == 0,
-                f"null_tenant_rows={mart_tenant_nulls}",
-            )
-        )
-
     raw_duplicate_groups = _raw_event_id_duplicate_group_count(raw)
     if raw_duplicate_groups:
         warnings.append(
@@ -443,11 +399,9 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     checks.append(
         _check(
             "funnel_session_grain_is_unique",
-            _duplicate_count(
-                funnel_session, ["tenant_id", "session_id", "product_id"]
-            )
+            _duplicate_count(funnel_session, ["session_id", "product_id"])
             == 0,
-            "funnel_session_fact grain=tenant_id+session_id+product_id",
+            "funnel_session_fact grain=session_id+product_id",
         )
     )
     checks.append(
@@ -457,7 +411,6 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
                 product_daily,
                 [
                     "event_date_kst",
-                    "tenant_id",
                     "product_id",
                     "actor_type",
                     "source",
@@ -476,7 +429,6 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
                 funnel_daily,
                 [
                     "funnel_date_kst",
-                    "tenant_id",
                     "product_id",
                     "actor_type",
                     "source",
