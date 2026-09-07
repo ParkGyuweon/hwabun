@@ -98,6 +98,46 @@
 기능성 표방을 못 하는 것이지, 성분이 없는 것이 아니다. 등록 폼에서는 **범위 밖이면 경고만**
 띄운다.
 
+### 1-2. 제품의 목적 — 카테고리 19종은 "무엇을 위한 제품인가"
+
+성분만으로는 목적을 모른다. 같은 살리실산이 클렌저에 있으면 씻어 내는 각질 관리이고
+세럼에 있으면 남겨 두는 모공 관리다. 그래서 `tertiary_category` 19종을 **루틴 단계 · 기대
+효과 · 그 목적에 흔히 쓰는 성분 계열** 로 잇는다 `[관행]`. 추천 근거("세안 단계의 …")와
+등록 폼의 카테고리 안내, 배너 `category` 축 문구에 쓴다.
+
+| `tertiary_category` (어휘 원문) | 루틴 단계 | 목적 (기대 효과) | 흔한 핵심 성분 계열 | 남기나 |
+|---|---|---|---|---|
+| Face Wash & Cleansers | 1 세안 | 피지·노폐물 제거, 당김 없이 | 아미노산계 세정, Salicylic Acid(지성용), Green Tea | 씻어 냄 |
+| Makeup Removers | 1 세안 | 메이크업·자차 용해 | 오일·에스터, Jojoba | 씻어 냄 |
+| Face Wipes | 1 세안(간이) | 간편 세정 | 보습·진정(Aloe) | 씻어 냄 |
+| Exfoliators | 2 각질 | 결·모공 정돈 (물리·화학) | AHA/Glycolic Acid, Lactic Acid, Salicylic Acid, Willow Bark | 대부분 씻어 냄 |
+| Facial Peels | 2 각질(집중) | 주 1~2회 강한 각질 | AHA/Glycolic Acid 고농도, Salicylic Acid | 씻어 냄 |
+| Toners | 3 토닝 | pH·수분 정돈, 다음 단계 흡수 | Hyaluronic Acid, Niacinamide, Centella, Panthenol | 남김 |
+| Mists & Essences | 3 토닝/보습 | 가벼운 수분·컨디셔닝 | Probiotic / Ferment, Hyaluronic Acid | 남김 |
+| Face Serums | 4 집중 | 고민 하나를 겨냥 (톤·모공·주름·진정) | Vitamin C, Niacinamide, Retinol, Peptides, Adenosine, Centella | 남김 |
+| Blemish & Acne Treatments | 4 집중(국소) | 트러블 부위 | Salicylic Acid, Zinc, Centella | 남김 |
+| Face Oils | 5 보습(유분) | 장벽·유수분 균형 | Squalane, Jojoba, Rosehip / Rose | 남김 |
+| Moisturizers | 5 보습 | 수분 유지·장벽 | Hyaluronic Acid, Ceramide, Squalane, Shea Butter, Glycerin | 남김 |
+| Night Creams | 5 보습(밤) | 밤 회복·항노화 | Retinol, Peptides, Ceramide, Shea Butter | 남김 |
+| For Face (기타) | 5 보습/집중 | 분류 밖 페이스 케어 | — | 남김 |
+| Eye Creams & Treatments | 6 아이 | 다크서클·잔주름·부기 | Caffeine, Peptides, Retinol(저농도), Hyaluronic Acid | 남김 |
+| Eye Masks | 6 아이(집중) | 부기·수분 집중 | Caffeine, Hyaluronic Acid, Collagen | 씻어 냄/떼어 냄 |
+| Face Masks | 7 마스크 | 주 1~3회 집중 수분·진정·각질 | Hyaluronic Acid, Centella, Collagen, (클레이) | 씻어 냄/떼어 냄 |
+| Face Sunscreen | 8 차단 | 자외선 차단, 색소·노화 예방 | SPF(유·무기 차단제), Niacinamide, Hyaluronic Acid | 남김 |
+| BB & CC Creams | 8 차단+톤 | 차단 + 가벼운 커버 | SPF, Silicone, Niacinamide | 남김 |
+| Lip Balms & Treatments | 립 | 입술 보습·보호 | Shea Butter, Mineral Oil / Petrolatum, Squalane | 남김 |
+
+**읽는 규칙.**
+
+1. "씻어 냄" 제품의 성분은 남는 시간이 짧아 **성분 관심 신호의 무게를 낮춘다** (§3 에서
+   `ing_weight × 0.5`). 클렌저에 든 살리실산을 오래 봤다고 BHA 선호로 세게 잡으면 안 된다.
+2. 같은 목적 안에서만 `similar` 대체를 제안한다. 세럼의 대체는 세럼이지 토너가 아니다.
+3. 루틴 단계 번호는 **`synergy` 조합의 순서** 이기도 하다 (세안 → 각질 → 토닝 → 집중 → 보습
+   → 차단). "다음 단계 제안" 은 이 번호로 만든다.
+4. 등록 폼에서 브랜드가 카테고리를 고르면 이 표의 "목적" 을 안내 문구로 보여 주고, 고른
+   카테고리와 어울리지 않는 `highlights` 조합(예: Face Sunscreen 인데 concern 태그가 하나도
+   없음)이면 경고만 띄운다.
+
 ---
 
 ## 2. 성분 간 관계 — 유사 · 대체 · 시너지 · 동시 사용 주의
@@ -165,6 +205,7 @@ u_ing⁻[i] = Σ_events  w_event × decay(t) × ing_weight(product, i)     기�
 
 ing_weight(product, i) = 어휘집 위치가중  max(1 − 등장위치/전체성분수, 0.1)
                           (product-feature-vocab.json ingredient_source.position_formula 와 같은 식)
+                          × 0.5  if 씻어 내는 제품 (§1-2 "남기나" 열)
 text_selection 은 matched_ingredients 에 든 성분만 1.0
 ```
 
