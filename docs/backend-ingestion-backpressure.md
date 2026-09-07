@@ -22,7 +22,7 @@ collector:
   kafka:
     publisher-executor:
       core-pool-size: 16
-      max-pool-size: 32
+      max-pool-size: 16
       queue-capacity: 200
 ```
 
@@ -67,8 +67,8 @@ Micrometer에 다음 지표를 추가했다.
 
 | 지표 | 의미 |
 | --- | --- |
-| `collector.events.publish.rejected` | executor 포화로 거절된 이벤트 수 |
-| `collector.events.publish.queue.wait` | 발행 시작 작업이 executor 대기열에서 기다린 시간 |
+| `collector.kafka.publish.overloaded` | executor 또는 in-flight 한도로 거절된 이벤트 수 |
+| `collector.kafka.publish.queue.wait` | 발행 시작 작업이 executor 대기열에서 기다린 시간 |
 
 기존의 수신, 발행 성공, 발행 실패 지표와 함께 보면 수집량 증가, 대기열 지연, 실제 거절 발생, Kafka 발행 실패를 구분해 관찰할 수 있다.
 

@@ -4,6 +4,7 @@ import com.cosmetic.collector.event.api.ActivityEvent;
 import com.cosmetic.collector.event.api.EventBatchRequest;
 import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
+import com.cosmetic.collector.event.application.IndexedActivityEvent;
 import com.cosmetic.collector.event.application.PublishSummary;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.Test;
@@ -80,8 +81,8 @@ class KafkaEventPublisherTest {
 
         assertThat(result.publishedCount()).isEqualTo(1);
         verify(kafkaTemplate).send(eq("activity-events"), eq("session-001"), anyString());
-        verify(metrics).recordPublished(1);
-        verify(metrics, never()).recordPublishFailure(any(Integer.class));
+        verify(metrics).recordAccepted(1);
+        verify(metrics, never()).recordKafkaPublishFailure(any(Integer.class));
     }
 
     @Test
@@ -114,7 +115,7 @@ class KafkaEventPublisherTest {
         assertThat(result.publishedCount()).isEqualTo(2);
         verify(kafkaTemplate).send(eq("activity-events"), eq("session-001"), anyString());
         verify(kafkaTemplate).send(eq("activity-events"), eq("session-002"), anyString());
-        verify(metrics).recordPublished(2);
+        verify(metrics).recordAccepted(2);
     }
 
     @Test
@@ -137,10 +138,10 @@ class KafkaEventPublisherTest {
                 Runnable::run
         );
 
-        publisher.publish("request-001", new EventBatchRequest("0.2.0-draft", List.of(
-                event("evt-001", null),
-                event("evt-002", null)
-        ))).join();
+        publisher.publish("request-001", List.of(
+                new IndexedActivityEvent(event("evt-001", null), 0),
+                new IndexedActivityEvent(event("evt-002", null), 2)
+        )).join();
 
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
         verify(kafkaTemplate, times(2)).send(
@@ -163,7 +164,7 @@ class KafkaEventPublisherTest {
         assertThat(first.receivedAt()).isEqualTo(Instant.parse("2026-08-27T15:00:00Z"));
         assertThat(second.receivedAt()).isEqualTo(Instant.parse("2026-08-27T15:00:00Z"));
         assertThat(first.eventIndex()).isZero();
-        assertThat(second.eventIndex()).isEqualTo(1);
+        assertThat(second.eventIndex()).isEqualTo(2);
         assertThat(first.source()).isEqualTo("web");
         assertThat(second.source()).isEqualTo("web");
     }
@@ -224,8 +225,42 @@ class KafkaEventPublisherTest {
         assertThatThrownBy(() -> publisher.publish("request-001", request).join())
                 .hasCauseInstanceOf(EventPublishException.class);
 
-        verify(metrics).recordPublishFailure(2);
-        verify(metrics, never()).recordPublished(any(Integer.class));
+        verify(metrics).recordKafkaPublishFailure(2);
+        verify(metrics, never()).recordAccepted(any(Integer.class));
+    }
+
+    @Test
+    void recordsKafkaAcknowledgementsAndFailuresPerEventWhenOnlyPartOfABatchFails() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CollectorMetrics metrics = mock(CollectorMetrics.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        Clock clock = Clock.fixed(Instant.parse("2026-08-27T15:00:00Z"), ZoneOffset.UTC);
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(
+                        CompletableFuture.completedFuture(null),
+                        CompletableFuture.failedFuture(new RuntimeException("Kafka unavailable"))
+                );
+
+        KafkaEventPublisher publisher = new KafkaEventPublisher(
+                kafkaTemplate,
+                objectMapper,
+                metrics,
+                clock,
+                "activity-events",
+                Runnable::run
+        );
+        EventBatchRequest request = new EventBatchRequest("draft", List.of(
+                event("evt-001", "persona-001"),
+                event("evt-002", "persona-002")
+        ));
+
+        assertThatThrownBy(() -> publisher.publish("request-001", request).join())
+                .hasCauseInstanceOf(EventPublishException.class);
+
+        verify(metrics).recordAccepted(1);
+        verify(metrics).recordKafkaPublishFailure(1);
     }
 
     @Test
@@ -256,8 +291,8 @@ class KafkaEventPublisherTest {
 
         assertThatThrownBy(result::join)
                 .hasCauseInstanceOf(EventPublishException.class);
-        verify(metrics).recordPublishFailure(1);
-        verify(metrics, never()).recordPublished(any(Integer.class));
+        verify(metrics).recordKafkaPublishFailure(1);
+        verify(metrics, never()).recordAccepted(any(Integer.class));
     }
 
     @Test
@@ -324,9 +359,9 @@ class KafkaEventPublisherTest {
 
         assertThatThrownBy(result::join)
                 .hasCauseInstanceOf(EventPublishOverloadedException.class);
-        verify(metrics).recordPublishRejected(1);
-        verify(metrics, never()).recordPublishFailure(any(Integer.class));
-        verify(metrics, never()).recordPublished(any(Integer.class));
+        verify(metrics).recordKafkaPublishOverloaded(1);
+        verify(metrics, never()).recordKafkaPublishFailure(any(Integer.class));
+        verify(metrics, never()).recordAccepted(any(Integer.class));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
     }
 
@@ -357,7 +392,7 @@ class KafkaEventPublisherTest {
         assertThat(first).isNotDone();
         assertThatThrownBy(second::join)
                 .hasCauseInstanceOf(EventPublishOverloadedException.class);
-        verify(metrics).recordPublishRejected(1);
+        verify(metrics).recordKafkaPublishOverloaded(1);
 
         kafkaAck.complete(null);
         first.join();

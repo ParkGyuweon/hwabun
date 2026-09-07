@@ -5,9 +5,11 @@ import com.cosmetic.collector.event.application.EventPublishException;
 import com.cosmetic.collector.event.application.EventPublishOverloadedException;
 import com.cosmetic.collector.event.application.EventPublisher;
 import com.cosmetic.collector.event.application.PublishSummary;
+import com.cosmetic.collector.event.api.validation.EventBatchSemanticValidator;
 import com.cosmetic.collector.event.observability.CollectorMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -15,12 +17,15 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.concurrent.CompletableFuture;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -43,7 +48,8 @@ class EventControllerTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
-        mockMvc = standaloneSetup(new EventController(publisher, metrics))
+        mockMvc = standaloneSetup(new EventController(
+                        publisher, metrics, new EventBatchSemanticValidator(validator)))
                 .setControllerAdvice(new GlobalExceptionHandler(metrics))
                 .setValidator(validator)
                 .build();
@@ -51,7 +57,7 @@ class EventControllerTest {
 
     @Test
     void acceptsAValidBatchAfterPublishing() throws Exception {
-        when(publisher.publish(anyString(), any()))
+        when(publisher.publish(anyString(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
@@ -87,7 +93,94 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.rejected").value(0));
 
         verify(metrics).recordReceived(1);
-        verify(publisher).publish(anyString(), any());
+        verify(publisher).publish(anyString(), anyList());
+    }
+
+    @Test
+    void acceptsNavigationClickWithSessionIntent() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [{
+                                    "schema_version": "0.2.0-draft",
+                                    "event_id": "evt-navigation-001",
+                                    "event_name": "navigation_click",
+                                    "intent": "session",
+                                    "occurred_at": "2026-08-27T14:30:00Z",
+                                    "session_id": "session-001",
+                                    "page_view_id": "page-view-001",
+                                    "sequence_no": 1,
+                                    "page_type": "product_list",
+                                    "actor_type": "user",
+                                    "environment": "local",
+                                    "properties": {
+                                      "target": "/cart",
+                                      "entry_source": "breadcrumb"
+                                    }
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(0));
+
+        verify(metrics).recordReceived(1);
+        verify(publisher).publish(anyString(), anyList());
+    }
+
+    @Test
+    void rejectsInvalidPurchaseReasonsWithoutRepublishingTheInvalidEvent() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-valid",
+                                      "event_name": "purchase_reason_select", "intent": "validation",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 1, "page_type": "cart",
+                                      "actor_type": "user", "environment": "local",
+                                      "properties": {"order_id": "order-001", "reasons": ["ingredient"]}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-invalid",
+                                      "event_name": "purchase_reason_select", "intent": "validation",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 2, "page_type": "cart",
+                                      "actor_type": "user", "environment": "local",
+                                      "properties": {"order_id": "order-001", "reasons": ["invalid_reason"]}
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_id").value("evt-invalid"))
+                .andExpect(jsonPath("$.rejections[0].code").value("invalid_property_enum"));
+
+        verify(publisher).publish(anyString(), anyList());
+        verify(metrics).recordEventRejected(1);
+        verify(metrics).recordValidationRejected("invalid_property_enum");
     }
 
     @Test
@@ -103,7 +196,187 @@ class EventControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
 
-        verify(metrics).recordValidationFailure("invalid_event_batch");
+        verify(metrics).recordValidationRejected("invalid_event_batch");
+    }
+
+    @Test
+    void rejectsAnEventWithoutEventNameButStillPublishesValidEvents() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-valid",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 1,
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-missing-name",
+                                      "intent": "comparison", "occurred_at": "2026-08-27T14:30:00Z",
+                                      "session_id": "session-001", "page_view_id": "page-view-001",
+                                      "sequence_no": 2, "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_id").value("evt-missing-name"))
+                .andExpect(jsonPath("$.rejections[0].code").value("missing_required_property"));
+
+        verify(publisher).publish(anyString(), anyList());
+    }
+
+    @Test
+    void rejectsNullEventsWithoutDereferencingTheirEventId() throws Exception {
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [null]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(0))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(0))
+                .andExpect(jsonPath("$.rejections[0].event_id").value(nullValue()))
+                .andExpect(jsonPath("$.rejections[0].code").value("null_event"));
+
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void choosesTheDocumentedPrimaryCodeWhenAnEventHasMultipleViolations() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(0)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [{
+                                    "schema_version": "0.2.0-draft", "event_id": "evt-invalid",
+                                    "event_name": "purchase", "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                    "page_view_id": "page-view-001", "sequence_no": 1,
+                                    "page_type": "cart", "actor_type": "user", "environment": "local",
+                                    "properties": {}
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].code").value("event_intent_mismatch"));
+
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void prioritizesMissingTenantOverAnInvalidPropertiesType() throws Exception {
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.3.0-draft",
+                                  "events": [{
+                                    "schema_version": "0.3.0-draft", "event_id": "evt-invalid",
+                                    "event_name": "product_click", "intent": "comparison",
+                                    "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                    "page_view_id": "page-view-001", "sequence_no": 1,
+                                    "page_type": "product_list", "actor_type": "user", "environment": "local",
+                                    "properties": []
+                                  }]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(0))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].code").value("missing_required_property"));
+
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void rejectsMalformedEventFieldTypesWithoutDiscardingValidEventsInTheBatch() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-valid",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 1,
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-invalid-time",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "not-a-time", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 2,
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-invalid-sequence",
+                                      "event_name": "product_click", "intent": "comparison",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": "not-an-int",
+                                      "page_type": "product_list", "actor_type": "user",
+                                      "environment": "local", "properties": {}
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected").value(2))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(1))
+                .andExpect(jsonPath("$.rejections[0].code").value("collector_validation_failure"))
+                .andExpect(jsonPath("$.rejections[1].event_index").value(2))
+                .andExpect(jsonPath("$.rejections[1].code").value("collector_validation_failure"));
+
+        verify(publisher).publish(anyString(), anyList());
     }
 
     @Test
@@ -131,12 +404,12 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.code").value("EVENT_BATCH_TOO_LARGE"));
 
         verifyNoInteractions(publisher);
-        verify(metrics).recordValidationFailure("event_batch_too_large");
+        verify(metrics).recordValidationRejected("event_batch_too_large");
     }
 
     @Test
-    void rejectsAnEventWithoutRequiredIdentifiers() throws Exception {
-        mockMvc.perform(post("/api/events")
+    void discardsAnEventWithoutRequiredIdentifiers() throws Exception {
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -150,15 +423,21 @@ class EventControllerTest {
                                   }]
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_EVENT_BATCH"));
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-        verify(metrics).recordValidationFailure("invalid_event_batch");
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(0))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(0));
+
+        verify(metrics).recordEventRejected(1);
     }
 
     @Test
     void returnsServiceUnavailableWhenKafkaPublishingFails() throws Exception {
-        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
+        when(publisher.publish(anyString(), anyList())).thenReturn(CompletableFuture.failedFuture(
                 new EventPublishException("publish failed", new RuntimeException("Kafka unavailable"))
         ));
 
@@ -195,7 +474,7 @@ class EventControllerTest {
 
     @Test
     void returnsTooManyRequestsWhenThePublisherIsOverloaded() throws Exception {
-        when(publisher.publish(anyString(), any())).thenReturn(CompletableFuture.failedFuture(
+        when(publisher.publish(anyString(), anyList())).thenReturn(CompletableFuture.failedFuture(
                 new EventPublishOverloadedException("publisher overloaded", new RuntimeException("executor saturated"))
         ));
 
@@ -220,7 +499,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.code").value("MALFORMED_JSON"));
 
         verifyNoInteractions(publisher);
-        verify(metrics).recordValidationFailure("malformed_json");
+        verify(metrics).recordValidationRejected("malformed_json");
     }
 
     private String validEventBatch() {

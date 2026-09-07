@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
+import java.util.List;
+
 @Schema(description = "활동 로그 수집 성공 응답")
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record EventAcceptedResponse(
@@ -13,7 +15,13 @@ public record EventAcceptedResponse(
         @Schema(description = "Kafka 발행에 성공한 이벤트 수", example = "2")
         int accepted,
 
-        @Schema(description = "거부된 이벤트 수. 현재 정책에서는 부분 성공을 사용하지 않아 항상 0", example = "0")
-        int rejected
+        @Schema(description = "의미 계약 위반으로 폐기된 이벤트 수. 프론트 재전송 대상이 아니다", example = "1")
+        int rejected,
+
+        @Schema(description = "폐기된 이벤트의 원인. 배치 내 원래 index를 사용한다.")
+        List<EventRejectionResponse> rejections
 ) {
+    public EventAcceptedResponse(String requestId, int accepted, int rejected) {
+        this(requestId, accepted, rejected, List.of());
+    }
 }

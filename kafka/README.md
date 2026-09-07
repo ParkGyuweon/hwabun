@@ -137,7 +137,7 @@ Q1과 Q2를 하나의 Job으로 합칠지는 저장 엔진과 트랜잭션 방�
 | `occurred_at` | 클라이언트 발생 시각. 클라이언트 시계 오차 가능 |
 | `received_at` | 현재 구현에서는 검증 후 Producer의 `publish()` 진입 시 얻는 서버 시각 |
 | `request_id` | HTTP 요청마다 생성. 같은 Event 재시도라도 달라질 수 있음 |
-| `event_index` | 해당 HTTP 배열 안의 0부터 시작하는 위치 |
+| `event_index` | 해당 HTTP 배열 안의 0부터 시작하는 원본 위치. 부분 수락으로 값 사이에 gap이 있을 수 있음 |
 | `source` | 현재 코드에서 `user → web`, `synthetic → simulator`로 생성 |
 | `schema_version` | 해석 계약의 버전. 현재 예시 버전은 `0.2.0-draft` |
 
@@ -147,7 +147,7 @@ Q1과 Q2를 하나의 Job으로 합칠지는 저장 엔진과 트랜잭션 방�
 `+09:00` 등)을 허용한다. timezone 없는 값은 거부하고, Raw 원문은 보존하되
 Parsed/Processed timestamp는 UTC로 정규화한다.
 
-`request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. 현재 Collector는 `schema_version`이 비어 있지 않은지만 검사하고, 지원 버전 목록과 배치·Event 버전 일치까지 강제하지는 않는다. 이벤트별 `properties` 의미 검증도 별도로 구현해야 한다.
+`request_id`와 `event_index`는 추적 정보이며 업무 중복 제거 Key가 아니다. Collector는 배치·Event의 `schema_version` 일치와 일부 활성 Event의 properties 의미를 검증한다. 계약 위반 Event는 Kafka에 발행하지 않으며, HTTP `202` 응답의 `rejections`와 Collector 구조화 로그·메트릭으로 확인한다. `bad_events`는 Kafka에 발행된 Event를 Spark가 추가 검증하다 위반을 발견했을 때만 사용하는 격리 Dataset이다.
 
 근거: [Event DTO](../backend/src/main/java/com/cosmetic/collector/event/api/ActivityEvent.java), [Kafka 메시지 변환](../backend/src/main/java/com/cosmetic/collector/event/infrastructure/KafkaEventMessage.java), [Raw Event 실행 계약](../contracts/event-schema.json), [Event Properties 계약](../contracts/event-properties-schema.md).
 
@@ -389,8 +389,8 @@ Replay 절차는 대상 Raw 날짜/Offset, 처리 버전, 예상 Event ID 수를
 | --- | --- | --- |
 | HTTP 요청률 | Collector 요청 수/초 | 배치 크기가 달라 Event TPS와 다름 |
 | 수신 Event TPS | `collector.events.received`의 변화율 | 현재는 검증 후 Collector에 들어온 건수 |
-| 발행 완료 Event TPS | `collector.events.published`의 변화율 | 현재 구현은 배치 전체 성공 때 배치 크기 증가 |
-| 발행 실패 | `collector.events.publish.failures` | 전체 실패 배치 크기를 기록하므로 실제 유실 건수와 다름 |
+| 발행 완료 Event TPS | `collector.events.accepted`의 변화율 | Kafka ACK를 받은 이벤트 수를 개별적으로 기록 |
+| 발행 실패 | `collector.kafka.publish.failures` | Kafka 발행에 실패한 이벤트 수를 개별적으로 기록 |
 | Kafka 적재율 | Topic/Partition에 기록된 레코드 수 | 업무 중복을 포함한 수신 건수 |
 | Spark 처리 적체 | Kafka Log End Offset − 마지막 성공 Batch의 다음 처리 Offset | Kafka Group Commit만 보고 측정하지 않음 |
 | Raw 이후 적체 | 미처리 Raw 범위와 가장 오래된 미처리 시각 | Q1이 따라잡아도 Q2가 지연될 수 있음 |

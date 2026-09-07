@@ -18,7 +18,7 @@ import java.util.List;
 @ValidEventBatchContract
 public record EventBatchRequest(
         @Schema(description = "배치 전송 계약 버전", example = "0.2.0-draft")
-        @NotBlank @Pattern(regexp = "^0\\.2\\.0-draft$") String schemaVersion,
+        @NotBlank @Pattern(regexp = "^0\\.(2|3)\\.0-draft$") String schemaVersion,
 
         @ArraySchema(
                 arraySchema = @Schema(description = "한 요청에 담긴 이벤트 목록", maxLength = 100),

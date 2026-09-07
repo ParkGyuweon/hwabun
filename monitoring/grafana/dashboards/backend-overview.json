@@ -55,8 +55,8 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "rate(collector_events_received_total{application=\"log-connector\"}[1m])", "legendFormat": "received/s", "refId": "A" },
-        { "expr": "rate(collector_events_published_total{application=\"log-connector\"}[1m])", "legendFormat": "published/s", "refId": "B" },
-        { "expr": "rate(collector_events_publish_failures_total{application=\"log-connector\"}[1m])", "legendFormat": "failed/s", "refId": "C" }
+        { "expr": "rate(collector_events_accepted_total{application=\"log-connector\"}[1m])", "legendFormat": "accepted/s", "refId": "B" },
+        { "expr": "rate(collector_kafka_publish_failures_total{application=\"log-connector\"}[1m])", "legendFormat": "failed/s", "refId": "C" }
       ],
       "fieldConfig": { "defaults": { "unit": "eps", "min": 0 }, "overrides": [] },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
