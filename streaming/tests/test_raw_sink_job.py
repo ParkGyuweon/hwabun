@@ -10,11 +10,18 @@ from streaming.jobs.clean_events_job import (
     CANONICAL_ORDER_FIELDS,
     CleanEventsConfig,
     RFC3339_WITH_OFFSET_PATTERN,
+    SUPPORTED_SCHEMA_VERSIONS,
+    TENANT_ID_PATTERN,
     parse_args as parse_clean_args,
 )
 from streaming.jobs.derive_facts_job import (
+    CONTENT_INTEREST_EVENTS,
+    DEFAULT_CONTENT_INTEREST_PATH,
+    DEFAULT_DIM_PRODUCT_PATH,
     DEFAULT_PRODUCT_FACT_PATH,
+    DEFAULT_SECTION_DWELL_PATH,
     DEFAULT_SESSIONIZED_PATH,
+    DEFAULT_BEHAVIOR_WEIGHTS_PATH,
     PRODUCT_EVENT_NAMES,
     DeriveFactsConfig,
     parse_args as parse_derive_args,
@@ -28,11 +35,15 @@ from streaming.jobs.build_marts_job import (
     parse_args as parse_mart_args,
 )
 from streaming.jobs.validate_pipeline_job import (
+    DEFAULT_CONTENT_INTEREST_PATH as DEFAULT_VALIDATE_CONTENT_INTEREST_PATH,
+    DEFAULT_DIM_PRODUCT_PATH as DEFAULT_VALIDATE_DIM_PRODUCT_PATH,
     DEFAULT_FUNNEL_DAILY_PATH as DEFAULT_VALIDATE_FUNNEL_DAILY_PATH,
     DEFAULT_PRODUCT_DAILY_PATH as DEFAULT_VALIDATE_PRODUCT_DAILY_PATH,
+    DEFAULT_SECTION_DWELL_PATH as DEFAULT_VALIDATE_SECTION_DWELL_PATH,
     ValidatePipelineConfig,
     parse_args as parse_validate_args,
 )
+from streaming.jobs.behavior_weights import load as load_behavior_weights
 
 
 class RawSinkConfigTest(unittest.TestCase):
@@ -53,6 +64,8 @@ class RawSinkConfigTest(unittest.TestCase):
             "raw_value",
             "is_json_parseable",
             "properties_json",
+            "source",
+            "tenant_id",
         }
 
         self.assertTrue(required.issubset(set(RAW_EVENT_FIELDS)))
@@ -101,6 +114,14 @@ class CleanEventsConfigTest(unittest.TestCase):
         self.assertEqual("data/processed/bad_events", config.bad_path)
         self.assertEqual("data/processed/duplicate_events", config.duplicate_path)
 
+    def test_schema_version_transition_and_tenant_slug_contract(self):
+        self.assertEqual(
+            ("0.2.0-draft", "0.3.0-draft"),
+            SUPPORTED_SCHEMA_VERSIONS,
+        )
+        self.assertIsNotNone(re.fullmatch(TENANT_ID_PATTERN, "estee-lauder"))
+        self.assertIsNone(re.fullmatch(TENANT_ID_PATTERN, "Estee Lauder"))
+
     def test_empty_output_path_is_rejected(self):
         with self.assertRaises(ValueError):
             CleanEventsConfig(cleaned_path=" ")
@@ -140,10 +161,38 @@ class DeriveFactsConfigTest(unittest.TestCase):
         self.assertEqual("data/processed/cleaned_events", config.input_path)
         self.assertEqual(DEFAULT_SESSIONIZED_PATH, config.sessionized_path)
         self.assertEqual(DEFAULT_PRODUCT_FACT_PATH, config.product_fact_path)
+        self.assertEqual(DEFAULT_SECTION_DWELL_PATH, config.section_dwell_path)
+        self.assertEqual(DEFAULT_CONTENT_INTEREST_PATH, config.content_interest_path)
+        self.assertEqual(DEFAULT_DIM_PRODUCT_PATH, config.dim_product_path)
+        self.assertEqual(DEFAULT_BEHAVIOR_WEIGHTS_PATH, config.behavior_weights_path)
+
+    def test_content_interest_scope_is_limited_to_contract_events(self):
+        self.assertEqual(
+            {
+                "accordion_toggle",
+                "review_filter_apply",
+                "text_selection",
+                "text_copy",
+            },
+            set(CONTENT_INTEREST_EVENTS),
+        )
 
     def test_empty_fact_path_is_rejected(self):
         with self.assertRaises(ValueError):
             DeriveFactsConfig(product_fact_path="")
+
+
+class BehaviorWeightContractTest(unittest.TestCase):
+    def test_spark_uses_frontend_weight_source(self):
+        weights = load_behavior_weights()
+
+        self.assertTrue(weights["event"])
+        self.assertTrue(weights["section"])
+        self.assertTrue(
+            {"accordion_toggle", "review_filter_apply", "text_selection", "text_copy"}
+            .issubset(weights["event"])
+        )
+        self.assertLess(weights["event"]["remove_from_cart"], 0)
 
 
 class BuildMartsConfigTest(unittest.TestCase):
@@ -160,6 +209,7 @@ class BuildMartsConfigTest(unittest.TestCase):
         self.assertEqual(DEFAULT_FUNNEL_SESSION_PATH, config.funnel_session_path)
         self.assertEqual(DEFAULT_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_FUNNEL_DAILY_PATH, config.funnel_daily_path)
+        self.assertEqual("frontend/src/types/log.ts", config.behavior_weights_path)
 
     def test_empty_mart_path_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -172,6 +222,13 @@ class ValidatePipelineConfigTest(unittest.TestCase):
 
         self.assertEqual("data/raw_events", config.raw_path)
         self.assertEqual("data/processed/cleaned_events", config.cleaned_path)
+        self.assertEqual(
+            DEFAULT_VALIDATE_SECTION_DWELL_PATH, config.section_dwell_path
+        )
+        self.assertEqual(
+            DEFAULT_VALIDATE_CONTENT_INTEREST_PATH, config.content_interest_path
+        )
+        self.assertEqual(DEFAULT_VALIDATE_DIM_PRODUCT_PATH, config.dim_product_path)
         self.assertEqual(DEFAULT_VALIDATE_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_VALIDATE_FUNNEL_DAILY_PATH, config.funnel_daily_path)
         self.assertFalse(config.require_events)

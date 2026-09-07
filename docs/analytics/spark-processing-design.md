@@ -1,7 +1,7 @@
 # Spark Processed 처리 설계
 
 작성일: 2026-09-01
-최종 정적 검증: 2026-09-02
+최종 정적 검증: 2026-09-07
 상태: 논리 Schema와 최신 통합본 정적 대조 완료, 구현 gap 해소·Delta 전환·E2E 검증 대기
 계약 원본: [`contracts/processed-schema.md`](../../contracts/processed-schema.md)
 
@@ -170,28 +170,28 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 
 ## 6. 현재 `dev` 구현과 목표 계약의 차이
 
-2026-09-02 `dev`의 최신 계약과 `streaming/` 구현을 다시 대조한 결과다. Spark Job의
-마지막 변경은 2026-08-31이며, 이후 Raw/Event/Persona 계약 변경이 반영되었으므로
-입력과 출력 양쪽을 재검수했다. 이 표는 구현 현황이며
+2026-09-07 `feat/spark-contract-sync`에서 최신 계약과 `streaming/` 구현을 다시 대조한
+결과다. 이 표는 구현 현황이며
 계약을 대체하지 않는다.
 
 | Dataset | 현재 구현 | 남은 차이 |
 | --- | --- | --- |
-| `raw_events` | Kafka 원문과 metadata를 Parquet로 저장 | Delta 전환, Raw 계약의 `source` 조회 projection 반영 |
-| `bad_events` | Q2에서 생성 | `event_name`, `schema_version`, `request_id`, `event_index`, `actor_type`, `source`, `error_message`, `bad_recorded_date` 등 목표 오류·추적 컬럼 정렬 |
-| `duplicate_events` | Q2에서 생성 | `event_date_kst` 보완, Delta key 기반 재실행 검증 |
-| `cleaned_events` | Q2에서 생성 | payload `source` 우선, `event_index`, 지연·Dimension·콘텐츠 품질 컬럼 보완 |
-| `sessionized_events` | Q3에서 생성 | 목표 순서·late Event 규칙 검증 |
-| `product_event_fact` | Q3에서 생성 | item grain E2E 확인과 상품 Dimension 보강 |
+| `raw_events` | Kafka 원문과 `source`·`tenant_id` projection을 Parquet로 저장 | Delta 전환 |
+| `bad_events` | 목표 오류·추적 컬럼과 `bad_recorded_date`를 포함해 Q2에서 생성 | Delta key 기반 재실행 검증 |
+| `duplicate_events` | Q2에서 생성하고 `event_date_kst`를 기록 | Delta key 기반 재실행 검증 |
+| `cleaned_events` | payload `source` 우선, tenant 버전 검증, `event_index`·지연·콘텐츠 컬럼을 포함해 생성 | Q3 Dimension 결과를 Q2에도 물리는 방식은 별도 검토 |
+| `sessionized_events` | tenant-aware 세션 순서 복원과 seed `dim_product` 조인을 수행 | 목표 late Event 규칙 검증 |
+| `product_event_fact` | item grain과 seed `dim_product`의 `brand_id` 조인을 수행 | Tenant 등록 상품 Dimension과 item grain E2E 확인 |
 | `funnel_session_fact` | Q4에서 생성 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
 | `search_event_fact` | 미구현 | Trigger와 원천 필드 확인 후 구현 |
-| `section_dwell_agg` | 미구현 | delta 합산 grain 구현 |
-| `content_interest_fact` | 미구현 | 산식은 계약 §13.1로 확정. vocab 연결 구현 |
+| `section_dwell_agg` | `dwell_ms` delta를 content grain으로 합산 | Tenant 등록 상품 Dimension과 E2E 확인 |
+| `content_interest_fact` | 계약 §13.1 산식과 Front 가중치 원본 파싱을 반영 | vocab 정규화 연결과 E2E 확인 |
+| `dim_product` | seed `products_200.json` projection 생성 | Tenant 등록 상품 union과 전체 속성 보강 |
 | `persona_behavior_feature_delta` | 미구현 | 추천 계약 기준 delta 구현 |
 | `purchase_fact` | 미구현 | `items[]` explode와 `item_revenue` 파생 구현 |
 | `purchase_reason_fact` | 미구현 | `reasons[]` explode, 건너뛰기 row 보존 구현 |
 
-현재 Q1~Q4는 주로 Parquet output을 사용한다. 목표 저장 엔진은 Delta Lake이며 실제
+현재 Q1~Q5는 주로 Parquet output을 사용한다. 목표 저장 엔진은 Delta Lake이며 실제
 Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
 
 `begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event가 됐다. 다만 Front

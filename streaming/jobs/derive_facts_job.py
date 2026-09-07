@@ -3,10 +3,11 @@
 This is a full-snapshot Spark batch job.  It intentionally consumes only
 ``cleaned_events`` so Raw duplicates cannot leak into downstream facts.
 
-The job restores event order by ``session_id + sequence_no + event_time +
-received_at`` and expands ``purchase``/``begin_checkout`` item arrays into
-one product row per item.  Event-specific properties stay available through
-``properties_json`` while frequently queried fields are typed columns.
+The job restores event order by ``tenant_id + session_id + sequence_no +
+event_time + received_at`` and expands ``purchase``/``begin_checkout`` item
+arrays into one product row per item.  Event-specific properties stay
+available through ``properties_json`` while frequently queried fields are
+typed columns.
 """
 
 from __future__ import annotations
@@ -21,6 +22,11 @@ DEFAULT_INPUT_PATH = "data/processed/cleaned_events"
 DEFAULT_SESSIONIZED_PATH = "data/processed/sessionized_events"
 DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
+DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
+DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
+DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
+DEFAULT_PRODUCT_CATALOG_PATH = "batch/ingest/data/products_200.json"
+DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 
 PRODUCT_EVENT_NAMES = (
     "product_view",
@@ -41,6 +47,12 @@ PRODUCT_EVENT_NAMES = (
 )
 
 ITEM_EVENT_NAMES = ("begin_checkout", "purchase")
+CONTENT_INTEREST_EVENTS = (
+    "accordion_toggle",
+    "review_filter_apply",
+    "text_selection",
+    "text_copy",
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +60,11 @@ class DeriveFactsConfig:
     input_path: str = DEFAULT_INPUT_PATH
     sessionized_path: str = DEFAULT_SESSIONIZED_PATH
     product_fact_path: str = DEFAULT_PRODUCT_FACT_PATH
+    section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
+    content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
+    dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
+    product_catalog_path: str = DEFAULT_PRODUCT_CATALOG_PATH
+    behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     time_zone: str = DEFAULT_TIME_ZONE
 
     def __post_init__(self) -> None:
@@ -55,6 +72,11 @@ class DeriveFactsConfig:
             "input_path": self.input_path,
             "sessionized_path": self.sessionized_path,
             "product_fact_path": self.product_fact_path,
+            "section_dwell_path": self.section_dwell_path,
+            "content_interest_path": self.content_interest_path,
+            "dim_product_path": self.dim_product_path,
+            "product_catalog_path": self.product_catalog_path,
+            "behavior_weights_path": self.behavior_weights_path,
             "time_zone": self.time_zone,
         }
         for name, value in values.items():
@@ -87,6 +109,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output path for product_event_fact",
     )
     parser.add_argument(
+        "--section-dwell-path",
+        default=_env("SECTION_DWELL_PATH", DEFAULT_SECTION_DWELL_PATH),
+        help="Output path for section_dwell_agg",
+    )
+    parser.add_argument(
+        "--content-interest-path",
+        default=_env("CONTENT_INTEREST_PATH", DEFAULT_CONTENT_INTEREST_PATH),
+        help="Output path for content_interest_fact",
+    )
+    parser.add_argument(
+        "--dim-product-path",
+        default=_env("DIM_PRODUCT_PATH", DEFAULT_DIM_PRODUCT_PATH),
+        help="Output path for the seed dim_product projection",
+    )
+    parser.add_argument(
+        "--product-catalog-path",
+        default=_env("PRODUCT_CATALOG_PATH", DEFAULT_PRODUCT_CATALOG_PATH),
+        help="Seed product catalog JSON used to build dim_product",
+    )
+    parser.add_argument(
+        "--behavior-weights-path",
+        default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
+        help="Execution source for EVENT_WEIGHT and SECTION_DWELL_WEIGHT",
+    )
+    parser.add_argument(
         "--time-zone",
         default=_env("ANALYTICS_TIME_ZONE", DEFAULT_TIME_ZONE),
         help="Time zone used for KST date/hour columns",
@@ -100,6 +147,11 @@ def parse_args(argv: list[str] | None = None) -> DeriveFactsConfig:
         input_path=args.input_path,
         sessionized_path=args.sessionized_path,
         product_fact_path=args.product_fact_path,
+        section_dwell_path=args.section_dwell_path,
+        content_interest_path=args.content_interest_path,
+        dim_product_path=args.dim_product_path,
+        product_catalog_path=args.product_catalog_path,
+        behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
     )
 
@@ -140,10 +192,18 @@ def _properties_schema() -> Any:
         "variants_viewed",
         "added_to_cart",
         "wishlisted",
+        "dwell_ms",
+        "co_visible_blocks",
+        "action",
+        "open",
+        "close_reason",
+        "vocab_version",
     )
+    array_names = ("matched_ingredients", "matched_keywords")
     return StructType(
         [
             *(StructField(name, StringType(), True) for name in scalar_names),
+            *(StructField(name, ArrayType(StringType()), True) for name in array_names),
             StructField("items", ArrayType(item_schema), True),
         ]
     )
@@ -160,12 +220,41 @@ def _typed_properties(cleaned_df: Any) -> Any:
     return cleaned_df.withColumn("_properties", properties)
 
 
-def _sessionized_events(cleaned_df: Any) -> Any:
+def _attach_product_dimension(df: Any, dim_product_df: Any | None) -> Any:
+    """Attach product attributes without ever using them as an isolation key."""
+
+    from pyspark.sql import functions as F
+
+    if dim_product_df is None:
+        return df
+
+    base_columns = [
+        name for name in df.columns if name not in {"category_id", "brand_id"}
+    ]
+    base = df.select(*base_columns)
+    dimension = dim_product_df.select(
+        F.col("product_id").alias("_dim_product_id"),
+        F.col("category_id").cast("string").alias("_dim_category_id"),
+        F.col("brand_id").cast("string").alias("_dim_brand_id"),
+    )
+    joined = base.join(
+        dimension,
+        base["product_id"] == dimension["_dim_product_id"],
+        "left",
+    )
+    return joined.select(
+        *[base[name] for name in base_columns],
+        F.col("_dim_category_id").alias("category_id"),
+        F.col("_dim_brand_id").alias("brand_id"),
+    )
+
+
+def _sessionized_events(cleaned_df: Any, dim_product_df: Any | None = None) -> Any:
     from pyspark.sql import Window
     from pyspark.sql import functions as F
 
     properties_df = _typed_properties(cleaned_df)
-    session_window = Window.partitionBy("session_id").orderBy(
+    session_window = Window.partitionBy("tenant_id", "session_id").orderBy(
         F.col("sequence_no").asc(),
         F.col("event_time").asc(),
         F.col("received_at").asc(),
@@ -175,10 +264,12 @@ def _sessionized_events(cleaned_df: Any) -> Any:
     previous_event = F.lag("event_name").over(session_window)
     next_event = F.lead("event_name").over(session_window)
 
-    return properties_df.select(
+    result = properties_df.select(
         "event_id",
         "session_id",
         "page_view_id",
+        "event_date_kst",
+        "tenant_id",
         "user_id",
         "persona_id",
         "scenario_id",
@@ -212,9 +303,12 @@ def _sessionized_events(cleaned_df: Any) -> Any:
         "environment",
         "properties_json",
     )
+    return _attach_product_dimension(result, dim_product_df)
 
 
-def _product_event_fact(cleaned_df: Any, time_zone: str) -> Any:
+def _product_event_fact(
+    cleaned_df: Any, time_zone: str, dim_product_df: Any | None = None
+) -> Any:
     from pyspark.sql import functions as F
 
     base = _typed_properties(cleaned_df).where(
@@ -262,11 +356,10 @@ def _product_event_fact(cleaned_df: Any, time_zone: str) -> Any:
         "generator_type",
         "session_id",
         "page_view_id",
+        "tenant_id",
         item_index.alias("item_index"),
         product_id.alias("product_id"),
         _prop(F.col("_properties"), "context_product_id").alias("context_product_id"),
-        F.lit(None).cast("string").alias("category_id"),
-        F.lit(None).cast("string").alias("brand_id"),
         F.when(item_events, item_sku_id)
         .otherwise(_prop(F.col("_properties"), "sku_id"))
         .alias("sku_id"),
@@ -311,24 +404,409 @@ def _product_event_fact(cleaned_df: Any, time_zone: str) -> Any:
         "source",
     ).where(F.col("product_id").isNotNull() & (F.length(F.trim(F.col("product_id"))) > 0))
 
-    return fact
+    if dim_product_df is None:
+        return fact.withColumn("category_id", F.lit(None).cast("string")).withColumn(
+            "brand_id", F.lit(None).cast("string")
+        )
+    return _attach_product_dimension(fact, dim_product_df)
 
 
-def build_derived_frames(cleaned_df: Any, time_zone: str) -> dict[str, Any]:
+def _build_seed_dim_product(catalog_df: Any) -> Any:
+    """Project the checked-in seed catalog into the common product dimension.
+
+    Tenant-registered products are a separate input owned by the storefront
+    flow.  Until that input exists, this projection covers the seed catalog
+    only and deliberately keeps ``tenant_id`` NULL.
+    """
+
+    from pyspark.sql import functions as F
+
+    product_id = F.trim(F.col("product_id").cast("string"))
+    return (
+        catalog_df.select(
+            product_id.alias("product_id"),
+            F.col("product_name").cast("string").alias("product_name"),
+            F.lit(None).cast("string").alias("tenant_id"),
+            F.lit("seed_catalog").alias("product_source"),
+            F.col("brand_id").cast("string").alias("brand_id"),
+            F.col("brand_name").cast("string").alias("brand_name"),
+            F.col("primary_category").cast("string").alias("primary_category"),
+            F.col("secondary_category").cast("string").alias("secondary_category"),
+            F.col("tertiary_category").cast("string").alias("tertiary_category"),
+            F.lit(None).cast("string").alias("category_id"),
+            F.array(
+                F.col("primary_category").cast("string"),
+                F.col("secondary_category").cast("string"),
+                F.col("tertiary_category").cast("string"),
+            ).alias("category_path"),
+            F.col("price_usd").cast("decimal(18,2)").alias("base_price"),
+            F.lit("USD").alias("currency"),
+            F.array().cast("array<string>").alias("skin_type_tags"),
+            F.array().cast("array<string>").alias("concern_tags"),
+            F.array().cast("array<string>").alias("ingredient_ids"),
+            F.lit(0).cast("int").alias("caution_ingredient_count"),
+            F.col("rating").cast("double").alias("rating"),
+            F.lit("observed").alias("rating_source"),
+            F.col("loves_count").cast("long").alias("loves_count"),
+            F.lit(None).cast("timestamp").alias("registered_at"),
+            F.current_timestamp().alias("updated_at"),
+        )
+        .where(F.col("product_id").isNotNull() & (F.length(F.col("product_id")) > 0))
+        .dropDuplicates(["product_id"])
+    )
+
+
+CONTENT_GROUP_COLUMNS = (
+    "event_date_kst",
+    "session_id",
+    "page_view_id",
+    "product_id",
+    "section_id",
+    "content_kind",
+    "content_ref",
+    "tenant_id",
+    "user_id",
+    "persona_id",
+    "scenario_id",
+    "simulation_run_id",
+    "generator_type",
+    "actor_type",
+    "source",
+)
+
+
+def _null_safe_left_join(
+    left_df: Any,
+    right_df: Any,
+    key_columns: tuple[str, ...] | list[str],
+    value_columns: tuple[str, ...] | list[str],
+) -> Any:
+    """Left-join aggregate values while matching nullable grain columns."""
+
+    from pyspark.sql import functions as F
+
+    left = left_df.alias("_left")
+    right = right_df.select(*key_columns, *value_columns).alias("_right")
+    condition = F.lit(True)
+    for name in key_columns:
+        condition = condition & F.col(f"_left.{name}").eqNullSafe(
+            F.col(f"_right.{name}")
+        )
+    joined = left.join(right, condition, "left")
+    return joined.select(
+        *[F.col(f"_left.{name}") for name in left_df.columns],
+        *[F.col(f"_right.{name}") for name in value_columns],
+    )
+
+
+def _content_events(cleaned_df: Any, event_names: tuple[str, ...]) -> Any:
+    from pyspark.sql import functions as F
+
+    typed = _typed_properties(cleaned_df).where(
+        F.col("event_name").isin(*event_names)
+    )
+    return typed.select(
+        "event_date_kst",
+        "session_id",
+        "page_view_id",
+        "product_id",
+        _prop(F.col("_properties"), "section_id").alias("section_id"),
+        _prop(F.col("_properties"), "content_kind").alias("content_kind"),
+        _prop(F.col("_properties"), "content_ref").alias("content_ref"),
+        "tenant_id",
+        "user_id",
+        "persona_id",
+        "scenario_id",
+        "simulation_run_id",
+        "generator_type",
+        "event_name",
+        "event_time",
+        "actor_type",
+        "source",
+        _prop(F.col("_properties"), "dwell_ms").cast("long").alias("dwell_ms"),
+        _prop(F.col("_properties"), "co_visible_blocks")
+        .cast("int")
+        .alias("co_visible_blocks"),
+        _prop(F.col("_properties"), "action").alias("action"),
+        _prop(F.col("_properties"), "open").alias("open"),
+        _prop(F.col("_properties"), "matched_ingredients").alias(
+            "_matched_ingredients"
+        ),
+        _prop(F.col("_properties"), "matched_keywords").alias("_matched_keywords"),
+        _prop(F.col("_properties"), "vocab_version").alias("vocab_version"),
+    )
+
+
+def _section_dwell_agg(
+    cleaned_df: Any, dim_product_df: Any | None = None
+) -> Any:
+    from pyspark.sql import functions as F
+
+    events = _content_events(cleaned_df, ("section_dwell",)).withColumn(
+        "_dwell_ms", F.col("dwell_ms").cast("long")
+    )
+    grouped = events.groupBy(*CONTENT_GROUP_COLUMNS).agg(
+        F.coalesce(F.sum("_dwell_ms"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
+        F.count(F.lit(1)).cast("long").alias("dwell_event_count"),
+        F.max("co_visible_blocks").cast("int").alias("max_co_visible_blocks"),
+        F.min("event_time").alias("first_seen_at"),
+        F.max("event_time").alias("last_seen_at"),
+        F.current_timestamp().alias("processed_at"),
+    )
+    return _attach_product_dimension(
+        grouped.withColumn("category_id", F.lit(None).cast("string")).withColumn(
+            "brand_id", F.lit(None).cast("string")
+        ),
+        dim_product_df,
+    )
+
+
+def _create_map(values: dict[str, float]) -> Any:
+    from pyspark.sql import functions as F
+
+    if not values:
+        raise ValueError("behavior weight table must not be empty")
+    entries: list[Any] = []
+    for name, value in values.items():
+        entries.extend((F.lit(name), F.lit(float(value))))
+    return F.create_map(*entries)
+
+
+def _load_behavior_weights(path: str | None = None) -> dict[str, Any]:
+    try:
+        from .behavior_weights import load
+    except ImportError:
+        from behavior_weights import load
+
+    return load(path)
+
+
+def _content_interest_fact(
+    cleaned_df: Any,
+    section_dwell_df: Any,
+    weights: dict[str, Any],
+    dim_product_df: Any | None = None,
+) -> Any:
+    from pyspark.sql import functions as F
+
+    event_names = ("section_view",) + CONTENT_INTEREST_EVENTS
+    events = _content_events(cleaned_df, event_names)
+    event_keys = events.select(*CONTENT_GROUP_COLUMNS)
+    section_keys = section_dwell_df.select(*CONTENT_GROUP_COLUMNS)
+    keys = event_keys.unionByName(section_keys).distinct()
+
+    expands = (F.col("event_name") == F.lit("accordion_toggle")) & (
+        (F.col("action") == F.lit("expand"))
+        | (F.col("open") == F.lit("true"))
+    )
+    counts = events.groupBy(*CONTENT_GROUP_COLUMNS).agg(
+        F.sum(
+            F.when(F.col("event_name") == F.lit("section_view"), 1).otherwise(0)
+        )
+        .cast("long")
+        .alias("view_count"),
+        F.sum(F.when(expands, 1).otherwise(0)).cast("long").alias(
+            "accordion_expand_count"
+        ),
+        F.sum(
+            F.when(F.col("event_name") == F.lit("review_filter_apply"), 1).otherwise(0)
+        )
+        .cast("long")
+        .alias("review_filter_count"),
+        F.sum(
+            F.when(F.col("event_name") == F.lit("text_selection"), 1).otherwise(0)
+        )
+        .cast("long")
+        .alias("text_select_count"),
+        F.sum(
+            F.when(F.col("event_name") == F.lit("text_copy"), 1).otherwise(0)
+        )
+        .cast("long")
+        .alias("text_copy_count"),
+        F.array_distinct(
+            F.flatten(
+                F.collect_list(
+                    F.coalesce(
+                        F.col("_matched_ingredients"),
+                        F.array().cast("array<string>"),
+                    )
+                )
+            )
+        ).alias("matched_ingredients"),
+        F.array_distinct(
+            F.flatten(
+                F.collect_list(
+                    F.coalesce(
+                        F.col("_matched_keywords"),
+                        F.array().cast("array<string>"),
+                    )
+                )
+            )
+        ).alias("matched_keywords"),
+        F.first("vocab_version", ignorenulls=True).alias("vocab_version"),
+    )
+
+    result = _null_safe_left_join(
+        keys,
+        section_dwell_df,
+        CONTENT_GROUP_COLUMNS,
+        ("dwell_ms_sum",),
+    )
+    result = _null_safe_left_join(
+        result,
+        counts,
+        CONTENT_GROUP_COLUMNS,
+        (
+            "view_count",
+            "accordion_expand_count",
+            "review_filter_count",
+            "text_select_count",
+            "text_copy_count",
+            "matched_ingredients",
+            "matched_keywords",
+            "vocab_version",
+        ),
+    )
+    result = (
+        result.withColumn("view_count", F.coalesce(F.col("view_count"), F.lit(0)).cast("long"))
+        .withColumn(
+            "dwell_ms_sum", F.coalesce(F.col("dwell_ms_sum"), F.lit(0)).cast("long")
+        )
+        .withColumn(
+            "accordion_expand_count",
+            F.coalesce(F.col("accordion_expand_count"), F.lit(0)).cast("long"),
+        )
+        .withColumn(
+            "review_filter_count",
+            F.coalesce(F.col("review_filter_count"), F.lit(0)).cast("long"),
+        )
+        .withColumn(
+            "text_select_count",
+            F.coalesce(F.col("text_select_count"), F.lit(0)).cast("long"),
+        )
+        .withColumn(
+            "text_copy_count",
+            F.coalesce(F.col("text_copy_count"), F.lit(0)).cast("long"),
+        )
+        .withColumn(
+            "matched_ingredients",
+            F.coalesce(
+                F.col("matched_ingredients"), F.array().cast("array<string>")
+            ),
+        )
+        .withColumn(
+            "matched_keywords",
+            F.coalesce(F.col("matched_keywords"), F.array().cast("array<string>")),
+        )
+    )
+
+    event_weights = weights["event"]
+    section_weights = weights["section"]
+    missing_events = set(CONTENT_INTEREST_EVENTS) - set(event_weights)
+    if missing_events:
+        raise ValueError(f"content interest weights missing: {sorted(missing_events)}")
+
+    section_map = _create_map(section_weights)
+    resolved_section_weight = F.when(
+        F.col("section_id").isNull(), F.lit(1.0)
+    ).otherwise(
+        F.coalesce(
+            F.element_at(section_map, F.col("section_id")),
+            F.lit(1.0),
+        )
+    )
+    unknown_section = F.col("section_id").isNotNull() & F.element_at(
+        section_map, F.col("section_id")
+    ).isNull()
+    event_score = F.lit(0.0)
+    event_count_columns = {
+        "accordion_toggle": "accordion_expand_count",
+        "review_filter_apply": "review_filter_count",
+        "text_selection": "text_select_count",
+        "text_copy": "text_copy_count",
+    }
+    for event_name in CONTENT_INTEREST_EVENTS:
+        event_score = event_score + (
+            F.col(event_count_columns[event_name])
+            * F.lit(float(event_weights[event_name]))
+        )
+    quality_flags = F.when(
+        F.col("section_id").isNull(),
+        F.array(F.lit("section_id_null_weight_defaulted")),
+    ).when(
+        unknown_section,
+        F.array(F.lit("unknown_section_weight_defaulted")),
+    ).otherwise(F.array().cast("array<string>"))
+
+    result = (
+        result.withColumn(
+            "content_interest_score",
+            resolved_section_weight
+            * (
+                F.log1p(F.col("dwell_ms_sum").cast("double") / F.lit(1000.0))
+                + event_score
+            ),
+        )
+        .withColumn("quality_flags", quality_flags)
+        .withColumn("processed_at", F.current_timestamp())
+        .withColumn("category_id", F.lit(None).cast("string"))
+        .withColumn("brand_id", F.lit(None).cast("string"))
+    )
+    return _attach_product_dimension(result, dim_product_df)
+
+
+def build_derived_frames(
+    cleaned_df: Any,
+    time_zone: str,
+    dim_product_df: Any | None = None,
+    weights: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    section_dwell = _section_dwell_agg(cleaned_df, dim_product_df)
+    if weights is None:
+        weights = _load_behavior_weights()
     return {
-        "sessionized_events": _sessionized_events(cleaned_df),
-        "product_event_fact": _product_event_fact(cleaned_df, time_zone),
+        "sessionized_events": _sessionized_events(cleaned_df, dim_product_df),
+        "product_event_fact": _product_event_fact(
+            cleaned_df, time_zone, dim_product_df
+        ),
+        "section_dwell_agg": section_dwell,
+        "content_interest_fact": _content_interest_fact(
+            cleaned_df, section_dwell, weights, dim_product_df
+        ),
     }
 
 
 def run(spark: Any, config: DeriveFactsConfig) -> None:
     spark.conf.set("spark.sql.session.timeZone", "UTC")
-    frames = build_derived_frames(spark.read.parquet(config.input_path), config.time_zone)
+    catalog_df = spark.read.option("multiLine", "true").json(
+        config.product_catalog_path
+    )
+    dim_product = _build_seed_dim_product(catalog_df)
+    weights = _load_behavior_weights(config.behavior_weights_path)
+    frames = build_derived_frames(
+        spark.read.option("mergeSchema", "true").parquet(config.input_path),
+        config.time_zone,
+        dim_product,
+        weights,
+    )
     frames["sessionized_events"].write.mode("overwrite").parquet(
-        config.sessionized_path
+        config.sessionized_path,
+        partitionBy="event_date_kst",
     )
     frames["product_event_fact"].write.mode("overwrite").parquet(
-        config.product_fact_path
+        config.product_fact_path,
+        partitionBy="event_date_kst",
+    )
+    frames["section_dwell_agg"].write.mode("overwrite").parquet(
+        config.section_dwell_path,
+        partitionBy="event_date_kst",
+    )
+    frames["content_interest_fact"].write.mode("overwrite").parquet(
+        config.content_interest_path,
+        partitionBy="event_date_kst",
+    )
+    dim_product.write.mode("overwrite").parquet(
+        config.dim_product_path,
     )
 
 

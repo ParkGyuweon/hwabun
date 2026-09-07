@@ -21,6 +21,9 @@ DEFAULT_BAD_PATH = "data/processed/bad_events"
 DEFAULT_DUPLICATE_PATH = "data/processed/duplicate_events"
 DEFAULT_SESSIONIZED_PATH = "data/processed/sessionized_events"
 DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
+DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
+DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
+DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
 DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
@@ -34,6 +37,9 @@ class ValidatePipelineConfig:
     duplicate_path: str = DEFAULT_DUPLICATE_PATH
     sessionized_path: str = DEFAULT_SESSIONIZED_PATH
     product_fact_path: str = DEFAULT_PRODUCT_FACT_PATH
+    section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
+    content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
+    dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
@@ -48,6 +54,9 @@ class ValidatePipelineConfig:
             "duplicate_path": self.duplicate_path,
             "sessionized_path": self.sessionized_path,
             "product_fact_path": self.product_fact_path,
+            "section_dwell_path": self.section_dwell_path,
+            "content_interest_path": self.content_interest_path,
+            "dim_product_path": self.dim_product_path,
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
@@ -89,6 +98,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("PRODUCT_EVENT_FACT_PATH", DEFAULT_PRODUCT_FACT_PATH),
     )
     parser.add_argument(
+        "--section-dwell-path",
+        default=_env("SECTION_DWELL_PATH", DEFAULT_SECTION_DWELL_PATH),
+    )
+    parser.add_argument(
+        "--content-interest-path",
+        default=_env("CONTENT_INTEREST_PATH", DEFAULT_CONTENT_INTEREST_PATH),
+    )
+    parser.add_argument(
+        "--dim-product-path",
+        default=_env("DIM_PRODUCT_PATH", DEFAULT_DIM_PRODUCT_PATH),
+    )
+    parser.add_argument(
         "--funnel-session-path",
         default=_env("FUNNEL_SESSION_FACT_PATH", DEFAULT_FUNNEL_SESSION_PATH),
     )
@@ -122,6 +143,9 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         duplicate_path=args.duplicate_path,
         sessionized_path=args.sessionized_path,
         product_fact_path=args.product_fact_path,
+        section_dwell_path=args.section_dwell_path,
+        content_interest_path=args.content_interest_path,
+        dim_product_path=args.dim_product_path,
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
@@ -143,7 +167,7 @@ def _synthetic_session_persona_conflict_count(cleaned: Any) -> int:
 
     return (
         cleaned.where(F.col("actor_type") == F.lit("synthetic"))
-        .groupBy("simulation_run_id", "session_id")
+        .groupBy("tenant_id", "simulation_run_id", "session_id")
         .agg(F.countDistinct("persona_id").alias("persona_count"))
         .where(F.col("persona_count") > 1)
         .count()
@@ -157,7 +181,7 @@ def _session_sequence_collision_count(cleaned: Any) -> int:
 
     return (
         cleaned.where(F.col("sequence_no").isNotNull())
-        .groupBy("simulation_run_id", "session_id", "sequence_no")
+        .groupBy("tenant_id", "simulation_run_id", "session_id", "sequence_no")
         .count()
         .where(F.col("count") > 1)
         .count()
@@ -210,6 +234,9 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     duplicates = frames["duplicates"]
     sessionized = frames["sessionized"]
     product_fact = frames["product_fact"]
+    section_dwell = frames["section_dwell"]
+    content_interest = frames["content_interest"]
+    dim_product = frames["dim_product"]
     funnel_session = frames["funnel_session"]
     product_daily = frames["product_daily"]
     funnel_daily = frames["funnel_daily"]
@@ -221,12 +248,74 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "duplicates": duplicates.count(),
         "sessionized": sessionized.count(),
         "product_fact": product_fact.count(),
+        "section_dwell": section_dwell.count(),
+        "content_interest": content_interest.count(),
+        "dim_product": dim_product.count(),
         "funnel_session": funnel_session.count(),
         "product_daily": product_daily.count(),
         "funnel_daily": funnel_daily.count(),
     }
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+
+    tenant_datasets = (
+        "cleaned",
+        "sessionized",
+        "product_fact",
+        "section_dwell",
+        "content_interest",
+        "funnel_session",
+        "product_daily",
+        "funnel_daily",
+    )
+    missing_tenant_columns = [
+        name for name in tenant_datasets if "tenant_id" not in frames[name].columns
+    ]
+    checks.append(
+        _check(
+            "tenant_id_is_present_in_processed_outputs",
+            not missing_tenant_columns,
+            "missing_columns=" + ",".join(missing_tenant_columns),
+        )
+    )
+    checks.append(
+        _check(
+            "dim_product_key_is_unique",
+            _duplicate_count(dim_product, ["product_id"]) == 0,
+            "dim_product grain=product_id",
+        )
+    )
+    checks.append(
+        _check(
+            "content_interest_score_is_materialized",
+            content_interest.where(F.col("content_interest_score").isNull()).count()
+            == 0,
+            "content_interest_fact score is non-null for every content grain",
+        )
+    )
+    if not missing_tenant_columns:
+        legacy_tenant_rows = cleaned.where(
+            (F.col("schema_version") == F.lit("0.3.0-draft"))
+            & F.col("tenant_id").isNull()
+        ).count()
+        checks.append(
+            _check(
+                "schema_0_3_events_have_tenant_id",
+                legacy_tenant_rows == 0,
+                f"violating_rows={legacy_tenant_rows}",
+            )
+        )
+        mart_tenant_nulls = sum(
+            frames[name].where(F.col("tenant_id").isNull()).count()
+            for name in ("product_daily", "funnel_daily")
+        )
+        checks.append(
+            _check(
+                "tenant_scoped_marts_have_no_null_tenant",
+                mart_tenant_nulls == 0,
+                f"null_tenant_rows={mart_tenant_nulls}",
+            )
+        )
 
     raw_duplicate_groups = _raw_event_id_duplicate_group_count(raw)
     if raw_duplicate_groups:
@@ -354,8 +443,11 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     checks.append(
         _check(
             "funnel_session_grain_is_unique",
-            _duplicate_count(funnel_session, ["session_id", "product_id"]) == 0,
-            "funnel_session_fact grain=session_id+product_id",
+            _duplicate_count(
+                funnel_session, ["tenant_id", "session_id", "product_id"]
+            )
+            == 0,
+            "funnel_session_fact grain=tenant_id+session_id+product_id",
         )
     )
     checks.append(
@@ -365,6 +457,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
                 product_daily,
                 [
                     "event_date_kst",
+                    "tenant_id",
                     "product_id",
                     "actor_type",
                     "source",
@@ -383,6 +476,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
                 funnel_daily,
                 [
                     "funnel_date_kst",
+                    "tenant_id",
                     "product_id",
                     "actor_type",
                     "source",
@@ -413,11 +507,17 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "duplicates": config.duplicate_path,
         "sessionized": config.sessionized_path,
         "product_fact": config.product_fact_path,
+        "section_dwell": config.section_dwell_path,
+        "content_interest": config.content_interest_path,
+        "dim_product": config.dim_product_path,
         "funnel_session": config.funnel_session_path,
         "product_daily": config.product_daily_path,
         "funnel_daily": config.funnel_daily_path,
     }
-    frames = {name: spark.read.parquet(path) for name, path in paths.items()}
+    frames = {
+        name: spark.read.option("mergeSchema", "true").parquet(path)
+        for name, path in paths.items()
+    }
     return validate_frames(frames, config.require_events)
 
 

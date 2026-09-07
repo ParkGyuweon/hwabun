@@ -39,6 +39,9 @@ validate_pipeline() {
     --duplicate-path "$data_root/processed/duplicate_events" \
     --sessionized-path "$data_root/processed/sessionized_events" \
     --product-fact-path "$data_root/processed/product_event_fact" \
+    --section-dwell-path "$data_root/processed/section_dwell_agg" \
+    --content-interest-path "$data_root/processed/content_interest_fact" \
+    --dim-product-path "$data_root/processed/dim_product" \
     --funnel-session-path "$data_root/processed/funnel_session_fact" \
     --product-daily-path "$data_root/marts/product_daily_kpi" \
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
@@ -56,14 +59,20 @@ run_batch_pipeline() {
   submit_job /opt/project/streaming/jobs/derive_facts_job.py \
     --input-path "$data_root/processed/cleaned_events" \
     --sessionized-path "$data_root/processed/sessionized_events" \
-    --product-fact-path "$data_root/processed/product_event_fact"
+    --product-fact-path "$data_root/processed/product_event_fact" \
+    --section-dwell-path "$data_root/processed/section_dwell_agg" \
+    --content-interest-path "$data_root/processed/content_interest_fact" \
+    --dim-product-path "$data_root/processed/dim_product" \
+    --product-catalog-path /opt/project/batch/ingest/data/products_200.json \
+    --behavior-weights-path /opt/project/frontend/src/types/log.ts
 
   submit_job /opt/project/streaming/jobs/build_marts_job.py \
     --sessionized-path "$data_root/processed/sessionized_events" \
     --product-fact-path "$data_root/processed/product_event_fact" \
     --funnel-session-path "$data_root/processed/funnel_session_fact" \
     --product-daily-path "$data_root/marts/product_daily_kpi" \
-    --funnel-daily-path "$data_root/marts/funnel_daily_kpi"
+    --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
+    --behavior-weights-path /opt/project/frontend/src/types/log.ts
 
   validate_pipeline
 }

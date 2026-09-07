@@ -33,6 +33,8 @@ RFC3339_WITH_OFFSET_PATTERN = (
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
     r"(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$"
 )
+SUPPORTED_SCHEMA_VERSIONS = ("0.2.0-draft", "0.3.0-draft")
+TENANT_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 CANONICAL_ORDER_FIELDS = (
     "received_at",
@@ -138,6 +140,23 @@ def _non_blank(column: Any) -> Any:
     return column.isNotNull() & (F.length(F.trim(column.cast("string"))) > 0)
 
 
+def _ensure_raw_projection(raw_df: Any) -> Any:
+    """Add nullable columns introduced after an older Raw snapshot.
+
+    A full-snapshot rerun can read a directory containing files written before
+    the source/tenant projection was added.  Treat those columns as unknown
+    rather than guessing a tenant or failing before Q2 can apply the version
+    rule.
+    """
+
+    from pyspark.sql import functions as F
+
+    for name in ("source", "tenant_id"):
+        if name not in raw_df.columns:
+            raw_df = raw_df.withColumn(name, F.lit(None).cast("string"))
+    return raw_df
+
+
 def _properties_column(raw_df: Any, field_name: str) -> Any:
     from pyspark.sql import functions as F
 
@@ -161,6 +180,19 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
     required_ok = F.lit(True)
     for field in REQUIRED_FIELDS:
         required_ok = required_ok & _non_blank(c(field))
+
+    schema_version_ok = c("schema_version").isin(*SUPPORTED_SCHEMA_VERSIONS).eqNullSafe(
+        True
+    )
+    tenant_required_ok = (
+        c("schema_version").isNull()
+        | (c("schema_version") != F.lit("0.3.0-draft"))
+        | _non_blank(c("tenant_id"))
+    )
+    tenant_format_ok = c("tenant_id").isNull() | c("tenant_id").rlike(
+        TENANT_ID_PATTERN
+    )
+    source_ok = (~_non_blank(c("source"))) | c("source").isin("web", "simulator")
 
     coordinate_ok = (
         _non_blank(c("kafka_cluster_id"))
@@ -199,6 +231,10 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         "json_ok": c("is_json_parseable").eqNullSafe(True),
         "coordinate_ok": coordinate_ok,
         "required_ok": required_ok,
+        "schema_version_ok": schema_version_ok,
+        "tenant_required_ok": tenant_required_ok,
+        "tenant_format_ok": tenant_format_ok,
+        "source_ok": source_ok,
         "timestamp_ok": c("event_time").isNotNull() & c("received_at").isNotNull(),
         "timestamp_format_ok": (
             _rfc3339_with_offset(occurred_at_raw)
@@ -217,6 +253,10 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         F.when(~expressions["json_ok"], F.lit("invalid_json"))
         .when(~expressions["coordinate_ok"], F.lit("missing_source_coordinate"))
         .when(~expressions["required_ok"], F.lit("missing_required_field"))
+        .when(~expressions["schema_version_ok"], F.lit("invalid_schema_version"))
+        .when(~expressions["tenant_required_ok"], F.lit("missing_tenant_id"))
+        .when(~expressions["tenant_format_ok"], F.lit("invalid_tenant_id"))
+        .when(~expressions["source_ok"], F.lit("invalid_source"))
         .when(~expressions["timestamp_ok"], F.lit("invalid_timestamp"))
         .when(~expressions["timestamp_format_ok"], F.lit("invalid_timestamp_format"))
         .when(~expressions["sequence_ok"], F.lit("invalid_sequence_no"))
@@ -267,11 +307,21 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
 
     from pyspark.sql import functions as F
 
+    raw_df = _ensure_raw_projection(raw_df)
     raw_df = _remove_replayed_coordinates(raw_df)
     expressions = _validation_columns(raw_df)
     valid_condition = F.lit(True)
     for expression in expressions.values():
         valid_condition = valid_condition & expression
+
+    raw_source = F.when(_non_blank(F.col("source")), F.trim(F.col("source")))
+    is_synthetic = F.col("actor_type") == F.lit("synthetic")
+    resolved_source = F.coalesce(
+        raw_source,
+        F.when(is_synthetic, F.lit("simulator")).otherwise(F.lit("web")),
+    )
+    bad_reason = _bad_reason(expressions)
+    bad_recorded_at = F.current_timestamp()
 
     bad_events = (
         raw_df.where(~valid_condition)
@@ -284,11 +334,21 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
             "kafka_key",
             "raw_value",
             "event_id",
+            "event_name",
+            "schema_version",
+            "request_id",
+            "event_index",
             "event_time",
             "received_at",
-            _bad_reason(expressions).alias("error_code"),
+            "actor_type",
+            resolved_source.alias("source"),
+            bad_reason.alias("error_code"),
             F.lit("spark_semantic_validation").alias("error_stage"),
-            F.current_timestamp().alias("bad_recorded_at"),
+            F.concat(F.lit("semantic validation failed: "), bad_reason).alias(
+                "error_message"
+            ),
+            bad_recorded_at.alias("bad_recorded_at"),
+            F.to_date(bad_recorded_at).alias("bad_recorded_date"),
         )
     )
 
@@ -298,7 +358,16 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
     scenario_id = _properties_column(canonical, "scenario_id")
     simulation_run_id = _properties_column(canonical, "simulation_run_id")
     generator_type = _properties_column(canonical, "generator_type")
-    is_synthetic = F.col("actor_type") == F.lit("synthetic")
+    processed_at = F.current_timestamp()
+    source_fallback = raw_source.isNull()
+    quality_flags = F.when(
+        F.col("_candidate_count") > 1,
+        F.array(F.lit("duplicate")),
+    ).otherwise(F.array().cast("array<string>"))
+    quality_flags = F.when(
+        source_fallback,
+        F.concat(quality_flags, F.array(F.lit("source_fallback"))),
+    ).otherwise(quality_flags)
 
     cleaned_events = canonical.select(
         "event_id",
@@ -307,11 +376,18 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         "intent",
         "event_time",
         "received_at",
-        F.current_timestamp().alias("processed_at"),
+        processed_at.alias("processed_at"),
+        (
+            F.unix_millis(F.col("received_at"))
+            - F.unix_millis(F.col("event_time"))
+        ).cast("long").alias("latency_ms"),
+        (
+            F.unix_millis(processed_at) - F.unix_millis(F.col("received_at"))
+        ).cast("long").alias("processing_lag_ms"),
         "request_id",
-        F.when(is_synthetic, F.lit("simulator"))
-        .otherwise(F.lit("web"))
-        .alias("source"),
+        "event_index",
+        resolved_source.alias("source"),
+        "tenant_id",
         "actor_type",
         is_synthetic.alias("is_synthetic"),
         F.when(is_synthetic, F.col("persona_id"))
@@ -333,16 +409,16 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         .alias("generator_type"),
         "environment",
         "product_id",
+        F.lit(None).cast("string").alias("category_id"),
+        F.lit(None).cast("string").alias("brand_id"),
+        _properties_column(canonical, "section_id").alias("section_id"),
+        _properties_column(canonical, "content_kind").alias("content_kind"),
+        _properties_column(canonical, "position").cast("int").alias("position"),
         "properties_json",
         F.from_utc_timestamp(F.col("event_time"), time_zone)
         .cast("date")
         .alias("event_date_kst"),
-        F.when(
-            F.col("_candidate_count") > 1,
-            F.array(F.lit("duplicate")),
-        )
-        .otherwise(F.array().cast("array<string>"))
-        .alias("quality_flags"),
+        quality_flags.alias("quality_flags"),
         F.col("_candidate_count").alias("raw_candidate_count"),
         "kafka_cluster_id",
         "kafka_topic",
@@ -359,6 +435,9 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         F.col("_canonical_rank").alias("canonical_rank"),
         F.col("_candidate_count").alias("candidate_count"),
         "received_at",
+        F.from_utc_timestamp(F.col("event_time"), time_zone)
+        .cast("date")
+        .alias("event_date_kst"),
         "kafka_cluster_id",
         "kafka_topic",
         "kafka_partition",
@@ -377,10 +456,20 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
 
 def run(spark: Any, config: CleanEventsConfig) -> None:
     spark.conf.set("spark.sql.session.timeZone", "UTC")
-    frames = build_processed_frames(spark.read.parquet(config.input_path), config.time_zone)
-    frames["cleaned_events"].write.mode("overwrite").parquet(config.cleaned_path)
-    frames["bad_events"].write.mode("overwrite").parquet(config.bad_path)
-    frames["duplicate_events"].write.mode("overwrite").parquet(config.duplicate_path)
+    raw_df = spark.read.option("mergeSchema", "true").parquet(config.input_path)
+    frames = build_processed_frames(raw_df, config.time_zone)
+    frames["cleaned_events"].write.mode("overwrite").parquet(
+        config.cleaned_path,
+        partitionBy="event_date_kst",
+    )
+    frames["bad_events"].write.mode("overwrite").parquet(
+        config.bad_path,
+        partitionBy="bad_recorded_date",
+    )
+    frames["duplicate_events"].write.mode("overwrite").parquet(
+        config.duplicate_path,
+        partitionBy="event_date_kst",
+    )
 
 
 def main(argv: list[str] | None = None) -> None:

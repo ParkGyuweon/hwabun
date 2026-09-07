@@ -1,7 +1,7 @@
 # Processed Dataset Schema 계약
 
 작성일: 2026-09-01
-최종 정적 검증: 2026-09-02
+최종 정적 검증: 2026-09-07
 대상 Jira: `[DATA] Spark 처리 결과 및 DW 저장 구조 확정`
 문서 정리 Jira: `[DATA] Analytics 계약 및 설계 문서 구조 정리`
 상태: 논리 Schema 확정, 현재 Spark 구현·Delta 물리화·E2E 정합성 검증 대기
@@ -61,17 +61,17 @@ Tenant 격리가 필요한 소비자는 해당 row를 제외한다. 값을 임�
 | --- | --- | --- | --- | --- |
 | `bad_events` | Error | Kafka 물리 좌표 1건 | `bad_recorded_date` | 구현, 목표 컬럼 보완 필요 |
 | `duplicate_events` | Audit | 중복 후보 Kafka 물리 좌표 1건 | `event_date_kst` | 구현, 목표 컬럼 보완 필요 |
-| `cleaned_events` | Processed Base | `event_id` | `event_date_kst` | 구현, 목표 컬럼 보완 필요 |
-| `sessionized_events` | Processed Base | `event_id` | `event_date_kst` | 구현, 목표 컬럼 보완 필요 |
-| `product_event_fact` | Processed Fact | `event_id + item_index + product_id` | `event_date_kst` | 구현, Dimension Join 필요 |
+| `cleaned_events` | Processed Base | `event_id` | `event_date_kst` | 구현, Q3 Dimension 결과는 후속 보강 |
+| `sessionized_events` | Processed Base | `event_id` | `event_date_kst` | 구현, tenant-aware 순서·seed Dimension 조인 |
+| `product_event_fact` | Processed Fact | `event_id + item_index + product_id` | `event_date_kst` | 구현, seed Dimension Join |
 | `search_event_fact` | Processed Fact | `event_id` | `event_date_kst` | 미구현 |
-| `section_dwell_agg` | Processed Aggregate | section dwell grain | `event_date_kst` | 미구현 |
-| `content_interest_fact` | Processed Fact | content interest grain | `event_date_kst` | 미구현 |
+| `section_dwell_agg` | Processed Aggregate | section dwell grain | `event_date_kst` | 구현, delta 합산 |
+| `content_interest_fact` | Processed Fact | content interest grain | `event_date_kst` | 구현, 산식·가중치 연결 |
 | `purchase_fact` | Processed Fact | `order_id + product_id` | `event_date_kst` | 미구현 |
 | `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 미구현 |
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
-| `dim_product` | Dimension | `product_id` | 없음 | 원천·Join 구현 대기 |
+| `dim_product` | Dimension | `product_id` | 없음 | seed 원천 projection 구현, Tenant 등록 union 대기 |
 
 `section_dwell_agg`와 `content_interest_fact`의 grain은 다음 컬럼 조합이다.
 
@@ -232,8 +232,9 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `environment` | string | N | 실행 환경 |
 | `properties_json` | string | N | properties 원문 JSON |
 
-세션 정렬은 `session_id` 안에서 `sequence_no → event_time → received_at → event_id`
-순으로 수행한다.
+세션 정렬은 `tenant_id + session_id` 경계 안에서
+`sequence_no → event_time → received_at → event_id` 순으로 수행한다. 같은
+`session_id` 문자열이 Tenant 사이에서 재사용돼도 세션이 섞이지 않는다.
 
 ## 8. `product_event_fact`
 
@@ -452,6 +453,7 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `matched_ingredients` | array<string> | N | 매칭 성분, 없으면 빈 배열 |
 | `matched_keywords` | array<string> | N | 매칭 키워드, 없으면 빈 배열 |
 | `vocab_version` | string | Y | 어휘집 버전 |
+| `quality_flags` | array<string> | N | 섹션 가중치 기본값 적용 등 품질 표시 |
 | `content_interest_score` | double | N | §13.1 산식 결과 |
 | `processed_at` | timestamp | N | 처리 시각 |
 | `actor_type` | string | N | 사용자 유형 |
