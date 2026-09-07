@@ -33,7 +33,7 @@ Frontend
 | 화면 Trigger·KPI 연결 | [`event-logging-design.md`](./event-logging-design.md) |
 | Kafka payload | Front JSON을 유지하고 Collector가 `received_at`, `source`, `request_id`, `event_index` 보강 |
 | 수집 API | `POST /api/events`, body는 `{ schema_version, events: [ ...LogEnvelope ] }` |
-| Schema version | `0.2.0-draft`와 `0.3.0-draft` 허용. 후자는 `tenant_id` 필수 |
+| Schema version | 현재 `0.2.0-draft`만 사용. 통합몰 전환으로 `0.3.0-draft`는 철회 |
 | Kafka message grain | 현재 Backend 구현은 Event 1건 |
 | Kafka key | `session_id` |
 | Raw 중복 | 수신 원본을 보존하고 Processed에서 `event_id` 기준 제거 |
@@ -107,7 +107,7 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 `properties`는 JSON으로 보존한다.
 
 - 공통 Envelope: Event, 사용자, 세션, 페이지, 시간 축
-- Tenant 축: `tenant_id`. 격리와 Mart partition의 기준 key
+- 상품 속성 축: `product_id`, `brand_id`. 현재 구현은 `dim_product` Join으로 `brand_id`를 보강
 - Collector metadata: `received_at`, `source`, `request_id`, `event_index`
 - Synthetic metadata: `scenario_id`, `simulation_run_id`, `generator_type`
 - 상품·콘텐츠 축: `product_id`, `section_id`, `content_kind`, `position` 등
@@ -116,10 +116,10 @@ Processed에서는 조회·조인·필터에 반복 사용되는 값만 typed co
 정확한 컬럼과 nullable은 Processed 계약을 따른다. Event별 필수 properties가 없거나
 타입 변환이 불가능하면 `bad_events`로 분리한다.
 
-`tenant_id`는 `schema_version = 0.3.0-draft`부터 Envelope에 실린다. `0.2.0-draft`
-Event에는 없으므로 컬럼이 NULL이며 값을 추정해 채우지 않는다. 상품 브랜드 `brand_id`는
-`dim_product` Join 파생이라 격리 key로 쓰지 않는다. 두 값을 서로 대체하면 상품이 없는
-Event에서 격리가 깨진다.
+상품 대상 Event의 `brand_id`는 `product_id`를 `dim_product`와 Join해 현재 Spark 구현에서
+보강한다. `business_id`는 `brand_id → dim_brand.business_id` 후속 Join이 필요한
+Fact/Dimension Jira의 범위다. 상품이 없는 Event의 귀속을 추정하지 않으며, 사업자
+대시보드 접근 격리는 Backend 인가가 담당한다.
 
 ### 4.4 `source`와 Synthetic 처리
 
@@ -170,28 +170,30 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 
 ## 6. 현재 `dev` 구현과 목표 계약의 차이
 
-2026-09-07 `feat/spark-contract-sync`에서 최신 계약과 `streaming/` 구현을 다시 대조한
-결과다. 이 표는 구현 현황이며
+2026-09-07 Jira 147 계약과 `streaming/` 구현을 대조하고, 이번 후속 작업에서
+`tenant_id` 의존성을 제거한 결과다. 이 표는 구현 현황이며
 계약을 대체하지 않는다.
 
 | Dataset | 현재 구현 | 남은 차이 |
 | --- | --- | --- |
-| `raw_events` | Kafka 원문과 `source`·`tenant_id` projection을 Parquet로 저장 | Delta 전환 |
+| `raw_events` | Kafka 원문과 `source` projection을 Parquet로 저장. `tenant_id` projection은 제거 | Delta 전환 |
 | `bad_events` | 목표 오류·추적 컬럼과 `bad_recorded_date`를 포함해 Q2에서 생성 | Delta key 기반 재실행 검증 |
 | `duplicate_events` | Q2에서 생성하고 `event_date_kst`를 기록 | Delta key 기반 재실행 검증 |
-| `cleaned_events` | payload `source` 우선, tenant 버전 검증, `event_index`·지연·콘텐츠 컬럼을 포함해 생성 | Q3 Dimension 결과를 Q2에도 물리는 방식은 별도 검토 |
-| `sessionized_events` | tenant-aware 세션 순서 복원과 seed `dim_product` 조인을 수행 | 목표 late Event 규칙 검증 |
-| `product_event_fact` | item grain과 seed `dim_product`의 `brand_id` 조인을 수행 | Tenant 등록 상품 Dimension과 item grain E2E 확인 |
-| `funnel_session_fact` | Q4에서 생성 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
+| `cleaned_events` | payload `source` 우선, `event_index`·지연·콘텐츠 컬럼을 포함해 생성. tenant 필수·형식 검증은 제거 | Q3 Dimension 결과를 Q2에도 물리는 방식은 별도 검토 |
+| `sessionized_events` | 통합 `session_id` 기준 세션 순서 복원과 seed `dim_product`의 `brand_id` 조인을 수행 | 목표 late Event 규칙 검증 |
+| `product_event_fact` | item grain과 seed `dim_product`의 `brand_id` 조인을 수행 | `dim_brand.business_id` 연결 및 입점 상품 E2E는 후속 Fact Jira |
+| `funnel_session_fact` | Q4에서 생성. tenant 필터·집계 축 없이 상품 세션 Funnel 산출 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
 | `search_event_fact` | 미구현 | Trigger와 원천 필드 확인 후 구현 |
-| `section_dwell_agg` | `dwell_ms` delta를 content grain으로 합산 | Tenant 등록 상품 Dimension과 E2E 확인 |
+| `section_dwell_agg` | `dwell_ms` delta를 content grain으로 합산하고 `brand_id`를 보강 | `dim_brand.business_id` 연결과 E2E 확인 |
 | `content_interest_fact` | 계약 §13.1 산식과 Front 가중치 원본 파싱을 반영 | vocab 정규화 연결과 E2E 확인 |
-| `dim_product` | seed `products_200.json` projection 생성 | Tenant 등록 상품 union과 전체 속성 보강 |
+| `dim_product` | seed `products_200.json` projection 생성 | 입점 브랜드 등록 상품 union과 전체 속성 보강 |
 | `persona_behavior_feature_delta` | 미구현 | 추천 계약 기준 delta 구현 |
 | `purchase_fact` | 미구현 | `items[]` explode와 `item_revenue` 파생 구현 |
 | `purchase_reason_fact` | 미구현 | `reasons[]` explode, 건너뛰기 row 보존 구현 |
 
-현재 Q1~Q5는 주로 Parquet output을 사용한다. 목표 저장 엔진은 Delta Lake이며 실제
+현재 Q1~Q5는 주로 Parquet output을 사용한다. 이번 후속에서는 기존 tenant 필터·집계
+축·물리 partition 의존성을 제거했으며, `business_id`·`brand_id`를 조회 축으로 쓰는
+Fact/Mart 물리 구현은 후속 Jira에서 진행한다. 목표 저장 엔진은 Delta Lake이며 실제
 Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
 
 `begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event가 됐다. 다만 Front

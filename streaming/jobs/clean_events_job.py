@@ -33,8 +33,7 @@ RFC3339_WITH_OFFSET_PATTERN = (
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
     r"(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$"
 )
-SUPPORTED_SCHEMA_VERSIONS = ("0.2.0-draft", "0.3.0-draft")
-TENANT_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+SUPPORTED_SCHEMA_VERSIONS = ("0.2.0-draft",)
 
 CANONICAL_ORDER_FIELDS = (
     "received_at",
@@ -144,16 +143,16 @@ def _ensure_raw_projection(raw_df: Any) -> Any:
     """Add nullable columns introduced after an older Raw snapshot.
 
     A full-snapshot rerun can read a directory containing files written before
-    the source/tenant projection was added.  Treat those columns as unknown
-    rather than guessing a tenant or failing before Q2 can apply the version
-    rule.
+    the source projection was added.  Treat that column as unknown rather than
+    failing before Q2 can apply the source fallback rule.  Older Raw files may
+    still contain the retired storefront-scope column; the explicit Processed projection
+    below ignores it.
     """
 
     from pyspark.sql import functions as F
 
-    for name in ("source", "tenant_id"):
-        if name not in raw_df.columns:
-            raw_df = raw_df.withColumn(name, F.lit(None).cast("string"))
+    if "source" not in raw_df.columns:
+        raw_df = raw_df.withColumn("source", F.lit(None).cast("string"))
     return raw_df
 
 
@@ -183,14 +182,6 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
 
     schema_version_ok = c("schema_version").isin(*SUPPORTED_SCHEMA_VERSIONS).eqNullSafe(
         True
-    )
-    tenant_required_ok = (
-        c("schema_version").isNull()
-        | (c("schema_version") != F.lit("0.3.0-draft"))
-        | _non_blank(c("tenant_id"))
-    )
-    tenant_format_ok = c("tenant_id").isNull() | c("tenant_id").rlike(
-        TENANT_ID_PATTERN
     )
     source_ok = (~_non_blank(c("source"))) | c("source").isin("web", "simulator")
 
@@ -232,8 +223,6 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         "coordinate_ok": coordinate_ok,
         "required_ok": required_ok,
         "schema_version_ok": schema_version_ok,
-        "tenant_required_ok": tenant_required_ok,
-        "tenant_format_ok": tenant_format_ok,
         "source_ok": source_ok,
         "timestamp_ok": c("event_time").isNotNull() & c("received_at").isNotNull(),
         "timestamp_format_ok": (
@@ -254,8 +243,6 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         .when(~expressions["coordinate_ok"], F.lit("missing_source_coordinate"))
         .when(~expressions["required_ok"], F.lit("missing_required_field"))
         .when(~expressions["schema_version_ok"], F.lit("invalid_schema_version"))
-        .when(~expressions["tenant_required_ok"], F.lit("missing_tenant_id"))
-        .when(~expressions["tenant_format_ok"], F.lit("invalid_tenant_id"))
         .when(~expressions["source_ok"], F.lit("invalid_source"))
         .when(~expressions["timestamp_ok"], F.lit("invalid_timestamp"))
         .when(~expressions["timestamp_format_ok"], F.lit("invalid_timestamp_format"))
@@ -387,7 +374,6 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         "request_id",
         "event_index",
         resolved_source.alias("source"),
-        "tenant_id",
         "actor_type",
         is_synthetic.alias("is_synthetic"),
         F.when(is_synthetic, F.col("persona_id"))
