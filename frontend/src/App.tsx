@@ -15,7 +15,7 @@ import {
   storefrontEventProps,
 } from './lib/storefront';
 import type { StorefrontPrefs } from './lib/storefront';
-import productsData from './mocks/products.sample.json';
+import { products as productsData } from './mocks/products';
 import reviewsData from './mocks/reviews.sample.json';
 import personasData from './mocks/personas.sample.json';
 import type { PersonaProfile } from './types/persona';

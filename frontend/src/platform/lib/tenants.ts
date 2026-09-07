@@ -1,4 +1,4 @@
-import productsData from '../../mocks/products.sample.json';
+import { products as productsData } from '../../mocks/products';
 import { fmt, hashString, rng } from '../../dashboard/lib/metrics';
 import type { Product } from '../../types/product';
 
