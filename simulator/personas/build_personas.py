@@ -267,12 +267,18 @@ users["stratum"] = users.skin_type + "|" + users.skin_tone + "|" + users.review_
 # 여기서 빼야 층 비율이 **남은 인원 기준**으로 다시 잡힌다. 뽑고 나서 거르면
 # 층화가 깨진다.
 if HOLDOUT:
+    # 이미 뽑은 **모든** 페르소나 파일을 뺀다. 홀드아웃끼리도 겹치면 안 된다 —
+    # 하나에서 고르고 다른 하나로 확인하는 것이 이 구조의 전부이기 때문이다.
     used = set()
-    for fn in ("personas_9900.json", "personas_100_agent.json"):
-        fp = os.path.join(ART, fn)
-        if os.path.exists(fp):
-            used |= {r["author_id"] for r in json.load(open(fp, encoding="utf-8"))
-                     if r.get("author_id")}
+    for fn in sorted(os.listdir(ART)):
+        if not (fn.startswith("personas_") and fn.endswith(".json")):
+            continue
+        if fn == f"personas_holdout_{_A.tag}.json":
+            continue                        # 자기 자신은 덮어쓰는 대상이다
+        used |= {r["author_id"] for r in
+                 json.load(open(os.path.join(ART, fn), encoding="utf-8"))
+                 if r.get("author_id")}
+        print(f"  제외: {fn}")
     extra = set()
     if _A.exclude and os.path.exists(_A.exclude):
         extra = {ln.strip() for ln in open(_A.exclude, encoding="utf-8") if ln.strip()}
