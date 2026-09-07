@@ -21,15 +21,19 @@ validation에서 검사한다.
 - `required properties`의 키는 `properties` object에 반드시 존재해야 한다.
 - `A 또는 B`는 두 키 중 하나 이상이 존재해야 한다.
 - `string|null`은 키는 필수지만 값은 null일 수 있다는 뜻이다.
-- 상품 대상 Event의 top-level `product_id`는 필수다.
+- 상품 자체가 대상인 Event와 상품 상세의 `page_view`·섹션 Event는 top-level
+  `product_id`가 필수다.
+- 플랫폼 목록의 `section_view`·`section_dwell`은 `product_id = NULL`을 허용한다.
+  상품 미귀속은 빈 문자열이 아니라 JSON `null`로 표현한다.
 - Planned Event는 `event-schema.json` enum에 등록되기 전까지 전송하지 않는다.
 
 ## 1.1 통합 쇼핑몰의 사업자·브랜드·상품 귀속
 
 소비자 행동은 하나의 통합 쇼핑몰에서 발생하므로 Event를 Storefront Tenant로
 격리하지 않는다. top-level Envelope에는 `tenant_id`, `business_id`, `brand_id`를
-반복하지 않고, 상품 대상 Event의 `product_id`를 기준으로 Processed 단계에서 귀속을
-파생한다.
+반복하지 않고, 상품에 귀속되는 Event의 `product_id`를 기준으로 Processed 단계에서
+귀속을 파생한다. `product_id = NULL`인 플랫폼 공통 Event에는 이 Join을 적용하지
+않는다.
 
 ```text
 Event.product_id
@@ -43,11 +47,13 @@ Event.product_id
 | `brand_id` | Processed Fact·Mart | `product_id`를 `dim_product`와 Join해 파생 |
 | `business_id` | Processed Fact·Mart | `brand_id`를 `dim_brand`와 Join해 파생 |
 
-상품 상세 화면의 `page_view`와 상세 콘텐츠 Event는 `product_id`가 필수다. 홈·검색·장바구니
-등 플랫폼 공통 화면의 `page_view`는 특정 사업자나 브랜드에 귀속하지 않으며
-`product_id = NULL`을 허용한다. 향후 상품 없이 브랜드 자체가 명시적 대상인 Event를
-도입할 때만 `brand_id` 선택 필드를 별도 계약한다. route, 표시명 또는 직전 상품으로
-사업자·브랜드를 추정하지 않는다.
+상품 상세 화면의 `page_view`, `section_view`, `section_dwell`은 `product_id`가
+필수다. 홈·검색·장바구니 등 플랫폼 공통 화면의 `page_view`와 상품 목록의
+프로모션·필터·상품 그리드 전체를 측정하는 `section_view`, `section_dwell`은 특정
+상품·사업자·브랜드에 귀속하지 않으며 `product_id = NULL`을 허용한다. 빈 문자열은
+상품 미귀속을 뜻하지 않으며 모든 페이지에서 거부한다. 향후 상품 없이 브랜드 자체가
+명시적 대상인 Event를 도입할 때만 `brand_id` 선택 필드를 별도 계약한다. route,
+표시명, 직전 상품 또는 세션 내 상품으로 사업자·브랜드를 추정하지 않는다.
 
 사업자 대시보드의 데이터 접근 격리는 Event 필드가 아니라 Backend의
 `business_id → brand_id` 소유 관계와 인가로 강제한다. Mart는 집계 시점의
@@ -103,6 +109,11 @@ Event.product_id
 | `accordion_toggle` | `validation` | 상세 정보 펼침·닫힘 | 정보 확인 의도 |
 | `text_selection` | `validation` | 텍스트 선택 | 관심 문장·성분 |
 | `text_copy` | `validation` | 텍스트 복사 | 강한 검증 의도 |
+
+`section_view`와 `section_dwell`은 상품 상세 콘텐츠뿐 아니라 상품 목록의 플랫폼 공통
+섹션도 측정한다. 상품 상세에서는 `product_id`가 필수이고, 목록의 프로모션·필터·상품
+그리드 전체 섹션에서는 `product_id = NULL`을 허용한다. 목록 섹션을 직전 상품이나
+세션 내 상품에 귀속하지 않는다.
 
 ### 2.4 Review / Ingredient
 
@@ -359,8 +370,9 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 
 - `storefront_promo='off'`인 브랜드는 기획전 섹션 자체가 없다. `promo_pick` 목록의
   `product_impression`이 0이므로 CTR 분모가 0이다. 브랜드 간 평균을 낼 때 제외한다.
-- `section_dwell`·`scroll_depth`의 분포는 진열에 따라 달라진다. 브랜드를 가로질러
-  비교할 때는 진열을 통제 변수로 넣어야 한다.
+- 상품 상세의 `section_dwell`·`scroll_depth` 분포는 진열에 따라 달라진다. 브랜드를
+  가로질러 비교할 때는 진열을 통제 변수로 넣어야 한다. 상품 목록의 미귀속
+  `section_dwell`은 브랜드 비교에 사용하지 않는다.
 - 반대로 `section_id`·`content_kind` 목록은 진열이 바뀌어도 **변하지 않는다**.
   로그는 좌표가 아니라 의미(`data-log-section` / `data-log-content`)에 묶여 있고,
   진열은 CSS 자리 이동으로만 구현되기 때문이다. 기존 집계는 그대로 유효하다.
@@ -369,7 +381,10 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 
 1. 활성 Event의 intent가 `event-schema.json` 조건과 일치해야 한다.
 2. §4의 required properties와 §3 enum을 검사한다.
-3. 상품 대상 Event의 top-level `product_id`가 존재해야 한다.
+3. 상품 자체가 대상인 Event와 `page_type='product_detail'`인 `page_view`,
+   `section_view`, `section_dwell`의 top-level `product_id`는 비어 있지 않은
+   string이어야 한다. 플랫폼 목록의 두 섹션 Event는 JSON `null`을 허용하지만 빈
+   문자열은 허용하지 않는다.
 4. `actor_type='synthetic'`이면 `scenario_id`, `simulation_run_id`,
    `generator_type`이 필요하다. 이 공통 규칙은 JSON Schema에서도 검사한다.
 5. `actor_type='user'`에 synthetic runtime metadata가 있으면 경고하고 분석에는

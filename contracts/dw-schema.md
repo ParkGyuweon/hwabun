@@ -41,6 +41,10 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 
 모든 Mart는 `event_id` 중복 제거가 끝난 Processed Dataset만 입력으로 사용한다.
 서로 다른 grain의 입력은 목표 Mart grain으로 각각 먼저 집계한 뒤 결합한다.
+`section_dwell_agg`와 `content_interest_fact`의 nullable `product_id`는 상품 목록의
+플랫폼 공통 섹션을 보존한다. 이 row는 플랫폼 탐색 분석용이며 상품 Dimension Join이나
+상품·브랜드 KPI 입력으로 사용하지 않고, 직전 상품 또는 세션 내 상품으로 보정하지
+않는다.
 
 ### 2.2 공통 타입과 NULL
 
@@ -297,6 +301,10 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 
 `dwell_ms_sum`은 `content_interest_fact`를 기본 원천으로 사용한다.
 `section_dwell_agg`와 동시에 합산하지 않는다.
+이 Mart는 `product_id`가 있는 상품 상세 콘텐츠만 입력으로 사용한다.
+`product_id = NULL`인 플랫폼 목록 섹션은 상품·브랜드 KPI에 포함하지 않는다. 플랫폼
+공통 콘텐츠 Mart가 필요해지면 `product_id` 없는 별도 grain과 key를 계약한 뒤
+집계한다.
 
 ### 4.5 `funnel_daily_kpi`
 
@@ -388,8 +396,9 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
    synthetic metadata를 사용한다.
 6. 상품 대상 Mart는 `product_id`에서 파생한 `brand_id`, `business_id`를
    집계 시점 스냅샷으로 보존한다.
-7. 상품이 없는 플랫폼 공통 Event를 특정 사업자·브랜드에 임의 귀속하지
-   않는다. 대시보드 접근 격리는 Backend 인가가 담당한다.
+7. 상품이 없는 플랫폼 공통 Event를 특정 상품·사업자·브랜드에 임의 귀속하거나
+   상품·브랜드 KPI에 포함하지 않는다. 플랫폼 공통 콘텐츠는 필요할 때 별도 grain으로
+   집계한다. 대시보드 접근 격리는 Backend 인가가 담당한다.
 8. `*_interest_score`를 0으로 하한 절단하지 않는다. 음수는 부정 행동의 신호다.
 9. §2.4의 표기 병합을 집계 전에 적용한다. 특히 상품 리뷰 통계의 `brunette`를
    `brown`으로 합치지 않으면 segment Join이 같은 사람을 둘로 나눈다.
