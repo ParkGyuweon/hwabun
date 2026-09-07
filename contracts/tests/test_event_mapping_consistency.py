@@ -102,23 +102,49 @@ class EventMappingConsistencyTest(unittest.TestCase):
                 ):
                     self.assertNotEqual([], self.error_messages(event))
 
-    def test_nullable_platform_events_allow_null_product_id(self) -> None:
+    def test_nullable_platform_events_allow_null_but_reject_blank_product_id(self) -> None:
         for case in self.cases:
             if case["product_id_policy"] != "nullable":
                 continue
             with self.subTest(event_name=case["event_name"]):
                 self.assertEqual([], self.error_messages(self.event_for(case)))
+                blank_product_event = self.event_for(case)
+                blank_product_event["product_id"] = ""
+                self.assertNotEqual([], self.error_messages(blank_product_event))
 
-    def test_page_view_product_id_policy_depends_on_page_type(self) -> None:
-        page_view = next(
-            case for case in self.cases if case["event_name"] == "page_view"
+    def test_conditional_product_id_policy_depends_on_page_type(self) -> None:
+        conditional_cases = [
+            case
+            for case in self.cases
+            if case["product_id_policy"] == "conditional"
+        ]
+
+        self.assertEqual(
+            {"page_view", "section_view", "section_dwell"},
+            {case["event_name"] for case in conditional_cases},
         )
-        product_list_event = self.event_for(page_view)
-        product_detail_event = self.event_for(page_view)
-        product_detail_event["page_type"] = "product_detail"
-
-        self.assertEqual([], self.error_messages(product_list_event))
-        self.assertNotEqual([], self.error_messages(product_detail_event))
+        for case in conditional_cases:
+            cases = (
+                ("product_list", None, True),
+                ("product_list", "", False),
+                ("product_detail", None, False),
+                ("product_detail", "", False),
+                ("product_detail", "P342", True),
+            )
+            for page_type, product_id, should_be_valid in cases:
+                event = self.event_for(case)
+                event["page_type"] = page_type
+                event["product_id"] = product_id
+                with self.subTest(
+                    event_name=case["event_name"],
+                    page_type=page_type,
+                    product_id=product_id,
+                ):
+                    errors = self.error_messages(event)
+                    if should_be_valid:
+                        self.assertEqual([], errors)
+                    else:
+                        self.assertNotEqual([], errors)
 
     def test_known_contract_pairs_with_cross_component_drift(self) -> None:
         mapping = {case["event_name"]: case["intent"] for case in self.cases}
