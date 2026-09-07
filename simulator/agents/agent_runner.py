@@ -1564,7 +1564,7 @@ def main():
                         script=script)
             for k in tot:
                 tot[k] += r[k]
-            page.wait_for_timeout(1200)       # 남은 배치가 flush 될 시간을 준다
+            drain_logs(page, sink)
             ctx.close()
         browser.close()
     sink.close()
@@ -1607,6 +1607,58 @@ def main():
 # ============================================================================
 # 6. 행동 로그 가로채기
 # ============================================================================
+
+LOGGER_TS = os.path.normpath(os.path.join(
+    BD, "..", "..", "frontend", "src", "lib", "logger.ts"))
+FLUSH_WAIT_MARGIN_MS = 1200
+
+
+def flush_interval_ms(path=None, default=5000):
+    """프론트 로거의 flush 주기를 **logger.ts 에서 직접 읽는다.**
+
+    값을 여기에 복사해 두면 프론트가 주기를 바꿨을 때 조용히 어긋난다 —
+    `behavior_weights.py` 가 행동 가중치를 `log.ts` 에서 읽는 것과 같은 이유다.
+    파일이 없거나 형식이 바뀌면 기본값으로 돌아간다(더 오래 기다릴 뿐 안전하다).
+    """
+    try:
+        with io.open(path or LOGGER_TS, encoding="utf-8") as f:
+            m = re.search(r"FLUSH_INTERVAL_MS\s*=\s*(\d+)", f.read())
+        return int(m.group(1)) if m else default
+    except OSError:
+        return default
+
+
+def drain_logs(page, sink, extra_ms=FLUSH_WAIT_MARGIN_MS):
+    """마지막 턴의 이벤트가 나갈 때까지 기다린다.
+
+    **왜 필요한가 (2026-09-07 규명)**
+        프론트 로거는 큐가 BATCH_SIZE(20) 를 넘거나 FLUSH_INTERVAL_MS(5초)
+        타이머가 돌 때 배치를 보낸다. 그런데 러너는 1.2초만 기다리고 컨텍스트를
+        닫고 있었다. 마지막 턴에서 만든 이벤트는 대개 20건에 못 미쳐 **타이머를
+        기다리는 중**이라, 그대로 사라졌다.
+
+        PA 100명 실행에서 잡혔다 — 담기 결정 217건 중 이벤트가 194건이었고,
+        **마지막 턴이 담기였던 23명이 정확히 23명 전부** 1건씩 잃었다.
+        마지막 턴이 담기가 아닌 77명은 한 건도 안 잃었다 (23/23 대 0/77).
+
+        `logger.ts` 에는 pagehide·visibilitychange 훅이 없어서 컨텍스트를 닫아도
+        beacon 이 나가지 않는다. 기다리는 것 말고 방법이 없다.
+
+    **조용해졌다고 끝난 것이 아니다.** 큐에 20건이 안 차면 아무것도 안 오는
+    상태로 타이머를 기다린다 — 그래서 "조용하면 종료" 로는 못 짠다.
+    주기를 통째로 넘긴 뒤, 그때부터 조용한지를 본다.
+    """
+    wait = flush_interval_ms() + extra_ms
+    before = sink.n
+    page.wait_for_timeout(wait)
+    # 주기를 넘겼는데도 계속 들어오면(대량 배치가 나뉘어 오는 중) 조금 더 준다
+    for _ in range(8):
+        last = sink.n
+        page.wait_for_timeout(400)
+        if sink.n == last:
+            break
+    return sink.n - before
+
 
 class LogSink:
     """프론트가 /api/events 로 보내는 행동 로그를 가로채 표시를 채우고 내보낸다.

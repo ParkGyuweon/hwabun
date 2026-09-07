@@ -1,0 +1,10 @@
+concern_id,concern,label_ko,doc_freq,vocab_version
+0,Dullness/Uneven Texture,칙칙함·피부결,69,0.5
+1,Dryness,건조함,56,0.5
+2,Anti-Aging,주름·안티에이징,49,0.5
+3,Pores,모공,35,0.5
+4,Loss of firmness,탄력 저하,28,0.5
+5,Dark Circles,다크서클,17,0.5
+6,Acne/Blemishes,여드름·트러블,13,0.5
+7,Redness,홍조,12,0.5
+8,Dark spots,색소침착·잡티,10,0.5

@@ -10,6 +10,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -137,6 +138,95 @@ class EventValidationTest {
     }
 
     @Test
+    void requiresProductIdForProductTargetEvents() {
+        Map<String, String> productTargetEvents = Map.ofEntries(
+                Map.entry("product_view", "interest"),
+                Map.entry("product_impression", "exposure"),
+                Map.entry("product_click", "comparison"),
+                Map.entry("accordion_toggle", "validation"),
+                Map.entry("recommendation_impression", "exposure"),
+                Map.entry("recommendation_click", "comparison"),
+                Map.entry("wishlist_toggle", "conversion"),
+                Map.entry("add_to_cart", "conversion"),
+                Map.entry("scroll_depth", "exposure"),
+                Map.entry("impression_dwell", "exposure"),
+                Map.entry("media_view", "interest"),
+                Map.entry("quick_look", "interest"),
+                Map.entry("quick_look_close", "interest"),
+                Map.entry("remove_from_cart", "hesitation"),
+                Map.entry("variant_select", "comparison"),
+                Map.entry("quantity_change", "conversion"),
+                Map.entry("review_filter_apply", "validation"),
+                Map.entry("review_expand", "validation"),
+                Map.entry("ingredient_view_mode_change", "validation"),
+                Map.entry("scroll_pause", "interest"),
+                Map.entry("scroll_backtrack", "comparison"),
+                Map.entry("text_selection", "validation"),
+                Map.entry("text_copy", "validation"),
+                Map.entry("hover_dwell", "hesitation")
+        );
+
+        for (Map.Entry<String, String> productTargetEvent : productTargetEvents.entrySet()) {
+            ActivityEvent event = eventWithProductId(
+                    productTargetEvent.getKey(), productTargetEvent.getValue(), "product_list", null
+            );
+
+            assertThat(validator.validate(event))
+                    .as("%s should require product_id", productTargetEvent.getKey())
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .contains("productId");
+        }
+    }
+
+    @Test
+    void requiresProductIdForProductDetailPageEvents() {
+        List<ActivityEvent> events = List.of(
+                eventWithProductId("page_view", "session", "product_detail", null),
+                eventWithProductId("section_view", "interest", "product_detail", null),
+                eventWithProductId("section_dwell", "interest", "product_detail", null)
+        );
+
+        for (ActivityEvent event : events) {
+            assertThat(validator.validate(event))
+                    .as("%s on product_detail should require product_id", event.eventName())
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .contains("productId");
+        }
+    }
+
+    @Test
+    void allowsNullProductIdForPlatformAndProductListEvents() {
+        List<ActivityEvent> events = List.of(
+                eventWithProductId("page_view", "session", "product_list", null),
+                eventWithProductId("section_view", "interest", "product_list", null),
+                eventWithProductId("section_dwell", "interest", "product_list", null),
+                eventWithProductId("page_view", "session", "cart", null)
+        );
+
+        for (ActivityEvent event : events) {
+            assertThat(validator.validate(event))
+                    .as("%s on %s should allow JSON null product_id", event.eventName(), event.pageType())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void rejectsBlankProductIdEvenWhenNullIsAllowed() {
+        List<ActivityEvent> events = List.of(
+                eventWithProductId("page_view", "session", "product_list", ""),
+                eventWithProductId("section_view", "interest", "product_list", " "),
+                eventWithProductId("section_dwell", "interest", "product_list", "")
+        );
+
+        for (ActivityEvent event : events) {
+            assertThat(validator.validate(event))
+                    .as("%s must use JSON null instead of a blank product_id", event.eventName())
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .contains("productId");
+        }
+    }
+
+    @Test
     void rejectsAnEventWithADifferentSchemaVersion() {
         ActivityEvent mismatchedVersion = new ActivityEvent(
                 "0.1.0-draft", "evt-001", "product_click", "comparison",
@@ -238,6 +328,19 @@ class EventValidationTest {
                 "0.2.0-draft", "evt-" + eventName, eventName, intent,
                 Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
                 "cart", null, "user", "local", properties
+        );
+    }
+
+    private ActivityEvent eventWithProductId(
+            String eventName,
+            String intent,
+            String pageType,
+            String productId
+    ) {
+        return new ActivityEvent(
+                "0.2.0-draft", "evt-" + eventName + "-" + pageType, eventName, intent,
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                pageType, productId, "user", "local", objectMapper.createObjectNode()
         );
     }
 

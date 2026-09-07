@@ -1,0 +1,31 @@
+ingredient_id,ingredient,label_ko,doc_freq,vocab_version
+0,Hyaluronic Acid,히알루론산,104,0.5
+1,Silicone,실리콘,59,0.5
+2,Vitamin C,비타민C,55,0.5
+3,Squalane,스쿠알란,49,0.5
+4,Probiotic / Ferment,발효·프로바이오틱,41,0.5
+5,Green Tea,녹차,39,0.5
+6,Peptides,펩타이드,36,0.5
+7,Aloe,알로에,35,0.5
+8,Lactic Acid,락틱애시드,33,0.5
+9,Licorice,감초,33,0.5
+10,SPF,자외선 차단,32,0.5
+11,Shea Butter,시어버터,32,0.5
+12,Panthenol (B5),판테놀(B5),32,0.5
+13,Niacinamide,나이아신아마이드,30,0.5
+14,Jojoba,호호바,24,0.5
+15,AHA/Glycolic Acid,AHA·글리콜산,23,0.5
+16,Salicylic Acid,살리실산(BHA),23,0.5
+17,Ceramide,세라마이드,23,0.5
+18,Rosehip / Rose,로즈힙·장미,19,0.5
+19,Caffeine,카페인,17,0.5
+20,Urea,요소(우레아),16,0.5
+21,Adenosine,아데노신,15,0.5
+22,Allantoin,알란토인,15,0.5
+23,Retinol,레티놀,14,0.5
+24,Zinc,아연,12,0.5
+25,Alcohol Denat,변성알코올,11,0.5
+26,Centella (Cica),센텔라(시카),9,0.5
+27,Willow Bark,버드나무 껍질,8,0.5
+28,Collagen,콜라겐,6,0.5
+29,Mineral Oil / Petrolatum,미네랄오일·바셀린,5,0.5

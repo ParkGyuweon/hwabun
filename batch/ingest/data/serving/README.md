@@ -4,14 +4,59 @@
 계약은 `contracts/recommendation-io-spec.md`, 점수 식은 같은 문서 §API 를 따른다.
 
 ```
-score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, i) + w3 x prior(i)
+score(u, i) = model.predict_proba(피처 19개)      <- 학습 결합 (계약 §4-2)
+```
+
+**2026-09-07 부터 점수 결합을 학습한다.** 아래 선형 식은 **폴백**이고, 그 항들은
+없어지지 않고 모델의 피처로 들어간다.
+
+```
+score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, i)
+            + w3 x prior(i) + w_b x brand_unknown(u, i) + β x cf_bonus(u, i)
 ```
 
 | 파일 | 내용 | 대응 테이블 |
 |---|---|---|
 | `product_feature.jsonl` | 상품 200개 · 148차원 벡터 · prior · 카테고리/가격대/평점 | `product_feature` |
 | `attribute_affinity.csv` | 4,000행 = 200상품 x 20세그먼트 | `attribute_affinity` |
+| `item_cooc.npz` | 200x200 동시발생 + 상품별 지지자 수 | (서빙 전용) |
+| `ltr_model.pkl` | 학습 결합 모델 (부스팅 트리 278개, 약 1.0MB) | (서빙 전용) |
+| `ltr_model_meta.json` | 피처 이름 19개 · 학습 조건 · 순열 중요도 · sklearn 버전 | (서빙 전용) |
 | `ranking_golden.json` | 페르소나 20명의 기대 상위 10개와 점수 | (대조용, 적재 대상 아님) |
+
+## 백엔드 적재용 정규화 테이블
+
+`python batch/jobs/export_backend_tables.py` 가 만든다. **DDL 이 같이 나온다** —
+`backend_tables.sql` 을 그대로 실행하고 CSV 를 적재하면 된다.
+
+| 파일 | 행 | 내용 |
+|---|---:|---|
+| `feature_block.csv` | 9 | 벡터 148차원을 블록으로 자르는 법 (`block_offset`·`dim`·가중치) |
+| `ingredient_vocab.csv` | 30 | 성분 마스터 — `ingredient_id`·원문·한국어·보유 상품 수 |
+| `concern_vocab.csv` | 9 | 피부 고민 마스터 |
+| `product_ingredient.csv` | 850 | 상품 x 성분 (`position_weight`·`source`) |
+| `product_concern.csv` | 363 | 상품 x 고민 상위 2축 |
+| `ingredient_skin_affinity.csv` | 76 | 피부타입 x 성분 |
+
+**위쪽 대시보드용 CSV(`product_ingredient_position.csv` 등)와 같은 값이다.**
+대시보드용은 상품명·브랜드명을 행마다 붙여 바로 그릴 수 있게 한 것이고, 이쪽은
+**키만 내고 상품 테이블에서 조인**하게 한 것이다. 적재는 이쪽을 쓸 것.
+
+### 적재할 때 지킬 것
+
+- **모든 행에 `vocab_version` 이 있다. 버전이 다른 행을 섞지 말 것.**
+  `ingredient_id` 는 어휘집 배열의 인덱스이자 **블록 안에서의 차원 위치**라,
+  버전이 다르면 그 대응이 조용히 깨진다. 전 테이블의 PK 첫 열이 `vocab_version` 이다
+- **키는 `ingredient` 원문**이고 `label_ko` 는 화면 표시용이다. 한국어를 키로 쓰면
+  한 글자 차이로 매칭이 통째로 실패하는데 **화면에는 아무 표시도 안 난다**
+- `block_offset`·`concern_rank` 는 **MySQL 8 예약어(`offset`·`rank`)를 피한 이름**이다.
+  CSV 헤더와 DDL 이 같으므로 그대로 적재된다
+- **`position_weight` 는 함량이 아니다.** 태그로 표시된 성분이 1.0, 전성분에서 찾은
+  것은 배합 순서 기반 감쇠다. "앞쪽에 적혀 있다" 이지 "몇 % 들었다" 가 아니다
+  (`source` 열이 `tag` / `parsed` 로 구분한다)
+- **`ingredient_skin_affinity` 는 곱이라 인과가 아니다.** "지성이 반응한 상품에
+  이 성분이 많더라" 이지 "이 성분이 지성에 좋다" 가 아니다. `n_products` 가 작은
+  행은 근거가 얇다
 
 ## 백엔드가 알아야 할 것
 
@@ -25,12 +70,26 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
   기준 구현은 `batch/jobs/persona_feature.py` 의 `normalize()` 다.
 - 셀이 없으면 **0.5(중립)** 을 쓴다. 0 을 쓰면 "표본 없음" 이 "안 맞음" 으로 둔갑한다.
 - `w1/w2/w3` 는 상호작용 고유 상품 수에 따른 스케줄을 따른다 (`recommender.SCHEDULE`).
+  **학습 결합을 쓰면 이 스케줄을 타지 않는다** — 시드 개수는 피처 `n_seed` 로 들어간다.
+- **`ltr_model.pkl` 은 파이썬 pickle 이라 자바가 못 읽는다.** ONNX 로 내보내거나
+  파이썬 추론 서버를 띄워야 한다. AI 파트 권고는 후자다 — 피처 19개를 자바로 다시
+  구현하면 **에러 없이 순위만 틀린다.** 계약 §4-2 참조.
+- pickle 은 sklearn 버전에 묶인다. `ltr_model_meta.json` 의 `sklearn_version` 이
+  로컬과 다르면 다시 학습할 것 (`python batch/jobs/train_ltr.py`).
 
 ## 대조하는 법
 
 `ranking_golden.json` 의 각 케이스는 **행동 로그 없이 리뷰 시드만으로** 만든 사용자
 벡터 기준이고, 시드 상품은 후보에서 뺐다. 자바 구현이 같은 입력으로 같은 상위 10개와
 점수(소수점 5자리)를 내면 벡터·가중치·정규화·시드 제외가 전부 맞다는 뜻이다.
+파일이 `scorer` 필드로 무엇으로 만들어졌는지 말한다 (`"ltr"` / `"linear"`).
+
+> ### ⚠ 파일에 적힌 값을 그대로 쓸 것
+>
+> `product_feature.jsonl` 은 벡터를 **소수 6자리로 반올림**해 내보낸다. 골든도
+> **그 반올림된 값으로** 계산한다. 선형 합에서는 차이가 묻혔지만 **학습 결합은
+> 트리라, 피처가 분기점 근처에 놓이면 잎이 통째로 갈린다** — 실제로 한 페르소나에서
+> 두 상품의 순서가 뒤집혔다. 자체적으로 정밀도를 올리거나 다시 정규화하지 말 것.
 
 식이 맞아도 블록 가중치·L2 정규화·시드 제외 중 하나만 어긋나면 순위가 **조용히**
 달라진다. 그래서 눈으로 보지 말고 이 파일로 비교할 것.

@@ -29,7 +29,9 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from persona_feature import AFFINITY_CSV, ATTRS, load as load_affinity  # noqa: E402
 from product_encoder import Encoder                                     # noqa: E402
-from recommender import (BRAND_W, LAMBDA, SCHEDULE,                     # noqa: E402
+from ltr_features import LtrFeatures, load_ltr                         # noqa: E402
+from recommender import (BRAND_W, CF_BETA, LAMBDA, SCHEDULE,            # noqa: E402
+                        cf_bonus, load_cooc,
                          brand_match, schedule_for)
 
 OUT_DIR = os.path.join(ROOT, "batch", "ingest", "data", "serving")
@@ -97,6 +99,18 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
     """
     brands = [q["brand_name"] for q in e.products]
     known = set(e.blk["brand"]["vocab"])       # 어휘집 밖 브랜드에만 폴백을 건다
+    cooc, supporters = load_cooc()
+    ltr = load_ltr()
+    if ltr is None:
+        print("  ⚠ 골든이 **선형 결합** 기준이다 (ltr_model.pkl 이 없다). "
+              "학습 결합은 2026-09-07 에 채택됐으므로 "
+              "`python batch/jobs/train_ltr.py` 를 먼저 도십시오")
+    else:
+        print(f"  골든 학습 결합(LTR) 기준 · 트리 {ltr[1]['n_trees']}개")
+    print("  골든 " + ("CF 가점 포함" if cooc is not None else
+                       "**CF 없이** (item_cooc.npz 가 없다)"))
+    feat = (None if ltr is None
+            else LtrFeatures(e, matrix, prior, affinity, cooc, supporters))
     cases = []
     for p in personas:
         seeds = []
@@ -115,14 +129,29 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
         bm = brand_match(brands, si, known)   # 어휘집 밖 브랜드 폴백 (0.5)
         if bm is not None:
             score = score + BRAND_W * bm
+        # CF 가점 (계약 §4-1). **이 파일이 CBF 기준이면 자바 구현이 CBF 순위를
+        # 재현하게 되고, 그러면 검증이 통과해도 서빙이 틀린다.**
+        if cooc is not None:
+            cand = np.ones(len(matrix), bool)
+            cand[si] = False
+            cfb = cf_bonus(cooc, si, cand, supporters)
+            if cfb is not None:
+                score = score + CF_BETA * cfb
+        # 학습 결합이 채택되면 **선형 합을 통째로 대체**한다 (계약 §5 처리 4단계).
+        # 위에서 만든 항들은 버려지지 않고 모델의 피처로 들어간다.
+        if feat is not None:
+            cand = np.ones(len(matrix), bool)
+            cand[si] = False
+            score = ltr[0].predict_proba(feat.make(p, si, cand))[:, 1]
         score[si] = -np.inf                      # 시드는 후보에서 뺀다
         top = np.argsort(-score)[:TOP_K]
         cases.append({
             "persona_id": p["persona_id"],
             "attributes": {a: p[a] for a in ATTRS},
             "seed_product_ids": seeds,
-            "weights": {"w1_cosine": w1, "w2_attribute": w2, "w3_prior": w3,
-                        "lambda_negative": LAMBDA},
+            "scorer": "ltr" if feat is not None else "linear",
+            "weights": ({"w1_cosine": w1, "w2_attribute": w2, "w3_prior": w3,
+                         "lambda_negative": LAMBDA} if feat is None else None),
             "expected_top10": [{"product_id": e.products[i]["product_id"],
                                 "score": round(float(score[i]), 6)} for i in top],
         })
@@ -133,6 +162,11 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
         json.dump({
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "vocab_version": e.V["version"],
+            "scorer": "ltr" if ltr is not None else "linear",
+            "ltr_model": (None if ltr is None else
+                          {"n_trees": ltr[1]["n_trees"],
+                           "trained_at": ltr[1]["trained_at"],
+                           "feature_names": ltr[1]["feature_names"]}),
             "schedule": [list(x) for x in SCHEDULE],
             "note": ("행동 로그 없이 리뷰 시드만으로 만든 사용자 벡터 기준. "
                      "시드는 후보에서 제외하고 **MMR 은 적용하지 않았다** — 점수 계산 "
@@ -163,7 +197,16 @@ def main():
     n_p = export_products(e, matrix, prior,
                           os.path.join(a.out, "product_feature.jsonl"))
     n_a = export_affinity(os.path.join(a.out, "attribute_affinity.csv"))
-    n_g = export_golden(e, matrix, prior, affinity, index, personas,
+    # ⚠ 골든은 **내보낸 값 그대로** 계산해야 한다.
+    #
+    # product_feature.jsonl 은 벡터를 소수 6자리, 인기도를 5자리로 반올림해 내보낸다.
+    # 자바가 읽는 것은 그 반올림된 값이다. 선형 합에서는 차이가 소수점 아래로
+    # 묻혔지만 **학습 결합은 트리라, 피처가 분기점 근처에 놓이면 잎이 통째로
+    # 갈린다** — 실제로 한 페르소나에서 두 상품의 순서가 뒤집혔다.
+    # 정본 정밀도로 골든을 만들면 자바는 그것을 **영원히 재현할 수 없다.**
+    matrix_out = np.round(matrix, 6).astype(np.float32)
+    prior_out = np.round(prior, 5).astype(np.float32)
+    n_g = export_golden(e, matrix_out, prior_out, affinity, index, personas,
                         os.path.join(a.out, "ranking_golden.json"), a.golden)
 
     print(f"내보냄 -> {a.out}")

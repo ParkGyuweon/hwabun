@@ -36,12 +36,14 @@
 [ 추천 ]  batch/ — 위 파이프라인과 분리된 오프라인 배치
    Sephora 리뷰 844,865건
      → 상품 벡터 148차원 · 페르소나 9,900명 · 속성 친화도 4,000행
+     → train_ltr.py    학습 결합 모델 (트리 278개)
      → recommender.py  점수 + MMR
      → batch/ingest/data/serving/  서빙용 산출물
           ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
-   대표 지표 Recall@10 = 38.86% (롱테일 40.61%) — CBF + CF 가점, test 1,971명
-   ┈┈▶ CBF 단독이던 23.39% 에서 CF 채택으로 올랐다 (부록 S)
-   ┈┈▶ 학습 결합(LTR)까지 얹으면 43.9% — 팀 검토 중, 미채택
+   대표 지표 Recall@10 = 43.95% — CBF + CF 가점 + 학습 결합, holdout_a 2,000명
+   ┈┈▶ 확인 집합 holdout_b 43.20% · 선형 대비 +5.80 / +3.95%p (둘 다 CI 가 0 제외)
+   ┈┈▶ 23.39%(CBF 단독) → 38%대(CF 채택) → 43%대(학습 결합) 순으로 올랐다 (부록 S·T)
+   ┈┈▶ 세 평가 축이 0.6%p 안에 모인다 — 오프라인 43.95 · 재생 43.95 · 동적 44.05%
 
 [ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
 ```
@@ -152,7 +154,7 @@ S15P21A306/
 │   └── git-convention.md            커밋 메시지·브랜치 전략 (팀 공통)
 │
 ├── batch/                           ★ Spark Batch — 상품·페르소나 피처와 추천 계산
-│   ├── regenerate_all.py            ★ 상품이 바뀌면 여기서부터 다시 만든다 (9단계·mtime 확인)
+│   ├── regenerate_all.py            ★ 상품이 바뀌면 여기서부터 다시 만든다 (16단계·mtime 확인)
 │   ├── ingest/
 │   │   ├── build_feature_vocab.py       어휘집 생성 (문서빈도·블록 가중치)
 │   │   ├── build_products_json.py       상품 200개 카탈로그 생성 (사이즈 변형 병합)
@@ -175,10 +177,24 @@ S15P21A306/
 │   │       ├── text_embeddings.npz         seed 리뷰·상품 임베딩 384차원 (13.7MB)
 │   │       ├── feature_sample.json          샘플 6개의 블록별 값·벡터·친화도
 │   │       └── serving/                     ★ 백엔드 RankingService 입력
-│   │           ├── README.md                    서빙 산출물의 열·갱신 시점
+│   │           ├── README.md                    서빙 산출물의 열·갱신 시점·적재 주의
 │   │           ├── product_feature.jsonl        상품 200개 × 148차원 + prior
 │   │           ├── attribute_affinity.csv       친화도 4,000행 (계약 열)
-│   │           └── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
+│   │           ├── item_cooc.npz                200×200 동시발생 + 지지자 수 (CF)
+│   │           ├── ltr_model.pkl · ltr_model_meta.json
+│   │           │                                 ★ 학습 결합 모델 (트리 278개)
+│   │           ├── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
+│   │           ├── banner_axes.json             배너 축 6종의 상품 목록
+│   │           ├── backend_tables.sql           ★ 아래 CSV 6종의 CREATE TABLE
+│   │           ├── feature_block.csv            148차원을 블록으로 자르는 법
+│   │           ├── ingredient_vocab.csv · concern_vocab.csv
+│   │           │                                 어휘 마스터 (원문·한국어·빈도)
+│   │           ├── product_ingredient.csv       상품 × 성분 (위치가중값 850행)
+│   │           ├── product_concern.csv          상품 × 고민 상위 2축 (363행)
+│   │           ├── ingredient_skin_affinity.csv 피부타입 × 성분 (76행)
+│   │           └── product_ingredient_position.csv · product_concern_top2.csv
+│   │                                             · ingredient_skin_lift.csv
+│   │                                             대시보드용 (이름 붙은 비정규화 판)
 │   └── jobs/
 │       ├── product_encoder.py           상품 → 148차원 콘텐츠 벡터 인코더
 │       ├── behavior_weights.py          `frontend/src/types/log.ts` 를 직접 읽는 행동 가중치 로더
@@ -186,7 +202,13 @@ S15P21A306/
 │       ├── build_user_vectors.py        Spark 산출물·JSONL → 사용자 벡터 상태 (Redis 형태)
 │       ├── persona_feature.py           페르소나 속성 → 상품별 친화도 (200,)
 │       ├── recommender.py               점수 계산·노출 정책·순위
+│       ├── ltr_features.py             ★ 학습 결합 피처 19개 — 학습과 서빙이 같은 코드
+│       ├── train_ltr.py                 학습 결합 모델 학습 (train 5,954명)
+│       ├── build_cooc.py                아이템-아이템 동시발생 (CF 입력, 누출 차단)
 │       ├── export_features.py           서빙용 산출물 + 순위 대조 기준 생성
+│       ├── export_backend_tables.py    ★ 백엔드 적재용 정규화 테이블 6종 + DDL
+│       ├── export_dashboard.py          대시보드용 파생 산출물 (이름 붙은 판)
+│       ├── banner_axes.py               배너 축 6종의 상품 목록
 │       ├── eval_metadata.py            ★ seed/target 정본 — 세 축이 같은 문제를 풀게 한다
 │       ├── hidden_preference.py        행동 생성을 추천 점수에서 떼어내는 통제 장치
 │       ├── build_text_embeddings.py    seed 리뷰·상품 텍스트 임베딩 (GPU 21초)
