@@ -24,6 +24,40 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 | `ltr_model_meta.json` | 피처 이름 19개 · 학습 조건 · 순열 중요도 · sklearn 버전 | (서빙 전용) |
 | `ranking_golden.json` | 페르소나 20명의 기대 상위 10개와 점수 | (대조용, 적재 대상 아님) |
 
+## 백엔드 적재용 정규화 테이블
+
+`python batch/jobs/export_backend_tables.py` 가 만든다. **DDL 이 같이 나온다** —
+`backend_tables.sql` 을 그대로 실행하고 CSV 를 적재하면 된다.
+
+| 파일 | 행 | 내용 |
+|---|---:|---|
+| `feature_block.csv` | 9 | 벡터 148차원을 블록으로 자르는 법 (`block_offset`·`dim`·가중치) |
+| `ingredient_vocab.csv` | 30 | 성분 마스터 — `ingredient_id`·원문·한국어·보유 상품 수 |
+| `concern_vocab.csv` | 9 | 피부 고민 마스터 |
+| `product_ingredient.csv` | 850 | 상품 x 성분 (`position_weight`·`source`) |
+| `product_concern.csv` | 363 | 상품 x 고민 상위 2축 |
+| `ingredient_skin_affinity.csv` | 76 | 피부타입 x 성분 |
+
+**위쪽 대시보드용 CSV(`product_ingredient_position.csv` 등)와 같은 값이다.**
+대시보드용은 상품명·브랜드명을 행마다 붙여 바로 그릴 수 있게 한 것이고, 이쪽은
+**키만 내고 상품 테이블에서 조인**하게 한 것이다. 적재는 이쪽을 쓸 것.
+
+### 적재할 때 지킬 것
+
+- **모든 행에 `vocab_version` 이 있다. 버전이 다른 행을 섞지 말 것.**
+  `ingredient_id` 는 어휘집 배열의 인덱스이자 **블록 안에서의 차원 위치**라,
+  버전이 다르면 그 대응이 조용히 깨진다. 전 테이블의 PK 첫 열이 `vocab_version` 이다
+- **키는 `ingredient` 원문**이고 `label_ko` 는 화면 표시용이다. 한국어를 키로 쓰면
+  한 글자 차이로 매칭이 통째로 실패하는데 **화면에는 아무 표시도 안 난다**
+- `block_offset`·`concern_rank` 는 **MySQL 8 예약어(`offset`·`rank`)를 피한 이름**이다.
+  CSV 헤더와 DDL 이 같으므로 그대로 적재된다
+- **`position_weight` 는 함량이 아니다.** 태그로 표시된 성분이 1.0, 전성분에서 찾은
+  것은 배합 순서 기반 감쇠다. "앞쪽에 적혀 있다" 이지 "몇 % 들었다" 가 아니다
+  (`source` 열이 `tag` / `parsed` 로 구분한다)
+- **`ingredient_skin_affinity` 는 곱이라 인과가 아니다.** "지성이 반응한 상품에
+  이 성분이 많더라" 이지 "이 성분이 지성에 좋다" 가 아니다. `n_products` 가 작은
+  행은 근거가 얇다
+
 ## 백엔드가 알아야 할 것
 
 - **벡터는 L2 정규화가 끝나 있다.** 다시 정규화하지 말고 내적만 하면 그것이 코사인이다.
