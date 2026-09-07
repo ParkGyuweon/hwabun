@@ -97,6 +97,60 @@ class EventControllerTest {
     }
 
     @Test
+    void appliesPageScopedProductIdRulesAtTheHttpBoundary() throws Exception {
+        when(publisher.publish(anyString(), anyList()))
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(2)));
+
+        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schema_version": "0.2.0-draft",
+                                  "events": [
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-list-section",
+                                      "event_name": "section_view", "intent": "interest",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 1,
+                                      "page_type": "product_list", "product_id": null,
+                                      "actor_type": "user", "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-detail-section",
+                                      "event_name": "section_dwell", "intent": "interest",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 2,
+                                      "page_type": "product_detail", "product_id": null,
+                                      "actor_type": "user", "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-platform-page",
+                                      "event_name": "page_view", "intent": "session",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 3,
+                                      "page_type": "product_list", "product_id": null,
+                                      "actor_type": "user", "environment": "local", "properties": {}
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(2))
+                .andExpect(jsonPath("$.rejected").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_index").value(1))
+                .andExpect(jsonPath("$.rejections[0].event_id").value("evt-detail-section"))
+                .andExpect(jsonPath("$.rejections[0].code").value("missing_required_property"));
+
+        verify(publisher).publish(anyString(), anyList());
+        verify(metrics).recordEventRejected(1);
+        verify(metrics).recordValidationRejected("missing_required_property");
+    }
+
+    @Test
     void acceptsNavigationClickWithSessionIntent() throws Exception {
         when(publisher.publish(anyString(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(new PublishSummary(1)));
@@ -215,7 +269,7 @@ class EventControllerTest {
                                       "event_name": "product_click", "intent": "comparison",
                                       "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
                                       "page_view_id": "page-view-001", "sequence_no": 1,
-                                      "page_type": "product_list", "actor_type": "user",
+                                      "page_type": "product_list", "product_id": "product-001", "actor_type": "user",
                                       "environment": "local", "properties": {}
                                     },
                                     {
@@ -342,7 +396,7 @@ class EventControllerTest {
                                       "event_name": "product_click", "intent": "comparison",
                                       "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
                                       "page_view_id": "page-view-001", "sequence_no": 1,
-                                      "page_type": "product_list", "actor_type": "user",
+                                      "page_type": "product_list", "product_id": "product-001", "actor_type": "user",
                                       "environment": "local", "properties": {}
                                     },
                                     {
@@ -350,7 +404,7 @@ class EventControllerTest {
                                       "event_name": "product_click", "intent": "comparison",
                                       "occurred_at": "not-a-time", "session_id": "session-001",
                                       "page_view_id": "page-view-001", "sequence_no": 2,
-                                      "page_type": "product_list", "actor_type": "user",
+                                      "page_type": "product_list", "product_id": "product-001", "actor_type": "user",
                                       "environment": "local", "properties": {}
                                     },
                                     {
@@ -358,7 +412,7 @@ class EventControllerTest {
                                       "event_name": "product_click", "intent": "comparison",
                                       "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
                                       "page_view_id": "page-view-001", "sequence_no": "not-an-int",
-                                      "page_type": "product_list", "actor_type": "user",
+                                      "page_type": "product_list", "product_id": "product-001", "actor_type": "user",
                                       "environment": "local", "properties": {}
                                     }
                                   ]

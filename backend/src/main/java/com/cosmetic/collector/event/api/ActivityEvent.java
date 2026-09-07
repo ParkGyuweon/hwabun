@@ -57,7 +57,11 @@ public record ActivityEvent(
         @Pattern(regexp = "^(product_list|product_detail|cart)$")
         String pageType,
 
-        @Schema(description = "행동과 관련된 상품 ID", example = "product-001", nullable = true)
+        @Schema(
+                description = "상품 대상 Event와 product_detail 페이지 Event에서는 필수이며, 플랫폼·목록 Event는 JSON null을 허용합니다.",
+                example = "product-001",
+                nullable = true
+        )
         String productId,
 
         @Schema(description = "행위자 유형", example = "user")
