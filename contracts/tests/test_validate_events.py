@@ -373,6 +373,51 @@ class EventValidatorTest(unittest.TestCase):
         self.assertEqual(2, result.event_count)
         self.assertEqual([], result.errors)
 
+    def test_api_batch_schema_version_is_required(self) -> None:
+        result = self.validate_values({"events": [self.user_event]})
+
+        self.assert_has_error(result.errors, "[required] $.schema_version")
+
+    def test_api_batch_schema_version_must_be_a_string(self) -> None:
+        result = self.validate_values(
+            {"schema_version": 2, "events": [self.user_event]}
+        )
+
+        self.assert_has_error(result.errors, "[type] $.schema_version")
+
+    def test_withdrawn_api_batch_schema_version_is_rejected(self) -> None:
+        result = self.validate_values(
+            {"schema_version": "0.3.0-draft", "events": [self.user_event]}
+        )
+
+        self.assert_has_error(result.errors, "[enum] $.schema_version")
+        self.assert_has_error(result.errors, "[schema_version_mismatch]")
+
+    def test_event_schema_version_must_match_api_batch(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["schema_version"] = "0.3.0-draft"
+
+        result = self.validate_values(
+            {"schema_version": "0.2.0-draft", "events": [event]}
+        )
+
+        self.assert_has_error(result.errors, "[schema_version_mismatch]")
+        self.assert_has_error(result.errors, "[enum] $.schema_version")
+
+    def test_mixed_event_schema_versions_in_api_batch_are_rejected(self) -> None:
+        second_event = copy.deepcopy(self.user_event)
+        second_event["event_id"] = "evt-user-0002"
+        second_event["schema_version"] = "0.3.0-draft"
+
+        result = self.validate_values(
+            {
+                "schema_version": "0.2.0-draft",
+                "events": [self.user_event, second_event],
+            }
+        )
+
+        self.assert_has_error(result.errors, ".events[1]: [schema_version_mismatch]")
+
     def test_duplicate_input_path_is_skipped_with_warning(self) -> None:
         result = validate_event_files(
             [USER_SAMPLE_PATH, USER_SAMPLE_PATH],

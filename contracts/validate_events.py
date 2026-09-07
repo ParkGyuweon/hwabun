@@ -38,6 +38,7 @@ class ValidatorInputError(ValueError):
 class LoadedEvent:
     label: str
     value: Any
+    batch_errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,10 @@ def _iter_json_lines(path: Path) -> Iterator[LoadedEvent]:
         raise ValidatorInputError(f"{path}: input must be UTF-8: {error}") from error
 
 
-def iter_event_file(path: Path) -> Iterator[LoadedEvent]:
+def iter_event_file(
+    path: Path,
+    supported_schema_versions: tuple[str, ...],
+) -> Iterator[LoadedEvent]:
     """Yield Events without materializing JSONL input in memory."""
 
     if path.suffix.lower() in {".jsonl", ".ndjson"}:
@@ -99,8 +103,43 @@ def iter_event_file(path: Path) -> Iterator[LoadedEvent]:
         events = document["events"]
         if not isinstance(events, list):
             raise ValidatorInputError(f"{path}: $.events must be an array")
+
+        batch_version = document.get("schema_version")
+        batch_errors: list[str] = []
+        if "schema_version" not in document:
+            batch_errors.append(
+                f"{path}: [required] $.schema_version: "
+                "API batch schema_version is required"
+            )
+        elif not isinstance(batch_version, str):
+            batch_errors.append(
+                f"{path}: [type] $.schema_version: "
+                "API batch schema_version must be a string"
+            )
+        elif batch_version not in supported_schema_versions:
+            batch_errors.append(
+                f"{path}: [enum] $.schema_version: {batch_version!r} is not one of "
+                f"{list(supported_schema_versions)!r}"
+            )
+
         for index, value in enumerate(events):
-            yield LoadedEvent(label=f"{path}.events[{index}]", value=value)
+            event_errors = list(batch_errors) if index == 0 else []
+            if (
+                isinstance(batch_version, str)
+                and isinstance(value, dict)
+                and value.get("schema_version") != batch_version
+            ):
+                event_errors.append(
+                    f"{path}.events[{index}]: [schema_version_mismatch] "
+                    "$.schema_version: Event schema_version "
+                    f"{value.get('schema_version')!r} does not match API batch "
+                    f"schema_version {batch_version!r}"
+                )
+            yield LoadedEvent(
+                label=f"{path}.events[{index}]",
+                value=value,
+                batch_errors=tuple(event_errors),
+            )
         return
 
     yield LoadedEvent(label=str(path), value=document)
@@ -127,6 +166,25 @@ def _build_validator(schema_path: Path) -> Draft202012Validator:
             "contracts/requirements-validator.txt"
         )
     return Draft202012Validator(schema, format_checker=format_checker)
+
+
+def _supported_schema_versions(
+    validator: Draft202012Validator,
+) -> tuple[str, ...]:
+    versions = (
+        validator.schema.get("properties", {})
+        .get("schema_version", {})
+        .get("enum")
+    )
+    if (
+        not isinstance(versions, list)
+        or not versions
+        or any(not isinstance(version, str) for version in versions)
+    ):
+        raise ValidatorInputError(
+            "schema properties.schema_version.enum must contain supported strings"
+        )
+    return tuple(versions)
 
 
 def _unique_paths(input_paths: Iterable[Path]) -> tuple[list[Path], list[str]]:
@@ -157,6 +215,7 @@ def validate_event_files(
     if max_errors < 1:
         raise ValidatorInputError("max_errors must be at least 1")
     validator = _build_validator(schema_path)
+    supported_schema_versions = _supported_schema_versions(validator)
     paths, warnings = _unique_paths(input_paths)
 
     errors: list[str] = []
@@ -167,8 +226,16 @@ def validate_event_files(
     stopped_early = False
 
     for input_path in paths:
-        for loaded in iter_event_file(input_path):
+        for loaded in iter_event_file(input_path, supported_schema_versions):
             event_count += 1
+            for batch_error in loaded.batch_errors:
+                errors.append(batch_error)
+                if len(errors) >= max_errors:
+                    stopped_early = True
+                    break
+            if stopped_early:
+                break
+
             schema_errors = sorted(
                 validator.iter_errors(loaded.value),
                 key=lambda error: (
