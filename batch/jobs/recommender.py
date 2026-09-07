@@ -64,6 +64,22 @@ CF_BETA = 1.0
 CF_MIN_SUPPORT = 3
 
 
+def load_cooc(path=None):
+    """동시발생 산출물을 읽는다. 없으면 (None, None) — 항이 꺼진다.
+
+    평가 스크립트가 `--cf` 로 이것을 켜고 끈다. 파일이 없을 때 죽지 않는 이유는
+    `build_cooc.py` 가 리뷰 원본을 필요로 해서 없는 환경이 있기 때문이다.
+    """
+    import os as _os
+    path = path or _os.path.join(
+        _os.path.dirname(_os.path.abspath(__file__)),
+        "..", "ingest", "data", "serving", "item_cooc.npz")
+    if not _os.path.exists(path):
+        return None, None
+    d = np.load(path, allow_pickle=True)
+    return np.asarray(d["S"], np.float32), np.asarray(d["supporters"])
+
+
 def cf_bonus(cooc, rows, cand=None, supporters=None,
              min_support=CF_MIN_SUPPORT):
     """동시발생에서 CF 가점 항을 만든다. 이력이 없는 상품에는 중앙값을 준다.
