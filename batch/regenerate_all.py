@@ -97,6 +97,23 @@ STEPS = [
      [os.path.join(DATA, "serving", "product_feature.jsonl"),
       os.path.join(DATA, "serving", "attribute_affinity.csv"),
       os.path.join(DATA, "serving", "ranking_golden.json")], False),
+    # 배너 축 목록은 어휘집·친화도·인기도에서 나오므로 그 뒤에 온다.
+    # 어휘가 늘었는데 목록을 안 다시 만들면 새 값이 배너에 영영 안 뜬다.
+    (10, "배너 축 6종 상품 목록",
+     ["batch/jobs/banner_axes.py"],
+     [os.path.join(DATA, "serving", "banner_axes.json")], False),
+    # 대시보드 파생 산출물. 인코더·친화도·concern 에서 나오므로 그 뒤에 온다.
+    (11, "대시보드용 파생 산출물 4종",
+     ["batch/jobs/export_dashboard.py"],
+     [os.path.join(DATA, "serving", "product_ingredient_position.csv"),
+      os.path.join(DATA, "serving", "product_concern_top2.csv"),
+      os.path.join(DATA, "serving", "ingredient_skin_lift.csv")], False),
+    # 동시발생은 리뷰 원본을 읽으므로 SEPHORA_DATASET 이 필요하다.
+    # **페르소나 파일이 늘면 반드시 다시 만들어야 한다** — 새 홀드아웃이
+    # 동시발생에 남아 있으면 그 홀드아웃으로 잰 수치가 전부 거짓이 된다.
+    (12, "아이템-아이템 동시발생 (CF 가점 입력)",
+     ["batch/jobs/build_cooc.py"],
+     [os.path.join(DATA, "serving", "item_cooc.npz")], False),
 ]
 
 

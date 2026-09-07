@@ -11,41 +11,47 @@ public class CollectorMetrics {
 
     private final MeterRegistry registry;
     private final Counter received;
-    private final Counter published;
+    private final Counter accepted;
+    private final Counter eventRejected;
     private final Counter publishFailures;
-    private final Counter publishRejections;
+    private final Counter publishOverloaded;
     private final Timer publishQueueWait;
 
     public CollectorMetrics(MeterRegistry registry) {
         this.registry = registry;
         this.received = registry.counter("collector.events.received");
-        this.published = registry.counter("collector.events.published");
-        this.publishFailures = registry.counter("collector.events.publish.failures");
-        this.publishRejections = registry.counter("collector.events.publish.rejected");
-        this.publishQueueWait = registry.timer("collector.events.publish.queue.wait");
+        this.accepted = registry.counter("collector.events.accepted");
+        this.eventRejected = registry.counter("collector.events.rejected");
+        this.publishFailures = registry.counter("collector.kafka.publish.failures");
+        this.publishOverloaded = registry.counter("collector.kafka.publish.overloaded");
+        this.publishQueueWait = registry.timer("collector.kafka.publish.queue.wait");
     }
 
     public void recordReceived(int count) {
         received.increment(count);
     }
 
-    public void recordPublished(int count) {
-        published.increment(count);
+    public void recordAccepted(int count) {
+        accepted.increment(count);
     }
 
-    public void recordPublishFailure(int count) {
+    public void recordEventRejected(int count) {
+        eventRejected.increment(count);
+    }
+
+    public void recordKafkaPublishFailure(int count) {
         publishFailures.increment(count);
     }
 
-    public void recordPublishRejected(int count) {
-        publishRejections.increment(count);
+    public void recordKafkaPublishOverloaded(int count) {
+        publishOverloaded.increment(count);
     }
 
     public void recordPublishQueueWait(Duration duration) {
         publishQueueWait.record(duration);
     }
 
-    public void recordValidationFailure(String reason) {
-        registry.counter("collector.events.validation.failures", "reason", reason).increment();
+    public void recordValidationRejected(String code) {
+        registry.counter("collector.events.validation.rejected", "code", code).increment();
     }
 }

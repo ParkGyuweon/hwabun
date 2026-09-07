@@ -34,7 +34,17 @@ sys.path.insert(0, BD)
 import behavior_weights as BW
 
 # 전환으로 보는 이벤트. 이 상품만 v_u⁺ 로 간다
-CONVERT = {"add_to_cart", "quantity_change"}
+#
+# `purchase` 는 아직 `frontend/src/types/log.ts` 에 없다(이벤트 36종). 계약
+# (`event-properties-schema.md` §6)에는 활성으로 열려 있고 프론트가 반영 대기
+# 중이라, **미리 넣어 둔다** — 없는 이벤트 이름이 집합에 있어도 매칭이 안 될 뿐
+# 아무 일도 일어나지 않는다. 반대로 로그가 먼저 들어오는데 여기가 비어 있으면
+# 구매가 조용히 전환에서 빠진다.
+#
+# `begin_checkout` 은 **넣지 않는다.** 결제를 시작만 하고 이탈하는 경우가 있어
+# 전환으로 세면 매출과 어긋난다. 기획 §15-6 이 "구매 = 주문 상태 PAID" 로 정한
+# 것과 맞춘다.
+CONVERT = {"add_to_cart", "quantity_change", "purchase"}
 UNDO = {"remove_from_cart"}
 
 # ── 부정 축의 강도 ─────────────────────────────────────────────────────

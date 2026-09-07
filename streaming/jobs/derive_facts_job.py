@@ -3,8 +3,8 @@
 This is a full-snapshot Spark batch job.  It intentionally consumes only
 ``cleaned_events`` so Raw duplicates cannot leak into downstream facts.
 
-The job restores event order by ``tenant_id + session_id + sequence_no +
-event_time + received_at`` and expands ``purchase``/``begin_checkout`` item
+The job restores event order by ``session_id + sequence_no + event_time +
+received_at`` and expands ``purchase``/``begin_checkout`` item
 arrays into one product row per item.  Event-specific properties stay
 available through ``properties_json`` while frequently queried fields are
 typed columns.
@@ -228,9 +228,7 @@ def _attach_product_dimension(df: Any, dim_product_df: Any | None) -> Any:
     if dim_product_df is None:
         return df
 
-    base_columns = [
-        name for name in df.columns if name not in {"category_id", "brand_id"}
-    ]
+    base_columns = [name for name in df.columns if name not in {"category_id", "brand_id"}]
     base = df.select(*base_columns)
     dimension = dim_product_df.select(
         F.col("product_id").alias("_dim_product_id"),
@@ -254,7 +252,7 @@ def _sessionized_events(cleaned_df: Any, dim_product_df: Any | None = None) -> A
     from pyspark.sql import functions as F
 
     properties_df = _typed_properties(cleaned_df)
-    session_window = Window.partitionBy("tenant_id", "session_id").orderBy(
+    session_window = Window.partitionBy("session_id").orderBy(
         F.col("sequence_no").asc(),
         F.col("event_time").asc(),
         F.col("received_at").asc(),
@@ -269,7 +267,6 @@ def _sessionized_events(cleaned_df: Any, dim_product_df: Any | None = None) -> A
         "session_id",
         "page_view_id",
         "event_date_kst",
-        "tenant_id",
         "user_id",
         "persona_id",
         "scenario_id",
@@ -356,7 +353,6 @@ def _product_event_fact(
         "generator_type",
         "session_id",
         "page_view_id",
-        "tenant_id",
         item_index.alias("item_index"),
         product_id.alias("product_id"),
         _prop(F.col("_properties"), "context_product_id").alias("context_product_id"),
@@ -414,9 +410,8 @@ def _product_event_fact(
 def _build_seed_dim_product(catalog_df: Any) -> Any:
     """Project the checked-in seed catalog into the common product dimension.
 
-    Tenant-registered products are a separate input owned by the storefront
-    flow.  Until that input exists, this projection covers the seed catalog
-    only and deliberately keeps ``tenant_id`` NULL.
+    Brand-registered products are a separate input owned by the catalog flow.
+    Until that input exists, this projection covers the seed catalog only.
     """
 
     from pyspark.sql import functions as F
@@ -426,7 +421,6 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
         catalog_df.select(
             product_id.alias("product_id"),
             F.col("product_name").cast("string").alias("product_name"),
-            F.lit(None).cast("string").alias("tenant_id"),
             F.lit("seed_catalog").alias("product_source"),
             F.col("brand_id").cast("string").alias("brand_id"),
             F.col("brand_name").cast("string").alias("brand_name"),
@@ -464,7 +458,6 @@ CONTENT_GROUP_COLUMNS = (
     "section_id",
     "content_kind",
     "content_ref",
-    "tenant_id",
     "user_id",
     "persona_id",
     "scenario_id",
@@ -513,7 +506,6 @@ def _content_events(cleaned_df: Any, event_names: tuple[str, ...]) -> Any:
         _prop(F.col("_properties"), "section_id").alias("section_id"),
         _prop(F.col("_properties"), "content_kind").alias("content_kind"),
         _prop(F.col("_properties"), "content_ref").alias("content_ref"),
-        "tenant_id",
         "user_id",
         "persona_id",
         "scenario_id",

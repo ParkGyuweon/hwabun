@@ -167,7 +167,7 @@ class EventValidationTest {
     }
 
     @Test
-    void requiresSyntheticRuntimeMetadata() {
+    void defersSyntheticRuntimeMetadataToTheDownstreamValidator() {
         ActivityEvent invalidEvent = new ActivityEvent(
                 "0.2.0-draft", "evt-001", "product_click", "comparison",
                 Instant.parse("2026-08-27T14:30:00Z"), "persona-001", "session-001", "page-view-001", 1,
@@ -176,9 +176,69 @@ class EventValidationTest {
 
         Set<ConstraintViolation<ActivityEvent>> violations = validator.validate(invalidEvent);
 
-        assertThat(violations)
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void rejectsInvalidPurchasePropertySemantics() throws Exception {
+        ActivityEvent invalidPurchase = new ActivityEvent(
+                "0.2.0-draft", "evt-purchase", "purchase", "conversion",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-001","items":[{"product_id":"product-001","quantity":0,"unit_price":10}]}
+                        """)
+        );
+        ActivityEvent invalidReasons = new ActivityEvent(
+                "0.2.0-draft", "evt-reason", "purchase_reason_select", "validation",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-001","reasons":["not_a_reason"]}
+                        """)
+        );
+
+        assertThat(validator.validate(invalidPurchase))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("properties");
+        assertThat(validator.validate(invalidReasons))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
+    }
+
+    @Test
+    void permitsNewlyActivatedEventsWhenPurchasePropertiesMeetTheCollectorPolicy() {
+        List<ActivityEvent> events = List.of(
+                event("navigation_click", "session"),
+                event("begin_checkout", "conversion"),
+                event("purchase", "conversion"),
+                event("purchase_reason_select", "validation")
+        );
+
+        for (ActivityEvent event : events) {
+            assertThat(validator.validate(event))
+                    .as("%s should be accepted by the Collector allow-list", event.eventName())
+                    .isEmpty();
+        }
+    }
+
+    private ActivityEvent event(String eventName, String intent) {
+        var properties = objectMapper.createObjectNode();
+        if ("begin_checkout".equals(eventName) || "purchase".equals(eventName)) {
+            var item = properties.putArray("items").addObject();
+            item.put("product_id", "product-001");
+            item.put("quantity", 1);
+            item.put("unit_price", 10);
+        }
+        if ("purchase".equals(eventName) || "purchase_reason_select".equals(eventName)) {
+            properties.put("order_id", "order-001");
+        }
+        if ("purchase_reason_select".equals(eventName)) {
+            properties.putArray("reasons").add("ingredient");
+        }
+        return new ActivityEvent(
+                "0.2.0-draft", "evt-" + eventName, eventName, intent,
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "cart", null, "user", "local", properties
+        );
     }
 
     private ActivityEvent validEvent() {

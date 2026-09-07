@@ -30,8 +30,8 @@ class EventRequestSizeFilterTest {
         ErrorResponse body = objectMapper.readValue(response.getContentAsByteArray(), ErrorResponse.class);
         assertThat(response.getStatus()).isEqualTo(413);
         assertThat(body.code()).isEqualTo("EVENT_REQUEST_TOO_LARGE");
-        assertThat(registry.get("collector.events.validation.failures")
-                .tag("reason", "event_request_too_large").counter().count()).isEqualTo(1);
+        assertThat(registry.get("collector.events.validation.rejected")
+                .tag("code", "event_request_too_large").counter().count()).isEqualTo(1);
     }
 
     @Test

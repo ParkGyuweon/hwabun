@@ -374,9 +374,13 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
    `generator_type`이 필요하다. 이 공통 규칙은 JSON Schema에서도 검사한다.
 5. `actor_type='user'`에 synthetic runtime metadata가 있으면 경고하고 분석에는
    사용하지 않는다.
-6. 위반 Event는 아래 표준 오류 코드로 `bad_events`에 격리한다. 한 Event에 여러
+6. Collector가 동기 검증한 위반 Event는 Kafka에 발행하지 않는다. HTTP `202`의
+   `rejections`와 Collector 구조화 로그·메트릭으로만 기록한다. Kafka에 발행된 Event를
+   Spark가 추가 검증하다 위반을 발견한 경우에만 `bad_events`에 격리한다. 한 Event에 여러
    위반이 있으면 원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
-7. Collector가 Event별 properties를 검사하지 않는 동안 Spark가 방어적으로 검사한다.
+7. Collector는 `begin_checkout`, `purchase`, `purchase_reason_select`의 required key,
+   타입, 양수 수량·가격, `reasons` 길이 및 enum을 동기 검증한다. 이 밖의 Event별
+   properties는 Spark가 방어적으로 검사한다.
 
 | 우선순위 | error_code | 판정 기준 |
 | --- | --- | --- |

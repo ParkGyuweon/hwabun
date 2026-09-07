@@ -11,7 +11,6 @@ from streaming.jobs.clean_events_job import (
     CleanEventsConfig,
     RFC3339_WITH_OFFSET_PATTERN,
     SUPPORTED_SCHEMA_VERSIONS,
-    TENANT_ID_PATTERN,
     parse_args as parse_clean_args,
 )
 from streaming.jobs.derive_facts_job import (
@@ -65,7 +64,6 @@ class RawSinkConfigTest(unittest.TestCase):
             "is_json_parseable",
             "properties_json",
             "source",
-            "tenant_id",
         }
 
         self.assertTrue(required.issubset(set(RAW_EVENT_FIELDS)))
@@ -114,13 +112,11 @@ class CleanEventsConfigTest(unittest.TestCase):
         self.assertEqual("data/processed/bad_events", config.bad_path)
         self.assertEqual("data/processed/duplicate_events", config.duplicate_path)
 
-    def test_schema_version_transition_and_tenant_slug_contract(self):
+    def test_schema_version_contract_has_no_storefront_scope(self):
         self.assertEqual(
-            ("0.2.0-draft", "0.3.0-draft"),
+            ("0.2.0-draft",),
             SUPPORTED_SCHEMA_VERSIONS,
         )
-        self.assertIsNotNone(re.fullmatch(TENANT_ID_PATTERN, "estee-lauder"))
-        self.assertIsNone(re.fullmatch(TENANT_ID_PATTERN, "Estee Lauder"))
 
     def test_empty_output_path_is_rejected(self):
         with self.assertRaises(ValueError):

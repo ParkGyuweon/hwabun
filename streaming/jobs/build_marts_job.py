@@ -147,7 +147,6 @@ def _funnel_stage_events(sessionized_df: Any, product_fact_df: Any) -> Any:
         "simulation_run_id",
         "generator_type",
         "product_id",
-        "tenant_id",
         "category_id",
         "brand_id",
         "event_name",
@@ -195,7 +194,6 @@ def _funnel_stage_events(sessionized_df: Any, product_fact_df: Any) -> Any:
         "simulation_run_id",
         "generator_type",
         "product_id",
-        "tenant_id",
         "category_id",
         "brand_id",
         "event_name",
@@ -226,7 +224,6 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     grouped = stage_events.groupBy(
         "session_id",
         "product_id",
-        "tenant_id",
         "user_id",
         "persona_id",
         "scenario_id",
@@ -298,7 +295,6 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "simulation_run_id",
         "generator_type",
         "product_id",
-        "tenant_id",
         "category_id",
         "brand_id",
         "actor_type",
@@ -338,7 +334,6 @@ def _product_daily_kpi(
 
     group_columns = [
         "event_date_kst",
-        "tenant_id",
         "product_id",
         "actor_type",
         "source",
@@ -425,7 +420,6 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
 
     group_columns = [
         "funnel_date_kst",
-        "tenant_id",
         "product_id",
         "actor_type",
         "source",
@@ -481,16 +475,12 @@ def build_mart_frames(
     time_zone: str,
     event_weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    from pyspark.sql import functions as F
-
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
-    tenant_product_fact = product_fact_df.where(F.col("tenant_id").isNotNull())
-    tenant_funnel_session = funnel_session.where(F.col("tenant_id").isNotNull())
     return {
         "funnel_session_fact": funnel_session,
-        "product_daily_kpi": _product_daily_kpi(tenant_product_fact, event_weights),
-        "funnel_daily_kpi": _funnel_daily_kpi(tenant_funnel_session),
+        "product_daily_kpi": _product_daily_kpi(product_fact_df, event_weights),
+        "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
     }
 
 
@@ -514,11 +504,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     )
     frames["product_daily_kpi"].write.mode("overwrite").parquet(
         config.product_daily_path,
-        partitionBy="tenant_id",
     )
     frames["funnel_daily_kpi"].write.mode("overwrite").parquet(
         config.funnel_daily_path,
-        partitionBy="tenant_id",
     )
 
 
