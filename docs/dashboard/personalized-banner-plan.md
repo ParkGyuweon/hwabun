@@ -1,7 +1,7 @@
 # 성향 반응형 추천 배너 — 같은 상품, 다른 강조
 
 작성: 프론트 (2026-09-07)
-상태: 기획 제안. 기획 정리(v0.1) §5 "사용자 성향별 강조 문구", §12 "추천 배너",
+상태: 기획 제안 → **§10 에서 AI 파트 회신(9/7)으로 갱신.** §5·§7 은 §10 이 우선한다. 기획 정리(v0.1) §5 "사용자 성향별 강조 문구", §12 "추천 배너",
 §15-10 "추천 배너의 범위" 를 화면과 데이터로 구체화한다. 데이터 파트 확인 항목은 §7.
 선행 문서: [`positioning-why-small-brands.md`](./positioning-why-small-brands.md) ·
 [`recommendation-io-spec.md`](../../contracts/recommendation-io-spec.md) ·
@@ -253,3 +253,97 @@ trait          = argmax_k trait_score[k]
 6. 참여 루프 이벤트 (§6). 백엔드 상품 수정 이력과 같이.
 
 1·2 는 데이터 파트 답과 무관하게 지금 시작할 수 있다.
+
+---
+
+## 10. 2026-09-07 갱신 — AI 파트 회신 반영 (이 절이 §1·§5·§7 보다 우선)
+
+AI 파트 문서 세 건(배너 전달 · 회신 1~4 · `log.ts` 패치 제안 · 회원가입 속성)과
+`origin/dev` f8a098a 기준 계약을 반영한 합의 상태다.
+
+### 10-1. 바로잡은 것
+
+| 항목 | 이전 (이 문서 §3·§5) | 갱신 |
+|---|---|---|
+| 목록 정렬 | 추천 점수로 기본 정렬 | **하지 않는다.** 점수순 정렬은 시드 브랜드 노출을 89% 로 올려 교차 브랜드 발견을 죽인다 (`exposure-role.md`). 기본 정렬은 현행 유지, **"추천순" 을 선택 옵션으로만** 추가 |
+| CF | "붙어서 38.5%" | dev 에는 CF **가점**이 들어갔다(`recommender.py`, Jira 174). 그러나 백엔드 `RankingService` 가 없어 서빙은 배치 산출물까지. 38.5%·43.9% 는 성숙 카탈로그 값이고 신규 브랜드 10% 조건은 40.5%, 초기엔 30%대로 인용 |
+| 배너 이벤트 | `recommendation_*` 에 optional 속성 | **`banner_impression` · `banner_click` 신규 2종.** `banner_skip` 은 없음(마트에서 노출 − 클릭) |
+| 배너 내용 | 프론트 variant 5종 카피 | **AI 축 6종 + 전용 칸** 이 내용. 프론트 성향은 어느 축을 올릴지 고르는 장치 |
+| 성능 | 6.8 μs | 실제 경로 0.26 ms(선형) / 4.0 ms(LTR). 사용자별 캐싱 필요 |
+
+### 10-2. 화면 — 히어로 1 + 배너 행 6 (전용 2, 설정값)
+
+```
+ hero      items[0] + 축 문구                     section_id: hero_banner (enum 추가 요청)
+ banners   slot 1~4 축 배너 · slot 5~6 new_brand   section_id: promo_row 재사용 또는 banner_row
+ items     메인 10칸 (기존 promo_row 자리)
+```
+
+`reserved` 칸 수는 프론트 설정값(기본 2)으로 두고 요청 파라미터로 보낸다.
+신규 브랜드 비율 30% 넘으면 3.
+
+### 10-3. API (계약 `recommendation-io-spec.md` §5-1, 제안 상태)
+
+```
+GET /api/recommend?user_id=…&k=10&banner_slots=6&reserved=2&axes=concern,segment,price_bin
+→ { user_id, generated_at, model_version, items[10], hero{…}, banners[6] }
+```
+
+- `items` 와 `banners` 의 `product_id` 는 겹치지 않는다. `hero` 만 `items[0]` 과 같을 수 있다
+- `banner_value` 는 어휘집 원문. 한국어는 `contracts/product-form-labels-ko.json` 으로 변환
+- `axes` 는 프론트가 세션 성향으로 정해 보낸다. 없으면 AI 기본 `concern,segment`
+
+### 10-4. 세션 성향 → 축 매핑
+
+| 성향 | 신호 (기존 이벤트) | `axes` 우선순위 |
+|---|---|---|
+| `price` | `filter_change(price)` · `sort_change(price)` · `text_selection(price)` | `price_bin` |
+| `ingredient` | `ingredient_view_mode_change` · `accordion_toggle(ingredients)` · `text_selection/copy(ingredient)` · `section_dwell(ingredients)` | `ingredient` → `clean` |
+| `review` | `review_expand` · `review_filter_apply` · `section_dwell(reviews)` | `segment` |
+| `concern` | `filter_change(concern)` · `section_dwell(highlight_badge/clinical_claim)` · 페르소나 있음 | `concern` |
+| `participate` | `section_dwell(brand_story)` · `purchase_reason_select` | `new_brand` 칸을 앞 slot 으로 |
+
+성향 없음 → `concern,segment`. 성향 있어도 **20% 는 다른 축**(`trait_source=explore`).
+
+### 10-5. `log.ts` 반영 — 5종 (AI 제안값, 측정 전)
+
+| 이벤트 | `EVENT_INTENT` | `EVENT_WEIGHT` | 비고 |
+|---|---|---:|---|
+| `banner_impression` | `session` | 0 | CTR 분모. `NEGATIVE_EVENTS` 에 넣지 않는다 |
+| `banner_click` | `interest` | 1.5 | `recommendation_click` 과 같은 값 |
+| `begin_checkout` | `conversion` | 5.0 | 전환 정의에는 안 넣음 |
+| `purchase` | `conversion` | 8.0 | 담기의 2배 이상 유지 |
+| `purchase_reason_select` | `validation` | 0 | 이유 선언. `reasons` 는 별도 신호 |
+| `add_to_cart` | (기존) | **4.0 → 3.0** | 구매의 약한 대리로 강등 |
+
+배너 property: `banner_type` · `banner_value`(원문, `new_brand` 는 null) · `banner_slot` ·
+`product_id` · `trait_source`. `event-schema.json` 에는 구매 3종은 이미 있고 **배너 2종은
+아직 없다** — 데이터 파트 enum 등록이 선행 조건.
+
+### 10-6. 회원가입 속성 (AI 문서 9/4)
+
+| 축 | 코드값 | 언제 | 비고 |
+|---|---|---|---|
+| `skin_type` | `dry` `oily` `combination` `normal` | 가입, 건너뛰기 허용 | 복합성 55.3% 는 `skin_tone` 이 주 축이 되므로 복합성 선택 시 톤 입력을 한 번 더 권한다 |
+| `skin_tone` | `fair` `light` `medium` `tan` `deep` | 가입, 건너뛰기 허용 | 라벨은 `product-form-labels-ko.json` `segment` |
+| `hair_color` | `black` `brown` `blonde` `auburn` `red` `gray` | 프로필 (선택) | |
+| `eye_color` | 받지 않음 | — | 한국 사용자 대부분 `brown` |
+
+사용자 **피부 고민(다중)** 은 현재 프론트에 없다. 백엔드 사용자 × 고민 매핑 테이블 신설
+요청 (코드표는 상품 `concern` 9종 공유).
+
+### 10-7. 상품 등록 폼 (계약 `product-registration-spec.md`)
+
+`highlights` 는 concern 9 + clean 16 + texture 5 = 30종 다중 선택, **성분은 태그로 받지
+않고** 전성분 텍스트만 받는다. 가격은 `price_krw`. 이 문서 §4-2 의 "핵심 성분 함량
+optional" 은 벡터에 쓸 곳이 없으므로 **배너 표시용으로만** 받거나 보류.
+
+### 10-8. 남은 미결
+
+| 항목 | 누구 |
+|---|---|
+| `banner_*` 2종 `event-schema.json` enum 등록, `hero_banner` section/entry enum | 데이터 |
+| `RankingService` (추천 API 서빙) | 백엔드 · AI |
+| 배너 반응 마트 `banner_daily`, 장기 성향 `user_trait_daily` | 데이터 |
+| 카테고리 가격 중앙값 (`price_bin` 이 KRW 로 바뀔 때 같이) | 데이터 |
+| 사용자별 추천 결과 캐싱 정책 | 백엔드 |
