@@ -44,7 +44,8 @@ from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder                          # noqa: E402
 from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
-                         Recommender, brand_match, schedule_for)
+                         Recommender, brand_match, schedule_for,
+                         load_cooc, cf_bonus, CF_BETA)
 from user_vector import UserVector                           # noqa: E402
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -149,7 +150,8 @@ def served_top(scores, blocked, recommender, k=K, lam_mmr=LAMBDA_MMR):
 
 def run_persona(persona, seeds, target, ctx, rng):
     """한 사람의 탐색을 돌리고 step 별 target 순위를 돌려준다"""
-    M, index, prior, affinity, hp, recommender, meta, brands, known = ctx
+    (M, index, prior, affinity, hp, recommender, meta, brands, known,
+     cooc, supporters) = ctx
     state = UserVector()
     # seed 는 이미 좋아한 상품이다. 전환으로 넣고 후보에서 뺀다
     for gid in seeds:
@@ -176,7 +178,14 @@ def run_persona(persona, seeds, target, ctx, rng):
         bm = brand_match(brands, rows, known) if rows else None
         if bm is not None:
             s = s + BRAND_W * bm
-        return s + w2 * affinity(persona) + w3 * prior
+        s = s + w2 * affinity(persona) + w3 * prior
+        # CF 가점 — 서빙과 같게 전환한 상품을 쓴다. 탐색이 쌓일수록 늘어난다
+        if cooc is not None:
+            cr = [index[g] for g in state.converted if g in index]
+            cfb = cf_bonus(cooc, cr, None, supporters)
+            if cfb is not None:
+                s = s + CF_BETA * cfb
+        return s
 
     scores = score_now()
     ranks.append(rank_of_target(scores, target_i, seed_idx))
@@ -255,6 +264,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=("train", "valid", "test", "all"),
                     default="valid")
+    # CF 가점은 **채택됐다** (2026-09-07). 기본이 켬이고 끄려면 --no-cf 다.
+    ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
+                    help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
@@ -285,7 +297,16 @@ def main():
             for p in encoder.products]
     brands = [p["brand_name"] for p in encoder.products]
     known = set(encoder.blk["brand"]["vocab"])
-    ctx = (M, index, prior, affinity, hp, recommender, meta, brands, known)
+    cooc, supporters = load_cooc() if a.cf else (None, None)
+    if a.cf and cooc is None:
+        print("⚠️ CF 가점이 켜져 있는데 item_cooc.npz 가 없습니다 — "
+              "CBF 단독으로 돕니다")
+    elif a.cf:
+        print("CF 가점 켬 (β=1.0 · 가점 전용)")
+    else:
+        print("CF 가점 끔 — CBF 단독")
+    ctx = (M, index, prior, affinity, hp, recommender, meta, brands, known,
+           cooc, supporters)
 
     profiles = {p["persona_id"]: p
                 for p in json.load(open(PERSONAS, encoding="utf-8"))}
