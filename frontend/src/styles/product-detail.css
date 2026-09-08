@@ -1227,34 +1227,136 @@
   color: var(--color-ink-soft);
 }
 
-.feedback__aspects {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+/* 계약 0.2.0 — 왼쪽 축 토글 + 오른쪽 자유 입력. 축은 고객이 고른다 */
+.feedback__compose {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-soft);
 }
 
-.chip--select {
-  cursor: pointer;
+.feedback__axes {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding-right: var(--space-4);
+  border-right: 1px solid var(--color-line-soft);
+}
+
+.feedback__axes-label,
+.feedback__editor-label {
+  margin: 0 0 var(--space-1);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-ink-soft);
+}
+
+.feedback__axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.chip--select.is-active {
-  border-color: var(--color-brand-deep);
-  background: var(--color-brand-soft);
-  color: var(--color-promo-ink);
+.feedback__axis:hover {
+  border-color: var(--color-brand);
+}
+
+.feedback__axis:focus-visible {
+  outline: 2px solid var(--color-brand-deep);
+  outline-offset: 2px;
+}
+
+.feedback__axis.is-active {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: #fff;
+}
+
+.feedback__axis-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  flex: none;
+}
+
+.feedback__axis-mark {
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+.feedback__axis-mark--sent {
+  color: var(--color-brand-deep);
+  font-weight: 700;
+}
+
+.feedback__editor {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-width: 0;
 }
 
 .feedback__text {
   width: 100%;
+  min-height: 140px;
   padding: var(--space-3);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
+  background: var(--color-surface);
   font: inherit;
   font-size: 14px;
+  line-height: 1.6;
   resize: vertical;
+}
+
+.feedback__text:focus-visible {
+  outline: 2px solid var(--color-brand-deep);
+  outline-offset: 1px;
+}
+
+.feedback__submit {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .feedback__compose {
+    grid-template-columns: 1fr;
+  }
+
+  .feedback__axes {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    padding-right: 0;
+    padding-bottom: var(--space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-line-soft);
+  }
+
+  .feedback__axes-label {
+    grid-column: 1 / -1;
+  }
+
+  .feedback__axis {
+    height: 40px;
+    font-size: 13px;
+  }
 }
 
 .feedback__actions {
