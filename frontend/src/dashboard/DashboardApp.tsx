@@ -13,6 +13,8 @@ import { MotifLine } from './components';
 import { DEFAULT_STOREFRONT, describeStorefront, loadStorefront, saveStorefront } from '../lib/storefront';
 import type { StorefrontPrefs } from '../lib/storefront';
 import { DEMO_BRAND } from '../mocks/products';
+import { SCOPE_LABEL } from './lib/scope';
+import type { ScopeKind } from './lib/scope';
 import { useAuth } from '../hooks/useAuth';
 import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
@@ -28,6 +30,19 @@ type ScreenKey =
   | 'ingredients'
   | 'register'
   | 'feedback';
+
+/** 화면이 어느 데이터 스코프를 보나 (lib/scope.ts). 피드백·등록만 SSAFY Beauty, 나머지는 행동·리뷰 브랜드 */
+const SCREEN_SCOPE: Record<ScreenKey, ScopeKind> = {
+  overview: 'behavior',
+  content: 'behavior',
+  segments: 'behavior',
+  ingredients: 'behavior',
+  products: 'behavior',
+  reviews: 'behavior',
+  behavior: 'behavior',
+  feedback: 'feedback',
+  register: 'feedback',
+};
 
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
   // 순서 = 브랜드가 결정하는 순서 (명세 §1). 범용 지표·마찰은 뒤로
@@ -213,6 +228,12 @@ export default function DashboardApp() {
         <header className="main__head">
           <h1>{active.title}</h1>
           <p>{active.desc}</p>
+          {/* 어느 브랜드 데이터인지 항상 적는다. 스코프가 둘이라 이게 없으면 숫자를 잘못 읽는다 */}
+          <p className="main__scope" title={SCOPE_LABEL[SCREEN_SCOPE[active.key]].source}>
+            <span className="main__scope-what">{SCOPE_LABEL[SCREEN_SCOPE[active.key]].what}</span>
+            <strong>{SCOPE_LABEL[SCREEN_SCOPE[active.key]].brand}</strong>
+            <span className="main__scope-src">{SCOPE_LABEL[SCREEN_SCOPE[active.key]].source}</span>
+          </p>
 
           <div className="main__controls">
             {screen === 'overview' ? (
@@ -229,7 +250,7 @@ export default function DashboardApp() {
           </div>
         </header>
 
-        {screen === 'overview' ? <OverviewScreen days={days} /> : null}
+        {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen /> : null}
         {screen === 'content' ? <ContentScreen /> : null}
         {screen === 'segments' ? <SegmentsScreen /> : null}

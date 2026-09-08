@@ -1,5 +1,6 @@
-import { Kpi, Panel } from '../components';
+import { Heatmap, Kpi, Panel } from '../components';
 import {
+  SKIN_TONE_ORDER,
   SKIN_TYPE_KO,
   fmt,
   sameSkinFilterRate,
@@ -8,11 +9,11 @@ import {
 } from '../lib/metrics';
 
 const TONE_KO: Record<string, string> = {
-  fair: 'Fair',
-  light: 'Light',
-  medium: 'Medium',
-  tan: 'Tan',
-  deep: 'Deep',
+  fair: '밝은 톤',
+  light: '라이트',
+  medium: '미디엄',
+  tan: '탠',
+  deep: '딥',
 };
 
 /**
@@ -26,19 +27,23 @@ const TONE_KO: Record<string, string> = {
  * 브랜드는 고객군마다 다른 상세페이지·광고 소재를 쓸 근거를 얻는다.
  */
 export default function SegmentsScreen() {
-  /** 전 칸 중 최댓값. 셀 배경 농도의 기준선이다 */
-  const maxRate = Math.max(...segmentMatrix.flatMap((r) => r.cells.map((c) => c.cartRate)));
-  const best = segmentMatrix
-    .flatMap((r) => r.cells.map((c) => ({ type: r.type, ...c })))
-    .reduce((a, b) => (a.cartRate >= b.cartRate ? a : b));
+  // 표본 50 미만 칸은 비교에서 뺀다 (명세 §3-1)
+  const shown = segmentMatrix.flatMap((r) => r.cells.map((c) => ({ type: r.type, ...c }))).filter((c) => c.sessions >= 50);
+  const best = shown.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b));
+  const cells: Record<string, Record<string, { value: number; n: number }>> = {};
+  for (const r of segmentMatrix) {
+    cells[r.type] = {};
+    for (const c of r.cells) cells[r.type][c.tone] = { value: c.cartRate, n: c.sessions };
+  }
+  const topContentOf = (type: string) => segmentTopContent.find((s) => s.type === type);
 
   return (
     <div className="stack">
       <div className="grid grid--kpi">
         <Kpi
           label="최고 전환 고객군"
-          value={`${SKIN_TYPE_KO[best.type]} · ${TONE_KO[best.tone]}`}
-          sub={`담기율 ${fmt.pct(best.cartRate)}`}
+          value={best.type === 'combination' ? `복합성 · ${TONE_KO[best.tone]}` : `${SKIN_TYPE_KO[best.type]} · ${TONE_KO[best.tone]}`}
+          sub={`담기율 ${fmt.pct(best.cartRate)} · n=${fmt.int(best.sessions)}`}
           source="mock"
         />
         <Kpi
@@ -53,41 +58,22 @@ export default function SegmentsScreen() {
       <Panel
         title="피부 타입 × 톤 · 장바구니 전환율"
         source="mock"
-        aside="농도 = 전환율. 색이 아니라 진하기로만 읽는다"
+        aside="n<50 비움 · n<200 흐림"
       >
-        <table className="table table--matrix">
-          <thead>
-            <tr>
-              <th>타입 \ 톤</th>
-              {segmentMatrix[0].cells.map((c) => (
-                <th key={c.tone}>{TONE_KO[c.tone]}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {segmentMatrix.map((row) => (
-              <tr key={row.type}>
-                <td>{SKIN_TYPE_KO[row.type]}</td>
-                {row.cells.map((cell) => (
-                  <td
-                    key={cell.tone}
-                    className="matrix__cell"
-                    style={{
-                      // 브랜드 초록 한 색의 농도로만 표현한다. 다색 히트맵은
-                      // 좋고 나쁨을 화면이 단정해 버린다
-                      // 테마가 바뀌면 같이 바뀌어야 한다. 값을 박아두면 테마 색과 어긋난다
-                      background: `rgb(var(--brand-rgb) / ${(cell.cartRate / maxRate) * 0.85})`,
-                    }}
-                    title={`표본 ${cell.sessions}건`}
-                  >
-                    {fmt.pct(cell.cartRate)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="note">칸에 올리면 표본 수</p>
+        <Heatmap
+          rows={segmentMatrix.map((r) => ({ key: r.type, label: SKIN_TYPE_KO[r.type] }))}
+          cols={SKIN_TONE_ORDER.map((t) => ({ key: t, label: TONE_KO[t] }))}
+          cells={cells}
+          format={(v) => fmt.pct(v)}
+          rowNote={(type) => {
+            const t = topContentOf(type);
+            if (type === 'combination') return `톤으로 비교${t ? ` · 가장 오래 보는 것: ${t.top}` : ''}`;
+            return t ? `가장 오래 보는 것: ${t.top}` : null;
+          }}
+        />
+        <p className="note">
+          복합성 고객(전체의 55%)은 피부 타입으로는 반응이 갈리지 않고 톤으로 갈립니다(실측: 타입 편차 0.053, 톤 0.269). 복합성 행은 톤 칸만 비교하세요.
+        </p>
       </Panel>
 
       <Panel

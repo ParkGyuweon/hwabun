@@ -277,3 +277,140 @@ export function LineChart({
     </svg>
   );
 }
+
+
+/* ---------- 산점도 (명세 §3-1: 두 지표 관계는 산점도. 막대 2개 나열 금지) ---------- */
+
+export interface ScatterPoint {
+  label: string;
+  /** 가로: 주목도 (평균 체류 초) */
+  x: number;
+  /** 세로: 전환 기여 lift. 1.0 이 기준선 */
+  y: number;
+  /** 표본. 200 미만은 흐림, 50 미만은 그리지 않는다 */
+  n: number;
+}
+
+/**
+ * 주목도 × 전환 기여.
+ *
+ * 체류가 길다 ≠ 좋다 (규칙 R-1a). 가로축 평균선과 세로축 lift=1 선으로 네 칸을 만들면
+ *   우상: 오래 보고 결정에도 기여 → 지금처럼
+ *   좌상: 짧게 보지만 결정에 기여 → 위로 올려라
+ *   우하: 오래 보지만 안 산다 → 설명 문제
+ *   좌하: 안 보고 안 산다 → 있어야 하나
+ * 로 읽힌다. 점 크기는 표본, 축은 0 부터.
+ */
+export function Scatter({ points, height = 300 }: { points: ScatterPoint[]; height?: number }) {
+  const width = 640;
+  const pad = { l: 44, r: 16, t: 14, b: 34 };
+  const shown = points.filter((p) => p.n >= 50);
+  const maxX = Math.max(1, ...shown.map((p) => p.x)) * 1.1;
+  const maxY = Math.max(1.2, ...shown.map((p) => p.y)) * 1.15;
+  const meanX = shown.reduce((s, p) => s + p.x, 0) / Math.max(1, shown.length);
+  const sx = (v: number) => pad.l + (v / maxX) * (width - pad.l - pad.r);
+  const sy = (v: number) => height - pad.b - (v / maxY) * (height - pad.t - pad.b);
+  const r = (n: number) => 4 + Math.min(6, Math.log10(Math.max(1, n)) * 1.6);
+
+  return (
+    <svg className="scatter" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="주목도와 전환 기여 산점도">
+      {/* 사분면 라벨 */}
+      <text className="scatter__quad" x={pad.l + 6} y={pad.t + 12}>짧게 보지만 결정에 기여</text>
+      <text className="scatter__quad" x={width - pad.r - 6} y={pad.t + 12} textAnchor="end">오래 보고 결정에 기여</text>
+      <text className="scatter__quad" x={pad.l + 6} y={height - pad.b - 6}>안 보고 안 산다</text>
+      <text className="scatter__quad" x={width - pad.r - 6} y={height - pad.b - 6} textAnchor="end">오래 보지만 안 산다</text>
+
+      {/* 축 */}
+      <line className="scatter__axis" x1={pad.l} y1={height - pad.b} x2={width - pad.r} y2={height - pad.b} />
+      <line className="scatter__axis" x1={pad.l} y1={pad.t} x2={pad.l} y2={height - pad.b} />
+      {/* 기준선: lift 1.0 · 평균 체류 */}
+      <line className="scatter__ref" x1={pad.l} y1={sy(1)} x2={width - pad.r} y2={sy(1)} />
+      <text className="scatter__tick" x={pad.l - 6} y={sy(1) + 4} textAnchor="end">1.0×</text>
+      <line className="scatter__ref" x1={sx(meanX)} y1={pad.t} x2={sx(meanX)} y2={height - pad.b} />
+      <text className="scatter__tick" x={sx(meanX)} y={height - pad.b + 14} textAnchor="middle">평균 {meanX.toFixed(0)}초</text>
+      <text className="scatter__tick" x={pad.l - 6} y={sy(maxY / 1.15) + 4} textAnchor="end">{(maxY / 1.15).toFixed(1)}×</text>
+      <text className="scatter__tick" x={width - pad.r} y={height - pad.b + 14} textAnchor="end">{maxX.toFixed(0)}초</text>
+      <text className="scatter__label" x={pad.l} y={height - 6}>가로: 평균 체류 · 세로: 본 방문 담기율 ÷ 전체</text>
+
+      {shown.map((p) => (
+        <g key={p.label} className={`scatter__pt${p.n < 200 ? ' is-thin' : ''}${p.y < 1 ? ' is-below' : ''}`}>
+          <circle cx={sx(p.x)} cy={sy(p.y)} r={r(p.n)}>
+            <title>{`${p.label} · 체류 ${p.x.toFixed(1)}초 · 기여 ${p.y.toFixed(1)}× · n=${p.n.toLocaleString('ko-KR')}`}</title>
+          </circle>
+          <text x={sx(p.x) + r(p.n) + 4} y={sy(p.y) + 4}>{p.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/* ---------- 히트맵 (명세 §3-1: 격자. 셀마다 값 + n. n<50 빈칸, n<200 흐림) ---------- */
+
+export interface HeatCell {
+  value: number;
+  n: number;
+}
+
+export function Heatmap({
+  rows,
+  cols,
+  cells,
+  format,
+  rowNote,
+}: {
+  rows: Array<{ key: string; label: string }>;
+  cols: Array<{ key: string; label: string }>;
+  /** cells[rowKey][colKey] */
+  cells: Record<string, Record<string, HeatCell>>;
+  format: (v: number) => string;
+  /** 행 오른쪽 한 줄 (예: 이 고객군은 성분을 가장 오래 본다) */
+  rowNote?: (rowKey: string) => string | null;
+}) {
+  const valid = rows.flatMap((r) => cols.map((c) => cells[r.key]?.[c.key])).filter((c) => c && c.n >= 50) as HeatCell[];
+  const max = Math.max(1e-9, ...valid.map((c) => c.value));
+  return (
+    <div className="table-wrap">
+      <table className="heat">
+        <thead>
+          <tr>
+            <th />
+            {cols.map((c) => (
+              <th key={c.key}>{c.label}</th>
+            ))}
+            {rowNote ? <th className="heat__note-head" /> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key}>
+              <th scope="row">{r.label}</th>
+              {cols.map((c) => {
+                const cell = cells[r.key]?.[c.key];
+                if (!cell || cell.n < 50) {
+                  return (
+                    <td key={c.key} className="heat__cell is-empty" title="표본 50 미만 · 표시하지 않음">
+                      <span className="heat__value">–</span>
+                    </td>
+                  );
+                }
+                const thin = cell.n < 200;
+                return (
+                  <td
+                    key={c.key}
+                    className={`heat__cell${thin ? ' is-thin' : ''}`}
+                    style={{ background: `rgb(var(--brand-rgb) / ${0.08 + (cell.value / max) * 0.72})` }}
+                    title={thin ? `n=${cell.n} · 표본 200 미만` : `n=${cell.n}`}
+                  >
+                    <span className="heat__value">{format(cell.value)}</span>
+                    <span className="heat__n">n={cell.n.toLocaleString('ko-KR')}</span>
+                  </td>
+                );
+              })}
+              {rowNote ? <td className="heat__note">{rowNote(r.key)}</td> : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Panel } from '../components';
-import { products } from '../lib/metrics';
-import { DEMO_BRAND } from '../../mocks/products';
+import { feedbackProducts as products } from '../lib/metrics';
+import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, updateFeedback } from '../../lib/feedbackStore';
 import { findAdTerms } from '../../lib/adTerms';
@@ -48,7 +48,7 @@ const STATUS_KO = { new: '새 의견', read: '읽음', reflected: '반영' } as 
  */
 export default function FeedbackScreen() {
   const all = useFeedback();
-  const mine = useMemo(() => feedbackForBrand(all, DEMO_BRAND), [all]);
+  const mine = useMemo(() => feedbackForBrand(all, FEEDBACK_BRAND), [all]);
 
   const [axis, setAxis] = useState<AxisFilter>('all');
   const [category, setCategory] = useState<string | null>(null);
@@ -348,7 +348,7 @@ export default function FeedbackScreen() {
                   {f.status === 'reflected' ? (
                     <blockquote className="fbx-card__reply">
                       <span>{f.reply ?? '답글 없이 반영'}</span>
-                      <small>{DEMO_BRAND} · {f.replied_at?.slice(0, 10)}</small>
+                      <small>{FEEDBACK_BRAND} · {f.replied_at?.slice(0, 10)}</small>
                     </blockquote>
                   ) : (
                     <div className="fbx-card__actions">

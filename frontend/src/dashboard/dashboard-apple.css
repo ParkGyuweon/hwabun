@@ -790,3 +790,282 @@ table.data tr:hover td {
   letter-spacing: var(--ls-md);
   font-weight: 600;
 }
+
+/* ---------- 데이터 스코프 표시 (머리 아래 한 줄) ---------- */
+
+.main__scope {
+  flex-basis: 100%;
+  margin: -6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  letter-spacing: var(--ls-sm);
+  color: var(--ink-soft);
+}
+.main__scope strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.main__scope-what::after {
+  content: ':';
+}
+.main__scope-src {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+
+
+/* ---------- 결론 카드 확장: 근거 목록 · 권고 단위 · 근거 화면 이동 ---------- */
+
+.verdict__reasons {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+.verdict__reasons li + li {
+  margin-top: 2px;
+}
+.verdict__unit {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.verdict__go {
+  margin-left: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  cursor: pointer;
+}
+.verdict__go:hover {
+  border-color: var(--ink);
+}
+
+/* 다음 후보 */
+.insight-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.insight-list__item {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.insight-list__item:hover {
+  background: var(--ground);
+}
+.insight-list__head {
+  font-weight: 500;
+}
+.insight-list__meta {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+
+/* 접힘 */
+.fold > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--lift);
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  list-style: none;
+}
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+.fold > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 120ms var(--ease);
+}
+.fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+.fold[open] > summary {
+  margin-bottom: 14px;
+}
+.fold__body {
+  margin-bottom: 16px;
+}
+
+/* ---------- 산점도 ---------- */
+
+.scatter {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--font);
+}
+.scatter__axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.scatter__ref {
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.scatter__tick,
+.scatter__label {
+  font-size: 10.5px;
+  fill: var(--ink-faint);
+}
+.scatter__quad {
+  font-size: 10.5px;
+  fill: var(--ink-faint);
+  opacity: 0.8;
+}
+.scatter__pt circle {
+  fill: var(--brand);
+  stroke: var(--panel);
+  stroke-width: 2;
+  transition: r 120ms var(--ease);
+}
+.scatter__pt.is-below circle {
+  fill: var(--accent);
+}
+.scatter__pt.is-thin {
+  opacity: 0.45;
+}
+.scatter__pt text {
+  font-size: 11.5px;
+  fill: var(--ink);
+}
+.scatter__pt:hover circle {
+  r: 9;
+}
+
+/* ---------- 히트맵 ---------- */
+
+.heat {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-size: var(--fs-sm);
+}
+.heat th {
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 4px 6px;
+}
+.heat th[scope='row'] {
+  text-align: left;
+  white-space: nowrap;
+}
+.heat__cell {
+  text-align: center;
+  padding: 10px 6px 8px;
+  border-radius: 10px;
+  transition: transform 120ms var(--ease);
+}
+.heat__cell:hover {
+  transform: scale(1.04);
+}
+.heat__cell.is-thin {
+  opacity: 0.5;
+}
+.heat__cell.is-empty {
+  background: var(--line-soft);
+  color: var(--ink-faint);
+}
+.heat__value {
+  display: block;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.heat__n {
+  display: block;
+  margin-top: 1px;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.heat__note {
+  padding-left: 12px;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.heat__note-head {
+  width: 30%;
+}
+
+
+/* ---------- 표: 상품명 한 줄 · 진단 표 ---------- */
+
+table.data td.is-name,
+table.data th.is-name {
+  max-width: 260px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.data--diag {
+  min-width: 960px;
+}
+table.data td.is-warn {
+  color: var(--accent);
+  font-weight: 600;
+}
+.diag-step {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ground);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.diag-step--cart {
+  background: rgb(var(--brand-rgb) / 0.18);
+}
+.diag-step--click {
+  background: var(--accent-soft);
+}
+.diag-hint {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+.chips--inline {
+  gap: 4px;
+}
+.chips--inline .chip {
+  padding: 3px 10px;
+  font-size: var(--fs-xs);
+}
