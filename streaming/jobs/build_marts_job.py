@@ -9,6 +9,8 @@ Outputs:
 * ``funnel_session_fact``: one row per session and product
 * ``product_daily_kpi``: product/event-date KPI counts and rates
 * ``funnel_daily_kpi``: session-based funnel reach and conversion rates
+* ``ingredient_weekly_interest``: position-weighted ingredient interest
+* ``category_price_reference``: secondary-category median price reference
 """
 
 from __future__ import annotations
@@ -24,8 +26,17 @@ DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
 DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
+DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
+DEFAULT_PRODUCT_INGREDIENT_PATH = "batch/ingest/data/serving/product_ingredient.csv"
+DEFAULT_INGREDIENT_VOCAB_PATH = "batch/ingest/data/serving/ingredient_vocab.csv"
+DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
+DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
+DEFAULT_CLEANSING_CATEGORY_WEIGHT = 0.5
+DEFAULT_PRICE_MIN_SAMPLE_SIZE = 3
+
+DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 
 FUNNEL_PRODUCT_EVENTS = (
     "product_impression",
@@ -53,8 +64,15 @@ class BuildMartsConfig:
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
+    dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
+    product_ingredient_path: str = DEFAULT_PRODUCT_INGREDIENT_PATH
+    ingredient_vocab_path: str = DEFAULT_INGREDIENT_VOCAB_PATH
+    ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
+    category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     time_zone: str = DEFAULT_TIME_ZONE
+    cleansing_category_weight: float = DEFAULT_CLEANSING_CATEGORY_WEIGHT
+    price_min_sample_size: int = DEFAULT_PRICE_MIN_SAMPLE_SIZE
 
     def __post_init__(self) -> None:
         values = {
@@ -63,17 +81,36 @@ class BuildMartsConfig:
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
+            "dim_product_path": self.dim_product_path,
+            "product_ingredient_path": self.product_ingredient_path,
+            "ingredient_vocab_path": self.ingredient_vocab_path,
+            "ingredient_weekly_path": self.ingredient_weekly_path,
+            "category_price_path": self.category_price_path,
             "behavior_weights_path": self.behavior_weights_path,
             "time_zone": self.time_zone,
         }
         for name, value in values.items():
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
+        if not 0 < self.cleansing_category_weight <= 1:
+            raise ValueError("cleansing_category_weight must be in (0, 1]")
+        if self.price_min_sample_size < 1:
+            raise ValueError("price_min_sample_size must be at least 1")
 
 
 def _env(name: str, default: str) -> str:
     value = os.getenv(name)
     return value if value is not None and value.strip() else default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    return float(value) if value is not None and value.strip() else default
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    return int(value) if value is not None and value.strip() else default
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -106,6 +143,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="funnel_daily_kpi output path",
     )
     parser.add_argument(
+        "--dim-product-path",
+        default=_env("DIM_PRODUCT_PATH", DEFAULT_DIM_PRODUCT_PATH),
+        help="dim_product input path",
+    )
+    parser.add_argument(
+        "--product-ingredient-path",
+        default=_env("PRODUCT_INGREDIENT_PATH", DEFAULT_PRODUCT_INGREDIENT_PATH),
+        help="product_ingredient.csv input path",
+    )
+    parser.add_argument(
+        "--ingredient-vocab-path",
+        default=_env("INGREDIENT_VOCAB_PATH", DEFAULT_INGREDIENT_VOCAB_PATH),
+        help="ingredient_vocab.csv input path",
+    )
+    parser.add_argument(
+        "--ingredient-weekly-path",
+        default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
+        help="ingredient_weekly_interest output path",
+    )
+    parser.add_argument(
+        "--category-price-path",
+        default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
+        help="category_price_reference output path",
+    )
+    parser.add_argument(
         "--behavior-weights-path",
         default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
         help="Execution source for EVENT_WEIGHT",
@@ -114,6 +176,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--time-zone",
         default=_env("ANALYTICS_TIME_ZONE", DEFAULT_TIME_ZONE),
         help="Time zone used for KST date columns",
+    )
+    parser.add_argument(
+        "--cleansing-category-weight",
+        type=float,
+        default=_env_float(
+            "CLEANSING_CATEGORY_WEIGHT", DEFAULT_CLEANSING_CATEGORY_WEIGHT
+        ),
+        help="Multiplier for secondary_category=Cleansers ingredient signals",
+    )
+    parser.add_argument(
+        "--price-min-sample-size",
+        type=int,
+        default=_env_int("PRICE_MIN_SAMPLE_SIZE", DEFAULT_PRICE_MIN_SAMPLE_SIZE),
+        help="Minimum valid prices required to use a category median",
     )
     return parser
 
@@ -126,8 +202,15 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
+        dim_product_path=args.dim_product_path,
+        product_ingredient_path=args.product_ingredient_path,
+        ingredient_vocab_path=args.ingredient_vocab_path,
+        ingredient_weekly_path=args.ingredient_weekly_path,
+        category_price_path=args.category_price_path,
         behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
+        cleansing_category_weight=args.cleansing_category_weight,
+        price_min_sample_size=args.price_min_sample_size,
     )
 
 
@@ -469,19 +552,281 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     )
 
 
+def _event_weight_column(event_weights: dict[str, float]) -> Any:
+    from pyspark.sql import functions as F
+
+    result = F.lit(0.0)
+    for event_name, weight in event_weights.items():
+        result = F.when(
+            F.col("event_name") == F.lit(event_name), F.lit(float(weight))
+        ).otherwise(result)
+    return result
+
+
+def _ingredient_weekly_interest(
+    sessionized_df: Any,
+    dim_product_df: Any,
+    product_ingredient_df: Any,
+    ingredient_vocab_df: Any,
+    time_zone: str,
+    event_weights: dict[str, float],
+    cleansing_category_weight: float,
+) -> Any:
+    """Build ingredient interest without reading an AI vector slice.
+
+    Direct text matches are attributed only to the named ingredient. Product-wide
+    signals are expanded through ``product_ingredient.position_weight``. Events
+    for products without a bridge row are deliberately absent from both the
+    ingredient numerator and its share denominator; they are not zero-filled.
+    """
+
+    from pyspark.sql import functions as F
+    from pyspark.sql.types import ArrayType, StringType
+    from pyspark.sql.window import Window
+
+    dimensions = [
+        "interest_week_kst",
+        "actor_type",
+        "source",
+        "scenario_id",
+        "simulation_run_id",
+    ]
+    events = (
+        sessionized_df.withColumn(
+            "interest_week_kst",
+            F.to_date(
+                F.date_trunc("week", F.from_utc_timestamp("event_time", time_zone))
+            ),
+        )
+        .withColumn("_section_id", F.get_json_object("properties_json", "$.section_id"))
+        .withColumn("_action", F.get_json_object("properties_json", "$.action"))
+        .withColumn(
+            "_dwell_ms",
+            F.get_json_object("properties_json", "$.dwell_ms").cast("long"),
+        )
+        .withColumn(
+            "_matched_ingredients",
+            F.from_json(
+                F.get_json_object("properties_json", "$.matched_ingredients"),
+                ArrayType(StringType()),
+            ),
+        )
+    )
+    weight = _event_weight_column(event_weights)
+
+    direct = (
+        events.where(F.col("event_name").isin(*DIRECT_INGREDIENT_EVENTS))
+        .where(F.size(F.col("_matched_ingredients")) > 0)
+        .withColumn(
+            "ingredient", F.explode(F.array_distinct("_matched_ingredients"))
+        )
+        .join(
+            ingredient_vocab_df.select(
+                "ingredient_id", "ingredient", "label_ko", "vocab_version"
+            ),
+            "ingredient",
+            "inner",
+        )
+        .select(
+            *dimensions,
+            "event_id",
+            "ingredient_id",
+            "ingredient",
+            "label_ko",
+            "vocab_version",
+            weight.alias("ingredient_interest_score"),
+            weight.alias("direct_match_score"),
+            F.lit(0.0).alias("product_attributed_score"),
+        )
+    )
+
+    product_signal_condition = (
+        (F.col("event_name") == F.lit("ingredient_view_mode_change"))
+        | (F.col("event_name") == F.lit("add_to_cart"))
+        | (
+            (F.col("event_name") == F.lit("accordion_toggle"))
+            & (F.col("_section_id") == F.lit("ingredients"))
+            & (F.col("_action") == F.lit("expand"))
+        )
+        | (
+            (F.col("event_name") == F.lit("section_dwell"))
+            & (F.col("_section_id") == F.lit("ingredients"))
+        )
+    )
+    product_events = events.where(product_signal_condition).where(
+        F.col("product_id").isNotNull()
+    )
+    base_score = F.when(
+        F.col("event_name") == F.lit("section_dwell"),
+        F.least(
+            F.coalesce(F.col("_dwell_ms"), F.lit(0)).cast("double") / F.lit(1000.0),
+            F.lit(60.0),
+        )
+        * weight,
+    ).otherwise(weight)
+    product = (
+        product_events.join(
+            dim_product_df.select("product_id", "secondary_category"),
+            "product_id",
+            "left",
+        )
+        # Inner join is intentional. A product with no ingredient row has no
+        # defensible ingredient attribution and does not enter the denominator.
+        .join(
+            product_ingredient_df.select(
+                "product_id",
+                "ingredient_id",
+                "ingredient",
+                "position_weight",
+                F.col("source").alias("ingredient_source"),
+                "vocab_version",
+            ),
+            "product_id",
+            "inner",
+        )
+        .join(
+            ingredient_vocab_df.select(
+                "ingredient_id", "ingredient", "label_ko", "vocab_version"
+            ),
+            ["ingredient_id", "ingredient", "vocab_version"],
+            "inner",
+        )
+        .withColumn(
+            "_category_weight",
+            F.when(
+                F.col("secondary_category") == F.lit("Cleansers"),
+                F.lit(float(cleansing_category_weight)),
+            ).otherwise(F.lit(1.0)),
+        )
+        .withColumn(
+            "_score",
+            base_score
+            * F.col("position_weight").cast("double")
+            * F.col("_category_weight"),
+        )
+        .select(
+            *dimensions,
+            "event_id",
+            "ingredient_id",
+            "ingredient",
+            "label_ko",
+            "vocab_version",
+            F.col("_score").alias("ingredient_interest_score"),
+            F.lit(0.0).alias("direct_match_score"),
+            F.col("_score").alias("product_attributed_score"),
+        )
+    )
+
+    signals = direct.unionByName(product)
+    grouped = signals.groupBy(
+        *dimensions, "ingredient_id", "ingredient", "label_ko", "vocab_version"
+    ).agg(
+        F.sum("ingredient_interest_score").cast("double").alias(
+            "ingredient_interest_score"
+        ),
+        F.sum("direct_match_score").cast("double").alias("direct_match_score"),
+        F.sum("product_attributed_score").cast("double").alias(
+            "product_attributed_score"
+        ),
+        F.countDistinct("event_id").cast("long").alias("contributing_event_count"),
+    )
+    share_window = Window.partitionBy(*dimensions)
+    denominator = F.sum("ingredient_interest_score").over(share_window)
+    return (
+        grouped.withColumn(
+            "ingredient_interest_share",
+            _safe_ratio(F.col("ingredient_interest_score"), denominator),
+        )
+        .withColumn("mart_processed_at", F.current_timestamp())
+    )
+
+
+def _category_price_reference(dim_product_df: Any, min_sample_size: int) -> Any:
+    """Build a currency-safe secondary-category price median.
+
+    Only ``base_price`` participates. Sale/discount fields are intentionally not
+    accepted by this function. Thin categories fall back to the catalog-wide
+    median in the same currency.
+    """
+
+    from pyspark.sql import functions as F
+
+    valid = dim_product_df.where(
+        F.col("secondary_category").isNotNull()
+        & F.col("currency").isNotNull()
+        & F.col("base_price").isNotNull()
+        & (F.col("base_price") > 0)
+    )
+    by_category = valid.groupBy("secondary_category", "currency").agg(
+        F.countDistinct("product_id").cast("long").alias("product_count"),
+        F.expr("percentile(CAST(base_price AS DOUBLE), 0.5)")
+        .cast("decimal(18,2)")
+        .alias("observed_median_price"),
+    )
+    global_by_currency = valid.groupBy("currency").agg(
+        F.countDistinct("product_id").cast("long").alias("global_product_count"),
+        F.expr("percentile(CAST(base_price AS DOUBLE), 0.5)")
+        .cast("decimal(18,2)")
+        .alias("global_median_price"),
+    )
+    sufficient = F.col("product_count") >= F.lit(int(min_sample_size))
+    return (
+        by_category.join(global_by_currency, "currency", "inner")
+        .withColumn("is_sample_sufficient", sufficient)
+        .withColumn(
+            "reference_median_price",
+            F.when(sufficient, F.col("observed_median_price")).otherwise(
+                F.col("global_median_price")
+            ),
+        )
+        .withColumn(
+            "reference_source",
+            F.when(sufficient, F.lit("category")).otherwise(
+                F.lit("global_fallback")
+            ),
+        )
+        .withColumn("min_sample_size", F.lit(int(min_sample_size)).cast("int"))
+        .withColumn("mart_processed_at", F.current_timestamp())
+    )
+
+
 def build_mart_frames(
     sessionized_df: Any,
     product_fact_df: Any,
     time_zone: str,
     event_weights: dict[str, float] | None = None,
+    dim_product_df: Any | None = None,
+    product_ingredient_df: Any | None = None,
+    ingredient_vocab_df: Any | None = None,
+    cleansing_category_weight: float = DEFAULT_CLEANSING_CATEGORY_WEIGHT,
+    price_min_sample_size: int = DEFAULT_PRICE_MIN_SAMPLE_SIZE,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
-    return {
+    frames = {
         "funnel_session_fact": funnel_session,
         "product_daily_kpi": _product_daily_kpi(product_fact_df, event_weights),
         "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
     }
+    if (
+        event_weights is not None
+        and dim_product_df is not None
+        and product_ingredient_df is not None
+        and ingredient_vocab_df is not None
+    ):
+        frames["ingredient_weekly_interest"] = _ingredient_weekly_interest(
+            sessionized_df,
+            dim_product_df,
+            product_ingredient_df,
+            ingredient_vocab_df,
+            time_zone,
+            event_weights,
+            cleansing_category_weight,
+        )
+        frames["category_price_reference"] = _category_price_reference(
+            dim_product_df, price_min_sample_size
+        )
+    return frames
 
 
 def run(spark: Any, config: BuildMartsConfig) -> None:
@@ -492,11 +837,62 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         from behavior_weights import load
 
     event_weights = load(config.behavior_weights_path)["event"]
+    from pyspark.sql.types import (
+        DoubleType,
+        IntegerType,
+        StringType,
+        StructField,
+        StructType,
+    )
+
+    product_ingredient_schema = StructType(
+        [
+            StructField("product_id", StringType(), False),
+            StructField("ingredient_id", IntegerType(), False),
+            StructField("ingredient", StringType(), False),
+            StructField("position_weight", DoubleType(), False),
+            StructField("source", StringType(), False),
+            StructField("vocab_version", StringType(), False),
+        ]
+    )
+    ingredient_vocab_schema = StructType(
+        [
+            StructField("ingredient_id", IntegerType(), False),
+            StructField("ingredient", StringType(), False),
+            StructField("label_ko", StringType(), True),
+            StructField("doc_freq", IntegerType(), False),
+            StructField("vocab_version", StringType(), False),
+        ]
+    )
+    sessionized = spark.read.option("mergeSchema", "true").parquet(
+        config.sessionized_path
+    )
+    product_fact = spark.read.option("mergeSchema", "true").parquet(
+        config.product_fact_path
+    )
+    dim_product = spark.read.option("mergeSchema", "true").parquet(
+        config.dim_product_path
+    )
+    product_ingredient = (
+        spark.read.option("header", "true")
+        .schema(product_ingredient_schema)
+        .csv(config.product_ingredient_path)
+    )
+    ingredient_vocab = (
+        spark.read.option("header", "true")
+        .schema(ingredient_vocab_schema)
+        .csv(config.ingredient_vocab_path)
+    )
     frames = build_mart_frames(
-        spark.read.option("mergeSchema", "true").parquet(config.sessionized_path),
-        spark.read.option("mergeSchema", "true").parquet(config.product_fact_path),
+        sessionized,
+        product_fact,
         config.time_zone,
         event_weights,
+        dim_product,
+        product_ingredient,
+        ingredient_vocab,
+        config.cleansing_category_weight,
+        config.price_min_sample_size,
     )
     frames["funnel_session_fact"].write.mode("overwrite").parquet(
         config.funnel_session_path,
@@ -507,6 +903,13 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     )
     frames["funnel_daily_kpi"].write.mode("overwrite").parquet(
         config.funnel_daily_path,
+    )
+    frames["ingredient_weekly_interest"].write.mode("overwrite").parquet(
+        config.ingredient_weekly_path,
+        partitionBy="interest_week_kst",
+    )
+    frames["category_price_reference"].write.mode("overwrite").parquet(
+        config.category_price_path,
     )
 
 
