@@ -16,8 +16,11 @@ Outputs:
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import os
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 
@@ -31,6 +34,13 @@ DEFAULT_PRODUCT_INGREDIENT_PATH = "batch/ingest/data/serving/product_ingredient.
 DEFAULT_INGREDIENT_VOCAB_PATH = "batch/ingest/data/serving/ingredient_vocab.csv"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
+DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
+DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
+DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
+DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
+DEFAULT_TRAIT_WEIGHTS_PATH = "contracts/user-trait-weights.json"
+DEFAULT_FEATURE_VOCAB_PATH = "contracts/product-feature-vocab.json"
+DEFAULT_AFFINITY_LIFT_PATH = "batch/ingest/data/affinity_lift.csv"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 DEFAULT_CLEANSING_CATEGORY_WEIGHT = 0.5
@@ -69,10 +79,20 @@ class BuildMartsConfig:
     ingredient_vocab_path: str = DEFAULT_INGREDIENT_VOCAB_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
+    banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
+    user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
+    cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
+    baseline_path: str = DEFAULT_BASELINE_PATH
+    trait_weights_path: str = DEFAULT_TRAIT_WEIGHTS_PATH
+    feature_vocab_path: str = DEFAULT_FEATURE_VOCAB_PATH
+    affinity_lift_path: str = DEFAULT_AFFINITY_LIFT_PATH
     behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     time_zone: str = DEFAULT_TIME_ZONE
     cleansing_category_weight: float = DEFAULT_CLEANSING_CATEGORY_WEIGHT
     price_min_sample_size: int = DEFAULT_PRICE_MIN_SAMPLE_SIZE
+    baseline_policy_version: str | None = None
+    baseline_start_date: str | None = None
+    baseline_end_date: str | None = None
 
     def __post_init__(self) -> None:
         values = {
@@ -86,6 +106,13 @@ class BuildMartsConfig:
             "ingredient_vocab_path": self.ingredient_vocab_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
+            "banner_daily_path": self.banner_daily_path,
+            "user_trait_daily_path": self.user_trait_daily_path,
+            "cross_brand_daily_path": self.cross_brand_daily_path,
+            "baseline_path": self.baseline_path,
+            "trait_weights_path": self.trait_weights_path,
+            "feature_vocab_path": self.feature_vocab_path,
+            "affinity_lift_path": self.affinity_lift_path,
             "behavior_weights_path": self.behavior_weights_path,
             "time_zone": self.time_zone,
         }
@@ -96,6 +123,21 @@ class BuildMartsConfig:
             raise ValueError("cleansing_category_weight must be in (0, 1]")
         if self.price_min_sample_size < 1:
             raise ValueError("price_min_sample_size must be at least 1")
+        baseline_values = (
+            self.baseline_policy_version,
+            self.baseline_start_date,
+            self.baseline_end_date,
+        )
+        if any(baseline_values) and not all(baseline_values):
+            raise ValueError("baseline policy version, start date, and end date must be supplied together")
+        if all(baseline_values):
+            try:
+                start_date = date.fromisoformat(self.baseline_start_date or "")
+                end_date = date.fromisoformat(self.baseline_end_date or "")
+            except ValueError as error:
+                raise ValueError("baseline dates must use YYYY-MM-DD") from error
+            if start_date > end_date:
+                raise ValueError("baseline start date must not be after end date")
 
 
 def _env(name: str, default: str) -> str:
@@ -167,6 +209,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
         help="category_price_reference output path",
     )
+    parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
+    parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
+    parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
+    parser.add_argument("--baseline-path", default=_env("ANALYTICS_BASELINE_PATH", DEFAULT_BASELINE_PATH))
+    parser.add_argument("--trait-weights-path", default=_env("TRAIT_WEIGHTS_PATH", DEFAULT_TRAIT_WEIGHTS_PATH))
+    parser.add_argument("--feature-vocab-path", default=_env("FEATURE_VOCAB_PATH", DEFAULT_FEATURE_VOCAB_PATH))
+    parser.add_argument("--affinity-lift-path", default=_env("AFFINITY_LIFT_PATH", DEFAULT_AFFINITY_LIFT_PATH))
     parser.add_argument(
         "--behavior-weights-path",
         default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
@@ -191,6 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env_int("PRICE_MIN_SAMPLE_SIZE", DEFAULT_PRICE_MIN_SAMPLE_SIZE),
         help="Minimum valid prices required to use a category median",
     )
+    parser.add_argument("--baseline-policy-version", default=os.getenv("BASELINE_POLICY_VERSION"))
+    parser.add_argument("--baseline-start-date", default=os.getenv("BASELINE_START_DATE"))
+    parser.add_argument("--baseline-end-date", default=os.getenv("BASELINE_END_DATE"))
     return parser
 
 
@@ -207,10 +259,20 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         ingredient_vocab_path=args.ingredient_vocab_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
+        banner_daily_path=args.banner_daily_path,
+        user_trait_daily_path=args.user_trait_daily_path,
+        cross_brand_daily_path=args.cross_brand_daily_path,
+        baseline_path=args.baseline_path,
+        trait_weights_path=args.trait_weights_path,
+        feature_vocab_path=args.feature_vocab_path,
+        affinity_lift_path=args.affinity_lift_path,
         behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
         cleansing_category_weight=args.cleansing_category_weight,
         price_min_sample_size=args.price_min_sample_size,
+        baseline_policy_version=args.baseline_policy_version,
+        baseline_start_date=args.baseline_start_date,
+        baseline_end_date=args.baseline_end_date,
     )
 
 
@@ -790,6 +852,291 @@ def _category_price_reference(dim_product_df: Any, min_sample_size: int) -> Any:
     )
 
 
+def load_trait_contract(path: str) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as stream:
+        contract = json.load(stream)
+    if set(contract.get("traits", {})) != {"price", "ingredient", "review", "concern", "participate"}:
+        raise ValueError("trait contract must define exactly five supported traits")
+    if int(contract.get("window_days", 0)) < 1:
+        raise ValueError("trait contract window_days must be positive")
+    return contract
+
+
+def load_banner_values(feature_vocab_path: str, affinity_lift_path: str) -> set[str]:
+    """Load source strings; Korean labels are deliberately excluded."""
+
+    with open(feature_vocab_path, encoding="utf-8") as stream:
+        feature_vocab = json.load(stream)
+    values = {
+        str(value)
+        for block in feature_vocab.get("blocks", [])
+        for value in (block.get("vocab") or [])
+        if value is not None and str(value).strip()
+    }
+    with open(affinity_lift_path, encoding="utf-8", newline="") as stream:
+        for row in csv.DictReader(stream):
+            segment = row.get("segment")
+            if segment is not None and segment.strip():
+                values.add(segment)
+    if not values:
+        raise ValueError("banner source vocabulary must not be empty")
+    return values
+
+
+def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
+    from pyspark.sql import functions as F
+
+    group_columns = [
+        "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
+        "banner_slot", "trait_source", "policy_version", "actor_type", "source",
+        "scenario_id", "simulation_run_id",
+    ]
+    banners = product_fact_df.where(
+        F.col("event_name").isin("banner_impression", "banner_click")
+    )
+    result = banners.groupBy(*group_columns).agg(
+        F.sum(F.when(F.col("event_name") == "banner_impression", 1).otherwise(0)).cast("long").alias("impression_count"),
+        F.sum(F.when(F.col("event_name") == "banner_click", 1).otherwise(0)).cast("long").alias("click_count"),
+        F.countDistinct(F.when(F.col("event_name") == "banner_impression", F.col("session_id"))).alias("impression_sessions"),
+        F.countDistinct(F.when(F.col("event_name") == "banner_click", F.col("session_id"))).alias("click_sessions"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    return (
+        result.withColumn("banner_ctr", _safe_ratio(F.col("click_count"), F.col("impression_count")))
+        .withColumn("skip_count", (F.col("impression_count") - F.col("click_count")).cast("long"))
+        .withColumn(
+            "banner_value_is_valid",
+            F.when(F.col("banner_type") == "new_brand", F.col("banner_value").isNull())
+            .otherwise(F.col("banner_value").isin(*sorted(allowed_values))),
+        )
+    )
+
+
+def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
+    from functools import reduce
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    signal_frames = []
+    properties = F.col("properties_json")
+    for trait, rules in contract["traits"].items():
+        for rule in rules:
+            condition = F.col("event_name") == F.lit(rule["event_name"])
+            property_name = rule.get("property")
+            if property_name:
+                condition = condition & F.get_json_object(properties, f"$.{property_name}").isin(*rule["values"])
+            if "weight_per_second" in rule:
+                score = (
+                    F.coalesce(F.get_json_object(properties, "$.dwell_ms").cast("double"), F.lit(0.0))
+                    / F.lit(1000.0)
+                    * F.lit(float(rule["weight_per_second"]))
+                )
+            else:
+                score = F.lit(float(rule["weight"]))
+            signal_frames.append(
+                sessionized_df.where(
+                    condition
+                    & F.col("user_id").isNotNull()
+                    & (F.length(F.trim(F.col("user_id"))) > 0)
+                ).select(
+                    "event_id", "event_date_kst", "user_id",
+                    F.lit(trait).alias("trait"), score.alias("event_trait_score"),
+                )
+            )
+    signals = reduce(lambda left, right: left.unionByName(right), signal_frames)
+    maximum_date = signals.agg(F.max("event_date_kst").alias("date")).first()["date"]
+    if maximum_date is None:
+        # Preserve a stable schema for empty snapshots.
+        return signals.select(
+            F.col("event_date_kst").alias("trait_date_kst"), "user_id", "trait",
+            F.lit(None).cast("double").alias("trait_score"),
+            F.lit(None).cast("int").alias("trait_rank"),
+            F.lit(False).alias("is_primary_trait"),
+            F.col("event_date_kst").alias("window_start_date"),
+            F.col("event_date_kst").alias("window_end_date"),
+            F.lit(0).cast("long").alias("contributing_event_count"),
+            F.lit(contract["version"]).alias("trait_policy_version"),
+            F.current_timestamp().alias("mart_processed_at"),
+        )
+    window_days = int(contract["window_days"])
+    expanded = signals.withColumn(
+        "trait_date_kst",
+        F.explode(F.sequence(
+            F.col("event_date_kst"),
+            F.least(F.date_add(F.col("event_date_kst"), window_days - 1), F.lit(maximum_date).cast("date")),
+        )),
+    )
+    scores = expanded.groupBy("trait_date_kst", "user_id", "trait").agg(
+        F.sum("event_trait_score").cast("double").alias("trait_score"),
+        F.countDistinct("event_id").cast("long").alias("contributing_event_count"),
+    )
+    rank_window = Window.partitionBy("trait_date_kst", "user_id").orderBy(
+        F.col("trait_score").desc(), F.col("trait").asc()
+    )
+    return (
+        scores.withColumn("trait_rank", F.row_number().over(rank_window))
+        .withColumn("is_primary_trait", F.col("trait_rank") == 1)
+        .withColumn("window_start_date", F.date_sub(F.col("trait_date_kst"), window_days - 1))
+        .withColumn("window_end_date", F.col("trait_date_kst"))
+        .withColumn("trait_policy_version", F.lit(contract["version"]))
+        .withColumn("mart_processed_at", F.current_timestamp())
+    )
+
+
+def _cross_brand_daily(sessionized_df: Any) -> Any:
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    views = sessionized_df.where(
+        (F.col("event_name") == "product_view") & F.col("brand_id").isNotNull()
+    )
+    view_order = Window.partitionBy("session_id").orderBy(
+        F.col("event_order"), F.col("event_time"), F.col("event_id")
+    )
+    session_view_order = view_order.rowsBetween(
+        Window.unboundedPreceding, Window.unboundedFollowing
+    )
+    destination_order = Window.partitionBy("session_id", "brand_id").orderBy(
+        F.col("event_order"), F.col("event_time"), F.col("event_id")
+    )
+    first_destination_views = (
+        views.withColumn("_first_brand_id", F.first("brand_id").over(session_view_order))
+        .withColumn("_destination_rank", F.row_number().over(destination_order))
+        .where(F.col("_destination_rank") == 1)
+        .select(
+            "session_id",
+            F.col("brand_id").alias("destination_brand_id"),
+            F.col("product_id").alias("destination_product_id"),
+            F.col("event_order").alias("destination_event_order"),
+            "event_date_kst",
+            "actor_type",
+            "source",
+            "scenario_id",
+            "simulation_run_id",
+            "_first_brand_id",
+            F.get_json_object("properties_json", "$.recommendation_id").alias(
+                "view_recommendation_id"
+            ),
+        )
+        .withColumn(
+            "_is_cross_brand",
+            F.col("_first_brand_id") != F.col("destination_brand_id"),
+        )
+    )
+
+    clicks = sessionized_df.where(
+        F.col("event_name").isin("recommendation_click", "banner_click")
+    ).select(
+        "session_id",
+        F.col("product_id").alias("click_product_id"),
+        F.col("event_order").alias("click_event_order"),
+        "event_name",
+        F.get_json_object("properties_json", "$.recommendation_id").alias(
+            "click_recommendation_id"
+        ),
+    )
+    destinations = first_destination_views.alias("destination")
+    preceding_clicks = destinations.join(
+        clicks.alias("click"),
+        (F.col("destination.session_id") == F.col("click.session_id"))
+        & (F.col("destination.destination_product_id") == F.col("click.click_product_id"))
+        & (F.col("click.click_event_order") < F.col("destination.destination_event_order")),
+        "left",
+    )
+    click_flags = preceding_clicks.groupBy(
+        F.col("destination.session_id").alias("session_id"),
+        F.col("destination.destination_brand_id").alias("destination_brand_id"),
+    ).agg(
+        F.max(
+            F.when(
+                (F.col("click.event_name") == "recommendation_click")
+                & F.col("click.click_recommendation_id").isNotNull()
+                & (F.length(F.trim(F.col("click.click_recommendation_id"))) > 0),
+                1,
+            ).otherwise(0)
+        ).cast("boolean").alias("has_preceding_recommendation_click"),
+        F.max(
+            F.when(F.col("click.event_name") == "banner_click", 1).otherwise(0)
+        ).cast("boolean").alias("has_preceding_banner_click"),
+    )
+    entries = (
+        first_destination_views.join(
+            click_flags, ["session_id", "destination_brand_id"], "left"
+        )
+        .withColumn(
+            "_is_recommendation_entry",
+            (
+                F.col("view_recommendation_id").isNotNull()
+                & (F.length(F.trim(F.col("view_recommendation_id"))) > 0)
+            )
+            | F.coalesce(F.col("has_preceding_recommendation_click"), F.lit(False)),
+        )
+        .withColumn(
+            "_is_banner_entry",
+            F.coalesce(F.col("has_preceding_banner_click"), F.lit(False)),
+        )
+    )
+    group_columns = [
+        "event_date_kst", "destination_brand_id",
+        "actor_type", "source", "scenario_id", "simulation_run_id",
+    ]
+    result = entries.groupBy(*group_columns).agg(
+        F.countDistinct("session_id").alias("brand_view_sessions"),
+        F.countDistinct(F.when(F.col("_is_cross_brand"), F.col("session_id"))).alias("cross_brand_entry_sessions"),
+        F.countDistinct(F.when(F.col("_is_cross_brand") & F.col("_is_recommendation_entry"), F.col("session_id"))).alias("recommendation_cross_brand_entry_sessions"),
+        F.countDistinct(F.when(F.col("_is_cross_brand") & F.col("_is_banner_entry"), F.col("session_id"))).alias("banner_cross_brand_entry_sessions"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    return (
+        result.withColumn("cross_brand_entry_rate", _safe_ratio(F.col("cross_brand_entry_sessions"), F.col("brand_view_sessions")))
+        .withColumn("recommendation_cross_brand_entry_rate", _safe_ratio(F.col("recommendation_cross_brand_entry_sessions"), F.col("brand_view_sessions")))
+        .withColumn("banner_cross_brand_entry_rate", _safe_ratio(F.col("banner_cross_brand_entry_sessions"), F.col("brand_view_sessions")))
+        .withColumn("recommendation_share_of_cross_brand_entries", _safe_ratio(F.col("recommendation_cross_brand_entry_sessions"), F.col("cross_brand_entry_sessions")))
+        .withColumn("banner_share_of_cross_brand_entries", _safe_ratio(F.col("banner_cross_brand_entry_sessions"), F.col("cross_brand_entry_sessions")))
+    )
+
+
+def _analytics_baseline(
+    product_fact_df: Any,
+    cross_brand_daily_df: Any,
+    policy_version: str,
+    start_date: str,
+    end_date: str,
+) -> Any:
+    from pyspark.sql import functions as F
+
+    period = (F.col("event_date_kst") >= F.lit(start_date).cast("date")) & (
+        F.col("event_date_kst") <= F.lit(end_date).cast("date")
+    )
+    recommendations = (
+        product_fact_df.where(period & F.col("event_name").isin("recommendation_impression", "recommendation_click"))
+        .groupBy("brand_id", "algorithm")
+        .agg(
+            F.sum(F.when(F.col("event_name") == "recommendation_click", 1).otherwise(0)).cast("long").alias("numerator"),
+            F.sum(F.when(F.col("event_name") == "recommendation_impression", 1).otherwise(0)).cast("long").alias("denominator"),
+        )
+        .withColumn("metric_name", F.lit("recommendation_ctr"))
+    )
+    cross = (
+        cross_brand_daily_df.where(period)
+        .groupBy(F.col("destination_brand_id").alias("brand_id"))
+        .agg(
+            F.sum("cross_brand_entry_sessions").cast("long").alias("numerator"),
+            F.sum("brand_view_sessions").cast("long").alias("denominator"),
+        )
+        .withColumn("algorithm", F.lit(None).cast("string"))
+        .withColumn("metric_name", F.lit("cross_brand_entry_rate"))
+    )
+    return (
+        recommendations.unionByName(cross)
+        .withColumn("metric_value", _safe_ratio(F.col("numerator"), F.col("denominator")))
+        .withColumn("baseline_policy_version", F.lit(policy_version))
+        .withColumn("baseline_start_date", F.lit(start_date).cast("date"))
+        .withColumn("baseline_end_date", F.lit(end_date).cast("date"))
+        .withColumn("mart_processed_at", F.current_timestamp())
+    )
+
+
 def build_mart_frames(
     sessionized_df: Any,
     product_fact_df: Any,
@@ -800,6 +1147,11 @@ def build_mart_frames(
     ingredient_vocab_df: Any | None = None,
     cleansing_category_weight: float = DEFAULT_CLEANSING_CATEGORY_WEIGHT,
     price_min_sample_size: int = DEFAULT_PRICE_MIN_SAMPLE_SIZE,
+    trait_contract: dict[str, Any] | None = None,
+    allowed_banner_values: set[str] | None = None,
+    baseline_policy_version: str | None = None,
+    baseline_start_date: str | None = None,
+    baseline_end_date: str | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -807,7 +1159,12 @@ def build_mart_frames(
         "funnel_session_fact": funnel_session,
         "product_daily_kpi": _product_daily_kpi(product_fact_df, event_weights),
         "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
+        "cross_brand_daily": _cross_brand_daily(sessionized_df),
     }
+    if trait_contract is not None:
+        frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
+    if allowed_banner_values is not None:
+        frames["banner_daily"] = _banner_daily(product_fact_df, allowed_banner_values)
     if (
         event_weights is not None
         and dim_product_df is not None
@@ -826,6 +1183,14 @@ def build_mart_frames(
         frames["category_price_reference"] = _category_price_reference(
             dim_product_df, price_min_sample_size
         )
+    if baseline_policy_version and baseline_start_date and baseline_end_date:
+        frames["analytics_baseline"] = _analytics_baseline(
+            product_fact_df,
+            frames["cross_brand_daily"],
+            baseline_policy_version,
+            baseline_start_date,
+            baseline_end_date,
+        )
     return frames
 
 
@@ -837,6 +1202,10 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         from behavior_weights import load
 
     event_weights = load(config.behavior_weights_path)["event"]
+    trait_contract = load_trait_contract(config.trait_weights_path)
+    allowed_banner_values = load_banner_values(
+        config.feature_vocab_path, config.affinity_lift_path
+    )
     from pyspark.sql.types import (
         DoubleType,
         IntegerType,
@@ -893,6 +1262,11 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         ingredient_vocab,
         config.cleansing_category_weight,
         config.price_min_sample_size,
+        trait_contract,
+        allowed_banner_values,
+        config.baseline_policy_version,
+        config.baseline_start_date,
+        config.baseline_end_date,
     )
     frames["funnel_session_fact"].write.mode("overwrite").parquet(
         config.funnel_session_path,
@@ -911,6 +1285,19 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     frames["category_price_reference"].write.mode("overwrite").parquet(
         config.category_price_path,
     )
+    frames["banner_daily"].write.mode("overwrite").parquet(
+        config.banner_daily_path, partitionBy="event_date_kst",
+    )
+    frames["user_trait_daily"].write.mode("overwrite").parquet(
+        config.user_trait_daily_path, partitionBy="trait_date_kst",
+    )
+    frames["cross_brand_daily"].write.mode("overwrite").parquet(
+        config.cross_brand_daily_path, partitionBy="event_date_kst",
+    )
+    if "analytics_baseline" in frames:
+        frames["analytics_baseline"].write.mode("overwrite").parquet(
+            config.baseline_path,
+        )
 
 
 def main(argv: list[str] | None = None) -> None:

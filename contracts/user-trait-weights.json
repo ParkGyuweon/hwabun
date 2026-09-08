@@ -1,0 +1,37 @@
+{
+  "version": "user-trait-v1-proposed",
+  "status": "proposed",
+  "window_days": 30,
+  "traits": {
+    "price": [
+      {"event_name": "filter_change", "property": "filter_kind", "values": ["price"], "weight": 1.0},
+      {"event_name": "sort_change", "property": "sort_key", "values": ["price", "price_asc", "price_desc"], "weight": 1.0},
+      {"event_name": "text_selection", "property": "selection_kind", "values": ["price"], "weight": 1.5},
+      {"event_name": "section_dwell", "property": "content_kind", "values": ["price"], "weight_per_second": 0.5},
+      {"event_name": "variant_select", "property": "variant_kind", "values": ["size"], "weight": 0.5}
+    ],
+    "ingredient": [
+      {"event_name": "ingredient_view_mode_change", "weight": 1.5},
+      {"event_name": "accordion_toggle", "property": "section_id", "values": ["ingredients"], "weight": 1.0},
+      {"event_name": "text_selection", "property": "selection_kind", "values": ["ingredient"], "weight": 1.5},
+      {"event_name": "text_copy", "property": "selection_kind", "values": ["ingredient"], "weight": 2.0},
+      {"event_name": "section_dwell", "property": "section_id", "values": ["ingredients"], "weight_per_second": 1.0},
+      {"event_name": "review_expand", "property": "target", "values": ["ingredients"], "weight": 0.5}
+    ],
+    "review": [
+      {"event_name": "review_expand", "property": "target", "values": ["review_text", "jump_to_reviews"], "weight": 1.0},
+      {"event_name": "review_filter_apply", "weight": 1.5},
+      {"event_name": "section_dwell", "property": "section_id", "values": ["reviews"], "weight_per_second": 1.0},
+      {"event_name": "section_dwell", "property": "content_kind", "values": ["review_stats"], "weight_per_second": 0.5}
+    ],
+    "concern": [
+      {"event_name": "filter_change", "property": "filter_kind", "values": ["concern"], "weight": 1.5},
+      {"event_name": "section_dwell", "property": "content_kind", "values": ["highlight_badge", "clinical_claim"], "weight_per_second": 0.5},
+      {"event_name": "text_selection", "property": "selection_kind", "values": ["claim"], "weight": 1.0}
+    ],
+    "participate": [
+      {"event_name": "section_dwell", "property": "content_kind", "values": ["brand_story"], "weight_per_second": 1.0},
+      {"event_name": "purchase_reason_select", "weight": 2.0}
+    ]
+  }
+}
