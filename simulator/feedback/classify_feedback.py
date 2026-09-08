@@ -37,9 +37,10 @@
     추가한다. 새 문제는 매 건마다가 아니라 어느 정도 쌓였을 때 보이는 것이
     맞고, 사장님 화면도 칸이 매일 바뀌면 오히려 불편하다.
 
-⚠ 이 데이터로 분류 정확도를 재면 안 된다
-    `intended_axis` 는 생성 때 지시한 축이다. 같은 모델이 축을 알고 쓴 문장을
-    같은 모델이 분류한 값이라 **성능 근거가 아니라 바닥 점검용**이다.
+⚠ 이 데이터의 `intended_axis` 복원율은 성능이 아니다
+    0.2.0 부터 `intended_axis` 는 "고객이 고른 축" 자리에 **입력**으로 들어간다 —
+    그 자체는 정당하다. 다만 카테고리 정확도는 여전히 **사람이 붙인 정답**
+    (Research/eval/feedback_gold_50.tsv) 으로만 잰다.
 
 실행
     set -a && . ./.env && set +a
@@ -103,7 +104,9 @@ JSON 만: {{"labels":[{{"axis":"..","category":".."}}, ...]}}"""
 PROMPT_AXIS = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고객이 골랐다 — 다시 판단하지 마라).
 이 축의 카테고리 중 **문장에 적혀 있는 불만을 전부** 고른다. 전부 불만·개선 요청이므로 극성은 판단하지 마라.
 
-[{axis}] {axis_desc}
+축 [{axis}] — {axis_desc}
+
+이 축의 카테고리 (답은 **이 목록의 이름만**. 축 이름 "{axis}" 는 답이 아니다):
 {menu}
     - 기타: 위 어디에도 안 맞음 (이 축 얘기지만 목록에 없는 불만)
 
@@ -120,7 +123,7 @@ PROMPT_AXIS = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고�
 상품: {product}
 피드백: {body}
 
-JSON 만: {{"categories":["..", ".."], "off_axis": null}}"""
+JSON 만 (categories 원소는 위 목록의 카테고리 이름): {{"categories":["..", ".."], "off_axis": null}}"""
 
 
 def build_menu(axes, other_label):
@@ -140,6 +143,7 @@ class Classifier:
         self.menu = build_menu(axes, other["label"])
         self.tok_in = self.tok_out = self.calls = self.retries = 0
         self.fallback = []              # 목록에 없는 답을 낸 것 -> 기타
+        self.axis_echo = 0              # 축 이름을 카테고리로 돌려준 횟수 (프롬프트 결함 신호)
 
     def _ask(self, prompt, tries=3):
         last = None
@@ -202,6 +206,9 @@ class Classifier:
         for cat in raw[: self.MAX_LABELS * 2]:
             cat = (str(cat) if cat is not None else "").strip()
             if cat == self.other["label"]:
+                continue
+            if cat == axis:                      # 축 이름을 카테고리 자리에 돌려준 것
+                self.axis_echo += 1
                 continue
             if cat not in ax["cats"]:
                 self.fallback.append((body[:40], f"[{axis}] {cat!r}"))
@@ -321,6 +328,8 @@ def main():
           f" / out {clf.tok_out:,} · {time.time() - t0:.0f}초")
     n_hidden = sum(1 for r in out if r["hidden_by_default"])
     print(f"금지어 걸린 것 {n_hidden}건 (hidden_by_default) · 목록 {len(banned.terms)}개")
+    if clf.axis_echo:
+        print(f"{NL}⚠ 축 이름을 카테고리로 돌려준 답 {clf.axis_echo}건 — 버렸다 (프롬프트 결함 신호)")
     if clf.fallback:
         print(f"{NL}목록에 없는 답 {len(clf.fallback)}건 -> 기타")
         for b, why in clf.fallback[:10]:
