@@ -195,6 +195,63 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "[const] $.intent")
 
+    def banner_event(self, event_name: str = "banner_impression") -> dict[str, object]:
+        event = copy.deepcopy(self.user_event)
+        event.update(
+            {
+                "event_name": event_name,
+                "intent": "session" if event_name == "banner_impression" else "interest",
+                "product_id": "P342",
+                "properties": {
+                    "banner_type": "concern",
+                    "banner_value": "Pores",
+                    "banner_slot": 1,
+                    "trait_source": "explore",
+                },
+            }
+        )
+        return event
+
+    def test_banner_contract_accepts_impression_click_and_new_brand_null(self) -> None:
+        click = self.banner_event("banner_click")
+        new_brand = self.banner_event()
+        new_brand["event_id"] = "evt-banner-new-brand"
+        new_brand["properties"] = {
+            "banner_type": "new_brand",
+            "banner_value": None,
+            "banner_slot": 2,
+            "trait_source": "coldstart",
+        }
+
+        result = self.validate_values([self.banner_event(), click, new_brand])
+
+        self.assertEqual([], result.errors)
+
+    def test_banner_contract_rejects_slot_alias_and_invalid_values(self) -> None:
+        invalid_events = []
+        mutations = (
+            {"banner_slot": None},
+            {"banner_type": "unknown"},
+            {"trait_source": "random"},
+            {"banner_type": "new_brand", "banner_value": "must-be-null"},
+            {"banner_type": "concern", "banner_value": None},
+            {"slot": 1},
+        )
+        for index, mutation in enumerate(mutations):
+            event = self.banner_event()
+            event["event_id"] = f"evt-banner-invalid-{index}"
+            properties = event["properties"]
+            assert isinstance(properties, dict)
+            if mutation == {"banner_slot": None}:
+                properties.pop("banner_slot")
+            else:
+                properties.update(mutation)
+            invalid_events.append(event)
+
+        result = self.validate_values(invalid_events)
+
+        self.assertEqual(len(mutations), len(result.errors))
+
     def test_actor_type_and_source_must_match(self) -> None:
         event = copy.deepcopy(self.user_event)
         event["source"] = "simulator"

@@ -35,6 +35,13 @@ class EventMappingConsistencyTest(unittest.TestCase):
         )
         if case["product_id_policy"] == "conditional":
             event["page_type"] = "product_list"
+        if case["event_name"] in {"banner_impression", "banner_click"}:
+            event["properties"] = {
+                "banner_type": "concern",
+                "banner_value": "Pores",
+                "banner_slot": 1,
+                "trait_source": "session",
+            }
         return event
 
     def error_messages(self, event: dict[str, object]) -> list[str]:
@@ -44,7 +51,7 @@ class EventMappingConsistencyTest(unittest.TestCase):
         schema_events = self.schema["properties"]["event_name"]["enum"]
         fixture_events = [case["event_name"] for case in self.cases]
 
-        self.assertEqual(39, len(fixture_events))
+        self.assertEqual(41, len(fixture_events))
         self.assertEqual(len(fixture_events), len(set(fixture_events)))
         self.assertEqual(set(schema_events), set(fixture_events))
 
