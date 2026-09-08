@@ -10,6 +10,7 @@ import ReviewSummary from '../components/review/ReviewSummary';
 import ReviewFilterBar from '../components/review/ReviewFilterBar';
 import type { ReviewFilter, ReviewSort } from '../components/review/ReviewFilterBar';
 import ReviewList from '../components/review/ReviewList';
+import FeedbackPanel from '../components/feedback/FeedbackPanel';
 import { calcReviewStats, splitIngredients } from '../lib/format';
 import { track } from '../lib/logger';
 import { useSectionView } from '../hooks/useSectionView';
@@ -194,6 +195,18 @@ export default function ProductDetailPage({
           persona={persona}
           authorReviewCounts={authorReviewCounts}
         />
+      </section>
+
+      {/*
+        의견 남기기 — 리뷰 섹션 안에 두지 않는다. 리뷰는 구매자의 평가이고 이건 누구나 남기는
+        제품 개선 의견이라 성격이 다르다. 로그 섹션은 계약 enum 안의 about_product 를 재사용한다
+        (content_kind=brand_story: 브랜드와의 관계를 다루는 자리라는 뜻).
+      */}
+      <section className="pdp__section" data-log-section="about_product" aria-labelledby="feedback-heading">
+        <h2 id="feedback-heading" className="pdp__section-title">
+          사장님께 의견 보내기
+        </h2>
+        <FeedbackPanel product={product} persona={persona} />
       </section>
     </main>
   );
