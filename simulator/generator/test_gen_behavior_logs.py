@@ -12,6 +12,8 @@ if np is not None:
         DEFAULT_SCENARIO_ID,
         Emitter,
         SimulationContext,
+        browse_list,
+        make_banners,
         default_simulation_run_id,
         seed_session_id,
         selectable_variants,
@@ -125,6 +127,42 @@ class SyntheticEventMetadataTest(unittest.TestCase):
                      engaged=False, entry_source="in_app")
         pv2 = [e for e in events2 if e["event_name"] == "product_view"][0]
         self.assertNotIn("recommendation_id", pv2["properties"])
+
+    def test_banner_events_use_banner_slot_and_share_ids_with_impression(self):
+        """배너 이벤트(Jira 212). property 이름은 DATA 계약대로 `banner_slot` — `slot` 은 거부된다.
+        칸 1~4 는 축(banner_type·banner_value), 5~6 은 new_brand(banner_value 없음).
+        force 한 상품은 축 칸에 들어가야 클릭이 노출된 배너에서 나온다."""
+        rng = np.random.default_rng(3)
+        catalog = {f"P{i}": {"cat": "Moisturizers", "price": 10.0 * i, "concern": "Dryness",
+                             "variants": [], "n": i} for i in range(1, 13)}
+        popular = sorted(catalog, key=lambda g: -catalog[g]["n"])
+        persona = {"persona_id": "PC00001", "skin_type": "oily"}
+        banners = make_banners(persona, catalog, popular[:8], popular, rng, force="P3", exclude={"P12"})
+        self.assertEqual([b["slot"] for b in banners], [1, 2, 3, 4, 5, 6])
+        self.assertIn("P3", [b["product_id"] for b in banners if b["type"] != "new_brand"])
+        self.assertTrue(all(b["type"] == "new_brand" and b["value"] is None for b in banners[4:]))
+        self.assertTrue(all(b["type"] in ("concern", "segment", "price_bin") and b["value"]
+                            for b in banners[:4]))
+        self.assertNotIn("P12", [b["product_id"] for b in banners])
+        events = []
+        emitter = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0), rng, self.context)
+        browse_list(emitter, popular[:2], popular[:5], catalog, rng, dwell_ms=3000, first=True,
+                    banners=banners)
+        imps = [e for e in events if e["event_name"] == "banner_impression"]
+        self.assertEqual(len(imps), 6)
+        for e in imps:
+            pr = e["properties"]
+            self.assertNotIn("slot", pr)
+            self.assertIn(pr["banner_slot"], range(1, 7))
+            self.assertEqual(pr["position"], pr["banner_slot"])
+            self.assertEqual(pr["list_id"], "banner_row")
+            self.assertIn(pr["trait_source"], ("coldstart", "profile", "session", "explore"))
+        self.assertEqual(len({e["properties"]["recommendation_id"] for e in imps}), 1)
+        batch, shown, source = emitter.last_banner
+        self.assertEqual(batch, imps[0]["properties"]["recommendation_id"])
+        # new_brand 칸은 banner_value 키 자체가 없어야 한다 (선택 string 을 null 로 보내면 타입 위반)
+        self.assertTrue(all("banner_value" not in e["properties"] for e in imps
+                            if e["properties"]["banner_type"] == "new_brand"))
 
     def test_selectable_variants_excludes_initial_frontend_selection(self):
         product = {

@@ -213,3 +213,21 @@ export async function authFetch(role: AccountRole, input: string, init: RequestI
   if (res.status === 401) write(role, null);
   return res;
 }
+
+/**
+ * 개발용 모의 세션. 백엔드(feat/shop-backend)가 머지되기 전에 대시보드·플랫폼 화면을 보기 위한 것.
+ * 토큰이 가짜라 보호된 API 는 401 이 나고, 그 순간 세션이 지워져 게이트로 돌아간다 — 흉내는 화면까지만.
+ * 프로덕션 빌드에서는 호출하는 버튼 자체가 없다 (import.meta.env.DEV).
+ */
+export function devSession(role: AccountRole): void {
+  const name = role === 'MEMBER' ? '개발용 고객' : role === 'SELLER' ? '개발용 담당자' : '개발용 운영자';
+  write(role, {
+    id: `dev-${role.toLowerCase()}`,
+    email: `dev-${role.toLowerCase()}@local`,
+    name,
+    role,
+    status: 'ACTIVE',
+    token: 'dev.local.token',
+    expires_at: null,
+  });
+}

@@ -9,7 +9,7 @@ export default function ProductsScreen() {
 
   return (
     <div className="stack">
-      <Panel title="장바구니 전환율 TOP 10" source="mock" aside="상세 조회 대비 담기 — 결제는 범위 밖">
+      <Panel title="장바구니 전환율 TOP 10" source="mock" aside="상세 조회 대비 담기 · 결제는 범위 밖">
         <BarList
           items={[...productMetrics]
             .filter((m) => m.detailViews >= 200)
@@ -24,7 +24,7 @@ export default function ProductsScreen() {
           format={(v) => `${v.toFixed(1)}%`}
           rank
         />
-        <p className="note">상세 조회 200건 미만 상품은 제외했다. 표본이 작으면 비율이 요동친다.</p>
+        <p className="note">상세 조회 200건 미만 제외</p>
       </Panel>
 
       <Panel
@@ -54,7 +54,7 @@ export default function ProductsScreen() {
               {rows.map((m) => (
                 <tr key={m.product.product_id}>
                   <td title={m.product.product_name}>
-                    {m.product.brand_name} — {m.product.product_name}
+                    {m.product.brand_name} · {m.product.product_name}
                   </td>
                   <td>{fmt.compact(m.impressions)}</td>
                   <td>{fmt.compact(m.clicks)}</td>
@@ -74,10 +74,7 @@ export default function ProductsScreen() {
             </tbody>
           </table>
         </div>
-        <p className="note">
-          퀵룩은 상세로 가지 않고 요약 창만 연 횟수다. 재고(제거)는 담았다 뺀
-          횟수로, 상품을 특정하는 가장 명확한 부정 신호다.
-        </p>
+        <p className="note">재고 = 담았다 뺀 횟수</p>
       </Panel>
     </div>
   );

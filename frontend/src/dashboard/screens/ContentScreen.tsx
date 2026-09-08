@@ -2,9 +2,9 @@ import { BarList, Kpi, Panel } from '../components';
 import { contentAttention, fmt, scrapedIngredients, validationBehaviors } from '../lib/metrics';
 
 /**
- * ③ 정보 관심도 — 이 대시보드의 존재 이유.
+ * ③ 정보 관심도 · 이 대시보드의 존재 이유.
  *
- * 일반 웹 분석은 "상세 이탈률이 높다" 에서 멈춘다. 이 화면은 그 다음을 말한다 —
+ * 일반 웹 분석은 "상세 이탈률이 높다" 에서 멈춘다. 이 화면은 그 다음을 말한다 ·
  * **무엇을 보여줘야 사는가.** 콘텐츠 단위 체류(`section_dwell` + `content_kind`)를
  * 수집하는 우리만 만들 수 있는 화면이다.
  *
@@ -28,13 +28,13 @@ export default function ContentScreen() {
         <Kpi
           label="개선 필요 콘텐츠"
           value={longButWeak ? longButWeak.ko : '없음'}
-          sub={longButWeak ? '오래 보는데 전환이 낮다 — 설명이 어렵다는 신호' : ''}
+          sub={longButWeak ? '오래 보는데 전환이 낮다. 설명이 어렵다는 신호' : ''}
           source="mock"
         />
         <Kpi
-          label="가장 많이 긁힌 성분"
+          label="사용자가 가장 많이 드래그한 성분"
           value={scrapedIngredients[0].name}
-          sub={`${fmt.int(scrapedIngredients[0].count)}회 — 설명 부족 신호`}
+          sub={`${fmt.int(scrapedIngredients[0].count)}회 · 가장 관심이 큰 성분`}
           source="mock"
         />
         <Kpi
@@ -48,7 +48,7 @@ export default function ContentScreen() {
       <Panel
         title="콘텐츠별 주목도 × 전환 기여"
         source="mock"
-        aside="co_visible_blocks ≤ 2 인 체류만 집계 — 겹쳐 보인 체류는 귀속 불가"
+        aside="co_visible_blocks ≤ 2 인 체류만 집계 · 겹쳐 보인 체류는 귀속 불가"
       >
         <table className="table">
           <thead>
@@ -77,17 +77,14 @@ export default function ContentScreen() {
             ))}
           </tbody>
         </table>
-        <p className="note">
-          전환 기여 = 그 콘텐츠를 본 방문의 장바구니 담기율 ÷ 전체 평균. 흐린 행은 표본
-          500건 미만 — 아직 판단 근거로 쓰지 말 것.
-        </p>
+        <p className="note">전환 기여 = 본 방문 담기율 ÷ 평균. 흐린 행은 표본 부족.</p>
       </Panel>
 
       <div className="grid grid--2">
         <Panel
-          title="긁어간 성분 TOP 10"
+          title="사용자가 드래그한 성분 TOP 10"
           source="mock"
-          aside="원문 미저장 — 성분 사전 표준명만 (vocab 0.4)"
+          aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)"
         >
           <BarList
             items={scrapedIngredients.map((i) => ({
@@ -96,12 +93,7 @@ export default function ContentScreen() {
               hint: `복사 ${i.copyCount}`,
             }))}
           />
-          <p className="note">
-            사용자는 모르는 성분명을 만나면 그 부분만 긁어 밖에서 검색한다. 반복해서 긁히는
-            성분은 상세페이지가 그 성분을 설명하지 못하고 있다는 뜻 — 가장 직접적인
-            상세페이지 개선 지시다. 성분 사전은 추천 엔진과 같은 파일을 쓰므로 "이 성분을
-            긁은 사람" 과 "이 성분이 든 상품" 이 같은 이름으로 조인된다.
-          </p>
+          <p className="note">드래그 횟수는 관심의 크기입니다. 설명이 어려운지는 이 성분 구간의 되돌아 읽기·이탈·담기율을 함께 봐야 알 수 있고, 그 집계는 데이터 마트가 만들면 여기에 붙습니다.</p>
         </Panel>
 
         <Panel title="검증 행동 × 전환" source="mock" aside="한 방문 vs 안 한 방문">
@@ -129,10 +121,7 @@ export default function ContentScreen() {
               ))}
             </tbody>
           </table>
-          <p className="note">
-            검증 행동을 한 방문의 담기율이 2~3배 높다. 다만 이것은 상관이지 인과가 아니다 —
-            살 사람이 검증하는 것일 수 있다. 인과는 정보 배치를 바꾼 A/B 로만 확인된다.
-          </p>
+          <p className="note">상관이지 인과는 아니다.</p>
         </Panel>
       </div>
     </div>

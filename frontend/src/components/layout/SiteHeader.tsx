@@ -1,5 +1,6 @@
 import AccountMenu from '../auth/AccountMenu';
 import PersonaSwitcher from './PersonaSwitcher';
+import { isDevtoolsOn } from '../../lib/devtools';
 import type { PersonaProfile } from '../../types/persona';
 
 interface SiteHeaderProps {
@@ -75,7 +76,10 @@ export default function SiteHeader({
             장바구니
             <span className="site-header__basket-count">{cartCount}</span>
           </button>
-          <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+          {/* 페르소나 선택기는 개발·에이전트용. 고객에게는 로그인이 그 자리다 */}
+          {isDevtoolsOn() ? (
+            <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+          ) : null}
           <AccountMenu />
         </div>
       </div>

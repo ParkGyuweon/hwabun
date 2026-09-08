@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
 import LogPanel from './components/devtools/LogPanel';
+import { isDevtoolsOn } from './lib/devtools';
 import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
@@ -538,7 +539,7 @@ export default function App() {
         />
       )}
 
-      <LogPanel />
+      {isDevtoolsOn() ? <LogPanel /> : null}
     </>
   );
 }

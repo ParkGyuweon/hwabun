@@ -169,6 +169,8 @@ SCENARIO = {
     #   직전 상세의 추천 노출과 같은 recommendation_id / position 을 실어야
     #   CTR 을 계산할 수 있다 (SimilarProducts.tsx 와 동일).
     "p_rec_click": 0.55,
+    "p_banner_click": 0.12,     # 목록에서 다음 상품을 배너로 들어가는 비율
+    "p_banner_explore": 0.20,   # trait_source=explore 비율 (배너 계획 §3)
 
     # [미정] 이탈 상품을 끝까지 훑어보는 확률 ("진지하게 봤지만 안 샀다").
     #   similar_products 는 7개 섹션 중 6번째라 스크롤 79% 이상이어야 도달한다.
@@ -279,6 +281,9 @@ def persona_style(p):
 #    사본을 두면 프론트가 이벤트를 추가했을 때 조용히 어긋난다.
 _W = BW.load()
 INTENT = _W["intent"]
+# 배너 2종은 dev 의 frontend log.ts EVENT_INTENT 에 아직 없다 (FE 184 브랜치에 있음).
+# 프론트가 머지되면 log.ts 값이 이긴다 — 여기는 그때까지의 대체값, FE 184 log.ts 와 같은 값
+BANNER_INTENT = {"banner_impression": "session", "banner_click": "interest"}
 
 
 # ── 화면 구조: 섹션 -> (콘텐츠 종류, content_ref) ──────────────────────────
@@ -306,6 +311,74 @@ PAGE_SIZE = 25         # 목록 첫 화면 카드 수 ("더 보기" 로 25씩 �
 
 LIST_LAYOUT = [("promo_row", "product_card"), ("list_controls", None),
                ("product_grid", "product_card")]
+
+# ── 배너 (Jira 212, DATA E2E 검증용) ────────────────────────────────────
+# 값은 frontend/src/lib/bannerConfig.ts 와 같다 — BANNER_SLOTS 6 · reserved 2.
+# 칸 1~4 는 축 배너(banner_type ∈ BANNER_AXES, banner_value 는 어휘집 원문),
+# 칸 5~6 은 new_brand (banner_value 없음). property 이름은 DATA 계약 그대로
+# `banner_slot` 이다 — `slot` 은 스키마·클렌징 양쪽에서 거부된다 (2026-09-08 확정).
+# 추천 API 응답 banners[].banner_slot 도 같은 이름 (recommendation-io-spec §5).
+# 이벤트 이름 2종은 event-schema.json enum 에 아직 없다 — 검증기(check_properties)는
+# 규칙 없는 이벤트를 건너뛰므로 생성은 되고, DATA 가 enum 을 올리면 그대로 통과한다.
+BANNER_EVENTS = True
+BANNER_SLOTS = 6
+BANNER_RESERVED = 2
+BANNER_AXES = ("concern", "segment", "price_bin")
+BANNER_ALGO = "banner_axes_v0"
+BANNER_LIST_ID = "banner_row"
+PRICE_BINS = ((20, "~20"), (35, "20-35"), (50, "35-50"), (80, "50-80"), (10**9, "80+"))
+
+
+def price_bin(price):
+    for edge, label in PRICE_BINS:
+        if price is None or price < edge:
+            return label
+    return "80+"
+
+
+def banner_value(kind, persona, item):
+    """축별 banner_value — 어휘집 원문. 없으면 None (키를 싣지 않는다)"""
+    if kind == "concern":
+        return item.get("concern")
+    if kind == "segment":
+        return persona.get("skin_type")
+    if kind == "price_bin":
+        return price_bin(item.get("price"))
+    return None
+
+
+def make_banners(persona, catalog, pool, popular, rng, force=None, exclude=()):
+    """이 화면의 배너 6칸. `force` 를 주면 그 상품을 축 칸 하나에 넣는다 —
+    그래야 banner_click 이 항상 노출된 배너에서 나온다 (CTR 성립).
+
+    new_brand 칸은 카탈로그에 신규 브랜드 표식이 없어 **리뷰가 가장 적은 상품**으로
+    채운다 — 자리와 이벤트 형태를 검증하는 용도지 신규 브랜드 노출 실측이 아니다.
+    """
+    n_axis = BANNER_SLOTS - BANNER_RESERVED
+    cand = [g for g in pool if g not in exclude and g != force]
+    axis_items = list(rng.choice(cand, size=min(n_axis, len(cand)), replace=False)) if cand else []
+    if force is not None:
+        axis_items = axis_items[:n_axis - 1]
+        axis_items.insert(int(rng.integers(0, len(axis_items) + 1)), force)
+    used = set(axis_items) | set(exclude)
+    fresh = [g for g in reversed(popular) if g not in used][:BANNER_RESERVED]
+    out = []
+    for slot, g in enumerate(axis_items, 1):
+        kind = str(rng.choice(BANNER_AXES))
+        out.append({"slot": slot, "type": kind, "product_id": g,
+                    "value": banner_value(kind, persona, catalog[g])})
+    for k, g in enumerate(fresh, 1):
+        out.append({"slot": n_axis + k, "type": "new_brand", "product_id": g, "value": None})
+    return out
+
+
+def trait_source_of(first, rng, SC=None):
+    """성향을 어디서 얻었나. 첫 방문은 coldstart, 재방문은 profile, 일부는 explore
+    (성향을 알아도 다른 축을 주는 A/B 표본 — personalized-banner-plan §3)"""
+    p_explore = (SC or SCENARIO)["p_banner_explore"]
+    if rng.random() < p_explore:
+        return "explore"
+    return "coldstart" if first else "profile"
 
 
 def log(m): print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
@@ -346,6 +419,7 @@ class Emitter:
         self.n = 0
         self.page = "product_list"
         self.last_rec = None      # 직전 상세에서 노출한 (recommendation_id, [상품])
+        self.last_banner = None   # 직전 목록에서 노출한 (recommendation_id, [배너], trait_source)
 
     def tick(self, lo=200, hi=1500, rng=None):
         """시간을 흘린다.
@@ -380,7 +454,7 @@ class Emitter:
             "schema_version": SCHEMA_VERSION,
             "event_id": uuid.uuid4().hex,
             "event_name": name,
-            "intent": INTENT[name],
+            "intent": INTENT.get(name) or BANNER_INTENT[name],
             "occurred_at": self.t.isoformat(timespec="milliseconds") + "Z",
             "persona_id": self.pid,
             "session_id": self.sid,
@@ -542,7 +616,7 @@ def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
 
 # ── 목록 페이지 체류 ──────────────────────────────────────────────────────
 def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
-                SC=SCENARIO, qrng=None):
+                SC=SCENARIO, qrng=None, banners=None):
     e.new_page("product_list")
     e.tick(300, 1200)
     if first:
@@ -573,6 +647,19 @@ def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
             e.emit("impression_dwell", g, position=pos,
                    list_id="list_grid", algorithm=EXPOSURE_NAME,
                    visible_ms=int(rng.integers(400, 5000) / (1 + 0.12 * (pos - 1))))
+    # 배너 노출 — 칸마다 banner_impression. 클릭과 같은 recommendation_id / banner_slot 을
+    # 써야 배너 CTR(banner_daily) 이 성립한다. 프론트 useImpression.ts 의 property 와 같다
+    if banners:
+        batch = "banner-%d" % int(rng.integers(10**10, 10**11))
+        source = trait_source_of(first, rng, SC)
+        e.last_banner = (batch, banners, source)
+        for b in banners:
+            e.tick(20, 120)
+            e.emit("banner_impression", b["product_id"],
+                   recommendation_id=batch, list_id=BANNER_LIST_ID, algorithm=BANNER_ALGO,
+                   position=b["slot"], banner_type=b["type"], banner_value=b["value"],
+                   banner_slot=b["slot"], trait_source=source,
+                   hold_ms=LIST_IMPRESSION_HOLD_MS, visible_ratio=IMPRESSION_VISIBLE_RATIO)
     # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
     # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
     # qrng 가 None 이면 이 동선 자체가 없다 (A/B 의 대조군)
@@ -959,13 +1046,33 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             grid = list(rng.choice(cards, size=min(PAGE_SIZE, len(cards)),
                                    replace=False))
             grid = [g] + [x for x in grid if x != g]
+            # 배너 경유 — 이번 상품을 배너 축 칸에 넣어 두고 그 배너를 누른다 (Jira 212)
+            via_banner = BANNER_EVENTS and g != target and rng.random() < SC["p_banner_click"]
+            banners = (make_banners(p, catalog, pool, popular, rng,
+                                    force=g if via_banner else None, exclude=set(seq))
+                       if BANNER_EVENTS else None)
             browse_list(e, promo, grid[:PAGE_SIZE], catalog, rng,
                         dwell_ms=int(rng.integers(*SC["list_dwell_ms"])),
                         first=(i == 0 or i in splits),
-                        SC=SC, qrng=qrng)
-            e.tick(); e.emit("product_click", g,
-                             entry_source="list_grid" if rng.random() < 0.8 else "promo_pick",
-                             position=1)
+                        SC=SC, qrng=qrng, banners=banners)
+            if via_banner:
+                batch, shown, source = e.last_banner
+                b = next(x for x in shown if x["product_id"] == g)
+                e.tick(); e.emit("banner_click", g,
+                                 recommendation_id=batch, list_id=BANNER_LIST_ID,
+                                 algorithm=BANNER_ALGO, position=b["slot"],
+                                 banner_type=b["type"], banner_value=b["value"],
+                                 banner_slot=b["slot"], trait_source=source)
+                # entry_source enum(§3.3) 에 배너 값이 없어 promo_pick 을 쓴다 — 배너 행은
+                # 맞춤 기획전 자리다. list_id 로 배너인지 가른다
+                e.tick(); e.emit("product_click", g, entry_source="promo_pick",
+                                 list_id=BANNER_LIST_ID, position=b["slot"])
+                rec_meta = {"recommendation_id": batch, "list_id": BANNER_LIST_ID,
+                            "position": b["slot"]}
+            else:
+                e.tick(); e.emit("product_click", g,
+                                 entry_source="list_grid" if rng.random() < 0.8 else "promo_pick",
+                                 position=1)
         rec_ids = [x for x in by_cat.get(catalog[g]["cat"], []) if x != g][:6]
         is_target = g == target
         if hidden is not None:
@@ -1078,6 +1185,9 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
             "cat": p["secondary_category"],
             "name": p["product_name"],
             "price": p["price_usd"],
+            # 배너 축 값 — highlights 의 첫 "Good for: X". 없으면 None
+            "concern": next((h.split(":", 1)[1].strip() for h in (p.get("highlights") or [])
+                             if h.startswith("Good for:")), None),
             "n": p["_review_stats"]["review_count"],
             "sku_id": frontend_products[p["product_id"]]["sku_id"],
             "variants": frontend_products[p["product_id"]].get("variants") or [],
@@ -1216,6 +1326,8 @@ if __name__ == "__main__":
                     help="jsonl 저장 경로. 생략하면 파일로 안 쓴다")
     ap.add_argument("--post", default=None, metavar="URL",
                     help="수집 API 베이스 URL. 예) http://localhost:8080")
+    ap.add_argument("--no-banner-events", action="store_true",
+                    help="banner_impression / banner_click 을 내지 않는다 (Jira 212)")
     ap.add_argument("--no-quick-look", action="store_true",
                     help="Quick Look 동선을 끈다 (A/B 대조군)")
     ap.add_argument("--scenario-id", default=DEFAULT_SCENARIO_ID,
@@ -1243,6 +1355,7 @@ if __name__ == "__main__":
     ap.add_argument("--rps", type=int, default=0,
                     help="초당 이벤트 수 제한. 0 이면 제한 없음")
     a = ap.parse_args()
+    BANNER_EVENTS = not a.no_banner_events      # 모듈 전역 (if __name__ 블록)
     if not a.out and not a.post:
         a.out = os.path.join(BD, "behavior_logs.jsonl")
     main(

@@ -1067,19 +1067,25 @@ GET /api/recommend?persona_id={id}&size=10
     "banner_value": "Pores"
   },
   "banners": [
-    { "slot": 1, "banner_type": "concern",   "banner_value": "Pores",
+    { "banner_slot": 1, "banner_type": "concern",   "banner_value": "Pores",
       "product_id": "P310022", "score": 0.7112 },
-    { "slot": 2, "banner_type": "segment",   "banner_value": "oily",
+    { "banner_slot": 2, "banner_type": "segment",   "banner_value": "oily",
       "product_id": "P448821", "score": 0.6640 },
-    { "slot": 5, "banner_type": "new_brand", "banner_value": null,
+    { "banner_slot": 5, "banner_type": "new_brand", "banner_value": null,
       "product_id": "P901133", "score": 0.3104, "reserved": true },
-    { "slot": 6, "banner_type": "new_brand", "banner_value": null,
+    { "banner_slot": 6, "banner_type": "new_brand", "banner_value": null,
       "product_id": "P902470", "score": 0.2988, "reserved": true }
   ]
 }
 ```
 
 ## 5-1. 배너 (2026-09-07 신설 · 제안)
+
+> **이름 확정 (2026-09-08, Jira 212):** 칸 번호는 응답도 이벤트도 **`banner_slot`** 이다.
+> DATA 계약(`event-properties-schema.md` 배너 property)이 `banner_slot` 고정이고 `slot` 키는
+> 스키마·클렌징 양쪽에서 거부되므로, 프론트가 응답 값을 변환 없이 `banner_impression` /
+> `banner_click` 에 그대로 싣도록 응답 필드도 같은 이름으로 맞췄다. 합성 로그 생성기
+> (`gen_behavior_logs.py`, `--no-banner-events` 로 끔)도 같은 이름으로 배너 2종을 낸다.
 
 > **상태: 제안.** 프론트와 형태를 합의한 단계이고 백엔드 `RankingService` 가
 > 아직 없어 지금은 배치 산출물까지만 나옵니다. **형태를 먼저 확정해 두고 만들 때

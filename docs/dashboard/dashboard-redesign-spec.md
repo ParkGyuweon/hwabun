@@ -40,7 +40,7 @@
 | B | 생성기에 SB 8종을 추가해 SSAFY Beauty 로그를 만든다 | 브랜드 하나로 통일 | 상품 벡터·추천·성분 정규화 테이블(Jira 194)에 SB를 넣어야 하고 AI·데이터 파트 작업. 리뷰는 여전히 0 |
 | C | SSAFY Beauty 유지 + 행동 화면은 모의값 | 작업 없음 | 발표에서 "실측"이라 말할 수 없다. 조사 결론(해석 부족을 데이터로 푼다)과 모순 |
 
-**이 문서는 A를 전제로 쓴다.** 대시보드 상단 스코프 셀렉터에 "행동 데이터: {세포라 브랜드} · 피드백·등록: SSAFY Beauty"를 명시한다. B로 가면 스코프만 바뀌고 요소·해석은 그대로다.
+**결정: A 확정 (2026-09-08, 유림).** 이 문서는 A를 전제로 쓴다. 대시보드 상단 스코프 셀렉터에 "행동 데이터: {세포라 브랜드} · 피드백·등록: SSAFY Beauty"를 명시한다. B로 가면 스코프만 바뀌고 요소·해석은 그대로다.
 
 ### 0-3. 결정 2 — 구매가 없다
 
@@ -107,7 +107,8 @@
 | # | 요소 | 수치 정의 | 원천 | 가능성 | 표본 | 의미·해석 | AI 기준 | 차트 |
 |---|---|---|---|---|---|---|---|---|
 | C1 | **콘텐츠별 주목도 × 전환 기여** | 주목도 = `dwell_ms_sum / product_view_sessions` (content_kind별, `max_co_visible_blocks ≤ 2`만). 전환 기여 = 그 콘텐츠를 본 세션의 담기율 ÷ 전체 담기율 (lift) | `content_daily_kpi`, `section_dwell_agg`, `funnel_session_fact` | 가능 | content_kind별 200~500 | Contentsquare Exposure→Attractiveness→Conversion 체인. 체류 길다 ≠ 좋다 | lift ≥1.3 & 체류 하위 → "짧게 보지만 결정에 기여, 위로 올려라". lift ≤0.8 & 체류 상위 → "오래 보지만 안 산다: 설명 문제" (사용법이면 난이도, 성분이면 기피 성분 발견 가능성) | **두 축 산점도**(x 주목도, y lift). 막대 2개 나열 금지 |
-| C2 | 긁어간 성분 TOP | `text_select_count + text_copy_count`를 `matched_ingredients` 성분별 합산 | `content_interest_fact.matched_ingredients` | 가능 | 성분별 수십~수백 | 밖에서 검색 = 설명 부족. 성분→고객군 문장 붙임(R-3) | 상위 3개 언급. 내 라인에 없는 성분이면 성분 화면으로 연결 | 순위 막대(rank) |
+| C2 | 사용자가 가장 많이 드래그한 성분 | `text_select_count + text_copy_count`를 `matched_ingredients` 성분별 합산 | `content_interest_fact.matched_ingredients` | 가능 | 성분별 수십~수백 | **관심의 크기.** 설명 부족으로 단정하지 않는다. 성분→고객군 문장 붙임(R-3) | 상위 3개 언급. 내 라인에 없는 성분이면 성분 화면으로 연결 | 순위 막대(rank) |
+| C2b | 드래그 성분의 관심 vs 어려움 판별 | 성분별로 (드래그 세션 중) `scroll_backtrack(section=ingredients)` 비율, `exit_summary.last_content_kind=ingredient_*` 비율, 담기율 lift(드래그 세션 ÷ 전체) | `content_interest_fact` + `cleaned_events` + `funnel_session_fact` 세션 조인 → **신규 마트 `ingredient_interest_kpi`** (grain: brand_id, product_id, ingredient) | 조건부(마트 없음. 세션 조인이라 FE 계산 불가) | 성분별 수십~수백 | 네 신호 중 둘 이상: 되돌아 읽기↑·이탈↑·lift<1 → "관심은 있는데 이해가 안 됨". lift≥1.3 → "소구 성분". 그 외 → "관심" | 판별은 마트가 준 플래그로만. 없으면 "관심" 으로 표시 | 표 열 2개(관심 지수 · 판별) |
 | C3 | 긁어간 문장 유형 | `selection_kind` 분포 | `cleaned_events`(text_selection.selection_kind) | 조건부(생성기가 selection_kind를 내는지 확인) | — | 클레임 긁기 = 근거 찾기 | claim 30% 이상 → "출처·시험 조건 표기" | 가로 누적 막대 1개 |
 | C4 | 성분 표시 모드 효과 | `ingredient_view_mode_change.mode`별 이후 담기율 | `cleaned_events` + funnel | 조건부 | 모드별 수백 | 어느 표시가 구매를 돕나 | 모드 간 담기율 차 5%p 이상이면 기본 모드 변경 권고 | 3막대 (표본 병기) |
 | C5 | 배지 신뢰도 | `highlight_badge` 체류 (badge_id별) + 전환 기여 | `section_dwell_agg`(content_ref=badge_id) | 조건부(생성기 badge_id 확인) | 배지별 수십 | 클레임 피로 79% | 체류 <0.5초 & lift <1 → "읽히지 않는 배지" | 표 |
@@ -331,6 +332,7 @@
 | `persona_segment_daily_kpi`에 `skin_type × skin_tone` 교차 segment_type 추가 | S1 격자 | 데이터 |
 | 세션 첫 조회 브랜드 컬럼(`first_brand_id`)을 `sessionized_events`에 | O4 교차 유입 | 데이터 |
 | `content_daily_kpi`에 `co_visible_le2_dwell_ms_sum` 분리 컬럼 | C1 귀속 순도 | 데이터 |
+| **신규 마트 `ingredient_interest_kpi`** (brand_id, product_id, ingredient): select_sessions, copy_sessions, backtrack_rate, exit_after_rate, cart_lift, 판별 플래그(interest / hard / selling) | C2b 관심 vs 어려움 판별. 세션 조인이라 FE 에서 못 한다 | 데이터 |
 | `product_daily_kpi`에 `wishlist_count` | P5 | 데이터 |
 | 생성기 `selection_kind`, `badge_id` 실제 값 확인 | C3, C5 | 데이터·AI |
 | `purchase`·`purchase_reason_select` 생성기 구현 | O7, C8, P8 전부 | AI(생성기) |

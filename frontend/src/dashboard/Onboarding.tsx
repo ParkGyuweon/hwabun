@@ -21,7 +21,7 @@ import type {
 import { MotifLine } from './components';
 
 /**
- * 가입 화면 — 내 쇼핑몰의 진열을 고른다.
+ * 가입 화면 · 내 쇼핑몰의 진열을 고른다.
  *
  * 축이 여덟(배열·기획전·크기·모서리·카드·글꼴·헤더·색)이라 조합이 10만 가지가 넘는다.
  * 앞선 화면은 축마다 큰 카드 목록을 세로로 늘어놓았는데, 고르는 화면이 아니라 서류가
@@ -175,8 +175,8 @@ export default function Onboarding({
                       { ['--sw' as string]: t.swatch[0], ['--sw2' as string]: t.swatch[1] } as React.CSSProperties
                     }
                     onClick={() => set('theme', t.key)}
-                    onMouseEnter={() => setHint(`${t.label} — ${t.desc}`)}
-                    onFocus={() => setHint(`${t.label} — ${t.desc}`)}
+                    onMouseEnter={() => setHint(`${t.label} · ${t.desc}`)}
+                    onFocus={() => setHint(`${t.label} · ${t.desc}`)}
                     aria-label={t.label}
                     aria-pressed={prefs.theme === t.key}
                   />
@@ -245,8 +245,8 @@ function AxisRow<K extends string>({
             type="button"
             className={`ax__opt ${value === o.key ? 'is-on' : ''}`}
             onClick={() => onChange(o.key)}
-            onMouseEnter={() => onHint(`${o.label} — ${o.desc}`)}
-            onFocus={() => onHint(`${o.label} — ${o.desc}`)}
+            onMouseEnter={() => onHint(`${o.label} · ${o.desc}`)}
+            onFocus={() => onHint(`${o.label} · ${o.desc}`)}
             aria-pressed={value === o.key}
             aria-label={`${label} ${o.label}`}
           >

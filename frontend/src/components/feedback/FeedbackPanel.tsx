@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForProduct, submitFeedback } from '../../lib/feedbackStore';
-import { FEEDBACK_INPUT_AXES, axisLabel, categoryLabel } from '../../types/feedback';
+import { FEEDBACK_INPUT_AXES, axisLabel, categoryLabel, labelsOf } from '../../types/feedback';
 import type { PersonaProfile } from '../../types/persona';
 import type { Product } from '../../types/product';
 
@@ -154,7 +154,7 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
                 <span className="feedback__item-aspects">
                   <strong>{f.axis_id ? axisLabel(f.axis_id) : '주제 없음'}</strong>
                   {' · '}
-                  {f.category_id ? categoryLabel(f.category_id) : '분류 중'}
+                  {labelsOf(f).length > 0 ? labelsOf(f).map((l) => categoryLabel(l.category_id)).join(' · ') : '분류 중'}
                 </span>
                 <span className="feedback__item-status">
                   {f.status === 'reflected' ? '반영됨' : f.status === 'read' ? '사장님이 읽음' : '전달됨'}

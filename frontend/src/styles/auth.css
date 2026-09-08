@@ -269,6 +269,19 @@
   color: var(--ink-soft, var(--color-ink-soft, #5c626c));
 }
 
+.auth-gate__dev {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-faint, var(--color-ink-faint, #878d97));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .auth-gate__note {
   margin: 0;
   font-size: 12px;
@@ -279,4 +292,15 @@
   .auth__submit {
     transition: none;
   }
+}
+
+/* 모달 맨 아래, 다른 역할로 가는 링크. 폼 안의 힌트와 얇은 선으로 나눈다 */
+.auth__hint--alt {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line-soft, var(--color-line));
+  text-align: center;
+}
+.auth__hint--alt .auth__link {
+  text-decoration: underline;
 }
