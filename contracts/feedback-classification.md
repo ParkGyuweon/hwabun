@@ -37,7 +37,7 @@
 | `scent` | 향 | `scent_strong` 향이 강함 · `scent_artificial` 향이 인공적 · `scent_weak` 향이 약함 |
 | `packaging` | 용기·포장 | `pkg_lid_loose` 뚜껑 헐거움·누수 · `pkg_lid_stiff` 뚜껑 뻑뻑함 · `pkg_pump` 펌프 막힘·고장·토출량 · `pkg_durability` 재질·내구성 약함 · `pkg_label` 라벨·표기 불분명 · `pkg_visibility` 내용물 확인 어려움 |
 | `value` | 용량·가격 | `value_small` 용량 부족 · `value_price` 가격 비쌈 · `value_option` 리필·대용량 요청 |
-| `other` | 기타 | `other` |
+| (모든 축) | — | `other` 기타 — **축이 아니라 카테고리.** 입력 축 안에서 목록에 없는 불만 |
 
 FE 가 임시로 둔 8종과의 대응: 향→`scent` · 용기→`packaging` · 제형→`texture` ·
 효과→`efficacy` · 성분→`efficacy` (자극·트러블) · 사용법→`packaging` (라벨·표기 불분명) ·
@@ -111,7 +111,7 @@ FE 가 임시로 둔 8종과의 대응: 향→`scent` · 용기→`packaging` ·
 
 ## 7. 아직 아닌 것
 
-- 시연 데이터(`simulator/feedback/data/`)의 `intended_axis`·`generator` 필드는 생성 흔적이라 **이 계약의 필드가 아니다.** 실서비스 행에는 없다.
+- 시연 데이터(`simulator/feedback/data/`)의 `intended_axis` 는 생성 때 지시한 축이고 0.2.0 부터 **`axis_id` 입력 자리에 그대로 쓴다** (고객이 고른 축에 해당). `generator` 는 생성 흔적이라 계약 필드가 아니다.
 - `scent_strong` 과 `scent_artificial` 은 한 문장에 같이 나오는 일이 많다("인공적이고 강해서"). 사장님이 고칠 것이 같으면 합칠 후보다. 시연 99건에서 판단하지 않고 실데이터가 쌓이면 본다.
 - 분류 정확도는 **사람이 붙인 정답**으로만 잰다. 시연 데이터의 `intended_axis` 는 같은 모델이 축을 알고 쓴 문장이라 성능 근거가 아니다. 정답 50건과 채점기는 `Research/eval/feedback_gold_50.tsv` · `eval_feedback_gold.py` (다중 라벨: 집합 정밀도·재현율).
 - 단일 라벨(0.1.0) 채점: 축 96% · 카테고리 71% (49건). 불일치 15건 중 11건이 복합 문장 — 0.2.0 으로 바꾼 이유.
