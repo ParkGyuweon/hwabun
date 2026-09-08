@@ -1,5 +1,7 @@
 package com.cosmetic.shopbackend.feedback;
 
+import com.cosmetic.shopbackend.identity.AccountRole;
+import com.cosmetic.shopbackend.security.ShopPrincipal;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -7,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -21,9 +24,10 @@ public class FeedbackController {
 
     @PostMapping("/reviews")
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String,Object> createReview(@RequestHeader("X-User-Id") String memberId, @RequestHeader("X-User-Role") String role,
+    public Map<String,Object> createReview(@AuthenticationPrincipal ShopPrincipal actor,
                                             @Valid @RequestBody ReviewRequest req) {
-        requireRole(role, "MEMBER");
+        requireRole(actor, AccountRole.MEMBER);
+        String memberId = actor.accountId();
         purchased(memberId, req.orderItemId());
         if (count("select count(*) from review where order_item_id=?", req.orderItemId()) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "review already exists");
@@ -42,9 +46,10 @@ public class FeedbackController {
 
     @PostMapping("/feedback")
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String,Object> createFeedback(@RequestHeader("X-User-Id") String memberId, @RequestHeader("X-User-Role") String role,
+    public Map<String,Object> createFeedback(@AuthenticationPrincipal ShopPrincipal actor,
                                               @Valid @RequestBody FeedbackRequest req) {
-        requireRole(role, "MEMBER");
+        requireRole(actor, AccountRole.MEMBER);
+        String memberId = actor.accountId();
         purchased(memberId, req.orderItemId());
         if (count("select count(*) from feedback where order_item_id=?", req.orderItemId()) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "feedback already exists");
@@ -54,9 +59,10 @@ public class FeedbackController {
     }
 
     @GetMapping("/seller/feedback")
-    public List<Map<String,Object>> sellerFeedback(@RequestHeader("X-User-Id") String sellerId, @RequestHeader("X-User-Role") String role,
+    public List<Map<String,Object>> sellerFeedback(@AuthenticationPrincipal ShopPrincipal actor,
                                                     @RequestParam String brandId) {
-        requireRole(role, "SELLER");
+        requireRole(actor, AccountRole.SELLER);
+        String sellerId = actor.accountId();
         owns(sellerId, brandId);
         return jdbc.queryForList("select f.feedback_id feedbackId,f.order_item_id orderItemId,f.body,f.status,f.created_at createdAt " +
                 "from feedback f join order_item oi on oi.order_item_id=f.order_item_id where oi.brand_id=? and f.status='VISIBLE' order by f.created_at desc", brandId);
@@ -71,7 +77,7 @@ public class FeedbackController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand access denied");
     }
     private int count(String sql, Object... args) { return jdbc.queryForObject(sql, Integer.class, args); }
-    private void requireRole(String actual, String expected) { if (!expected.equalsIgnoreCase(actual)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "required role: " + expected); }
+    private void requireRole(ShopPrincipal actor, AccountRole expected) { if (actor == null || actor.role() != expected) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "required role: " + expected); }
     public record ReviewRequest(@NotBlank String orderItemId, @Min(1) @Max(5) int rating, Boolean isRecommended, String title, String body) {}
     public record FeedbackRequest(@NotBlank String orderItemId, @NotBlank String body) {}
 }
