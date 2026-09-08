@@ -128,6 +128,7 @@ S15P21A306/
 │   │   ├── product-feature-sample.md    상품 6개 인코딩 샘플 (생성물 — build_feature_sample.py)
 │   │   ├── persona-feature-port.md      페르소나 피처 이관 계획·검증 기준·결과
 │   │   ├── exposure-role.md             노출이 어느 자리에서 무엇을 하는가 — 다섯 자리와 섞어 말하면 안 되는 것
+│   │   ├── cross-brand-inflow-proposal.md  교차 브랜드 유입 마트 요청서 (AI → DATA·FE) — 재료 위치·정의·추천 식별자
 │   │   └── evaluation-framework.md     ★ 추천 평가 체계 (팀 합의) — 오프라인/동적/LLM 3축 분리
 │   │                                     대표 지표·부록(기각된 안 포함)이 모두 여기 모입니다
 │   │
