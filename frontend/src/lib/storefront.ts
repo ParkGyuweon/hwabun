@@ -163,7 +163,7 @@ export const STOREFRONT_HEADERS: Array<Option<StorefrontHeader>> = [
 export const STOREFRONT_THEMES: Array<
   Option<StorefrontTheme> & { /** [주색(CTA·별점), 강조(배지), 리본] */ swatch: [string, string, string] }
 > = [
-  { key: 'bloom', label: '블룸', desc: 'Fresh Green CTA · Blossom Pink 배지 (기본)', swatch: ['#a8c96e', '#e68fa1', '#d8e9c3'] },
+  { key: 'bloom', label: '블룸', desc: 'Fresh Green CTA · Blossom Pink 배지', swatch: ['#a8c96e', '#e68fa1', '#d8e9c3'] },
   { key: 'rose', label: '로즈', desc: 'Blossom Pink 를 앞에. 부드럽고 따뜻하게', swatch: ['#e68fa1', '#a8c96e', '#f7dfe4'] },
   { key: 'coral', label: '코랄', desc: '산호빛. 생기 있고 눈에 띈다', swatch: ['#ef7f5e', '#7a5b43', '#fde3d8'] },
   { key: 'lavender', label: '라벤더', desc: '연보라. 진정·수면 계열에 잘 붙는다', swatch: ['#9184c4', '#e68fa1', '#ece8f7'] },
@@ -171,7 +171,7 @@ export const STOREFRONT_THEMES: Array<
   { key: 'earth', label: '어스', desc: 'Earthy Brown CTA. 차분한 클린 뷰티', swatch: ['#7a5b43', '#e68fa1', '#efe6dc'] },
   { key: 'sand', label: '샌드', desc: '베이지 골드. 고급스럽고 조용하게', swatch: ['#b9944f', '#7a5b43', '#f4ead4'] },
   { key: 'clinic', label: '클리닉', desc: '딥 블루. 임상 근거를 앞세우는 더마 브랜드', swatch: ['#35618f', '#8fb889', '#dfe9f4'] },
-  { key: 'mono', label: '모노', desc: '무채색. 상품 사진 색만 살린다', swatch: ['#1d1d1f', '#6e6e73', '#e8e8ed'] },
+  { key: 'mono', label: '모노', desc: '무채색. 상품 사진 색만 살린다 (기본)', swatch: ['#1d1d1f', '#6e6e73', '#e8e8ed'] },
 ];
 
 /** 프리셋이 정하는 축. 색과 이름은 뺀다 */
@@ -233,7 +233,8 @@ export const DEFAULT_STOREFRONT: StorefrontPrefs = {
   card: 'line',
   font: 'sans',
   header: 'plain',
-  theme: 'bloom',
+  /** 아무것도 안 골랐을 때는 무채색 — 처음 세포라 모양. 색은 사장님이 진열 설정에서 고른다 */
+  theme: 'mono',
   brandName: '',
 };
 
