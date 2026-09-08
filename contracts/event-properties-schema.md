@@ -229,6 +229,34 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 `ingredients`는 리뷰 행동이 아니므로 리뷰 열람률은
 `target in ('review_text', 'jump_to_reviews')`로 제한한다.
 
+### 3.11 `banner_type`
+
+`concern`, `ingredient`, `clean`, `price_bin`, `category`, `segment`, `new_brand`
+
+### 3.12 `trait_source`
+
+`session`, `profile`, `coldstart`, `explore`
+
+`explore`는 성향 실험의 20% 탐색군 식별자다. 배정은 배너 노출 전에 FE 또는 추천
+서비스가 하고, 같은 노출·클릭 쌍에는 같은 값을 싣는다. DATA는 배정하지 않고 비중과
+노출·클릭 일치만 검증한다.
+
+### 3.13 배너 값과 slot 규칙
+
+`banner_slot`은 1 이상의 정수다. 추천 API 응답의 `slot`은 Event 발행 시 이 이름으로
+변환하며 Event properties의 `slot`은 허용하지 않는다.
+
+`banner_value`는 `product-feature-vocab.json` 또는 `affinity_lift.csv`의 원문
+문자열이다. `banner_type`이 `new_brand`일 때만 JSON `null`이며, 나머지 축에서는 비어
+있지 않은 문자열이다. 한국어 표시 라벨은 소비 시점에 붙이고 Event·Fact·Mart에는
+넣지 않는다.
+
+배너 대상 `product_id`는 다른 상품 Event와 같이 top-level Envelope에 둔다. Front 로거가
+호출부의 `properties.product_id`를 top-level로 승격하므로 properties에 중복 저장하지 않는다.
+
+`policy_version`은 배너·정렬 정책의 배포 버전이다. 사전/사후 비교의 귀속 키이므로
+배너 Event에 실으면 `banner_daily`까지 그대로 내려간다.
+
 ## 4. Event별 Required Properties
 
 ### 4.1 Session / Page
@@ -245,6 +273,8 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
+| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
+| `banner_click` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
 | `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number` | `impression_area: string`, `dedupe_key: string` |
 | `product_click` | 없음 | `list_id: string`, `position: integer`, `entry_source: string`, `impression_event_id: string`, `context_product_id: string` |
 | `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number` | `section_id: string`, `context_product_id: string` |

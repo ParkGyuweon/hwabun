@@ -34,6 +34,10 @@ export type P0EventName =
   | 'accordion_toggle'
   | 'recommendation_impression'
   | 'recommendation_click'
+  /** 개인화 배너의 유효 노출. CTR 분모 전용 */
+  | 'banner_impression'
+  /** 개인화 배너 클릭 */
+  | 'banner_click'
   | 'wishlist_toggle'
   | 'add_to_cart'
   /** 장바구니 화면 진입. GA4 표준 퍼널 단계 */
@@ -175,6 +179,7 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
 
   product_impression: 'exposure',
   recommendation_impression: 'exposure',
+  banner_impression: 'session',
   scroll_depth: 'exposure',
   impression_dwell: 'exposure',
   recommendation_snapshot: 'exposure',
@@ -191,6 +196,7 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   navigation_click: 'session',
   product_click: 'comparison',
   recommendation_click: 'comparison',
+  banner_click: 'interest',
 
   accordion_toggle: 'validation',
   ingredient_view_mode_change: 'validation',
@@ -240,6 +246,7 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   navigation_click: 0,
   product_click: 1.0,
   recommendation_click: 1.5,
+  banner_click: 1.5,
 
   // 확인 — 능동적으로 사실을 확인했다
   ingredient_view_mode_change: 1.5,
@@ -291,6 +298,7 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
    */
   product_impression: 0,
   recommendation_impression: 0,
+  banner_impression: 0,
   impression_dwell: 0,
   recommendation_snapshot: 0,
   scroll_depth: 0, // 도달 깊이는 scrollDepthWeight() 로 따로 계산한다
