@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 import unittest
 from datetime import date, datetime, timezone
 
@@ -13,6 +15,7 @@ from streaming.jobs.build_marts_job import (
     _banner_daily,
     _cross_brand_daily,
     _user_trait_daily,
+    _write_mart,
 )
 from streaming.jobs.derive_facts_job import _product_event_fact
 
@@ -165,6 +168,52 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
         self.assertEqual(1, row["trait_rank"])
         self.assertTrue(row["is_primary_trait"])
         self.assertEqual("test-v1", row["trait_policy_version"])
+
+    def test_banner_daily_stays_readable_when_no_banner_event_exists(self):
+        """배너를 아직 아무도 발행하지 않는 기간에도 검증 Job이 Mart를 읽어야 한다."""
+        from pyspark.sql.types import (
+            DateType,
+            IntegerType,
+            StringType,
+            StructField,
+            StructType,
+        )
+
+        text_columns = [
+            "event_id", "event_name", "product_id", "brand_id", "session_id",
+            "banner_type", "banner_value", "trait_source", "policy_version",
+            "actor_type", "source", "scenario_id", "simulation_run_id",
+        ]
+        schema = StructType(
+            [StructField(name, StringType(), True) for name in text_columns]
+            + [
+                StructField("banner_slot", IntegerType(), True),
+                StructField("event_date_kst", DateType(), True),
+            ]
+        )
+        fact = self.spark.createDataFrame(
+            [
+                (
+                    "e1", "product_view", "P1", "B1", "S1",
+                    None, None, None, None,
+                    "user", "web", None, None,
+                    None, date(2026, 9, 8),
+                )
+            ],
+            schema,
+        )
+
+        daily = _banner_daily(fact, {"Pores"})
+        self.assertEqual(0, daily.count())
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "banner_daily")
+            _write_mart(daily, path, "event_date_kst")
+            restored = self.spark.read.option("mergeSchema", "true").parquet(path)
+
+            self.assertEqual(0, restored.count())
+            self.assertIn("banner_ctr", restored.columns)
+            self.assertIn("event_date_kst", restored.columns)
 
     def test_analytics_baseline_keeps_pre_banner_metrics_only(self):
         facts = self.spark.createDataFrame(

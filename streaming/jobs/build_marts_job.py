@@ -1137,6 +1137,21 @@ def _analytics_baseline(
     )
 
 
+def _write_mart(frame: Any, path: str, partition_column: str | None = None) -> None:
+    """빈 결과에 partitionBy를 걸면 데이터 파일이 남지 않아 스키마를 다시 읽을 수 없다.
+
+    배너 Event를 아직 아무도 발행하지 않는 기간에는 `banner_daily`가 정상적으로
+    0행이다. 그때 파티션 쓰기를 하면 `_SUCCESS`만 남아 검증 Job의 읽기가
+    UNABLE_TO_INFER_SCHEMA로 실패한다. 0행이면 파티션 없이 써서 스키마를 남긴다.
+    """
+
+    writer = frame.write.mode("overwrite")
+    if partition_column is not None and not frame.isEmpty():
+        writer.parquet(path, partitionBy=partition_column)
+    else:
+        writer.parquet(path)
+
+
 def build_mart_frames(
     sessionized_df: Any,
     product_fact_df: Any,
@@ -1285,19 +1300,11 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     frames["category_price_reference"].write.mode("overwrite").parquet(
         config.category_price_path,
     )
-    frames["banner_daily"].write.mode("overwrite").parquet(
-        config.banner_daily_path, partitionBy="event_date_kst",
-    )
-    frames["user_trait_daily"].write.mode("overwrite").parquet(
-        config.user_trait_daily_path, partitionBy="trait_date_kst",
-    )
-    frames["cross_brand_daily"].write.mode("overwrite").parquet(
-        config.cross_brand_daily_path, partitionBy="event_date_kst",
-    )
+    _write_mart(frames["banner_daily"], config.banner_daily_path, "event_date_kst")
+    _write_mart(frames["user_trait_daily"], config.user_trait_daily_path, "trait_date_kst")
+    _write_mart(frames["cross_brand_daily"], config.cross_brand_daily_path, "event_date_kst")
     if "analytics_baseline" in frames:
-        frames["analytics_baseline"].write.mode("overwrite").parquet(
-            config.baseline_path,
-        )
+        _write_mart(frames["analytics_baseline"], config.baseline_path)
 
 
 def main(argv: list[str] | None = None) -> None:
