@@ -1283,9 +1283,10 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         config.baseline_start_date,
         config.baseline_end_date,
     )
-    frames["funnel_session_fact"].write.mode("overwrite").parquet(
+    _write_mart(
+        frames["funnel_session_fact"],
         config.funnel_session_path,
-        partitionBy="funnel_date_kst",
+        "funnel_date_kst",
     )
     frames["product_daily_kpi"].write.mode("overwrite").parquet(
         config.product_daily_path,
@@ -1293,9 +1294,10 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     frames["funnel_daily_kpi"].write.mode("overwrite").parquet(
         config.funnel_daily_path,
     )
-    frames["ingredient_weekly_interest"].write.mode("overwrite").parquet(
+    _write_mart(
+        frames["ingredient_weekly_interest"],
         config.ingredient_weekly_path,
-        partitionBy="interest_week_kst",
+        "interest_week_kst",
     )
     frames["category_price_reference"].write.mode("overwrite").parquet(
         config.category_price_path,
