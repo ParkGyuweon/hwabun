@@ -330,6 +330,69 @@ input = cleaned_events, product_event_fact, funnel_session_fact, content_interes
 | `avg_event_count_per_session`, `avg_product_interest_score`, `avg_content_interest_score`, `view_to_cart_rate`, `view_to_purchase_rate` | double | Y | 평균·전환율 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
+### 4.8 `ingredient_weekly_interest`
+
+```text
+key = interest_week_kst + ingredient_id + actor_type + source + scenario_id + simulation_run_id
+input = sessionized_events, dim_product, product_ingredient.csv, ingredient_vocab.csv
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `interest_week_kst` | date | N | KST 기준 월요일 |
+| `ingredient_id`, `ingredient`, `label_ko`, `vocab_version` | int/string | 표시명만 Y | 성분 어휘 Dimension |
+| `actor_type`, `source`, `scenario_id`, `simulation_run_id` | 공통 계약 | scenario/run만 Y | Web/Synthetic 및 실행 분리 축 |
+| `ingredient_interest_score` | double | N | 직접 지목 점수 + 상품 귀속 점수 |
+| `direct_match_score` | double | N | `matched_ingredients[]`로 직접 지목된 성분 점수 |
+| `product_attributed_score` | double | N | 행동 가중치 × `position_weight` × 카테고리 가중치 |
+| `contributing_event_count` | bigint | N | 해당 성분에 기여한 고유 Event 수 |
+| `ingredient_interest_share` | double | Y | 같은 주·실행 축 점수 합 대비 비중. 분모 0이면 NULL |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+성분 관심 계산은 AI 사용자 벡터의 ingredient 슬라이스를 읽지 않는다.
+`product_ingredient.csv.position_weight`를 직접 사용하며, 이 값은 함량이 아니라 원본 태그
+또는 전성분 배합 순서 기반 가중치다. `text_selection`·`text_copy`의
+`matched_ingredients[]`는 직접 지목한 성분에만 귀속하고 위치가중을 다시 곱하지 않는다.
+상품 전체 신호는 성분표 체류(최대 60초), 성분 표시 전환, 성분 Accordion 펼침,
+장바구니 담기를 상품의 각 성분으로 확장한다. 행동 가중치는 `EVENT_WEIGHT` 단일 원본을
+사용한다.
+
+`secondary_category=Cleansers`의 상품 전체 신호에는 기본 `0.5`를 곱한다. 이 값은
+`CLEANSING_CATEGORY_WEIGHT` 또는 `--cleansing-category-weight` 실행 설정으로 관리하며
+코드의 고정 상수로 산식에 삽입하지 않는다. 직접 지목 신호에는 세정 가중치를 적용하지
+않는다.
+
+현재 200개 시드 상품 중 188개만 `product_ingredient.csv`에 연결되고 12개는 성분 행이
+없다. 이 12개 상품의 상품 전체 Event는 성분별 numerator와
+`ingredient_interest_share` denominator에서 모두 제외한다. 성분 관심 0으로 채우지
+않는다. 단, Event가 `matched_ingredients[]`로 성분을 직접 지목했다면 상품 연결 여부와
+무관하게 해당 성분에 반영한다.
+
+### 4.9 `category_price_reference`
+
+```text
+key = secondary_category + currency
+input = dim_product
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `secondary_category`, `currency` | string | N | 카테고리·통화 기준 축 |
+| `product_count` | bigint | N | 유효 기준 가격을 가진 카테고리 상품 수 |
+| `observed_median_price` | decimal(18,2) | N | 해당 카테고리의 실제 중앙값 |
+| `global_product_count`, `global_median_price` | bigint/decimal(18,2) | N | 같은 통화 전체 기준 |
+| `is_sample_sufficient` | boolean | N | `product_count >= min_sample_size` |
+| `reference_median_price` | decimal(18,2) | N | 화면·추천에서 사용할 최종 기준값 |
+| `reference_source` | string | N | `category`, `global_fallback` |
+| `min_sample_size` | int | N | 실행 당시 표본 기준, 기본 3 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+가격은 `secondary_category`와 `currency`별 `base_price`의 정확한 중앙값으로 집계한다.
+NULL과 0 이하 가격은 제외한다. 표본이 3개 미만이면 같은 통화 전체 상품 중앙값을
+`reference_median_price`로 사용한다. 기준은 `PRICE_MIN_SAMPLE_SIZE` 또는
+`--price-min-sample-size` 설정으로 관리한다. `sale_price`, `sale_price_usd`, 할인율은
+결측이 많고 `dim_product` 기준 가격 계약에도 없으므로 입력·집계·산출에서 사용하지 않는다.
+
 ## 5. 실시간 Mart 후보
 
 ### 5.1 `realtime_event_stats`

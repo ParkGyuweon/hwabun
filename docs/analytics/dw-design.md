@@ -91,6 +91,8 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 평균 체류시간 | `dwell_ms_sum / section_view_sessions` | `content_daily_kpi` |
 | 콘텐츠 관심도 | `processed-schema.md` §13.1 | `content_daily_kpi` |
 | 상품 관심도 | `Σ EVENT_WEIGHT x 발생 수` | `product_daily_kpi` |
+| 성분 관심도 | 직접 지목 + `EVENT_WEIGHT x position_weight x category_weight` | `ingredient_weekly_interest` |
+| 카테고리 가격 기준 | 통화별 `secondary_category` 기준 가격 중앙값, 3개 미만은 전체 중앙값 | `category_price_reference` |
 
 Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기능 판단 시
 `actor_type=user`에서 Quick Look 사용/미사용 arm의 표본 수와 장바구니 전환율을
@@ -108,7 +110,8 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 | MySQL `dw` | Dashboard serving 역할 합의 | DDL, 인덱스, 적재 주기, upsert 방식 결정 |
 | 검색·결제 Event | 일부 provisional | 화면·Collector 구현 후 key와 optional 값 재검증 |
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |
-| Dashboard Mart·KPI | 저장 가능한 후보 Schema 작성 | 추천·AI 담당과 지표 우선순위·최종 grain 합의 후 확정 |
+| 성분·가격 기준 Mart | `ingredient_weekly_interest`, `category_price_reference` Parquet 구현. 성분 없는 상품 제외·세정 가중치 설정·가격 표본 fallback 반영 | 운영 Delta/MySQL projection |
+| 그 외 Dashboard Mart·KPI | 저장 가능한 후보 Schema 작성 | 추천·AI 담당과 지표 우선순위·최종 grain 합의 후 확정 |
 
 `search_query_hash`의 정규화·hash 규칙, 실제 Web의 안정적인 `user_id`, `cart_id`,
 운영 저장 경로는 구현 전 확정이 필요하다. 이 항목들은 이미 정한 Schema를 다시
