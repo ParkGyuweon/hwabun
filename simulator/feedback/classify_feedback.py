@@ -11,7 +11,7 @@
     축 이름만 적고 재분류는 안 한다 — 고객이 고른 칸을 존중한다.
 
 다중 라벨
-    한 문장에 불만이 둘이면 둘 다 붙인다 (최대 3, 첫 번째가 primary). 사람 정답 50건
+    한 문장에 불만이 둘이면 둘 다 붙인다 (개수 제한 없음, 첫 번째가 primary). 사람 정답 50건
     채점에서 카테고리 불일치 15건 중 11건이 "용량 적은데 가격 비싸서" 였다 — 사용자는
     우리 축을 모르고 쓰므로 하나만 고르게 하면 불만이 버려진다. 집계는 **언급 수**다.
     "뚜껑도 이상하고 펌프도 이상하다" → 뚜껑 칸에도 펌프 칸에도 그 피드백이 뜬다.
@@ -85,7 +85,7 @@ PROMPT = """고객 피드백 1건에 **적혀 있는 불만을 전부** 아래 �
 {menu}
 
 규칙
-- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 최대 3개
+- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 해당하면 **개수 제한 없이 전부**
 - 가장 두드러진 것을 **첫 번째**에 둔다
 - "용량이 적은데 가격이 비싸서" 는 둘이다 (용량 부족 + 가격 비쌈).
   "끈적이고 흡수도 느려서" 도 둘이다. 하나만 고르지 마라
@@ -111,7 +111,7 @@ PROMPT_AXIS = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고�
     - 기타: 위 어디에도 안 맞음 (이 축 얘기지만 목록에 없는 불만)
 
 규칙
-- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 최대 3개
+- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 이 축 얘기면 **개수 제한 없이 전부**
 - 가장 두드러진 것을 **첫 번째**에 둔다
 - "뚜껑도 이상하고 펌프도 이상하다" 는 둘이다. 하나만 고르지 마라
 - 목록의 이름을 **글자 그대로** 쓴다. 새 이름을 만들지 마라
@@ -168,7 +168,8 @@ class Classifier:
             self.retries += 1
         raise ValueError(f"{tries}회 모두 JSON 파싱 실패: {last}")
 
-    MAX_LABELS = 3
+    # 개수 상한은 두지 않는다 — 그 축의 카테고리 수가 자연스러운 상한이다 (규원, 2026-09-08).
+    # 목록 검증·중복 제거가 있으므로 모델이 헛것을 늘려도 목록 밖은 걸린다.
 
     def _other(self):
         return {"axis_id": self.other["id"], "axis": self.other["label"],
@@ -185,7 +186,7 @@ class Classifier:
         return None
 
     def classify_in_axis(self, body, axis, product=""):
-        """(계약 0.2.0 정본 경로) **축은 고객이 골랐다.** 그 축 안의 카테고리만, 최대 3개.
+        """(계약 0.2.0 정본 경로) **축은 고객이 골랐다.** 그 축 안의 카테고리만, 해당하는 것 전부.
 
         화면이 왼쪽에 축 토글, 오른쪽에 그 축의 주관식 칸이다. 그래서 축은 입력이고
         분류기는 카테고리만 고른다 — 축 추론 오류가 구조적으로 사라진다.
@@ -205,7 +206,7 @@ class Classifier:
         if not isinstance(raw, list):
             raw = [g.get("category")] if g.get("category") else []
         out, seen = [], set()
-        for cat in raw[: self.MAX_LABELS * 2]:
+        for cat in raw:
             cat = (str(cat) if cat is not None else "").strip()
             if cat == self.other["label"]:
                 continue
@@ -220,8 +221,6 @@ class Classifier:
             seen.add(cat)
             out.append({"axis_id": ax["id"], "axis": axis,
                         "category_id": ax["cats"][cat], "category": cat})
-            if len(out) >= self.MAX_LABELS:
-                break
         hint = g.get("off_axis")
         hint = hint.strip() if isinstance(hint, str) and hint.strip() in self.axes and hint.strip() != axis else None
         return self._pack(out or [self._other_in(axis)], off_axis=hint)
@@ -233,7 +232,7 @@ class Classifier:
                 "category_id": self.other["id"], "category": self.other["label"]}
 
     def classify(self, body, product=""):
-        """(축을 모를 때의 보조 경로) 축 + 카테고리를 함께 추론. 최대 3개. 첫 번째가 primary.
+        """(축을 모를 때의 보조 경로) 축 + 카테고리를 함께 추론. 개수 제한 없음. 첫 번째가 primary.
 
         0.1.0 은 하나만 고르게 했다. 사람 정답 50건에서 카테고리 불일치 15건 중 11건이
         "용량 적은데 가격 비싸서" 처럼 한 문장에 두 불만이 함께 적힌 것이었다 —
@@ -248,7 +247,7 @@ class Classifier:
         if not isinstance(raw, list):                      # 옛 형식 {"axis","category"} 도 받는다
             raw = [g] if g.get("axis") else []
         out, seen = [], set()
-        for item in raw[: self.MAX_LABELS * 2]:
+        for item in raw:
             if not isinstance(item, dict):
                 continue
             axis = (item.get("axis") or "").strip()
@@ -261,8 +260,6 @@ class Classifier:
             if key in seen:
                 continue
             seen.add(key); out.append(lab)
-            if len(out) >= self.MAX_LABELS:
-                break
         # 기타는 단독으로만 — 다른 라벨이 있으면 기타를 뺀다
         real = [l for l in out if l["axis_id"] != self.other["id"]]
         return self._pack(real or [self._other()])
