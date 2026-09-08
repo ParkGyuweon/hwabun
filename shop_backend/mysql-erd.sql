@@ -46,7 +46,7 @@ CREATE TABLE product (
 );
 CREATE TABLE product_variant (
  variant_id VARCHAR(64) PRIMARY KEY, product_id VARCHAR(64) NOT NULL, sku_id VARCHAR(64) NOT NULL UNIQUE, label VARCHAR(200) NOT NULL, size VARCHAR(100) NULL,
- price_krw DECIMAL(18,0) NOT NULL, sale_price_krw DECIMAL(18,0) NULL, image_url VARCHAR(1000) NULL, swatch_url VARCHAR(1000) NULL, status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE', sort_order INT NOT NULL DEFAULT 0,
+ price_krw DECIMAL(18,2) NOT NULL, sale_price_krw DECIMAL(18,2) NULL, image_url VARCHAR(1000) NULL, swatch_url VARCHAR(1000) NULL, status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE', sort_order INT NOT NULL DEFAULT 0,
  FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT, UNIQUE KEY uq_variant_order(product_id,sort_order), CHECK(price_krw > 0), CHECK(sale_price_krw IS NULL OR (sale_price_krw > 0 AND sale_price_krw <= price_krw))
 );
 CREATE TABLE product_image (
@@ -102,8 +102,19 @@ CREATE TABLE review (
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT, CHECK(rating BETWEEN 1 AND 5)
 );
 CREATE TABLE feedback (
- feedback_id VARCHAR(64) PRIMARY KEY, order_item_id VARCHAR(64) NOT NULL UNIQUE, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT
+ feedback_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, order_item_id VARCHAR(64) NOT NULL, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT, FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT,
+ UNIQUE KEY uq_feedback_member_product_axis(member_id,product_id,axis_id), INDEX ix_feedback_product_axis(product_id,axis_id), INDEX ix_feedback_order_item_status(order_item_id,status)
+);
+CREATE TABLE feedback_classification (
+ feedback_id VARCHAR(64) PRIMARY KEY, classifier VARCHAR(100) NULL, vocab_version VARCHAR(32) NULL, primary_axis_id VARCHAR(32) NULL, primary_category_id VARCHAR(64) NULL, off_axis_hint VARCHAR(32) NULL,
+ classification_status ENUM('PENDING','COMPLETED','FAILED') NOT NULL DEFAULT 'PENDING', classified_at DATETIME(6) NULL, banned_terms_json JSON NULL, hidden_by_default BOOLEAN NOT NULL DEFAULT FALSE,
+ FOREIGN KEY(feedback_id) REFERENCES feedback(feedback_id) ON DELETE CASCADE
+);
+CREATE TABLE feedback_classification_label (
+ feedback_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, category_id VARCHAR(64) NOT NULL, PRIMARY KEY(feedback_id,axis_id,category_id),
+ FOREIGN KEY(feedback_id) REFERENCES feedback(feedback_id) ON DELETE CASCADE, INDEX ix_feedback_label_axis_category(axis_id,category_id)
 );
 CREATE TABLE settlement (
  settlement_id VARCHAR(64) PRIMARY KEY, brand_id VARCHAR(64) NOT NULL, settlement_month DATE NOT NULL, currency CHAR(3) NOT NULL DEFAULT 'KRW', gross_amount DECIMAL(18,0) NOT NULL, fee_amount DECIMAL(18,0) NOT NULL DEFAULT 0, net_amount DECIMAL(18,0) NOT NULL,

@@ -15,10 +15,13 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api")
 public class FeedbackController {
+    private static final Set<String> FEEDBACK_AXES = Set.of("efficacy", "texture", "scent", "packaging", "value");
     private final JdbcTemplate jdbc;
     public FeedbackController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -28,7 +31,7 @@ public class FeedbackController {
                                             @Valid @RequestBody ReviewRequest req) {
         requireRole(actor, AccountRole.MEMBER);
         String memberId = actor.accountId();
-        purchased(memberId, req.orderItemId());
+        purchasedOrderItem(memberId, req.orderItemId());
         if (count("select count(*) from review where order_item_id=?", req.orderItemId()) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "review already exists");
         String id = UUID.randomUUID().toString();
@@ -50,12 +53,15 @@ public class FeedbackController {
                                               @Valid @RequestBody FeedbackRequest req) {
         requireRole(actor, AccountRole.MEMBER);
         String memberId = actor.accountId();
-        purchased(memberId, req.orderItemId());
-        if (count("select count(*) from feedback where order_item_id=?", req.orderItemId()) > 0)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "feedback already exists");
+        String orderItemId = purchased(memberId, req.productId());
+        String axisId = normalizeAxisValue(req.axisId());
+        if (count("select count(*) from feedback where member_id=? and product_id=? and axis_id=?", memberId, req.productId(), axisId) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "feedback already exists for this product axis");
         String id = UUID.randomUUID().toString();
-        jdbc.update("insert into feedback(feedback_id,order_item_id,body) values(?,?,?)", id, req.orderItemId(), req.body());
-        return Map.of("feedbackId", id, "status", "VISIBLE");
+        jdbc.update("insert into feedback(feedback_id,member_id,product_id,axis_id,order_item_id,body) values(?,?,?,?,?,?)",
+                id, memberId, req.productId(), axisId, orderItemId, req.body());
+        return Map.of("feedbackId", id, "productId", req.productId(), "axisId", axisId,
+                "status", "VISIBLE", "classificationStatus", "PENDING");
     }
 
     @GetMapping("/seller/feedback")
@@ -64,11 +70,26 @@ public class FeedbackController {
         requireRole(actor, AccountRole.SELLER);
         String sellerId = actor.accountId();
         owns(sellerId, brandId);
-        return jdbc.queryForList("select f.feedback_id feedbackId,f.order_item_id orderItemId,f.body,f.status,f.created_at createdAt " +
-                "from feedback f join order_item oi on oi.order_item_id=f.order_item_id where oi.brand_id=? and f.status='VISIBLE' order by f.created_at desc", brandId);
+        return jdbc.queryForList("select f.feedback_id feedbackId,f.order_item_id orderItemId,f.product_id productId, " +
+                "oi.product_name_snapshot productName,f.member_id authorMemberId, " +
+                "m.skin_type_code authorSkinTypeCode,m.skin_tone_code authorSkinToneCode, " +
+                "m.hair_color_code authorHairColorCode,m.eye_color_code authorEyeColorCode, " +
+                "f.axis_id axisId,f.body,f.status,f.created_at createdAt, " +
+                "'PENDING' classificationStatus,false hiddenByDefault " +
+                "from feedback f join order_item oi on oi.order_item_id=f.order_item_id " +
+                "left join member m on m.member_id=f.member_id " +
+                "where oi.brand_id=? and f.status='VISIBLE' order by f.created_at desc", brandId);
     }
 
-    private void purchased(String memberId, String itemId) {
+    private String purchased(String memberId, String productId) {
+        List<String> itemIds = jdbc.query("select oi.order_item_id from order_item oi join shop_order o on o.order_id=oi.order_id " +
+                        "where oi.product_id=? and o.member_id=? and o.status='PAID' order by o.paid_at desc",
+                (rs, rowNum) -> rs.getString("order_item_id"), productId, memberId);
+        if (itemIds.isEmpty())
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "paid purchase required");
+        return itemIds.get(0);
+    }
+    private void purchasedOrderItem(String memberId, String itemId) {
         if (count("select count(*) from order_item oi join shop_order o on o.order_id=oi.order_id where oi.order_item_id=? and o.member_id=? and o.status='PAID'", itemId, memberId) == 0)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "paid purchase required");
     }
@@ -77,7 +98,13 @@ public class FeedbackController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand access denied");
     }
     private int count(String sql, Object... args) { return jdbc.queryForObject(sql, Integer.class, args); }
+    static String normalizeAxisValue(String value) {
+        String axis = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        if (!FEEDBACK_AXES.contains(axis))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported feedback axis");
+        return axis;
+    }
     private void requireRole(ShopPrincipal actor, AccountRole expected) { if (actor == null || actor.role() != expected) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "required role: " + expected); }
     public record ReviewRequest(@NotBlank String orderItemId, @Min(1) @Max(5) int rating, Boolean isRecommended, String title, String body) {}
-    public record FeedbackRequest(@NotBlank String orderItemId, @NotBlank String body) {}
+    public record FeedbackRequest(@NotBlank String productId, @NotBlank String axisId, @NotBlank String body) {}
 }
