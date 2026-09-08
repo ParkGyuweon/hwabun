@@ -38,6 +38,9 @@ frontend/.image-cache/
 # 생성기 산출물 — 커밋하지 않는다
 simulator/generator/*.jsonl
 
+# Shop Backend 로컬 데이터 덤프 — 저장소에 커밋하지 않는다
+shop_backend/*dump*.sql
+
 # LLM 에이전트가 수집한 행동 로그 (실행할 때마다 새로 생긴다)
 simulator/agents/data/
 simulator/agents/.cache/

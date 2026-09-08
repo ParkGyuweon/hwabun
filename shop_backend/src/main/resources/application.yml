@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: shop-backend
+  datasource:
+    url: ${SHOP_BACKEND_MYSQL_URL:jdbc:mysql://localhost:13306/shop_backend?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul}
+    username: ${SHOP_BACKEND_MYSQL_USER:shop_backend}
+    password: ${SHOP_BACKEND_MYSQL_PASSWORD:shop_backend_dev}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: ${SERVER_PORT:8090}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
