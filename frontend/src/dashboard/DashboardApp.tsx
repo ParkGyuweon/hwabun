@@ -13,6 +13,8 @@ import { MotifLine } from './components';
 import { DEFAULT_STOREFRONT, describeStorefront, loadStorefront, saveStorefront } from '../lib/storefront';
 import type { StorefrontPrefs } from '../lib/storefront';
 import { DEMO_BRAND } from '../mocks/products';
+import { useAuth } from '../hooks/useAuth';
+import { logout } from '../lib/auth';
 
 type ScreenKey =
   | 'overview'
@@ -68,6 +70,8 @@ const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: strin
  * 그 값은 같은 브라우저의 쇼핑몰(index.html)에 바로 반영된다. 사이드바 "쇼핑몰 설정" 으로 다시 고칠 수 있다.
  */
 export default function DashboardApp() {
+  /** main.tsx 의 AuthGate 를 지나 왔으므로 null 이 아니다. 만료되면 게이트가 다시 로그인으로 바꾼다 */
+  const seller = useAuth('SELLER');
   const [storefront, setStorefront] = useState<StorefrontPrefs | null>(() => loadStorefront());
   const [editing, setEditing] = useState(false);
   const [screen, setScreen] = useState<ScreenKey>('overview');
@@ -137,6 +141,16 @@ export default function DashboardApp() {
         </div>
 
         <div className="sidebar__foot">
+          {seller ? (
+            <div className="sidebar__account">
+              <span className="sidebar__account-name" title={seller.email}>
+                {seller.name}
+              </span>
+              <button type="button" className="sidebar__settings" onClick={() => logout('SELLER')}>
+                로그아웃
+              </button>
+            </div>
+          ) : null}
           <p>
             v0.2 · 이벤트 36종 기준
             <br />

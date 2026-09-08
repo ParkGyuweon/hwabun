@@ -1,3 +1,4 @@
+import AccountMenu from '../auth/AccountMenu';
 import PersonaSwitcher from './PersonaSwitcher';
 import type { PersonaProfile } from '../../types/persona';
 
@@ -20,7 +21,8 @@ interface SiteHeaderProps {
 /**
  * BLOOM 상단 바.
  *
- * 계정 자리에는 접속 중인 페르소나를 올린다. 이 사이트에서는 페르소나가 곧 사용자다.
+ * 계정 자리에는 둘이 나란히 있다. 페르소나는 행동 로그의 주체(시뮬레이션 신원)이고,
+ * 로그인 계정(AccountMenu)은 백엔드 주문·리뷰·피드백의 주체다. 로그인 없이도 둘러볼 수 있다.
  *
  * 카테고리 메뉴는 **데이터에 실제로 있는 값만** 건다.
  * 처음에는 Makeup·Hair 같은 항목을 span 으로 두었는데 두 가지 문제가 있었다.
@@ -74,6 +76,7 @@ export default function SiteHeader({
             <span className="site-header__basket-count">{cartCount}</span>
           </button>
           <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+          <AccountMenu />
         </div>
       </div>
     </header>
