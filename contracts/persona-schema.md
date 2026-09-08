@@ -1,8 +1,8 @@
 # Persona Schema 계약
 
 작성일: 2026-09-02
-최종 검증: 2026-09-03, 표본 평탄화 위반 0건 · 평가 정본 대조 PC 9,900명 PA 100명 0건
-상태: Draft, §7.1 확정·정본 정렬 완료. Event·Run 축 E2E 검증 대기
+최종 검증: 2026-09-08, holdout A/B 계약 편입 · 전역 ID/집단 교집합 검증
+상태: Draft, §2.1 holdout 계약 및 §7.1 정본 정렬 완료. Event·Run 축 E2E 검증 대기
 설계 설명: [`persona-design.md`](../docs/analytics/persona-design.md)
 
 ## 1. 범위와 우선순위
@@ -23,8 +23,18 @@ Synthetic Event runtime metadata는 [`event-schema.json`](./event-schema.json), 
 | --- | --- | --- |
 | Agent 표본 100명 | `PA00001`~`PA00100` | `agent_sample` |
 | Batch 표본 9,900명 | `PC00001`~`PC09900` | `batch_sample` |
+| Holdout A 2,000명 | `PH00001`~`PH02000` | `holdout_sample` |
+| Holdout B 2,000명 | `PH02001`~`PH04000` | `holdout_sample` |
 
-분석에서 prefix를 파싱하지 않는다. 표본 구분은 `persona_source`를 사용한다.
+분석에서 prefix나 ID 대역을 파싱하지 않는다. 생성 표본 구분은 `persona_source`, 평가
+집단 구분은 `evaluation_cohort`를 사용한다. `evaluation_cohort` 허용값은 현재
+`holdout_a`, `holdout_b`이며 PA·PC에서는 NULL이다.
+
+원본 `personas_holdout_a.json`, `personas_holdout_b.json`은 기존 평가 재현성을 위해 둘 다
+`PH00001`~`PH02000`을 유지한다. B의 ID를 직접 바꾸면 `persona_id` 기반 결정적 노이즈와
+기존 평가 metadata 조인이 달라진다. 따라서 `build_persona_tables.py`가 계약/Dimension
+적재 시 B에 2,000을 더한다. 향후 `holdout_c`는 같은 규칙으로
+`PH04001`~`PH06000`을 사용한다. 원본 파일 ID는 분석·집단 판정에 사용하지 않는다.
 
 ### 2.2 상품 ID
 
@@ -37,9 +47,9 @@ Synthetic Event runtime metadata는 [`event-schema.json`](./event-schema.json), 
 
 ### 2.3 Persona와 Runtime Context 분리
 
-`persona_id`, `author_id`, `user_id`, `persona_source`, `profile_version`은 Persona에
-귀속된다. `scenario_id`, `simulation_run_id`, `generator_type`은 실행에 귀속되며 Persona
-고유 속성으로 저장하지 않는다.
+`persona_id`, `author_id`, `user_id`, `persona_source`, `evaluation_cohort`,
+`profile_version`은 Persona에 귀속된다. `scenario_id`, `simulation_run_id`,
+`generator_type`은 실행에 귀속되며 Persona 고유 속성으로 저장하지 않는다.
 
 Synthetic Event에서는 `actor_type='synthetic'`, `user_id=persona_id`로 파생하고
 `scenario_id`, `simulation_run_id`, `generator_type`을 Event `properties`에 넣는다.
@@ -88,7 +98,8 @@ profile_scope = full
 | `persona_id` | string | N | Unique key |
 | `author_id` | string | Y | 원천 리뷰어 ID, 외부 노출 금지 |
 | `user_id` | string | N | Synthetic 분석 ID, 기본값 `persona_id` |
-| `persona_source` | string | N | `agent_sample`, `batch_sample` |
+| `persona_source` | string | N | `agent_sample`, `batch_sample`, `holdout_sample` |
+| `evaluation_cohort` | string | Y | 홀드아웃만 `holdout_a`, `holdout_b`; 그 외 NULL |
 | `skin_type` | string | N | §3 enum |
 | `skin_tone` | string | N | §3 enum |
 | `eye_color` | string | Y | §3 enum |
@@ -290,7 +301,7 @@ grain = persona_id + segment_type + segment_value
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `persona_id` | string | N | Persona ID |
-| `segment_type` | string | N | `skin_type`, `skin_tone`, `hair_color`, `eye_color`, `review_bucket`, `persona_source` |
+| `segment_type` | string | N | `skin_type`, `skin_tone`, `hair_color`, `eye_color`, `review_bucket`, `persona_source`, `evaluation_cohort` |
 | `segment_value` | string | N | Segment 값 |
 | `valid_from` | date | Y | 적용 시작일 |
 | `valid_to` | date | Y | 적용 종료일 |
@@ -332,6 +343,7 @@ fallback 값은 `recommendation-io-spec.md`를 따르며 현재 계약값은 0.5
 | `generator_type` | `properties.generator_type` |
 | `canonical_product_id` | top-level `product_id` |
 | `persona_source` | Event에 미포함, Dimension Join |
+| `evaluation_cohort` | Event에 미포함, Persona Dimension Join |
 
 Seed Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}` 형식을
 사용하고 `properties.seeded=true`를 함께 기록한다.
@@ -350,7 +362,7 @@ grain = simulation_run_id
 | `scenario_id` | string | N | Scenario ID |
 | `scenario_name` | string | Y | 표시명 |
 | `generator_type` | string | N | `python_batch`, `agent_llm` |
-| `persona_source` | string | N | `batch_sample`, `agent_sample` |
+| `persona_source` | string | N | `batch_sample`, `agent_sample`, `holdout_sample` |
 | `target_persona_count` | int | N | 실행 대상 수 |
 | `seed` | int | Y | 난수 seed |
 | `started_at` | timestamp | Y | 시작 시각 |
@@ -383,14 +395,16 @@ grain = scenario_id
 
 ## 11. 검증 조건
 
-1. PA·PC 전체에서 `persona_id`가 유일하다.
+1. PA·PC·Holdout A/B 전체에서 계약/Dimension `persona_id`가 유일하다. Holdout A/B의
+   ID 교집합은 0건이어야 한다.
 2. `skin_type`, `skin_tone`, `stratum`, `review_bucket`이 존재한다.
 3. 사용자 속성이 §3 enum에 속한다.
 4. Persona 모집단은 `n_reviews >= 3`, `n_products >= 3`, `n_positive >= 3`이다.
 5. `review_bucket`은 `n_positive=3 → 3`, `4 → 4`, `5~6 → 5-6`, `7 이상 → 7+`다.
 6. `canonical_product_id`가 Product Feature에 존재한다.
 7. Holdout과 eval Profile에서 target 리뷰와 target 상품이 seed 입력에 포함되지 않는다.
-8. `bridge_persona_segment.segment_type`은 허용 6종만 사용한다.
+8. `bridge_persona_segment.segment_type`은 허용 7종만 사용한다. 집단 판정은 ID 대역이
+   아니라 `evaluation_cohort`를 사용한다.
 9. 한 Simulation Run 안에서 `persona_source`, `generator_type`, `scenario_id`가 일관된다.
 10. PA와 PC Event가 각각 `agent_llm`, `python_batch`를 사용한다.
 11. `persona_holdout_target`의 `target_label`이 모두 `positive`이고
@@ -398,6 +412,9 @@ grain = scenario_id
 12. seed 리뷰의 `submission_time`이 target보다 나중이 아니다. target 이후 리뷰는
     `evaluation_role='excluded'`다.
 13. `latest_review_label`이 §7.1 정렬 기준 첫 리뷰의 극성과 일치한다.
+14. `holdout_sample`에는 `evaluation_cohort`가 반드시 존재하고, 다른 표본에서는 NULL이다.
+15. CF 동시발생 생성 시 모든 `personas_*.json`의 `author_id`를 제외한다. 새 Holdout
+    파일을 추가하면 해당 author_id가 제외 집합에 포함되는지 회귀 테스트한다.
 
 ## 12. 추천 행동 상태 연결
 
