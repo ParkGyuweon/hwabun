@@ -11,7 +11,7 @@ import './storefront-preview.css';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
-    {/* 브랜드 담당자(SELLER) 로그인 — shop_backend /api/auth */}
+    {/* 브랜드 담당자(SELLER) 로그인 · shop_backend /api/auth */}
     <AuthGate
       role="SELLER"
       product={{ mark: '/brand/hwabun-mark.png', name: 'HWABUN', tagline: '참여 브랜드 담당자 대시보드' }}

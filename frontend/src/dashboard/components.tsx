@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
  * 인라인 SVG 와 div 로 충분하고, 흑백 단색이라 라이브러리 테마 싸움도 없다.
  */
 
-/** 값의 출처. 모의값은 반드시 표시한다 — 검토자가 진짜 수치로 착각하면 안 된다 */
+/** 값의 출처. 모의값은 반드시 표시한다. 검토자가 진짜 수치로 착각하면 안 된다 */
 export function SourceBadge({ kind }: { kind: 'real' | 'mock' }) {
   return (
     <span className={`badge badge--${kind}`}>{kind === 'real' ? '실측' : '모의'}</span>
@@ -99,7 +99,7 @@ export function Kpi({
  * 막대 길이로는 차이를 못 읽는다. 길게 늘린 막대는 가로 공간만 먹고 답을 안 준다.
  * 그래서 **이름과 숫자를 앞세우고 막대는 짧게 옆에 둔다.**
  *
- * 이름도 둘로 나눈다. "브랜드 — 상품명" 을 한 줄에 붙이면 폭이 모자라 상품명이 잘리는데,
+ * 이름도 둘로 나눈다. "브랜드 · 상품명" 을 한 줄에 붙이면 폭이 모자라 상품명이 잘리는데,
  * 정작 알아야 할 것이 상품명이다. 상품명을 위에 크게, 브랜드를 아래 작게 둔다.
  */
 export function BarList({
@@ -112,26 +112,67 @@ export function BarList({
   /** 순위 번호를 붙인다. TOP N 목록에만 쓰고 분포 목록에는 쓰지 않는다 */
   rank?: boolean;
 }) {
-  const max = Math.max(1, ...items.map((item) => item.value));
+  const values = items.map((item) => item.value);
+  const max = Math.max(1, ...values);
+  const min = Math.min(...values);
+  const mean = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
+  /*
+   * 차이가 작은데 막대만 길면 시각적으로 아무 정보가 없다 (명세 §3-1).
+   *   spread < 15%  → 막대를 그리지 않고 숫자만 (flat)
+   *   15~40%        → 점 + 평균 기준선 (dots). 기준선에서 얼마나 떨어졌는지가 보인다
+   *   ≥ 40%         → 막대. 축은 0 부터
+   */
+  const spread = max > 0 ? (max - min) / max : 0;
+  const mode: 'flat' | 'dots' | 'bars' =
+    items.length < 2 ? 'bars' : spread < 0.15 ? 'flat' : spread < 0.4 ? 'dots' : 'bars';
+  const fmt = (v: number) => (format ? format(v) : v.toLocaleString('ko-KR'));
+  // dots 좌표: 축을 [min·0.9, max·1.05] 로 잡되, 축을 잘랐다는 것을 기준선과 주석으로 드러낸다
+  const lo = min * 0.9;
+  const hi = max * 1.05;
+  const pos = (v: number) => `${((v - lo) / Math.max(1e-9, hi - lo)) * 100}%`;
+
   return (
-    <ul className={`bars${rank ? ' bars--rank' : ''}`}>
-      {items.map((item, index) => (
-        <li key={item.label} className="bars__row">
-          {rank ? <span className="bars__rank">{index + 1}</span> : null}
-          <span className="bars__name">
-            <b title={item.label}>{item.label}</b>
-            {item.sub ? <small title={item.sub}>{item.sub}</small> : null}
-          </span>
-          <span className="bars__track" aria-hidden="true">
-            <span className="bars__fill" style={{ width: `${(item.value / max) * 100}%` }} />
-          </span>
-          <span className="bars__value">
-            {format ? format(item.value) : item.value.toLocaleString('ko-KR')}
-            {item.hint ? <em>{item.hint}</em> : null}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className={`bars bars--${mode}${rank ? ' bars--rank' : ''}`}>
+        {items.map((item, index) => (
+          <li key={item.label} className="bars__row">
+            {rank ? <span className="bars__rank">{index + 1}</span> : null}
+            <span className="bars__name">
+              <b title={item.label}>{item.label}</b>
+              {item.sub ? <small title={item.sub}>{item.sub}</small> : null}
+            </span>
+            {mode === 'bars' ? (
+              <span className="bars__track" aria-hidden="true">
+                <span className="bars__fill" style={{ width: `${(item.value / max) * 100}%` }} />
+              </span>
+            ) : null}
+            {mode === 'dots' ? (
+              <span className="bars__track" aria-hidden="true" title={`평균 ${fmt(mean)}`}>
+                <span className="bars__baseline" style={{ left: pos(mean) }} />
+                <span
+                  className={`bars__dot${item.value < mean ? ' is-below' : ''}`}
+                  style={{ left: pos(item.value) }}
+                />
+              </span>
+            ) : null}
+            <span className="bars__value">
+              {fmt(item.value)}
+              {item.hint ? <em>{item.hint}</em> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {mode === 'flat' ? (
+        <p className="bars__flat-note">
+          항목 간 차이가 {Math.round(spread * 100)}%로 작아 막대를 생략했습니다. 숫자로 비교하세요.
+        </p>
+      ) : null}
+      {mode === 'dots' ? (
+        <p className="bars__flat-note">
+          세로선은 평균 {fmt(mean)}. 점이 왼쪽이면 평균 아래입니다. 축은 0이 아니라 값 범위입니다.
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -163,7 +204,7 @@ export function Funnel({ steps }: { steps: Array<{ label: string; value: number;
 }
 
 /**
- * HWABUN 그래픽 모티프 — "Data Point & Connection".
+ * HWABUN 그래픽 모티프 · "Data Point & Connection".
  *
  * 브랜딩 가이드의 핵심 모티프다. 채운 원은 있음, 빈 원은 없음(또는 아직)을 뜻하고,
  * 실선은 연결된 것, 점선은 아직 이어지지 않은 것이다. 색은 팔레트 토큰을 그대로 써서
@@ -213,7 +254,8 @@ export function LineChart({
   const width = 640;
   const pad = 6;
   const max = Math.max(1, ...points.map((p) => p.value));
-  const min = Math.min(...points.map((p) => p.value), max * 0.6);
+  // 축은 0 부터. 아래를 잘라 내면 작은 흔들림이 큰 변화처럼 보인다 (명세 §3-1)
+  const min = 0;
   const x = (i: number) => pad + (i / Math.max(1, points.length - 1)) * (width - pad * 2);
   const y = (v: number) => height - pad - ((v - min) / Math.max(1, max - min)) * (height - pad * 2);
   const path = points.map((p, i) => `${x(i)},${y(p.value)}`).join(' ');

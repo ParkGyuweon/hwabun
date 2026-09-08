@@ -27,7 +27,7 @@ export default function ReviewsScreen({
             <option value="all">전체 상품</option>
             {products.map((p) => (
               <option key={p.product_id} value={p.product_id}>
-                {p.product_name} — {p.brand_name}
+                {p.product_name} · {p.brand_name}
               </option>
             ))}
           </select>
@@ -35,9 +35,7 @@ export default function ReviewsScreen({
         <p className="scope__meta">
           리뷰 {fmt.int(stats.sampleSize)}건 · 본문 있는 리뷰 {fmt.int(stats.withText)}건
         </p>
-        <p className="scope__note">
-          상품당 리뷰가 10건이라 개별 상품 수치는 표본이 작다. 비율만 보지 말고 건수를 함께 볼 것.
-        </p>
+        <p className="scope__note">상품당 리뷰 10건. 건수를 함께 볼 것.</p>
       </div>
 
       <div className="grid grid--kpi">
@@ -79,10 +77,7 @@ export default function ReviewsScreen({
               hint: fmt.pct(f.share, 0),
             }))}
           />
-          <p className="note">
-            영문 리뷰 원문에서 표현 패턴을 센 값이다. 형태소 분석이 아니라 근사치이며,
-            정식 평가 요소 추출은 리뷰 분석 파이프라인(범위: 데이터)에서 온다.
-          </p>
+          <p className="note">영문 표현 패턴 근사치</p>
         </Panel>
       </div>
 
@@ -101,7 +96,7 @@ export default function ReviewsScreen({
               {troubleRanking.slice(0, 10).map((row) => (
                 <tr key={row.product.product_id}>
                   <td>
-                    {row.product.brand_name} — {row.product.product_name}
+                    {row.product.brand_name} · {row.product.product_name}
                   </td>
                   <td>{fmt.pct(row.irritationRate, 0)}</td>
                   <td>{fmt.pct(row.troubleRate, 0)}</td>
@@ -111,10 +106,6 @@ export default function ReviewsScreen({
             </tbody>
           </table>
         </div>
-        <p className="note">
-          "트러블 리뷰 확인 후 이탈률" 같은 행동 교차 지표는 수집 연결 후 이 자리에 붙는다
-          (리뷰 열람 content_kind=user_review × exit_summary 조합).
-        </p>
       </Panel>
     </div>
   );

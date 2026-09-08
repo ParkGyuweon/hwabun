@@ -30,16 +30,11 @@ export default function BehaviorScreen() {
           <Funnel
             steps={intentFunnel.map((s) => ({ label: s.ko, note: s.label, value: s.value }))}
           />
-          <p className="note">
-            모든 이벤트에 발생 시점의 의미(intent)가 실려 온다. 단계는 이벤트 이름이 아니라
-            이 값으로 센다. friction(마찰)은 단계가 아니라 어느 구간에서든 새는 구멍이라
-            아래에 따로 둔다.
-          </p>
         </Panel>
 
         <Panel title="표준 퍼널 · 단계별 이탈" source="mock" aside="GA4 기준 단계">
           <Funnel steps={standardFunnel} />
-          <p className="note">구매는 이 테스트 쇼핑몰의 범위 밖이라 장바구니가 마지막 단계다.</p>
+          <p className="note">구매 이벤트 없음. 장바구니가 마지막 단계.</p>
         </Panel>
       </div>
 
@@ -47,25 +42,25 @@ export default function BehaviorScreen() {
         <Kpi
           label="rage_click"
           value={fmt.int(frictionCounts.rage_click)}
-          sub="같은 자리 연타 — 반응 없는 UI"
+          sub="같은 자리 연타 · 반응 없는 UI"
           source="mock"
         />
         {/*
           dead_click 은 실사용자 전용이다. 프론트 훅은 정상 동작하지만
-          가상 사용자가 이 행동을 만들지 못한다 — 러너는 유효한 요소만
+          가상 사용자가 이 행동을 만들지 못한다. 러너는 유효한 요소만
           클릭하고, 코드 생성기에는 이 행동이 없다. 합성 로그만 도는 동안
           이 값은 항상 0 이므로, 그 0 이 "마찰 없음" 으로 읽히면 안 된다.
         */}
         <Kpi
           label="dead_click"
           value={fmt.int(frictionCounts.dead_click)}
-          sub="눌리지 않는 곳 클릭 — 실사용자 전용"
+          sub="눌리지 않는 곳 클릭 · 실사용자 전용"
           source="mock"
         />
         <Kpi
           label="scroll_backtrack"
           value={fmt.int(frictionCounts.scroll_backtrack)}
-          sub="되돌아 읽기 — 비교·재확인"
+          sub="되돌아 읽기 · 비교·재확인"
           source="mock"
         />
         <Kpi
@@ -77,7 +72,7 @@ export default function BehaviorScreen() {
       </div>
 
       <Panel
-        title="마찰 위치 — 어디서 막히는가"
+        title="마찰 위치 · 어디서 막히는가"
         source="mock"
         aside="좌절 신호는 상품이 아니라 화면의 문제일 수 있다"
       >
@@ -103,12 +98,7 @@ export default function BehaviorScreen() {
             ))}
           </tbody>
         </table>
-        <p className="note">
-          위치가 없는 좌절 건수는 할 일이 되지 못한다. dead_click 이 상품 이미지에 몰리면
-          확대 기능을 넣으면 되고, scroll_backtrack 이 성분에 몰리면 성분 설명을 쉽게
-          고치면 된다. 이 신호들은 상품 선호 벡터에 넣지 않는다 — UI 품질과 상품 선호는
-          다른 축이다.
-        </p>
+        <p className="note">좌절이 몰린 위치가 할 일이다.</p>
       </Panel>
 
       <div className="grid grid--2">
@@ -117,10 +107,6 @@ export default function BehaviorScreen() {
             items={eventVolumes.map((e) => ({ label: e.name, value: e.count }))}
             format={fmt.compact}
           />
-          <p className="note">
-            section_dwell 이 압도적인 것은 실측과 같다 — 섹션을 벗어날 때마다 구간 체류가
-            한 건씩 나간다. 집계 시 같은 섹션은 합산해야 한다 (최댓값이 아니다).
-          </p>
         </Panel>
 
         <Panel title="피부 타입 세그먼트" aside="분포는 리뷰 실측 · 전환율은 모의">
@@ -132,10 +118,6 @@ export default function BehaviorScreen() {
             }))}
             format={(v) => `${v.toFixed(1)}%`}
           />
-          <p className="note">
-            같은 콘텐츠라도 피부 타입에 따라 머무는 곳이 다르면 그것이 인사이트다.
-            콘텐츠별 체류 × 세그먼트 교차는 수집 연결 후 제공한다.
-          </p>
         </Panel>
       </div>
     </div>

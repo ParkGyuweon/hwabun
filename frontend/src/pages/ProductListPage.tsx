@@ -9,6 +9,7 @@ import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
+import { labelKo } from '../lib/formLabels';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
@@ -415,7 +416,7 @@ export default function ProductListPage({
                 <option value="all">전체</option>
                 {concerns.map(([name, count]) => (
                   <option key={name} value={name}>
-                    {name} ({count})
+                    {labelKo(name)} ({count})
                   </option>
                 ))}
               </select>
@@ -438,6 +439,10 @@ export default function ProductListPage({
             </div>
           </div>
 
+          <div className="list__right">
+            <p className="list__count" aria-live="polite">
+              {filtered.length}개 상품
+            </p>
           <label className="list__sort">
             정렬
             <select
@@ -456,11 +461,8 @@ export default function ProductListPage({
               ))}
             </select>
           </label>
+          </div>
         </div>
-
-        <p className="list__count" aria-live="polite">
-          {filtered.length}개 상품
-        </p>
 
         {visible.length === 0 ? (
           <EmptyState message="조건에 맞는 상품이 없습니다. 필터를 넓혀 보세요." />

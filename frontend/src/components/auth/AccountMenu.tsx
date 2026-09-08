@@ -53,11 +53,14 @@ export default function AccountMenu() {
             <button type="button" className="auth-modal__close" aria-label="닫기" onClick={() => setOpen(false)}>
               ×
             </button>
-            <AuthForm
-              role="MEMBER"
-              lead="주문·리뷰·사장님께 보내는 피드백에 쓰는 계정입니다."
-              onSuccess={() => setOpen(false)}
-            />
+            <AuthForm role="MEMBER" onSuccess={() => setOpen(false)} />
+            {/* 브랜드 담당자는 다른 진입점(dashboard.html, SELLER 세션). 같은 모달에 모드를 섞지 않는다 */}
+            <p className="auth__hint auth__hint--alt">
+              브랜드 담당자이신가요?{' '}
+              <a className="auth__link" href="/dashboard.html">
+                대시보드 로그인
+              </a>
+            </p>
           </div>
         </div>
       ) : null}

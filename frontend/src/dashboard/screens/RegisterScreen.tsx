@@ -20,7 +20,7 @@ const DRAFT_DEBOUNCE_MS = 250;
 const MAX_IMAGE_BYTES = 400 * 1024;
 
 /**
- * 상품 등록 — 왼쪽은 계약 `product-registration-spec.md` 의 입력 필드, 오른쪽은
+ * 상품 등록 · 왼쪽은 계약 `product-registration-spec.md` 의 입력 필드, 오른쪽은
  * **실제 쇼핑몰 상세 페이지** 를 iframe 으로 띄운 미리보기다.
  *
  * 폼이 바뀌면 초안을 localStorage 에 쓰고, 쇼핑몰(`/?product=DRAFT&preview=1`)이 storage
@@ -107,7 +107,7 @@ export default function RegisterScreen() {
               <div className="reg-field">
                 <label className="reg-label" htmlFor="reg-price">가격 (원) *</label>
                 <input id="reg-price" className="reg-input" type="number" min={0} step={100} value={form.price_krw} onChange={(e) => set('price_krw', e.target.value === '' ? '' : Number(e.target.value))} placeholder="32000" />
-                <p className="reg-hint">고객 화면에는 ${form.price_krw === '' ? '—' : (Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 보입니다 (고정 환율 {KRW_PER_USD}원, 계약 §4.1)</p>
+                <p className="reg-hint">고객 화면에는 ${form.price_krw === '' ? '-' : (Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 보입니다 (고정 환율 {KRW_PER_USD}원, 계약 §4.1)</p>
               </div>
             </div>
 
