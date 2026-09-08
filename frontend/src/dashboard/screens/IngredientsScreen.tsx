@@ -1,14 +1,26 @@
-import { BarList, Kpi, Panel } from '../components';
+import { useMemo } from 'react';
+import { Panel } from '../components';
 import {
+  MINOR_WEIGHT,
   catalogProducts,
   cautionPrevalence,
   fmt,
+  ingredientGap,
   ingredientStats,
-  productMetrics,
+  ingredientWeights,
   products,
 } from '../lib/metrics';
+import { labelKo } from '../../lib/formLabels';
 
-/** 성분 구성과 성분 정보에 대한 사용자 관심 */
+const ko = (name: string) => {
+  const k = labelKo(name);
+  return k === name ? name : `${k}`;
+};
+
+/**
+ * 성분. 결론(갭) → 갭 표(I1) → 내 상품 성분 띠(I2) → 주의 성분(I3) 순.
+ * 관심(긁기·체류)은 수집 연결 전 모의, 보유·위치가중은 전성분 실측.
+ */
 export default function IngredientsScreen({
   productId,
   onProductChange,
@@ -18,101 +30,163 @@ export default function IngredientsScreen({
 }) {
   const product = products.find((p) => p.product_id === productId) ?? products[0];
   const stats = ingredientStats(product);
-  const behavior = productMetrics.find((m) => m.product.product_id === product.product_id);
+  const weights = useMemo(() => ingredientWeights(product), [product]);
+
+  const gaps = ingredientGap.filter((r) => r.gap);
+  const top10 = ingredientGap.filter((r) => r.rank <= 10);
+  const ownedTop = top10.filter((r) => r.owned.length > 0).length;
+
+  const band = [...weights.entries()]
+    .map(([name, weight]) => ({ name, weight, tagged: weight === 1 }))
+    .sort((a, b) => b.weight - a.weight);
+  const minorTagged = band.filter((b) => !b.tagged && b.weight <= MINOR_WEIGHT);
 
   return (
     <div className="stack">
-      <div className="scope">
-        <label className="scope__field">
-          <span className="scope__label">상품 선택</span>
-          <select
-            value={product.product_id}
-            onChange={(e) => onProductChange(e.target.value)}
-            aria-label="상품 선택"
-          >
-            {products.map((p) => (
-              <option key={p.product_id} value={p.product_id}>
-                {p.product_name} — {p.brand_name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="scope__meta">성분 정보는 데이터셋 실측</p>
-      </div>
+      <section className="verdict">
+        <p className="verdict__eyebrow">찾는데 없는 성분</p>
+        <h2 className="verdict__headline">
+          {gaps.length === 0
+            ? '관심 상위 10 성분을 모두 갖고 있습니다'
+            : gaps
+                .slice(0, 3)
+                .map((g) => ko(g.name))
+                .join(' · ')}
+        </h2>
+        <p className="verdict__reason">
+          관심 상위 10 중 보유 {ownedTop} · 미보유 {10 - ownedTop}
+          {gaps.length > 3 ? ` · 그 외 ${gaps.length - 3}종` : ''}
+        </p>
+        {gaps.length > 0 ? (
+          <p className="verdict__action">제품·처방: {ko(gaps[0].name)} 라인 검토 · 상세페이지: 대체 성분 설명</p>
+        ) : null}
+        <p className="verdict__sample">관심은 모의 · 보유는 전성분 실측</p>
+      </section>
 
-      <div className="grid grid--kpi">
-        <Kpi label="전체 성분 수" value={fmt.int(stats.totalCount)} source="real" />
-        <Kpi
-          label="확인 필요 성분"
-          value={`${stats.cautionCount}종`}
-          sub="민감성 피부 체크 항목"
-          source="real"
-        />
-        <Kpi
-          label="성분 열람률"
-          value={behavior ? fmt.pct(behavior.ingredientViewRate, 0) : '—'}
-          sub="상세 조회 대비"
-          source="mock"
-        />
-        <Kpi
-          label="성분 텍스트 드래그"
-          value={behavior ? fmt.int(Math.round(behavior.detailViews * 0.06)) : '—'}
-          sub="text_selection · 검색해 본 성분"
-          source="mock"
-        />
-      </div>
+      <Panel title="성분 갭 표" source="mock" aside="관심 순 30종 · 갭 행 위">
+        <div className="table-wrap">
+          <table className="fbx-table gap-table">
+            <thead>
+              <tr>
+                <th className="is-num">관심</th>
+                <th>성분</th>
+                <th className="is-num">긁기</th>
+                <th className="is-num">체류</th>
+                <th>내 라인</th>
+                <th style={{ width: '18%' }}>함량 위치</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ingredientGap.map((r) => (
+                <tr key={r.name} className={r.gap ? 'is-gap' : r.minor ? 'is-minor' : ''}>
+                  <td className="is-num">{r.rank}</td>
+                  <td>
+                    <span className="fbx-table__name">{ko(r.name)}</span>
+                    {ko(r.name) !== r.name ? <span className="fbx-table__desc">{r.name}</span> : null}
+                  </td>
+                  <td className="is-num">{fmt.int(r.scrapeCount)}</td>
+                  <td className="is-num">{(r.dwellMs / 1000).toFixed(1)}초</td>
+                  <td>
+                    {r.gap ? (
+                      <span className="gap-flag gap-flag--gap">갭</span>
+                    ) : r.owned.length === 0 ? (
+                      <span className="gap-flag">없음</span>
+                    ) : (
+                      <span title={r.owned.map((o) => o.product.product_name).join(', ')}>
+                        {r.owned.length}개{r.minor ? <span className="gap-flag gap-flag--minor">미량</span> : null}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {r.owned.length > 0 ? (
+                      <span className="fbx-table__track">
+                        <span
+                          className="fbx-table__bar"
+                          style={{
+                            width: `${r.maxWeight * 100}%`,
+                            ['--seg' as string]: r.minor ? 'var(--accent)' : 'var(--brand)',
+                          }}
+                        />
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
 
       <div className="grid grid--2">
-        <Panel
-          title={`확인 필요 성분 · ${product.product_name}`}
-          source="real"
-          aside="위해성 판정이 아니라 민감성 피부의 일반적 확인 항목"
-        >
-          <div className="chips">
-            {stats.cautions.map((c) => (
-              <span key={c.label} className={`chip${c.hit ? ' chip--hit' : ''}`}>
-                {c.hit ? '● ' : '○ '}
-                {c.label}
-              </span>
-            ))}
+        <Panel title="내 상품 성분 띠" source="real" aside="앞쪽일수록 함량 높음">
+          <div className="scope scope--inline">
+            <label className="scope__field">
+              <span className="scope__label">상품</span>
+              <select value={product.product_id} onChange={(e) => onProductChange(e.target.value)} aria-label="상품 선택">
+                {products.map((p) => (
+                  <option key={p.product_id} value={p.product_id}>
+                    {p.product_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="scope__meta">전성분 {fmt.int(stats.totalCount)} · 핵심 성분 {band.length}</p>
           </div>
-          <p className="note">
-            ● 포함 / ○ 미검출. 전성분 문자열 패턴 매칭 결과라 표기 변형은 놓칠 수 있다.
-          </p>
+          {band.length === 0 ? (
+            <p className="fbx-empty">핵심 성분 30종 중 검출된 것이 없습니다.</p>
+          ) : (
+            <ul className="band">
+              {band.map((b) => (
+                <li key={b.name} className={`band__row${!b.tagged && b.weight <= MINOR_WEIGHT ? ' is-minor' : ''}`}>
+                  <span className="band__name">
+                    {ko(b.name)}
+                    {b.tagged ? <span className="gap-flag">태그</span> : null}
+                  </span>
+                  <span className="fbx-table__track">
+                    <span
+                      className="fbx-table__bar"
+                      style={{
+                        width: `${b.weight * 100}%`,
+                        ['--seg' as string]: !b.tagged && b.weight <= MINOR_WEIGHT ? 'var(--accent)' : 'var(--brand)',
+                      }}
+                    />
+                  </span>
+                  <span className="band__w">{b.weight.toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {minorTagged.length > 0 ? (
+            <p className="note">미량: {minorTagged.map((m) => ko(m.name)).join(' · ')} · 강조 문구에 쓰면 실증 부담</p>
+          ) : null}
         </Panel>
 
-        <Panel title="확인 필요 성분 유형별 포함 상품 수" source="real" aside="전체 200개 기준">
-          <BarList
-            items={cautionPrevalence.map((c) => ({
-              label: c.label,
-              value: c.count,
-              hint: fmt.pct(c.count / catalogProducts.length, 0),
-            }))}
-          />
+        <Panel title="주의 성분" source="real" aside={`${product.product_name} · 플랫폼 ${catalogProducts.length}개 대비`}>
+          <table className="fbx-table">
+            <thead>
+              <tr>
+                <th>성분</th>
+                <th>이 상품</th>
+                <th className="is-num">포함 상품</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cautionPrevalence.map((c) => {
+                const hit = stats.cautions.find((x) => x.label === c.label)?.hit ?? false;
+                return (
+                  <tr key={c.label}>
+                    <td>{c.label}</td>
+                    <td>{hit ? <span className="gap-flag gap-flag--minor">포함</span> : <span className="gap-flag">–</span>}</td>
+                    <td className="is-num">
+                      {c.count} <small>({fmt.pct(c.count / catalogProducts.length, 0)})</small>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </Panel>
       </div>
-
-      <Panel title="상품별 성분 관심도 TOP 10" source="mock" aside="성분 열람률 × 상세 조회">
-        <BarList
-          items={[...productMetrics]
-            .sort(
-              (a, b) => b.ingredientViewRate * b.detailViews - a.ingredientViewRate * a.detailViews,
-            )
-            .slice(0, 10)
-            .map((m) => ({
-              label: m.product.product_name,
-              sub: m.product.brand_name,
-              value: Math.round(m.ingredientViewRate * m.detailViews),
-              hint: fmt.pct(m.ingredientViewRate, 0),
-            }))}
-          rank
-          format={fmt.compact}
-        />
-        <p className="note">
-          "성분을 오래 봤는데 전환이 낮은 상품"은 성분 설명이 불안을 해소하지 못한다는
-          신호다. 콘텐츠 체류(content_kind=ingredient_list) × 전환 교차는 수집 연결 후 붙는다.
-        </p>
-      </Panel>
     </div>
   );
 }

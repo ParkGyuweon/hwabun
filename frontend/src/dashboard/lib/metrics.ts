@@ -579,3 +579,93 @@ export const frictionByLocation = [
   { where: '리뷰 더보기', event: 'dead_click', count: 156, meaning: '버튼처럼 보이는 비버튼' },
   { where: '담기 버튼', event: 'hover_dwell', count: 1893, meaning: '평균 2.4초 망설임' },
 ];
+
+/* ---------- ④ 성분 갭 (명세 I1·I2) ---------- */
+
+interface IngredientSource {
+  synonyms: Record<string, string[]>;
+  position_formula: string;
+  position_min: number;
+}
+
+const INGREDIENT_SOURCE = (vocab as unknown as { ingredient_source: IngredientSource }).ingredient_source;
+const POS_MIN = INGREDIENT_SOURCE.position_min ?? 0.1;
+/** 태그 성분이 전성분 앞 30% 안에 없으면 "미량". 명세 I2 */
+export const MINOR_WEIGHT = 0.3;
+
+const splitFull = (p: Product): string[] =>
+  p.ingredients
+    .flatMap((block) => block.split(','))
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+/**
+ * 성분 30종의 위치가중. 전성분에서 처음 나오는 자리로 `max(1 - 위치/전체, 0.1)` (어휘집 position_formula).
+ * 태그(highlights)에 있으면 1.0 — AI 파트 상품 벡터와 같은 규칙이라 "긁은 성분" 과 "든 성분" 이 같은 이름으로 만난다.
+ */
+export function ingredientWeights(p: Product): Map<string, number> {
+  const parts = splitFull(p);
+  const tags = new Set(p.highlights.map((h) => h.toLowerCase()));
+  const out = new Map<string, number>();
+  for (const [name, syns] of Object.entries(INGREDIENT_SOURCE.synonyms)) {
+    if (tags.has(name.toLowerCase())) {
+      out.set(name, 1);
+      continue;
+    }
+    const lowered = syns.map((s) => s.toLowerCase());
+    const idx = parts.findIndex((part) => lowered.some((s) => part.includes(s)));
+    if (idx >= 0 && parts.length > 0) out.set(name, Math.max(1 - idx / parts.length, POS_MIN));
+  }
+  return out;
+}
+
+export interface IngredientGapRow {
+  name: string;
+  /** 관심 = 긁기 + 체류 (모의). 순위 산출에만 쓴다 */
+  interest: number;
+  scrapeCount: number;
+  dwellMs: number;
+  /** 내 라인에서 이 성분이 든 상품 (실측) */
+  owned: Array<{ product: Product; weight: number }>;
+  maxWeight: number;
+  rank: number;
+  /** 관심 상위 10 & 미보유 */
+  gap: boolean;
+  /** 보유하지만 전부 미량(위치가중 ≤ 0.3) */
+  minor: boolean;
+}
+
+/**
+ * 성분 갭 표. 관심(모의) 순으로 30행, 갭 행이 위로 올라온다.
+ * 관심은 수집 연결 전이라 시드 고정 모의값이고, 보유·위치가중은 내 상품 전성분에서 실측.
+ */
+export const ingredientGap: IngredientGapRow[] = (() => {
+  const rand = rng(hashString('ingredient-interest'));
+  const weightsByProduct = products.map((p) => ({ product: p, weights: ingredientWeights(p) }));
+  const rows = Object.keys(INGREDIENT_SOURCE.synonyms).map((name) => {
+    const scrapeCount = Math.round(8 + rand() * 190);
+    const dwellMs = Math.round(4000 + rand() * 30000);
+    const owned = weightsByProduct
+      .filter(({ weights }) => weights.has(name))
+      .map(({ product, weights }) => ({ product, weight: weights.get(name) ?? 0 }))
+      .sort((a, b) => b.weight - a.weight);
+    const maxWeight = owned[0]?.weight ?? 0;
+    return {
+      name,
+      interest: scrapeCount * 100 + dwellMs / 100,
+      scrapeCount,
+      dwellMs,
+      owned,
+      maxWeight,
+      rank: 0,
+      gap: false,
+      minor: owned.length > 0 && maxWeight <= MINOR_WEIGHT,
+    };
+  });
+  rows.sort((a, b) => b.interest - a.interest);
+  rows.forEach((r, i) => {
+    r.rank = i + 1;
+    r.gap = i < 10 && r.owned.length === 0;
+  });
+  return rows.sort((a, b) => Number(b.gap) - Number(a.gap) || a.rank - b.rank);
+})();
