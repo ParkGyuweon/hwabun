@@ -48,17 +48,27 @@ except Exception:
 
 AGENT_PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_100_agent.json")
 BATCH_PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
+HOLDOUT_A_PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_holdout_a.json")
+HOLDOUT_B_PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_holdout_b.json")
 PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
 DEFAULT_OUT = os.path.join(HERE, "data")
 
-SOURCE_FILES = {"PA": AGENT_PERSONAS, "PC": BATCH_PERSONAS}
+SOURCE_CONFIGS = {
+    "PA": {"path": AGENT_PERSONAS, "persona_source": "agent_sample", "evaluation_cohort": None},
+    "PC": {"path": BATCH_PERSONAS, "persona_source": "batch_sample", "evaluation_cohort": None},
+    "HA": {"path": HOLDOUT_A_PERSONAS, "persona_source": "holdout_sample", "evaluation_cohort": "holdout_a"},
+    "HB": {"path": HOLDOUT_B_PERSONAS, "persona_source": "holdout_sample", "evaluation_cohort": "holdout_b"},
+}
+SOURCE_FILES = {band: config["path"] for band, config in SOURCE_CONFIGS.items()}
+
+HOLDOUT_COHORT_SIZE = 2000
 
 # 계약 §7.4 — split_of() 가 쓰는 결정론적 규칙. 별도 파일 없이 재현된다.
 SPLIT_RULE = "md5(split_version|persona_id)[:8] % 10 -> 0-5:train, 6-7:valid, 8-9:test"
 
-# 계약 §8.1 — Persona segment 로 허용되는 6종. generator_type·concern 은 아니다.
+# 계약 §8.1 — Persona segment 로 허용되는 7종. generator_type·concern 은 아니다.
 SEGMENT_TYPES = ("skin_type", "skin_tone", "hair_color", "eye_color",
-                 "review_bucket", "persona_source")
+                 "review_bucket", "persona_source", "evaluation_cohort")
 
 # 계약 §8.2 — 속성별 Affinity 가중치. combination 은 skin_type 을 쓰지 않는다.
 AFFINITY_WEIGHTS = {"skin_type": 0.40, "skin_tone": 0.40, "hair_color": 0.10, "eye_color": 0.10}
@@ -74,7 +84,8 @@ TABLE_SPECS = OrderedDict([
         "grain": ["persona_id"],
         "columns": [
             ("persona_id", S, N), ("author_id", S, Y), ("user_id", S, N),
-            ("persona_source", S, N), ("skin_type", S, N), ("skin_tone", S, N),
+            ("persona_source", S, N), ("evaluation_cohort", S, Y),
+            ("skin_type", S, N), ("skin_tone", S, N),
             ("eye_color", S, Y), ("hair_color", S, Y), ("stratum", S, N),
             ("review_bucket", S, N), ("n_reviews", "int", N), ("n_products", "int", N),
             ("n_positive", "int", N), ("n_negative", "int", N), ("n_neutral", "int", N),
@@ -169,6 +180,41 @@ def _load(path):
 def _row(spec, values):
     """계약이 정의한 컬럼 순서대로만 내보낸다. 없는 값은 명시적 None 이다."""
     return OrderedDict((col, values.get(col)) for col, _, _ in spec["columns"])
+
+
+def global_holdout_id(local_id, evaluation_cohort):
+    """원본 PH00001~PH02000을 집단별 전역 ID 대역으로 옮긴다.
+
+    원본 ID는 기존 평가 재현성을 위해 바꾸지 않는다. 계약/Dimension 산출물에서만
+    A=1~2000, B=2001~4000, C=4001~6000 순으로 매핑한다.
+    """
+    if not evaluation_cohort or not evaluation_cohort.startswith("holdout_"):
+        return local_id
+    suffix = evaluation_cohort.removeprefix("holdout_")
+    if len(suffix) != 1 or not suffix.isalpha():
+        raise ValueError(f"알 수 없는 evaluation_cohort: {evaluation_cohort}")
+    if not (isinstance(local_id, str) and len(local_id) == 7
+            and local_id.startswith("PH") and local_id[2:].isdigit()):
+        raise ValueError(f"홀드아웃 원본 persona_id 형식 오류: {local_id}")
+    local_number = int(local_id[2:])
+    if not 1 <= local_number <= HOLDOUT_COHORT_SIZE:
+        raise ValueError(f"홀드아웃 원본 persona_id 범위 오류: {local_id}")
+    cohort_index = ord(suffix.lower()) - ord("a")
+    if cohort_index < 0:
+        raise ValueError(f"알 수 없는 evaluation_cohort: {evaluation_cohort}")
+    return f"PH{cohort_index * HOLDOUT_COHORT_SIZE + local_number:05d}"
+
+
+def apply_source_contract(persona, config):
+    """원본을 변경하지 않고 계약 식별자와 집단 필드를 붙인 복사본을 만든다."""
+    out = dict(persona)
+    cohort = config["evaluation_cohort"]
+    global_id = global_holdout_id(persona["persona_id"], cohort)
+    out["persona_id"] = global_id
+    out["user_id"] = global_id
+    out["persona_source"] = config["persona_source"]
+    out["evaluation_cohort"] = cohort
+    return out
 
 
 def build_profile(persona, decision):
@@ -343,11 +389,11 @@ def build(personas, product_ids):
 
 
 def parse_sample(text):
-    """'PA:10' -> ('PA', 10). 'PC:all' -> ('PC', None)"""
+    """'PA:10' -> ('PA', 10). 'HB:all' -> ('HB', None)"""
     band, _, size = text.partition(":")
     band = band.upper()
     if band not in SOURCE_FILES:
-        raise ValueError(f"알 수 없는 대역: {band} (PA|PC)")
+        raise ValueError(f"알 수 없는 대역: {band} ({'|'.join(SOURCE_FILES)})")
     if size in ("", "all"):
         return band, None
     return band, int(size)
@@ -372,12 +418,13 @@ def write_tables(tables, out_dir, manifest):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="페르소나 JSON -> 계약 평탄 테이블")
     ap.add_argument("--sample", default="PA:10",
-                    help="대역:인원. 예 PA:10 · PA:100 · PC:100 · PC:all")
+                    help="대역:인원. 예 PA:10 · PC:all · HA:all · HB:all")
     ap.add_argument("--out", default=DEFAULT_OUT, help="산출 루트 디렉터리")
     args = ap.parse_args(argv)
 
     band, size = parse_sample(args.sample)
-    personas = _load(SOURCE_FILES[band])
+    config = SOURCE_CONFIGS[band]
+    personas = [apply_source_contract(p, config) for p in _load(SOURCE_FILES[band])]
     personas.sort(key=lambda p: p["persona_id"])
     if size is not None:
         personas = personas[:size]
@@ -390,6 +437,8 @@ def main(argv=None):
     manifest = {
         "sample_id": sid,
         "persona_band": band,
+        "persona_source": config["persona_source"],
+        "evaluation_cohort": config["evaluation_cohort"],
         "persona_count": len(personas),
         "persona_source_file": os.path.relpath(SOURCE_FILES[band], ROOT).replace("\\", "/"),
         "product_catalog": os.path.relpath(PRODUCTS, ROOT).replace("\\", "/"),

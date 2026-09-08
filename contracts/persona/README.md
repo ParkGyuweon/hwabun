@@ -5,7 +5,7 @@
 
 ```
 simulator/personas/data/personas_*.json      사람 1명 + reviews[] 배열
-        |  build_persona_tables.py
+        |  build_persona_tables.py (holdout B는 계약 ID +2,000)
         v
 contracts/persona/data/<sample>/*.jsonl          테이블 8종
         |  validate_persona_tables.py
@@ -48,13 +48,15 @@ DW 의 `dim_persona_segment` 도, Processed 의 persona join 도 평탄 테이�
 py contracts/persona/build_persona_tables.py --sample PA:10
 py contracts/persona/build_persona_tables.py --sample PA:100
 py contracts/persona/build_persona_tables.py --sample PC:100
+py contracts/persona/build_persona_tables.py --sample HA:all
+py contracts/persona/build_persona_tables.py --sample HB:all
 
 py contracts/persona/validate_persona_tables.py contracts/persona/data
 py contracts/persona/compare_holdout_rules.py
 py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 ```
 
-`--sample` 은 `대역:인원` 이다 (`PA:10` · `PC:100` · `PC:all`). 산출은
+`--sample` 은 `대역:인원` 이다 (`PA:10` · `PC:all` · `HA:all` · `HB:all`). 산출은
 `contracts/persona/data/<sample_id>/` 아래에 테이블당 JSONL 한 개와 `_manifest.json`
 (원천 파일·행 수·규칙 버전) 이다.
 
@@ -64,6 +66,17 @@ py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 
 **산출물은 커밋하지 않는다.** 난수가 없어 누가 돌려도 같은 결과가 나오고, 아직 이
 테이블을 읽는 모듈이 없다. 필요할 때 로컬에서 다시 만든다. 9,900명 전량은 약 70MB 다.
+
+## Holdout ID와 평가 재현성
+
+Holdout 원본 A/B는 기존 평가를 재현하기 위해 둘 다 `PH00001`~`PH02000`을 유지한다.
+원본 B를 고치면 동적 평가의 `persona_id` 기반 노이즈와 기존 metadata 조인이 바뀐다.
+대신 평탄 테이블 생성 시 A는 `PH00001`~`PH02000`, B는
+`PH02001`~`PH04000`으로 내보낸다. 모든 계약 테이블의 ID와 `user_id`가 함께 바뀌며,
+집단은 ID를 파싱하지 않고 `evaluation_cohort`로 조회한다.
+
+CF 동시발생은 `build_cooc.py`가 `personas_*.json` 전체의 `author_id`를 제외한다.
+`batch/jobs/test_build_cooc.py`가 A/B 파일 추가 시 이 누출 차단 규칙을 검증한다.
 
 ## 검증 결과 (2026-09-03)
 
