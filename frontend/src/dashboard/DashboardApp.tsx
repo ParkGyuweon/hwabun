@@ -31,7 +31,7 @@ type ScreenKey =
 
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
   { key: 'overview', label: 'Overview', title: 'Overview', desc: '전체 성과와 핵심 KPI' },
-  { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객이 보는 상세 페이지 그대로 미리 보입니다' },
+  { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기' },
   { key: 'products', label: '상품 분석', title: '상품 분석', desc: '상품별 관심도와 전환 성과' },
   {
     key: 'content',
@@ -52,7 +52,7 @@ const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: strin
     desc: '의도 퍼널·이탈 구간·마찰 신호',
   },
   { key: 'reviews', label: '리뷰 분석', title: '리뷰 분석', desc: '소비자 평가와 자극·트러블' },
-  { key: 'feedback', label: '고객 피드백', title: '고객 피드백', desc: '고객이 쓴 글을 효능·사용감·향·용기·용량 5축으로 나눠 받고 반영 처리' },
+  { key: 'feedback', label: '고객 피드백', title: '고객 피드백', desc: '고객이 고쳐 달라는 것 · 5축' },
   {
     key: 'ingredients',
     label: '성분 분석',

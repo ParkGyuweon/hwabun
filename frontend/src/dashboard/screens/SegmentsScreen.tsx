@@ -87,10 +87,7 @@ export default function SegmentsScreen() {
             ))}
           </tbody>
         </table>
-        <p className="note">
-          칸에 마우스를 올리면 표본 수가 보인다. 페르소나가 균등 설계라 칸 간 비교가
-          성립한다 — 실사용 데이터로 바뀌면 칸마다 표본 보정이 먼저다.
-        </p>
+        <p className="note">칸에 올리면 표본 수</p>
       </Panel>
 
       <Panel
@@ -120,11 +117,6 @@ export default function SegmentsScreen() {
             ))}
           </tbody>
         </table>
-        <p className="note">
-          고객군마다 결정 근거가 다르면 상세페이지도 광고 소재도 달라야 한다. 건성 고객
-          광고에 임상 수치를, 지성 고객 광고에 감성 이미지를 쓰고 있었다면 이 표가 그
-          비용이 새는 지점을 알려준다.
-        </p>
       </Panel>
     </div>
   );

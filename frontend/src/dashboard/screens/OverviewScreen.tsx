@@ -86,10 +86,7 @@ export default function OverviewScreen({ days }: { days: number }) {
           }))}
           rank
         />
-        <p className="note">
-          관심도 = 행동별 발생 수 × 가중치. 가중치의 단일 출처는 frontend/src/types/log.ts 이며
-          값은 초기 가설이다 (Ablation 검증 전).
-        </p>
+        <p className="note">관심도 = 행동 수 × 가중치 (초기 가설)</p>
       </Panel>
     </div>
   );

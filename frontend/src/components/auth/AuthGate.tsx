@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { devSession } from '../../lib/auth';
 import type { AccountRole } from '../../lib/auth';
 import AuthForm from './AuthForm';
 import '../../styles/auth.css';
@@ -32,6 +33,11 @@ export default function AuthGate({ role, product, children }: AuthGateProps) {
         <AuthForm role={role} onSuccess={() => undefined} />
         {role === 'ADMIN' ? (
           <p className="auth-gate__note">운영자 계정은 가입 화면이 없습니다. 팀에서 발급한 계정으로 들어오세요.</p>
+        ) : null}
+        {import.meta.env.DEV ? (
+          <button type="button" className="auth-gate__dev" onClick={() => devSession(role)}>
+            백엔드 없이 보기 (개발용 · 모의 세션)
+          </button>
         ) : null}
       </div>
     </div>

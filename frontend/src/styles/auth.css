@@ -269,6 +269,19 @@
   color: var(--ink-soft, var(--color-ink-soft, #5c626c));
 }
 
+.auth-gate__dev {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-faint, var(--color-ink-faint, #878d97));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .auth-gate__note {
   margin: 0;
   font-size: 12px;

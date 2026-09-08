@@ -77,10 +77,7 @@ export default function ContentScreen() {
             ))}
           </tbody>
         </table>
-        <p className="note">
-          전환 기여 = 그 콘텐츠를 본 방문의 장바구니 담기율 ÷ 전체 평균. 흐린 행은 표본
-          500건 미만 — 아직 판단 근거로 쓰지 말 것.
-        </p>
+        <p className="note">전환 기여 = 본 방문 담기율 ÷ 평균. 흐린 행은 표본 부족.</p>
       </Panel>
 
       <div className="grid grid--2">
@@ -96,12 +93,7 @@ export default function ContentScreen() {
               hint: `복사 ${i.copyCount}`,
             }))}
           />
-          <p className="note">
-            사용자는 모르는 성분명을 만나면 그 부분만 긁어 밖에서 검색한다. 반복해서 긁히는
-            성분은 상세페이지가 그 성분을 설명하지 못하고 있다는 뜻 — 가장 직접적인
-            상세페이지 개선 지시다. 성분 사전은 추천 엔진과 같은 파일을 쓰므로 "이 성분을
-            긁은 사람" 과 "이 성분이 든 상품" 이 같은 이름으로 조인된다.
-          </p>
+          <p className="note">반복해서 긁히는 성분은 설명이 부족하다는 뜻.</p>
         </Panel>
 
         <Panel title="검증 행동 × 전환" source="mock" aside="한 방문 vs 안 한 방문">
@@ -129,10 +121,7 @@ export default function ContentScreen() {
               ))}
             </tbody>
           </table>
-          <p className="note">
-            검증 행동을 한 방문의 담기율이 2~3배 높다. 다만 이것은 상관이지 인과가 아니다 —
-            살 사람이 검증하는 것일 수 있다. 인과는 정보 배치를 바꾼 A/B 로만 확인된다.
-          </p>
+          <p className="note">상관이지 인과는 아니다.</p>
         </Panel>
       </div>
     </div>
