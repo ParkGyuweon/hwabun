@@ -20,12 +20,13 @@ PRODUCT N:M SKIN_TYPE, CONCERN, CLEAN, TEXTURE, INGREDIENT
 | 계정 | seller_account, member, admin_account | 사업자·회원·관리자 계정. member는 피부 타입·피부색·헤어 색·눈동자 색 FK를 가진다. |
 | 브랜드 | brand | seller_account가 소유하는 브랜드. |
 | 기준값 | skin_type, skin_tone, hair_color, eye_color, concern, category | 회원과 상품이 공유하는 코드 및 카테고리 계층. |
-| 상품 | product | 브랜드, 카테고리, price_bin, secondary/tertiary category, 가격·평점·인기도와 등록 원문을 저장한다. 등록 API는 계약 어휘를 검증하고 기본 옵션을 생성한다. |
+| 상품 | product | 브랜드, 카테고리, price_bin, secondary/tertiary category, 가격·평점·인기도와 등록 원문을 저장한다. rating_source로 실측·주입 평점을 구분하며, 등록 API는 계약 어휘를 검증하고 기본 옵션을 생성한다. |
 | 상품 미디어 | product_image | 상품 이미지와 표시 순서. |
 | 상품 옵션 | product_variant | SKU·용량·원화 가격(DECIMAL(18,2)). 상품 등록 시 기본 옵션을 1개 생성한다. |
 | 상품 속성 | product_skin_type, product_concern, product_clean, product_texture | 상품의 피부 타입·고민·clean·texture 다대다 연결. |
 | clean/texture 기준 | clean_feature, texture_feature | 계약에 정의된 clean 16종·texture 5종 코드. |
 | 성분 | ingredient, product_ingredient | 상품 성분, 순서(first_position), 파서 버전. |
+| 등록 품질 | product_unmapped_value | 계약 vocab 밖 입력을 상품·필드·원문 값 단위로 수집한다. |
 | 구매 | cart, cart_item, shop_order, order_item | 장바구니·주문. member_id + idempotency_key UNIQUE로 중복 주문을 방지한다. |
 | 의견 | review, feedback, feedback_classification, feedback_classification_label | 구매 후기, 구매 후 개선 의견, 분류 결과와 다중 라벨. 피드백은 회원·상품·축별 1건만 허용한다. |
 | 정산 | settlement, settlement_item | 브랜드 월별 정산과 정산 대상 주문 상품. |

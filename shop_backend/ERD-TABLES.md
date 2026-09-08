@@ -23,6 +23,7 @@
 - clean_feature / texture_feature: clean·texture 코드표
 - product_skin_type / product_concern / product_clean / product_texture: 상품 속성 연결
 - ingredient / product_ingredient: 성분 기준값과 상품별 파싱 결과
+- product_unmapped_value: 등록 vocab 밖 입력을 상품·필드·원문 값 단위로 수집
 
 clean과 texture는 코드표와 다대다 매핑으로 저장합니다. 원문 보존이 필요한 경우 product.clean_json, product.texture_json도 함께 사용할 수 있습니다.
 

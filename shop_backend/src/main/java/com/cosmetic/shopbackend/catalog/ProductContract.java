@@ -10,5 +10,6 @@ final class ProductContract {
  static BigDecimal usd(BigDecimal krw){return krw.divide(BigDecimal.valueOf(1300),2,RoundingMode.HALF_UP);}
  static String priceBin(BigDecimal usd){double p=usd.doubleValue();return p<20?"~20":p<35?"20-35":p<50?"35-50":p<80?"50-80":"80+";}
  static Set<String> group(Collection<String> values,Set<String> vocabulary){Set<String> out=new LinkedHashSet<>();for(String v:values)if(vocabulary.contains(v))out.add(v);return out;}
+ static boolean isKnownHighlight(String value){return CONCERNS.contains(value)||CLEAN.contains(value)||TEXTURES.contains(value);}
  record ProductInput(String productName,String categoryId,String secondaryCategory,String tertiaryCategory,List<String> highlights,String ingredients,BigDecimal priceKrw,String primaryImageUrl,String descriptionJson){}
 }

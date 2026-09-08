@@ -37,7 +37,7 @@ CREATE TABLE category (
 CREATE TABLE product (
  product_id VARCHAR(64) PRIMARY KEY, brand_id VARCHAR(64) NOT NULL, category_id VARCHAR(64) NOT NULL, product_name VARCHAR(300) NOT NULL,
  product_source ENUM('seed_catalog','brand_registered') NOT NULL, status ENUM('DRAFT','PENDING_APPROVAL','ACTIVE','INACTIVE','REJECTED') NOT NULL DEFAULT 'DRAFT',
- secondary_category VARCHAR(64) NOT NULL, tertiary_category VARCHAR(64) NOT NULL, price_bin VARCHAR(16) NOT NULL, rating DECIMAL(4,2) NULL, loves_count INT NULL,
+ secondary_category VARCHAR(64) NOT NULL, tertiary_category VARCHAR(64) NOT NULL, price_bin VARCHAR(16) NOT NULL, rating DECIMAL(4,2) NULL, rating_source ENUM('observed','injected') NOT NULL DEFAULT 'injected', loves_count INT NULL,
  primary_image_url VARCHAR(1000) NULL, description_json JSON NULL, ingredients_text TEXT NULL, clean_json JSON NULL, texture_json JSON NULL,
  source_price_usd DECIMAL(12,2) NULL, source_rating DECIMAL(4,2) NULL, source_review_count INT NULL, source_loves_count INT NULL, source_rank INT NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -106,6 +106,13 @@ CREATE TABLE feedback (
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id,product_id) REFERENCES order_item(order_item_id,product_id) ON DELETE RESTRICT, FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT,
  UNIQUE KEY uq_feedback_member_product_axis(member_id,product_id,axis_id), INDEX ix_feedback_product_axis(product_id,axis_id), INDEX ix_feedback_order_item_status(order_item_id,status)
+);
+
+CREATE TABLE product_unmapped_value (
+ unmapped_id VARCHAR(64) PRIMARY KEY, product_id VARCHAR(64) NOT NULL, field_name VARCHAR(64) NOT NULL,
+ raw_value VARCHAR(255) NOT NULL, created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE CASCADE,
+ UNIQUE KEY uq_product_unmapped(product_id,field_name,raw_value)
 );
 CREATE TABLE feedback_classification (
  feedback_id VARCHAR(64) PRIMARY KEY, classifier VARCHAR(100) NULL, vocab_version VARCHAR(32) NULL, primary_axis_id VARCHAR(32) NULL, primary_category_id VARCHAR(64) NULL, off_axis_hint VARCHAR(32) NULL,
