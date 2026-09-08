@@ -30,6 +30,8 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
     전용 난수 스트림을 쓰므로 껐을 때 나머지 궤적이 완전히 동일하다
   - 직전 상세의 추천에 다음 상품이 있으면 recommendation_click 으로 넘어간다
     (노출과 같은 recommendation_id / position 을 실어 CTR 이 성립하게 한다)
+  - 그렇게 들어간 상세의 product_view 에도 recommendation_id / list_id / position 을 싣는다
+    (추천 경유 유입 추적, Jira 210 — 계약 선택 필드. 프론트는 아직 안 실음)
   - 모든 synthetic Event properties 에 scenario_id / simulation_run_id /
     generator_type 을 기록한다
 
@@ -404,15 +406,22 @@ def selectable_variants(product):
 
 
 def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
-                 entry_source, SC=SCENARIO):
-    """depth_target = 도달할 최대 스크롤 %. 10% 단위로 로그를 남긴다"""
+                 entry_source, SC=SCENARIO, rec_meta=None):
+    """depth_target = 도달할 최대 스크롤 %. 10% 단위로 로그를 남긴다
+
+    rec_meta: 추천 카드를 눌러 들어왔을 때 {recommendation_id, list_id, position}.
+              product_view 에 그대로 싣는다 (event-properties 의 선택 필드). 이게 있어야
+              "추천에서 넘어온 고객" 을 세션 순서 추정 없이 셀 수 있다 (교차 브랜드 유입 · Jira 210).
+              ⚠ 프론트(SimilarProducts -> startPageView) 는 아직 안 싣는다 — 계약이 허용하는 형태를
+              생성기가 먼저 채운 것이고, 프론트가 따라오면 같은 모양이 된다.
+    """
     e.new_page("product_detail")
     e.tick(300, 1200)
     e.emit("page_view", gid, navigation_source=entry_source)
     # 프론트가 상세 진입에서 page_view 직후 product_view 를 같은 page_view_id 로 남긴다
     # (frontend/src/lib/logger.ts 의 trackProductView). 둘 다 가중치 1.0 이라
     # 하나만 만들면 합성 로그가 실제 로그보다 상품당 1.0 만큼 가볍다.
-    e.emit("product_view", gid, navigation_source=entry_source)
+    e.emit("product_view", gid, navigation_source=entry_source, **(rec_meta or {}))
 
     n_sec = max(1, round(len(DETAIL_LAYOUT) * depth_target / 100))
     depth = 0
@@ -931,14 +940,19 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 route[i] = g
                 via_rec = True
         visited.add(g)
+        rec_meta = None
         if via_rec:
             rec_batch, rec_list = e.last_rec
+            pos = rec_list.index(g) + 1
             e.tick(); e.emit("recommendation_click", g,
                              recommendation_id=rec_batch, list_id="similar_products",
                              algorithm="same_category_v0",
-                             position=rec_list.index(g) + 1)
+                             position=pos)
             e.tick(); e.emit("product_click", g, entry_source="similar_products",
-                             position=rec_list.index(g) + 1)
+                             position=pos)
+            # 상세 진입 product_view 에도 같은 식별자를 싣는다 — 추천 경유 추적 (Jira 210)
+            rec_meta = {"recommendation_id": rec_batch, "list_id": "similar_products",
+                        "position": pos}
         else:
             # size 를 pool 길이로 잡으면 g 를 뺀 만큼 모자라 죽는다
             cards = [x for x in pool if x != g] or list(pool)
@@ -978,7 +992,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         else:
             depth = int(rng.choice(SC["bounce_depth_choices"]))
         visit_detail(e, g, catalog[g], rec_ids, rng, depth_target=depth,
-                     engaged=is_target, entry_source="in_app", SC=SC)
+                     engaged=is_target, entry_source="in_app", SC=SC, rec_meta=rec_meta)
         if hidden is not None:
             if wish:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
