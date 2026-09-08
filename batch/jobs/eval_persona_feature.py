@@ -44,6 +44,7 @@ PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.js
 K = 10
 BOOT = 300
 LTR_NAME = "학습 결합 (LTR)"
+RESERVED_NAME = "LTR · 전용 칸"
 PREV_SCHEDULE = [(0, 0.00, 0.30, 0.70), (5, 0.70, 0.25, 0.05),
                  (10 ** 9, 0.40, 0.55, 0.05)]
 
@@ -67,7 +68,8 @@ def weights(schedule, n_seed):
 
 
 def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
-             brands=None, known=None, cooc=None, supporters=None, ltr=None):
+             brands=None, known=None, cooc=None, supporters=None, ltr=None,
+             reserved=0):
     """조건별 적중 여부를 사람 단위로 모은다. 같은 사람을 여러 조건에 쓰므로 짝비교가 된다
 
     조건은 **우리가 골랐던 것들**이다. valid 에서 같은 선택이 나오는지 확인하고,
@@ -81,6 +83,11 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
     hits = {c: [] for c in conds}
     if ltr is not None:
         hits[LTR_NAME] = []       # 학습 결합. 선형 조건들과 **같은 사람**을 쓴다
+        if reserved:
+            # 신규 브랜드 전용 칸 (Jira 129). 같은 점수에서 recommender.pick 을 타므로
+            # LTR 행과의 차이가 곧 전용 칸의 비용이다. 지금 카탈로그는 신규가 0개라
+            # 두 행이 같아야 한다 — 다르면 전용 칸이 일반 칸으로 안 돌아간 것이다.
+            hits[RESERVED_NAME] = []
     longtail, seeds, elapsed = [], [], 0.0
     for p in personas:
         s = seq_of(p["_meta"], index)
@@ -128,6 +135,9 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
             order = [int(i) for i in np.argsort(-x)[:K * 3] if np.isfinite(x[i])]
             top = recommender.mmr(x, order, K, LAMBDA_MMR)
             hits[LTR_NAME].append(1 if ti in list(top) else 0)
+            if reserved:
+                top_r = recommender.pick(x, order, K, LAMBDA_MMR, reserved)
+                hits[RESERVED_NAME].append(1 if ti in list(top_r) else 0)
         longtail.append(pop_rank[ti] >= 101)
         seeds.append(len(si))
     return ({k: np.array(v) for k, v in hits.items()},
@@ -151,6 +161,9 @@ def main():
                     help="학습 결합을 끄고 선형 결합만 본다 (옛 수치 재현용)")
     ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,
                     help="CF 가점을 끈다 (CBF 단독 · 옛 수치 재현용)")
+    ap.add_argument("--reserved", type=int, default=0, metavar="N",
+                    help="신규 브랜드 전용 칸 수 (Jira 129). LTR 행 옆에 'LTR · 전용 칸' "
+                         "행을 하나 더 낸다. 지금 카탈로그는 신규가 0개라 두 행이 같아야 한다")
     ap.add_argument("--split",
                     choices=("train", "valid", "test", "all",
                              "holdout_a", "holdout_b"),
@@ -234,9 +247,15 @@ def main():
     elif a.split == "all":
         print("  ⚠ 전원 집합이다. 파라미터 선택에도 최종 보고에도 쓰지 말 것")
 
+    if a.reserved:
+        n_new = int(recommender.new_mask().sum())
+        print(f"전용 칸 {a.reserved}칸 · 지금 카탈로그의 신규 상품 {n_new}개"
+              + (" — 0개라 전용 칸은 일반 칸으로 돌아간다 (두 행이 같아야 한다)"
+                 if n_new == 0 else ""))
     hits, lt, seeds, elapsed = evaluate(personas, V, prior, pop_rank, affinity,
                                         index, recommender, brands, known,
-                                        cooc=cooc, supporters=supporters, ltr=ltr)
+                                        cooc=cooc, supporters=supporters, ltr=ltr,
+                                        reserved=a.reserved)
     rng = np.random.default_rng(42)
     base = hits["현행 (스케줄+MMR)"]
 

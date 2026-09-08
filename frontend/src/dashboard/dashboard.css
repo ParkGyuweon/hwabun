@@ -731,6 +731,11 @@ table.data tr:hover td {
 .reg-list {
   display: grid;
   gap: 8px;
+/* ---------- 고객 피드백 인박스 ---------- */
+
+.feedback-inbox {
+  display: grid;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -751,6 +756,20 @@ table.data tr:hover td {
 
 .reg-list__meta {
   grid-column: 1;
+.feedback-inbox__item {
+  padding: 12px 14px;
+  border: 1px solid var(--line, #e5e5ea);
+  border-radius: 12px;
+}
+
+.feedback-inbox__item.is-new {
+  border-left: 4px solid var(--accent, #8fae8b);
+}
+
+.feedback-inbox__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   font-size: 12px;
   color: var(--ink-soft, #6e6e73);
 }
@@ -773,4 +792,108 @@ table.data tr:hover td {
   .register__iframe {
     height: 720px;
   }
+.feedback-inbox__product {
+  font-weight: 600;
+  color: inherit;
+}
+
+.feedback-inbox__status--new {
+  color: var(--accent-deep, #4f7a4b);
+  font-weight: 600;
+}
+
+.feedback-inbox__status--reflected {
+  color: var(--ink-soft, #6e6e73);
+}
+
+.feedback-inbox__text {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.feedback-inbox__reply {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft, #6e6e73);
+}
+
+.feedback-inbox__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.feedback-inbox__reply-input {
+  flex: 1 1 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #e5e5ea);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.feedback-inbox__empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft, #6e6e73);
+}
+
+/* ---------- 고객 피드백: 카테고리 그룹 (계약 grain product × axis × category) ---------- */
+
+.fb-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fb-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.fb-group__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fb-group__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fb-group__products,
+.fb-group__desc {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.fb-group--pending .fb-group__title {
+  color: var(--ink-soft);
+}
+
+.chip--pending {
+  border-style: dashed;
+}
+
+.feedback-inbox__profile {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.feedback-inbox__hidden {
+  display: inline-block;
+  margin: 6px 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--line-soft);
 }

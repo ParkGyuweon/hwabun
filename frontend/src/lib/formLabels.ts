@@ -36,7 +36,7 @@ export const SECONDARY_CATEGORIES: Entry[] = list('secondary_category');
 export const TERTIARY_CATEGORIES: Entry[] = list('tertiary_category');
 
 const ko = new Map<string, string>();
-for (const key of ['concern', 'clean', 'texture', 'secondary_category', 'tertiary_category', 'ingredient']) {
+for (const key of ['concern', 'clean', 'texture', 'secondary_category', 'tertiary_category', 'ingredient', 'segment']) {
   for (const e of list(key)) ko.set(e.value, e.ko);
 }
 export const labelKo = (value: string): string => ko.get(value) ?? value;
