@@ -1,5 +1,6 @@
-import { BarList, Kpi, Panel } from '../components';
+import { BarList, Kpi, Panel, Scatter } from '../components';
 import { contentAttention, fmt, scrapedIngredients, validationBehaviors } from '../lib/metrics';
+import { labelKo } from '../../lib/formLabels';
 
 /**
  * ③ 정보 관심도 · 이 대시보드의 존재 이유.
@@ -33,7 +34,7 @@ export default function ContentScreen() {
         />
         <Kpi
           label="사용자가 가장 많이 드래그한 성분"
-          value={scrapedIngredients[0].name}
+          value={labelKo(scrapedIngredients[0].name)}
           sub={`${fmt.int(scrapedIngredients[0].count)}회 · 가장 관심이 큰 성분`}
           source="mock"
         />
@@ -50,6 +51,14 @@ export default function ContentScreen() {
         source="mock"
         aside="co_visible_blocks ≤ 2 인 체류만 집계 · 겹쳐 보인 체류는 귀속 불가"
       >
+        <Scatter
+          points={contentAttention.map((c) => ({ label: c.ko, x: c.avgDwellMs / 1000, y: c.conversionLift, n: c.sampleSize }))}
+        />
+        <p className="note">
+          오른쪽 아래 칸(오래 보지만 안 산다)이 손볼 곳, 왼쪽 위 칸(짧게 보지만 결정에 기여)이 위로 올릴 것. 점 크기는 표본.
+        </p>
+        <details className="fold">
+          <summary>표로 보기</summary>
         <table className="table">
           <thead>
             <tr>
@@ -78,6 +87,7 @@ export default function ContentScreen() {
           </tbody>
         </table>
         <p className="note">전환 기여 = 본 방문 담기율 ÷ 평균. 흐린 행은 표본 부족.</p>
+        </details>
       </Panel>
 
       <div className="grid grid--2">
@@ -88,7 +98,7 @@ export default function ContentScreen() {
         >
           <BarList
             items={scrapedIngredients.map((i) => ({
-              label: i.name,
+              label: labelKo(i.name),
               value: i.count,
               hint: `복사 ${i.copyCount}`,
             }))}

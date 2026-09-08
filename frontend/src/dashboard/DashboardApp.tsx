@@ -250,7 +250,7 @@ export default function DashboardApp() {
           </div>
         </header>
 
-        {screen === 'overview' ? <OverviewScreen days={days} /> : null}
+        {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen /> : null}
         {screen === 'content' ? <ContentScreen /> : null}
         {screen === 'segments' ? <SegmentsScreen /> : null}
