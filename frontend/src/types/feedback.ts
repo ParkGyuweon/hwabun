@@ -1,51 +1,91 @@
 /**
  * 고객 피드백 — 참여 루프 ①(남김) → ②(사장이 분류별로 본다) → ③(고친다) → ④(반영됐다고 돌려준다).
  *
- * 리뷰(평점 + 구매자만)와 다르다. 피드백은 **제품의 어느 부분** 에 대한 의견인지가 핵심이라
- * 분류(aspect)를 먼저 고르게 한다. 사장님은 "향 3건, 용기 1건" 처럼 나눠서 받는다.
+ * 계약: `contracts/feedback-classification.md` + `contracts/feedback-category-vocab.json` (Jira 200).
+ * 리뷰가 아니다. 사장님에게 보내는 **개선 요청**이라 별점·극성이 없고 전부 "고쳐 달라"로 본다.
  *
- * 서버가 생기면 백엔드 Review·Feedback API(Jira 146)로 옮긴다. 그때까지 localStorage 공유.
+ * 분류는 소비자가 고르지 않는다. 텍스트를 분류기(Jira 201)가 어휘 목록에서 **딱 하나**
+ * (축 1 + 카테고리 1) 고른다. FE 가 임시로 두었던 8종 다중 선택은 이 계약으로 갈아탔다.
+ * 서버가 생기면 백엔드 Feedback API(Jira 146)로 옮긴다. 그때까지 localStorage.
  * 로그에는 원문을 싣지 않는다 (behavior-log-design "일부러 안 남기는 것").
  */
+import vocab from '../../../contracts/feedback-category-vocab.json';
+import type { SkinType } from './product';
 
-/** 사장님 입장에서 고칠 수 있는 단위로 나눈다. 성분·제형·향·용기는 각각 다른 담당(처방·포장)이다 */
-export type FeedbackAspect =
-  | 'scent'
-  | 'packaging'
-  | 'texture'
-  | 'ingredient'
-  | 'effect'
-  | 'usage'
-  | 'price'
-  | 'other';
+interface VocabCategory {
+  id: string;
+  label: string;
+  desc: string;
+}
+interface VocabAxis {
+  id: string;
+  label: string;
+  desc: string;
+  categories: VocabCategory[];
+}
+interface Vocab {
+  schema_version: string;
+  axes: VocabAxis[];
+  other: VocabCategory;
+}
 
-export const FEEDBACK_ASPECTS: ReadonlyArray<{ key: FeedbackAspect; label: string; hint: string }> = [
-  { key: 'scent', label: '향', hint: '강하다 · 인공적이다 · 무향이면 좋겠다' },
-  { key: 'packaging', label: '용기', hint: '펌프 · 스포이드 · 뚜껑 · 용량 · 위생' },
-  { key: 'texture', label: '제형', hint: '끈적임 · 흡수 · 밀림 · 백탁' },
-  { key: 'ingredient', label: '성분', hint: '자극 · 빼 줬으면 하는 성분 · 함량' },
-  { key: 'effect', label: '효과', hint: '기대와 달랐다 · 이 부분은 좋았다' },
-  { key: 'usage', label: '사용법', hint: '설명이 부족하다 · 순서를 모르겠다' },
-  { key: 'price', label: '가격·구성', hint: '부담 · 소용량이 있었으면 · 세트' },
-  { key: 'other', label: '기타', hint: '' },
+const v = vocab as unknown as Vocab;
+
+export const FEEDBACK_VOCAB_VERSION = v.schema_version;
+
+/** 축 5개 + 기타. 화면 탭 순서 = 어휘 파일 순서 */
+export const FEEDBACK_AXES: ReadonlyArray<VocabAxis> = [
+  ...v.axes,
+  { id: v.other.id, label: v.other.label, desc: v.other.desc, categories: [v.other] },
 ];
+
+const axisById = new Map(FEEDBACK_AXES.map((a) => [a.id, a]));
+const categoryById = new Map(FEEDBACK_AXES.flatMap((a) => a.categories.map((c) => [c.id, { ...c, axis_id: a.id }])));
+
+export const axisLabel = (id: string): string => axisById.get(id)?.label ?? id;
+export const categoryLabel = (id: string): string => categoryById.get(id)?.label ?? id;
+export const categoryDesc = (id: string): string => categoryById.get(id)?.desc ?? '';
 
 export type FeedbackStatus = 'new' | 'read' | 'reflected';
 
+/**
+ * 계약 §3 입력 + §4 출력 + FE 전용 필드.
+ *
+ * 분류 필드는 분류기가 돌기 전엔 `null` 이다. 서버가 없는 지금은 쇼핑몰에서 새로 쓴 글이
+ * 그 상태로 남고, 시드 30건은 분류기 결과를 그대로 싣는다.
+ */
 export interface Feedback {
+  // ---- 계약 §3 입력 (FE → 분류기)
   feedback_id: string;
+  /** 작성자. 프로필 조인 키. 비로그인은 null (계약은 필수지만 이 사이트엔 로그인이 없다) */
+  user_id: string | null;
   product_id: string;
-  brand_name: string;
-  /** 없으면 비로그인 방문자 */
-  persona_id: string | null;
-  aspects: FeedbackAspect[];
-  /** 자유 텍스트. 서버로만 가고 로그에는 안 싣는다 */
-  text: string;
-  /** 결제 완료 사용자인지. 지금은 장바구니 담기 여부로 대신하지 않고 false 고정 — 백엔드 PAID 연결 후 */
-  purchased: boolean;
+  body: string;
   created_at: string;
+
+  // ---- 계약 §4 출력 (분류기 → 저장 → 대시보드). 분류 전 null
+  axis_id: string | null;
+  axis: string | null;
+  category_id: string | null;
+  category: string | null;
+  classifier: string | null;
+  vocab_version: string | null;
+  classified_at: string | null;
+  /** 본문에서 걸린 금지어 (Jira 202). 없으면 [] */
+  banned_terms: string[];
+  /** true 면 대시보드가 본문을 접어 두고 눌러야 보여준다. 집계에는 그대로 포함 */
+  hidden_by_default: boolean;
+
+  // ---- FE 전용
+  /** 대시보드 브랜드 스코프 필터. 서버가 생기면 product_id → brand 조인으로 대체 */
+  brand_name: string;
+  /** 비익명 계약 — 사장님 화면에 작성자 피부를 보여도 된다. 지금은 시드에만 있고 나중엔 user_id 조인 */
+  profile: { skin_type: SkinType | string; skin_tone: string } | null;
   status: FeedbackStatus;
   /** 사장님이 반영하며 남긴 한 줄. 소비자에게 그대로 보인다 (루프 ④) */
   reply: string | null;
   replied_at: string | null;
 }
+
+/** 분류기가 아직 안 돈 행. 화면에서 "분류 대기"로 묶는다 */
+export const isUnclassified = (f: Feedback): boolean => f.axis_id === null;

@@ -839,3 +839,61 @@ table.data tr:hover td {
   font-size: 14px;
   color: var(--ink-soft, #6e6e73);
 }
+
+/* ---------- 고객 피드백: 카테고리 그룹 (계약 grain product × axis × category) ---------- */
+
+.fb-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fb-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.fb-group__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fb-group__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fb-group__products,
+.fb-group__desc {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.fb-group--pending .fb-group__title {
+  color: var(--ink-soft);
+}
+
+.chip--pending {
+  border-style: dashed;
+}
+
+.feedback-inbox__profile {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.feedback-inbox__hidden {
+  display: inline-block;
+  margin: 6px 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--line-soft);
+}
