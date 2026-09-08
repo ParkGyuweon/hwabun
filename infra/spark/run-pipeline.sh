@@ -46,6 +46,8 @@ validate_pipeline() {
     --funnel-session-path "$data_root/processed/funnel_session_fact" \
     --product-daily-path "$data_root/marts/product_daily_kpi" \
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
+    --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest" \
+    --category-price-path "$data_root/marts/category_price_reference" \
     --report-path "$data_root/validation/pipeline-report.json" \
     --require-events
 }
@@ -71,9 +73,14 @@ run_batch_pipeline() {
   submit_job /opt/project/streaming/jobs/build_marts_job.py \
     --sessionized-path "$data_root/processed/sessionized_events" \
     --product-fact-path "$data_root/processed/product_event_fact" \
+    --dim-product-path "$data_root/processed/dim_product" \
+    --product-ingredient-path /opt/project/batch/ingest/data/serving/product_ingredient.csv \
+    --ingredient-vocab-path /opt/project/batch/ingest/data/serving/ingredient_vocab.csv \
     --funnel-session-path "$data_root/processed/funnel_session_fact" \
     --product-daily-path "$data_root/marts/product_daily_kpi" \
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
+    --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest" \
+    --category-price-path "$data_root/marts/category_price_reference" \
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
 
   validate_pipeline

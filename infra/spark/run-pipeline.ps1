@@ -72,9 +72,14 @@ function Invoke-BatchPipeline {
     Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/build_marts_job.py' -JobArguments @(
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",
+        '--dim-product-path', "$dataRoot/processed/dim_product",
+        '--product-ingredient-path', '/opt/project/batch/ingest/data/serving/product_ingredient.csv',
+        '--ingredient-vocab-path', '/opt/project/batch/ingest/data/serving/ingredient_vocab.csv',
         '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
         '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
         '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
+        '--ingredient-weekly-path', "$dataRoot/marts/ingredient_weekly_interest",
+        '--category-price-path', "$dataRoot/marts/category_price_reference",
         '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
     Invoke-PipelineValidation
@@ -95,6 +100,8 @@ function Invoke-PipelineValidation {
         '--funnel-session-path', "$dataRoot/processed/funnel_session_fact",
         '--product-daily-path', "$dataRoot/marts/product_daily_kpi",
         '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
+        '--ingredient-weekly-path', "$dataRoot/marts/ingredient_weekly_interest",
+        '--category-price-path', "$dataRoot/marts/category_price_reference",
         '--report-path', "$dataRoot/validation/pipeline-report.json",
         '--require-events'
     )
