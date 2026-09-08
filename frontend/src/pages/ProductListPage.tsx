@@ -44,6 +44,12 @@ const PRICE_BANDS = [
 
 type PriceKey = (typeof PRICE_BANDS)[number]['key'];
 
+/** 인기순 정렬 키. 순위 없는 신상품 −1, 순위 있는 상품은 그 순위, 그 밖은 999 */
+function popularKey(p: Product): number {
+  if (p.rank !== undefined) return p.rank;
+  return (p.badges ?? []).includes('new') ? -1 : 999;
+}
+
 interface ProductListPageProps {
   products: Product[];
   /** 페르소나 맞춤 추천 근거로 쓴다 */
@@ -188,7 +194,14 @@ export default function ProductListPage({
         sorted.sort((a, b) => b.price_usd - a.price_usd);
         break;
       default:
-        sorted.sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+        /**
+         * 인기순. 순위가 없는 상품은 둘로 나뉜다.
+         *   - `new` 배지가 있는 상품(브랜드가 방금 등록한 것, 시드 브랜드)은 **맨 앞**.
+         *     사장님이 등록하면 쇼핑몰에 바로 보여야 "등록했다" 는 게 성립한다.
+         *   - 그 밖에 순위가 없는 상품은 맨 뒤.
+         * 점수순 정렬이 아니다 — 추천 점수로 목록을 줄세우면 교차 브랜드 발견이 죽는다(exposure-role.md).
+         */
+        sorted.sort((a, b) => popularKey(a) - popularKey(b));
     }
     return sorted;
   }, [products, category, concern, price, sort]);

@@ -6,10 +6,12 @@ import ContentScreen from './screens/ContentScreen';
 import SegmentsScreen from './screens/SegmentsScreen';
 import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
+import RegisterScreen from './screens/RegisterScreen';
 import Onboarding from './Onboarding';
 import { MotifLine } from './components';
 import { DEFAULT_STOREFRONT, describeStorefront, loadStorefront, saveStorefront } from '../lib/storefront';
 import type { StorefrontPrefs } from '../lib/storefront';
+import { DEMO_BRAND } from '../mocks/products';
 
 type ScreenKey =
   | 'overview'
@@ -18,10 +20,12 @@ type ScreenKey =
   | 'segments'
   | 'behavior'
   | 'reviews'
-  | 'ingredients';
+  | 'ingredients'
+  | 'register';
 
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
   { key: 'overview', label: 'Overview', title: 'Overview', desc: '전체 성과와 핵심 KPI' },
+  { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객이 보는 상세 페이지 그대로 미리 보입니다' },
   { key: 'products', label: '상품 분석', title: '상품 분석', desc: '상품별 관심도와 전환 성과' },
   {
     key: 'content',
@@ -94,7 +98,7 @@ export default function DashboardApp() {
           <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />
           <div>
             <strong>HWABUN</strong>
-            <span>{storefront.brandName || '화분 · Beauty Data, Naturally Yours'}</span>
+            <span>{storefront.brandName || DEMO_BRAND}</span>
           </div>
         </div>
 
@@ -169,6 +173,7 @@ export default function DashboardApp() {
         {screen === 'ingredients' ? (
           <IngredientsScreen productId={productId} onProductChange={setProductId} />
         ) : null}
+        {screen === 'register' ? <RegisterScreen /> : null}
       </main>
     </div>
   );

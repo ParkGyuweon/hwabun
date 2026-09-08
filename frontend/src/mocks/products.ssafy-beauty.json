@@ -1,0 +1,453 @@
+[
+  {
+    "product_id": "SB000001",
+    "product_name": "제로 포어 토닝 패드",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Treatments",
+      "Exfoliators"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000001.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000001.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "AHA(락틱애씨드)와 BHA(살리실릭애씨드)로 각질과 피지를 정리하고 모공 주변 결을 고르게 하는 데일리 토닝 패드입니다. 엠보 면으로 닦아내고 부드러운 면으로 마무리합니다.",
+      "skin_type": "지성, 복합성. 자극에 민감하면 주 2~3회부터",
+      "concerns_text": "Pores, Dullness/Uneven Texture",
+      "highlighted_ingredients": [
+        "Lactic Acid: 각질층을 부드럽게 정리해 결을 고릅니다.",
+        "Salicylic Acid: 모공 속 피지와 노폐물을 녹여 냅니다.",
+        "Centella Asiatica Extract: 각질 제거 후 피부를 진정시킵니다."
+      ],
+      "ingredient_callouts": "인공 색소, 파라벤 무첨가. 에센셜 오일 포함(향 민감 시 주의).",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "세안 후 엠보 면으로 피지가 많은 부위를 닦아 내고, 뒤집어 부드러운 면으로 얼굴 전체를 정돈합니다. 이후 남은 에센스를 두드려 흡수시킵니다.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 22,
+    "size": "70매 / 155g",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Pores",
+      "Dullness/Uneven Texture",
+      "Without Parabens"
+    ],
+    "ingredients": [
+      "Water, Methylpropanediol, Tromethamine, Lactic Acid, Alcohol Denat, 1,2-Hexanediol, Panthenol, Glycereth-26, Salicylic Acid, Ammonium Acryloyldimethyltaurate/VP Copolymer, Betaine, Trehalose, Polyglyceryl-10 Laurate, Ethylhexylglycerin, Glycerin, Allantoin, Polyglyceryl-10 Myristate, Disodium EDTA, Butylene Glycol, Sodium Hyaluronate, Betaine Salicylate, Citrus Aurantium Dulcis (Orange) Peel Oil, Citrus Limon (Lemon) Peel Oil, Citrus Grandis (Grapefruit) Peel Oil, Citrus Aurantium Bergamia (Bergamot) Fruit Oil, Rosmarinus Officinalis (Rosemary) Leaf Oil, Eucalyptus Globulus Leaf Oil, Lavandula Angustifolia (Lavender) Oil, Vitis Vinifera (Grape) Fruit Extract, Citrus Aurantifolia (Lime) Fruit Extract, Citrus Limon (Lemon) Fruit Extract, Pyrus Malus (Apple) Fruit Extract, Citrus Aurantium Dulcis (Orange) Fruit Extract, Ethyl Hexanediol, Centella Asiatica Extract, Salix Alba (Willow) Bark Extract, Origanum Vulgare Leaf Extract, Chamaecyparis Obtusa Leaf Extract, Lactobacillus/Soybean Ferment Extract, Cinnamomum Cassia Bark Extract, Scutellaria Baicalensis Root Extract, Portulaca Oleracea Extract, Oenothera Biennis (Evening Primrose) Flower Extract, Pinus Palustris Leaf Extract, Ulmus Davidiana Root Extract, Pueraria Lobata Root Extract, Limonene"
+    ],
+    "suitable_skin_types": [
+      "oily",
+      "combination"
+    ],
+    "skincare_concerns": [
+      "Pores",
+      "Dullness/Uneven Texture"
+    ]
+  },
+  {
+    "product_id": "SB000002",
+    "product_name": "딥 비타C 캡슐 세럼",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Treatments",
+      "Face Serums"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000002.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000002.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "순수 비타민C 캡슐이 바르는 순간 터지며 칙칙한 톤과 잡티에 집중하는 브라이트닝 세럼입니다. 비타민나무 열매수 베이스에 나이아신아마이드 5%를 더했습니다.",
+      "skin_type": "모든 피부 타입",
+      "concerns_text": "Dark spots, Dullness/Uneven Texture",
+      "highlighted_ingredients": [
+        "Ascorbic Acid: 순수 비타민C. 톤을 고르게 하고 잡티에 집중합니다.",
+        "Niacinamide: 피부 결과 톤을 함께 정돈합니다.",
+        "Glutathione: 비타민C와 함께 칙칙함을 덜어 줍니다."
+      ],
+      "ingredient_callouts": "미네랄 오일, 파라벤 무첨가.",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "토너 후 적당량을 덜어 결 방향으로 펴 바릅니다. 캡슐이 터지도록 손끝으로 가볍게 문지릅니다. 아침 사용 시 자외선 차단제를 꼭 바릅니다.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 28,
+    "size": "30ml",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Dark spots",
+      "Dullness/Uneven Texture",
+      "Without Parabens",
+      "Without Mineral Oil"
+    ],
+    "ingredients": [
+      "Hippophae Rhamnoides Water, Glycereth-26, Niacinamide, Glycerin, Water, 1,2-Hexanediol, Diphenylsiloxy Phenyl Trimethicone, Benzyl Glycol, Caprylic/Capric Triglyceride, Isononyl Isononanoate, Diethoxyethyl Succinate, Arginine, Acrylates/C10-30 Alkyl Acrylate Crosspolymer, C12-14 Alketh-12, Octyldodeceth-16, Castor Oil/IPDI Copolymer, Gluconolactone, Ethylhexylglycerin, Allantoin, Xanthan Gum, Adenosine, Disodium EDTA, Panthenol, Dextrin Palmitate, Hydrogenated Lecithin, Olea Europaea (Olive) Fruit Oil, Cholesterol, Dibutyl Ethylhexanoyl Glutamide, Carbomer, Helianthus Annuus (Sunflower) Seed Oil, Glutathione, Ascorbic Acid, Dibutyl Lauroyl Glutamide, Citrus Medica Vulgaris Peel Oil, 3-O-Ethyl Ascorbic Acid, Ascorbyl Glucoside, Xanthophylls, Propanediol, Rosmarinus Officinalis (Rosemary) Leaf Oil, Litsea Cubeba Fruit Oil, Foeniculum Vulgare (Fennel) Oil, Magnesium Ascorbyl Phosphate, Sodium Ascorbyl Phosphate, Sodium Hyaluronate"
+    ],
+    "suitable_skin_types": [
+      "normal",
+      "combination",
+      "oily",
+      "dry"
+    ],
+    "skincare_concerns": [
+      "Dark spots",
+      "Dullness/Uneven Texture"
+    ]
+  },
+  {
+    "product_id": "SB000003",
+    "product_name": "PDRN 핑크 펩타이드 세럼",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Treatments",
+      "Face Serums"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000003.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000003.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "연어 PDRN(소듐 DNA) 10,000ppm 과 5종 펩타이드가 처진 결과 볼륨을 채우는 스킨 부스팅 세럼입니다. 핑크빛은 천연 비타민 B12 색입니다.",
+      "skin_type": "건성, 중성, 복합성",
+      "concerns_text": "Loss of firmness, Anti-Aging",
+      "highlighted_ingredients": [
+        "Sodium DNA: 연어 유래 PDRN. 탄력과 볼륨감을 채웁니다.",
+        "Copper Tripeptide-1: 5종 펩타이드 복합체의 핵심.",
+        "Hydrolyzed Collagen: 연어 콜라겐으로 결을 매끈하게."
+      ],
+      "ingredient_callouts": "파라벤 무첨가. 향료 포함.",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "토너 후 2~3방울을 얼굴 전체에 펴 바르고 손바닥으로 감싸 흡수시킵니다. 아침저녁 사용.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 32,
+    "size": "30ml",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Loss of firmness",
+      "Anti-Aging",
+      "Without Parabens"
+    ],
+    "ingredients": [
+      "Water, Disodium EDTA, Niacinamide, Hydrolyzed Collagen, Sodium DNA, Millet Extract, Copper Tripeptide-1, Acetyl Hexapeptide-8, Palmitoyl Pentapeptide-4, Palmitoyl Tripeptide-1, Palmitoyl Tetrapeptide-7, Butylene Glycol, 1,2-Hexanediol, Glycerin, Dipropylene Glycol, Polyglycerin-3, Glyceryl Acrylate/Acrylic Acid Copolymer, PVM/MA Copolymer, Sodium Hyaluronate, Ethylhexylglycerin, Glycereth-26, Adenosine, Acrylates/C10-30 Alkyl Acrylate Crosspolymer, Isopropyl Myristate, Ubiquinone, Fragrance, Caprylyl Glycol, Tromethamine, Sodium Acrylate/Sodium Acryloyldimethyl Taurate Copolymer, Polyisobutene, Caprylyl/Capryl Glucoside, Sorbitan Oleate, Atelocollagen, Salmon Egg Extract, Cyanocobalamin, Melia Azadirachta Leaf Extract, Melia Azadirachta Flower Extract, Curcuma Longa (Turmeric) Root Extract, Ocimum Sanctum Leaf Extract, Corallina Officinalis Extract"
+    ],
+    "suitable_skin_types": [
+      "dry",
+      "normal",
+      "combination"
+    ],
+    "skincare_concerns": [
+      "Loss of firmness",
+      "Anti-Aging"
+    ]
+  },
+  {
+    "product_id": "SB000004",
+    "product_name": "콜라겐 젤리 크림",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Moisturizers",
+      "Moisturizers"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000004.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000004.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "저분자 콜라겐 3종과 나이아신아마이드를 젤리 제형에 담아 수분과 탄력을 한 번에 채우는 크림입니다. 끈적임 없이 탱글하게 마무리됩니다.",
+      "skin_type": "건성, 중성. 여름철 지성 피부의 수분 크림으로도 적합",
+      "concerns_text": "Dryness, Loss of firmness",
+      "highlighted_ingredients": [
+        "Collagen: 저분자·가수분해·수용성 콜라겐 3종.",
+        "Niacinamide: 톤과 결을 함께 정돈합니다.",
+        "Squalane: 수분이 날아가지 않게 막을 만듭니다."
+      ],
+      "ingredient_callouts": "미네랄 오일, 파라벤 무첨가.",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "스킨케어 마지막 단계에 적당량을 덜어 얼굴 전체에 펴 바릅니다. 스패출러로 덜어 쓰면 위생적입니다.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 26,
+    "size": "110ml",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Dryness",
+      "Loss of firmness",
+      "Without Parabens",
+      "Without Mineral Oil"
+    ],
+    "ingredients": [
+      "Water, Propanediol, Dipropylene Glycol, Butylene Glycol, Methylpropanediol, Diethoxyethyl Succinate, Ethoxydiglycol, Ammonium Acryloyldimethyltaurate/Beheneth-25 Methacrylate Crosspolymer, Niacinamide, Trehalose, 1,2-Hexanediol, Chlorella Vulgaris Extract, Collagen, Hydrolyzed Collagen, Cynanchum Atratum Extract, Althaea Rosea Flower Extract, Soluble Collagen, Allium Sativum (Garlic) Bulb Extract, Avena Sativa (Oat) Kernel Extract, Bertholletia Excelsa Seed Extract, Brassica Oleracea Italica (Broccoli) Extract, Camellia Sinensis Seed Extract, Salmon Egg Extract, Solanum Lycopersicum (Tomato) Fruit Extract, Spinacia Oleracea (Spinach) Leaf Extract, Vaccinium Angustifolium (Blueberry) Fruit Extract, Wine Extract, Polyglyceryl-10 Isostearate, Tromethamine, Glucose, Polyglyceryl-10 Oleate, Ethylhexylglycerin, Fructooligosaccharides, Fructose, Adenosine, Sodium Phytate, Cyanocobalamin, Tocopherol, Pullulan, Glycerin, Hydroxypropyltrimonium Hyaluronate, Squalane"
+    ],
+    "suitable_skin_types": [
+      "dry",
+      "normal"
+    ],
+    "skincare_concerns": [
+      "Dryness",
+      "Loss of firmness"
+    ]
+  },
+  {
+    "product_id": "SB000005",
+    "product_name": "제로 포어 폼 클렌저",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Cleansers",
+      "Face Wash & Cleansers"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000005.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000005.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "조밀한 거품이 모공 속 피지와 노폐물을 씻어 내면서 당김 없이 마무리되는 데일리 폼 클렌저입니다. 쇠비름·동백꽃 추출물이 세안 후 피부를 진정시킵니다.",
+      "skin_type": "지성, 복합성",
+      "concerns_text": "Pores, Acne/Blemishes",
+      "highlighted_ingredients": [
+        "Potassium Cocoyl Glycinate: 순한 아미노산계 세정 성분.",
+        "Portulaca Oleracea Extract: 쇠비름 추출물. 진정.",
+        "Camellia Japonica Flower Extract: 동백꽃 추출물. 보습."
+      ],
+      "ingredient_callouts": "파라벤 무첨가. 향료 포함.",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "물기 있는 손에 적당량을 덜어 거품을 낸 뒤 얼굴을 마사지하듯 씻고 미온수로 헹굽니다. 아침저녁 사용.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 14,
+    "size": "120g",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Pores",
+      "Acne/Blemishes",
+      "Without Parabens"
+    ],
+    "ingredients": [
+      "Water, Glycerin, Myristic Acid, Sorbitol, Palmitic Acid, Stearic Acid, Potassium Hydroxide, Lauric Acid, Cetearyl Olivate, Potassium Cocoyl Glycinate, Parfum (Fragrance), Sodium Cocoyl Isethionate, Sorbitan Olivate, Potassium Cocoate, Coconut Acid, Butylene Glycol, Sodium Isethionate, Sodium Polyacrylate, Portulaca Oleracea Extract, Gaultheria Procumbens (Wintergreen) Leaf Extract, Disodium EDTA, Camellia Japonica Flower Extract, Propanediol, Diisopropyl Adipate, Lecithin, 1,2-Hexanediol, Saponaria Officinalis Leaf Extract, Acrylic Acid/Acrylamidomethyl Propane Sulfonic Acid Copolymer, Dimethylmethoxy Chromanol, Glyceryl Caprylate, Citric Acid, Potassium Sorbate, Sodium Benzoate, Xanthan Gum, Chaenomeles Sinensis Fruit Extract, Citrus Aurantium Dulcis (Orange) Flower Extract, Melissa Officinalis Extract, Limonene, Hydroxyl Citronellal"
+    ],
+    "suitable_skin_types": [
+      "oily",
+      "combination"
+    ],
+    "skincare_concerns": [
+      "Pores",
+      "Acne/Blemishes"
+    ]
+  },
+  {
+    "product_id": "SB000006",
+    "product_name": "제로 포어 모이스처 선 세럼 SPF50+ PA++++",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Sunscreen",
+      "Face Sunscreen"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000006.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000006.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "세럼처럼 가볍게 발리는 유기자차 선 세럼입니다. 8종 히알루론산이 수분을 채우고 백탁 없이 밀착됩니다. 나이아신아마이드가 톤을 정돈합니다.",
+      "skin_type": "모든 피부 타입",
+      "concerns_text": "Dryness, Pores",
+      "highlighted_ingredients": [
+        "Hyaluronic Acid: 분자량이 다른 8종이 층층이 수분을 채웁니다.",
+        "Niacinamide: 톤 정돈.",
+        "Ethylhexyl Triazone: 자외선 차단 성분 (유기자차)."
+      ],
+      "ingredient_callouts": "옥시벤존, 파라벤 무첨가. 백탁 없음.",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "스킨케어 마지막 단계에 충분한 양(약 500원 동전 크기)을 얼굴 전체에 고르게 바릅니다. 외출 30분 전에 바르고, 2~3시간마다 덧바릅니다.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 19,
+    "size": "50ml",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Dryness",
+      "Pores",
+      "Without Oxybenzone",
+      "Without Parabens"
+    ],
+    "ingredients": [
+      "Water, Dibutyl Adipate, Propanediol, Butyloctyl Salicylate, 1,2-Hexanediol, Ethylhexyl Triazone, Heptyl Undecylenate, Niacinamide, Propylheptyl Caprylate, Bis-Ethylhexyloxyphenol Methoxyphenyl Triazine, Methylene Bis-Benzotriazolyl Tetramethylbutylphenol, Caprylyl Methicone, Diethylamino Hydroxybenzoyl Hexyl Benzoate, Methyl Methacrylate Crosspolymer, Behenyl Alcohol, Potassium Cetyl Phosphate, Polyglyceryl-3 Methylglucose Distearate, Carbomer, Polyester-5, Tromethamine, Decyl Glucoside, Dipropylene Glycol, Polyacrylate Crosspolymer-6, Xanthan Gum, Ethylhexylglycerin, Adenosine, Morus Alba Leaf Extract, Morus Alba Extract, Glycerin, Disodium EDTA, Coccinia Indica Fruit Extract, Allantoin, Panthenol, Polymethylsilsesquioxane, Butylene Glycol, Eucalyptus Dives Leaf Oil, Solanum Melongena Fruit Extract, T-Butyl Alcohol, Simmondsia Chinensis Seed Oil, Agave Americana Leaf Extract, Coral Extract, Curcuma Longa Root Extract, Ocimum Sanctum Leaf Extract, Tocopherol, Cymbopogon Nardus Oil, Rosa Damascena Flower Oil, Hydrolyzed Wheat Germ Extract, Sodium Hyaluronate, Hydrolyzed Hyaluronic Acid, Hydrolyzed Sodium Hyaluronate, Hydroxypropyltrimonium Hyaluronate, Sodium Acetylated Hyaluronate, Sodium Hyaluronate Crosspolymer, Hyaluronic Acid, Pentylene Glycol, Potassium Hyaluronate"
+    ],
+    "suitable_skin_types": [
+      "dry",
+      "normal",
+      "combination",
+      "oily"
+    ],
+    "skincare_concerns": [
+      "Dryness",
+      "Pores"
+    ]
+  },
+  {
+    "product_id": "SB000007",
+    "product_name": "PDRN 핑크 펩타이드 아이크림",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Eye Care",
+      "Eye Creams & Treatments"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000007.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000007.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "PDRN 과 5종 펩타이드, 카페인, 레티놀을 눈가용으로 조정한 아이크림입니다. 다크서클이 도드라지는 부위와 눈가 잔주름을 함께 봅니다.",
+      "skin_type": "모든 피부 타입. 레티놀 포함이라 저녁 사용 권장",
+      "concerns_text": "Dark Circles, Anti-Aging",
+      "highlighted_ingredients": [
+        "Caffeine: 눈가 부기와 칙칙함을 덜어 줍니다.",
+        "Retinol: 저농도. 눈가 결을 매끈하게.",
+        "Sodium DNA: 연어 PDRN. 탄력."
+      ],
+      "ingredient_callouts": "파라벤 무첨가. 레티놀 포함(임산부·레티놀 민감 시 주의).",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "쌀알 크기를 덜어 눈가에 점을 찍듯 올리고 약지로 두드려 흡수시킵니다. 저녁 사용을 권합니다.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 24,
+    "size": "20ml",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Dark Circles",
+      "Anti-Aging",
+      "Without Parabens"
+    ],
+    "ingredients": [
+      "Water, Glycerin, Dipropylene Glycol, Niacinamide, Caprylic/Capric Triglyceride, Pentaerythrityl Tetraethylhexanoate, Cetearyl Alcohol, Glycereth-26, Butylene Glycol Dicaprylate/Dicaprate, Bis-Behenyl/Isostearyl/Phytosteryl Dimer Dilinoleyl Dimer Dilinoleate, Cetearyl Olivate, Sorbitan Olivate, Propylene Glycol Dibenzoate, Pullulan, 1,2-Hexanediol, Glyceryl Stearate, Vinyl Dimethicone, Hydroxyacetophenone, Hydroxyethyl Acrylate/Sodium Acryloyldimethyl Taurate Copolymer, Hydrogenated Lecithin, Sodium Acrylate/Sodium Acryloyldimethyl Taurate Copolymer, Sodium DNA, Polyisobutene, Butylene Glycol, Ethylhexylglycerin, Propanediol, Melia Azadirachta Leaf Extract, Adenosine, Melia Azadirachta Flower Extract, Curcuma Longa (Turmeric) Root Extract, Sorbitan Isostearate, Sorbitan Oleate, Caprylyl/Capryl Glucoside, Fragaria Chiloensis (Strawberry) Fruit Extract, Hedera Helix (Ivy) Leaf/Stem Extract, Cyanocobalamin, Citrus Nobilis (Mandarin Orange) Peel Extract, Retinol, Ocimum Sanctum Leaf Extract, Lespedeza Capitata Leaf/Stem Extract, Corallina Officinalis Extract, Sodium Hyaluronate, Caffeine, Coffea Arabica (Coffee) Seed Extract, Hydrolyzed Extensin, Hydrolyzed Hyaluronic Acid, Copper Tripeptide-1, Sodium Acetylated Hyaluronate, Acetyl Hexapeptide-8, Palmitoyl Pentapeptide-4, Palmitoyl Tetrapeptide-7, Palmitoyl Tripeptide-1"
+    ],
+    "suitable_skin_types": [
+      "dry",
+      "normal",
+      "combination",
+      "oily"
+    ],
+    "skincare_concerns": [
+      "Dark Circles",
+      "Anti-Aging"
+    ]
+  },
+  {
+    "product_id": "SB000008",
+    "product_name": "PDRN 콜라겐 젤리 겔 마스크",
+    "brand_name": "SSAFY Beauty",
+    "category": [
+      "Skincare",
+      "Masks",
+      "Face Masks"
+    ],
+    "image_url": "/images/ssafy-beauty/SB000008.svg",
+    "sku_id": null,
+    "images": [
+      "/images/ssafy-beauty/SB000008.svg"
+    ],
+    "variants": [],
+    "description": {
+      "what_it_is": "겔 시트가 얼굴에 밀착돼 PDRN 과 12종 펩타이드, 콜라겐을 20분 동안 전달하는 집중 마스크입니다. 중요한 날 전날 밤에 씁니다.",
+      "skin_type": "건성, 중성, 복합성",
+      "concerns_text": "Dryness, Loss of firmness",
+      "highlighted_ingredients": [
+        "Sodium DNA: 연어 PDRN.",
+        "Hydrolyzed Collagen: 저분자 콜라겐.",
+        "Acetyl Hexapeptide-8: 12종 펩타이드 중 하나. 탄력."
+      ],
+      "ingredient_callouts": "파라벤 무첨가. 향료 포함.",
+      "what_else": null,
+      "clinical_results": null,
+      "suggested_usage": "세안 후 토너로 정돈한 뒤 시트를 얼굴에 밀착시키고 15~20분 후 떼어 냅니다. 남은 에센스는 두드려 흡수시킵니다.",
+      "brand_story": "SSAFY Beauty 는 성분표를 읽는 사람들을 위해 만든 작은 브랜드입니다. 광고 모델 대신 전성분과 함량을 앞에 두고, 고객이 남긴 의견을 다음 제품에 그대로 반영합니다. 이 페이지의 상품은 시연용 가상 브랜드이며, 전성분은 공개된 INCI 표기를 옮겨 적은 것입니다."
+    },
+    "price_usd": 6,
+    "size": "1매 / 30g",
+    "rating": null,
+    "review_count": 0,
+    "loves_count": null,
+    "badges": [
+      "new"
+    ],
+    "highlights": [
+      "Dryness",
+      "Loss of firmness",
+      "Without Parabens"
+    ],
+    "ingredients": [
+      "Water, Glycerin, Methylpropanediol, Acrylates/Ethylhexyl Acrylate Copolymer, Niacinamide, Chondrus Crispus Powder, 1,2-Hexanediol, Butylene Glycol, Betaine, Ceratonia Siliqua (Carob) Gum, Hydroxyacetophenone, Allantoin, Glucomannan, Xanthan Gum, Laureth-21, Panthenol, Polyglyceryl-10 Laurate, Propanediol, Cellulose Gum, Cyamopsis Tetragonoloba (Guar) Gum, Fragrance (Parfum), Potassium Chloride, Dextrin, Adenosine, Ethylhexylglycerin, Hydrolyzed Collagen, Cyanocobalamin, Ascorbic Acid, Sodium DNA, Tocopherol, Acetyl Hexapeptide-8, Ascorbic Acid Polypeptide, Acetyl Octapeptide-3, Acetyl Tetrapeptide-2, Acetyl Tetrapeptide-3, Acetyl Tetrapeptide-5, Acetyl Tetrapeptide-9, Carnosine, Copper Tripeptide-1, Nonapeptide-1, Palmitoyl Pentapeptide-4, Palmitoyl Tripeptide-1, Palmitoyl Tripeptide-5"
+    ],
+    "suitable_skin_types": [
+      "dry",
+      "normal",
+      "combination"
+    ],
+    "skincare_concerns": [
+      "Dryness",
+      "Loss of firmness"
+    ]
+  }
+]
