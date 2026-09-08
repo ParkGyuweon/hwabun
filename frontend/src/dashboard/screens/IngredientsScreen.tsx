@@ -1,5 +1,12 @@
 import { BarList, Kpi, Panel } from '../components';
-import { cautionPrevalence, fmt, ingredientStats, productMetrics, products } from '../lib/metrics';
+import {
+  catalogProducts,
+  cautionPrevalence,
+  fmt,
+  ingredientStats,
+  productMetrics,
+  products,
+} from '../lib/metrics';
 
 /** 성분 구성과 성분 정보에 대한 사용자 관심 */
 export default function IngredientsScreen({
@@ -79,7 +86,7 @@ export default function IngredientsScreen({
             items={cautionPrevalence.map((c) => ({
               label: c.label,
               value: c.count,
-              hint: fmt.pct(c.count / products.length, 0),
+              hint: fmt.pct(c.count / catalogProducts.length, 0),
             }))}
           />
         </Panel>

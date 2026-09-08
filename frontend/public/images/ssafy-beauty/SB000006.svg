@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="제로 포어 모이스처 선 세럼 SPF50+ PA++++">
+  <rect width="800" height="800" fill="#f4f1ea"/>
+  <ellipse cx="400" cy="690" rx="220" ry="26" fill="#000" fill-opacity="0.06"/>
+  
+  <rect x="364" y="170" width="72" height="54" rx="8" fill="#e0a84a"/>
+  <path d="M312 224 h176 a20 20 0 0 1 20 20 v354 a36 36 0 0 1 -36 36 h-144 a36 36 0 0 1 -36 -36 v-354 a20 20 0 0 1 20 -20z" fill="#fbe7c6"/>
+  <rect x="292" y="380" width="216" height="130" fill="#ffffff" fill-opacity="0.85"/>
+  
+  <g font-family="'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif" text-anchor="middle" fill="#2f3a2f">
+    <text x="400" y="424" font-size="22" letter-spacing="4" font-weight="600">SSAFY BEAUTY</text>
+    <line x1="320.0" y1="438" x2="480.0" y2="438" stroke="#2f3a2f" stroke-opacity="0.35" stroke-width="1.5"/>
+    <text x="400" y="468" font-size="24" font-weight="500">제로 포어 모이스처 선 세럼 SPF50+ PA++++</text>
+    <text x="400" y="496" font-size="16" fill-opacity="0.65">50ml</text>
+  </g>
+  <circle cx="86" cy="86" r="30" fill="#8fae8b"/>
+  <text x="86" y="93" font-family="'Pretendard','Noto Sans KR',sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">SB</text>
+</svg>
