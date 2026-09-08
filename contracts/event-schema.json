@@ -76,7 +76,9 @@
         "dead_click",
         "begin_checkout",
         "purchase",
-        "purchase_reason_select"
+        "purchase_reason_select",
+        "banner_impression",
+        "banner_click"
       ]
     },
     "intent": {
@@ -224,7 +226,9 @@
               "scroll_backtrack",
               "text_selection",
               "text_copy",
-              "hover_dwell"
+              "hover_dwell",
+              "banner_impression",
+              "banner_click"
             ]
           }
         },
@@ -311,7 +315,8 @@
               "session_start",
               "page_view",
               "navigation_click",
-              "exit_summary"
+              "exit_summary",
+              "banner_impression"
             ]
           }
         },
@@ -363,7 +368,8 @@
               "scroll_pause",
               "media_view",
               "quick_look",
-              "quick_look_close"
+              "quick_look_close",
+              "banner_click"
             ]
           }
         },
@@ -375,6 +381,69 @@
         "properties": {
           "intent": {
             "const": "interest"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": ["banner_impression", "banner_click"]
+          }
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "type": "object",
+            "required": [
+              "banner_type",
+              "banner_value",
+              "banner_slot",
+              "trait_source"
+            ],
+            "properties": {
+              "banner_type": {
+                "enum": [
+                  "concern",
+                  "ingredient",
+                  "clean",
+                  "price_bin",
+                  "category",
+                  "segment",
+                  "new_brand"
+                ]
+              },
+              "banner_value": {
+                "type": ["string", "null"]
+              },
+              "banner_slot": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "trait_source": {
+                "enum": ["session", "profile", "coldstart", "explore"]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {"banner_type": {"const": "new_brand"}},
+                  "required": ["banner_type"]
+                },
+                "then": {
+                  "properties": {"banner_value": {"type": "null"}}
+                },
+                "else": {
+                  "properties": {
+                    "banner_value": {"type": "string", "minLength": 1}
+                  }
+                }
+              }
+            ],
+            "not": {"required": ["slot"]}
           }
         }
       }

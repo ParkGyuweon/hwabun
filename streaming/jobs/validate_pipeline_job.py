@@ -30,6 +30,10 @@ DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
+DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
+DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
+DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
+DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,10 @@ class ValidatePipelineConfig:
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
+    banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
+    user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
+    cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
+    baseline_path: str = DEFAULT_BASELINE_PATH
     report_path: str | None = None
     require_events: bool = False
 
@@ -69,6 +77,10 @@ class ValidatePipelineConfig:
             "funnel_daily_path": self.funnel_daily_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
+            "banner_daily_path": self.banner_daily_path,
+            "user_trait_daily_path": self.user_trait_daily_path,
+            "cross_brand_daily_path": self.cross_brand_daily_path,
+            "baseline_path": self.baseline_path,
         }
         for name, value in paths.items():
             if not isinstance(value, str) or not value.strip():
@@ -142,6 +154,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--category-price-path",
         default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
     )
+    parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
+    parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
+    parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
+    parser.add_argument("--baseline-path", default=_env("ANALYTICS_BASELINE_PATH", DEFAULT_BASELINE_PATH))
     parser.add_argument(
         "--report-path",
         default=os.getenv("PIPELINE_VALIDATION_REPORT_PATH"),
@@ -173,6 +189,10 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         funnel_daily_path=args.funnel_daily_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
+        banner_daily_path=args.banner_daily_path,
+        user_trait_daily_path=args.user_trait_daily_path,
+        cross_brand_daily_path=args.cross_brand_daily_path,
+        baseline_path=args.baseline_path,
         report_path=args.report_path,
         require_events=args.require_events,
     )
@@ -286,6 +306,26 @@ def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
     }
 
 
+def _unmatched_banner_click_count(product_fact: Any) -> int:
+    """A click must match an impression in the same session and banner grain."""
+
+    from pyspark.sql import functions as F
+
+    columns = ["session_id", "product_id", "banner_type", "banner_value", "banner_slot"]
+    clicks = product_fact.where(F.col("event_name") == "banner_click").alias("click")
+    impressions = (
+        product_fact.where(F.col("event_name") == "banner_impression")
+        .select(*columns, "trait_source")
+        .dropDuplicates()
+        .alias("impression")
+    )
+    condition = F.lit(True)
+    for name in columns:
+        condition = condition & F.col(f"click.{name}").eqNullSafe(F.col(f"impression.{name}"))
+    condition = condition & F.col("click.trait_source").eqNullSafe(F.col("impression.trait_source"))
+    return clicks.join(impressions, condition, "left_anti").count()
+
+
 def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dict[str, Any]:
     """Run cross-dataset checks and return a JSON-serializable report."""
 
@@ -306,6 +346,9 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     funnel_daily = frames["funnel_daily"]
     ingredient_weekly = frames["ingredient_weekly"]
     category_price = frames["category_price"]
+    banner_daily = frames["banner_daily"]
+    user_trait_daily = frames["user_trait_daily"]
+    cross_brand_daily = frames["cross_brand_daily"]
 
     counts = {
         "raw": raw.count(),
@@ -323,6 +366,9 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "funnel_daily": funnel_daily.count(),
         "ingredient_weekly": ingredient_weekly.count(),
         "category_price": category_price.count(),
+        "banner_daily": banner_daily.count(),
+        "user_trait_daily": user_trait_daily.count(),
+        "cross_brand_daily": cross_brand_daily.count(),
     }
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
@@ -678,6 +724,172 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         )
     )
 
+    banner_grain = [
+        "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
+        "banner_slot", "trait_source", "policy_version", "actor_type", "source",
+        "scenario_id", "simulation_run_id",
+    ]
+    checks.append(_check(
+        "banner_daily_grain_is_unique",
+        _duplicate_count(banner_daily, banner_grain) == 0,
+        "banner_daily configured grain is unique",
+    ))
+    invalid_banner_counts = banner_daily.where(
+        (F.col("click_count") > F.col("impression_count"))
+        | (F.col("skip_count") < 0)
+        | (
+            (F.col("impression_count") == 0)
+            & F.col("banner_ctr").isNotNull()
+        )
+        | (
+            (F.col("impression_count") > 0)
+            & ~F.col("banner_ctr").between(0, 1)
+        )
+    ).count()
+    checks.append(_check(
+        "banner_daily_counts_and_ctr_are_valid",
+        invalid_banner_counts == 0,
+        f"invalid_rows={invalid_banner_counts}",
+    ))
+    invalid_banner_values = banner_daily.where(~F.col("banner_value_is_valid")).count()
+    checks.append(_check(
+        "banner_value_uses_source_vocabulary",
+        invalid_banner_values == 0,
+        f"invalid_rows={invalid_banner_values}; new_brand alone permits NULL",
+    ))
+    unmatched_clicks = _unmatched_banner_click_count(product_fact)
+    checks.append(_check(
+        "banner_click_matches_impression_trait_source",
+        unmatched_clicks == 0,
+        f"unmatched_clicks={unmatched_clicks}",
+    ))
+    banner_facts = product_fact.where(F.col("event_name").isin("banner_impression", "banner_click"))
+    invalid_banner_facts = banner_facts.where(
+        F.col("banner_type").isNull()
+        | F.col("banner_slot").isNull()
+        | (F.col("banner_slot") <= 0)
+        | ~F.col("trait_source").isin("session", "profile", "coldstart", "explore")
+        | ((F.col("banner_type") == "new_brand") & F.col("banner_value").isNotNull())
+        | ((F.col("banner_type") != "new_brand") & F.col("banner_value").isNull())
+    ).count()
+    checks.append(_check(
+        "banner_fact_contract_is_valid",
+        invalid_banner_facts == 0,
+        f"invalid_rows={invalid_banner_facts}",
+    ))
+    impressions = banner_facts.where(F.col("event_name") == "banner_impression")
+    impression_count = impressions.count()
+    explore_count = impressions.where(F.col("trait_source") == "explore").count()
+    explore_share = explore_count / impression_count if impression_count else None
+    # Sampling fluctuates at small N; enforce a broad operational guardrail only at N>=100.
+    explore_ok = impression_count < 100 or (explore_share is not None and 0.1 <= explore_share <= 0.3)
+    checks.append(_check(
+        "banner_explore_impression_share_is_near_twenty_percent",
+        explore_ok,
+        f"impressions={impression_count} explore={explore_count} share={explore_share}",
+    ))
+    checks.append(_check(
+        "user_trait_daily_grain_is_unique",
+        _duplicate_count(user_trait_daily, ["trait_date_kst", "user_id", "trait"]) == 0,
+        "user_trait_daily grain=trait_date_kst+user_id+trait",
+    ))
+    invalid_traits = user_trait_daily.where(
+        ~F.col("trait").isin("price", "ingredient", "review", "concern", "participate")
+        | F.col("trait_score").isNull()
+        | F.col("trait").isNull()
+        | (F.col("contributing_event_count") <= 0)
+    ).count()
+    checks.append(_check(
+        "user_trait_daily_values_are_valid",
+        invalid_traits == 0,
+        f"invalid_rows={invalid_traits}",
+    ))
+    checks.append(_check(
+        "cross_brand_daily_grain_is_unique",
+        _duplicate_count(cross_brand_daily, [
+            "event_date_kst", "destination_brand_id", "actor_type", "source",
+            "scenario_id", "simulation_run_id",
+        ]) == 0,
+        "cross_brand_daily configured grain is unique",
+    ))
+    invalid_cross_rates = cross_brand_daily.where(
+        (F.col("cross_brand_entry_sessions") > F.col("brand_view_sessions"))
+        | (F.col("recommendation_cross_brand_entry_sessions") > F.col("cross_brand_entry_sessions"))
+        | (F.col("banner_cross_brand_entry_sessions") > F.col("cross_brand_entry_sessions"))
+    ).count()
+    checks.append(_check(
+        "cross_brand_daily_counts_are_bounded",
+        invalid_cross_rates == 0,
+        f"invalid_rows={invalid_cross_rates}",
+    ))
+    invalid_cross_rate_values = cross_brand_daily.where(
+        (F.col("cross_brand_entry_rate") < 0)
+        | (F.col("cross_brand_entry_rate") > 1)
+        | (F.col("recommendation_cross_brand_entry_rate") < 0)
+        | (F.col("recommendation_cross_brand_entry_rate") > 1)
+        | (F.col("banner_cross_brand_entry_rate") < 0)
+        | (F.col("banner_cross_brand_entry_rate") > 1)
+        | (
+            (F.col("cross_brand_entry_sessions") == 0)
+            & (
+                F.col("recommendation_share_of_cross_brand_entries").isNotNull()
+                | F.col("banner_share_of_cross_brand_entries").isNotNull()
+            )
+        )
+        | (
+            (F.col("cross_brand_entry_sessions") > 0)
+            & (
+                ~F.col("recommendation_share_of_cross_brand_entries").between(0, 1)
+                | ~F.col("banner_share_of_cross_brand_entries").between(0, 1)
+            )
+        )
+    ).count()
+    checks.append(_check(
+        "cross_brand_daily_rates_use_contract_denominators",
+        invalid_cross_rate_values == 0,
+        f"invalid_rows={invalid_cross_rate_values}; share denominator=cross-brand entries",
+    ))
+
+    baseline = frames.get("analytics_baseline")
+    if baseline is None:
+        # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
+        warnings.append({
+            "check": "analytics_baseline_is_absent",
+            "detail": "baseline policy version, start date, end date를 준 실행에서만 생성된다",
+        })
+    else:
+        counts["analytics_baseline"] = baseline.count()
+        checks.append(_check(
+            "analytics_baseline_grain_is_unique",
+            _duplicate_count(baseline, [
+                "baseline_policy_version", "metric_name", "brand_id", "algorithm",
+            ]) == 0,
+            "analytics_baseline grain=policy_version+metric+brand+algorithm",
+        ))
+        checks.append(_check(
+            "analytics_baseline_metrics_are_pre_banner_only",
+            baseline.where(
+                ~F.col("metric_name").isin("recommendation_ctr", "cross_brand_entry_rate")
+            ).count() == 0,
+            "배너 CTR 기준선은 존재하지 않는 값이므로 만들지 않는다",
+        ))
+        invalid_baseline = baseline.where(
+            (F.col("numerator") > F.col("denominator"))
+            | (F.col("numerator") < 0)
+            | (F.col("denominator") < 0)
+            | ((F.col("denominator") == 0) & F.col("metric_value").isNotNull())
+            | ((F.col("denominator") > 0) & ~F.col("metric_value").between(0, 1))
+            | F.col("baseline_policy_version").isNull()
+            | F.col("baseline_start_date").isNull()
+            | F.col("baseline_end_date").isNull()
+            | (F.col("baseline_start_date") > F.col("baseline_end_date"))
+        ).count()
+        checks.append(_check(
+            "analytics_baseline_values_and_period_are_valid",
+            invalid_baseline == 0,
+            f"invalid_rows={invalid_baseline}",
+        ))
+
     failures = [check for check in checks if not check["passed"]]
     return {
         "status": "passed" if not failures else "failed",
@@ -706,11 +918,21 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "funnel_daily": config.funnel_daily_path,
         "ingredient_weekly": config.ingredient_weekly_path,
         "category_price": config.category_price_path,
+        "banner_daily": config.banner_daily_path,
+        "user_trait_daily": config.user_trait_daily_path,
+        "cross_brand_daily": config.cross_brand_daily_path,
     }
     frames = {
         name: spark.read.option("mergeSchema", "true").parquet(path)
         for name, path in paths.items()
     }
+    try:
+        frames["analytics_baseline"] = spark.read.option("mergeSchema", "true").parquet(
+            config.baseline_path
+        )
+    except Exception:
+        # 기준선을 만들지 않은 실행에서는 경로가 없다. 검증은 그대로 진행한다.
+        pass
     return validate_frames(frames, config.require_events)
 
 
