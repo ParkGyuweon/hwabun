@@ -33,6 +33,6 @@ Implement the API layer for consumer, seller, and administrator access; seller v
 ## Branch and commits
 
 - Work on the shared `feat/shop-backend` branch and stage only this role's files.
-- Before each commit, read [docs/git-convention.md](../../docs/git-convention.md).
+- Before each commit, read [docs/git-convention.md](../../../docs/git-convention.md).
 - Use the required Korean `type(scope): 구체적인 작업 내용` convention and keep each commit to one cohesive change.
 - Never commit generated `.gradle/` files or another agent's package.

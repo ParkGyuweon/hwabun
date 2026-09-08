@@ -37,6 +37,6 @@ Independently verify the implemented Shop Backend. Add focused automated tests t
 ## Branch and commits
 
 - Work on the shared `feat/shop-backend` branch and stage only test and role-instruction files.
-- Before each commit, read [docs/git-convention.md](../../docs/git-convention.md).
+- Before each commit, read [docs/git-convention.md](../../../docs/git-convention.md).
 - Use the required Korean `type(scope): 구체적인 작업 내용` convention and keep each commit to one cohesive change.
 - Never commit generated `.gradle/` files or production code unless the orchestrator explicitly asks for a fix.
