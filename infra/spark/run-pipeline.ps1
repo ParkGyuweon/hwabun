@@ -69,7 +69,7 @@ function Invoke-BatchPipeline {
         '--product-catalog-path', '/opt/project/batch/ingest/data/products_200.json',
         '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
-    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/build_marts_job.py' -JobArguments @(
+    $martArguments = @(
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",
         '--dim-product-path', "$dataRoot/processed/dim_product",
@@ -80,8 +80,23 @@ function Invoke-BatchPipeline {
         '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
         '--ingredient-weekly-path', "$dataRoot/marts/ingredient_weekly_interest",
         '--category-price-path', "$dataRoot/marts/category_price_reference",
+        '--banner-daily-path', "$dataRoot/marts/banner_daily",
+        '--user-trait-daily-path', "$dataRoot/marts/user_trait_daily",
+        '--cross-brand-daily-path', "$dataRoot/marts/cross_brand_daily",
+        '--baseline-path', "$dataRoot/marts/analytics_baseline",
+        '--trait-weights-path', '/opt/project/contracts/user-trait-weights.json',
+        '--feature-vocab-path', '/opt/project/contracts/product-feature-vocab.json',
+        '--affinity-lift-path', '/opt/project/batch/ingest/data/affinity_lift.csv',
         '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
+    if ($env:BASELINE_POLICY_VERSION -and $env:BASELINE_START_DATE -and $env:BASELINE_END_DATE) {
+        $martArguments += @(
+            '--baseline-policy-version', $env:BASELINE_POLICY_VERSION,
+            '--baseline-start-date', $env:BASELINE_START_DATE,
+            '--baseline-end-date', $env:BASELINE_END_DATE
+        )
+    }
+    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/build_marts_job.py' -JobArguments $martArguments
     Invoke-PipelineValidation
 }
 
@@ -102,6 +117,10 @@ function Invoke-PipelineValidation {
         '--funnel-daily-path', "$dataRoot/marts/funnel_daily_kpi",
         '--ingredient-weekly-path', "$dataRoot/marts/ingredient_weekly_interest",
         '--category-price-path', "$dataRoot/marts/category_price_reference",
+        '--banner-daily-path', "$dataRoot/marts/banner_daily",
+        '--user-trait-daily-path', "$dataRoot/marts/user_trait_daily",
+        '--cross-brand-daily-path', "$dataRoot/marts/cross_brand_daily",
+        '--baseline-path', "$dataRoot/marts/analytics_baseline",
         '--report-path', "$dataRoot/validation/pipeline-report.json",
         '--require-events'
     )

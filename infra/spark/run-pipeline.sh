@@ -48,6 +48,10 @@ validate_pipeline() {
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
     --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest" \
     --category-price-path "$data_root/marts/category_price_reference" \
+    --banner-daily-path "$data_root/marts/banner_daily" \
+    --user-trait-daily-path "$data_root/marts/user_trait_daily" \
+    --cross-brand-daily-path "$data_root/marts/cross_brand_daily" \
+    --baseline-path "$data_root/marts/analytics_baseline" \
     --report-path "$data_root/validation/pipeline-report.json" \
     --require-events
 }
@@ -70,18 +74,34 @@ run_batch_pipeline() {
     --product-catalog-path /opt/project/batch/ingest/data/products_200.json \
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
 
-  submit_job /opt/project/streaming/jobs/build_marts_job.py \
-    --sessionized-path "$data_root/processed/sessionized_events" \
-    --product-fact-path "$data_root/processed/product_event_fact" \
-    --dim-product-path "$data_root/processed/dim_product" \
-    --product-ingredient-path /opt/project/batch/ingest/data/serving/product_ingredient.csv \
-    --ingredient-vocab-path /opt/project/batch/ingest/data/serving/ingredient_vocab.csv \
-    --funnel-session-path "$data_root/processed/funnel_session_fact" \
-    --product-daily-path "$data_root/marts/product_daily_kpi" \
-    --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
-    --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest" \
-    --category-price-path "$data_root/marts/category_price_reference" \
+  local mart_args=(
+    --sessionized-path "$data_root/processed/sessionized_events"
+    --product-fact-path "$data_root/processed/product_event_fact"
+    --dim-product-path "$data_root/processed/dim_product"
+    --product-ingredient-path /opt/project/batch/ingest/data/serving/product_ingredient.csv
+    --ingredient-vocab-path /opt/project/batch/ingest/data/serving/ingredient_vocab.csv
+    --funnel-session-path "$data_root/processed/funnel_session_fact"
+    --product-daily-path "$data_root/marts/product_daily_kpi"
+    --funnel-daily-path "$data_root/marts/funnel_daily_kpi"
+    --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest"
+    --category-price-path "$data_root/marts/category_price_reference"
+    --banner-daily-path "$data_root/marts/banner_daily"
+    --user-trait-daily-path "$data_root/marts/user_trait_daily"
+    --cross-brand-daily-path "$data_root/marts/cross_brand_daily"
+    --baseline-path "$data_root/marts/analytics_baseline"
+    --trait-weights-path /opt/project/contracts/user-trait-weights.json
+    --feature-vocab-path /opt/project/contracts/product-feature-vocab.json
+    --affinity-lift-path /opt/project/batch/ingest/data/affinity_lift.csv
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
+  )
+  if [[ -n "${BASELINE_POLICY_VERSION:-}" && -n "${BASELINE_START_DATE:-}" && -n "${BASELINE_END_DATE:-}" ]]; then
+    mart_args+=(
+      --baseline-policy-version "$BASELINE_POLICY_VERSION"
+      --baseline-start-date "$BASELINE_START_DATE"
+      --baseline-end-date "$BASELINE_END_DATE"
+    )
+  fi
+  submit_job /opt/project/streaming/jobs/build_marts_job.py "${mart_args[@]}"
 
   validate_pipeline
 }
