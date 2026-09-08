@@ -388,6 +388,11 @@ TYPE_KR = {"combination": "복합성", "dry": "건성", "normal": "중성", "oil
 # 종류(카테고리)가 없어서 모델이 카테고리를 기준으로 못 고르는 것인지 본다.
 # 켜면 ① 프로필에 "주로 사 온 종류" 줄 ② 목록 줄마다 (종류) 표기 ③ 행동 기준 한 줄
 PREFER_CATEGORY = False
+# "먼저 보라" 는 권고형은 100명에서 lift 1.00x — 다섯 기준 중 하나로 묻혔다. strict 는
+# 금지형("★ 아닌 상품은 고르지 마라") + 목록 줄에 자기 종류를 ★ 로 표시한다.
+# 화면에 보이는 것만으로 잡을 수 있는 상한은 lift 1.64x (99명 중 97명이 ★ 를 봤다)
+PREFER_STRICT = False
+CURRENT_PREF = ()          # 지금 돌고 있는 사람의 종류 — read_list 가 ★ 를 찍을 때 본다
 
 
 def profile_text(p):
@@ -568,7 +573,9 @@ def read_list(page, visited=()):
         title = f"{brand} {name}"
         kind_tag = ""
         if PREFER_CATEGORY and categories().get(pid):
-            kind_tag = f" ({categories()[pid]})"
+            kind = categories()[pid]
+            star = "★ " if PREFER_STRICT and kind in CURRENT_PREF else ""
+            kind_tag = f" ({star}{kind})"
         lines.append(f"{len(lines)+1}. {title}{kind_tag} — {price}"
                      f"{'  [이미 봄]' if _seen_before(title, visited) else ''}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
@@ -1117,8 +1124,17 @@ class DecisionLog:
 
 def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=None,
             decisions=None):
-    category_rule = ("\n- **내가 주로 사 온 종류의 상품을 먼저 보십시오.** 다른 종류는 지금 "
-                     "필요해서 살 이유가 있을 때만 고르십시오." if PREFER_CATEGORY else "")
+    global CURRENT_PREF
+    CURRENT_PREF = tuple(preferred_categories(persona)[:3])
+    if PREFER_STRICT:
+        category_rule = ("\n- **★ 표시가 없는 상품은 고르지 마십시오.** ★ 는 내가 주로 사 온 종류다. "
+                         "화면에 ★ 상품이 하나도 없을 때만 다른 종류를 고르거나 scroll 하십시오. "
+                         "reason 에 종류를 적으십시오.")
+    elif PREFER_CATEGORY:
+        category_rule = ("\n- **내가 주로 사 온 종류의 상품을 먼저 보십시오.** 다른 종류는 지금 "
+                         "필요해서 살 이유가 있을 때만 고르십시오.")
+    else:
+        category_rule = ""
     system = SYSTEM_TMPL.format(profile=profile_text(persona), category_rule=category_rule,
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
     calls, done, failed, carted = 0, 0, 0, 0
@@ -1428,6 +1444,8 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--prefer-category", action="store_true",
                     help="실험: 프로필·목록에 상품 종류를 적고 내 종류를 먼저 보게 한다")
+    ap.add_argument("--prefer-strict", action="store_true",
+                    help="실험: 내 종류를 ★ 로 표시하고 ★ 아닌 상품은 고르지 못하게 한다 (--prefer-category 포함)")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
@@ -1446,8 +1464,9 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
-    global PREFER_CATEGORY
-    PREFER_CATEGORY = a.prefer_category
+    global PREFER_CATEGORY, PREFER_STRICT
+    PREFER_STRICT = a.prefer_strict
+    PREFER_CATEGORY = a.prefer_category or a.prefer_strict
     # dry-run · 스크립트 모드가 기본 경로에 쓰면 진짜 실행 파일을 덮어쓴다 —
     # 2026-09-08 에 --dry-run --limit 1 이 09-07 100명 본실행 33,217건을 지웠다
     if (a.dry_run or a.script) and a.out == ap.get_default("out"):

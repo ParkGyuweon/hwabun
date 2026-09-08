@@ -29,6 +29,51 @@ def decisions_path(events_path):
     return f"{base}_decisions{ext}"
 
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(os.path.dirname(_HERE))
+PRODUCTS_FILE = os.path.join(_ROOT, "batch", "ingest", "data", "products_200.json")
+PERSONA_FILE = os.path.join(_ROOT, "simulator", "personas", "data", "personas_100_agent.json")
+
+
+def persona_fit(ev, event_name):
+    """페르소나가 행동을 이끄는가 — 그 행동의 상품이 **본인 리뷰 카테고리 안**인 비율과,
+    카탈로그에서 무작위로 골랐을 때의 기대치, 그 비(lift).
+
+    형식 지표(재진입·교정률)가 좋아도 이 값이 1.0 근처면 100명이 같은 사람처럼
+    움직인 것이다. 2026-09-07 본실행: 담기 57% / 기대 56% = lift 1.02x.
+    반환 (건수, 안 비율, 기대 비율, lift). 카탈로그·페르소나 파일이 없으면 None.
+    """
+    try:
+        with open(PRODUCTS_FILE, encoding="utf-8") as f:
+            cat = {q["product_id"]: q.get("secondary_category") for q in json.load(f)
+                   if q.get("product_id") and q.get("secondary_category")}
+        with open(PERSONA_FILE, encoding="utf-8") as f:
+            pers = {q["persona_id"]: q for q in json.load(f)}
+    except OSError:
+        return None
+    share = Counter(cat.values())
+    total = len(cat)
+    own = {}
+    for pid, q in pers.items():
+        own[pid] = {cat[r["product_id"]] for r in q.get("reviews", ())
+                    if r.get("product_id") in cat}
+    n = hit = 0
+    exp = 0.0
+    for e in ev:
+        if e.get("event_name") != event_name:
+            continue
+        c = cat.get(e.get("product_id"))
+        mine = own.get(e.get("persona_id"))
+        if c is None or not mine:
+            continue
+        n += 1
+        hit += c in mine
+        exp += sum(share[k] for k in mine) / total
+    if not n or not exp:
+        return None
+    return n, hit / n, exp / n, hit / exp
+
+
 def measure(events_path, exclude=()):
     """exclude 에 준 persona_id 는 빼고 잰다.
 
@@ -73,6 +118,15 @@ def measure(events_path, exclude=()):
     for k in ("quick_look", "wishlist_toggle", "scroll_backtrack"):
         m[k] = names.get(k, 0)
 
+    # 페르소나 적합 — 사람 사이 차이가 나는가. 1.0x 면 무작위와 같다
+    for label, name in (("담기", "add_to_cart"), ("상세 진입", "product_view")):
+        fit = persona_fit(ev, name)
+        if fit:
+            k, in_cat, expect, lift = fit
+            m[f"{label} 리뷰카테고리 안"] = in_cat
+            m[f"{label} 무작위 기대"] = expect
+            m[f"{label} lift"] = f"{lift:.2f}x (n={k})"
+
     # 판단 기록 — 모델이 무엇을 골랐고 코드가 얼마나 고쳤는가
     dpath = decisions_path(events_path)
     if os.path.exists(dpath):
@@ -113,7 +167,8 @@ def show(ms):
         for m in ms:
             v = m.get(k, "-")
             if isinstance(v, float):
-                v = f"{v*100:.1f}%" if k.endswith("률") or k.endswith("비율") else f"{v:.2f}"
+                pct = k.endswith("률") or k.endswith("비율") or k.endswith("안") or k.endswith("기대")
+                v = f"{v*100:.1f}%" if pct else f"{v:.2f}"
             elif isinstance(v, dict):
                 v = " ".join(f"{a}:{b}" for a, b in list(v.items())[:4])
             cells += f"{str(v):>28}"
