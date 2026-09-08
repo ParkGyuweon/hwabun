@@ -2,8 +2,8 @@
 
 작성일: 2026-09-01
 최종 계약 갱신: 2026-09-07
-대상 Jira: `[DATA] Spark 처리 결과 및 DW 저장 구조 확정`
-문서 정리 Jira: `[DATA] Analytics 계약 및 설계 문서 구조 정리`
+대상 작업: `[DATA] Spark 처리 결과 및 DW 저장 구조 확정`
+문서 정리 작업: `[DATA] Analytics 계약 및 설계 문서 구조 정리`
 상태: 논리 Schema 확정, 현재 Spark 구현·Delta 물리화·E2E 정합성 검증 대기
 설계 설명: [`spark-processing-design.md`](../docs/analytics/spark-processing-design.md)
 
@@ -266,6 +266,11 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `search_id` | string | Y | 검색 연결 ID |
 | `section_id` | string | Y | 섹션 ID |
 | `position` | int | Y | 목록 위치 |
+| `banner_type` | string | Y | 배너 축 enum. 배너 Event에서 필수 |
+| `banner_value` | string | Y | 어휘집 원문. `new_brand` 배너만 NULL |
+| `banner_slot` | int | Y | 추천 API `slot`을 Event 발행 시 변환한 양의 정수 |
+| `trait_source` | string | Y | `session`, `profile`, `coldstart`, `explore` |
+| `policy_version` | string | Y | 배너·정렬 정책 귀속 버전 |
 | `quantity` | int | Y | 수량 |
 | `purchase_quantity` | int | Y | Checkout/구매 item 수량 |
 | `cart_size_after` | int | Y | 변경 후 장바구니 크기 |

@@ -2,7 +2,7 @@
 
 작성일: 2026-09-02  
 최종 정적 검증: 2026-09-07
-상태: 통합몰 귀속 계약 반영, Spark tenant 의존성 제거 완료. Dimension·Fact·Mart 물리 구현은 후속 Jira에서 확정
+상태: 통합몰 귀속 계약 반영, Spark tenant 의존성 제거 완료. Dimension·Fact·Mart 물리 구현은 후속 작업에서 확정
 
 ## 1. 문서 역할
 
@@ -59,7 +59,7 @@ Processed에서 분석 컬럼으로 승격된다. PA와 PC는 모두 `source=sim
 
 Dashboard에 제공할 정확한 지표와 최종 Mart는 아직 확정하지 않았다. 아래 표와 KPI는
 Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI 평가 결과와 함께
-팀에서 우선순위를 정한 뒤 채택한다. 따라서 이 절은 이번 Jira에서 물리 구현을
+팀에서 우선순위를 정한 뒤 채택한다. 따라서 이 절은 이번 작업에서 물리 구현을
 강제하는 계약이 아니다.
 
 | 화면 | 주요 질문 | Mart / Dimension |
@@ -93,6 +93,10 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 상품 관심도 | `Σ EVENT_WEIGHT x 발생 수` | `product_daily_kpi` |
 | 성분 관심도 | 직접 지목 + `EVENT_WEIGHT x position_weight x category_weight` | `ingredient_weekly_interest` |
 | 카테고리 가격 기준 | 통화별 `secondary_category` 기준 가격 중앙값, 3개 미만은 전체 중앙값 | `category_price_reference` |
+| 배너 CTR | `click_count / impression_count`, 분모 0이면 NULL | `banner_daily` |
+| 사용자 장기 성향 | 최근 30일 행동을 trait별 가중치로 합산한 `trait_score`와 순위 | `user_trait_daily` |
+| 교차 브랜드 유입률 | `cross_brand_entry_sessions / brand_view_sessions` | `cross_brand_daily` |
+| 적용 전 기준선 | 배너·정렬 배포 전 추천 CTR과 교차 유입률의 분자·분모 | `analytics_baseline` |
 
 Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기능 판단 시
 `actor_type=user`에서 Quick Look 사용/미사용 arm의 표본 수와 장바구니 전환율을
@@ -106,11 +110,14 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 | Kafka | 기본 topic `activity-events`, key `session_id` | 환경별 설정 확인 |
 | Raw Q1 | 로컬 Parquet + checkpoint, `source` projection 포함, tenant projection 제거 | Delta 전환 및 실제 payload E2E 대조 |
 | Processed | `session_id` 세션 처리, `dim_product.brand_id` Join, `dim_brand` 생성 및 품질 검증 구현 | Delta `printSchema()` E2E 대조 |
-| Delta marts | 상위 소유 주체 축 없이 `brand_id` 스냅샷 유지 | `brand_id` 조회 축과 물리 partition은 후속 Jira에서 확정 |
+| Delta marts | 상위 소유 주체 축 없이 `brand_id` 스냅샷 유지 | `brand_id` 조회 축과 물리 partition은 후속 작업에서 확정 |
 | MySQL `dw` | Dashboard serving 역할 합의 | DDL, 인덱스, 적재 주기, upsert 방식 결정 |
 | 검색·결제 Event | 일부 provisional | 화면·Collector 구현 후 key와 optional 값 재검증 |
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |
 | 성분·가격 기준 Mart | `ingredient_weekly_interest`, `category_price_reference` Parquet 구현. 성분 없는 상품 제외·세정 가중치 설정·가격 표본 fallback 반영 | 운영 Delta/MySQL projection |
+| 배너·성향·교차 브랜드 Mart | `banner_daily`, `user_trait_daily`, `cross_brand_daily`, `analytics_baseline` Parquet 구현. 배너 Event 계약과 `trait_source` 포함 | 배너 Event를 실제로 발행하는 FE·Collector 연결 후 값 검증 |
+| trait 가중치 | `contracts/user-trait-weights.json`으로 분리. 현재 `status=proposed` | 팀 합의 후 값 확정하고 정책 버전 상향 |
+| 배너·정렬 기준선 | `BASELINE_POLICY_VERSION`·시작·종료일을 준 실행에서만 `analytics_baseline` 생성 | 기준선 기간과 정책 배포 시각 확정 |
 | 그 외 Dashboard Mart·KPI | 저장 가능한 후보 Schema 작성 | 추천·AI 담당과 지표 우선순위·최종 grain 합의 후 확정 |
 
 `search_query_hash`의 정규화·hash 규칙, 실제 Web의 안정적인 `user_id`, `cart_id`,

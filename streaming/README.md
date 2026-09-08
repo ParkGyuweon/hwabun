@@ -202,10 +202,13 @@ spark-submit streaming/jobs/build_marts_job.py \
   --product-daily-path data/marts/product_daily_kpi \
   --funnel-daily-path data/marts/funnel_daily_kpi \
   --ingredient-weekly-path data/marts/ingredient_weekly_interest \
-  --category-price-path data/marts/category_price_reference
+  --category-price-path data/marts/category_price_reference \
+  --banner-daily-path data/marts/banner_daily \
+  --user-trait-daily-path data/marts/user_trait_daily \
+  --cross-brand-daily-path data/marts/cross_brand_daily
 ```
 
-생성 결과는 다음 세 가지다.
+생성 결과는 다음과 같다.
 
 | Dataset | Grain | 역할 |
 | --- | --- | --- |
@@ -214,6 +217,38 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `funnel_daily_kpi` | `funnel_date_kst + product_id + actor/source/run 축` | 세션 기반 Funnel 전환·이탈률 |
 | `ingredient_weekly_interest` | `interest_week_kst + ingredient + actor/source/run 축` | 위치가중 성분 관심도와 주간 비중 |
 | `category_price_reference` | `secondary_category + currency` | 카테고리 가격 중앙값과 표본 부족 fallback |
+| `banner_daily` | 일자 + 브랜드/상품 + 배너 축/값/slot/성향 출처 + 정책 버전 + 실행 축 | 배너 노출·클릭·CTR과 어휘 유효성 |
+| `user_trait_daily` | `trait_date_kst + user_id + trait` | 버전 가중치 기반 최근 30일 장기 성향 |
+| `cross_brand_daily` | 일자 + 도착 브랜드 + 실행 축 | 실제 상품 조회 순서 기반 교차 브랜드 유입률 |
+| `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
+
+`banner_daily`는 `policy_version`을 key에 둬서 배너·정렬 정책 배포 전후를 같은 Mart에서
+가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고
+`analytics_baseline` 기간으로 가른다.
+
+`cross_brand_daily`는 `sessionized_events.event_order`로 정렬한 `product_view`만 사용한다.
+세션 최초 브랜드와 목적 브랜드가 다르면 교차 유입으로 판정하며, 같은 세션·목적 브랜드는
+한 번만 센다. 추천 귀속은 목적 조회의 `recommendation_id`를 우선하고 없으면 같은
+세션·상품의 선행 `recommendation_click`을 사용한다. 배너 귀속은 같은 세션·상품의 모든
+선행 `banner_click`을 대상으로 한다. 추천·배너 비율은 브랜드 조회 세션 분모와 전체 교차
+유입 세션 분모를 각각 보존한다.
+
+### 적용 전 기준선
+
+배너·정렬 정책을 켜기 전에 `analytics_baseline`을 한 번 남긴다. 세 값을 모두 주면
+생성하고, 하나라도 빠지면 Job이 실패한다.
+
+```bash
+BASELINE_POLICY_VERSION=pre_banner_sort_v1 \
+BASELINE_START_DATE=2026-09-01 \
+BASELINE_END_DATE=2026-09-07 \
+bash infra/spark/run-pipeline.sh run-batch
+```
+
+남는 값은 `recommendation_ctr`과 `cross_brand_entry_rate` 둘뿐이고 각각 분자·분모를
+함께 저장한다. 배너가 없던 기간의 배너 CTR은 존재하지 않는 값이므로 만들지 않으며,
+기준선에 배너 지표가 들어오면 검증 Job이 실패한다. 기준선을 만들지 않은 실행에서는
+검증 Job이 경고만 남기고 통과한다.
 
 정보 확인 단계는 성분/리뷰 Section·Content, Accordion 펼침, 리뷰 필터/상세,
 매칭 성분·키워드가 있는 텍스트 선택/복사 Event로 파생한다. 상품 매출은

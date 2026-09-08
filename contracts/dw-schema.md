@@ -18,7 +18,7 @@ Delta Lake에 보존하고 MySQL `dw`로 제공하는 저장 계층, 책임 경�
 - 처리 근거, KPI 화면 연결, 현재 구현 상태와 검증 계획은
   [`../docs/analytics/dw-design.md`](../docs/analytics/dw-design.md)에서 설명한다.
 
-§2의 입력 grain·공통 타입·NULL·집계 원칙과 Delta→MySQL 책임 경계는 이번 Jira의
+§2의 입력 grain·공통 타입·NULL·집계 원칙과 Delta→MySQL 책임 경계는 이번 작업의
 확정 범위다. §3~§5의 Dimension·Mart·KPI는 저장 가능성을 확인하기 위한 후보이며,
 Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별도 확정한다.
 
@@ -124,7 +124,7 @@ source = Backend 브랜드 등록 정보
 | `created_at` | timestamp | N | 브랜드 등록 시각 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
-`brand_hash`와 `commons_participating`의 산출·억제 규칙은 Commons Mart Jira에서
+`brand_hash`와 `commons_participating`의 산출·억제 규칙은 Commons Mart 작업에서
 확정한다. 브랜드 계정과의 1:1 인증 매핑은 Backend가 소유하고 DW에 복제하지 않는다.
 원본 `brand_id`는 다른 브랜드에게 노출하지 않는다.
 
@@ -392,6 +392,82 @@ NULL과 0 이하 가격은 제외한다. 표본이 3개 미만이면 같은 통�
 `reference_median_price`로 사용한다. 기준은 `PRICE_MIN_SAMPLE_SIZE` 또는
 `--price-min-sample-size` 설정으로 관리한다. `sale_price`, `sale_price_usd`, 할인율은
 결측이 많고 `dim_product` 기준 가격 계약에도 없으므로 입력·집계·산출에서 사용하지 않는다.
+
+### 4.10 `banner_daily`
+
+```text
+key = event_date_kst + brand_id + product_id + banner_type + banner_value + banner_slot
+      + trait_source + policy_version + actor_type + source + scenario_id + simulation_run_id
+input = product_event_fact
+```
+
+`impression_count`, `click_count`, `impression_sessions`, `click_sessions`, `skip_count`,
+`banner_ctr`를 저장한다. `banner_ctr`은 `click_count / impression_count`이며 분모 0은
+NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`는 원문
+어휘집 검증 결과이고 `new_brand`만 NULL을 허용한다.
+
+`policy_version`을 key에 두는 이유는 배너·정렬 정책 배포 전후를 같은 Mart 안에서
+가르기 위해서다. Event에 값이 없으면 NULL 그룹으로 남고 사전/사후 구분은
+`analytics_baseline` 기간으로만 가능하다. 축별 CTR은 `banner_type`, `banner_value`,
+`banner_slot`, `trait_source`로 잘라서 본다.
+
+`cross_brand_daily`에는 `policy_version`을 두지 않는다. 교차 유입은 세션 단위 중복
+제거가 기준이라 정책 버전으로 다시 쪼개면 같은 세션이 여러 행에 걸린다. 그쪽 사전/사후는
+`analytics_baseline`의 기준선 기간으로 가른다.
+
+### 4.11 `user_trait_daily`
+
+```text
+key = trait_date_kst + user_id + trait
+input = sessionized_events
+```
+
+trait은 `price`, `ingredient`, `review`, `concern`, `participate` 5종이다. 최근 30일
+행동의 `trait_score`, `trait_rank`, `is_primary_trait`, `window_start_date`,
+`window_end_date`, `contributing_event_count`, `trait_policy_version`을 저장한다.
+가중치와 기간은 `contracts/user-trait-weights.json`을 실행 원본으로 사용한다. 현재
+정책 상태는 `proposed`이며 합의된 값으로 파일을 갱신한 뒤 버전을 올린다.
+
+### 4.12 `cross_brand_daily`
+
+```text
+key = event_date_kst + destination_brand_id + actor_type + source + scenario_id + simulation_run_id
+input = sessionized_events
+```
+
+`sessionized_events.event_order`로 정렬한 `product_view`만 사용하며, 세션 최초 브랜드와
+목적 브랜드가 다를 때 교차 유입으로 판정한다. Front의 `cross_brand` boolean은 입력으로
+사용하지 않고, 한 세션의 같은 목적 브랜드는 각 지표에서 한 번만 센다.
+
+추천 귀속은 목적 `product_view.properties.recommendation_id`를 우선 사용하고, 값이 없으면
+같은 세션·상품의 선행 `recommendation_click`을 사용한다. 배너 귀속은 같은 세션·상품의
+선행 `banner_click`을 사용하며 직전 Event만으로 제한하지 않는다.
+
+`brand_view_sessions`를 공통 분모로 `cross_brand_entry_rate`,
+`recommendation_cross_brand_entry_rate`, `banner_cross_brand_entry_rate`를 저장한다. 또한
+전체 교차 유입 세션을 분모로 `recommendation_share_of_cross_brand_entries`,
+`banner_share_of_cross_brand_entries`를 저장한다. `top_source_brand_id`는 공개 임계값과
+정책 버전이 확정될 때까지 산출하지 않는다.
+
+### 4.13 `analytics_baseline`
+
+```text
+key = baseline_policy_version + metric_name + brand_id + algorithm
+input = product_event_fact, cross_brand_daily
+```
+
+`metric_name`은 `recommendation_ctr`과 `cross_brand_entry_rate` 둘뿐이다. 각각
+`numerator`, `denominator`, `metric_value`와 `baseline_start_date`,
+`baseline_end_date`를 함께 저장해 나중에 분모를 다시 검증할 수 있게 한다. 분모 0이면
+`metric_value`는 NULL이다.
+
+`BASELINE_POLICY_VERSION`, `BASELINE_START_DATE`, `BASELINE_END_DATE` 세 값을 모두
+지정한 실행에서만 생성한다. 셋 중 일부만 주면 Job이 실패한다. 검증 Job은 이 Mart가
+없으면 경고만 남기고 통과한다.
+
+배너가 없던 기간의 배너 CTR은 존재하지 않는 값이므로 0으로 만들지 않는다. 기준선에
+배너 지표를 넣으면 검증이 실패한다. 사전 기준선은 기존 추천 CTR과 브랜드별 교차 유입률
+두 가지로만 남긴다.
 
 ## 5. 실시간 Mart 후보
 
