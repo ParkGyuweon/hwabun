@@ -35,7 +35,7 @@
 | `efficacy` | 효능 | `efficacy_low` 효과 미흡 · `efficacy_irritation` 자극·트러블 · `efficacy_dryness` 건조·당김 |
 | `texture` | 사용감 | `texture_sticky` 끈적임 · `texture_runny` 묽음·흘러내림 · `texture_slow` 흡수 느림 · `texture_whitecast` 백탁 · `texture_heavy` 무겁고 답답함 |
 | `scent` | 향 | `scent_strong` 향이 강함 · `scent_artificial` 향이 인공적 · `scent_weak` 향이 약함 |
-| `packaging` | 용기·포장 | `pkg_lid_loose` 뚜껑 헐거움·누수 · `pkg_lid_stiff` 뚜껑 뻑뻑함 · `pkg_pump` 펌프 막힘·고장 · `pkg_durability` 재질·내구성 약함 · `pkg_label` 라벨·표기 불분명 · `pkg_visibility` 내용물 확인 어려움 |
+| `packaging` | 용기·포장 | `pkg_lid_loose` 뚜껑 헐거움·누수 · `pkg_lid_stiff` 뚜껑 뻑뻑함 · `pkg_pump` 펌프 막힘·고장·토출량 · `pkg_durability` 재질·내구성 약함 · `pkg_label` 라벨·표기 불분명 · `pkg_visibility` 내용물 확인 어려움 |
 | `value` | 용량·가격 | `value_small` 용량 부족 · `value_price` 가격 비쌈 · `value_option` 리필·대용량 요청 |
 | `other` | 기타 | `other` |
 
