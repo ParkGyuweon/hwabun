@@ -774,14 +774,6 @@ table.data tr:hover td {
 .reg-list {
   display: grid;
   gap: 8px;
-/* ---------- 고객 피드백 인박스 ---------- */
-
-.feedback-inbox {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 .reg-list__item {
@@ -799,22 +791,8 @@ table.data tr:hover td {
 
 .reg-list__meta {
   grid-column: 1;
-.feedback-inbox__item {
-  padding: 12px 14px;
-  border: 1px solid var(--line, #e5e5ea);
-  border-radius: 12px;
-}
-
-.feedback-inbox__item.is-new {
-  border-left: 4px solid var(--accent, #8fae8b);
-}
-
-.feedback-inbox__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
   font-size: 12px;
-  color: var(--ink-soft, #6e6e73);
+  color: var(--ink-faint);
 }
 
 .reg-list__actions {
@@ -835,108 +813,559 @@ table.data tr:hover td {
   .register__iframe {
     height: 720px;
   }
-.feedback-inbox__product {
-  font-weight: 600;
-  color: inherit;
 }
 
-.feedback-inbox__status--new {
-  color: var(--accent-deep, #4f7a4b);
-  font-weight: 600;
-}
+/* ==========================================================================
+   고객 피드백 (fbx). 역피라미드: 결론 카드 → 축 분포 → 카테고리 표 → 원문.
+   색은 §3-6 대로 브랜드(긍정)·액센트(주의)·회색만. 담당 배지(F1)는 연한 바탕에 글자로 구분.
+   ========================================================================== */
 
-.feedback-inbox__status--reflected {
-  color: var(--ink-soft, #6e6e73);
-}
-
-.feedback-inbox__text {
-  margin: 8px 0 0;
-  font-size: 14px;
-}
-
-.feedback-inbox__reply {
-  margin: 8px 0 0;
-  font-size: 13px;
-  color: var(--ink-soft, #6e6e73);
-}
-
-.feedback-inbox__actions {
+.fbx-verdict__routes {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
-.feedback-inbox__reply-input {
-  flex: 1 1 240px;
-  padding: 6px 10px;
-  border: 1px solid var(--line, #e5e5ea);
-  border-radius: 8px;
+.fbx-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  background: var(--line-soft);
+  white-space: nowrap;
+}
+
+.fbx-route--formula {
+  color: #3d5233;
+  background: var(--brand-soft);
+}
+
+.fbx-route--packaging {
+  color: #4a382b;
+  background: #efe6dc;
+}
+
+.fbx-route--pricing {
+  color: #5c4720;
+  background: #f4ead4;
+}
+
+/* ---- 축 분포: 한 줄 누적 막대 + 버튼 ---- */
+.fbx-axes {
+  display: grid;
+  gap: 12px;
+}
+
+.fbx-stack {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--line-soft);
+}
+
+.fbx-stack__seg {
+  height: 100%;
+  min-width: 2px;
+  background: var(--seg);
+  transition: opacity 0.15s;
+}
+
+.fbx-stack__seg.is-dim {
+  opacity: 0.3;
+}
+
+.fbx-axis-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fbx-axis {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
   font: inherit;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.fbx-axis:hover {
+  border-color: var(--ink-faint);
+}
+
+.fbx-axis:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.fbx-axis.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.fbx-axis__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--seg);
+  flex: none;
+}
+
+.fbx-axis__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.fbx-axis--pending {
+  border-style: dashed;
+}
+
+/* ---- 카테고리 표 ---- */
+.fbx-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 13px;
 }
 
-.feedback-inbox__empty {
+.fbx-table th {
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.fbx-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+
+.fbx-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.fbx-table td.is-num,
+.fbx-table th.is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fbx-table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.fbx-table tbody tr:hover {
+  background: var(--ground);
+}
+
+.fbx-table tbody tr.is-active {
+  background: var(--brand-soft);
+}
+
+.fbx-table__name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fbx-table__desc {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.fbx-table__new {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #7a2f45;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.fbx-table__track {
+  display: block;
+  width: 100%;
+  min-width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-soft);
+}
+
+.fbx-table__bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--seg, var(--brand));
+}
+
+/* ---- 원문 목록 ---- */
+.fbx-inbox {
+  display: grid;
+  gap: 10px;
   margin: 0;
-  font-size: 14px;
-  color: var(--ink-soft, #6e6e73);
+  padding: 0;
+  list-style: none;
 }
 
-/* ---------- 고객 피드백: 카테고리 그룹 (계약 grain product × axis × category) ---------- */
-
-.fb-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.fb-group__head {
+.fbx-inbox__head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px 10px;
-  margin-bottom: 8px;
+  gap: 6px 12px;
+  margin-bottom: 4px;
 }
 
-.fb-group__title {
+.fbx-inbox__head h3 {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
 }
 
-.fb-group__count {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.fb-group__products,
-.fb-group__desc {
+.fbx-inbox__head small {
   font-size: 12px;
   color: var(--ink-faint);
 }
 
-.fb-group--pending .fb-group__title {
+.fbx-inbox__reset {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
   color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
-.chip--pending {
-  border-style: dashed;
+.fbx-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
 }
 
-.feedback-inbox__profile {
+.fbx-card.is-new {
+  border-left-color: var(--accent);
+}
+
+.fbx-card.is-read {
+  border-left-color: var(--ink-faint);
+}
+
+.fbx-card.is-reflected {
+  border-left-color: var(--brand);
+  background: var(--ground);
+}
+
+.fbx-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
   font-size: 12px;
   color: var(--ink-soft);
 }
 
-.feedback-inbox__hidden {
-  display: inline-block;
-  margin: 6px 0;
+.fbx-card__product {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fbx-card__sep {
+  color: var(--line);
+}
+
+.fbx-card__cat {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.fbx-card__when {
+  font-variant-numeric: tabular-nums;
+}
+
+.fbx-status {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.fbx-status--new {
+  background: var(--accent-soft);
+  color: #7a2f45;
+}
+
+.fbx-status--read {
+  background: var(--line-soft);
+  color: var(--ink-soft);
+}
+
+.fbx-status--reflected {
+  background: var(--brand-soft);
+  color: #3d5233;
+}
+
+.fbx-card__body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.fbx-card__hidden {
+  justify-self: start;
   padding: 6px 10px;
-  font-size: 12px;
-  color: var(--ink-soft);
   border: 1px dashed var(--line);
   border-radius: 6px;
   background: var(--line-soft);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.fbx-card__reply {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--brand);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--panel);
+  font-size: 13.5px;
+}
+
+.fbx-card__reply small {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.fbx-card__actions {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.fbx-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.fbx-btn:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.fbx-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.fbx-btn--primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.fbx-btn--primary:hover {
+  border-color: #000;
+  background: #000;
+  color: #fff;
+}
+
+.fbx-btn--primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fbx-reply {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fbx-reply input {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.fbx-reply input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.fbx-reply.has-warning input {
+  border-color: var(--accent);
+}
+
+.fbx-reply__warn {
+  margin: 0;
+  font-size: 11.5px;
+  color: #7a2f45;
+}
+
+.fbx-reply__warn b {
+  font-weight: 700;
+}
+
+.fbx-empty {
+  margin: 0;
+  padding: 28px 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 760px) {
+  .fbx-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .fbx-status {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fbx-axis,
+  .fbx-btn,
+  .fbx-stack__seg,
+  .fbx-table tbody tr {
+    transition: none;
+  }
+}
+
+/* ---------- 성분 갭 표 (I1) · 성분 띠 (I2) ---------- */
+.gap-table tbody tr {
+  cursor: default;
+}
+
+.gap-table tbody tr:hover {
+  background: transparent;
+}
+
+.gap-table tr.is-gap td {
+  background: var(--accent-soft);
+}
+
+.gap-table tr.is-gap .fbx-table__name {
+  color: #7a2f45;
+}
+
+.gap-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gap-flag--gap {
+  margin-left: 0;
+  background: var(--accent);
+  color: #fff;
+}
+
+.gap-flag--minor {
+  background: var(--accent-soft);
+  color: #7a2f45;
+}
+
+.scope--inline {
+  margin-bottom: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.band {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.band__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.band__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.band__w {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.band__row.is-minor .band__name {
+  color: var(--ink-soft);
 }
