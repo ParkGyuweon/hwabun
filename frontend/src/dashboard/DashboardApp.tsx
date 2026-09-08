@@ -30,35 +30,16 @@ type ScreenKey =
   | 'feedback';
 
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
-  { key: 'overview', label: 'Overview', title: 'Overview', desc: '전체 성과와 핵심 KPI' },
-  { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기' },
-  { key: 'products', label: '상품 분석', title: '상품 분석', desc: '상품별 관심도와 전환 성과' },
-  {
-    key: 'content',
-    label: '정보 관심도',
-    title: '정보 관심도',
-    desc: '무엇을 보여줘야 사는가 — 콘텐츠 단위 주목도',
-  },
-  {
-    key: 'segments',
-    label: '고객군',
-    title: '고객군 분석',
-    desc: '피부 타입 × 톤별 전환과 콘텐츠 선호',
-  },
-  {
-    key: 'behavior',
-    label: '행동 분석',
-    title: '사용자 행동 분석',
-    desc: '의도 퍼널·이탈 구간·마찰 신호',
-  },
-  { key: 'reviews', label: '리뷰 분석', title: '리뷰 분석', desc: '소비자 평가와 자극·트러블' },
+  // 순서 = 브랜드가 결정하는 순서 (명세 §1). 범용 지표·마찰은 뒤로
+  { key: 'overview', label: '개요', title: '개요', desc: '지금 손봐야 할 것 하나' },
+  { key: 'content', label: '정보 관심도', title: '정보 관심도', desc: '무엇을 보고 사나 — 콘텐츠 단위 주목도와 전환 기여' },
+  { key: 'segments', label: '고객군', title: '고객군', desc: '누가 사나 — 피부 타입 × 톤' },
+  { key: 'ingredients', label: '성분', title: '성분', desc: '고객이 찾는 성분과 내 라인의 갭' },
+  { key: 'products', label: '상품', title: '상품', desc: '상품별 병목과 이탈 지점' },
   { key: 'feedback', label: '고객 피드백', title: '고객 피드백', desc: '고객이 고쳐 달라는 것 · 5축' },
-  {
-    key: 'ingredients',
-    label: '성분 분석',
-    title: '성분 분석',
-    desc: '성분 구성과 성분 정보 관심',
-  },
+  { key: 'reviews', label: '리뷰', title: '리뷰', desc: '공개 평가 — 피부 타입별 갈림과 자극 언급' },
+  { key: 'behavior', label: '행동·마찰', title: '행동·마찰', desc: '화면이 막는 곳 — 상품 선호와 분리해서 본다' },
+  { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기' },
 ];
 
 /**
