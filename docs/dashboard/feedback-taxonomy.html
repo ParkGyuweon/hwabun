@@ -1,0 +1,248 @@
+<title>고객 피드백 분류 어휘</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f7f5f1; --surface:#ffffff; --ink:#1f1c18; --ink-2:#5c554c; --ink-3:#8c8478;
+  --line:#e2ddd4; --accent:#7a4a2a; --accent-soft:#f1e6dc;
+  --ef:#b0552f; --tx:#3f7a6a; --sc:#8a6bb0; --pk:#2f6a9a; --va:#a3792a; --ot:#8c8478;
+  --code-bg:#f0ece5;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1815; --surface:#22201c; --ink:#ece7de; --ink-2:#b5ada1; --ink-3:#7d766c;
+    --line:#37332d; --accent:#d9a679; --accent-soft:#33281f;
+    --ef:#e07a4f; --tx:#6fb8a3; --sc:#b79ad9; --pk:#6ea6d6; --va:#d4a64a; --ot:#8c8478;
+    --code-bg:#2b2823;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1a1815; --surface:#22201c; --ink:#ece7de; --ink-2:#b5ada1; --ink-3:#7d766c;
+  --line:#37332d; --accent:#d9a679; --accent-soft:#33281f;
+  --ef:#e07a4f; --tx:#6fb8a3; --sc:#b79ad9; --pk:#6ea6d6; --va:#d4a64a; --ot:#8c8478;
+  --code-bg:#2b2823;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;font-size:15px;line-height:1.65}
+main{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+h1,h2,h3{font-family:"Noto Serif KR","Noto Sans KR",serif;text-wrap:balance;margin:0}
+h1{font-size:34px;font-weight:700;line-height:1.25}
+h2{font-size:20px;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--ink)}
+code,.id{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:12.5px;background:var(--code-bg);padding:1px 6px;border-radius:3px;color:var(--ink-2)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:10px}
+.lede{color:var(--ink-2);max-width:66ch;margin-top:12px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:18px;font-size:13px;color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+section{margin-top:48px}
+
+/* 축 요약 */
+.axes{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.axis{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--c);padding:14px 16px;border-radius:4px}
+.axis .lab{font-family:"Noto Serif KR",serif;font-weight:700;font-size:18px}
+.axis .n{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);margin-left:6px}
+.axis p{margin:6px 0 0;font-size:13px;color:var(--ink-2)}
+
+/* 카테고리 표 */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface);border:1px solid var(--line)}
+th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:500;padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.ax{white-space:nowrap;font-weight:700;border-left:4px solid var(--c);color:var(--c)}
+td.lab{font-weight:500;white-space:nowrap}
+td.desc{color:var(--ink-2)}
+tbody.other td.ax{color:var(--ink-3)}
+
+/* 계약 표 */
+.kv{display:grid;grid-template-columns:150px 1fr;border:1px solid var(--line);background:var(--surface)}
+.kv>div{padding:10px 14px;border-bottom:1px solid var(--line)}
+.kv>div:nth-last-child(-n+2){border-bottom:none}
+.kv .k{font-weight:500;color:var(--ink-2);border-right:1px solid var(--line)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media (max-width:760px){.two{grid-template-columns:1fr}.kv{grid-template-columns:120px 1fr}}
+
+/* 필드 */
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media (max-width:760px){.fields{grid-template-columns:1fr}}
+.fields h3{font-size:15px;margin-bottom:8px;color:var(--ink-2)}
+.fields table td:first-child{white-space:nowrap}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:500;margin-left:6px}
+
+/* FE 매핑 */
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.map div{background:var(--surface);border:1px solid var(--line);padding:8px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.map span:first-child{color:var(--ink-2)}
+.map span:last-child{color:var(--c);font-weight:500;white-space:nowrap}
+
+.note{background:var(--accent-soft);border-left:3px solid var(--accent);padding:12px 16px;font-size:14px;margin-top:16px;color:var(--ink)}
+ol,ul{padding-left:20px;margin:8px 0}
+li{margin:4px 0}
+.diff td:first-child{color:var(--ink-3);white-space:nowrap}
+footer{margin-top:60px;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:14px}
+</style>
+
+<main>
+  <div class="eyebrow">Jira 200 · 202 · 계약 문서</div>
+  <h1>고객 피드백 분류 어휘</h1>
+  <p class="lede">소비자가 상품에 대해 <strong>사장님에게 보내는 개선 요청</strong>을 5개 축·20개 카테고리로 자동 분류한다. 리뷰가 아니다. 분류기는 이 고정 목록에서만 고르고, 목록에 없는 답은 <code>other</code>로 떨어진다. 새 항목은 분류기가 짓지 않고 사람이 <code>other</code> 누적분을 훑어 추가한다.</p>
+  <div class="meta">
+    <span>어휘 <b>feedback-category-vocab.json</b></span>
+    <span>schema_version <b>0.1.0-draft</b></span>
+    <span>갱신 <b>2026-09-08</b></span>
+    <span>분류기 <b>gpt-4.1-nano</b> · 건당 호출 1회</span>
+  </div>
+
+  <section>
+    <h2>축 5개</h2>
+    <div class="axes">
+      <div class="axis" style="--c:var(--ef)"><span class="lab">효능</span><span class="n">efficacy · 3</span><p>기대한 효과가 안 나거나 부작용이 났다</p></div>
+      <div class="axis" style="--c:var(--tx)"><span class="lab">사용감</span><span class="n">texture · 5</span><p>피부에 닿았을 때의 느낌. 발림성·흡수·끈적임·백탁</p></div>
+      <div class="axis" style="--c:var(--sc)"><span class="lab">향</span><span class="n">scent · 3</span><p>향의 세기·종류·지속</p></div>
+      <div class="axis" style="--c:var(--pk)"><span class="lab">용기·포장</span><span class="n">packaging · 6</span><p>용기를 다루는 모든 것. 뚜껑·펌프·재질·라벨</p></div>
+      <div class="axis" style="--c:var(--va)"><span class="lab">용량·가격</span><span class="n">value · 3</span><p>용량 대비 가격, 소·대용량 부재</p></div>
+    </div>
+    <p class="note">범위: 브랜드가 <strong>제품을 고쳐서</strong> 해결할 수 있는 축만 둔다. 배송·CS는 플랫폼 문제라 제외. 극성 없음. 피드백은 전부 불만·개선 요청으로 보고, 칭찬은 리뷰가 받는다.</p>
+  </section>
+
+  <section>
+    <h2>카테고리 20개 + 기타</h2>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>축</th><th>category_id</th><th>라벨</th><th>설명</th></tr></thead>
+      <tbody style="--c:var(--ef)">
+        <tr><td class="ax" rowspan="3">효능</td><td><span class="id">efficacy_low</span></td><td class="lab">효과 미흡</td><td class="desc">기대한 효과(모공·미백·주름·진정·세정 등)가 안 느껴진다</td></tr>
+        <tr><td><span class="id">efficacy_irritation</span></td><td class="lab">자극·트러블</td><td class="desc">쓰고 나서 따갑거나 붉어지거나 트러블이 났다</td></tr>
+        <tr><td><span class="id">efficacy_dryness</span></td><td class="lab">건조·당김</td><td class="desc">쓰고 나서 피부가 건조해지거나 당긴다</td></tr>
+      </tbody>
+      <tbody style="--c:var(--tx)">
+        <tr><td class="ax" rowspan="5">사용감</td><td><span class="id">texture_sticky</span></td><td class="lab">끈적임</td><td class="desc">바른 뒤 끈적임이 남는다</td></tr>
+        <tr><td><span class="id">texture_runny</span></td><td class="lab">묽음·흘러내림</td><td class="desc">제형이 묽어서 흘러내리거나 잘 안 발린다</td></tr>
+        <tr><td><span class="id">texture_slow</span></td><td class="lab">흡수 느림</td><td class="desc">흡수가 느려서 기다려야 한다</td></tr>
+        <tr><td><span class="id">texture_whitecast</span></td><td class="lab">백탁</td><td class="desc">바른 자리가 하얗게 남는다</td></tr>
+        <tr><td><span class="id">texture_heavy</span></td><td class="lab">무겁고 답답함</td><td class="desc">제형이 무겁거나 두껍게 느껴진다</td></tr>
+      </tbody>
+      <tbody style="--c:var(--sc)">
+        <tr><td class="ax" rowspan="3">향</td><td><span class="id">scent_strong</span></td><td class="lab">향이 강함</td><td class="desc">향이 세거나 오래 남는다</td></tr>
+        <tr><td><span class="id">scent_artificial</span></td><td class="lab">향이 인공적</td><td class="desc">인공적인 냄새가 난다</td></tr>
+        <tr><td><span class="id">scent_weak</span></td><td class="lab">향이 약함</td><td class="desc">향이 거의 안 난다</td></tr>
+      </tbody>
+      <tbody style="--c:var(--pk)">
+        <tr><td class="ax" rowspan="6">용기·포장</td><td><span class="id">pkg_lid_loose</span></td><td class="lab">뚜껑 헐거움·누수</td><td class="desc">뚜껑이 잘 안 잠기거나 저절로 열려 내용물이 샌다</td></tr>
+        <tr><td><span class="id">pkg_lid_stiff</span></td><td class="lab">뚜껑 뻑뻑함</td><td class="desc">뚜껑이 너무 꽉 닫혀 열기 어렵다</td></tr>
+        <tr><td><span class="id">pkg_pump</span></td><td class="lab">펌프 막힘·고장</td><td class="desc">펌프가 막히거나 눌리지 않는다</td></tr>
+        <tr><td><span class="id">pkg_durability</span></td><td class="lab">재질·내구성 약함</td><td class="desc">용기 재질이 얇거나 부품이 쉽게 부서진다</td></tr>
+        <tr><td><span class="id">pkg_label</span></td><td class="lab">라벨·표기 불분명</td><td class="desc">성분·사용법 표기를 알아보기 어렵다</td></tr>
+        <tr><td><span class="id">pkg_visibility</span></td><td class="lab">내용물 확인 어려움</td><td class="desc">남은 양이 보이지 않는다</td></tr>
+      </tbody>
+      <tbody style="--c:var(--va)">
+        <tr><td class="ax" rowspan="3">용량·가격</td><td><span class="id">value_small</span></td><td class="lab">용량 부족</td><td class="desc">용량이 적어 금방 떨어진다</td></tr>
+        <tr><td><span class="id">value_price</span></td><td class="lab">가격 비쌈</td><td class="desc">용량과 무관하게 가격 자체가 부담</td></tr>
+        <tr><td><span class="id">value_option</span></td><td class="lab">리필·대용량 요청</td><td class="desc">리필이나 더 큰 용량을 원한다</td></tr>
+      </tbody>
+      <tbody class="other" style="--c:var(--ot)">
+        <tr><td class="ax">기타</td><td><span class="id">other</span></td><td class="lab">기타</td><td class="desc">위 어디에도 안 맞음. 비방·무의미·다른 주제 포함. 여기 쌓인 것을 훑어 목록에 항목을 추가한다</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note"><code>pkg_lid_loose</code>와 <code>pkg_lid_stiff</code>는 <strong>의도적으로 갈라 둔 것</strong>이다. 고치는 방향이 정반대라 한 칸에 두면 뚜껑을 헐겁게 고친 뒤 "안 열린다"고 한 사람에게도 반영 알림이 간다.</p>
+  </section>
+
+  <section>
+    <h2>FE 임시 8종 → 계약 축 대응</h2>
+    <div class="map">
+      <div style="--c:var(--sc)"><span>향</span><span>scent</span></div>
+      <div style="--c:var(--pk)"><span>용기</span><span>packaging</span></div>
+      <div style="--c:var(--tx)"><span>제형</span><span>texture</span></div>
+      <div style="--c:var(--ef)"><span>효과</span><span>efficacy</span></div>
+      <div style="--c:var(--ef)"><span>성분</span><span>efficacy · 자극·트러블</span></div>
+      <div style="--c:var(--pk)"><span>사용법</span><span>packaging · 라벨·표기 불분명</span></div>
+      <div style="--c:var(--va)"><span>가격구성</span><span>value</span></div>
+      <div style="--c:var(--ot)"><span>기타</span><span>other</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>확정된 것</h2>
+    <div class="two">
+      <div class="kv">
+        <div class="k">분류 방식</div><div>텍스트 자동 분류. 소비자가 고르는 항목 없음</div>
+        <div class="k">분류 단위</div><div>건당 단일. 축 1 + 카테고리 1. 증상이 여러 개면 가장 두드러진 하나</div>
+        <div class="k">극성</div><div>없음. 전부 개선 요청으로 본다</div>
+        <div class="k">익명</div><div>아님. <code>user_id</code>로 프로필(피부 타입·톤) 조인</div>
+      </div>
+      <div class="kv">
+        <div class="k">어휘</div><div>고정 목록. 목록에 없는 답은 <code>other</code></div>
+        <div class="k">새 카테고리</div><div>분류기가 만들지 않는다. 사람이 추가하고 <code>schema_version</code>을 올린다</div>
+        <div class="k">범위</div><div>제품을 고쳐서 해결할 수 있는 축만. 배송·CS 제외</div>
+        <div class="k">금지어</div><div>입력을 막지 않는다. 걸리면 <code>hidden_by_default=true</code>로 표시만 하고 분류는 그대로</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>입력 · 출력 필드</h2>
+    <div class="fields">
+      <div>
+        <h3>입력 · FE → 분류기</h3>
+        <div class="tbl-wrap"><table>
+          <tr><td><span class="id">feedback_id</span></td><td>string</td><td class="desc">피드백 식별자</td></tr>
+          <tr><td><span class="id">user_id</span></td><td>string</td><td class="desc">작성자. 프로필 조인 키</td></tr>
+          <tr><td><span class="id">product_id</span></td><td>string</td><td class="desc">대상 상품</td></tr>
+          <tr><td><span class="id">body</span></td><td>string</td><td class="desc">본문. 빈 문자열 불가</td></tr>
+          <tr><td><span class="id">created_at</span></td><td>ISO-8601</td><td class="desc">작성 시각</td></tr>
+        </table></div>
+        <p style="font-size:13px;color:var(--ink-2)">본문 외 다른 것은 분류에 쓰지 않는다. 상품명은 분류기가 <code>product_id</code>로 조회해 프롬프트에 넣는다.</p>
+      </div>
+      <div>
+        <h3>출력 · 분류기 → 저장 → 대시보드 <span class="tag">입력 전부 + 아래</span></h3>
+        <div class="tbl-wrap"><table>
+          <tr><td><span class="id">axis_id</span> / <span class="id">axis</span></td><td>string</td><td class="desc">축 id · 표시 라벨</td></tr>
+          <tr><td><span class="id">category_id</span> / <span class="id">category</span></td><td>string</td><td class="desc">카테고리 id · 표시 라벨</td></tr>
+          <tr><td><span class="id">classifier</span></td><td>string</td><td class="desc"><code>gpt-4.1-nano</code></td></tr>
+          <tr><td><span class="id">vocab_version</span></td><td>string</td><td class="desc">분류 시점의 어휘 버전</td></tr>
+          <tr><td><span class="id">classified_at</span></td><td>ISO-8601</td><td class="desc">분류 시각</td></tr>
+          <tr><td><span class="id">banned_terms</span></td><td>string[]</td><td class="desc">걸린 금지어. 없으면 <code>[]</code></td></tr>
+          <tr><td><span class="id">hidden_by_default</span></td><td>boolean</td><td class="desc">금지어가 있으면 <code>true</code>. 대시보드는 본문을 접어 둔다. 집계엔 포함</td></tr>
+        </table></div>
+      </div>
+    </div>
+    <ul style="font-size:14px;color:var(--ink-2);margin-top:14px">
+      <li><code>axis_id == "other"</code>이면 <code>category_id</code>도 <code>"other"</code>. 어긋나는 행은 없다.</li>
+      <li>라벨은 표시용. <strong>집계·조인은 id로 한다.</strong></li>
+      <li>대시보드 집계 grain: <code>(product_id, axis_id, category_id)</code>. 상품별 보기는 여기에 <code>product_id</code> 필터.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>처리 순서</h2>
+    <ol style="font-size:14.5px">
+      <li><code>body</code>와 상품명을 프롬프트에 넣고 어휘 목록에서 딱 하나 고르게 한다. 건당 호출 1회.</li>
+      <li>답의 축·카테고리가 목록에 글자 그대로 있는지 검사. 하나라도 어긋나면 <code>other</code>.</li>
+      <li>응답 JSON은 첫 객체만 떼어 낸다. 3회 실패하면 <code>other</code>.</li>
+      <li>금지어 대조 (LLM 없음). NFC·소문자·한글/자모/영문/숫자만 남겨 정규화한 뒤 부분 일치. "시 발"·"시.발"도 잡힌다. 출처 VaneProject/bad-word-filtering (MIT) 599개. 보태는 단어는 <code>added</code>, 오탐 예외는 <code>allow</code>("똥손"), 끄는 단어는 <code>disabled</code>("18년").</li>
+    </ol>
+    <p class="note">이름을 짓게 하고 기존 항목과 비교해 붙이는 방식(건당 3회)은 <strong>채택하지 않았다.</strong> 파편·과병합·프롬프트 예시 누출·반대 방향 혼입이 번갈아 났다. 고정 목록에서는 넷이 구조적으로 사라진다. 30건 시험에서 목록 밖 답 0건.</p>
+  </section>
+
+  <section>
+    <h2>어휘 변경 규칙 · 아직 아닌 것</h2>
+    <div class="two">
+      <div>
+        <ol style="font-size:14px">
+          <li>카테고리 <strong>추가</strong>는 patch (<code>0.1.0 → 0.1.1</code>). 기존 id 유지.</li>
+          <li><strong>이름 변경</strong>은 <code>label</code>만. id는 안 바꾼다.</li>
+          <li><strong>삭제·병합·id 변경</strong>은 minor. 기존 행 재분류 여부를 MR에 적는다.</li>
+          <li>추가 후보는 <code>other</code> 원문 중 여러 상품에 걸쳐 반복되는 문제만.</li>
+        </ol>
+      </div>
+      <div>
+        <ul style="font-size:14px">
+          <li>시연 데이터의 <code>intended_axis</code>·<code>generator</code>는 생성 흔적. 계약 필드가 아니다.</li>
+          <li><code>scent_strong</code>과 <code>scent_artificial</code>은 한 문장에 같이 나오는 일이 많다. 실데이터가 쌓이면 병합 여부를 본다.</li>
+          <li>분류 정확도는 <strong>사람이 쓴 피드백</strong>으로만 잰다. 시연 99건은 성능 근거가 아니다.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>단일 출처는 <code>contracts/feedback-category-vocab.json</code> · <code>contracts/feedback-classification.md</code> (dev, 2026-09-08 커밋 6c63cc9·5b05ca3). 이 페이지와 충돌하면 JSON이 우선한다.</footer>
+</main>

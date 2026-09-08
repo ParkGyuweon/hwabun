@@ -7,7 +7,15 @@
 | `persona_style.json` | 페르소나별 성향 6축 (10,000명 전체) | 1.2MB |
 | `persona_sampling_report.json` | 추출 파라미터 · 모집단 대비 표본 분포 검증 | 2KB |
 | `personas_holdout_a.json` | **홀드아웃 A** 2,000명 (`PH00001`~`PH02000`) — 고르는 데 쓴다 | 11.8MB |
-| `personas_holdout_b.json` | **홀드아웃 B** 2,000명 — **확인에만** 쓴다 | 11.6MB |
+| `personas_holdout_b.json` | **홀드아웃 B** 2,000명 (`PH00001`~`PH02000` — A 와 같은 원본 대역) — **확인에만** 쓴다 | 11.6MB |
+
+> **원본 ID 는 그대로 둔다 (2026-09-08, 데이터 파트 Jira 204).** B 의 persona_id 를 직접
+> 바꾸면 동적 평가의 결정적 노이즈 시드와 `eval_metadata` 조인이 깨진다. 전역 ID
+> (B → `PH02001`~`PH04000`) 는 계약 테이블 `persona_profile.persona_id` 에만 있고, 원본은
+> `source_persona_id` 로 보존된다. AI 산출물을 DW 와 붙일 때의 조인 키:
+> `eval_metadata.split = persona_profile.evaluation_cohort` AND
+> `eval_metadata.persona_id = persona_profile.source_persona_id`. 4,000건 전부 붙고 누락 0,
+> 전역 ID 유일 — `contracts/persona/build_persona_tables.py --sample HA:all` / `HB:all` 로 확인.
 | `holdout_{a,b}_sampling_report.json` | 홀드아웃 추출 파라미터·분포 검증 | 2KB |
 
 ## PA / PC 대역 구분

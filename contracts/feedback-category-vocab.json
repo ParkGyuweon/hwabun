@@ -1,0 +1,151 @@
+{
+  "schema_version": "0.2.0-draft",
+  "updated": "2026-09-08",
+  "description": "고객 피드백 자동 분류의 고정 어휘. 축(axis) 5개와 그 아래 카테고리. 분류기는 이 목록에서만 고르고, 목록에 없는 답은 other 로 떨어진다. 새 항목은 other 누적분을 훑어서 사람이 추가한다 — 분류기가 이름을 짓지 않는다.",
+  "scope": "브랜드가 제품을 고쳐서 해결할 수 있는 축만 둔다. 배송·CS 는 플랫폼 문제라 제외.",
+  "polarity": "없음. 피드백은 사장님에게 보내는 개선 요청이라 전부 불만·요청으로 본다. 칭찬은 리뷰가 받는다.",
+  "cardinality": "건당 다중 (labels[] 최대 3개). 전부 입력 축 안의 카테고리. 문장에 실제로 적힌 불만만. other 는 단독으로만. primary 는 가장 두드러진 하나. 집계는 '언급 수' — 카테고리별 합이 피드백 수를 넘을 수 있다.",
+  "axes": [
+    {
+      "id": "efficacy",
+      "label": "효능",
+      "desc": "기대한 효과가 안 나거나 부작용이 났다",
+      "categories": [
+        {
+          "id": "efficacy_low",
+          "label": "효과 미흡",
+          "desc": "기대한 효과(모공·미백·주름·진정·세정 등)가 안 느껴진다"
+        },
+        {
+          "id": "efficacy_irritation",
+          "label": "자극·트러블",
+          "desc": "쓰고 나서 따갑거나 붉어지거나 트러블이 났다"
+        },
+        {
+          "id": "efficacy_dryness",
+          "label": "건조·당김",
+          "desc": "쓰고 나서 피부가 건조해지거나 당긴다"
+        }
+      ]
+    },
+    {
+      "id": "texture",
+      "label": "사용감",
+      "desc": "피부에 닿았을 때의 느낌 — 발림성·흡수·끈적임·백탁",
+      "categories": [
+        {
+          "id": "texture_sticky",
+          "label": "끈적임",
+          "desc": "바른 뒤 끈적임이 남는다"
+        },
+        {
+          "id": "texture_runny",
+          "label": "묽음·흘러내림",
+          "desc": "제형이 묽어서 흘러내리거나 잘 안 발린다"
+        },
+        {
+          "id": "texture_slow",
+          "label": "흡수 느림",
+          "desc": "흡수가 느려서 기다려야 한다"
+        },
+        {
+          "id": "texture_whitecast",
+          "label": "백탁",
+          "desc": "바른 자리가 하얗게 남는다"
+        },
+        {
+          "id": "texture_heavy",
+          "label": "무겁고 답답함",
+          "desc": "제형이 무겁거나 두껍게 느껴진다"
+        }
+      ]
+    },
+    {
+      "id": "scent",
+      "label": "향",
+      "desc": "향의 세기·종류·지속",
+      "categories": [
+        {
+          "id": "scent_strong",
+          "label": "향이 강함",
+          "desc": "향이 세거나 오래 남는다"
+        },
+        {
+          "id": "scent_artificial",
+          "label": "향이 인공적",
+          "desc": "인공적인 냄새가 난다"
+        },
+        {
+          "id": "scent_weak",
+          "label": "향이 약함",
+          "desc": "향이 거의 안 난다"
+        }
+      ]
+    },
+    {
+      "id": "packaging",
+      "label": "용기·포장",
+      "desc": "용기를 다루는 모든 것 — 뚜껑·펌프·재질·라벨",
+      "categories": [
+        {
+          "id": "pkg_lid_loose",
+          "label": "뚜껑 헐거움·누수",
+          "desc": "뚜껑이 잘 안 잠기거나 저절로 열려 내용물이 샌다"
+        },
+        {
+          "id": "pkg_lid_stiff",
+          "label": "뚜껑 뻑뻑함",
+          "desc": "뚜껑이 너무 꽉 닫혀 열기 어렵다"
+        },
+        {
+          "id": "pkg_pump",
+          "label": "펌프 막힘·고장·토출량",
+          "desc": "펌프가 막히거나 눌리지 않거나, 한 번에 너무 많이/적게 나온다"
+        },
+        {
+          "id": "pkg_durability",
+          "label": "재질·내구성 약함",
+          "desc": "용기 재질이 얇거나 부품이 쉽게 부서진다"
+        },
+        {
+          "id": "pkg_label",
+          "label": "라벨·표기 불분명",
+          "desc": "성분·사용법 표기를 알아보기 어렵다"
+        },
+        {
+          "id": "pkg_visibility",
+          "label": "내용물 확인 어려움",
+          "desc": "남은 양이 보이지 않는다"
+        }
+      ]
+    },
+    {
+      "id": "value",
+      "label": "용량·가격",
+      "desc": "용량 대비 가격, 소·대용량 부재",
+      "categories": [
+        {
+          "id": "value_small",
+          "label": "용량 부족",
+          "desc": "용량이 적어 금방 떨어진다"
+        },
+        {
+          "id": "value_price",
+          "label": "가격 비쌈",
+          "desc": "용량과 무관하게 가격 자체가 부담"
+        },
+        {
+          "id": "value_option",
+          "label": "리필·대용량 요청",
+          "desc": "리필이나 더 큰 용량을 원한다"
+        }
+      ]
+    }
+  ],
+  "other": {
+    "id": "other",
+    "label": "기타",
+    "desc": "입력 축 안에서 목록에 없는 불만. 0.2.0 부터 축이 아니라 카테고리 — axis_id 는 항상 고객이 고른 축. 여기 쌓인 것을 훑어 목록에 항목을 추가한다"
+  },
+  "axis_is_input": "축(axis)은 고객이 화면 토글로 고른다 — 분류기는 축을 추론하지 않고 그 축의 카테고리만 고른다 (0.2.0)."
+}
