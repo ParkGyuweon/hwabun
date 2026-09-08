@@ -35,6 +35,8 @@ PRODUCT_EVENT_NAMES = (
     "product_click",
     "recommendation_impression",
     "recommendation_click",
+    "banner_impression",
+    "banner_click",
     "wishlist_toggle",
     "add_to_cart",
     "remove_from_cart",
@@ -207,6 +209,11 @@ def _properties_schema() -> Any:
         "open",
         "close_reason",
         "vocab_version",
+        "banner_type",
+        "banner_value",
+        "banner_slot",
+        "trait_source",
+        "policy_version",
     )
     array_names = ("matched_ingredients", "matched_keywords")
     return StructType(
@@ -396,6 +403,11 @@ def _product_event_fact(
         _prop(F.col("_properties"), "search_id").alias("search_id"),
         _prop(F.col("_properties"), "section_id").alias("section_id"),
         _prop(F.col("_properties"), "position").cast("int").alias("position"),
+        _prop(F.col("_properties"), "banner_type").alias("banner_type"),
+        _prop(F.col("_properties"), "banner_value").alias("banner_value"),
+        _prop(F.col("_properties"), "banner_slot").cast("int").alias("banner_slot"),
+        _prop(F.col("_properties"), "trait_source").alias("trait_source"),
+        _prop(F.col("_properties"), "policy_version").alias("policy_version"),
         quantity.alias("quantity"),
         F.when(item_events, quantity).alias("purchase_quantity"),
         _prop(F.col("_properties"), "cart_size_after")

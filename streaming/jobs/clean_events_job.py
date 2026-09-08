@@ -218,6 +218,37 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         )
     )
 
+    is_banner = c("event_name").isin("banner_impression", "banner_click")
+    banner_type = _properties_column(raw_df, "banner_type")
+    banner_value = _properties_column(raw_df, "banner_value")
+    banner_slot = _properties_column(raw_df, "banner_slot")
+    trait_source = _properties_column(raw_df, "trait_source")
+    banner_value_key_present = c("properties_json").rlike(
+        r'"banner_value"\s*:'
+    )
+    banner_type_ok = banner_type.isin(
+        "concern", "ingredient", "clean", "price_bin", "category", "segment", "new_brand"
+    )
+    banner_value_ok = banner_value_key_present & (
+        ((banner_type == F.lit("new_brand")) & banner_value.isNull())
+        | ((banner_type != F.lit("new_brand")) & _non_blank(banner_value))
+    )
+    banner_slot_ok = banner_slot.rlike(r"^[1-9][0-9]*$")
+    trait_source_ok = trait_source.isin("session", "profile", "coldstart", "explore")
+    banner_intent_ok = (
+        ((c("event_name") == F.lit("banner_impression")) & (c("intent") == F.lit("session")))
+        | ((c("event_name") == F.lit("banner_click")) & (c("intent") == F.lit("interest")))
+    )
+    banner_contract_ok = (~is_banner) | (
+        _non_blank(c("product_id"))
+        & banner_type_ok
+        & banner_value_ok
+        & banner_slot_ok
+        & trait_source_ok
+        & banner_intent_ok
+        & ~c("properties_json").rlike(r'"slot"\s*:')
+    )
+
     return {
         "json_ok": c("is_json_parseable").eqNullSafe(True),
         "coordinate_ok": coordinate_ok,
@@ -231,6 +262,7 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         ),
         "sequence_ok": sequence_ok,
         "enum_ok": enum_ok,
+        "banner_contract_ok": banner_contract_ok,
         "synthetic_properties_ok": synthetic_properties_ok,
     }
 
@@ -248,6 +280,7 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         .when(~expressions["timestamp_format_ok"], F.lit("invalid_timestamp_format"))
         .when(~expressions["sequence_ok"], F.lit("invalid_sequence_no"))
         .when(~expressions["enum_ok"], F.lit("invalid_enum"))
+        .when(~expressions["banner_contract_ok"], F.lit("invalid_banner_properties"))
         .when(~expressions["synthetic_properties_ok"], F.lit("invalid_properties"))
         .otherwise(F.lit("invalid_record"))
     )
