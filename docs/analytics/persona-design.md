@@ -135,6 +135,9 @@ Persona Dimension에는 편입하되, 집단을 ID 대역으로 추론하지 않
 Holdout 원본 A/B는 기존 평가 재현성을 위해 각각의 파일 안에서 동일한
 `PH00001~PH02000`을 유지한다. B의 전역 ID는 계약 테이블 생성 시 부여한다. 집단은
 `evaluation_cohort=holdout_a|holdout_b`로 Join하며, 향후 C도 2,000명 대역을 이어 쓴다.
+원본 ID는 `persona_profile.source_persona_id`에 보존한다. AI metadata는
+`split = evaluation_cohort AND persona_id = source_persona_id`로 Join한 뒤 Profile의
+`persona_id`를 전역 ID로 사용한다.
 
 PA는 FE logger를 수정하지 않는다. runner가 `/api/events` batch를 캡처하고 Collector로
 전송하기 직전에 synthetic metadata를 보강한다. Persona 선택 전 발생한 초기 Event는
@@ -175,6 +178,8 @@ Mart.simulation_run_id
   전원에 존재한다. 파일명이나 ID prefix로 추론하지 않는다.
 - Holdout A/B 4,000명을 `persona_source=holdout_sample`로 편입하고
   `evaluation_cohort`로 분리했다. 원본 평가 ID는 보존하고 Dimension ID만 전역화한다.
+- `source_persona_id`로 원본 평가 ID를 계약 산출물에 보존하고, A/B가 공유하는 원본
+  ID를 `evaluation_cohort`와 함께 안전하게 Join하는 복합 키를 제공한다.
 - 중첩 JSON을 계약 테이블 8종으로 평탄화하는 구현이 `contracts/persona/`에 생겼다.
   PA 10·100명과 PC 100명 표본에서 계약 §11 조건과 grain·nullable·enum·누출 검사가
   위반 0건으로 통과했다.

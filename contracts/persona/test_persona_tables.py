@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -22,6 +23,12 @@ import build_persona_tables as bp                                      # noqa: E
 import validate_persona_tables as vp                                   # noqa: E402
 
 CATALOG = {"P1", "P2", "P3"}
+EVAL_METADATA = {
+    "holdout_a": os.path.join(bp.ROOT, "batch", "ingest", "data",
+                              "eval_metadata_holdout_a.jsonl"),
+    "holdout_b": os.path.join(bp.ROOT, "batch", "ingest", "data",
+                              "eval_metadata_holdout_b.jsonl"),
+}
 
 
 def review(review_id, product_id, rating=5, submitted="2020-01-01",
@@ -40,7 +47,8 @@ def review(review_id, product_id, rating=5, submitted="2020-01-01",
 
 def persona(reviews, **extra):
     row = {
-        "persona_id": "PA00001", "user_id": "PA00001", "author_id": "A1",
+        "persona_id": "PA00001", "source_persona_id": "PA00001",
+        "user_id": "PA00001", "author_id": "A1",
         "persona_source": "agent_sample", "profile_version": "persona-v1",
         "profile_scope": "full", "created_at": "2026-09-02T01:22:41Z",
         "updated_at": "2026-09-02T01:22:41Z",
@@ -263,8 +271,19 @@ class HoldoutIdentity(unittest.TestCase):
         self.assertEqual(original["persona_id"], "PH00001")
         self.assertNotIn("evaluation_cohort", original)
         self.assertEqual(mapped["persona_id"], "PH02001")
+        self.assertEqual(mapped["source_persona_id"], "PH00001")
         self.assertEqual(mapped["user_id"], "PH02001")
         self.assertEqual(mapped["evaluation_cohort"], "holdout_b")
+
+    def test_PA와_PC도_원본_ID를_명시적으로_보존한다(self):
+        for band in ("PA", "PC"):
+            source_id = f"{band}00001"
+            mapped = bp.apply_source_contract(
+                persona([], persona_id=source_id, user_id=source_id),
+                bp.SOURCE_CONFIGS[band],
+            )
+            self.assertEqual(mapped["source_persona_id"], source_id)
+            self.assertEqual(mapped["persona_id"], source_id)
 
     def test_집단_ID_교집합이_없다(self):
         a = {bp.global_holdout_id(f"PH{i:05d}", "holdout_a")
@@ -277,6 +296,30 @@ class HoldoutIdentity(unittest.TestCase):
         overlaps = vp.band_overlaps({
             "HA": {"PH00001"}, "HB": {"PH00001"}, "PA": {"PA00001"}})
         self.assertEqual(overlaps, {("HA", "HB"): {"PH00001"}})
+
+    def test_AI_metadata는_cohort와_원본_ID로_전역_ID에_join된다(self):
+        profiles = {}
+        for band in ("HA", "HB"):
+            config = bp.SOURCE_CONFIGS[band]
+            for raw in bp._load(config["path"]):
+                profile = bp.apply_source_contract(raw, config)
+                key = (profile["evaluation_cohort"], profile["source_persona_id"])
+                self.assertNotIn(key, profiles)
+                profiles[key] = profile["persona_id"]
+
+        joined = {}
+        for cohort, path in EVAL_METADATA.items():
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    metadata = json.loads(line)
+                    key = (metadata["split"], metadata["persona_id"])
+                    self.assertIn(key, profiles)
+                    joined[key] = profiles[key]
+
+        self.assertEqual(len(joined), 4000)
+        self.assertEqual(joined[("holdout_a", "PH00001")], "PH00001")
+        self.assertEqual(joined[("holdout_b", "PH00001")], "PH02001")
+        self.assertEqual(len(set(joined.values())), 4000)
 
 
 class TableShape(unittest.TestCase):

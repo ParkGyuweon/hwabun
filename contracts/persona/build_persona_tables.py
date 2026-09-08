@@ -83,7 +83,8 @@ TABLE_SPECS = OrderedDict([
         "contract": "§4",
         "grain": ["persona_id"],
         "columns": [
-            ("persona_id", S, N), ("author_id", S, Y), ("user_id", S, N),
+            ("persona_id", S, N), ("source_persona_id", S, N),
+            ("author_id", S, Y), ("user_id", S, N),
             ("persona_source", S, N), ("evaluation_cohort", S, Y),
             ("skin_type", S, N), ("skin_tone", S, N),
             ("eye_color", S, Y), ("hair_color", S, Y), ("stratum", S, N),
@@ -209,7 +210,9 @@ def apply_source_contract(persona, config):
     """원본을 변경하지 않고 계약 식별자와 집단 필드를 붙인 복사본을 만든다."""
     out = dict(persona)
     cohort = config["evaluation_cohort"]
-    global_id = global_holdout_id(persona["persona_id"], cohort)
+    source_id = persona["persona_id"]
+    global_id = global_holdout_id(source_id, cohort)
+    out["source_persona_id"] = source_id
     out["persona_id"] = global_id
     out["user_id"] = global_id
     out["persona_source"] = config["persona_source"]
