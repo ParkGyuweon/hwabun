@@ -963,6 +963,22 @@ GET /api/recommend?persona_id={id}&size=10
 7. 상위 size개 반환 — 전용 칸으로 들어온 항목은 `reserved: true`
 ```
 
+> **참조 구현 (2026-09-08, Jira 206) — `batch/serving/recommend_server.py`** (FastAPI).
+> 위 1~7 을 파이썬으로 그대로 돈다. 백엔드 `RankingService` 는 아직 없으므로 **백엔드가
+> 이 서버를 프록시하는 형태**를 권한다 — 모델이 sklearn pickle 이고 피처 19개를 자바로 다시
+> 짜면 순위가 조용히 어긋난다. ONNX 로 가더라도 이 서버가 대조 기준이다.
+>
+> | | |
+> |---|---|
+> | 실행 | `python batch/serving/recommend_server.py` (포트 8300) · `GET /health` |
+> | 요청 | `GET /api/recommend?persona_id=&size=10&reserved=0` (+ `seed=review` — 리뷰 시드를 상태로 쓰는 **시연용**, 응답 `state_source: review_seed`) |
+> | 상태 | 메모리 (Redis 자리). `POST /api/events {persona_id, events[]}` 로 쌓는다. 이력 없으면 `state_source: cold_start` |
+> | 응답 추가 필드 | `state_source` · `scorer` (`ltr`/`linear`) · `latency_ms` · `items[].brand_name` · `items[].reason` (아래) · 선형 폴백일 때만 `weights` |
+> | **`reason`** | `breakdown` 대체. 항별 기여가 아니라 **그 상품에 실제로 있던 신호**만 문장으로: `cf` "회원님이 담은 상품을 고른 사람들이 함께 고른 상품" · `content` "본 상품과 성분·고민 구성이 비슷" (cos ≥ 0.5) · `attribute` "{skin_type} 피부 사용자 사이에서 반응이 좋은" (친화도 상위 20%) · `new_brand` (전용 칸) · 아무것도 없으면 `popular`. **프론트 확정 대기** — §7 |
+> | **응답 시간 (실측)** | holdout_a 300명 · seed=review · reserved=2 · LTR: **점수 계산 p50 7.0ms / p95 8.9ms**, **HTTP 왕복+reason p50 12.3ms / p95 15.2ms** (파이썬 단일 프로세스, 워밍업 후). `batch/serving/bench_recommend.py` |
+> | 안 한 것 | `banner_slots` / `axes` (배너, §5-1) — 전용 칸 자리 확정 뒤. Redis 연결. 인증 |
+> | 테스트 | `python -m unittest batch/serving/test_recommend_server.py` — 계약 필드·전환 제외·콜드 스타트·404·reserved 상한 |
+
 > **4단계만 바뀌었습니다.** 1·2·3·5·6·7 단계와 Redis 스키마·실시간 증분 갱신
 > (§2-1)·노출 정책·MMR·배너(§5-1)는 그대로입니다.
 >
@@ -1197,7 +1213,8 @@ FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서
 | `w1` 항 검증 | 행동 로그 생성 후 가능 |
 | CF 가점 (§4-1) | **채택** (2026-09-07). β = 1.0 · 가점 전용 · 지지자 3명 미만 차단 |
 | 학습 결합 (§4-2) | **채택** (2026-09-07). §5 처리 4단계가 모델 추론으로 바뀌고 `breakdown` 항별 분해가 사라진다. 선형은 폴백으로 남는다 |
-| 모델을 자바에서 어떻게 읽나 | **미정 · 백엔드와 협의 필요.** ONNX 내보내기 / 파이썬 추론 서버 (AI 파트 권고는 후자 — 피처 19개를 자바로 다시 짜면 조용히 어긋난다) |
-| `breakdown` 대체 형태 | **미정.** 항별 분해 대신 피처 중요도 또는 "함께 고른 상품" 문구. 프론트와 협의 |
+| 모델을 자바에서 어떻게 읽나 | **파이썬 추론 서버 참조 구현 있음** (2026-09-08, `batch/serving/recommend_server.py`, §5). 백엔드가 프록시하는 형태를 권함. ONNX 는 백엔드 결정 시 — 그때도 이 서버가 대조 기준 |
+| `breakdown` 대체 형태 | **초안 있음 — 프론트 확정 대기.** `items[].reason` 에 실제로 있던 신호만 문장으로 (`cf`·`content`·`attribute`·`new_brand`·`popular`, §5 참조 구현 표). 문구·개수는 프론트와 협의 |
+| 응답 시간 기준 | **실측 p95 15.2ms** (HTTP 왕복, 파이썬 단일 프로세스). 기준값(SLA)은 미정 — 백엔드 프록시·네트워크 포함해 다시 잰 뒤 정한다 |
 | 신규 브랜드 전용 칸 (§5-1) | **구현** (2026-09-08, Jira 129). `Recommender.rank(reserved=N, flags=True)`. 지금 카탈로그는 신규 0개라 결과 불변 (부록 U) |
 | 전용 칸의 자리 | **미정 · 프론트와 협의.** 측정·구현은 메인 `size` 칸 안. `reserved` 파라미터 설명은 배너 칸으로 적혀 있어 어긋남 — 확정 후 한쪽으로 정리 |
