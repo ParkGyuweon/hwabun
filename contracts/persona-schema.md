@@ -1,7 +1,7 @@
 # Persona Schema 계약
 
 작성일: 2026-09-02
-최종 검증: 2026-09-08, holdout A/B 계약 편입 · 전역 ID/집단 교집합 검증
+최종 검증: 2026-09-08, holdout 원본·전역 ID 매핑 및 AI metadata Join 검증
 상태: Draft, §2.1 holdout 계약 및 §7.1 정본 정렬 완료. Event·Run 축 E2E 검증 대기
 설계 설명: [`persona-design.md`](../docs/analytics/persona-design.md)
 
@@ -36,6 +36,20 @@ Synthetic Event runtime metadata는 [`event-schema.json`](./event-schema.json), 
 적재 시 B에 2,000을 더한다. 향후 `holdout_c`는 같은 규칙으로
 `PH04001`~`PH06000`을 사용한다. 원본 파일 ID는 분석·집단 판정에 사용하지 않는다.
 
+원본 ID는 `persona_profile.source_persona_id`에 보존한다. AI 평가 metadata는 다음
+복합 키로 Profile에 Join하고, Join 이후 `persona_profile.persona_id`를 전역 ID로 쓴다.
+`persona_id` 단독 Join은 A/B가 같은 원본 ID를 공유하므로 금지한다.
+
+```text
+eval_metadata.split      = persona_profile.evaluation_cohort
+eval_metadata.persona_id = persona_profile.source_persona_id
+```
+
+| `source_persona_id` | `evaluation_cohort` | `persona_id` |
+| --- | --- | --- |
+| `PH00001` | `holdout_a` | `PH00001` |
+| `PH00001` | `holdout_b` | `PH02001` |
+
 ### 2.2 상품 ID
 
 | 필드 | 의미 |
@@ -47,7 +61,7 @@ Synthetic Event runtime metadata는 [`event-schema.json`](./event-schema.json), 
 
 ### 2.3 Persona와 Runtime Context 분리
 
-`persona_id`, `author_id`, `user_id`, `persona_source`, `evaluation_cohort`,
+`persona_id`, `source_persona_id`, `author_id`, `user_id`, `persona_source`, `evaluation_cohort`,
 `profile_version`은 Persona에 귀속된다. `scenario_id`, `simulation_run_id`,
 `generator_type`은 실행에 귀속되며 Persona 고유 속성으로 저장하지 않는다.
 
@@ -96,6 +110,7 @@ profile_scope = full
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | `persona_id` | string | N | Unique key |
+| `source_persona_id` | string | N | 원본 Persona 파일 및 AI 평가 metadata의 ID |
 | `author_id` | string | Y | 원천 리뷰어 ID, 외부 노출 금지 |
 | `user_id` | string | N | Synthetic 분석 ID, 기본값 `persona_id` |
 | `persona_source` | string | N | `agent_sample`, `batch_sample`, `holdout_sample` |
@@ -415,6 +430,9 @@ grain = scenario_id
 14. `holdout_sample`에는 `evaluation_cohort`가 반드시 존재하고, 다른 표본에서는 NULL이다.
 15. CF 동시발생 생성 시 모든 `personas_*.json`의 `author_id`를 제외한다. 새 Holdout
     파일을 추가하면 해당 author_id가 제외 집합에 포함되는지 회귀 테스트한다.
+16. `source_persona_id`는 모든 표본에서 원본 ID를 보존한다. Holdout은
+    `(evaluation_cohort, source_persona_id)`가 유일하며 이 키와 `persona_id`의 정방향·
+    역방향 매핑이 각각 유일해야 한다.
 
 ## 12. 추천 행동 상태 연결
 
