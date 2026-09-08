@@ -60,6 +60,7 @@ public class FeedbackController {
         String id = UUID.randomUUID().toString();
         jdbc.update("insert into feedback(feedback_id,member_id,product_id,axis_id,order_item_id,body) values(?,?,?,?,?,?)",
                 id, memberId, req.productId(), axisId, orderItemId, req.body());
+        jdbc.update("insert into feedback_classification(feedback_id) values(?)", id);
         return Map.of("feedbackId", id, "productId", req.productId(), "axisId", axisId,
                 "status", "VISIBLE", "classificationStatus", "PENDING");
     }
@@ -75,9 +76,10 @@ public class FeedbackController {
                 "m.skin_type_code authorSkinTypeCode,m.skin_tone_code authorSkinToneCode, " +
                 "m.hair_color_code authorHairColorCode,m.eye_color_code authorEyeColorCode, " +
                 "f.axis_id axisId,f.body,f.status,f.created_at createdAt, " +
-                "'PENDING' classificationStatus,false hiddenByDefault " +
+                "coalesce(fc.classification_status,'PENDING') classificationStatus,coalesce(fc.hidden_by_default,false) hiddenByDefault " +
                 "from feedback f join order_item oi on oi.order_item_id=f.order_item_id " +
                 "left join member m on m.member_id=f.member_id " +
+                "left join feedback_classification fc on fc.feedback_id=f.feedback_id " +
                 "where oi.brand_id=? and f.status='VISIBLE' order by f.created_at desc", brandId);
     }
 
