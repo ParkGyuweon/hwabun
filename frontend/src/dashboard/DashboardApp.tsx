@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
 import ProductsScreen from './screens/ProductsScreen';
 import BehaviorScreen from './screens/BehaviorScreen';
@@ -15,6 +15,8 @@ import type { StorefrontPrefs } from '../lib/storefront';
 import { DEMO_BRAND } from '../mocks/products';
 import { useAuth } from '../hooks/useAuth';
 import { logout } from '../lib/auth';
+import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
+import type { BrandsState } from '../lib/brands';
 
 type ScreenKey =
   | 'overview'
@@ -73,6 +75,33 @@ export default function DashboardApp() {
   /** main.tsx 의 AuthGate 를 지나 왔으므로 null 이 아니다. 만료되면 게이트가 다시 로그인으로 바꾼다 */
   const seller = useAuth('SELLER');
   const [storefront, setStorefront] = useState<StorefrontPrefs | null>(() => loadStorefront());
+  /**
+   * 내 브랜드. 판매자 API 는 전부 brandId 를 요구하므로 로그인 직후 받아 하나를 고른다.
+   * 서버가 없으면 'unavailable' — 화면은 모의 브랜드(DEMO_BRAND)로 남고 사이드바에 그 사실을 적는다.
+   */
+  const [brands, setBrands] = useState<BrandsState>({ kind: 'loading' });
+  const [brandId, setBrandId] = useState<string | null>(() => loadBrandId());
+
+  useEffect(() => {
+    let alive = true;
+    fetchMyBrands().then((state) => {
+      if (!alive) return;
+      setBrands(state);
+      if (state.kind === 'ready') {
+        const keep = state.brands.some((b) => b.id === brandId);
+        const next = keep ? brandId : (state.brands[0]?.id ?? null);
+        setBrandId(next);
+        saveBrandId(next);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // seller 가 바뀌면(재로그인) 다시 받는다. brandId 는 안에서 맞추므로 의존성에 넣지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seller?.id]);
+
+  const brand = brands.kind === 'ready' ? (brands.brands.find((b) => b.id === brandId) ?? null) : null;
   const [editing, setEditing] = useState(false);
   const [screen, setScreen] = useState<ScreenKey>('overview');
   const [days, setDays] = useState(14);
@@ -105,9 +134,49 @@ export default function DashboardApp() {
           <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />
           <div>
             <strong>HWABUN</strong>
-            <span>{storefront.brandName || DEMO_BRAND}</span>
+            <span>{brand?.name || storefront.brandName || DEMO_BRAND}</span>
           </div>
         </div>
+
+        {/* 서버 브랜드. 둘 이상이면 고르고, 없으면 만들고, 서버가 없으면 모의값이라고 적는다 */}
+        {brands.kind === 'ready' && brands.brands.length > 1 ? (
+          <select
+            className="sidebar__brand-select"
+            value={brandId ?? ''}
+            aria-label="브랜드 선택"
+            onChange={(e) => {
+              setBrandId(e.target.value);
+              saveBrandId(e.target.value);
+            }}
+          >
+            {brands.brands.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {brands.kind === 'ready' && brands.brands.length === 0 ? (
+          <button
+            type="button"
+            className="sidebar__settings sidebar__brand-create"
+            onClick={async () => {
+              const created = await createBrand(storefront.brandName || DEMO_BRAND);
+              if (created) {
+                setBrands({ kind: 'ready', brands: [created] });
+                setBrandId(created.id);
+                saveBrandId(created.id);
+              }
+            }}
+          >
+            서버에 브랜드 등록
+          </button>
+        ) : null}
+        {brands.kind === 'unavailable' ? (
+          <p className="sidebar__brand-note">
+            {brands.reason === 'server' ? '서버 미연결 · 모의 브랜드' : '로그인 만료 · 다시 로그인'}
+          </p>
+        ) : null}
 
         <MotifLine variant="divider" compact />
 
