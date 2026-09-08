@@ -2,9 +2,9 @@ import { BarList, Kpi, Panel } from '../components';
 import { contentAttention, fmt, scrapedIngredients, validationBehaviors } from '../lib/metrics';
 
 /**
- * ③ 정보 관심도 — 이 대시보드의 존재 이유.
+ * ③ 정보 관심도 · 이 대시보드의 존재 이유.
  *
- * 일반 웹 분석은 "상세 이탈률이 높다" 에서 멈춘다. 이 화면은 그 다음을 말한다 —
+ * 일반 웹 분석은 "상세 이탈률이 높다" 에서 멈춘다. 이 화면은 그 다음을 말한다 ·
  * **무엇을 보여줘야 사는가.** 콘텐츠 단위 체류(`section_dwell` + `content_kind`)를
  * 수집하는 우리만 만들 수 있는 화면이다.
  *
@@ -28,13 +28,13 @@ export default function ContentScreen() {
         <Kpi
           label="개선 필요 콘텐츠"
           value={longButWeak ? longButWeak.ko : '없음'}
-          sub={longButWeak ? '오래 보는데 전환이 낮다 — 설명이 어렵다는 신호' : ''}
+          sub={longButWeak ? '오래 보는데 전환이 낮다. 설명이 어렵다는 신호' : ''}
           source="mock"
         />
         <Kpi
           label="가장 많이 긁힌 성분"
           value={scrapedIngredients[0].name}
-          sub={`${fmt.int(scrapedIngredients[0].count)}회 — 설명 부족 신호`}
+          sub={`${fmt.int(scrapedIngredients[0].count)}회 · 설명 부족 신호`}
           source="mock"
         />
         <Kpi
@@ -48,7 +48,7 @@ export default function ContentScreen() {
       <Panel
         title="콘텐츠별 주목도 × 전환 기여"
         source="mock"
-        aside="co_visible_blocks ≤ 2 인 체류만 집계 — 겹쳐 보인 체류는 귀속 불가"
+        aside="co_visible_blocks ≤ 2 인 체류만 집계 · 겹쳐 보인 체류는 귀속 불가"
       >
         <table className="table">
           <thead>
@@ -84,7 +84,7 @@ export default function ContentScreen() {
         <Panel
           title="긁어간 성분 TOP 10"
           source="mock"
-          aside="원문 미저장 — 성분 사전 표준명만 (vocab 0.4)"
+          aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)"
         >
           <BarList
             items={scrapedIngredients.map((i) => ({

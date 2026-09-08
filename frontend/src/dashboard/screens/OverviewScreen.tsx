@@ -11,7 +11,7 @@ import {
 /**
  * 첫 화면.
  *
- * 배치는 역피라미드다 — 결론 → 추세 → 표.
+ * 배치는 역피라미드다. 결론 → 추세 → 표.
  * 결론부터 말하고 근거를 아래로 펼친다.
  *
  * 요약 지표를 4개로 줄였다. 뷰티 브랜드 대시보드의 의사결정 지원 상한이
@@ -43,7 +43,7 @@ export default function OverviewScreen({ days }: { days: number }) {
         <Kpi
           label="성분 열람률"
           value={fmt.pct(overview.ingredientViewRate)}
-          sub="상세 조회 대비 — 우리만 잴 수 있는 값"
+          sub="상세 조회 대비 · 우리만 잴 수 있는 값"
           source="mock"
         />
       </div>
@@ -67,7 +67,7 @@ export default function OverviewScreen({ days }: { days: number }) {
           <LineChart points={series.map((d) => ({ label: d.label, value: d.visits }))} />
         </Panel>
 
-        <Panel title="전환 퍼널 요약" source="mock" aside="구매는 범위 밖 — 장바구니까지">
+        <Panel title="전환 퍼널 요약" source="mock" aside="구매는 범위 밖 · 장바구니까지">
           <Funnel steps={standardFunnel} />
         </Panel>
       </div>

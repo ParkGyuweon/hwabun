@@ -228,7 +228,7 @@ export function leakVerdict(): Verdict {
 }
 
 /**
- * intent 퍼널 — 이 대시보드의 차별점.
+ * intent 퍼널 · 이 대시보드의 차별점.
  * 이벤트 이름이 아니라 발생 시점에 실린 의미(intent)로 단계를 세므로
  * 이벤트가 늘어나도 퍼널 정의가 흔들리지 않는다.
  */
@@ -380,7 +380,7 @@ export function ingredientStats(product: Product): IngredientStats {
   };
 }
 
-/** 주의 성분 유형별 포함 상품 수 (플랫폼 전 상품 실측 — 커먼즈 지표) */
+/** 주의 성분 유형별 포함 상품 수 (플랫폼 전 상품 실측 · 커먼즈 지표) */
 export const cautionPrevalence = CAUTION_INGREDIENTS.map(({ label, pattern }) => ({
   label,
   count: catalogProducts.filter((p) => pattern.test(p.ingredients.join(' '))).length,
@@ -462,7 +462,7 @@ export const contentAttention: ContentAttention[] = (() => {
  * 긁어간 성분 빈도.
  *
  * 원문은 로그에 남지 않는다(데이터 계약). 성분 사전에 걸린 표준 명칭만 온다.
- * 사전은 contracts/product-feature-vocab.json — AI 파트가 상품 벡터에 쓰는 것과
+ * 사전은 contracts/product-feature-vocab.json · AI 파트가 상품 벡터에 쓰는 것과
  * 같은 파일이라 "이 성분을 긁은 사람" 과 "이 성분이 든 상품" 이 같은 이름으로
  * 조인된다. 여기서도 그 사전을 그대로 읽어 화면과 로그의 성분 목록이 어긋나지
  * 않게 한다.
@@ -573,8 +573,8 @@ export const sameSkinFilterRate = 0.63;
  * 상품 선호와 UI 품질은 같은 축이 아니라서 여기 값은 선호 벡터에 넣지 않는다.
  */
 export const frictionByLocation = [
-  { where: '상품 이미지', event: 'dead_click', count: 412, meaning: '확대 기대 — 줌 없음' },
-  { where: '성분 목록', event: 'scroll_backtrack', count: 388, meaning: '되돌아 읽기 — 설명 난이도' },
+  { where: '상품 이미지', event: 'dead_click', count: 412, meaning: '확대 기대 · 줌 없음' },
+  { where: '성분 목록', event: 'scroll_backtrack', count: 388, meaning: '되돌아 읽기 · 설명 난이도' },
   { where: '옵션 선택', event: 'rage_click', count: 214, meaning: '품절 옵션 반응 없음' },
   { where: '리뷰 더보기', event: 'dead_click', count: 156, meaning: '버튼처럼 보이는 비버튼' },
   { where: '담기 버튼', event: 'hover_dwell', count: 1893, meaning: '평균 2.4초 망설임' },
@@ -601,7 +601,7 @@ const splitFull = (p: Product): string[] =>
 
 /**
  * 성분 30종의 위치가중. 전성분에서 처음 나오는 자리로 `max(1 - 위치/전체, 0.1)` (어휘집 position_formula).
- * 태그(highlights)에 있으면 1.0 — AI 파트 상품 벡터와 같은 규칙이라 "긁은 성분" 과 "든 성분" 이 같은 이름으로 만난다.
+ * 태그(highlights)에 있으면 1.0 · AI 파트 상품 벡터와 같은 규칙이라 "긁은 성분" 과 "든 성분" 이 같은 이름으로 만난다.
  */
 export function ingredientWeights(p: Product): Map<string, number> {
   const parts = splitFull(p);

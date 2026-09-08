@@ -9,7 +9,7 @@ export default function ProductsScreen() {
 
   return (
     <div className="stack">
-      <Panel title="장바구니 전환율 TOP 10" source="mock" aside="상세 조회 대비 담기 — 결제는 범위 밖">
+      <Panel title="장바구니 전환율 TOP 10" source="mock" aside="상세 조회 대비 담기 · 결제는 범위 밖">
         <BarList
           items={[...productMetrics]
             .filter((m) => m.detailViews >= 200)
@@ -54,7 +54,7 @@ export default function ProductsScreen() {
               {rows.map((m) => (
                 <tr key={m.product.product_id}>
                   <td title={m.product.product_name}>
-                    {m.product.brand_name} — {m.product.product_name}
+                    {m.product.brand_name} · {m.product.product_name}
                   </td>
                   <td>{fmt.compact(m.impressions)}</td>
                   <td>{fmt.compact(m.clicks)}</td>

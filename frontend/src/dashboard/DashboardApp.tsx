@@ -32,23 +32,23 @@ type ScreenKey =
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
   // 순서 = 브랜드가 결정하는 순서 (명세 §1). 범용 지표·마찰은 뒤로
   { key: 'overview', label: '개요', title: '개요', desc: '지금 손봐야 할 것 하나' },
-  { key: 'content', label: '정보 관심도', title: '정보 관심도', desc: '무엇을 보고 사나 — 콘텐츠 단위 주목도와 전환 기여' },
-  { key: 'segments', label: '고객군', title: '고객군', desc: '누가 사나 — 피부 타입 × 톤' },
+  { key: 'content', label: '정보 관심도', title: '정보 관심도', desc: '무엇을 보고 사나 · 콘텐츠 단위 주목도와 전환 기여' },
+  { key: 'segments', label: '고객군', title: '고객군', desc: '누가 사나 · 피부 타입 × 톤' },
   { key: 'ingredients', label: '성분', title: '성분', desc: '고객이 찾는 성분과 내 라인의 갭' },
   { key: 'products', label: '상품', title: '상품', desc: '상품별 병목과 이탈 지점' },
   { key: 'feedback', label: '고객 피드백', title: '고객 피드백', desc: '고객이 고쳐 달라는 것 · 5축' },
-  { key: 'reviews', label: '리뷰', title: '리뷰', desc: '공개 평가 — 피부 타입별 갈림과 자극 언급' },
-  { key: 'behavior', label: '행동·마찰', title: '행동·마찰', desc: '화면이 막는 곳 — 상품 선호와 분리해서 본다' },
+  { key: 'reviews', label: '리뷰', title: '리뷰', desc: '공개 평가 · 피부 타입별 갈림과 자극 언급' },
+  { key: 'behavior', label: '행동·마찰', title: '행동·마찰', desc: '화면이 막는 곳 · 상품 선호와 분리해서 본다' },
   { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기' },
 ];
 
 /**
- * HWABUN — 참여 브랜드(소상공인) 담당자용 대시보드 v0.2.
+ * HWABUN · 참여 브랜드(소상공인) 담당자용 대시보드 v0.2.
  *
- * 쇼핑몰과 진입점이 분리되어 있다 (/dashboard.html — 쇼핑몰 어디에서도 링크하지 않는다).
+ * 쇼핑몰과 진입점이 분리되어 있다 (/dashboard.html · 쇼핑몰 어디에서도 링크하지 않는다).
  * 실제 접근 제어(계정·권한)는 백엔드 범위이고, 여기서는 화면과 지표 정의를 확정한다.
  *
- * 화면은 사이드바 하나로 고정이고 색도 HWABUN 이다 — 브랜드마다 다른 것은 대시보드가 아니라
+ * 화면은 사이드바 하나로 고정이고 색도 HWABUN 이다. 브랜드마다 다른 것은 대시보드가 아니라
  * **고객이 보는 쇼핑몰**이다. 가입할 때 쇼핑몰의 진열 레이아웃과 색을 고르고(Onboarding),
  * 그 값은 같은 브라우저의 쇼핑몰(index.html)에 바로 반영된다. 사이드바 "쇼핑몰 설정" 으로 다시 고칠 수 있다.
  */
@@ -58,7 +58,7 @@ export default function DashboardApp() {
   const [storefront, setStorefront] = useState<StorefrontPrefs | null>(() => loadStorefront());
   /**
    * 내 브랜드. 판매자 API 는 전부 brandId 를 요구하므로 로그인 직후 받아 하나를 고른다.
-   * 서버가 없으면 'unavailable' — 화면은 모의 브랜드(DEMO_BRAND)로 남고 사이드바에 그 사실을 적는다.
+   * 서버가 없으면 'unavailable' · 화면은 모의 브랜드(DEMO_BRAND)로 남고 사이드바에 그 사실을 적는다.
    */
   const [brands, setBrands] = useState<BrandsState>({ kind: 'loading' });
   const [brandId, setBrandId] = useState<string | null>(() => loadBrandId());
@@ -174,7 +174,7 @@ export default function DashboardApp() {
           ))}
         </nav>
 
-        {/* 내 쇼핑몰 — 고객이 보는 화면. 진열 설정과 바로가기 */}
+        {/* 내 쇼핑몰 · 고객이 보는 화면. 진열 설정과 바로가기 */}
         <div className="sidebar__shop">
           <p className="sidebar__shop-label">내 쇼핑몰</p>
           <p className="sidebar__shop-state">

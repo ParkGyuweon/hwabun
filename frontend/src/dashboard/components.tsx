@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
  * 인라인 SVG 와 div 로 충분하고, 흑백 단색이라 라이브러리 테마 싸움도 없다.
  */
 
-/** 값의 출처. 모의값은 반드시 표시한다 — 검토자가 진짜 수치로 착각하면 안 된다 */
+/** 값의 출처. 모의값은 반드시 표시한다. 검토자가 진짜 수치로 착각하면 안 된다 */
 export function SourceBadge({ kind }: { kind: 'real' | 'mock' }) {
   return (
     <span className={`badge badge--${kind}`}>{kind === 'real' ? '실측' : '모의'}</span>
@@ -99,7 +99,7 @@ export function Kpi({
  * 막대 길이로는 차이를 못 읽는다. 길게 늘린 막대는 가로 공간만 먹고 답을 안 준다.
  * 그래서 **이름과 숫자를 앞세우고 막대는 짧게 옆에 둔다.**
  *
- * 이름도 둘로 나눈다. "브랜드 — 상품명" 을 한 줄에 붙이면 폭이 모자라 상품명이 잘리는데,
+ * 이름도 둘로 나눈다. "브랜드 · 상품명" 을 한 줄에 붙이면 폭이 모자라 상품명이 잘리는데,
  * 정작 알아야 할 것이 상품명이다. 상품명을 위에 크게, 브랜드를 아래 작게 둔다.
  */
 export function BarList({
@@ -204,7 +204,7 @@ export function Funnel({ steps }: { steps: Array<{ label: string; value: number;
 }
 
 /**
- * HWABUN 그래픽 모티프 — "Data Point & Connection".
+ * HWABUN 그래픽 모티프 · "Data Point & Connection".
  *
  * 브랜딩 가이드의 핵심 모티프다. 채운 원은 있음, 빈 원은 없음(또는 아직)을 뜻하고,
  * 실선은 연결된 것, 점선은 아직 이어지지 않은 것이다. 색은 팔레트 토큰을 그대로 써서

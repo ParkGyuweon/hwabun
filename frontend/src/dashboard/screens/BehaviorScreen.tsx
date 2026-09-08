@@ -42,25 +42,25 @@ export default function BehaviorScreen() {
         <Kpi
           label="rage_click"
           value={fmt.int(frictionCounts.rage_click)}
-          sub="같은 자리 연타 — 반응 없는 UI"
+          sub="같은 자리 연타 · 반응 없는 UI"
           source="mock"
         />
         {/*
           dead_click 은 실사용자 전용이다. 프론트 훅은 정상 동작하지만
-          가상 사용자가 이 행동을 만들지 못한다 — 러너는 유효한 요소만
+          가상 사용자가 이 행동을 만들지 못한다. 러너는 유효한 요소만
           클릭하고, 코드 생성기에는 이 행동이 없다. 합성 로그만 도는 동안
           이 값은 항상 0 이므로, 그 0 이 "마찰 없음" 으로 읽히면 안 된다.
         */}
         <Kpi
           label="dead_click"
           value={fmt.int(frictionCounts.dead_click)}
-          sub="눌리지 않는 곳 클릭 — 실사용자 전용"
+          sub="눌리지 않는 곳 클릭 · 실사용자 전용"
           source="mock"
         />
         <Kpi
           label="scroll_backtrack"
           value={fmt.int(frictionCounts.scroll_backtrack)}
-          sub="되돌아 읽기 — 비교·재확인"
+          sub="되돌아 읽기 · 비교·재확인"
           source="mock"
         />
         <Kpi
@@ -72,7 +72,7 @@ export default function BehaviorScreen() {
       </div>
 
       <Panel
-        title="마찰 위치 — 어디서 막히는가"
+        title="마찰 위치 · 어디서 막히는가"
         source="mock"
         aside="좌절 신호는 상품이 아니라 화면의 문제일 수 있다"
       >

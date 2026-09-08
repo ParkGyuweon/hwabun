@@ -27,7 +27,7 @@ export default function ReviewsScreen({
             <option value="all">전체 상품</option>
             {products.map((p) => (
               <option key={p.product_id} value={p.product_id}>
-                {p.product_name} — {p.brand_name}
+                {p.product_name} · {p.brand_name}
               </option>
             ))}
           </select>
@@ -96,7 +96,7 @@ export default function ReviewsScreen({
               {troubleRanking.slice(0, 10).map((row) => (
                 <tr key={row.product.product_id}>
                   <td>
-                    {row.product.brand_name} — {row.product.product_name}
+                    {row.product.brand_name} · {row.product.product_name}
                   </td>
                   <td>{fmt.pct(row.irritationRate, 0)}</td>
                   <td>{fmt.pct(row.troubleRate, 0)}</td>
