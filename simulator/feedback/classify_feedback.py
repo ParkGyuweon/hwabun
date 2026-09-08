@@ -44,6 +44,8 @@ from collections import Counter, defaultdict
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.path.insert(0, BD)
+from banned_terms import BannedTerms  # noqa: E402  금지어 대조 — LLM 없음
 
 GMS_BASE = "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
 MODEL = "gpt-4.1-nano"      # 목록에서 고르는 일은 nano 로 충분하다
@@ -170,10 +172,14 @@ def main():
     print(f"피드백 {len(rows)}건 · 고정 목록 {len(axes)}축 {n_cat}종 + 기타"
           f" · 어휘 {vocab['schema_version']} · {a.model} · 건당 호출 1회{NL}")
 
+    banned = BannedTerms()
     out, t0 = [], time.time()
     for i, r in enumerate(rows, 1):
         g = clf.classify(r["body"], r.get("product_name", ""))
-        out.append(dict(r, **g, classifier=a.model,
+        # 금지어는 분류를 바꾸지 않는다. 걸리면 표시만 하고 화면에서 접는다.
+        hits = banned.find(r["body"])
+        out.append(dict(r, **g, banned_terms=hits, hidden_by_default=bool(hits),
+                        classifier=a.model,
                         vocab_version=vocab["schema_version"],
                         classified_at=time.strftime("%Y-%m-%dT%H:%M:%S")))
         if i % 20 == 0:
@@ -186,6 +192,8 @@ def main():
     print(f"{NL}{len(out)}건 -> {a.out}")
     print(f"호출 {clf.calls}회(재시도 {clf.retries}) · 토큰 in {clf.tok_in:,}"
           f" / out {clf.tok_out:,} · {time.time() - t0:.0f}초")
+    n_hidden = sum(1 for r in out if r["hidden_by_default"])
+    print(f"금지어 걸린 것 {n_hidden}건 (hidden_by_default) · 목록 {len(banned.terms)}개")
     if clf.fallback:
         print(f"{NL}목록에 없는 답 {len(clf.fallback)}건 -> 기타")
         for b, why in clf.fallback[:10]:

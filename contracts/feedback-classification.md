@@ -1,7 +1,7 @@
 # 고객 피드백 분류 계약
 
 > 2026-09-08 · 어휘 `feedback-category-vocab.json` `0.1.0-draft`
-> 관련: [`feedback-category-vocab.json`](feedback-category-vocab.json) (실행 계약 — 축·카테고리 목록) · `simulator/feedback/classify_feedback.py` (분류기, Jira 201) · `docs/planning/feature-spec-status.md` (브랜드 대시보드 "고객 피드백")
+> 관련: [`feedback-category-vocab.json`](feedback-category-vocab.json) (실행 계약 — 축·카테고리 목록) · [`feedback-banned-terms.json`](feedback-banned-terms.json) (실행 계약 — 금지어, Jira 202) · `simulator/feedback/classify_feedback.py` (분류기, Jira 201) · `docs/planning/feature-spec-status.md` (브랜드 대시보드 "고객 피드백")
 
 소비자가 상품에 대해 **사장님에게 보내는 개선 요청**을 축·카테고리로 자동 분류하는
 입력 → 처리 → 출력을 정의한다. 리뷰가 아니다.
@@ -24,6 +24,7 @@
 | 어휘 | **고정 목록.** 분류기는 `feedback-category-vocab.json` 에서만 고른다. 목록에 없는 답은 `other` |
 | 새 카테고리 | 분류기가 만들지 않는다. `other` 누적분을 훑어 **사람이** 어휘에 추가하고 `schema_version` 을 올린다 |
 | 범위 | 브랜드가 **제품을 고쳐서** 해결할 수 있는 축만. 배송·CS 는 플랫폼 문제라 제외 |
+| 금지어 | **입력을 막지 않는다.** `feedback-banned-terms.json` 에 걸리면 `hidden_by_default=true` 로 표시만 하고 분류는 그대로. 사장님 화면은 그 행을 접어 두고 눌러야 본문을 보여준다 |
 
 ## 2. 축·카테고리
 
@@ -72,8 +73,11 @@ FE 가 임시로 둔 8종과의 대응: 향→`scent` · 용기→`packaging` ·
 | `classifier` | string | 분류 모델 (`gpt-4.1-nano`) |
 | `vocab_version` | string | 분류 시점의 어휘 `schema_version` |
 | `classified_at` | string (ISO-8601) | 분류 시각 |
+| `banned_terms` | string[] | 본문에서 걸린 금지어. 없으면 `[]` |
+| `hidden_by_default` | boolean | `banned_terms` 가 비어 있지 않으면 `true`. **대시보드는 이 행의 본문을 접어 두고 "금지어 포함 · 눌러서 보기" 로 보여준다.** 집계에는 그대로 포함한다 |
 
 - `axis_id == "other"` 이면 `category_id` 도 `"other"` 다. 둘이 어긋나는 행은 없다.
+- `hidden_by_default` 는 금지어 여부만 뜻한다. 분류 결과(`axis_id`, `category_id`)와 무관하고 집계에서 빼지 않는다 — 욕이 섞여도 "펌프 막힘" 은 사장님이 봐야 할 내용이다.
 - 라벨(`axis`, `category`)은 표시용이다. **집계·조인은 id 로 한다.** 라벨은 어휘 개정 때 바뀔 수 있다.
 - 대시보드 집계 grain: `(product_id, axis_id, category_id)`. 상품별 보기는 이 grain 에 `product_id` 필터다 — 분류 시점에 상품으로 나누지 않는다 (같은 문제가 상품 수만큼 갈라진다).
 
@@ -82,6 +86,8 @@ FE 가 임시로 둔 8종과의 대응: 향→`scent` · 용기→`packaging` ·
 1. `body` 와 상품명을 프롬프트에 넣고 어휘 목록에서 **딱 하나** 고르게 한다. 건당 호출 1회.
 2. 답의 `axis`, `category` 가 어휘 목록에 **글자 그대로** 있는지 검사한다. 하나라도 어긋나면 `other`. 모델이 지어낸 이름을 그대로 받지 않는다.
 3. 응답 JSON 파싱은 첫 객체만 떼어 낸다. 3회 실패하면 `other`.
+4. **금지어 대조 (LLM 없음).** 본문과 목록 단어를 같은 방식으로 정규화(NFC·소문자·한글/자모/영문/숫자만 남김)한 뒤 부분 일치. 공백·기호를 지우므로 "시 발"·"시.발" 이 잡힌다. 단일 출처는 `feedback-banned-terms.json` — 출처 VaneProject/bad-word-filtering (MIT), 599개. 우리가 보태는 단어는 `added`, 오탐 예외 낱말은 `allow`(대조 전에 본문에서 지운다 — "똥손"), 출처에 있지만 끄는 단어는 `disabled`("18년" — 기간 표현과 구분 불가)에 넣고 이유를 함께 적는다.
+   - **못 잡는 것:** 비방(허위 사실·타 브랜드 비교)은 단어로 못 잡는다. 초성·변형 우회는 목록에 있는 형태만 잡힌다.
 
 이름을 짓게 하고 기존 항목과 비교해 붙이는 방식(건당 3회)은 **채택하지 않았다.**
 아홉 번 돌리는 동안 파편·과병합·프롬프트 예시 누출·반대 방향 혼입이 번갈아 났고,
