@@ -1,5 +1,5 @@
 {
- "_source": "simulator/feedback/data/feedback_classified.sample30.jsonl (Jira 201·202). 계약 contracts/feedback-classification.md §3·§4 필드만. FB00008 의 hidden_by_default 는 접힘 UI 시연용으로 FE 가 켠 것",
+ "_source": "simulator/feedback/data/feedback_classified.sample30.jsonl (계약 0.2.0 · Jira 201·202). §3·§4 필드만. FB00008 의 hidden_by_default 는 접힘 UI 시연용으로 FE 가 켠 것",
  "rows": [
   {
    "feedback_id": "FB00001",
@@ -14,11 +14,26 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_pump",
+     "category": "펌프 막힘·고장·토출량"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_pump",
+    "category": "펌프 막힘·고장·토출량"
+   },
+   "off_axis_hint": null,
    "category_id": "pkg_pump",
-   "category": "펌프 막힘·고장",
+   "category": "펌프 막힘·고장·토출량",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:33",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:32",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -35,11 +50,32 @@
    },
    "axis_id": "scent",
    "axis": "향",
+   "labels": [
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_strong",
+     "category": "향이 강함"
+    },
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_artificial",
+     "category": "향이 인공적"
+    }
+   ],
+   "primary": {
+    "axis_id": "scent",
+    "axis": "향",
+    "category_id": "scent_strong",
+    "category": "향이 강함"
+   },
+   "off_axis_hint": null,
    "category_id": "scent_strong",
    "category": "향이 강함",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:34",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:33",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -56,11 +92,38 @@
    },
    "axis_id": "value",
    "axis": "용량·가격",
-   "category_id": "value_option",
-   "category": "리필·대용량 요청",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_small",
+     "category": "용량 부족"
+    },
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_price",
+     "category": "가격 비쌈"
+    },
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_option",
+     "category": "리필·대용량 요청"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "value_small",
+    "category": "용량 부족"
+   },
+   "off_axis_hint": null,
+   "category_id": "value_small",
+   "category": "용량 부족",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:35",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:34",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -77,11 +140,26 @@
    },
    "axis_id": "scent",
    "axis": "향",
+   "labels": [
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_strong",
+     "category": "향이 강함"
+    }
+   ],
+   "primary": {
+    "axis_id": "scent",
+    "axis": "향",
+    "category_id": "scent_strong",
+    "category": "향이 강함"
+   },
+   "off_axis_hint": null,
    "category_id": "scent_strong",
    "category": "향이 강함",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:36",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:35",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -98,11 +176,32 @@
    },
    "axis_id": "efficacy",
    "axis": "효능",
-   "category_id": "efficacy_irritation",
-   "category": "자극·트러블",
+   "labels": [
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "efficacy_low",
+     "category": "효과 미흡"
+    },
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "efficacy_irritation",
+     "category": "자극·트러블"
+    }
+   ],
+   "primary": {
+    "axis_id": "efficacy",
+    "axis": "효능",
+    "category_id": "efficacy_low",
+    "category": "효과 미흡"
+   },
+   "off_axis_hint": null,
+   "category_id": "efficacy_low",
+   "category": "효과 미흡",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:38",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:36",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -119,11 +218,26 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_lid_loose",
+     "category": "뚜껑 헐거움·누수"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_lid_loose",
+    "category": "뚜껑 헐거움·누수"
+   },
+   "off_axis_hint": null,
    "category_id": "pkg_lid_loose",
    "category": "뚜껑 헐거움·누수",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:39",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:37",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -140,11 +254,26 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_visibility",
+     "category": "내용물 확인 어려움"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_visibility",
+    "category": "내용물 확인 어려움"
+   },
+   "off_axis_hint": null,
    "category_id": "pkg_visibility",
    "category": "내용물 확인 어려움",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:41",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:38",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -159,13 +288,28 @@
     "skin_type": "combination",
     "skin_tone": "light"
    },
-   "axis_id": "packaging",
-   "axis": "용기·포장",
-   "category_id": "pkg_lid_loose",
-   "category": "뚜껑 헐거움·누수",
+   "axis_id": "texture",
+   "axis": "사용감",
+   "labels": [
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "other",
+     "category": "기타"
+    }
+   ],
+   "primary": {
+    "axis_id": "texture",
+    "axis": "사용감",
+    "category_id": "other",
+    "category": "기타"
+   },
+   "off_axis_hint": null,
+   "category_id": "other",
+   "category": "기타",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:45",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:39",
    "banned_terms": [
     "(시연용 표시)"
    ],
@@ -182,13 +326,28 @@
     "skin_type": "normal",
     "skin_tone": "medium"
    },
-   "axis_id": "packaging",
-   "axis": "용기·포장",
-   "category_id": "pkg_durability",
-   "category": "재질·내구성 약함",
+   "axis_id": "efficacy",
+   "axis": "효능",
+   "labels": [
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "other",
+     "category": "기타"
+    }
+   ],
+   "primary": {
+    "axis_id": "efficacy",
+    "axis": "효능",
+    "category_id": "other",
+    "category": "기타"
+   },
+   "off_axis_hint": null,
+   "category_id": "other",
+   "category": "기타",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:46",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:40",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -203,13 +362,28 @@
     "skin_type": "combination",
     "skin_tone": "light"
    },
-   "axis_id": "packaging",
-   "axis": "용기·포장",
-   "category_id": "pkg_label",
-   "category": "라벨·표기 불분명",
+   "axis_id": "value",
+   "axis": "용량·가격",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "other",
+     "category": "기타"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "other",
+    "category": "기타"
+   },
+   "off_axis_hint": null,
+   "category_id": "other",
+   "category": "기타",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:47",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:41",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -226,11 +400,26 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_pump",
+     "category": "펌프 막힘·고장·토출량"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_pump",
+    "category": "펌프 막힘·고장·토출량"
+   },
+   "off_axis_hint": null,
    "category_id": "pkg_pump",
-   "category": "펌프 막힘·고장",
+   "category": "펌프 막힘·고장·토출량",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:48",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:41",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -247,11 +436,32 @@
    },
    "axis_id": "value",
    "axis": "용량·가격",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_small",
+     "category": "용량 부족"
+    },
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_price",
+     "category": "가격 비쌈"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "value_small",
+    "category": "용량 부족"
+   },
+   "off_axis_hint": null,
    "category_id": "value_small",
    "category": "용량 부족",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:49",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:43",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -268,11 +478,32 @@
    },
    "axis_id": "value",
    "axis": "용량·가격",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_small",
+     "category": "용량 부족"
+    },
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_price",
+     "category": "가격 비쌈"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "value_small",
+    "category": "용량 부족"
+   },
+   "off_axis_hint": null,
    "category_id": "value_small",
    "category": "용량 부족",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:50",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:44",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -289,11 +520,32 @@
    },
    "axis_id": "scent",
    "axis": "향",
+   "labels": [
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_artificial",
+     "category": "향이 인공적"
+    },
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_strong",
+     "category": "향이 강함"
+    }
+   ],
+   "primary": {
+    "axis_id": "scent",
+    "axis": "향",
+    "category_id": "scent_artificial",
+    "category": "향이 인공적"
+   },
+   "off_axis_hint": null,
    "category_id": "scent_artificial",
    "category": "향이 인공적",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:51",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:44",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -310,11 +562,32 @@
    },
    "axis_id": "efficacy",
    "axis": "효능",
+   "labels": [
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "efficacy_low",
+     "category": "효과 미흡"
+    },
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "efficacy_irritation",
+     "category": "자극·트러블"
+    }
+   ],
+   "primary": {
+    "axis_id": "efficacy",
+    "axis": "효능",
+    "category_id": "efficacy_low",
+    "category": "효과 미흡"
+   },
+   "off_axis_hint": null,
    "category_id": "efficacy_low",
    "category": "효과 미흡",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:53",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:45",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -331,11 +604,32 @@
    },
    "axis_id": "value",
    "axis": "용량·가격",
-   "category_id": "value_price",
-   "category": "가격 비쌈",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_small",
+     "category": "용량 부족"
+    },
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_price",
+     "category": "가격 비쌈"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "value_small",
+    "category": "용량 부족"
+   },
+   "off_axis_hint": null,
+   "category_id": "value_small",
+   "category": "용량 부족",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:54",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:46",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -352,11 +646,32 @@
    },
    "axis_id": "texture",
    "axis": "사용감",
+   "labels": [
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_sticky",
+     "category": "끈적임"
+    },
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_slow",
+     "category": "흡수 느림"
+    }
+   ],
+   "primary": {
+    "axis_id": "texture",
+    "axis": "사용감",
+    "category_id": "texture_sticky",
+    "category": "끈적임"
+   },
+   "off_axis_hint": null,
    "category_id": "texture_sticky",
    "category": "끈적임",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:55",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:47",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -373,11 +688,32 @@
    },
    "axis_id": "efficacy",
    "axis": "효능",
+   "labels": [
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "efficacy_low",
+     "category": "효과 미흡"
+    },
+    {
+     "axis_id": "efficacy",
+     "axis": "효능",
+     "category_id": "efficacy_irritation",
+     "category": "자극·트러블"
+    }
+   ],
+   "primary": {
+    "axis_id": "efficacy",
+    "axis": "효능",
+    "category_id": "efficacy_low",
+    "category": "효과 미흡"
+   },
+   "off_axis_hint": null,
    "category_id": "efficacy_low",
    "category": "효과 미흡",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:56",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:48",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -394,11 +730,32 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
-   "category_id": "pkg_durability",
-   "category": "재질·내구성 약함",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_lid_loose",
+     "category": "뚜껑 헐거움·누수"
+    },
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_pump",
+     "category": "펌프 막힘·고장·토출량"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_lid_loose",
+    "category": "뚜껑 헐거움·누수"
+   },
+   "off_axis_hint": null,
+   "category_id": "pkg_lid_loose",
+   "category": "뚜껑 헐거움·누수",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:57",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:49",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -415,11 +772,32 @@
    },
    "axis_id": "scent",
    "axis": "향",
+   "labels": [
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_artificial",
+     "category": "향이 인공적"
+    },
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_strong",
+     "category": "향이 강함"
+    }
+   ],
+   "primary": {
+    "axis_id": "scent",
+    "axis": "향",
+    "category_id": "scent_artificial",
+    "category": "향이 인공적"
+   },
+   "off_axis_hint": null,
    "category_id": "scent_artificial",
    "category": "향이 인공적",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:58",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:50",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -436,11 +814,26 @@
    },
    "axis_id": "texture",
    "axis": "사용감",
+   "labels": [
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_sticky",
+     "category": "끈적임"
+    }
+   ],
+   "primary": {
+    "axis_id": "texture",
+    "axis": "사용감",
+    "category_id": "texture_sticky",
+    "category": "끈적임"
+   },
+   "off_axis_hint": null,
    "category_id": "texture_sticky",
    "category": "끈적임",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:04:59",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:51",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -457,11 +850,32 @@
    },
    "axis_id": "scent",
    "axis": "향",
+   "labels": [
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_artificial",
+     "category": "향이 인공적"
+    },
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_strong",
+     "category": "향이 강함"
+    }
+   ],
+   "primary": {
+    "axis_id": "scent",
+    "axis": "향",
+    "category_id": "scent_artificial",
+    "category": "향이 인공적"
+   },
+   "off_axis_hint": null,
    "category_id": "scent_artificial",
    "category": "향이 인공적",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:00",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:51",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -478,11 +892,26 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_lid_loose",
+     "category": "뚜껑 헐거움·누수"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_lid_loose",
+    "category": "뚜껑 헐거움·누수"
+   },
+   "off_axis_hint": null,
    "category_id": "pkg_lid_loose",
    "category": "뚜껑 헐거움·누수",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:01",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:52",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -499,11 +928,32 @@
    },
    "axis_id": "value",
    "axis": "용량·가격",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_small",
+     "category": "용량 부족"
+    },
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "value_price",
+     "category": "가격 비쌈"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "value_small",
+    "category": "용량 부족"
+   },
+   "off_axis_hint": null,
    "category_id": "value_small",
    "category": "용량 부족",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:02",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:53",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -520,11 +970,26 @@
    },
    "axis_id": "scent",
    "axis": "향",
+   "labels": [
+    {
+     "axis_id": "scent",
+     "axis": "향",
+     "category_id": "scent_strong",
+     "category": "향이 강함"
+    }
+   ],
+   "primary": {
+    "axis_id": "scent",
+    "axis": "향",
+    "category_id": "scent_strong",
+    "category": "향이 강함"
+   },
+   "off_axis_hint": null,
    "category_id": "scent_strong",
    "category": "향이 강함",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:03",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:54",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -541,11 +1006,32 @@
    },
    "axis_id": "texture",
    "axis": "사용감",
-   "category_id": "texture_slow",
-   "category": "흡수 느림",
+   "labels": [
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_sticky",
+     "category": "끈적임"
+    },
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_slow",
+     "category": "흡수 느림"
+    }
+   ],
+   "primary": {
+    "axis_id": "texture",
+    "axis": "사용감",
+    "category_id": "texture_sticky",
+    "category": "끈적임"
+   },
+   "off_axis_hint": null,
+   "category_id": "texture_sticky",
+   "category": "끈적임",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:04",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:54",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -562,11 +1048,32 @@
    },
    "axis_id": "texture",
    "axis": "사용감",
+   "labels": [
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_sticky",
+     "category": "끈적임"
+    },
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_slow",
+     "category": "흡수 느림"
+    }
+   ],
+   "primary": {
+    "axis_id": "texture",
+    "axis": "사용감",
+    "category_id": "texture_sticky",
+    "category": "끈적임"
+   },
+   "off_axis_hint": null,
    "category_id": "texture_sticky",
    "category": "끈적임",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:05",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:55",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -581,13 +1088,28 @@
     "skin_type": "normal",
     "skin_tone": "medium"
    },
-   "axis_id": "efficacy",
-   "axis": "효능",
-   "category_id": "efficacy_irritation",
-   "category": "자극·트러블",
+   "axis_id": "texture",
+   "axis": "사용감",
+   "labels": [
+    {
+     "axis_id": "texture",
+     "axis": "사용감",
+     "category_id": "texture_whitecast",
+     "category": "백탁"
+    }
+   ],
+   "primary": {
+    "axis_id": "texture",
+    "axis": "사용감",
+    "category_id": "texture_whitecast",
+    "category": "백탁"
+   },
+   "off_axis_hint": null,
+   "category_id": "texture_whitecast",
+   "category": "백탁",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:06",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:56",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -602,13 +1124,28 @@
     "skin_type": "dry",
     "skin_tone": "tan"
    },
-   "axis_id": "packaging",
-   "axis": "용기·포장",
-   "category_id": "pkg_lid_loose",
-   "category": "뚜껑 헐거움·누수",
+   "axis_id": "value",
+   "axis": "용량·가격",
+   "labels": [
+    {
+     "axis_id": "value",
+     "axis": "용량·가격",
+     "category_id": "other",
+     "category": "기타"
+    }
+   ],
+   "primary": {
+    "axis_id": "value",
+    "axis": "용량·가격",
+    "category_id": "other",
+    "category": "기타"
+   },
+   "off_axis_hint": null,
+   "category_id": "other",
+   "category": "기타",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:07",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:56",
    "banned_terms": [],
    "hidden_by_default": false
   },
@@ -625,11 +1162,26 @@
    },
    "axis_id": "packaging",
    "axis": "용기·포장",
+   "labels": [
+    {
+     "axis_id": "packaging",
+     "axis": "용기·포장",
+     "category_id": "pkg_pump",
+     "category": "펌프 막힘·고장·토출량"
+    }
+   ],
+   "primary": {
+    "axis_id": "packaging",
+    "axis": "용기·포장",
+    "category_id": "pkg_pump",
+    "category": "펌프 막힘·고장·토출량"
+   },
+   "off_axis_hint": null,
    "category_id": "pkg_pump",
-   "category": "펌프 막힘·고장",
+   "category": "펌프 막힘·고장·토출량",
    "classifier": "gpt-4.1-nano",
-   "vocab_version": "0.1.0-draft",
-   "classified_at": "2026-09-08T10:05:08",
+   "vocab_version": "0.2.0-draft",
+   "classified_at": "2026-09-08T14:24:58",
    "banned_terms": [],
    "hidden_by_default": false
   }

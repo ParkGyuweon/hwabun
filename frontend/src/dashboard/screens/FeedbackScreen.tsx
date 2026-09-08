@@ -7,11 +7,12 @@ import { feedbackForBrand, updateFeedback } from '../../lib/feedbackStore';
 import { findAdTerms } from '../../lib/adTerms';
 import { skinTypeLabel, humanizeAttribute } from '../../lib/format';
 import {
-  FEEDBACK_AXES,
+  FEEDBACK_INPUT_AXES,
   FEEDBACK_VOCAB_VERSION,
   categoryDesc,
   categoryLabel,
   isUnclassified,
+  labelsOf,
 } from '../../types/feedback';
 import type { Feedback } from '../../types/feedback';
 
@@ -77,12 +78,19 @@ export default function FeedbackScreen() {
     [scoped, axis],
   );
 
-  /** 카테고리 표. 건수 많은 순. 분류 대기는 맨 아래 */
+  /**
+   * 카테고리 표. **언급 수** 많은 순 (계약 0.2.0 §4). 한 건이 labels 를 둘 가지면 두 칸에 각 1씩 —
+   * 카테고리별 합이 피드백 수를 넘을 수 있다. 분류 대기는 맨 아래
+   */
   const categories = useMemo(() => {
     const m = new Map<string, Feedback[]>();
     for (const f of byAxis) {
-      const k = f.category_id ?? PENDING;
-      m.set(k, [...(m.get(k) ?? []), f]);
+      const labels = labelsOf(f);
+      if (labels.length === 0) {
+        m.set(PENDING, [...(m.get(PENDING) ?? []), f]);
+        continue;
+      }
+      for (const l of labels) m.set(l.category_id, [...(m.get(l.category_id) ?? []), f]);
     }
     return [...m.entries()]
       .map(([id, list]) => ({
@@ -96,7 +104,10 @@ export default function FeedbackScreen() {
   }, [byAxis]);
 
   const rows = useMemo(
-    () => (category ? byAxis.filter((f) => (f.category_id ?? PENDING) === category) : byAxis),
+    () =>
+      category
+        ? byAxis.filter((f) => (category === PENDING ? isUnclassified(f) : labelsOf(f).some((l) => l.category_id === category)))
+        : byAxis,
     [byAxis, category],
   );
 
@@ -108,20 +119,20 @@ export default function FeedbackScreen() {
   /** 결론 한 줄 (명세 F2). LLM 없이 상위 2개 카테고리로 만든다 */
   const verdict = useMemo(() => {
     const top = [...mine.reduce((m, f) => {
-      if (!f.category_id) return m;
-      m.set(f.category_id, (m.get(f.category_id) ?? 0) + 1);
+      for (const l of labelsOf(f)) m.set(l.category_id, (m.get(l.category_id) ?? 0) + 1);
       return m;
     }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
     if (top.length === 0) return null;
     const [first, second] = top;
-    const firstProducts = new Set(mine.filter((f) => f.category_id === first[0]).map((f) => f.product_id)).size;
-    const routes = [...new Set(top.slice(0, 2).map(([id]) => mine.find((f) => f.category_id === id)?.axis_id ?? ''))]
+    const has = (f: Feedback, id: string) => labelsOf(f).some((l) => l.category_id === id);
+    const firstProducts = new Set(mine.filter((f) => has(f, first[0])).map((f) => f.product_id)).size;
+    const routes = [...new Set(top.slice(0, 2).map(([id]) => mine.find((f) => has(f, id))?.axis_id ?? ''))]
       .map((a) => ROUTE[a])
       .filter(Boolean);
     return {
       headline: second
-        ? `${categoryLabel(first[0])} ${first[1]}건 · ${categoryLabel(second[0])} ${second[1]}건`
-        : `${categoryLabel(first[0])} ${first[1]}건`,
+        ? `${categoryLabel(first[0])} 언급 ${first[1]} · ${categoryLabel(second[0])} 언급 ${second[1]}`
+        : `${categoryLabel(first[0])} 언급 ${first[1]}`,
       reason:
         first[1] >= 5 && firstProducts >= 2
           ? `${categoryLabel(first[0])}: 상품 ${firstProducts}개에서 반복. 한 상품 문제가 아닙니다.`
@@ -141,7 +152,7 @@ export default function FeedbackScreen() {
   };
 
   const axisLabelOf = (id: AxisFilter) =>
-    id === 'all' ? '전체' : id === 'pending' ? '분류 대기' : (FEEDBACK_AXES.find((a) => a.id === id)?.label ?? id);
+    id === 'all' ? '전체' : id === 'pending' ? '분류 대기' : (FEEDBACK_INPUT_AXES.find((a) => a.id === id)?.label ?? id);
 
   return (
     <div className="stack">
@@ -180,7 +191,7 @@ export default function FeedbackScreen() {
       <Panel title="축별 건수" source="real" aside={`${scoped.length}건`}>
         <div className="fbx-axes">
           <div className="fbx-stack" aria-hidden="true">
-            {FEEDBACK_AXES.map((a) => {
+            {FEEDBACK_INPUT_AXES.map((a) => {
               const n = axisCounts.get(a.id) ?? 0;
               if (n === 0) return null;
               return (
@@ -199,7 +210,7 @@ export default function FeedbackScreen() {
                 전체 <span className="fbx-axis__n">{scoped.length}</span>
               </button>
             </li>
-            {FEEDBACK_AXES.map((a) => (
+            {FEEDBACK_INPUT_AXES.map((a) => (
               <li key={a.id}>
                 <button
                   type="button"
@@ -238,7 +249,7 @@ export default function FeedbackScreen() {
                 <tr>
                   <th>카테고리</th>
                   <th>담당</th>
-                  <th className="is-num">건수</th>
+                  <th className="is-num" title="한 글에 불만이 둘이면 두 칸에 각 1. 합이 글 수를 넘을 수 있습니다">언급</th>
                   <th style={{ width: '22%' }} aria-label="비중" />
                   <th className="is-num">상품</th>
                   <th className="is-num">새 의견</th>
@@ -256,7 +267,11 @@ export default function FeedbackScreen() {
                     >
                       <td>
                         <span className="fbx-table__name">{pending ? '분류 대기' : categoryLabel(c.id)}</span>
-                        {!pending ? <span className="fbx-table__desc">{categoryDesc(c.id)}</span> : null}
+                        {!pending ? (
+                          <span className="fbx-table__desc">
+                            {c.id === 'other' ? '이 축 얘기지만 목록에 없는 불만' : categoryDesc(c.id)}
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         {route ? <span className={`fbx-route fbx-route--${route.key}`}>{route.label}</span> : null}
@@ -306,7 +321,9 @@ export default function FeedbackScreen() {
                 <li key={f.feedback_id} className={`fbx-card is-${f.status}`}>
                   <div className="fbx-card__meta">
                     <span className="fbx-card__product">{productName(f.product_id)}</span>
-                    {f.category_id ? <span className="fbx-card__cat">{categoryLabel(f.category_id)}</span> : null}
+                    {labelsOf(f).map((l) => (
+                      <span key={l.category_id} className="fbx-card__cat">{categoryLabel(l.category_id)}</span>
+                    ))}
                     {f.profile ? (
                       <span title="작성자 피부">
                         {skinTypeLabel(f.profile.skin_type)} · {humanizeAttribute(f.profile.skin_tone)}

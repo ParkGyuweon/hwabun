@@ -48,6 +48,14 @@ export const categoryDesc = (id: string): string => categoryById.get(id)?.desc ?
 
 export type FeedbackStatus = 'new' | 'read' | 'reflected';
 
+/** 계약 0.2.0 §4 `labels[]` 원소. 전부 입력 축 안의 카테고리 */
+export interface FeedbackLabel {
+  axis_id: string;
+  axis: string;
+  category_id: string;
+  category: string;
+}
+
 /**
  * 계약 §3 입력 + §4 출력 + FE 전용 필드.
  *
@@ -63,9 +71,18 @@ export interface Feedback {
   body: string;
   created_at: string;
 
-  // ---- 계약 §4 출력 (분류기 → 저장 → 대시보드). 분류 전 null
+  // ---- 계약 0.2.0 §3 입력: 축은 고객이 토글로 고른다
   axis_id: string | null;
   axis: string | null;
+
+  // ---- 계약 0.2.0 §4 출력 (분류기 → 저장 → 대시보드). 분류 전 labels = []
+  /** 문장에 실제로 적힌 불만만, 전부 입력 축 안. **집계 단위는 언급 수** — 한 건이 두 칸에 뜰 수 있다 */
+  labels: FeedbackLabel[];
+  /** labels[0]. 대표 표시·정렬용 */
+  primary: FeedbackLabel | null;
+  /** 다른 축 얘기로 보일 때 축 id. 참고용·보장 없음. 화면은 무시한다 (계약 §4) */
+  off_axis_hint: string | null;
+  /** = primary. 0.1.0 소비자 호환용. 새 코드는 labels 를 읽는다 */
   category_id: string | null;
   category: string | null;
   classifier: string | null;
@@ -90,5 +107,14 @@ export interface Feedback {
 /** 고객이 고를 수 있는 축 5개. `other` 는 0.2.0 부터 축이 아니라 "그 축 얘기지만 목록에 없는 불만" 카테고리라 토글에 없다 */
 export const FEEDBACK_INPUT_AXES: ReadonlyArray<VocabAxis> = v.axes;
 
-/** 분류기가 아직 안 돈 행. 0.2.0 부터 축은 고객이 고르므로 카테고리가 비었는지로 본다 */
-export const isUnclassified = (f: Feedback): boolean => f.category_id === null;
+/** 분류기가 아직 안 돈 행. 0.2.0 부터 축은 고객이 고르므로 라벨이 비었는지로 본다 */
+export const isUnclassified = (f: Feedback): boolean => labelsOf(f).length === 0;
+
+/** 라벨 목록. 0.1.0 형태(단일 category_id)로 저장된 옛 행도 한 개짜리 목록으로 읽는다 */
+export function labelsOf(f: Feedback): FeedbackLabel[] {
+  if (f.labels && f.labels.length > 0) return f.labels;
+  if (f.category_id && f.axis_id) {
+    return [{ axis_id: f.axis_id, axis: f.axis ?? axisLabel(f.axis_id), category_id: f.category_id, category: f.category ?? categoryLabel(f.category_id) }];
+  }
+  return [];
+}
