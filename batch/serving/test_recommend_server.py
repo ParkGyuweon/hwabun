@@ -39,8 +39,11 @@ class TestServer(unittest.TestCase):
         self.assertEqual(len(r["items"]), 10)
         ids = [it["product_id"] for it in r["items"]]
         self.assertEqual(len(set(ids)), 10)
+        for k in ("recommendation_id", "list_id", "algorithm"):
+            self.assertTrue(r.get(k), k)          # 유입 추적 식별자 — 클릭 이벤트가 그대로 싣는다
+        self.assertEqual([it["position"] for it in r["items"]], list(range(1, 11)))
         for it in r["items"]:
-            for k in ("product_id", "product_name", "brand_name", "score", "reserved", "reason"):
+            for k in ("product_id", "product_name", "brand_name", "score", "position", "reserved", "reason"):
                 self.assertIn(k, it)
             self.assertIsInstance(it["reserved"], bool)
             self.assertTrue(it["reason"])          # 근거 문구가 비어 있지 않다
@@ -73,6 +76,12 @@ class TestServer(unittest.TestCase):
         self.assertEqual(len(set(ids)), 5)
         # 지금 카탈로그는 신규 상품이 0개라 전용 칸이 하나도 안 찍혀야 한다
         self.assertFalse(any(it["reserved"] for it in r["items"]))
+
+    def test_recommendation_id_is_unique_per_call(self):
+        a = client.get("/api/recommend", params={"persona_id": PID}).json()
+        b = client.get("/api/recommend", params={"persona_id": PID}).json()
+        self.assertNotEqual(a["recommendation_id"], b["recommendation_id"])
+        self.assertEqual(a["algorithm"], b["algorithm"])
 
     def test_latency_is_reported(self):
         r = client.get("/api/recommend", params={"persona_id": PID, "seed": "review"}).json()

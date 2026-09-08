@@ -383,6 +383,13 @@ TONE_KR = {"fair": "밝은", "light": "밝은 편", "medium": "중간",
 TYPE_KR = {"combination": "복합성", "dry": "건성", "normal": "중성", "oily": "지성"}
 
 
+# 실험 (2026-09-08): 100명 본실행에서 담은 상품이 본인 리뷰 카테고리 안인 비율이
+# 57% — 카탈로그 무작위 기대(56%)와 같았다 (lift 1.02x). 프로필에 상품 이름만 있고
+# 종류(카테고리)가 없어서 모델이 카테고리를 기준으로 못 고르는 것인지 본다.
+# 켜면 ① 프로필에 "주로 사 온 종류" 줄 ② 목록 줄마다 (종류) 표기 ③ 행동 기준 한 줄
+PREFER_CATEGORY = False
+
+
 def profile_text(p):
     """페르소나 레코드 -> LLM 에게 줄 자기소개
 
@@ -411,9 +418,14 @@ def profile_text(p):
         price_line += (f" (${band:.0f} 아래가 익숙한 가격대다)" if band
                        else " (비싼 것도 사 본 적이 있다)")
 
+    cat_line = ""
+    if PREFER_CATEGORY:
+        pref = preferred_categories(p)
+        if pref:
+            cat_line = f"\n- 주로 사 온 종류: {', '.join(pref[:3])}"
     return (f"- 피부 타입: {TYPE_KR.get(p['skin_type'], p['skin_type'])}\n"
             f"- 피부 톤: {TONE_KR.get(p['skin_tone'], p['skin_tone'])}"
-            f"{price_line}\n"
+            f"{price_line}{cat_line}\n"
             f"- 지금까지 산 것:\n    " + "\n    ".join(bought[-8:]))
 
 
@@ -428,7 +440,7 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 
 [행동 기준]
 - 목록에서는 **아직 보지 않은 상품 중** 내 피부 타입, 피부 톤, 구매 이력,
-  가격대에 가장 맞는 상품을 하나 고르십시오.
+  가격대에 가장 맞는 상품을 하나 고르십시오.{category_rule}
 - **`[이미 봄]` 이 붙은 줄은 이미 상세까지 본 상품입니다. 그 줄은 고르지 마십시오.**
   표시가 없는 줄 중에서만 고르십시오.
 - 불만이었던 상품과 비슷한 것은 피하십시오.
@@ -554,7 +566,10 @@ def read_list(page, visited=()):
         # 눌렀다 (100명 중 56명). 목록과 화면을 대조하는 일을 모델에게 시키지
         # 않고, 화면 자체에 답을 적어 준다.
         title = f"{brand} {name}"
-        lines.append(f"{len(lines)+1}. {title} — {price}"
+        kind_tag = ""
+        if PREFER_CATEGORY and categories().get(pid):
+            kind_tag = f" ({categories()[pid]})"
+        lines.append(f"{len(lines)+1}. {title}{kind_tag} — {price}"
                      f"{'  [이미 봄]' if _seen_before(title, visited) else ''}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
     # 바닥이어도 "더 보기" 가 남아 있으면 목록 끝이 아니다. 끝이라고 말하면
@@ -1102,7 +1117,9 @@ class DecisionLog:
 
 def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=None,
             decisions=None):
-    system = SYSTEM_TMPL.format(profile=profile_text(persona),
+    category_rule = ("\n- **내가 주로 사 온 종류의 상품을 먼저 보십시오.** 다른 종류는 지금 "
+                     "필요해서 살 이유가 있을 때만 고르십시오." if PREFER_CATEGORY else "")
+    system = SYSTEM_TMPL.format(profile=profile_text(persona), category_rule=category_rule,
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
     calls, done, failed, carted = 0, 0, 0, 0
 
@@ -1409,6 +1426,8 @@ def main():
     ap.add_argument("--shard", type=int, default=0, help=argparse.SUPPRESS)
     ap.add_argument("--shards", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--prefer-category", action="store_true",
+                    help="실험: 프로필·목록에 상품 종류를 적고 내 종류를 먼저 보게 한다")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
@@ -1427,6 +1446,12 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
+    global PREFER_CATEGORY
+    PREFER_CATEGORY = a.prefer_category
+    # dry-run · 스크립트 모드가 기본 경로에 쓰면 진짜 실행 파일을 덮어쓴다 —
+    # 2026-09-08 에 --dry-run --limit 1 이 09-07 100명 본실행 33,217건을 지웠다
+    if (a.dry_run or a.script) and a.out == ap.get_default("out"):
+        a.out = os.path.join(BD, "data", "agent_events_dryrun.jsonl")
 
     simulation_run_id = a.simulation_run_id or default_simulation_run_id()
     start_url = entry_url(a.url, a.scenario_id, simulation_run_id)

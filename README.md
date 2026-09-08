@@ -110,7 +110,7 @@ S15P21A306/
 │   │   ├── test_persona_tables.py       원천에 드문 경우의 단위 테스트
 │   │   ├── README.md                    실행 방법·표본 검증 결과·미결 항목
 │   │   └── data/                        JSONL 산출물 — 커밋하지 않는다 (결정론적 재생성)
-│   ├── feedback-classification.md       ★ 고객 피드백 자동 분류 계약 — 입력 5필드·출력·금지어 플래그 (AI)
+│   ├── feedback-classification.md       ★ 고객 피드백 분류 계약 0.2.0 — 축은 고객 입력, 그 축 안 카테고리 다중, 언급 수 집계 (AI)
 │   ├── feedback-category-vocab.json     피드백 어휘 — 5축 20종 + other (분류기는 여기서만 고른다)
 │   ├── feedback-banned-terms.json       금지어 599개 (MIT) — 걸리면 hidden_by_default, 입력은 안 막음
 │   ├── product-feature-spec.md          상품 벡터 148차원 명세 — 블록 구성·인코딩·가중치
@@ -241,7 +241,7 @@ S15P21A306/
 ├── simulator/                       ★ 부하·행동 로그 생성기 (AI)
 │   ├── feedback/                    ★ 고객 피드백 시연 데이터 — 생성·자동 분류·금지어 (Jira 200~202)
 │   │   ├── gen_feedback.py              페르소나 × 상품 × 축 → 개선 요청 99건 (nano)
-│   │   ├── classify_feedback.py         계약 어휘 목록에서 고르기, 건당 호출 1회
+│   │   ├── classify_feedback.py         고른 축 안의 카테고리를 목록에서 전부 고르기, 건당 호출 1회 (사람 정답 50건 F1 94%)
 │   │   ├── banned_terms.py              금지어 대조 — LLM 없음
 │   │   └── data/  feedback_demo.jsonl · feedback_classified.sample30.jsonl
 │   ├── collector_client.py              수집 API 전송 (429/503 백프레셔 대응) — 공용

@@ -8,7 +8,7 @@ import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
-import { track } from '../lib/logger';
+import { setNextProductViewEntry, track } from '../lib/logger';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
@@ -324,6 +324,13 @@ export default function ProductListPage({
         list_id: listId,
         algorithm: promoAlgorithm,
         product_id: productId,
+        position: position + 1,
+      });
+      // 곧 열릴 상세의 product_view 에 같은 식별자를 싣는다 (Jira 210)
+      setNextProductViewEntry({
+        product_id: productId,
+        recommendation_id: promoRecommendationId,
+        list_id: listId,
         position: position + 1,
       });
     }

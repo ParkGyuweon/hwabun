@@ -3,7 +3,7 @@ import { useImpression } from '../../hooks/useImpression';
 import StarRating from '../common/StarRating';
 import { formatCount, formatPrice } from '../../lib/format';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
-import { track } from '../../lib/logger';
+import { setNextProductViewEntry, track } from '../../lib/logger';
 import type { Product } from '../../types/product';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
@@ -77,6 +77,13 @@ export default function SimilarProducts({
       position,
     });
     track('product_click', { product_id: product.product_id, entry_source: listId });
+    // 곧 열릴 상세의 product_view 에 같은 식별자를 싣는다 (Jira 210)
+    setNextProductViewEntry({
+      product_id: product.product_id,
+      recommendation_id: recommendationId,
+      list_id: listId,
+      position,
+    });
     onSelect(product.product_id);
   };
 
