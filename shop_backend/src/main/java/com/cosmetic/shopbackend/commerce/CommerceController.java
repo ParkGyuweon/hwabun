@@ -1,12 +1,14 @@
 package com.cosmetic.shopbackend.commerce;
 
 import com.cosmetic.shopbackend.brand.BrandRepository;
+import com.cosmetic.shopbackend.brand.BrandStatus;
 import com.cosmetic.shopbackend.catalog.Product;
 import com.cosmetic.shopbackend.catalog.ProductRepository;
 import com.cosmetic.shopbackend.catalog.ProductVariant;
 import com.cosmetic.shopbackend.catalog.ProductVariantRepository;
 import com.cosmetic.shopbackend.identity.AccountRole;
-import com.cosmetic.shopbackend.identity.RequestActor;
+import com.cosmetic.shopbackend.security.ShopPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,22 +66,19 @@ public class CommerceController {
 
     @GetMapping("/cart")
     public Map<String, Object> view(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User-Role", required = false) String role
+            @AuthenticationPrincipal ShopPrincipal actor
     ) {
-        RequestActor actor = requireMember(userId, role);
-        Cart cart = cart(actor.userId());
+        requireMember(actor); Cart cart = cart(actor.accountId());
         return Map.of("cartId", cart.getId(), "items", cartItems.findByCartId(cart.getId()));
     }
 
     @PostMapping("/cart/items")
     @Transactional
     public ResponseEntity<?> add(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @AuthenticationPrincipal ShopPrincipal actor,
             @RequestBody CartRequest request
     ) {
-        RequestActor actor = requireMember(userId, role);
+        requireMember(actor);
         if (request.quantity() < 1 || request.variantId() == null) {
             return ResponseEntity.badRequest().body("invalid cart item");
         }
@@ -87,7 +86,7 @@ public class CommerceController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("inactive or unavailable product");
         }
 
-        Cart cart = cart(actor.userId());
+        Cart cart = cart(actor.accountId());
         CartItem item = cartItems.findByCartIdAndVariantId(cart.getId(), request.variantId())
                 .orElseGet(() -> new CartItem(UUID.randomUUID().toString(), cart.getId(), request.variantId(), 0));
         item.quantity(item.getQuantity() + request.quantity());
@@ -96,14 +95,13 @@ public class CommerceController {
 
     @DeleteMapping("/cart/items/{id}")
     public ResponseEntity<?> remove(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @AuthenticationPrincipal ShopPrincipal actor,
             @PathVariable String id
     ) {
-        RequestActor actor = requireMember(userId, role);
+        requireMember(actor);
         return cartItems.findById(id)
                 .filter(item -> carts.findById(item.getCartId())
-                        .map(cart -> cart.getMemberId().equals(actor.userId()))
+                        .map(cart -> cart.getMemberId().equals(actor.accountId()))
                         .orElse(false))
                 .map(item -> {
                     cartItems.delete(item);
@@ -115,21 +113,25 @@ public class CommerceController {
     @PostMapping("/orders")
     @Transactional
     public ResponseEntity<?> order(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @AuthenticationPrincipal ShopPrincipal actor,
             @RequestBody OrderRequest request
     ) {
-        RequestActor actor = requireMember(userId, role);
+        requireMember(actor);
         if (request.idempotencyKey() == null || request.idempotencyKey().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
 
-        Optional<ShopOrder> existing = orders.findByMemberIdAndIdempotencyKey(actor.userId(), request.idempotencyKey());
+        Optional<ShopOrder> existing = orders.findByMemberIdAndIdempotencyKey(actor.accountId(), request.idempotencyKey());
         if (existing.isPresent()) {
+            List<CartItem> retryItems = carts.findByMemberId(actor.accountId())
+                    .map(cart -> cartItems.findByCartId(cart.getId())).orElseGet(List::of);
+            if (!retryItems.isEmpty() && !existing.get().getRequestHash().equals(hash(retryItems))) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body("idempotency key reused with different cart");
+            }
             return ResponseEntity.ok(existing.get());
         }
 
-        Cart cart = cart(actor.userId());
+        Cart cart = cart(actor.accountId());
         List<CartItem> items = cartItems.findByCartId(cart.getId());
         if (items.isEmpty()) {
             return ResponseEntity.badRequest().body("cart is empty");
@@ -154,7 +156,7 @@ public class CommerceController {
         }
 
         ShopOrder order = orders.save(new ShopOrder(
-                orderId, actor.userId(), request.idempotencyKey(), hash(items), total
+                orderId, actor.accountId(), request.idempotencyKey(), hash(items), total
         ));
         orderItems.saveAll(snapshots);
         cartItems.deleteByCartId(cart.getId());
@@ -164,13 +166,12 @@ public class CommerceController {
     @PostMapping("/orders/{id}/pay")
     @Transactional
     public ResponseEntity<?> pay(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @AuthenticationPrincipal ShopPrincipal actor,
             @PathVariable String id
     ) {
-        RequestActor actor = requireMember(userId, role);
+        requireMember(actor);
         return orders.findById(id)
-                .filter(order -> order.getMemberId().equals(actor.userId()))
+                .filter(order -> order.getMemberId().equals(actor.accountId()))
                 .map(order -> {
                     order.paid();
                     return ResponseEntity.ok(orders.save(order));
@@ -187,12 +188,14 @@ public class CommerceController {
         return variants.findById(variantId)
                 .filter(variant -> variant.getStatus() == ProductVariant.Status.ACTIVE)
                 .filter(variant -> products.findById(variant.getProductId())
-                        .map(product -> product.getStatus() == Product.Status.ACTIVE)
+                        .filter(product -> product.getStatus() == Product.Status.ACTIVE)
+                        .flatMap(product -> brands.findById(product.getBrandId()))
+                        .map(brand -> brand.getStatus() == BrandStatus.ACTIVE)
                         .orElse(false));
     }
 
-    private RequestActor requireMember(String userId, String role) {
-        return RequestActor.require(userId, role, AccountRole.MEMBER);
+    private void requireMember(ShopPrincipal actor) {
+        if (actor == null || actor.role() != AccountRole.MEMBER) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "member role required");
     }
 
     private String hash(List<CartItem> items) {
