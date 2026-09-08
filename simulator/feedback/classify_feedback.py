@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
-"""피드백을 축·카테고리로 분류한다 — **고정 목록에서 고르기**, 건당 호출 1회.
+"""피드백을 축·카테고리로 분류한다 — **고정 목록에서 고르기**, 건당 호출 1회, **다중 라벨**.
 
-계약: `contracts/feedback-category-vocab.json` (축 5개, 카테고리 20종, 기타).
-분류기는 그 목록에서만 고른다. 목록에 없는 답은 `기타` 로 떨어진다.
+계약: `contracts/feedback-category-vocab.json` (축 5개, 카테고리 20종, 기타) `0.2.0`.
+분류기는 그 목록에서만 고른다. 목록에 없는 답은 버리고, 남는 게 없으면 `기타`.
+
+다중 라벨 (0.2.0, 2026-09-08)
+    한 문장에 불만이 둘이면 둘 다 붙인다 (최대 3, 첫 번째가 primary). 사람 정답 50건
+    채점에서 카테고리 불일치 15건 중 11건이 "용량 적은데 가격 비싸서" 였다 — 사용자는
+    우리 축을 모르고 쓰므로 하나만 고르게 하면 불만이 버려진다. 집계는 **언급 수**다.
 
 왜 이름을 짓게 하지 않는가
     처음에는 모델이 라벨을 짓고, 그것을 기존 카테고리와 비교해 붙이거나 새로
@@ -66,22 +71,26 @@ def load_vocab(path=VOCAB):
     return v, axes
 
 
-PROMPT = """고객 피드백 1건을 아래 목록에서 **딱 하나** 골라 분류한다.
+PROMPT = """고객 피드백 1건에 **적혀 있는 불만을 전부** 아래 목록에서 골라 분류한다.
 전부 불만·개선 요청이므로 극성은 판단하지 마라.
 
 {menu}
 
 규칙
-- 증상이 여러 개면 **가장 두드러진 하나**만 고른다
+- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 최대 3개
+- 가장 두드러진 것을 **첫 번째**에 둔다
+- "용량이 적은데 가격이 비싸서" 는 둘이다 (용량 부족 + 가격 비쌈).
+  "끈적이고 흡수도 느려서" 도 둘이다. 하나만 고르지 마라
 - 목록의 이름을 **글자 그대로** 쓴다. 새 이름을 만들지 마라
-- 어디에도 안 맞으면 axis, category 둘 다 "기타"
+- 어디에도 안 맞으면 {{"axis":"기타","category":"기타"}} 하나만
 - 반대 방향은 다른 항목이다 — "뚜껑이 자꾸 열림" 은 뚜껑 헐거움·누수,
   "뚜껑이 안 열림" 은 뚜껑 뻑뻑함
+- "피부가 당기고 건조하다" 는 [효능] 건조·당김이다
 
 상품: {product}
 피드백: {body}
 
-JSON 만: {{"axis":"..","category":".."}}"""
+JSON 만: {{"labels":[{{"axis":"..","category":".."}}, ...]}}"""
 
 
 def build_menu(axes, other_label):
@@ -123,27 +132,62 @@ class Classifier:
             self.retries += 1
         raise ValueError(f"{tries}회 모두 JSON 파싱 실패: {last}")
 
+    MAX_LABELS = 3
+
     def _other(self):
         return {"axis_id": self.other["id"], "axis": self.other["label"],
                 "category_id": self.other["id"], "category": self.other["label"]}
 
+    def _one(self, axis, cat):
+        """목록에 있는 (축, 카테고리) 면 dict, 아니면 None. 지어낸 이름은 받지 않는다."""
+        ax = self.axes.get(axis)
+        if ax is not None and cat in ax["cats"]:
+            return {"axis_id": ax["id"], "axis": axis,
+                    "category_id": ax["cats"][cat], "category": cat}
+        if axis == self.other["label"] and cat == self.other["label"]:
+            return self._other()
+        return None
+
     def classify(self, body, product=""):
+        """(계약 0.2.0) 문장에 적힌 불만 전부, 최대 3개. 첫 번째가 primary.
+
+        0.1.0 은 하나만 고르게 했다. 사람 정답 50건에서 카테고리 불일치 15건 중 11건이
+        "용량 적은데 가격 비싸서" 처럼 한 문장에 두 불만이 함께 적힌 것이었다 —
+        사용자는 우리 축을 모르고 쓴다. 하나만 고르게 하면 불만이 버려진다.
+        """
         try:
             g = self._ask(PROMPT.format(menu=self.menu, product=product or "(미상)", body=body))
         except ValueError as e:
             self.fallback.append((body[:40], f"파싱 실패 {e}"))
-            return self._other()
-        axis = (g.get("axis") or "").strip()
-        cat = (g.get("category") or "").strip()
-        ax = self.axes.get(axis)
-        # 목록에 없는 답은 **그대로 받지 않는다.** 이름을 짓게 하던 시절에 프롬프트
-        # 예시 문자열이 카테고리로 등록된 적이 있다. 둘 중 하나라도 어긋나면 기타.
-        if ax is None or cat not in ax["cats"]:
-            if not (axis == self.other["label"] and cat == self.other["label"]):
+            return self._pack([self._other()])
+        raw = g.get("labels")
+        if not isinstance(raw, list):                      # 옛 형식 {"axis","category"} 도 받는다
+            raw = [g] if g.get("axis") else []
+        out, seen = [], set()
+        for item in raw[: self.MAX_LABELS * 2]:
+            if not isinstance(item, dict):
+                continue
+            axis = (item.get("axis") or "").strip()
+            cat = (item.get("category") or "").strip()
+            lab = self._one(axis, cat)
+            if lab is None:
                 self.fallback.append((body[:40], f"{axis!r}/{cat!r}"))
-            return self._other()
-        return {"axis_id": ax["id"], "axis": axis,
-                "category_id": ax["cats"][cat], "category": cat}
+                continue
+            key = (lab["axis_id"], lab["category_id"])
+            if key in seen:
+                continue
+            seen.add(key); out.append(lab)
+            if len(out) >= self.MAX_LABELS:
+                break
+        # 기타는 단독으로만 — 다른 라벨이 있으면 기타를 뺀다
+        real = [l for l in out if l["axis_id"] != self.other["id"]]
+        return self._pack(real or [self._other()])
+
+    def _pack(self, labels):
+        p = labels[0]
+        return {"labels": labels, "primary": p,
+                "axis_id": p["axis_id"], "axis": p["axis"],
+                "category_id": p["category_id"], "category": p["category"]}
 
 
 def main():
@@ -199,10 +243,15 @@ def main():
         for b, why in clf.fallback[:10]:
             print(f"    {why} | {b}")
 
+    # 집계는 **언급 수**다 — 라벨이 둘이면 두 칸에 각 1. 합이 건수를 넘을 수 있다 (계약 §4)
     byc = defaultdict(list)
     for r in out:
-        byc[(r["axis"], r["category"])].append(r["body"])
-    print(f"{NL}**칸 {len(byc)}개 사용** (목록 {n_cat}+1 중)")
+        for lab in r["labels"]:
+            byc[(lab["axis"], lab["category"])].append(r["body"])
+    n_lab = sum(len(r["labels"]) for r in out)
+    multi = sum(1 for r in out if len(r["labels"]) > 1)
+    print(f"{NL}**칸 {len(byc)}개 사용** (목록 {n_cat}+1 중) · 언급 {n_lab}개 / 피드백 {len(out)}건"
+          f" · 라벨 2개 이상 {multi}건")
     for lab in list(axes) + [vocab["other"]["label"]]:
         c = sorted([(k[1], len(v)) for k, v in byc.items() if k[0] == lab], key=lambda kv: -kv[1])
         if c:
