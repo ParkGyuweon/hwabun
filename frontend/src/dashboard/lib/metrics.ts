@@ -467,8 +467,9 @@ export const contentAttention: ContentAttention[] = (() => {
  * 조인된다. 여기서도 그 사전을 그대로 읽어 화면과 로그의 성분 목록이 어긋나지
  * 않게 한다.
  *
- * 반복해서 긁히는 성분 = 상세페이지가 그 성분을 설명하지 못하고 있다는 뜻.
- * 사용자는 모르는 성분명을 만나면 그 부분만 긁어서 밖에서 검색한다.
+ * 반복해서 드래그되는 성분 = 사용자가 가장 관심을 두는 성분. 드래그 자체는 관심의 크기다.
+ * "설명이 어렵다" 는 별개의 판단이라 같은 성분 구간의 되돌아 읽기·이탈·담기율을 함께 봐야 하고,
+ * 그 조합은 세션 단위 조인이 필요해 데이터 마트(ingredient_interest_kpi 제안)에서 만든다.
  */
 export const scrapedIngredients: Array<{ name: string; count: number; copyCount: number }> =
   (() => {

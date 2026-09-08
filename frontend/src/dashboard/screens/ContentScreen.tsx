@@ -32,9 +32,9 @@ export default function ContentScreen() {
           source="mock"
         />
         <Kpi
-          label="가장 많이 긁힌 성분"
+          label="사용자가 가장 많이 드래그한 성분"
           value={scrapedIngredients[0].name}
-          sub={`${fmt.int(scrapedIngredients[0].count)}회 · 설명 부족 신호`}
+          sub={`${fmt.int(scrapedIngredients[0].count)}회 · 가장 관심이 큰 성분`}
           source="mock"
         />
         <Kpi
@@ -82,7 +82,7 @@ export default function ContentScreen() {
 
       <div className="grid grid--2">
         <Panel
-          title="긁어간 성분 TOP 10"
+          title="사용자가 드래그한 성분 TOP 10"
           source="mock"
           aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)"
         >
@@ -93,7 +93,7 @@ export default function ContentScreen() {
               hint: `복사 ${i.copyCount}`,
             }))}
           />
-          <p className="note">반복해서 긁히는 성분은 설명이 부족하다는 뜻.</p>
+          <p className="note">드래그 횟수는 관심의 크기입니다. 설명이 어려운지는 이 성분 구간의 되돌아 읽기·이탈·담기율을 함께 봐야 알 수 있고, 그 집계는 데이터 마트가 만들면 여기에 붙습니다.</p>
         </Panel>
 
         <Panel title="검증 행동 × 전환" source="mock" aside="한 방문 vs 안 한 방문">
