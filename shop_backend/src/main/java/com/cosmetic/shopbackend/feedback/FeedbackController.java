@@ -11,19 +11,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Set;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 
 @RestController
 @RequestMapping("/api")
 public class FeedbackController {
     private static final Set<String> FEEDBACK_AXES = Set.of("efficacy", "texture", "scent", "packaging", "value");
     private final JdbcTemplate jdbc;
-    public FeedbackController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final ObjectMapper objectMapper;
+    public FeedbackController(JdbcTemplate jdbc, ObjectMapper objectMapper) { this.jdbc = jdbc; this.objectMapper = objectMapper; }
 
     @PostMapping("/reviews")
     @ResponseStatus(HttpStatus.CREATED)
@@ -49,6 +53,7 @@ public class FeedbackController {
 
     @PostMapping("/feedback")
     @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
     public Map<String,Object> createFeedback(@AuthenticationPrincipal ShopPrincipal actor,
                                               @Valid @RequestBody FeedbackRequest req) {
         requireRole(actor, AccountRole.MEMBER);
@@ -71,7 +76,7 @@ public class FeedbackController {
         requireRole(actor, AccountRole.SELLER);
         String sellerId = actor.accountId();
         owns(sellerId, brandId);
-        return jdbc.queryForList("select f.feedback_id feedbackId,f.order_item_id orderItemId,f.product_id productId, " +
+        List<Map<String,Object>> rows = jdbc.queryForList("select f.feedback_id feedbackId,f.order_item_id orderItemId,f.product_id productId, " +
                 "oi.product_name_snapshot productName,f.member_id authorMemberId, " +
                 "m.skin_type_code authorSkinTypeCode,m.skin_tone_code authorSkinToneCode, " +
                 "m.hair_color_code authorHairColorCode,m.eye_color_code authorEyeColorCode, " +
@@ -80,7 +85,44 @@ public class FeedbackController {
                 "from feedback f join order_item oi on oi.order_item_id=f.order_item_id " +
                 "left join member m on m.member_id=f.member_id " +
                 "left join feedback_classification fc on fc.feedback_id=f.feedback_id " +
-                "where oi.brand_id=? and f.status='VISIBLE' order by f.created_at desc", brandId);
+                "where oi.brand_id=? and f.product_id=oi.product_id and f.status='VISIBLE' order by f.created_at desc", brandId);
+        for (Map<String,Object> row : rows) {
+            Map<String,Object> classification = classification(String.valueOf(row.get("feedbackId")));
+            row.putAll(classification);
+        }
+        return rows;
+    }
+
+    private Map<String,Object> classification(String feedbackId) {
+        List<Map<String,Object>> classifications = jdbc.queryForList("select classification_status classificationStatus,primary_axis_id primaryAxisId,primary_category_id primaryCategoryId,off_axis_hint offAxisHint,classifier,vocab_version vocabVersion,classified_at classifiedAt,banned_terms_json bannedTermsJson,hidden_by_default hiddenByDefault from feedback_classification where feedback_id=?", feedbackId);
+        if (classifications.isEmpty()) {
+            Map<String,Object> pending = new LinkedHashMap<>();
+            pending.put("labels", List.of()); pending.put("primary", null); pending.put("offAxisHint", null);
+            pending.put("classifier", null); pending.put("vocabVersion", null); pending.put("classifiedAt", null);
+            pending.put("bannedTerms", List.of()); pending.put("classificationStatus", "PENDING"); pending.put("hiddenByDefault", false);
+            return pending;
+        }
+        Map<String,Object> row = classifications.get(0);
+        String status = String.valueOf(row.get("classificationStatus"));
+        List<Map<String,Object>> labels = "COMPLETED".equals(status) ? jdbc.queryForList("select axis_id axisId,category_id categoryId from feedback_classification_label where feedback_id=? order by axis_id,category_id", feedbackId) : List.of();
+        Map<String,Object> primary = null;
+        if ("COMPLETED".equals(status) && row.get("primaryCategoryId") != null)
+            primary = Map.of("axisId", row.get("primaryAxisId"), "categoryId", row.get("primaryCategoryId"));
+        List<String> bannedTerms = parseBannedTerms(row.get("bannedTermsJson"));
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("labels", labels); result.put("primary", primary); result.put("offAxisHint", row.get("offAxisHint"));
+        result.put("classifier", row.get("classifier")); result.put("vocabVersion", row.get("vocabVersion"));
+        result.put("classifiedAt", row.get("classifiedAt")); result.put("bannedTerms", bannedTerms);
+        result.put("classificationStatus", status); result.put("hiddenByDefault", booleanValue(row.get("hiddenByDefault")));
+        return result;
+    }
+    private boolean booleanValue(Object value) {
+        return Boolean.TRUE.equals(value) || (value instanceof Number number && number.intValue() != 0);
+    }
+    private List<String> parseBannedTerms(Object raw) {
+        if (raw == null) return List.of();
+        try { return objectMapper.readValue(raw.toString(), objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)); }
+        catch (Exception ignored) { return List.of(); }
     }
 
     private String purchased(String memberId, String productId) {

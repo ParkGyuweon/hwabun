@@ -94,7 +94,7 @@ CREATE TABLE order_item (
  order_item_id VARCHAR(64) PRIMARY KEY, order_id VARCHAR(64) NOT NULL, variant_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, brand_id VARCHAR(64) NOT NULL,
  product_name_snapshot VARCHAR(300) NOT NULL, brand_name_snapshot VARCHAR(200) NOT NULL, sku_snapshot VARCHAR(64) NOT NULL, variant_label_snapshot VARCHAR(200) NOT NULL, unit_price DECIMAL(18,0) NOT NULL, quantity INT NOT NULL, line_amount DECIMAL(18,0) NOT NULL,
  FOREIGN KEY(order_id) REFERENCES shop_order(order_id) ON DELETE RESTRICT, FOREIGN KEY(variant_id) REFERENCES product_variant(variant_id) ON DELETE RESTRICT, FOREIGN KEY(product_id,brand_id) REFERENCES product(product_id,brand_id) ON DELETE RESTRICT,
- UNIQUE KEY uq_order_variant(order_id,variant_id), UNIQUE KEY uq_order_item_brand(order_item_id,brand_id), CHECK(quantity > 0), CHECK(unit_price > 0), CHECK(line_amount = unit_price * quantity), INDEX ix_order_item_brand(brand_id,order_id)
+ UNIQUE KEY uq_order_variant(order_id,variant_id), UNIQUE KEY uq_order_item_brand(order_item_id,brand_id), UNIQUE KEY uq_order_item_product(order_item_id,product_id), CHECK(quantity > 0), CHECK(unit_price > 0), CHECK(line_amount = unit_price * quantity), INDEX ix_order_item_brand(brand_id,order_id)
 );
 CREATE TABLE review (
  review_id VARCHAR(64) PRIMARY KEY, order_item_id VARCHAR(64) NOT NULL UNIQUE, rating TINYINT NOT NULL, is_recommended BOOLEAN NULL, title VARCHAR(300) NULL, body TEXT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE review (
 CREATE TABLE feedback (
  feedback_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, order_item_id VARCHAR(64) NOT NULL, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT, FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT,
+ FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id,product_id) REFERENCES order_item(order_item_id,product_id) ON DELETE RESTRICT, FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT,
  UNIQUE KEY uq_feedback_member_product_axis(member_id,product_id,axis_id), INDEX ix_feedback_product_axis(product_id,axis_id), INDEX ix_feedback_order_item_status(order_item_id,status)
 );
 CREATE TABLE feedback_classification (
