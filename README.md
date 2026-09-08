@@ -108,6 +108,9 @@ S15P21A306/
 │   │   ├── test_persona_tables.py       원천에 드문 경우의 단위 테스트
 │   │   ├── README.md                    실행 방법·표본 검증 결과·미결 항목
 │   │   └── data/                        JSONL 산출물 — 커밋하지 않는다 (결정론적 재생성)
+│   ├── feedback-classification.md       ★ 고객 피드백 자동 분류 계약 — 입력 5필드·출력·금지어 플래그 (AI)
+│   ├── feedback-category-vocab.json     피드백 어휘 — 5축 20종 + other (분류기는 여기서만 고른다)
+│   ├── feedback-banned-terms.json       금지어 599개 (MIT) — 걸리면 hidden_by_default, 입력은 안 막음
 │   ├── product-feature-spec.md          상품 벡터 148차원 명세 — 블록 구성·인코딩·가중치
 │   ├── product-feature-vocab.json       인코딩 어휘집 `0.4` — 9개 블록 (brand 포함)
 │   ├── product-registration-spec.md     브랜드가 상품을 등록할 때의 입력 필드·어휘 제약·파생값
@@ -201,7 +204,7 @@ S15P21A306/
 │       ├── user_vector.py               이벤트 → v_u⁺ / v_u⁻ 집계
 │       ├── build_user_vectors.py        Spark 산출물·JSONL → 사용자 벡터 상태 (Redis 형태)
 │       ├── persona_feature.py           페르소나 속성 → 상품별 친화도 (200,)
-│       ├── recommender.py               점수 계산·노출 정책·순위
+│       ├── recommender.py               점수 계산·노출 정책·MMR·신규 브랜드 전용 칸(reserved)
 │       ├── ltr_features.py             ★ 학습 결합 피처 19개 — 학습과 서빙이 같은 코드
 │       ├── train_ltr.py                 학습 결합 모델 학습 (train 5,954명)
 │       ├── build_cooc.py                아이템-아이템 동시발생 (CF 입력, 누출 차단)
@@ -218,7 +221,7 @@ S15P21A306/
 │       ├── persona_split.py            train/valid/test 분할 (split-v1)
 │       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
 │       ├── concern_from_reviews.py · explore_choice.py
-│       └── test_*.py                    단위 테스트 (피처·산출물·사용자 벡터)
+│       └── test_*.py                    단위 테스트 (피처·산출물·사용자 벡터·전용 칸·CF 홀드아웃 제외)
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/
@@ -230,6 +233,11 @@ S15P21A306/
 │   ├── tests/ · README.md
 │
 ├── simulator/                       ★ 부하·행동 로그 생성기 (AI)
+│   ├── feedback/                    ★ 고객 피드백 시연 데이터 — 생성·자동 분류·금지어 (Jira 200~202)
+│   │   ├── gen_feedback.py              페르소나 × 상품 × 축 → 개선 요청 99건 (nano)
+│   │   ├── classify_feedback.py         계약 어휘 목록에서 고르기, 건당 호출 1회
+│   │   ├── banned_terms.py              금지어 대조 — LLM 없음
+│   │   └── data/  feedback_demo.jsonl · feedback_classified.sample30.jsonl
 │   ├── collector_client.py              수집 API 전송 (429/503 백프레셔 대응) — 공용
 │   ├── test_collector_client.py
 │   ├── generator/

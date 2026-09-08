@@ -936,7 +936,7 @@ GET /api/recommend?persona_id={id}&size=10
 |---|---:|---|
 | `size` | 10 | 메인 목록 칸 수 |
 | `banner_slots` | 0 | 배너 칸 수. 0 이면 `banners` 를 안 내린다 |
-| `reserved` | 2 | 그중 **신규·저노출 브랜드 전용** 칸 수 (§5-1) |
+| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). ⚠ **어느 자리인지 확정 대기** — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다 |
 | `axes` | — | 축 배너에 쓸 축 순서. 안 주면 `concern,segment` |
 
 > **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
@@ -1024,7 +1024,9 @@ GET /api/recommend?persona_id={id}&size=10
       "product_id": "P420652",
       "product_name": "Lip Sleeping Mask Intense Hydration with Vitamin C",
       "score": 0.7231,
+      "reserved": false,
       "breakdown": {
+        "_note": "선형 폴백일 때만. 현행(LTR, §4-2)에서는 이 객체가 없다 — 대체 형태는 §7 미확정",
         "cosine": 0.6120,
         "attr_affinity": 0.4710,
         "prior": 1.0000,
@@ -1197,3 +1199,5 @@ FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서
 | 학습 결합 (§4-2) | **채택** (2026-09-07). §5 처리 4단계가 모델 추론으로 바뀌고 `breakdown` 항별 분해가 사라진다. 선형은 폴백으로 남는다 |
 | 모델을 자바에서 어떻게 읽나 | **미정 · 백엔드와 협의 필요.** ONNX 내보내기 / 파이썬 추론 서버 (AI 파트 권고는 후자 — 피처 19개를 자바로 다시 짜면 조용히 어긋난다) |
 | `breakdown` 대체 형태 | **미정.** 항별 분해 대신 피처 중요도 또는 "함께 고른 상품" 문구. 프론트와 협의 |
+| 신규 브랜드 전용 칸 (§5-1) | **구현** (2026-09-08, Jira 129). `Recommender.rank(reserved=N, flags=True)`. 지금 카탈로그는 신규 0개라 결과 불변 (부록 U) |
+| 전용 칸의 자리 | **미정 · 프론트와 협의.** 측정·구현은 메인 `size` 칸 안. `reserved` 파라미터 설명은 배너 칸으로 적혀 있어 어긋남 — 확정 후 한쪽으로 정리 |
