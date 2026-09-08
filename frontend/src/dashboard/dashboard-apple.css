@@ -790,3 +790,29 @@ table.data tr:hover td {
   letter-spacing: var(--ls-md);
   font-weight: 600;
 }
+
+/* ---------- 데이터 스코프 표시 (머리 아래 한 줄) ---------- */
+
+.main__scope {
+  flex-basis: 100%;
+  margin: -6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  letter-spacing: var(--ls-sm);
+  color: var(--ink-soft);
+}
+.main__scope strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.main__scope-what::after {
+  content: ':';
+}
+.main__scope-src {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}

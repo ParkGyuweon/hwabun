@@ -12,7 +12,8 @@
  * 화면을 검토하는 사람이 변화의 원인을 찾느라 시간을 버린다.
  */
 import vocab from '../../../../contracts/product-feature-vocab.json';
-import { DEMO_BRAND, products as catalogData } from '../../mocks/products';
+import { products as catalogData } from '../../mocks/products';
+import { BEHAVIOR_BRAND, FEEDBACK_BRAND } from './scope';
 import reviewsData from '../../mocks/reviews.sample.json';
 import { EVENT_WEIGHT } from '../../types/log';
 import type { EventName } from '../../types/log';
@@ -20,14 +21,19 @@ import type { Product } from '../../types/product';
 import type { Review } from '../../types/review';
 
 /**
- * 브랜드 대시보드는 **내 브랜드** 상품만 본다. 시연 브랜드는 SSAFY Beauty 다.
+ * 브랜드 대시보드는 **내 브랜드** 상품만 본다.
+ *
+ * 스코프는 둘이다 (lib/scope.ts, 결정 A). 행동·리뷰 화면은 BEHAVIOR_BRAND(세포라 카탈로그의
+ * 실제 브랜드) 상품을, 피드백·등록은 FEEDBACK_BRAND(SSAFY Beauty) 상품을 본다.
  *
  * 다른 브랜드 상품은 이름·절대치를 보이지 않는다는 데이터 경계
  * (collective-insight-data-boundary.md A층). 플랫폼 전체를 분모로 쓰는 지표
  * (주의 성분 보급률 같은 커먼즈)는 `catalogProducts` 를 쓴다.
  */
 export const catalogProducts = catalogData as unknown as Product[];
-export const products = catalogProducts.filter((p) => p.brand_name === DEMO_BRAND);
+export const products = catalogProducts.filter((p) => p.brand_name === BEHAVIOR_BRAND);
+/** 피드백·등록 화면의 상품 목록 (SSAFY Beauty) */
+export const feedbackProducts = catalogProducts.filter((p) => p.brand_name === FEEDBACK_BRAND);
 export const reviews = reviewsData as unknown as Review[];
 
 /* ---------- 시드 고정 난수 ---------- */
