@@ -1024,3 +1024,48 @@ table.data tr:hover td {
 .heat__note-head {
   width: 30%;
 }
+
+
+/* ---------- 표: 상품명 한 줄 · 진단 표 ---------- */
+
+table.data td.is-name,
+table.data th.is-name {
+  max-width: 260px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.data--diag {
+  min-width: 960px;
+}
+table.data td.is-warn {
+  color: var(--accent);
+  font-weight: 600;
+}
+.diag-step {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ground);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.diag-step--cart {
+  background: rgb(var(--brand-rgb) / 0.18);
+}
+.diag-step--click {
+  background: var(--accent-soft);
+}
+.diag-hint {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+.chips--inline {
+  gap: 4px;
+}
+.chips--inline .chip {
+  padding: 3px 10px;
+  font-size: var(--fs-xs);
+}

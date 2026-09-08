@@ -73,7 +73,38 @@ export interface ProductMetrics {
   removedFromCart: number;
   /** EVENT_WEIGHT 기반 행동 가중 관심도. 대시보드의 '상품별 관심도' 정의다 */
   interestScore: number;
+
+  // ---- 상품 진단 (명세 §2-5). funnel_session_fact · exit_summary · variant_select · quick_look_close 에서 온다. 지금은 모의
+  /** 노출→클릭→상세→정보확인→담기 중 브랜드 중앙값 대비 가장 낮은 단계 */
+  bottleneck: 'click' | 'detail' | 'info' | 'cart';
+  /** 이탈 직전 본 콘텐츠 최빈값 (exit_summary.last_content_kind) */
+  exitContent: 'ingredient_list' | 'usage_guide' | 'user_review' | 'similar_products' | 'product_hero' | 'price';
+  /** 세션당 variant_select 평균. 3 이상은 마찰 */
+  variantSwitches: number;
+  /** quick_look_close.close_reason = open_detail 비율 */
+  quickLookToDetail: number;
+  /** 담기 후 제거 비율 */
+  removeRate: number;
+  /** 정보 확인(성분 또는 리뷰) 도달 세션 비율 */
+  infoRate: number;
 }
+
+/** 이탈 지점 → 이유 힌트 (규칙 R-1c·e·h). 단정하지 않는다 */
+export const EXIT_HINT: Record<ProductMetrics['exitContent'], { ko: string; hint: string }> = {
+  ingredient_list: { ko: '성분 목록', hint: '기피 성분 발견 가능성' },
+  usage_guide: { ko: '사용법', hint: '설명 난이도 가능성' },
+  user_review: { ko: '리뷰', hint: '부정 리뷰 노출 가능성' },
+  similar_products: { ko: '유사 상품', hint: '대체 탐색 가능성' },
+  product_hero: { ko: '첫 화면', hint: '목록 카드와 기대 불일치 가능성' },
+  price: { ko: '가격', hint: '가격 저항 가능성' },
+};
+
+export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
+  click: '노출 → 클릭',
+  detail: '클릭 → 상세',
+  info: '상세 → 정보 확인',
+  cart: '정보 확인 → 담기',
+};
 
 function buildProductMetrics(product: Product): ProductMetrics {
   const rand = rng(hashString(product.product_id));
@@ -102,6 +133,17 @@ function buildProductMetrics(product: Product): ProductMetrics {
     addToCart * EVENT_WEIGHT.add_to_cart +
     removedFromCart * EVENT_WEIGHT.remove_from_cart;
 
+  const infoRate = Math.min(0.95, (ingredientViewRate + reviewViewRate) / 2 + rand() * 0.1);
+  const rates = {
+    click: ctr / 0.12,
+    detail: detailViews / Math.max(1, clicks) / 0.9,
+    info: infoRate / 0.6,
+    cart: cartRate / 0.12,
+  };
+  const bottleneck = (Object.keys(rates) as Array<keyof typeof rates>).reduce((a, b) => (rates[a] <= rates[b] ? a : b));
+  const exits: ProductMetrics['exitContent'][] = ['ingredient_list', 'usage_guide', 'user_review', 'similar_products', 'product_hero', 'price'];
+  const exitContent = exits[Math.floor(rand() * exits.length)];
+
   return {
     product,
     impressions,
@@ -113,6 +155,12 @@ function buildProductMetrics(product: Product): ProductMetrics {
     addToCart,
     removedFromCart,
     interestScore: Math.round(interestScore),
+    bottleneck,
+    exitContent,
+    variantSwitches: Math.round((1 + rand() * 3) * 10) / 10,
+    quickLookToDetail: 0.3 + rand() * 0.45,
+    removeRate: addToCart === 0 ? 0 : removedFromCart / addToCart,
+    infoRate,
   };
 }
 
@@ -676,3 +724,44 @@ export const ingredientGap: IngredientGapRow[] = (() => {
   });
   return rows.sort((a, b) => Number(b.gap) - Number(a.gap) || a.rank - b.rank);
 })();
+
+
+/* ---------- 리뷰 × 리뷰어 피부 타입 (실측) ---------- */
+
+export interface SkinReviewRow {
+  type: string;
+  n: number;
+  avgRating: number;
+  irritationRate: number;
+}
+
+/**
+ * 피부 타입별 평점·자극 언급. 리뷰어 skin_type 은 원천에 있어 전부 실측이다.
+ * 같은 상품이 건성 4.6 / 지성 3.4 처럼 갈리면 타깃 문구를 갈라 쓸 근거다 (명세 R1·R2).
+ */
+export function reviewsBySkinType(productId: string | null): SkinReviewRow[] {
+  const scoped = productId ? reviews.filter((r) => r.product_id === productId) : reviews.filter((r) => products.some((p) => p.product_id === r.product_id));
+  return ['dry', 'oily', 'combination', 'normal'].map((type) => {
+    const rows = scoped.filter((r) => r.skin_type === type);
+    const texts = rows.filter((r) => r.review_text);
+    return {
+      type,
+      n: rows.length,
+      avgRating: rows.length === 0 ? 0 : rows.reduce((s, r) => s + r.rating, 0) / rows.length,
+      irritationRate: texts.length === 0 ? 0 : texts.filter((r) => IRRITATION_PATTERN.test(r.review_text as string)).length / texts.length,
+    };
+  });
+}
+
+/* ---------- 행동·마찰 보조 (모의) ---------- */
+
+/** 진입 경로별 상세→담기 전환 (entry_source). 추천 진입 lift 가 이 표의 답이다 */
+export const entryConversion = [
+  { source: 'similar_products', ko: '유사 상품 추천', sessions: Math.round(totals.detailViews * 0.18), cartRate: overview.cartRate * 1.8 },
+  { source: 'promo_pick', ko: '맞춤 기획전', sessions: Math.round(totals.detailViews * 0.14), cartRate: overview.cartRate * 1.5 },
+  { source: 'list_grid', ko: '목록', sessions: Math.round(totals.detailViews * 0.58), cartRate: overview.cartRate * 0.9 },
+  { source: 'quick_look', ko: '퀵룩에서', sessions: Math.round(totals.detailViews * 0.1), cartRate: overview.cartRate * 1.1 },
+];
+
+/** 3초 안에 나간 상세 방문 비율 (exit_summary dwell). 40% 초과면 첫 화면 기대 불일치 */
+export const quickExitRate = 0.29;
