@@ -10,6 +10,7 @@
  * 백엔드 Feedback API 가 생기면 이 파일의 함수 본문만 fetch 로 바뀐다.
  */
 import seedJson from '../mocks/feedback.classified.json';
+import { axisLabel } from '../types/feedback';
 import type { Feedback, FeedbackStatus } from '../types/feedback';
 
 export const FEEDBACK_KEY = 'hwabun.feedback.v2';
@@ -85,6 +86,8 @@ export function submitFeedback(input: {
   product_id: string;
   brand_name: string;
   user_id: string | null;
+  /** 고객이 토글로 고른 축 (계약 0.2.0 §3 필수). 분류기는 이 축 안에서만 카테고리를 고른다 */
+  axis_id: string;
   body: string;
 }): Feedback {
   const item: Feedback = {
@@ -93,8 +96,8 @@ export function submitFeedback(input: {
     product_id: input.product_id,
     body: input.body.trim(),
     created_at: new Date().toISOString(),
-    axis_id: null,
-    axis: null,
+    axis_id: input.axis_id,
+    axis: axisLabel(input.axis_id),
     category_id: null,
     category: null,
     classifier: null,

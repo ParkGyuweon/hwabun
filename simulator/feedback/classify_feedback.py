@@ -11,7 +11,7 @@
     축 이름만 적고 재분류는 안 한다 — 고객이 고른 칸을 존중한다.
 
 다중 라벨
-    한 문장에 불만이 둘이면 둘 다 붙인다 (최대 3, 첫 번째가 primary). 사람 정답 50건
+    한 문장에 불만이 둘이면 둘 다 붙인다 (개수 제한 없음, 첫 번째가 primary). 사람 정답 50건
     채점에서 카테고리 불일치 15건 중 11건이 "용량 적은데 가격 비싸서" 였다 — 사용자는
     우리 축을 모르고 쓰므로 하나만 고르게 하면 불만이 버려진다. 집계는 **언급 수**다.
     "뚜껑도 이상하고 펌프도 이상하다" → 뚜껑 칸에도 펌프 칸에도 그 피드백이 뜬다.
@@ -85,7 +85,7 @@ PROMPT = """고객 피드백 1건에 **적혀 있는 불만을 전부** 아래 �
 {menu}
 
 규칙
-- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 최대 3개
+- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 해당하면 **개수 제한 없이 전부**
 - 가장 두드러진 것을 **첫 번째**에 둔다
 - "용량이 적은데 가격이 비싸서" 는 둘이다 (용량 부족 + 가격 비쌈).
   "끈적이고 흡수도 느려서" 도 둘이다. 하나만 고르지 마라
@@ -101,7 +101,36 @@ PROMPT = """고객 피드백 1건에 **적혀 있는 불만을 전부** 아래 �
 JSON 만: {{"labels":[{{"axis":"..","category":".."}}, ...]}}"""
 
 
-PROMPT_AXIS = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고객이 골랐다 — 다시 판단하지 마라).
+# 축별 규칙 — 그 축을 분류할 때만 그 축의 줄을 넣는다. 모든 축에 향·가격 규칙을 같이 넣었더니
+# nano 가 헷갈렸다 (효능 3건이 기타로). 규칙은 계약 §2 "라벨 지침" 과 같아야 한다.
+AXIS_RULES = {
+    "ko": {
+        "향": ['"향이 은은하지 않다" · "향이 오래 남는다" 는 **향이 강함**이다 (약함이 아니다)',
+              '"인공적이고 강하다" 는 향이 강함 + 향이 인공적 둘이다'],
+        "용량·가격": ['"가격 대비 아쉽다" · "용량이 적은데 가격이 부담" 은 **용량 부족 + 가격 비쌈** 둘이다',
+                  '"대용량이 있었으면" · "리필이 있었으면" 은 리필·대용량 요청이다'],
+        "용기·포장": ['반대 방향은 다른 항목이다 — "뚜껑이 자꾸 열림·샌다" 는 뚜껑 헐거움·누수, "뚜껑이 안 열림·뻑뻑" 은 뚜껑 뻑뻑함',
+                  '"뚜껑도 이상하고 펌프도 이상하다" 는 둘이다'],
+        "효능": ['"효과가 없다" · "개선이 안 느껴진다" 는 효과 미흡, "따갑다·붉어진다·트러블·예민해졌다" 는 자극·트러블 — 둘 다 적혀 있으면 둘 다',
+               '"당기고 건조하다" 는 건조·당김이다'],
+        "사용감": ['"끈적이고 흡수도 느리다" 는 끈적임 + 흡수 느림 둘이다',
+                '"묽어서 흘러내린다" 는 묽음·흘러내림이다'],
+    },
+    "en": {
+        "향": ['"not subtle" / "lingers too long" means **향이 강함** (strong), NOT 향이 약함 (weak)',
+              '"artificial and strong" is two labels: 향이 강함 + 향이 인공적'],
+        "용량·가격": ['"disappointing for the price" / "small amount and pricey" is two labels: **용량 부족 + 가격 비쌈**',
+                  '"wish there were a larger size / refill" is 리필·대용량 요청'],
+        "용기·포장": ['Opposite directions are different labels — a lid that keeps opening or leaks is 뚜껑 헐거움·누수; a lid that is hard to open is 뚜껑 뻑뻑함',
+                  '"the lid and the pump are both broken" is two labels'],
+        "효능": ['"no effect" / "no visible improvement" is 효과 미흡; "stings, redness, breakouts, skin got sensitive" is 자극·트러블 — if both are written, pick both',
+               '"skin feels tight and dry" is 건조·당김'],
+        "사용감": ['"sticky and slow to absorb" is two labels: 끈적임 + 흡수 느림',
+                '"runny, drips off" is 묽음·흘러내림'],
+    },
+}
+
+PROMPT_AXIS_KO = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고객이 골랐다 — 다시 판단하지 마라).
 이 축의 카테고리 중 **문장에 적혀 있는 불만을 전부** 고른다. 전부 불만·개선 요청이므로 극성은 판단하지 마라.
 
 축 [{axis}] — {axis_desc}
@@ -111,12 +140,11 @@ PROMPT_AXIS = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고�
     - 기타: 위 어디에도 안 맞음 (이 축 얘기지만 목록에 없는 불만)
 
 규칙
-- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 최대 3개
+- 문장에 **실제로 적힌** 불만만 고른다. 짐작해서 붙이지 마라. 이 축 얘기면 **개수 제한 없이 전부**
 - 가장 두드러진 것을 **첫 번째**에 둔다
-- "뚜껑도 이상하고 펌프도 이상하다" 는 둘이다. 하나만 고르지 마라
 - 목록의 이름을 **글자 그대로** 쓴다. 새 이름을 만들지 마라
 - 이 축의 카테고리 어디에도 안 맞으면 ["기타"] 하나만
-- 반대 방향은 다른 항목이다 — "뚜껑이 자꾸 열림" 은 뚜껑 헐거움·누수, "뚜껑이 안 열림" 은 뚜껑 뻑뻑함
+{rules}
 - 문장이 **다른 축** 얘기(예: 용기 칸에 향 얘기)로 보이면 off_axis 에 그 축 이름을 적는다.
   그래도 분류는 이 축 안에서만 한다. 다른 축 얘기가 아니면 off_axis 는 null
 
@@ -124,6 +152,33 @@ PROMPT_AXIS = """고객이 **[{axis}]** 칸에 쓴 피드백이다 (축은 고�
 피드백: {body}
 
 JSON 만 (categories 원소는 위 목록의 카테고리 이름): {{"categories":["..", ".."], "off_axis": null}}"""
+
+PROMPT_AXIS_EN = """A customer wrote this feedback in the **[{axis}]** box. The customer chose the axis — do not re-judge it.
+Pick **every complaint that is actually written** in the text, from this axis's categories only.
+All feedback here is a complaint or improvement request; do not judge sentiment.
+
+Axis [{axis}] — {axis_desc}
+
+Categories of this axis (answer ONLY with names from this list, copied exactly. The axis name "{axis}" is NOT an answer):
+{menu}
+    - 기타: fits none of the above (about this axis, but not in the list)
+
+Rules
+- Only complaints **explicitly written** in the text. Do not guess. If it belongs to this axis, include **all of them — no limit**
+- Put the most prominent one **first**
+- Copy category names **character for character**. Never invent a name
+- If nothing in this axis fits, answer ["기타"] only
+{rules}
+- If the text seems to be about a **different axis** (e.g. scent written in the packaging box), put that axis name in off_axis.
+  Still classify within this axis only. Otherwise off_axis is null
+
+Product: {product}
+Feedback: {body}
+
+JSON only (categories are names from the list above): {{"categories":["..", ".."], "off_axis": null}}"""
+
+# 옛 이름을 유지 — 다른 코드가 참조한다
+PROMPT_AXIS = PROMPT_AXIS_KO
 
 
 def build_menu(axes, other_label):
@@ -137,8 +192,9 @@ def build_menu(axes, other_label):
 
 
 class Classifier:
-    def __init__(self, client, axes, other, model=MODEL):
+    def __init__(self, client, axes, other, model=MODEL, lang="ko"):
         self.c, self.model = client, model
+        self.lang = lang if lang in AXIS_RULES else "ko"
         self.axes, self.other = axes, other
         self.menu = build_menu(axes, other["label"])
         self.tok_in = self.tok_out = self.calls = self.retries = 0
@@ -166,7 +222,8 @@ class Classifier:
             self.retries += 1
         raise ValueError(f"{tries}회 모두 JSON 파싱 실패: {last}")
 
-    MAX_LABELS = 3
+    # 개수 상한은 두지 않는다 — 그 축의 카테고리 수가 자연스러운 상한이다 (규원, 2026-09-08).
+    # 목록 검증·중복 제거가 있으므로 모델이 헛것을 늘려도 목록 밖은 걸린다.
 
     def _other(self):
         return {"axis_id": self.other["id"], "axis": self.other["label"],
@@ -183,7 +240,7 @@ class Classifier:
         return None
 
     def classify_in_axis(self, body, axis, product=""):
-        """(계약 0.2.0 정본 경로) **축은 고객이 골랐다.** 그 축 안의 카테고리만, 최대 3개.
+        """(계약 0.2.0 정본 경로) **축은 고객이 골랐다.** 그 축 안의 카테고리만, 해당하는 것 전부.
 
         화면이 왼쪽에 축 토글, 오른쪽에 그 축의 주관식 칸이다. 그래서 축은 입력이고
         분류기는 카테고리만 고른다 — 축 추론 오류가 구조적으로 사라진다.
@@ -193,9 +250,11 @@ class Classifier:
         if ax is None:
             raise KeyError(f"모르는 축: {axis!r}")
         menu = NL.join(f"    - {c}: {d}" for c, d in ax["cat_desc"].items())
+        rules = NL.join("- " + r for r in AXIS_RULES[self.lang].get(axis, []))
+        tmpl = PROMPT_AXIS_EN if self.lang == "en" else PROMPT_AXIS_KO
         try:
-            g = self._ask(PROMPT_AXIS.format(axis=axis, axis_desc=ax["desc"], menu=menu,
-                                             product=product or "(미상)", body=body))
+            g = self._ask(tmpl.format(axis=axis, axis_desc=ax["desc"], menu=menu, rules=rules,
+                                      product=product or "(미상)", body=body))
         except ValueError as e:
             self.fallback.append((body[:40], f"파싱 실패 {e}"))
             return self._pack([self._other_in(axis)], off_axis=None)
@@ -203,7 +262,7 @@ class Classifier:
         if not isinstance(raw, list):
             raw = [g.get("category")] if g.get("category") else []
         out, seen = [], set()
-        for cat in raw[: self.MAX_LABELS * 2]:
+        for cat in raw:
             cat = (str(cat) if cat is not None else "").strip()
             if cat == self.other["label"]:
                 continue
@@ -218,8 +277,6 @@ class Classifier:
             seen.add(cat)
             out.append({"axis_id": ax["id"], "axis": axis,
                         "category_id": ax["cats"][cat], "category": cat})
-            if len(out) >= self.MAX_LABELS:
-                break
         hint = g.get("off_axis")
         hint = hint.strip() if isinstance(hint, str) and hint.strip() in self.axes and hint.strip() != axis else None
         return self._pack(out or [self._other_in(axis)], off_axis=hint)
@@ -231,7 +288,7 @@ class Classifier:
                 "category_id": self.other["id"], "category": self.other["label"]}
 
     def classify(self, body, product=""):
-        """(축을 모를 때의 보조 경로) 축 + 카테고리를 함께 추론. 최대 3개. 첫 번째가 primary.
+        """(축을 모를 때의 보조 경로) 축 + 카테고리를 함께 추론. 개수 제한 없음. 첫 번째가 primary.
 
         0.1.0 은 하나만 고르게 했다. 사람 정답 50건에서 카테고리 불일치 15건 중 11건이
         "용량 적은데 가격 비싸서" 처럼 한 문장에 두 불만이 함께 적힌 것이었다 —
@@ -246,7 +303,7 @@ class Classifier:
         if not isinstance(raw, list):                      # 옛 형식 {"axis","category"} 도 받는다
             raw = [g] if g.get("axis") else []
         out, seen = [], set()
-        for item in raw[: self.MAX_LABELS * 2]:
+        for item in raw:
             if not isinstance(item, dict):
                 continue
             axis = (item.get("axis") or "").strip()
@@ -259,8 +316,6 @@ class Classifier:
             if key in seen:
                 continue
             seen.add(key); out.append(lab)
-            if len(out) >= self.MAX_LABELS:
-                break
         # 기타는 단독으로만 — 다른 라벨이 있으면 기타를 뺀다
         real = [l for l in out if l["axis_id"] != self.other["id"]]
         return self._pack(real or [self._other()])
@@ -278,6 +333,8 @@ def main():
     ap.add_argument("--out", default=os.path.join(DATA, "feedback_classified.jsonl"))
     ap.add_argument("--limit", type=int, default=None, help="앞에서 N건만 (크레딧 아끼기)")
     ap.add_argument("--model", default=MODEL)
+    ap.add_argument("--lang", choices=("ko", "en"), default="ko",
+                    help="지시문 언어. 카테고리 이름은 어휘 그대로(한글). en 은 비교 실험용")
     ap.add_argument("--axis-field", default="axis",
                     help="입력 행에서 고객이 고른 축을 읽는 필드. 시연 데이터는 intended_axis 가 그것이다. "
                          "없는 행은 축까지 추론하는 보조 경로로 간다")
@@ -296,10 +353,10 @@ def main():
     if not key:
         raise SystemExit("GMS 키를 못 찾았습니다. `set -a && . ./.env && set +a` 먼저.")
 
-    clf = Classifier(OpenAI(api_key=key, base_url=GMS_BASE), axes, vocab["other"], a.model)
+    clf = Classifier(OpenAI(api_key=key, base_url=GMS_BASE), axes, vocab["other"], a.model, lang=a.lang)
     n_cat = sum(len(ax["cats"]) for ax in axes.values())
     print(f"피드백 {len(rows)}건 · 고정 목록 {len(axes)}축 {n_cat}종 + 기타"
-          f" · 어휘 {vocab['schema_version']} · {a.model} · 건당 호출 1회{NL}")
+          f" · 어휘 {vocab['schema_version']} · {a.model} · 지시문 {a.lang} · 건당 호출 1회{NL}")
 
     banned = BannedTerms()
     out, t0 = [], time.time()

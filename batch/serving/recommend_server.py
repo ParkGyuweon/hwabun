@@ -30,6 +30,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from typing import List, Optional
 
 import numpy as np
@@ -77,6 +78,11 @@ class Engine:
                                cooc=self.cooc, supporters=self.supporters,
                                ltr=ltr[0] if ltr else None, ltr_feat=feat)
         self.scorer = "ltr" if ltr else "linear"
+        # 클릭·상세 진입 이벤트가 그대로 싣는 값 (event-properties recommendation_click.algorithm).
+        # 모델이 바뀌면 문자열이 바뀌어야 하므로 학습 시각과 트리 수를 넣는다
+        m = self.ltr_meta or {}
+        self.algorithm = (f"ltr-{m.get('n_trees', '?')}t-{str(m.get('trained_at', ''))[:10]}"
+                          if ltr else "linear-cbf-cf")
         self.personas = {}
         for fn in sorted(glob.glob(os.path.join(PDIR, "personas_*.json"))):
             with open(fn, encoding="utf-8") as f:
@@ -158,13 +164,17 @@ class Engine:
         is_new = self.rec.new_mask()
         rs = self.reasons(persona, st, rows_seed, picks, is_new)
         items = []
-        for (g, s, f), r in zip(ranked, rs):
+        for pos, ((g, s, f), r) in enumerate(zip(ranked, rs), 1):
             p = self.products[self.index[g]]
             items.append({"product_id": g, "product_name": p.get("product_name"),
                           "brand_name": p.get("brand_name"), "score": round(float(s), 6),
-                          "reserved": bool(f), "reason": r})
+                          "position": pos, "reserved": bool(f), "reason": r})
         n_products = len(st.converted | st.viewed)
+        # 유입 추적 식별자 (교차 브랜드 유입 · 추천 CTR). FE 는 recommendation_click ·
+        # product_view 에 recommendation_id / list_id / position / algorithm 을 그대로 싣는다.
         body = {"persona_id": persona_id, "n_products": n_products,
+                "recommendation_id": uuid.uuid4().hex, "list_id": "main",
+                "algorithm": self.algorithm,
                 "state_source": source, "scorer": self.scorer,
                 "size": size, "reserved": int(reserved),
                 "items": items, "latency_ms": round(ms, 2)}

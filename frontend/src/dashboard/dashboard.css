@@ -132,6 +132,26 @@ body {
   line-height: 1.6;
 }
 
+/* 로그인한 담당자. 게이트를 지난 뒤라 항상 있다 */
+.sidebar__account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.sidebar__account-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
 .main {
   padding: 28px 36px 64px;
   max-width: 1240px;

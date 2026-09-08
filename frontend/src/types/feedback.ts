@@ -87,5 +87,8 @@ export interface Feedback {
   replied_at: string | null;
 }
 
-/** 분류기가 아직 안 돈 행. 화면에서 "분류 대기"로 묶는다 */
-export const isUnclassified = (f: Feedback): boolean => f.axis_id === null;
+/** 고객이 고를 수 있는 축 5개. `other` 는 0.2.0 부터 축이 아니라 "그 축 얘기지만 목록에 없는 불만" 카테고리라 토글에 없다 */
+export const FEEDBACK_INPUT_AXES: ReadonlyArray<VocabAxis> = v.axes;
+
+/** 분류기가 아직 안 돈 행. 0.2.0 부터 축은 고객이 고르므로 카테고리가 비었는지로 본다 */
+export const isUnclassified = (f: Feedback): boolean => f.category_id === null;

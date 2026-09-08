@@ -195,9 +195,14 @@ Processed Fact에서 Dashboard용 세션 Funnel과 일간 KPI Mart를 만든다.
 spark-submit streaming/jobs/build_marts_job.py \
   --sessionized-path data/processed/sessionized_events \
   --product-fact-path data/processed/product_event_fact \
+  --dim-product-path data/processed/dim_product \
+  --product-ingredient-path batch/ingest/data/serving/product_ingredient.csv \
+  --ingredient-vocab-path batch/ingest/data/serving/ingredient_vocab.csv \
   --funnel-session-path data/processed/funnel_session_fact \
   --product-daily-path data/marts/product_daily_kpi \
-  --funnel-daily-path data/marts/funnel_daily_kpi
+  --funnel-daily-path data/marts/funnel_daily_kpi \
+  --ingredient-weekly-path data/marts/ingredient_weekly_interest \
+  --category-price-path data/marts/category_price_reference
 ```
 
 생성 결과는 다음 세 가지다.
@@ -207,6 +212,8 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `funnel_session_fact` | `session_id + product_id` | 노출 → 클릭 → 상세 → 정보 확인 → 장바구니 → Checkout → 구매 도달 시각 |
 | `product_daily_kpi` | `event_date_kst + product_id + actor/source/run 축` | 상품 Event 수, 세션 수, CTR, 상세 진입률, 매출 |
 | `funnel_daily_kpi` | `funnel_date_kst + product_id + actor/source/run 축` | 세션 기반 Funnel 전환·이탈률 |
+| `ingredient_weekly_interest` | `interest_week_kst + ingredient + actor/source/run 축` | 위치가중 성분 관심도와 주간 비중 |
+| `category_price_reference` | `secondary_category + currency` | 카테고리 가격 중앙값과 표본 부족 fallback |
 
 정보 확인 단계는 성분/리뷰 Section·Content, Accordion 펼침, 리뷰 필터/상세,
 매칭 성분·키워드가 있는 텍스트 선택/복사 Event로 파생한다. 상품 매출은
@@ -216,6 +223,16 @@ spark-submit streaming/jobs/build_marts_job.py \
 
 Q4도 전체 snapshot `overwrite` 방식의 MVP다. 실제 운영에서는 입력 변경 범위와
 Mart 재계산 범위를 함께 관리하는 증분 전략을 추가한다.
+
+성분 Mart는 AI 벡터를 읽지 않고 `product_ingredient.csv.position_weight`를 사용한다.
+성분이 없는 시드 상품 12개의 상품 전체 Event는 성분 점수와 비중 분모에서 모두
+제외하며, `matched_ingredients[]` 직접 지목은 상품 연결 없이도 반영한다. 세정 상품의
+기본 가중치 `0.5`는 `CLEANSING_CATEGORY_WEIGHT` 또는
+`--cleansing-category-weight`로 변경할 수 있다.
+
+가격 기준 Mart는 `dim_product.base_price`만 사용하고 할인가는 사용하지 않는다.
+`secondary_category + currency`별 유효 상품이 기본 3개 미만이면 같은 통화 전체 중앙값을
+사용한다. 기준은 `PRICE_MIN_SAMPLE_SIZE` 또는 `--price-min-sample-size`로 변경한다.
 
 ## 통합 검증과 관측
 

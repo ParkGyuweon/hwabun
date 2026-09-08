@@ -32,7 +32,18 @@ export default defineConfig({
     // 다른 세션이 5173 을 쓰고 있을 때 PORT 로 비켜 띄울 수 있게 한다
     port: Number(process.env.PORT) || undefined,
     proxy: {
-      // 로그 수집 서버(Spring, 기본 8080)로 넘긴다. 안 떠 있으면 프론트는 재시도만 한다
+      /*
+       * 백엔드가 둘이다. 구체적인 경로를 먼저 적어야 '/api' 가 삼키지 않는다.
+       *
+       *   shop_backend (8090)  로그인·브랜드·상품·주문·리뷰·피드백·대시보드   feat/shop-backend
+       *   collector    (8080)  행동 로그 수집 /api/events                     backend/
+       */
+      ...Object.fromEntries(
+        ['/api/auth', '/api/brands', '/api/products', '/api/orders', '/api/reviews', '/api/feedback', '/api/seller', '/api/admin'].map(
+          (path) => [path, { target: process.env.SHOP_BACKEND_URL || 'http://localhost:8090', changeOrigin: true }],
+        ),
+      ),
+      // 로그 수집 서버. 안 떠 있으면 프론트는 재시도만 한다
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,

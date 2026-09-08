@@ -27,18 +27,26 @@ from streaming.jobs.derive_facts_job import (
     parse_args as parse_derive_args,
 )
 from streaming.jobs.build_marts_job import (
+    DEFAULT_CATEGORY_PRICE_PATH,
+    DEFAULT_CLEANSING_CATEGORY_WEIGHT,
     DEFAULT_FUNNEL_DAILY_PATH,
     DEFAULT_FUNNEL_SESSION_PATH,
+    DEFAULT_INGREDIENT_VOCAB_PATH,
+    DEFAULT_INGREDIENT_WEEKLY_PATH,
+    DEFAULT_PRICE_MIN_SAMPLE_SIZE,
+    DEFAULT_PRODUCT_INGREDIENT_PATH,
     DEFAULT_PRODUCT_DAILY_PATH,
     FUNNEL_PRODUCT_EVENTS,
     BuildMartsConfig,
     parse_args as parse_mart_args,
 )
 from streaming.jobs.validate_pipeline_job import (
+    DEFAULT_CATEGORY_PRICE_PATH as DEFAULT_VALIDATE_CATEGORY_PRICE_PATH,
     DEFAULT_CONTENT_INTEREST_PATH as DEFAULT_VALIDATE_CONTENT_INTEREST_PATH,
     DEFAULT_DIM_PRODUCT_PATH as DEFAULT_VALIDATE_DIM_PRODUCT_PATH,
     DEFAULT_DIM_BRAND_PATH as DEFAULT_VALIDATE_DIM_BRAND_PATH,
     DEFAULT_FUNNEL_DAILY_PATH as DEFAULT_VALIDATE_FUNNEL_DAILY_PATH,
+    DEFAULT_INGREDIENT_WEEKLY_PATH as DEFAULT_VALIDATE_INGREDIENT_WEEKLY_PATH,
     DEFAULT_PRODUCT_DAILY_PATH as DEFAULT_VALIDATE_PRODUCT_DAILY_PATH,
     DEFAULT_SECTION_DWELL_PATH as DEFAULT_VALIDATE_SECTION_DWELL_PATH,
     ValidatePipelineConfig,
@@ -208,11 +216,23 @@ class BuildMartsConfigTest(unittest.TestCase):
         self.assertEqual(DEFAULT_FUNNEL_SESSION_PATH, config.funnel_session_path)
         self.assertEqual(DEFAULT_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_FUNNEL_DAILY_PATH, config.funnel_daily_path)
+        self.assertEqual(DEFAULT_PRODUCT_INGREDIENT_PATH, config.product_ingredient_path)
+        self.assertEqual(DEFAULT_INGREDIENT_VOCAB_PATH, config.ingredient_vocab_path)
+        self.assertEqual(DEFAULT_INGREDIENT_WEEKLY_PATH, config.ingredient_weekly_path)
+        self.assertEqual(DEFAULT_CATEGORY_PRICE_PATH, config.category_price_path)
+        self.assertEqual(DEFAULT_CLEANSING_CATEGORY_WEIGHT, config.cleansing_category_weight)
+        self.assertEqual(DEFAULT_PRICE_MIN_SAMPLE_SIZE, config.price_min_sample_size)
         self.assertEqual("frontend/src/types/log.ts", config.behavior_weights_path)
 
     def test_empty_mart_path_is_rejected(self):
         with self.assertRaises(ValueError):
             BuildMartsConfig(funnel_daily_path=" ")
+
+    def test_invalid_mart_thresholds_are_rejected(self):
+        with self.assertRaises(ValueError):
+            BuildMartsConfig(cleansing_category_weight=0)
+        with self.assertRaises(ValueError):
+            BuildMartsConfig(price_min_sample_size=0)
 
 
 class ValidatePipelineConfigTest(unittest.TestCase):
@@ -231,6 +251,10 @@ class ValidatePipelineConfigTest(unittest.TestCase):
         self.assertEqual(DEFAULT_VALIDATE_DIM_BRAND_PATH, config.dim_brand_path)
         self.assertEqual(DEFAULT_VALIDATE_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_VALIDATE_FUNNEL_DAILY_PATH, config.funnel_daily_path)
+        self.assertEqual(
+            DEFAULT_VALIDATE_INGREDIENT_WEEKLY_PATH, config.ingredient_weekly_path
+        )
+        self.assertEqual(DEFAULT_VALIDATE_CATEGORY_PRICE_PATH, config.category_price_path)
         self.assertFalse(config.require_events)
 
     def test_empty_report_path_is_rejected(self):

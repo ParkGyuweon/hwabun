@@ -28,6 +28,8 @@ DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
 DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
+DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
+DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,8 @@ class ValidatePipelineConfig:
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
+    ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
+    category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     report_path: str | None = None
     require_events: bool = False
 
@@ -63,6 +67,8 @@ class ValidatePipelineConfig:
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
+            "ingredient_weekly_path": self.ingredient_weekly_path,
+            "category_price_path": self.category_price_path,
         }
         for name, value in paths.items():
             if not isinstance(value, str) or not value.strip():
@@ -129,6 +135,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("FUNNEL_DAILY_KPI_PATH", DEFAULT_FUNNEL_DAILY_PATH),
     )
     parser.add_argument(
+        "--ingredient-weekly-path",
+        default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
+    )
+    parser.add_argument(
+        "--category-price-path",
+        default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
+    )
+    parser.add_argument(
         "--report-path",
         default=os.getenv("PIPELINE_VALIDATION_REPORT_PATH"),
         help="Optional local JSON report path",
@@ -157,6 +171,8 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
+        ingredient_weekly_path=args.ingredient_weekly_path,
+        category_price_path=args.category_price_path,
         report_path=args.report_path,
         require_events=args.require_events,
     )
@@ -288,6 +304,8 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     funnel_session = frames["funnel_session"]
     product_daily = frames["product_daily"]
     funnel_daily = frames["funnel_daily"]
+    ingredient_weekly = frames["ingredient_weekly"]
+    category_price = frames["category_price"]
 
     counts = {
         "raw": raw.count(),
@@ -303,6 +321,8 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "funnel_session": funnel_session.count(),
         "product_daily": product_daily.count(),
         "funnel_daily": funnel_daily.count(),
+        "ingredient_weekly": ingredient_weekly.count(),
+        "category_price": category_price.count(),
     }
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
@@ -607,6 +627,56 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "funnel_daily_kpi grain is unique",
         )
     )
+    checks.append(
+        _check(
+            "ingredient_weekly_grain_is_unique",
+            _duplicate_count(
+                ingredient_weekly,
+                [
+                    "interest_week_kst",
+                    "ingredient_id",
+                    "actor_type",
+                    "source",
+                    "scenario_id",
+                    "simulation_run_id",
+                ],
+            )
+            == 0,
+            "ingredient_weekly_interest grain is unique",
+        )
+    )
+    invalid_ingredient_scores = ingredient_weekly.where(
+        F.col("ingredient_interest_score").isNull()
+        | (F.col("ingredient_interest_score") < 0)
+        | (F.col("ingredient_interest_share") < 0)
+        | (F.col("ingredient_interest_share") > 1)
+    ).count()
+    checks.append(
+        _check(
+            "ingredient_weekly_scores_are_valid",
+            invalid_ingredient_scores == 0,
+            f"invalid_rows={invalid_ingredient_scores}",
+        )
+    )
+    checks.append(
+        _check(
+            "category_price_grain_is_unique",
+            _duplicate_count(category_price, ["secondary_category", "currency"]) == 0,
+            "category_price_reference grain=secondary_category+currency",
+        )
+    )
+    invalid_price_rows = category_price.where(
+        F.col("reference_median_price").isNull()
+        | (F.col("reference_median_price") <= 0)
+        | ~F.col("reference_source").isin("category", "global_fallback")
+    ).count()
+    checks.append(
+        _check(
+            "category_price_reference_is_valid",
+            invalid_price_rows == 0,
+            f"invalid_rows={invalid_price_rows}",
+        )
+    )
 
     failures = [check for check in checks if not check["passed"]]
     return {
@@ -634,6 +704,8 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "funnel_session": config.funnel_session_path,
         "product_daily": config.product_daily_path,
         "funnel_daily": config.funnel_daily_path,
+        "ingredient_weekly": config.ingredient_weekly_path,
+        "category_price": config.category_price_path,
     }
     frames = {
         name: spark.read.option("mergeSchema", "true").parquet(path)
