@@ -34,8 +34,8 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import holdout_rule as hr                                                    # noqa: E402
-from build_persona_tables import (SEGMENT_TYPES, SOURCE_FILES, TABLE_SPECS,  # noqa: E402
-                                  PRODUCTS)
+from build_persona_tables import (SEGMENT_TYPES, SOURCE_CONFIGS, TABLE_SPECS,  # noqa: E402
+                                  PRODUCTS, apply_source_contract)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -52,6 +52,8 @@ ATTR_ENUM = {
 ROLE_ENUM = {hr.SEED, hr.HOLDOUT_TARGET, hr.EXCLUDED}
 LABEL_ENUM = {hr.POSITIVE, hr.NEGATIVE, hr.DIAGNOSTIC}
 SPLIT_ENUM = {"train", "valid", "test"}
+PERSONA_SOURCE_ENUM = {"agent_sample", "batch_sample", "holdout_sample"}
+EVALUATION_COHORT_ENUM = {"holdout_a", "holdout_b"}
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")
@@ -161,8 +163,36 @@ def check_enums(tables, rep):
     scan("bridge_persona_segment", "segment_type", set(SEGMENT_TYPES), True)   # §11-8
     scan("persona_profile", "profile_scope", {"full"}, True)
     scan("persona_profile_eval", "profile_scope", {"eval"}, True)
-    scan("persona_profile", "persona_source", {"agent_sample", "batch_sample"}, True)
+    scan("persona_profile", "persona_source", PERSONA_SOURCE_ENUM, True)
+    scan("persona_profile", "evaluation_cohort", EVALUATION_COHORT_ENUM, False)
+    for lineno, row in tables["persona_profile"]:
+        is_holdout = row.get("persona_source") == "holdout_sample"
+        if is_holdout != (row.get("evaluation_cohort") is not None):
+            rep.fail("C.cohort", f"persona_profile:{lineno} holdout_sample과 evaluation_cohort가 불일치")
     rep.ok("C")
+
+
+def check_cohort_consistency(tables, manifest, rep):
+    expected_source = manifest.get("persona_source")
+    expected_cohort = manifest.get("evaluation_cohort")
+    profile_cohorts = {}
+    for lineno, row in tables["persona_profile"]:
+        if row["persona_source"] != expected_source:
+            rep.fail("C.source", f"persona_profile:{lineno} persona_source가 manifest와 불일치")
+        if row.get("evaluation_cohort") != expected_cohort:
+            rep.fail("C.cohort", f"persona_profile:{lineno} evaluation_cohort가 manifest와 불일치")
+        profile_cohorts[row["persona_id"]] = row.get("evaluation_cohort")
+
+    cohort_segments = defaultdict(list)
+    for lineno, row in tables["bridge_persona_segment"]:
+        if row["segment_type"] == "evaluation_cohort":
+            cohort_segments[row["persona_id"]].append((lineno, row["segment_value"]))
+    for persona_id, cohort in profile_cohorts.items():
+        actual = [value for _, value in cohort_segments.get(persona_id, [])]
+        expected = [] if cohort is None else [cohort]
+        if actual != expected:
+            rep.fail("C.cohort-segment",
+                     f"{persona_id} evaluation_cohort segment={actual}, profile={cohort!r}")
 
 
 def _review_bucket(n_positive):
@@ -181,6 +211,20 @@ def check_contract_11(tables, product_ids, rep):
         rep.fail("D.11-1", f"persona_id 중복 {len(ids) - len(set(ids))}건")
 
     for p in profiles:
+        cohort = p.get("evaluation_cohort")
+        if cohort:
+            cohort_index = ord(cohort[-1]) - ord("a")
+            lower = cohort_index * 2000 + 1
+            upper = (cohort_index + 1) * 2000
+            expected = f"PH{lower:05d}~PH{upper:05d}"
+            try:
+                number = int(p["persona_id"].removeprefix("PH"))
+            except (TypeError, ValueError):
+                number = -1
+            if not p["persona_id"].startswith("PH") or not lower <= number <= upper:
+                rep.fail("D.holdout-id",
+                         f"{p['persona_id']} {cohort} ID 대역 불일치 (기대 {expected})")
+
         for col in ("skin_type", "skin_tone", "stratum", "review_bucket"):     # §11-2
             if not p.get(col):
                 rep.fail("D.11-2", f"{p['persona_id']} {col} 없음")
@@ -318,10 +362,19 @@ def validate_sample(sample_dir, product_ids, personas_by_id):
     check_columns_and_types(tables, rep)
     check_grain(tables, rep)
     check_enums(tables, rep)
+    check_cohort_consistency(tables, manifest, rep)
     check_contract_11(tables, product_ids, rep)
     check_leakage(tables, product_ids, personas_by_id, rep)
     check_referential(tables, rep)
     return rep
+
+
+def band_overlaps(bands):
+    """모든 표본 쌍의 ID 교집합을 반환한다 (세 집합 전체 교집합이 아님)."""
+    names = sorted(bands)
+    return {(left, right): bands[left] & bands[right]
+            for i, left in enumerate(names) for right in names[i + 1:]
+            if bands[left] & bands[right]}
 
 
 def main(argv=None):
@@ -339,20 +392,23 @@ def main(argv=None):
 
     product_ids = {p["product_id"] for p in _load_json(PRODUCTS)}
     personas_by_id = {}
-    for path in SOURCE_FILES.values():
-        for persona in _load_json(path):
-            personas_by_id[persona["persona_id"]] = persona
+    for config in SOURCE_CONFIGS.values():
+        for persona in _load_json(config["path"]):
+            contracted = apply_source_contract(persona, config)
+            personas_by_id[contracted["persona_id"]] = contracted
 
     reports = [validate_sample(d, product_ids, personas_by_id) for d in dirs]
 
-    # 샘플 간 persona_id 교집합 (계약 §11-1 은 PA·PC 전체에서 유일할 것을 요구한다)
+    # 샘플 간 persona_id 교집합 (계약 §11-1 은 모든 Dimension 표본에서 유일하다)
     bands = defaultdict(set)
     for d, rep in zip(dirs, reports):
         manifest = _load_json(os.path.join(d, "_manifest.json"))
         for _, row in _read_jsonl(os.path.join(d, "persona_profile.jsonl")):
             bands[manifest["persona_band"]].add(row["persona_id"])
-    if len(bands) > 1 and set.intersection(*bands.values()):
-        reports[0].fail("D.11-1", f"PA·PC persona_id 교집합 {len(set.intersection(*bands.values()))}건")
+    overlaps = band_overlaps(bands)
+    for (left, right), overlap in overlaps.items():
+        reports[0].fail("D.11-1",
+                        f"{left}·{right} persona_id 교집합 {len(overlap)}건")
 
     failed = 0
     for rep in reports:
@@ -369,8 +425,8 @@ def main(argv=None):
         for note in rep.notes:
             print(f"  - {note}")
 
-    if len(bands) > 1:
-        print(f"PA·PC persona_id 교집합 0건 확인 ({' / '.join(f'{b} {len(v)}명' for b, v in sorted(bands.items()))})")
+    if len(bands) > 1 and not overlaps:
+        print(f"표본 간 persona_id 교집합 0건 확인 ({' / '.join(f'{b} {len(v)}명' for b, v in sorted(bands.items()))})")
     return 2 if failed else 0
 
 

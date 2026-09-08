@@ -19,6 +19,7 @@ sys.path.insert(0, HERE)
 
 import holdout_rule as hr                                              # noqa: E402
 import build_persona_tables as bp                                      # noqa: E402
+import validate_persona_tables as vp                                   # noqa: E402
 
 CATALOG = {"P1", "P2", "P3"}
 
@@ -229,15 +230,53 @@ class AffinityInput(unittest.TestCase):
 
 
 class Segments(unittest.TestCase):
-    def test_허용된_6종만_나온다(self):
+    def test_허용된_7종만_나온다(self):
         rows = bp.build_segments(persona([]))
-        self.assertEqual([r["segment_type"] for r in rows], list(bp.SEGMENT_TYPES))
+        self.assertEqual([r["segment_type"] for r in rows],
+                         [s for s in bp.SEGMENT_TYPES if s != "evaluation_cohort"])
 
     def test_NULL_속성은_행을_만들지_않는다(self):
         """segment_value 는 nullable=N 이다. 빈 값으로 채우지 않고 행을 뺀다."""
         rows = bp.build_segments(persona([], hair_color=None))
         self.assertNotIn("hair_color", [r["segment_type"] for r in rows])
-        self.assertEqual(len(rows), len(bp.SEGMENT_TYPES) - 1)
+        self.assertEqual(len(rows), len(bp.SEGMENT_TYPES) - 2)
+
+    def test_홀드아웃_집단은_명시적_segment로_나온다(self):
+        rows = bp.build_segments(persona([], persona_source="holdout_sample",
+                                         evaluation_cohort="holdout_b"))
+        values = {(r["segment_type"], r["segment_value"]) for r in rows}
+        self.assertIn(("evaluation_cohort", "holdout_b"), values)
+
+
+class HoldoutIdentity(unittest.TestCase):
+    def test_A와_B가_서로_다른_전역_ID를_쓴다(self):
+        self.assertEqual(bp.global_holdout_id("PH00001", "holdout_a"), "PH00001")
+        self.assertEqual(bp.global_holdout_id("PH02000", "holdout_a"), "PH02000")
+        self.assertEqual(bp.global_holdout_id("PH00001", "holdout_b"), "PH02001")
+        self.assertEqual(bp.global_holdout_id("PH02000", "holdout_b"), "PH04000")
+        self.assertEqual(bp.global_holdout_id("PH00001", "holdout_c"), "PH04001")
+
+    def test_계약_매핑은_원본을_변경하지_않는다(self):
+        original = persona([], persona_id="PH00001", user_id="PH00001")
+        mapped = bp.apply_source_contract(original, {
+            "persona_source": "holdout_sample", "evaluation_cohort": "holdout_b"})
+        self.assertEqual(original["persona_id"], "PH00001")
+        self.assertNotIn("evaluation_cohort", original)
+        self.assertEqual(mapped["persona_id"], "PH02001")
+        self.assertEqual(mapped["user_id"], "PH02001")
+        self.assertEqual(mapped["evaluation_cohort"], "holdout_b")
+
+    def test_집단_ID_교집합이_없다(self):
+        a = {bp.global_holdout_id(f"PH{i:05d}", "holdout_a")
+             for i in range(1, 2001)}
+        b = {bp.global_holdout_id(f"PH{i:05d}", "holdout_b")
+             for i in range(1, 2001)}
+        self.assertFalse(a & b)
+
+    def test_검증기는_전체가_아닌_집단별_교집합을_찾는다(self):
+        overlaps = vp.band_overlaps({
+            "HA": {"PH00001"}, "HB": {"PH00001"}, "PA": {"PA00001"}})
+        self.assertEqual(overlaps, {("HA", "HB"): {"PH00001"}})
 
 
 class TableShape(unittest.TestCase):
