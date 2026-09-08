@@ -39,7 +39,8 @@
      → train_ltr.py    학습 결합 모델 (트리 278개)
      → recommender.py  점수 + MMR
      → batch/ingest/data/serving/  서빙용 산출물
-          ┈┈▶ (미연결) 백엔드 RankingService 가 없어 화면 노출에 반영되지 않습니다
+     → batch/serving/recommend_server.py   GET /api/recommend (FastAPI, p95 15ms)
+          ┈┈▶ (미연결) 백엔드가 이 서버를 프록시하는 단계가 아직 없어 화면 노출에 반영되지 않습니다
    대표 지표 Recall@10 = 43.95% — CBF + CF 가점 + 학습 결합, holdout_a 2,000명
    ┈┈▶ 확인 집합 holdout_b 43.20% · 선형 대비 +5.80 / +3.95%p (둘 다 CI 가 0 제외)
    ┈┈▶ 23.39%(CBF 단독) → 38%대(CF 채택) → 43%대(학습 결합) 순으로 올랐다 (부록 S·T)
@@ -52,8 +53,9 @@
 `contracts/recommendation-io-spec.md` 가 단일 출처입니다. 기준은
 [`contracts/README.md`](contracts/README.md) 를 따릅니다.
 
-**아직 없는 것** — 백엔드 `RankingService`, 사용자 벡터 Redis 적재, 서빙 테이블 MySQL.
-추천은 현재 배치 산출물까지만 나옵니다.
+**아직 없는 것** — 백엔드가 추천 서버를 프록시하는 경로, 사용자 벡터 Redis 적재, 서빙 테이블 MySQL.
+추천 점수는 `batch/serving/recommend_server.py` 가 계약 §5 대로 내지만(참조 구현, Jira 206)
+백엔드·프론트에 아직 연결되지 않았습니다.
 
 ---
 
@@ -222,6 +224,10 @@ S15P21A306/
 │       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 (피처·산출물·사용자 벡터·전용 칸·CF 홀드아웃 제외)
+│   └── serving/                     ★ 추천 추론 서버 — 계약 §5 참조 구현 (Jira 206)
+│       ├── recommend_server.py          FastAPI: GET /api/recommend · POST /api/events · /health
+│       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
+│       └── test_recommend_server.py     계약 필드·전환 제외·콜드 스타트·404
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/
