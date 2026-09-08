@@ -222,6 +222,7 @@ export function startSession(personaId: string | null, productId: string | null 
   sessionId = createId();
   sequenceNo = 0;
   firedOnceKeys.clear();
+  pendingEntry = null;
   setLoggerContext({ personaId, productId });
 
   // 첫 page_view 몫의 id 를 세션 시작 전에 발급해 둘이 공유한다
@@ -244,9 +245,44 @@ export function startSession(personaId: string | null, productId: string | null 
  * 한쪽에만 넣으면 상품 URL 로 바로 들어온 방문이 통째로 빠진다.
  * 같은 page_view_id 를 쓰므로 page_view 와 이어 붙일 수 있다.
  */
-function trackProductView(productId: string | null, navigationSource: string): void {
+function trackProductView(
+  productId: string | null,
+  navigationSource: string,
+  entry: ProductViewEntry | null = null,
+): void {
   if (productId === null) return;
-  track('product_view', { product_id: productId, navigation_source: navigationSource });
+  track('product_view', {
+    product_id: productId,
+    navigation_source: navigationSource,
+    ...(entry && entry.product_id === productId
+      ? { recommendation_id: entry.recommendation_id, list_id: entry.list_id, position: entry.position }
+      : {}),
+  });
+}
+
+/**
+ * 추천 카드를 눌러 들어온 상세의 `product_view` 에 실을 식별자 (Jira 210).
+ *
+ * 계약(event-properties §4.2)은 `product_view` 에 `recommendation_id`·`list_id`·`position` 을
+ * 선택 필드로 허용한다. 값은 그 카드의 `recommendation_click` 과 같다. 이게 있어야 교차 브랜드
+ * 유입의 "추천 경유" 가 세션 순서를 추정하지 않고 product_view 한 행으로 닫힌다.
+ * 생성기(`gen_behavior_logs.py visit_detail(rec_meta=)`)가 같은 모양으로 채운다.
+ *
+ * 카드 클릭 → `onSelect` → App 의 setProductId → effect → `startPageView` 순서라 클릭 시점과
+ * product_view 시점이 갈라진다. 그래서 클릭한 쪽이 여기 예약해 두고 `startPageView` 가 한 번 쓴다.
+ * 예약한 상품과 실제로 열린 상품이 다르면(중간에 장바구니를 열었다 등) 버린다 — 잘못 붙는 것보다
+ * 안 붙는 게 낫다. 직접 진입·목록 클릭은 키 자체를 보내지 않는다 (생성기와 같음).
+ */
+export interface ProductViewEntry {
+  product_id: string;
+  recommendation_id: string;
+  list_id: string;
+  position: number;
+}
+let pendingEntry: ProductViewEntry | null = null;
+
+export function setNextProductViewEntry(entry: ProductViewEntry | null): void {
+  pendingEntry = entry;
 }
 
 /**
@@ -263,8 +299,10 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
   pageViewId = createId();
   firedOnceKeys.clear();
   setLoggerContext({ productId });
+  const entry = pendingEntry;
+  pendingEntry = null;
   track('page_view', { product_id: productId, navigation_source: navigationSource });
-  trackProductView(productId, navigationSource);
+  trackProductView(productId, navigationSource, entry);
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
