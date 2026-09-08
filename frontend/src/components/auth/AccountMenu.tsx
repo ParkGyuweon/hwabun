@@ -53,11 +53,7 @@ export default function AccountMenu() {
             <button type="button" className="auth-modal__close" aria-label="닫기" onClick={() => setOpen(false)}>
               ×
             </button>
-            <AuthForm
-              role="MEMBER"
-              lead="주문·리뷰·사장님께 보내는 피드백에 쓰는 계정입니다."
-              onSuccess={() => setOpen(false)}
-            />
+            <AuthForm role="MEMBER" onSuccess={() => setOpen(false)} />
           </div>
         </div>
       ) : null}

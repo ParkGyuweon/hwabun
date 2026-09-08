@@ -9,6 +9,7 @@ import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
+import { labelKo } from '../lib/formLabels';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
@@ -415,7 +416,7 @@ export default function ProductListPage({
                 <option value="all">전체</option>
                 {concerns.map(([name, count]) => (
                   <option key={name} value={name}>
-                    {name} ({count})
+                    {labelKo(name)} ({count})
                   </option>
                 ))}
               </select>
