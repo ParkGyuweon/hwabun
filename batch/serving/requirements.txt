@@ -1,0 +1,4 @@
+# 추천 추론 서버 의존성 (batch/jobs 쪽 numpy·scikit-learn·joblib 은 이미 있다고 본다)
+fastapi>=0.110
+uvicorn>=0.29
+httpx>=0.27          # TestClient · bench --url

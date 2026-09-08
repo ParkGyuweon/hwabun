@@ -243,10 +243,11 @@ LAMBDA_MMR = 0.8
 # 속성 항은 정확도를 올리는 장치가 아니라 **롱테일 보험**이라 남긴다.
 #
 # ⚠ 위 세 줄은 **CBF 단독** 값이다. 이 스케줄은 그대로 쓰지만 **현재 성능이
-# 아니다** — CF 가점 채택 후 대표 지표는 Recall@10 38.86% (롱테일 40.61%) 다
-# (docs/ai/evaluation-framework.md 부록 S). 스케줄 자체는 CF 를 얹어도 판단이
-# 바뀌지 않아 다시 고르지 않았다: CF 는 가점 전용이라 w1/w2/w3 의 상대 비중을
-# 건드리지 않는다.
+# 아니다** — 현행은 학습 결합(LTR)이고 대표 지표는 Recall@10 43.95% (holdout_a,
+# 확인 holdout_b 43.20%) 다 (docs/ai/evaluation-framework.md 부록 T). LTR 이 켜지면
+# 이 스케줄은 타지 않고 **선형 폴백에서만** 쓰인다 (모델 산출물이 없을 때).
+# 스케줄 자체는 CF 를 얹어도 판단이 바뀌지 않아 다시 고르지 않았다: CF 는 가점
+# 전용이라 w1/w2/w3 의 상대 비중을 건드리지 않는다.
 # 측정: docs/ai/persona-feature-port.md §7 · batch/jobs/eval_persona_feature.py
 SCHEDULE = [(0, 0.00, 0.30, 0.70),
             (5, 0.70, 0.25, 0.05),
