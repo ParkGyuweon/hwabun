@@ -122,6 +122,77 @@ def brand_match(brands, rows, known=None):
         return None
     return np.fromiter((1.0 if b in seen else 0.0 for b in brands),
                        np.float32, len(brands))
+
+
+# ── 신규 브랜드 전용 칸 (2026-09-08, Jira 129) ────────────────────────────────
+#
+# 메인 k칸 중 RESERVED 칸을 **신규 상품**에 떼어 준다. 점수로 싸우게 하는 것보다
+# 자리를 떼어 주는 것이 훨씬 싸다 — 신규 브랜드 10% 부하에서 그 사장님 상품의
+# 적중률이 16.5% -> 43.6% (LTR 증강 기준). 전체 정확도 비용은 신규 브랜드 비율에
+# 따라 부호가 바뀐다:
+#
+#   신규 브랜드 비율   전용 칸의 전체 비용 (holdout_a / holdout_b)
+#     10%             -1.23%p (손해)             -> 2칸
+#     30%             +0.58%p / +0.92%p (이득)   -> 2~3칸
+#     50%             +0.81%p / +0.67%p (이득)   -> 3칸 (전체도 3칸이 최고)
+#
+# 정답이 신규 브랜드 상품인 사람이 많아지면 전용 칸이 그들을 잡아 주는 값이
+# 잃는 값보다 커진다. HWABUN 초기(신규가 대부분)는 이득 구간이다.
+# 근거: docs/ai/evaluation-framework.md 부록 R-3·R-4 · 계약 §5-1.
+#
+# **신규 상품의 정의는 둘 중 하나다** — 지지자(그 상품을 긍정 평가한 사람 중 다른
+# 상품도 산 사람)가 CF_MIN_SUPPORT 미만이거나, 브랜드가 어휘집 밖이거나. 둘 다
+# 이미 있는 값이라 새 산출물이 없다. 지금 카탈로그 200개는 전부 지지자 520명
+# 이상이고 어휘집 안이라 **전용 칸이 비어 일반 칸으로 돌아간다** — 기본값
+# RESERVED=0 과 결과가 같고 골든·대표 지표가 한 자리도 안 바뀐다.
+#
+# 기본은 0 이다. 칸 수는 카탈로그의 신규 브랜드 비율을 보고 **설정으로** 준다
+# (계약 §5 `reserved`). 코드에 박아 두면 브랜드가 늘 때마다 고쳐야 한다.
+RESERVED = 0
+
+
+def new_product_mask(n, supporters=None, brands=None, known_brands=None,
+                     min_support=CF_MIN_SUPPORT):
+    """(상품수,) bool — 전용 칸 후보. 지지자 미달 **또는** 어휘집 밖 브랜드.
+
+    둘 다 없으면 전부 False 다 — 전용 칸이 비어 일반 칸으로 돌아간다.
+    """
+    m = np.zeros(n, bool)
+    if supporters is not None:
+        m |= np.asarray(supporters) < min_support
+    if brands is not None and known_brands is not None:
+        m |= np.fromiter((b not in known_brands for b in brands), bool, n)
+    return m
+
+
+def reserve_slots(scores, picked, k, reserved, is_new, fallback=()):
+    """MMR 이 고른 `picked`(k - reserved 개) 뒤에 신규 상품 `reserved` 개를 점수순으로
+    붙인다. 신규가 모자라면 남은 자리를 `fallback` 순서(MMR 을 k 까지 이어 간 것)로,
+    그것도 모자라면 일반 점수순으로 채운다.
+
+    ⚠ 폴백을 원점수순으로 채우면 안 된다. 신규가 0개일 때 뒤 r 칸이 MMR 을 건너뛴
+    상위 점수가 되어 `reserved=0` 과 결과가 갈린다 — holdout_a 에서 43.95% 가
+    44.75% 로 "좋아지는" 것처럼 보였는데, 전용 칸이 아니라 MMR 이 일부 꺼진 효과였다.
+    MMR 은 탐욕 순차라 mmr(k)[:k-r] == mmr(k-r) 이므로, 이어 간 순서로 채우면
+    신규가 없을 때 정확히 reserved=0 과 같다.
+    """
+    out = list(picked)
+    taken = set(out)
+    if reserved > 0:
+        newidx = np.where(is_new & np.isfinite(scores))[0]
+        for i in newidx[np.argsort(-scores[newidx])]:
+            if len(out) >= k:
+                break
+            if int(i) not in taken:
+                out.append(int(i)); taken.add(int(i))
+    for i in list(fallback) + [int(j) for j in np.argsort(-scores)]:
+        if len(out) >= k:
+            break
+        if np.isfinite(scores[i]) and int(i) not in taken:
+            out.append(int(i)); taken.add(int(i))
+    return out[:k]
+
+
 # MMR 다양성 계수. **값이 클수록 약하게 건다** — 헷갈리기 쉬운 방향이다.
 #
 #     선택 = argmax [ λ_mmr x score(i) - (1-λ_mmr) x max cos(v_i, 이미 고른 것) ]
@@ -336,9 +407,30 @@ class Recommender:
             picked.append(rest.pop(best))
         return picked
 
+    def new_mask(self):
+        """전용 칸 후보 — 지지자 미달 또는 어휘집 밖 브랜드 (모듈 주석 참조)"""
+        return new_product_mask(len(self.M), self.supporters, self.brands,
+                                self.known_brands if self.brands is not None else None)
+
+    def pick(self, scores, order, k, lam_mmr=LAMBDA_MMR, reserved=RESERVED):
+        """MMR 로 (k - reserved) 개를 고르고 전용 칸을 붙인다. rank() 와 평가
+        스크립트가 **같은 경로**를 쓰게 하려고 뗐다 — 따로 구현하면 어긋난다."""
+        r = max(0, min(int(reserved), k))
+        # MMR 을 k 까지 한 번 돌리고 앞 (k - r) 개를 일반 칸으로 쓴다. 탐욕 순차라
+        # 앞부분은 mmr(k - r) 과 같고, 뒷부분은 신규가 모자랄 때의 폴백 순서가 된다.
+        full = list(self.mmr(scores, order, k, lam_mmr))
+        if r == 0:
+            return full[:k]
+        return reserve_slots(scores, full[:k - r], k, r, self.new_mask(), fallback=full)
+
     def rank(self, state, persona=None, k=10, evaluation=False,
-             review_products=(), view_cap=VIEW_CAP, lam_mmr=LAMBDA_MMR):
-        """추천 목록 상위 k개. evaluation=True 면 본 상품을 전부 뺀다(leakage 차단)"""
+             review_products=(), view_cap=VIEW_CAP, lam_mmr=LAMBDA_MMR,
+             reserved=RESERVED, flags=False):
+        """추천 목록 상위 k개. evaluation=True 면 본 상품을 전부 뺀다(leakage 차단)
+
+        reserved: 신규 상품 전용 칸 수 (계약 §5). 신규가 없으면 일반 칸으로 돌아간다
+        flags:    True 면 (id, score, reserved 여부) 3-튜플을 준다
+        """
         s = self.score(state, persona).copy()
         if self.catalog is not None:        # 이 사이트가 파는 상품만 후보다
             keep = np.zeros(len(s), bool)
@@ -364,8 +456,14 @@ class Recommender:
                 if len(out) >= k * 3:      # MMR 이 고를 여지를 남긴다
                     break
             order = out
-        order = self.mmr(s, order, k, lam_mmr)
-        return [(self.ids[i], float(s[i])) for i in order[:k]]
+        r = max(0, min(int(reserved), k))
+        order = self.pick(s, order, k, lam_mmr, r)
+        if not flags:
+            return [(self.ids[i], float(s[i])) for i in order[:k]]
+        # 전용 칸으로 들어온 것 = MMR 이 고른 앞 (k - r) 개 뒤의 신규 상품
+        is_new = self.new_mask() if r else np.zeros(len(s), bool)
+        return [(self.ids[i], float(s[i]), bool(j >= k - r and is_new[i]))
+                for j, i in enumerate(order[:k])]
 
     def rank_of(self, state, product_id, persona=None, **kw):
         """정답 상품이 지금 몇 위인지. 목록 갱신마다 기록해 순위 곡선을 만든다"""
