@@ -195,6 +195,46 @@ def check_cohort_consistency(tables, manifest, rep):
                      f"{persona_id} evaluation_cohort segment={actual}, profile={cohort!r}")
 
 
+def check_source_identity(tables, source_personas, rep):
+    """원본 ID와 전역 ID가 양방향으로 손실 없이 매핑되는지 검사한다."""
+    profiles = [row for _, row in tables["persona_profile"]]
+    source_ids = [p.get("source_persona_id") for p in profiles]
+    if len(set(source_ids)) != len(source_ids):
+        rep.fail("D.source-id", "source_persona_id가 표본 안에서 중복됨")
+
+    forward = {}
+    reverse = {}
+    for p in profiles:
+        source_id = p.get("source_persona_id")
+        persona_id = p.get("persona_id")
+        cohort = p.get("evaluation_cohort")
+        key = (cohort, source_id)
+
+        if source_id not in source_personas:
+            rep.fail("D.source-id", f"{source_id!r}를 원본 Persona 파일에서 찾을 수 없음")
+
+        if cohort:
+            try:
+                source_number = int(source_id.removeprefix("PH"))
+                cohort_index = ord(cohort.removeprefix("holdout_")) - ord("a")
+                expected_id = f"PH{cohort_index * 2000 + source_number:05d}"
+            except (AttributeError, TypeError, ValueError):
+                expected_id = None
+        else:
+            expected_id = source_id
+        if persona_id != expected_id:
+            rep.fail("D.source-id",
+                     f"{key} -> {persona_id}, 기대 전역 ID={expected_id}")
+
+        if key in forward and forward[key] != persona_id:
+            rep.fail("D.source-id", f"원본 키 {key}가 여러 전역 ID로 매핑됨")
+        if persona_id in reverse and reverse[persona_id] != key:
+            rep.fail("D.source-id", f"전역 ID {persona_id}가 여러 원본 키로 매핑됨")
+        forward[key] = persona_id
+        reverse[persona_id] = key
+    rep.ok("D.source-id", len(profiles))
+
+
 def _review_bucket(n_positive):
     if n_positive == 3:
         return "3"
@@ -350,7 +390,7 @@ def check_referential(tables, rep):
     rep.ok("F")
 
 
-def validate_sample(sample_dir, product_ids, personas_by_id):
+def validate_sample(sample_dir, product_ids, personas_by_id, source_personas):
     manifest = _load_json(os.path.join(sample_dir, "_manifest.json"))
     rep = Report(manifest["sample_id"])
     tables = {name: _read_jsonl(os.path.join(sample_dir, f"{name}.jsonl")) for name in TABLE_SPECS}
@@ -363,6 +403,7 @@ def validate_sample(sample_dir, product_ids, personas_by_id):
     check_grain(tables, rep)
     check_enums(tables, rep)
     check_cohort_consistency(tables, manifest, rep)
+    check_source_identity(tables, source_personas, rep)
     check_contract_11(tables, product_ids, rep)
     check_leakage(tables, product_ids, personas_by_id, rep)
     check_referential(tables, rep)
@@ -397,7 +438,17 @@ def main(argv=None):
             contracted = apply_source_contract(persona, config)
             personas_by_id[contracted["persona_id"]] = contracted
 
-    reports = [validate_sample(d, product_ids, personas_by_id) for d in dirs]
+    source_personas_by_band = {
+        band: {p["persona_id"]: p for p in _load_json(config["path"])}
+        for band, config in SOURCE_CONFIGS.items()
+    }
+    reports = []
+    for d in dirs:
+        manifest = _load_json(os.path.join(d, "_manifest.json"))
+        reports.append(validate_sample(
+            d, product_ids, personas_by_id,
+            source_personas_by_band[manifest["persona_band"]],
+        ))
 
     # 샘플 간 persona_id 교집합 (계약 §11-1 은 모든 Dimension 표본에서 유일하다)
     bands = defaultdict(set)
