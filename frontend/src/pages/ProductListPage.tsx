@@ -10,6 +10,9 @@ import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
 import { labelKo } from '../lib/formLabels';
+import AdBanner from '../components/banner/AdBanner';
+import { pickBannerProducts } from '../lib/bannerCreative';
+import type { BannerAxis } from '../lib/bannerCreative';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
@@ -166,6 +169,24 @@ export default function ProductListPage({
 
     return [...candidates].sort((a, b) => score(b) - score(a)).slice(0, PROMO_SIZE);
   }, [products, persona, reviewSkinTypes, cartProductIds]);
+
+  /**
+   * 광고 배너 — 히어로 1 + 카드 3.
+   *
+   * 축 순서를 페르소나로 정한다. 추천 API(`/api/recommend` 의 `axes`·`banners[]`)가 붙으면
+   * 이 블록이 API 응답으로 대체된다. 지금은 프론트 규칙이고, 전용 칸 2개는 신규 브랜드
+   * (SSAFY Beauty)를 마지막에 둔다 (계약 §5-1 `reserved`).
+   */
+  const bannerSlots = useMemo(() => {
+    const axes: BannerAxis[] = persona
+      ? ['concern', 'ingredient', 'segment', 'price_bin', 'new_brand']
+      : ['category', 'ingredient', 'price_bin', 'new_brand'];
+    const pool = products.filter((p) => !cartProductIds.has(p.product_id));
+    // 신규 브랜드는 전용 칸이라 후보를 따로 준다
+    const fresh = pool.filter((p) => /^SB\d+$/.test(p.product_id));
+    const picked = pickBannerProducts([...fresh, ...pool], axes, 4, persona?.skin_type);
+    return picked;
+  }, [products, persona, cartProductIds]);
 
   /** 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름 */
   const promoAlgorithm = persona ? 'skin_match_v0' : 'badge_rank_v0';
@@ -352,6 +373,39 @@ export default function ProductListPage({
 
   return (
     <main className="page list">
+      {bannerSlots.length > 0 ? (
+        <section className="ads" data-log-section="promo_row">
+          <div className="ads__hero">
+            <AdBanner
+              product={bannerSlots[0].product}
+              axis={bannerSlots[0].banner_type}
+              value={bannerSlots[0].banner_value}
+              shape="hero"
+              skinTone={persona?.skin_tone}
+              slot={1}
+              onSelect={selectFrom('promo_pick')}
+            />
+          </div>
+          {bannerSlots.length > 1 ? (
+            <ul className="ads__row">
+              {bannerSlots.slice(1).map((b, i) => (
+                <li key={b.product.product_id}>
+                  <AdBanner
+                    product={b.product}
+                    axis={b.banner_type}
+                    value={b.banner_value}
+                    shape="card"
+                    skinTone={persona?.skin_tone}
+                    slot={i + 2}
+                    onSelect={selectFrom('promo_pick')}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="list__promo" data-log-section="promo_row">
         <header className="list__promo-head">
           <h2>지금 주목할 상품</h2>

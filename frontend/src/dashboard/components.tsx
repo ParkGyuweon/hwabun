@@ -301,46 +301,172 @@ export interface ScatterPoint {
  *   좌하: 안 보고 안 산다 → 있어야 하나
  * 로 읽힌다. 점 크기는 표본, 축은 0 부터.
  */
-export function Scatter({ points, height = 300 }: { points: ScatterPoint[]; height?: number }) {
-  const width = 640;
-  const pad = { l: 44, r: 16, t: 14, b: 34 };
+export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; height?: number }) {
+  const width = 760;
+  const pad = { l: 56, r: 28, t: 44, b: 62 };
+  const x0 = pad.l;
+  const x1 = width - pad.r;
+  const y0 = pad.t;
+  const y1 = height - pad.b;
+
   const shown = points.filter((p) => p.n >= 50);
-  const maxX = Math.max(1, ...shown.map((p) => p.x)) * 1.1;
-  const maxY = Math.max(1.2, ...shown.map((p) => p.y)) * 1.15;
-  const meanX = shown.reduce((s, p) => s + p.x, 0) / Math.max(1, shown.length);
-  const sx = (v: number) => pad.l + (v / maxX) * (width - pad.l - pad.r);
-  const sy = (v: number) => height - pad.b - (v / maxY) * (height - pad.t - pad.b);
-  const r = (n: number) => 4 + Math.min(6, Math.log10(Math.max(1, n)) * 1.6);
+  if (shown.length === 0) return <p className="note">표본 50 이상인 콘텐츠가 없습니다.</p>;
+
+  // 축 범위. 세로는 lift 1.0 이 항상 가운데 쪽에 오도록 위아래로 같은 폭을 준다
+  const maxX = Math.max(...shown.map((p) => p.x)) * 1.12;
+  const loY = Math.min(0.6, Math.min(...shown.map((p) => p.y)) * 0.9);
+  const hiY = Math.max(1.5, Math.max(...shown.map((p) => p.y)) * 1.1);
+  const meanX = shown.reduce((s, p) => s + p.x, 0) / shown.length;
+
+  const sx = (v: number) => x0 + (v / maxX) * (x1 - x0);
+  const sy = (v: number) => y1 - ((v - loY) / (hiY - loY)) * (y1 - y0);
+  // 점 크기는 표본. 너무 크면 서로 닿고 위치를 못 읽는다. 반지름 4.5~9px 로 묶는다
+  const rOf = (n: number) => 4.5 + Math.min(4.5, Math.log10(Math.max(10, n)) * 1.5);
+
+  const cx = sx(meanX);
+  const cy = sy(1);
+
+  /*
+   * 라벨 겹침 회피. 표본이 큰 점부터 자리를 잡고, 이미 놓인 라벨·점과 겹치지 않는
+   * 첫 후보 위치를 쓴다. 전부 겹치면 아래쪽에 두고 얇은 지시선을 그린다.
+   * 왼쪽 아래에 점이 몰려서 그냥 오른쪽에 붙이면 글자가 서로 포개진다.
+   */
+  const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const hit = (a: { x: number; y: number; w: number; h: number }) =>
+    placed.some((b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) ||
+    shown.some((p) => {
+      const r = rOf(p.n) + 3;
+      return a.x < sx(p.x) + r && a.x + a.w > sx(p.x) - r && a.y < sy(p.y) + r && a.y + a.h > sy(p.y) - r;
+    });
+
+  const labels = [...shown]
+    .sort((a, b) => b.n - a.n)
+    .map((p) => {
+      const w = p.label.length * 12 + 6;
+      const h = 17;
+      const r = rOf(p.n);
+      const px = sx(p.x);
+      const py = sy(p.y);
+      const cands: Array<[number, number, 'start' | 'end']> = [
+        [px + r + 7, py + 5, 'start'],
+        [px - r - 7 - w, py + 5, 'end'],
+        [px - w / 2, py - r - 8, 'start'],
+        [px - w / 2, py + r + 17, 'start'],
+        [px + r + 7, py - r - 6, 'start'],
+        [px + r + 7, py + r + 16, 'start'],
+        [px - r - 7 - w, py - r - 6, 'end'],
+        [px - r - 7 - w, py + r + 16, 'end'],
+      ];
+      let pick = cands[0];
+      let found = false;
+      for (const c of cands) {
+        const box = { x: c[0], y: c[1] - 13, w, h };
+        if (box.x < x0 - 4 || box.x + box.w > x1 + 4 || box.y < y0 - 6 || box.y + box.h > y1 + 6) continue;
+        if (!hit(box)) {
+          pick = c;
+          found = true;
+          break;
+        }
+      }
+      placed.push({ x: pick[0], y: pick[1] - 13, w, h });
+      const anchor = pick[2];
+      const tx = anchor === 'end' ? pick[0] + w : pick[0];
+      // 지시선: 자리를 못 찾아 멀리 밀린 라벨만
+      const far = Math.abs(tx - px) > r + 30 || Math.abs(pick[1] - py) > r + 22;
+      return { p, px, py, r, tx, ty: pick[1], anchor, leader: !found || far };
+    });
 
   return (
-    <svg className="scatter" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="주목도와 전환 기여 산점도">
-      {/* 사분면 라벨 */}
-      <text className="scatter__quad" x={pad.l + 6} y={pad.t + 12}>짧게 보지만 결정에 기여</text>
-      <text className="scatter__quad" x={width - pad.r - 6} y={pad.t + 12} textAnchor="end">오래 보고 결정에 기여</text>
-      <text className="scatter__quad" x={pad.l + 6} y={height - pad.b - 6}>안 보고 안 산다</text>
-      <text className="scatter__quad" x={width - pad.r - 6} y={height - pad.b - 6} textAnchor="end">오래 보지만 안 산다</text>
+    <div className="scatter-wrap">
+      <svg
+        className="scatter"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="콘텐츠별 주목도와 전환 기여 산점도"
+      >
+        <defs>
+          <clipPath id="scatter-plot">
+            <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx="14" />
+          </clipPath>
+        </defs>
 
-      {/* 축 */}
-      <line className="scatter__axis" x1={pad.l} y1={height - pad.b} x2={width - pad.r} y2={height - pad.b} />
-      <line className="scatter__axis" x1={pad.l} y1={pad.t} x2={pad.l} y2={height - pad.b} />
-      {/* 기준선: lift 1.0 · 평균 체류 */}
-      <line className="scatter__ref" x1={pad.l} y1={sy(1)} x2={width - pad.r} y2={sy(1)} />
-      <text className="scatter__tick" x={pad.l - 6} y={sy(1) + 4} textAnchor="end">1.0×</text>
-      <line className="scatter__ref" x1={sx(meanX)} y1={pad.t} x2={sx(meanX)} y2={height - pad.b} />
-      <text className="scatter__tick" x={sx(meanX)} y={height - pad.b + 14} textAnchor="middle">평균 {meanX.toFixed(0)}초</text>
-      <text className="scatter__tick" x={pad.l - 6} y={sy(maxY / 1.15) + 4} textAnchor="end">{(maxY / 1.15).toFixed(1)}×</text>
-      <text className="scatter__tick" x={width - pad.r} y={height - pad.b + 14} textAnchor="end">{maxX.toFixed(0)}초</text>
-      <text className="scatter__label" x={pad.l} y={height - 6}>가로: 평균 체류 · 세로: 본 방문 담기율 ÷ 전체</text>
-
-      {shown.map((p) => (
-        <g key={p.label} className={`scatter__pt${p.n < 200 ? ' is-thin' : ''}${p.y < 1 ? ' is-below' : ''}`}>
-          <circle cx={sx(p.x)} cy={sy(p.y)} r={r(p.n)}>
-            <title>{`${p.label} · 체류 ${p.x.toFixed(1)}초 · 기여 ${p.y.toFixed(1)}× · n=${p.n.toLocaleString('ko-KR')}`}</title>
-          </circle>
-          <text x={sx(p.x) + r(p.n) + 4} y={sy(p.y) + 4}>{p.label}</text>
+        {/* 사분면 바탕. 손볼 곳(오래 보지만 안 산다)과 올릴 것(짧게 보지만 기여)만 색을 준다 */}
+        <g clipPath="url(#scatter-plot)">
+          <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} className="scatter__field" />
+          <rect x={x0} y={y0} width={cx - x0} height={cy - y0} className="scatter__q scatter__q--lift" />
+          <rect x={cx} y={cy} width={x1 - cx} height={y1 - cy} className="scatter__q scatter__q--fix" />
         </g>
-      ))}
-    </svg>
+
+        {/* 격자 */}
+        {[0.5, 1, 1.5, 2, 2.5].filter((v) => v > loY && v < hiY).map((v) => (
+          <g key={v}>
+            <line className="scatter__grid" x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} />
+            <text className="scatter__tick" x={x0 - 10} y={sy(v) + 4} textAnchor="end">
+              {v.toFixed(1)}×
+            </text>
+          </g>
+        ))}
+
+        {/* 기준선 */}
+        <line className="scatter__ref scatter__ref--strong" x1={x0} y1={cy} x2={x1} y2={cy} />
+        <line className="scatter__ref" x1={cx} y1={y0} x2={cx} y2={y1} />
+        <text className="scatter__ref-label" x={x1 - 6} y={cy - 8} textAnchor="end">
+          기여 1.0× 기준
+        </text>
+        <text className="scatter__ref-label" x={cx + 6} y={y1 + 16}>
+          평균 체류 {meanX.toFixed(0)}초
+        </text>
+
+        {/* 사분면 이름 */}
+        <text className="scatter__quad" x={x0 + 14} y={y0 + 22}>
+          짧게 보지만 결정에 기여 · 위로 올릴 것
+        </text>
+        <text className="scatter__quad scatter__quad--fix" x={x1 - 14} y={y1 - 14} textAnchor="end">
+          오래 보지만 안 산다 · 손볼 곳
+        </text>
+
+        {/* 축 */}
+        <line className="scatter__axis" x1={x0} y1={y1} x2={x1} y2={y1} />
+        <text className="scatter__tick" x={x1} y={y1 + 16} textAnchor="end">
+          {maxX.toFixed(0)}초
+        </text>
+        <text className="scatter__axis-name" x={x0} y={height - 8}>
+          가로 · 평균 체류 시간
+        </text>
+        <text className="scatter__axis-name" x={x0 - 44} y={y0 - 22}>
+          세로 · 담기 기여
+        </text>
+
+        {/* 점 */}
+        {labels.map(({ p, px, py, r, tx, ty, anchor, leader }) => {
+          const below = p.y < 1;
+          return (
+            <g
+              key={p.label}
+              className={`scatter__pt${below ? ' is-below' : ''}${p.n < 200 ? ' is-thin' : ''}`}
+            >
+              {leader ? <line className="scatter__leader" x1={px} y1={py} x2={anchor === 'end' ? tx : tx} y2={ty - 4} /> : null}
+              <circle className="scatter__halo" cx={px} cy={py} r={r + 3} />
+              <circle className="scatter__dot" cx={px} cy={py} r={r}>
+                <title>{`${p.label} · 체류 ${p.x.toFixed(1)}초 · 기여 ${p.y.toFixed(1)}× · n=${p.n.toLocaleString('ko-KR')}`}</title>
+              </circle>
+              <text className="scatter__name" x={tx} y={ty} textAnchor={anchor}>
+                {p.label}
+                <tspan className="scatter__lift" dx="6">
+                  {p.y.toFixed(1)}×
+                </tspan>
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <p className="scatter-legend">
+        <span className="scatter-legend__key scatter-legend__key--lift" /> 담기 기여 1.0× 이상
+        <span className="scatter-legend__key scatter-legend__key--fix" /> 1.0× 미만
+        <span className="scatter-legend__size" /> 원 크기 = 표본, 흐린 것은 200 미만
+      </p>
+    </div>
   );
 }
 
@@ -412,5 +538,96 @@ export function Heatmap({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * 할 일 목록
+ * ------------------------------------------------------------------ */
+
+export interface ActionItem {
+  /** 무엇을 해야 하나. 색과 말이 여기서 갈린다 */
+  verb: 'up' | 'fix' | 'keep';
+  /** 대상 이름. 콘텐츠 이름, 상품 이름처럼 짧은 명사 */
+  what: string;
+  /** 왜 그래야 하나. 한 문장, 숫자를 품는다 */
+  why: string;
+  /** 오른쪽에 세우는 근거 숫자 */
+  num: string;
+  /** 그 숫자가 무엇인지 */
+  unit: string;
+  /** 무엇을 어떻게. 위치·형식·개수까지 적은 명령 */
+  how?: string;
+  /** 그 명령을 지지하는 근거. 어느 화면에서 가져왔는지 함께 */
+  basis?: Array<{ from: string; text: string }>;
+  /** 무엇이 얼마나 바뀌면 성공인가 */
+  verify?: string;
+}
+
+const VERB_KO: Record<ActionItem['verb'], string> = {
+  up: '위로 올리세요',
+  fix: '손보세요',
+  keep: '그대로 두세요',
+};
+
+/**
+ * 화면 맨 위에 놓는 할 일 목록.
+ *
+ * 지표를 늘어놓으면 사장님이 "그래서 뭘 하지" 를 스스로 풀어야 한다. 그 계산을
+ * 화면이 대신한다. 한 줄에 **동작 하나 · 대상 하나 · 근거 숫자 하나**만 둔다.
+ *
+ * 동작 이름만으로는 안 된다. "위로 올리세요" 다음에 **무엇을 어떻게**(`how`) 가
+ * 붙고, 그 지시가 어느 화면의 어떤 숫자에서 나왔는지(`basis`)와 다음 주에 무엇으로
+ * 채점할지(`verify`)를 접어 둔다. 근거를 접어 두는 이유는 감추려는 게 아니라
+ * 지시부터 읽게 하려는 것이다.
+ *
+ * 그래프는 이 판단이 어디서 나왔는지 확인하고 싶을 때 펼쳐 보는 부록으로 내린다.
+ */
+export function Actions({ items }: { items: ActionItem[] }) {
+  return (
+    <ol className="acts">
+      {items.map((a) => (
+        <li key={a.what} className={`act act--${a.verb}`}>
+          <div className="act__row">
+            <span className="act__verb">{VERB_KO[a.verb]}</span>
+            <div className="act__body">
+              <p className="act__what">{a.what}</p>
+              <p className="act__why">{a.why}</p>
+            </div>
+            <div className="act__fig">
+              <strong className="act__num">{a.num}</strong>
+              <span className="act__unit">{a.unit}</span>
+            </div>
+          </div>
+
+          {a.how ? (
+            <div className="act__rx">
+              <p className="act__how">
+                <span className="act__rx-tag">이렇게 하세요</span>
+                {a.how}
+              </p>
+              {a.basis && a.basis.length > 0 ? (
+                <details className="act__more">
+                  <summary>왜 이렇게 하라는 건지 · 다른 화면에서 모은 근거 {a.basis.length}개</summary>
+                  <ul className="act__basis">
+                    {a.basis.map((b) => (
+                      <li key={b.from + b.text}>
+                        <span className="act__from">{b.from}</span>
+                        {b.text}
+                      </li>
+                    ))}
+                  </ul>
+                  {a.verify ? (
+                    <p className="act__verify">
+                      <b>다음 주에 이걸로 채점하세요</b> {a.verify}
+                    </p>
+                  ) : null}
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+        </li>
+      ))}
+    </ol>
   );
 }
