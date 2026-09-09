@@ -1152,6 +1152,24 @@ INACTIVE 로 바꾸거나 삭제할 때 한 번 부른다. 벡터·행은 지우
 
 응답·`/health.catalog_sync.last`: `listed · added · replaced · unchanged · deactivated · rejected · ms`. 훅과 동기화가 같이 돌아도 같은 id 는 갈아 끼우기라 충돌이 없다.
 
+### 실시간 행동 유입 — Kafka 구독 (Jira 226)
+
+실서비스에서 `POST /api/events` 를 부르는 주체가 없었다 — 실제 소비자 상태가 쌓이지 않아 모두 cold_start 에 머물렀다.
+추천 서버가 **Kafka `activity-events` 를 Spark 와 다른 consumer group(`recommend-state-v1`)으로 구독**해 같은 `observe` 로 넘긴다.
+Spark 정본을 우회하는 것이 아니라 Spark 가 맡지 않는 시간 단위(초)를 맡는다. 지연은 보통 1초 안.
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| 켜는 조건 | `KAFKA_BOOTSTRAP_SERVERS` 있을 때만 | 없으면 지금과 같다 (로컬 개발 영향 없음). Spark 스트리밍→Delta 경로로 바꿀 때 이 어댑터만 교체 |
+| commit | `enable.auto.commit=false`, **상태 반영 + 세션 로그 기록 뒤** commit | 처리 전에 commit 되면 재기동 때 이벤트를 잃는다 |
+| 재기동 | committed offset 부터 이어 읽음. `auto.offset.reset=latest` 는 group 에 offset 이 없는 첫 기동에만 | "최신부터" 는 첫 기동의 선택일 뿐이다 |
+| 중복 | `event_id` LRU 20만 건 | 계약상 같은 event_id 가 Kafka 에 여러 번 올 수 있다(Processed 에서 제거). 우리는 그 전 단계를 읽는다 |
+| 검사 | `schema_version` 앞자리 · `persona_id·event_name·event_id` 필수 · 상태 이벤트만 | 수집 서버가 계약 검증을 이미 했다. 여기서는 최소만 |
+| 관측 | `/health.kafka_state`: `alive · connected · lag · last_processed_at · processed · duplicates · filtered · invalid · last_error` | 스레드는 장애 경계가 아니다 — consumer 가 죽어도 API 는 산다. 그래서 상태를 드러낸다 |
+| 제한 | **단일 replica.** Kafka key 가 `session_id` 라 같은 persona 가 여러 파티션에 흩어진다 | 소비자를 여러 대 두면 상태가 갈린다. 확장은 별도 `recommend-state-updater` → Redis (운영 단계) |
+
+**배포 전 검증(데이터 팀 요구):** 2,000 TPS 에서 lag 증가율 · API p95/p99 · 재시작·중복·rebalance·Kafka 단절. 로컬에 Kafka 가 없어 가짜 consumer 로 로직만 검증했고, 실측은 EC2 또는 데이터 로컬 Kafka 에서 한다.
+
 ### 세션 상태 영속화 (Jira 224)
 
 `POST /api/events` 로 받은 이벤트 중 **상태를 바꾸는 것**(behavior_weights 에 가중치가 있는 이름·section_dwell·scroll_depth·전환·되돌림)만
