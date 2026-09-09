@@ -71,6 +71,22 @@ class SessionLog:
         self.appended += len(rows)
         return len(rows)
 
+    def append_many(self, items):
+        """[(persona_id, events), ...] 를 파일 한 번 열어 모두 기록. 건당 open/close 를 피한다
+        (Windows 에서 open+close 가 ~0.7ms → 배치 500건이 1,000건/초에 막혔다). 행 형식은 append 와 같다."""
+        rows_by = [(pid, self.filter(evs)) for pid, evs in items]
+        rows_by = [(pid, r) for pid, r in rows_by if r]
+        if not rows_by:
+            return 0
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        at = time.strftime("%Y-%m-%dT%H:%M:%S")
+        with open(self.path, "a", encoding="utf-8") as f:
+            for pid, r in rows_by:
+                f.write(json.dumps({"persona_id": pid, "at": at, "events": r}, ensure_ascii=False) + "\n")
+        n = sum(len(r) for _, r in rows_by)
+        self.appended += n
+        return n
+
     # ── 읽기 ──────────────────────────────────────────────────────────────
     def replay(self, observe):
         """파일을 순서대로 다시 observe 한다. (페르소나 수, 이벤트 수, ms)"""

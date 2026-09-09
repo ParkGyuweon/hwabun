@@ -81,6 +81,7 @@ class StateConsumer(threading.Thread):
         self.engine = engine
         self.bootstrap, self.topic, self.group = bootstrap, topic, group
         self.max_poll, self.poll_timeout = int(max_poll), float(poll_timeout)
+        self._broker_down = False
         self.consumer_factory = consumer_factory or self._default_factory
         self.log = log
         self.dedupe = Dedupe(dedupe_size)
@@ -98,6 +99,7 @@ class StateConsumer(threading.Thread):
         그래서 connected 는 '메시지를 받았거나 파티션이 배정됐다' 로 켜고, 여기서 끈다"""
         self.stats["broker_errors"] = self.stats.get("broker_errors", 0) + 1
         self.stats["connected"] = False
+        self._broker_down = True                # 메시지를 다시 받을 때까지 assignment 만으로 켜지 않는다
         self.stats["last_error"] = str(err)[:200]
 
     def _default_factory(self):
@@ -136,7 +138,9 @@ class StateConsumer(threading.Thread):
                 {"event_name": ev["event_name"], "product_id": ev["product_id"], "properties": ev["properties"]})
         n = 0
         for pid, evs in by_pid.items():
-            n += self.engine.observe(pid, evs)            # persist=True → 세션 로그 JSONL 에도 남는다
+            n += self.engine.observe(pid, evs, persist=False)   # 상태만 반영
+        if by_pid:                                             # 세션 로그 JSONL 은 배치당 파일 한 번만 연다
+            self.engine.session_log.append_many(by_pid.items())
         if n:
             self.stats["processed"] += n
             self.stats["last_processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -168,12 +172,17 @@ class StateConsumer(threading.Thread):
                     msgs = consumer.consume(num_messages=self.max_poll, timeout=self.poll_timeout)
                     if not msgs:
                         try:
-                            if consumer.assignment():          # 파티션이 배정돼 있으면 연결된 것
+                            # 파티션이 배정돼 있으면 연결된 것 — 단, 브로커 오류 뒤에는 assignment 가
+                            # 옛 값으로 남아 있으므로(실측: 브로커 죽은 28초 동안 connected=true) 켜지 않는다
+                            if not self._broker_down and consumer.assignment():
                                 self.stats["connected"] = True
                         except Exception:
                             pass
                         continue
                     self.stats["connected"] = True
+                    if self._broker_down:                      # 복구 — 지난 오류는 지운다
+                        self._broker_down = False
+                        self.stats["last_error"] = None
                     values = []
                     for m in msgs:
                         err = m.error()

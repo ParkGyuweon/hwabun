@@ -35,9 +35,28 @@ def _strip_comments(t):
     return re.sub(r"//[^\n]*", "", t)
 
 
+_CACHE = {}          # path -> (mtime, weights). 파일이 바뀌면 다시 읽는다
+
+
 def load(path=None):
-    """{'event': {...}, 'section': {...}, 'negative': {...}, 'scroll': [(임계, 가중), ...]}"""
+    """{'event': {...}, 'section': {...}, 'negative': {...}, 'scroll': [(임계, 가중), ...]}
+    같은 파일은 mtime 이 같으면 캐시를 돌려준다 — UserVector 가 페르소나마다 새로 파싱하면
+    건당 0.5ms 가 들어 Kafka 소비가 1,000건/초에 막혔다 (Jira 226 실측)."""
     path = path or LOG_TS
+    try:
+        mtime = os.stat(path).st_mtime_ns
+        hit = _CACHE.get(path)
+        if hit is not None and hit[0] == mtime:
+            return hit[1]
+    except OSError:
+        mtime = None
+    w = _load_uncached(path)
+    if mtime is not None:
+        _CACHE[path] = (mtime, w)
+    return w
+
+
+def _load_uncached(path):
     with open(path, encoding="utf-8") as f:
         src = f.read()
 
