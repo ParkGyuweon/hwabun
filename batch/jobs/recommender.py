@@ -426,13 +426,15 @@ class Recommender:
 
     def rank(self, state, persona=None, k=10, evaluation=False,
              review_products=(), view_cap=VIEW_CAP, lam_mmr=LAMBDA_MMR,
-             reserved=RESERVED, flags=False):
+             reserved=RESERVED, flags=False, scores=None):
         """추천 목록 상위 k개. evaluation=True 면 본 상품을 전부 뺀다(leakage 차단)
 
         reserved: 신규 상품 전용 칸 수 (계약 §5). 신규가 없으면 일반 칸으로 돌아간다
         flags:    True 면 (id, score, reserved 여부) 3-튜플을 준다
+        scores:   미리 계산한 score(state, persona). 서버가 배너(§5-1)와 점수 계산을
+                  한 번만 하려고 넘긴다. 안 주면 여기서 계산한다 — 결과는 같다
         """
-        s = self.score(state, persona).copy()
+        s = (self.score(state, persona) if scores is None else np.asarray(scores, float)).copy()
         if self.catalog is not None:        # 이 사이트가 파는 상품만 후보다
             keep = np.zeros(len(s), bool)
             keep[self.catalog] = True

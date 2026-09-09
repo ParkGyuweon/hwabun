@@ -37,6 +37,13 @@ persona_id 규칙 (Jira 214)
 reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 있을 때만 채워진다.
 원천 200개는 신규가 0 이다. **등록 상품**(Jira 216)이 들어오면 그때부터 채워진다.
 
+히어로 + 배너 (Jira 218, §5-1) — 프론트 확정 2026-09-09
+    curl "http://localhost:8300/api/recommend?persona_id=PC00001&size=10&banner_slots=6&reserved=2&seed=review"
+    → items 10 (순수 순위) + hero (items[0] 에 축 문구, banner_type 항상 있음)
+      + banners 6: 칸 1~4 축 순환(기본 concern,segment), 칸 5·6 new_brand(전용). items 와 겹치지 않음
+    reason 은 아이템·배너 모두 key 하나 (attribute → content → cf → new_brand → popular)
+    성분 축은 위치가중 ≥ 0.3 인 성분만. banner_slots=0 이면 예전과 같고 reserved 는 메인 안
+
 상품 등록 (Jira 216) — 실서비스 형태
     POST /api/products  body = 계약 입력 필드 1건 또는 배열
         {"product_id":"SB000001","product_name":"…","brand_name":"SSAFY Beauty",
@@ -72,6 +79,7 @@ from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
 from user_vector import UserVector                             # noqa: E402
 from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
+from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import validate_product_registration as vpr                    # noqa: E402
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
@@ -106,6 +114,7 @@ class Engine:
         self._vocab = vpr.load_vocab()
         self._medians, self._overall = vpr.rating_reference()
         self._append(self.registry.load(), persist=False)
+        self.planner = BannerPlanner(self.enc, self.products, self.index)   # §5-1 hero·banners (Jira 218)
         # 클릭·상세 진입 이벤트가 그대로 싣는 값 (event-properties recommendation_click.algorithm).
         # 모델이 바뀌면 문자열이 바뀌어야 하므로 학습 시각과 트리 수를 넣는다
         m = self.ltr_meta or {}
@@ -169,6 +178,8 @@ class Engine:
             self.enc.products = self.products
         if new_rows or replaced:
             self._assemble()
+        if new_rows and getattr(self, "planner", None) is not None:
+            self.planner.grow([x for x, _ in new_rows])
         if persist:
             for x in records:
                 self.registry.append(x)
@@ -247,18 +258,25 @@ class Engine:
         return out
 
     # ── 추천 ──────────────────────────────────────────────────────────────
-    def recommend(self, persona_id=None, size=10, reserved=RESERVED, seed_from_reviews=False):
+    def recommend(self, persona_id=None, size=10, reserved=RESERVED, seed_from_reviews=False,
+                  banner_slots=0, axes=DEFAULT_AXES):
         """persona_id 가 없거나(익명) 페르소나 표에 없어도(실회원 accountId) 동작한다.
         속성 친화도는 빠지고 행동 상태 + 인기 prior 로 순위를 매긴다 — 요청서 C 안 (Jira 214).
-        상태는 persona_id 가 있으면 그 키로 쌓이므로, 미등록 회원도 행동이 오면 개인화된다."""
+        상태는 persona_id 가 있으면 그 키로 쌓이므로, 미등록 회원도 행동이 오면 개인화된다.
+
+        banner_slots > 0 이면 hero 와 banners[] 를 함께 낸다 (§5-1, Jira 218). 그때 전용 칸
+        `reserved` 는 **배너 칸**(뒤 reserved 개)에 두고 메인 items 는 순수 순위다 — 프론트 확정.
+        banner_slots = 0 이면 예전처럼 reserved 가 메인 안에 든다."""
         persona = self.personas.get(persona_id) if persona_id else None
         if persona_id:
             st, source = self.state_of(persona_id, seed_from_reviews)
         else:
             st, source = UserVector(), "cold_start"
         t0 = time.perf_counter()
-        ranked = self.rec.rank(st, persona=persona, k=size, reserved=reserved, flags=True)
-        ms = (time.perf_counter() - t0) * 1000
+        scores = self.rec.score(st, persona)                      # 한 번만 계산 — 메인·배너가 같이 쓴다
+        reserved_main = 0 if banner_slots > 0 else reserved
+        ranked = self.rec.rank(st, persona=persona, k=size, reserved=reserved_main, flags=True,
+                               scores=scores)
         pos, _ = st.weights()
         rows_seed = [self.index[g] for g in pos if g in self.index] or \
                     [self.index[g] for g in st.converted if g in self.index]
@@ -266,12 +284,32 @@ class Engine:
         is_new = self.rec.new_mask()
         rs = self.reasons(persona, st, rows_seed, picks, is_new)
         items = []
-        for pos, ((g, s, f), r) in enumerate(zip(ranked, rs), 1):
+        for pos_, ((g, s, f), r) in enumerate(zip(ranked, rs), 1):
             p = self.products[self.index[g]]
             items.append({"product_id": g, "product_name": p.get("product_name"),
                           "brand_name": p.get("brand_name"), "score": round(float(s), 6),
-                          "position": pos, "reserved": bool(f), "reason": r,
+                          "position": pos_, "reserved": bool(f), "reason": pick_reason(r),
                           "product_source": p.get("product_source", "seed_catalog")})
+
+        hero, banners = None, None
+        if banner_slots > 0:
+            s_b = np.asarray(scores, float).copy()
+            for g in st.converted:                                 # 전환한 상품은 배너에도 안 나온다
+                i = self.index.get(g)
+                if i is not None:
+                    s_b[i] = -np.inf
+            exclude = {it["product_id"] for it in items} | set(st.converted)
+            banners, traits = self.planner.plan(s_b, rows_seed, persona, tuple(axes),
+                                                banner_slots, reserved, exclude, is_new)
+            b_reasons = self.reasons(persona, st, rows_seed,
+                                     [(b["_row"], b["reserved"]) for b in banners], is_new)
+            for b, r in zip(banners, b_reasons):
+                b["reason"] = pick_reason(r)
+                b["product_source"] = self.products[b.pop("_row")].get("product_source", "seed_catalog")
+            if items:
+                hero = self.planner.hero_for(items[0]["product_id"], traits)
+        ms = (time.perf_counter() - t0) * 1000
+
         n_products = len(st.converted | st.viewed)
         # 유입 추적 식별자 (교차 브랜드 유입 · 추천 CTR). FE 는 recommendation_click ·
         # product_view 에 recommendation_id / list_id / position / algorithm 을 그대로 싣는다.
@@ -281,10 +319,14 @@ class Engine:
                 "algorithm": self.algorithm,
                 "state_source": source, "scorer": self.scorer,
                 "size": size, "reserved": int(reserved),
-                # 전용 칸에 실제로 들어간 수. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이
-                # 카탈로그에 없으면 0 이고 그 칸은 일반 순위로 채워진다 — 설계된 동작
-                "reserved_filled": sum(1 for it in items if it["reserved"]),
+                # 전용 칸에 실제로 들어간 수 (배너 칸이면 배너에서, 아니면 메인에서).
+                # 신규 상품이 카탈로그에 없으면 0 이고 그 칸은 일반 순위 — 설계된 동작
+                "reserved_filled": (sum(1 for b in banners if b["reserved"]) if banners is not None
+                                    else sum(1 for it in items if it["reserved"])),
                 "items": items, "latency_ms": round(ms, 2)}
+        if banners is not None:
+            body.update({"banner_slots": int(banner_slots), "axes": list(axes),
+                         "banner_list_id": "banner_row", "hero": hero, "banners": banners})
         if self.scorer == "linear":
             w1, w2, w3 = schedule_for(len(pos))
             body["weights"] = {"cosine": w1, "attr": w2, "prior": w3}
@@ -332,9 +374,16 @@ def health():
 def recommend(persona_id: Optional[str] = Query(None, description="없으면 익명 cold_start. 페르소나 표에 없는 값(실회원 id)도 받는다"),
               size: int = Query(10, ge=1, le=50),
               reserved: int = Query(RESERVED, ge=0, le=10),
-              seed: Optional[str] = Query(None, description="'review' 면 리뷰 시드를 상태로 쓴다 (시연용)")):
+              seed: Optional[str] = Query(None, description="'review' 면 리뷰 시드를 상태로 쓴다 (시연용)"),
+              banner_slots: int = Query(0, ge=0, le=12, description="배너 칸 수. 0 이면 hero·banners 를 안 내린다 (§5-1)"),
+              axes: str = Query(",".join(DEFAULT_AXES), description="축 배너 순환 순서. concern,ingredient,clean,price_bin,category,segment 중 쉼표 구분")):
     e = get_engine()
-    return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"))
+    ax = tuple(a.strip() for a in axes.split(",") if a.strip()) or DEFAULT_AXES
+    bad = [a for a in ax if a not in AXES]
+    if bad:
+        raise HTTPException(422, {"code": "INVALID_AXES", "bad": bad, "allowed": list(AXES)})
+    return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"),
+                       banner_slots=banner_slots, axes=ax)
 
 
 class ProductRegistration(BaseModel):

@@ -156,7 +156,9 @@ class TestRegistration(unittest.TestCase):
         for it in res:
             self.assertEqual(it["brand_name"], "SSAFY Beauty")
             self.assertEqual(it["product_source"], "brand_registered")
-            self.assertIn("new_brand", it["reason"])
+            # reason 은 key 하나 (Jira 218, 프론트 확정) — attribute 가 있으면 new_brand 보다 앞선다
+            self.assertEqual(len(it["reason"]), 1)
+            self.assertIn(next(iter(it["reason"])), ("attribute", "content", "cf", "new_brand", "popular"))
 
     def test_reserved_zero_ranking_equals_first_k_minus_r(self):
         # MMR 순차성 — 전용 칸을 붙여도 앞 (k-r) 칸은 reserved=0 과 같아야 한다
