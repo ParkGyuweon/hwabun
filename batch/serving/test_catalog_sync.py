@@ -21,6 +21,7 @@ sys.path.insert(0, BD)
 _TMP = tempfile.mkdtemp(prefix="sync222_")
 os.environ["REGISTERED_PRODUCTS_PATH"] = shutil.copy(
     os.path.join(BD, "..", "ingest", "data", "serving", "registered_products.jsonl"), os.path.join(_TMP, "r.jsonl"))
+os.environ.setdefault("SESSION_EVENTS_PATH", os.path.join(tempfile.mkdtemp(prefix="sess_"), "session_events.jsonl"))  # 세션 로그가 레포에 쌓이지 않게
 os.environ["PRESCRIPTIONS_PATH"] = os.path.join(_TMP, "p.jsonl")
 os.environ.pop("SHOP_BACKEND_URL", None)
 
