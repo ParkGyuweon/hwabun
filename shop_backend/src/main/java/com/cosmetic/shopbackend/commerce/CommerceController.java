@@ -87,8 +87,7 @@ public class CommerceController {
         }
 
         Cart cart = cart(actor.accountId());
-        cartItems.insertIfAbsent(UUID.randomUUID().toString(), cart.getId(), request.variantId());
-        cartItems.incrementQuantity(cart.getId(), request.variantId(), request.quantity());
+        cartItems.addQuantity(UUID.randomUUID().toString(), cart.getId(), request.variantId(), request.quantity());
         return ResponseEntity.ok(cartItems.findByCartIdAndVariantId(cart.getId(), request.variantId()).orElseThrow());
     }
 
