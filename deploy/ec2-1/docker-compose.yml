@@ -22,6 +22,20 @@ services:
       - backend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - type: bind
+        source: ${CERTBOT_WEBROOT_PATH:-/opt/hwabun/certbot/www}
+        target: /var/www/certbot
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LETSENCRYPT_PATH:-/etc/letsencrypt}
+        target: /etc/letsencrypt
+        read_only: true
+        bind:
+          create_host_path: false
     mem_limit: 128m
 
   prometheus:
