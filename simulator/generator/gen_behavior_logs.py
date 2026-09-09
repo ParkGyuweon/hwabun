@@ -315,7 +315,7 @@ LIST_LAYOUT = [("promo_row", "product_card"), ("list_controls", None),
 # ── 배너 (Jira 212, DATA E2E 검증용) ────────────────────────────────────
 # 값은 frontend/src/lib/bannerConfig.ts 와 같다 — BANNER_SLOTS 6 · reserved 2.
 # 칸 1~4 는 축 배너(banner_type ∈ BANNER_AXES, banner_value 는 어휘집 원문),
-# 칸 5~6 은 new_brand (banner_value 없음). property 이름은 DATA 계약 그대로
+# 칸 5~6 은 new_brand (banner_value 는 null 로 싣는다). property 이름은 DATA 계약 그대로
 # `banner_slot` 이다 — `slot` 은 스키마·클렌징 양쪽에서 거부된다 (2026-09-08 확정).
 # 추천 API 응답 banners[].banner_slot 도 같은 이름 (recommendation-io-spec §5).
 # 이벤트 이름 2종은 event-schema.json enum 에 아직 없다 — 검증기(check_properties)는
@@ -326,6 +326,8 @@ BANNER_RESERVED = 2
 BANNER_AXES = ("concern", "segment", "price_bin")
 BANNER_ALGO = "banner_axes_v0"
 BANNER_LIST_ID = "banner_row"
+# DATA 계약이 required 로 두되 null 을 허용하는 property — emit 의 None 제거에서 제외
+NULLABLE_REQUIRED_PROPS = frozenset({"banner_value"})
 PRICE_BINS = ((20, "~20"), (35, "20-35"), (50, "35-50"), (80, "50-80"), (10**9, "80+"))
 
 
@@ -337,7 +339,7 @@ def price_bin(price):
 
 
 def banner_value(kind, persona, item):
-    """축별 banner_value — 어휘집 원문. 없으면 None (키를 싣지 않는다)"""
+    """축별 banner_value — 어휘집 원문. new_brand 는 None (키는 남기고 null 로 싣는다)"""
     if kind == "concern":
         return item.get("concern")
     if kind == "segment":
@@ -364,7 +366,10 @@ def make_banners(persona, catalog, pool, popular, rng, force=None, exclude=()):
     fresh = [g for g in reversed(popular) if g not in used][:BANNER_RESERVED]
     out = []
     for slot, g in enumerate(axis_items, 1):
-        kind = str(rng.choice(BANNER_AXES))
+        # 축 칸의 banner_value 는 계약상 string 필수 — 이 상품에 값이 있는 축만 고른다
+        # (concern 이 비어 있는 상품이 있다). price_bin 은 항상 값이 있어 빈 후보가 안 나온다
+        kinds = [k for k in BANNER_AXES if banner_value(k, persona, catalog[g]) is not None]
+        kind = str(rng.choice(kinds))
         out.append({"slot": slot, "type": kind, "product_id": g,
                     "value": banner_value(kind, persona, catalog[g])})
     for k, g in enumerate(fresh, 1):
@@ -438,7 +443,10 @@ class Emitter:
         self.n += 1
         # 선택 property가 없으면 key 자체를 보내지 않는다. ``string``으로 선언된
         # 선택값을 null로 보내는 것은 "미제공"이 아니라 타입 위반이다.
-        properties = {k: v for k, v in props.items() if v is not None}
+        # 예외: 배너 이벤트의 ``banner_value`` 는 DATA 계약(event-schema.json)이
+        # required 로 두고 new_brand 칸은 null 을 요구한다 — 키를 남긴다 (Jira 213)
+        properties = {k: v for k, v in props.items()
+                      if v is not None or k in NULLABLE_REQUIRED_PROPS}
         # These fields are required for every synthetic Event.  Assign rather
         # than setdefault so an event-specific property cannot contradict the
         # run metadata carried by its Emitter.
