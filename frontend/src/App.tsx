@@ -10,7 +10,7 @@ import { setLoggerContext, startPageView, startSession, track } from './lib/logg
 import { setTraitProfile } from './lib/trait';
 import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
 import type { PlacedOrder } from './lib/checkout';
-import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps, tenantIdOf } from './lib/storefront';
+import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import reviewsData from './mocks/reviews.sample.json';
@@ -434,11 +434,7 @@ export default function App() {
 
   useEffect(() => {
     applyStorefront(storefront);
-    setLoggerContext({
-      storefront: storefrontEventProps(storefront),
-      // 봉투 top-level tenant_id. 진열(properties)과 달리 격리 키라 봉투에 실린다
-      tenantId: tenantIdOf(storefront),
-    });
+    setLoggerContext({ storefront: storefrontEventProps(storefront) });
   }, [storefront]);
 
   /**

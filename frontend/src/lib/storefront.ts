@@ -80,47 +80,6 @@ export interface StorefrontPrefs {
   theme: StorefrontTheme;
   /** 쇼핑몰 헤더에 표시되는 브랜드 이름. 비우면 BLOOM 워드마크 */
   brandName: string;
-  /**
-   * 이 쇼핑몰이 **누구 것인가** — 이벤트 봉투의 `tenant_id` (계약 §1.1).
-   *
-   * 표시명(`brandName`)에서 한 번 만든 slug 다. 상품 브랜드(`brand_id`)와 다른 값이고,
-   * 격리·파티션 키는 이것만 쓴다. 표시명을 고칠 때마다 다시 계산하지 않는다 —
-   * 규칙이 바뀌거나 이름이 바뀌면 파티션이 조용히 갈라지기 때문이다. 계정·백엔드가
-   * 생기면 서버가 발급한 값을 여기 넣는다. 형식은 그대로다.
-   */
-  tenantId: string;
-}
-
-/** 계약 `event-schema.json` 이 `tenant_id` 에 직접 거는 정규식 */
-export const TENANT_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
-/** 표시명이 비어 있을 때의 테넌트. 기본 쇼핑몰 이름과 같다 */
-export const DEFAULT_TENANT_ID = 'bloom';
-
-/**
- * 표시명 → `tenant_id` slug. 계약 §1.1.1 의 생성 규칙 그대로다.
- *
- *   NFKD 로 악센트를 떼고 ASCII 로 접는다 → 영숫자 아닌 구간을 하이픈으로 → 앞뒤 하이픈 제거
- *
- *   Estée Lauder → estee-lauder   Lancôme → lancome   Dr. Jart+ → dr-jart
- *
- * 한글처럼 ASCII 로 접히지 않는 이름은 비어서 기본값이 된다. 그런 이름은 서버 발급
- * (순번 부여) 이 생기기 전까지는 한 테넌트로 뭉친다는 뜻이라, 시연용 브랜드는 영문
- * 표시명을 쓴다. 충돌 시 순번을 붙이는 것은 Dimension 이 할 일이고 프론트는 모른다.
- */
-export function slugifyTenant(name: string): string {
-  const slug = name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return TENANT_ID_PATTERN.test(slug) ? slug : DEFAULT_TENANT_ID;
-}
-
-/** 봉투에 실을 값. 저장된 slug 가 형식에 맞으면 그것, 아니면 표시명에서 만든다 */
-export function tenantIdOf(prefs: Pick<StorefrontPrefs, 'tenantId' | 'brandName'>): string {
-  return TENANT_ID_PATTERN.test(prefs.tenantId) ? prefs.tenantId : slugifyTenant(prefs.brandName);
 }
 
 interface Option<K> {
@@ -216,7 +175,7 @@ export const STOREFRONT_THEMES: Array<
 ];
 
 /** 프리셋이 정하는 축. 색과 이름은 뺀다 */
-export type StorefrontStyle = Omit<StorefrontPrefs, 'theme' | 'brandName' | 'tenantId'>;
+export type StorefrontStyle = Omit<StorefrontPrefs, 'theme' | 'brandName'>;
 
 export const STOREFRONT_PRESETS: Array<{
   key: string;
@@ -277,7 +236,6 @@ export const DEFAULT_STOREFRONT: StorefrontPrefs = {
   /** 아무것도 안 골랐을 때는 무채색 — 처음 세포라 모양. 색은 사장님이 진열 설정에서 고른다 */
   theme: 'mono',
   brandName: '',
-  tenantId: DEFAULT_TENANT_ID,
 };
 
 export const STOREFRONT_KEY = 'bloom.storefront.v1';
@@ -309,11 +267,6 @@ export function loadStorefront(): StorefrontPrefs | null {
       header: keyOf(STOREFRONT_HEADERS, p.header, DEFAULT_STOREFRONT.header),
       theme: keyOf(STOREFRONT_THEMES, p.theme, DEFAULT_STOREFRONT.theme),
       brandName: typeof p.brandName === 'string' ? p.brandName : '',
-      // 0.3.0-draft 전에 가입한 설정에는 slug 가 없다. 표시명에서 한 번 만들어 채운다
-      tenantId: tenantIdOf({
-        tenantId: typeof p.tenantId === 'string' ? p.tenantId : '',
-        brandName: typeof p.brandName === 'string' ? p.brandName : '',
-      }),
     };
   } catch {
     return null;
