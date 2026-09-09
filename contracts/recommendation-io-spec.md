@@ -1152,6 +1152,14 @@ INACTIVE 로 바꾸거나 삭제할 때 한 번 부른다. 벡터·행은 지우
 
 응답·`/health.catalog_sync.last`: `listed · added · replaced · unchanged · deactivated · rejected · ms`. 훅과 동기화가 같이 돌아도 같은 id 는 갈아 끼우기라 충돌이 없다.
 
+### 세션 상태 영속화 (Jira 224)
+
+`POST /api/events` 로 받은 이벤트 중 **상태를 바꾸는 것**(behavior_weights 에 가중치가 있는 이름·section_dwell·scroll_depth·전환·되돌림)만
+`session_events.jsonl` 에 append 하고, 기동 때 순서대로 다시 `observe` 한다 — 스냅샷이 아니라 **이벤트 로그 + 재생**이라
+UserVector 규칙이 바뀌어도 재생하면 새 규칙으로 상태가 만들어진다. 재시작 뒤 `state_source=events` 가 그대로 남는다.
+`/health.sessions` 에 재생 페르소나·이벤트 수·ms. 파일이 자라면 `POST /api/sessions/compact?keep_last=500` 으로 페르소나별 마지막 N건만 남긴다.
+**워커 1개 전제는 그대로**다 — 프로세스가 여럿이면 서로의 append 를 못 본다. 확장은 Redis Streams 로 같은 모양(append → replay)으로 옮긴다.
+
 ### 배포 (Jira 219)
 
 `deploy/recommend.Dockerfile` + `deploy/ec2-1/docker-compose.yml` 의 `recommend` 서비스 (8300, 내부 전용, `/data` 볼륨에 등록 상품).
