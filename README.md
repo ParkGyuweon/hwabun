@@ -234,6 +234,7 @@ S15P21A306/
 │       ├── eval_review_replay.py       실제 리뷰 이력 순차 재생
 │       ├── persona_split.py            train/valid/test 분할 (split-v1)
 │       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
+│       ├── eval_registered_brand_share.py  등록 상품이 같은 브랜드를 얼마나 끌어오나 — 크기 맞춘 원천 브랜드와 대조 (Jira 217)
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 12개 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
 │   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
