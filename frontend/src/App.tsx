@@ -13,7 +13,7 @@ import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
-import reviewsData from './mocks/reviews.sample.json';
+import { reviews as reviewsData } from './mocks/reviews';
 import personasData from './mocks/personas.sample.json';
 import type { PersonaProfile } from './types/persona';
 import type { Review } from './types/review';

@@ -1,4 +1,5 @@
 import StarRating from '../common/StarRating';
+import { badgeKo } from '../../lib/localize';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
 import { formatCount, formatPrice } from '../../lib/format';
 import type { Product } from '../../types/product';
@@ -6,13 +7,7 @@ import type { LogContentKind } from '../../types/log';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
 
-/** 원본 플래그를 그대로 옮긴 배지. 할인율은 데이터가 없어 만들지 않는다 */
-const BADGE_LABEL: Record<string, string> = {
-  new: '신제품',
-  limited: '한정판',
-  exclusive: 'BLOOM 단독',
-  online_only: '온라인 전용',
-};
+// 배지 문구는 사이트 라벨(contracts/localization/labels-ko.json)을 쓴다. 할인율 배지는 데이터가 없어 만들지 않는다
 
 interface ProductCardProps {
   product: Product;
@@ -63,7 +58,7 @@ export default function ProductCard({
             <span className="card__badges">
               {badges.map((badge) => (
                 <span key={badge} className={`card__badge card__badge--${badge}`}>
-                  {BADGE_LABEL[badge] ?? badge}
+                  {badgeKo(badge)}
                 </span>
               ))}
             </span>

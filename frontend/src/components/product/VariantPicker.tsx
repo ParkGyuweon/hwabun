@@ -1,4 +1,5 @@
 import { IMAGE_WIDTH_SWATCH, sizedImage } from '../../lib/image';
+import { variantLabelKo } from '../../lib/localize';
 import { track } from '../../lib/logger';
 import type { ProductVariant } from '../../types/product';
 
@@ -39,8 +40,8 @@ export default function VariantPicker({
   return (
     <div className="variants" data-log-content="variant_option">
       <p className="variants__label">
-        <span>Color</span>
-        <strong>{selected.label}</strong>
+        <span>옵션</span>
+        <strong>{variantLabelKo(selected.label)}</strong>
       </p>
 
       <ul className="variants__list">
@@ -50,8 +51,8 @@ export default function VariantPicker({
               type="button"
               className={variant.sku_id === selected.sku_id ? 'is-active' : ''}
               aria-pressed={variant.sku_id === selected.sku_id}
-              aria-label={variant.label}
-              title={variant.label}
+              aria-label={variantLabelKo(variant.label)}
+              title={variantLabelKo(variant.label)}
               data-log-action="variant_select"
               onClick={() => select(variant)}
             >

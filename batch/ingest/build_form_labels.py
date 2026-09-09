@@ -173,7 +173,34 @@ GROUPS = [
 ]
 
 
+SITE_LABELS = os.path.join(ROOT, "contracts", "localization", "labels-ko.json")
+
+# 사이트 라벨이 우선한다 (결정 2026-09-10, 프론트). 같은 영문 키에 등록 폼과 쇼핑몰이
+# 다른 한국어를 붙이면 사장님이 폼에서 고른 태그 이름과 고객 화면의 이름이 어긋난다.
+# 위 KO 는 사이트 라벨에 없는 키(가격대·성분 일부·세그먼트)만 실제로 쓰인다.
+SITE_GROUPS = ("highlights", "skincare_concerns", "category", "suitable_skin_types")
+
+
+def overlay_site_labels(ko):
+    if not os.path.exists(SITE_LABELS):
+        return 0
+    site = json.load(open(SITE_LABELS, encoding="utf-8"))
+    merged = {}
+    for g in SITE_GROUPS:
+        merged.update(site.get(g, {}))
+    changed = 0
+    for table in ko.values():
+        for key in list(table):
+            if key in merged and table[key] != merged[key]:
+                table[key] = merged[key]
+                changed += 1
+    return changed
+
+
 def main():
+    changed = overlay_site_labels(KO)
+    if changed:
+        print(f"사이트 라벨로 덮어쓴 항목 {changed}개 (contracts/localization/labels-ko.json)")
     vocab = json.load(open(VOCAB, encoding="utf-8"))
     blocks = {b["name"]: b for b in vocab["blocks"]}
 

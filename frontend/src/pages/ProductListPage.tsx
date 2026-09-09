@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
@@ -12,8 +12,8 @@ import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
-import { labelKo } from '../lib/formLabels';
 import type { FilterKind } from '../types/log';
+import { categoryKo, concernKo } from '../lib/localize';
 import AdBanner from '../components/banner/AdBanner';
 import type { BannerAxis } from '../lib/bannerCreative';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
@@ -28,7 +28,25 @@ const PROMO_SIZE = MAIN_SLOTS;
  * 한 번에 그리는 카드 수. 200개를 한 번에 그리면 노출 로그가 의미를 잃는다.
  * 넓은 화면의 열 수(5)의 배수로 둬서 마지막 줄이 꽉 차게 한다.
  */
-const PAGE_SIZE = 25;
+/**
+ * 페이지 번호 줄. 7개까지는 전부, 그 이상은 첫·끝과 현재 주변만 숫자로 두고 사이는 줄임표.
+ * null 이 줄임표 자리다.
+ */
+function pagerItems(current: number, count: number): Array<number | null> {
+  if (count <= 7) return Array.from({ length: count }, (_, i) => i + 1);
+  const keep = new Set([1, count, current - 1, current, current + 1]);
+  if (current <= 3) [2, 3, 4].forEach((n) => keep.add(n));
+  if (current >= count - 2) [count - 3, count - 2, count - 1].forEach((n) => keep.add(n));
+  const out: Array<number | null> = [];
+  for (let n = 1; n <= count; n++) {
+    if (keep.has(n)) out.push(n);
+    else if (out[out.length - 1] !== null) out.push(null);
+  }
+  return out;
+}
+
+/** 한 페이지 상품 수. 열 수에 맞춰 마지막 줄을 채우도록 아래에서 다시 자른다 */
+const PAGE_SIZE = 24;
 
 type SortKey = 'popular' | 'rating' | 'reviews' | 'price_asc' | 'price_desc';
 
@@ -94,7 +112,7 @@ export default function ProductListPage({
   const [sort, setSort] = useState<SortKey>('popular');
   const [concern, setConcern] = useState('all');
   const [price, setPrice] = useState<PriceKey>('all');
-  const [shown, setShown] = useState(PAGE_SIZE);
+  const [page, setPage] = useState(1);
   /**
    * 그리드 노드와 실제 열 수.
    * 열 수를 auto-fill 로 잡아서 화면 폭마다 달라진다. 그리는 개수를 고정해 두면
@@ -175,7 +193,9 @@ export default function ProductListPage({
   );
 
   /**
-   * 광고 배너 칸.
+   * 광고 배너 칸. 화면에는 **히어로 한 장만** 그린다 (기획 검토 2026-09-10).
+   * 추천 응답의 banners[] 는 받아 두되 지금은 쓰지 않는다. 신규 브랜드 전용 칸(reserved 2)
+   * 이 화면에서 사라지는 셈이라 AI 파트와 다시 맞춰야 한다.
    *
    * 무엇을 올릴지는 추천 응답(`recommendation.hero` · `recommendation.banners`)이 정하고,
    * 어떻게 보일지는 `AdBanner` 가 정한다. 뽑는 규칙과 그림을 한 파일에 두면 API 가 붙을 때
@@ -248,14 +268,25 @@ export default function ProductListPage({
   }, [products, category, concern, price, sort]);
 
   /**
-   * 마지막 줄을 채우고 끊는다.
-   * 다 보여줄 수 있으면 자르지 않는다. 남는 게 열 수보다 적어도 최소 한 줄은 그린다.
+   * 한 페이지는 줄을 꽉 채운다. 열 수가 3이면 24, 5면 20. 남는 게 열 수보다 적어도 한 줄은 그린다.
+   * 더 보기 대신 양옆으로 넘기는 페이지다. 끝이 어디인지 보여야 다 봤다는 느낌이 든다.
    */
-  const visibleCount =
-    shown >= filtered.length
-      ? filtered.length
-      : Math.min(filtered.length, Math.max(columns, Math.floor(shown / columns) * columns));
-  const visible = filtered.slice(0, visibleCount);
+  const perPage = Math.max(columns, Math.floor(PAGE_SIZE / columns) * columns);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(page, pageCount);
+  /** 이 페이지의 첫 상품이 전체 목록에서 몇 번째인가. 노출·클릭 position 에 더한다 */
+  const pageOffset = (safePage - 1) * perPage;
+  const visible = filtered.slice(pageOffset, pageOffset + perPage);
+  const catalogRef = useRef<HTMLElement>(null);
+
+  const goPage = (next: number) => {
+    const clamped = Math.min(Math.max(1, next), pageCount);
+    if (clamped === safePage) return;
+    setPage(clamped);
+    // 페이지를 넘기면 목록 머리로 올린다. 배너까지 되감지 않는다.
+    // 부드럽게 말고 바로 간다. 페이지 넘김은 이동이지 애니메이션이 아니고, 어디서 멈출지 예측 가능해야 한다
+    catalogRef.current?.scrollIntoView({ block: 'start' });
+  };
 
   /**
    * 목록 조건이 바뀌면 새 화면으로 본다.
@@ -303,16 +334,9 @@ export default function ProductListPage({
     algorithm: bannerAlgorithm,
     recommendationId: promoRecommendationId,
   });
-  const bannerRef = useImpression({
-    pageViewKey: `banner:${persona?.persona_id ?? 'anonymous'}:${trait.trait_source}`,
-    eventName: 'recommendation_impression',
-    listId: 'banner_row',
-    algorithm: bannerAlgorithm,
-    recommendationId: promoRecommendationId,
-  });
 
   /** 배너·히어로 클릭. 추천 클릭 + 상품 클릭. entry_source 는 계약 enum 안의 promo_pick 을 쓴다 */
-  const selectFromBanner = (listId: 'hero_banner' | 'banner_row') => (productId: string) => {
+  const selectFromBanner = (listId: 'hero_banner') => (productId: string) => {
     const banner =
       listId === 'hero_banner'
         ? recommendation.hero && recommendation.hero.product_id === productId
@@ -383,7 +407,8 @@ export default function ProductListPage({
   /** 카드 위 Quick Look 버튼. 어느 목록의 몇 번째에서 열었는지 함께 남긴다 */
   const quickLookFrom = (listId: string) => (productId: string) => {
     const source = listId === 'promo_pick' ? promo : visible;
-    const position = source.findIndex((p) => p.product_id === productId);
+    const position =
+      source.findIndex((p) => p.product_id === productId) + (listId === 'promo_pick' ? 0 : pageOffset);
     track('quick_look', {
       product_id: productId,
       entry_source: listId,
@@ -400,9 +425,9 @@ export default function ProductListPage({
   };
 
   const selectFrom = (listId: string) => (productId: string) => {
-    const position = (listId === 'promo_pick' ? promo : visible).findIndex(
-      (p) => p.product_id === productId,
-    );
+    const position =
+      (listId === 'promo_pick' ? promo : visible).findIndex((p) => p.product_id === productId) +
+      (listId === 'promo_pick' ? 0 : pageOffset);
 
     // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
     if (listId === 'promo_pick' && promoRecommendationId) {
@@ -433,7 +458,7 @@ export default function ProductListPage({
   /** 무엇으로 좁혔는지가 취향을 말해준다. 필터 종류를 함께 남긴다 */
   const applyFilter = (kind: FilterKind, value: string, reset = true) => {
     track('filter_change', { filter_kind: kind, filter_value: value });
-    if (reset) setShown(PAGE_SIZE);
+    if (reset) setPage(1);
   };
 
   return (
@@ -457,23 +482,6 @@ export default function ProductListPage({
               onSelect={selectFromBanner('hero_banner')}
             />
           </div>
-          {bannerSlots.length > 1 ? (
-            <ul className="ads__row" ref={bannerRef as React.Ref<HTMLUListElement>}>
-              {bannerSlots.slice(1).map((b, i) => (
-                <li key={b.product.product_id}>
-                  <AdBanner
-                    product={b.product}
-                    axis={b.banner_type}
-                    value={b.banner_value}
-                    shape="card"
-                    skinTone={persona?.skin_tone}
-                    slot={i + 2}
-                    onSelect={selectFromBanner('banner_row')}
-                  />
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </section>
       ) : null}
 
@@ -500,7 +508,7 @@ export default function ProductListPage({
         </ul>
       </section>
 
-      <section className="list__catalog" data-log-section="product_grid">
+      <section className="list__catalog" data-log-section="product_grid" ref={catalogRef}>
         <nav className="list__tabs" aria-label="카테고리">
           <button
             type="button"
@@ -522,7 +530,7 @@ export default function ProductListPage({
                 applyFilter('category', name);
               }}
             >
-              {name} <span>{count}</span>
+              {categoryKo(name)} <span>{count}</span>
             </button>
           ))}
         </nav>
@@ -541,7 +549,7 @@ export default function ProductListPage({
                 <option value="all">전체</option>
                 {concerns.map(([name, count]) => (
                   <option key={name} value={name}>
-                    {labelKo(name)} ({count})
+                    {concernKo(name)} ({count})
                   </option>
                 ))}
               </select>
@@ -575,7 +583,7 @@ export default function ProductListPage({
               onChange={(event) => {
                 const next = event.target.value as SortKey;
                 setSort(next);
-                setShown(PAGE_SIZE);
+                setPage(1);
                 track('sort_change', { sort_key: next });
               }}
             >
@@ -597,7 +605,7 @@ export default function ProductListPage({
               <ProductCard
                 key={product.product_id}
                 product={product}
-                position={index + 1}
+                position={pageOffset + index + 1}
                 onSelect={selectFrom('list_grid')}
                 onQuickLook={quickLookFrom('list_grid')}
               />
@@ -605,14 +613,47 @@ export default function ProductListPage({
           </ul>
         )}
 
-        {visibleCount < filtered.length ? (
-          <button
-            type="button"
-            className="list__more"
-            onClick={() => setShown(visibleCount + PAGE_SIZE)}
-          >
-            더 보기 ({filtered.length - visibleCount}개 남음)
-          </button>
+        {pageCount > 1 ? (
+          <nav className="list__pager" aria-label="상품 목록 페이지">
+            <button
+              type="button"
+              className="list__pager-arrow"
+              onClick={() => goPage(safePage - 1)}
+              disabled={safePage === 1}
+              aria-label="이전 페이지"
+            >
+              ‹
+            </button>
+            <ol className="list__pager-pages">
+              {pagerItems(safePage, pageCount).map((item, i) =>
+                item === null ? (
+                  <li key={`gap-${i}`} className="list__pager-gap" aria-hidden="true">
+                    …
+                  </li>
+                ) : (
+                  <li key={item}>
+                    <button
+                      type="button"
+                      className={item === safePage ? 'is-active' : ''}
+                      aria-current={item === safePage ? 'page' : undefined}
+                      onClick={() => goPage(item)}
+                    >
+                      {item}
+                    </button>
+                  </li>
+                ),
+              )}
+            </ol>
+            <button
+              type="button"
+              className="list__pager-arrow"
+              onClick={() => goPage(safePage + 1)}
+              disabled={safePage === pageCount}
+              aria-label="다음 페이지"
+            >
+              ›
+            </button>
+          </nav>
         ) : null}
       </section>
 
