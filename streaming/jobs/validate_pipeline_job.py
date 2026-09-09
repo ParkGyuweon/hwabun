@@ -21,6 +21,9 @@ DEFAULT_BAD_PATH = "data/processed/bad_events"
 DEFAULT_DUPLICATE_PATH = "data/processed/duplicate_events"
 DEFAULT_SESSIONIZED_PATH = "data/processed/sessionized_events"
 DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
+DEFAULT_PURCHASE_FACT_PATH = "data/processed/purchase_fact"
+DEFAULT_PURCHASE_REASON_FACT_PATH = "data/processed/purchase_reason_fact"
+DEFAULT_REVIEW_EVENT_FACT_PATH = "data/processed/review_event_fact"
 DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
 DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
 DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
@@ -44,6 +47,9 @@ class ValidatePipelineConfig:
     duplicate_path: str = DEFAULT_DUPLICATE_PATH
     sessionized_path: str = DEFAULT_SESSIONIZED_PATH
     product_fact_path: str = DEFAULT_PRODUCT_FACT_PATH
+    purchase_fact_path: str = DEFAULT_PURCHASE_FACT_PATH
+    purchase_reason_fact_path: str = DEFAULT_PURCHASE_REASON_FACT_PATH
+    review_event_fact_path: str = DEFAULT_REVIEW_EVENT_FACT_PATH
     section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
     content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
@@ -68,6 +74,9 @@ class ValidatePipelineConfig:
             "duplicate_path": self.duplicate_path,
             "sessionized_path": self.sessionized_path,
             "product_fact_path": self.product_fact_path,
+            "purchase_fact_path": self.purchase_fact_path,
+            "purchase_reason_fact_path": self.purchase_reason_fact_path,
+            "review_event_fact_path": self.review_event_fact_path,
             "section_dwell_path": self.section_dwell_path,
             "content_interest_path": self.content_interest_path,
             "dim_product_path": self.dim_product_path,
@@ -117,6 +126,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--product-fact-path",
         default=_env("PRODUCT_EVENT_FACT_PATH", DEFAULT_PRODUCT_FACT_PATH),
+    )
+    parser.add_argument(
+        "--purchase-fact-path",
+        default=_env("PURCHASE_FACT_PATH", DEFAULT_PURCHASE_FACT_PATH),
+    )
+    parser.add_argument(
+        "--purchase-reason-fact-path",
+        default=_env("PURCHASE_REASON_FACT_PATH", DEFAULT_PURCHASE_REASON_FACT_PATH),
+    )
+    parser.add_argument(
+        "--review-event-fact-path",
+        default=_env("REVIEW_EVENT_FACT_PATH", DEFAULT_REVIEW_EVENT_FACT_PATH),
     )
     parser.add_argument(
         "--section-dwell-path",
@@ -180,6 +201,9 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         duplicate_path=args.duplicate_path,
         sessionized_path=args.sessionized_path,
         product_fact_path=args.product_fact_path,
+        purchase_fact_path=args.purchase_fact_path,
+        purchase_reason_fact_path=args.purchase_reason_fact_path,
+        review_event_fact_path=args.review_event_fact_path,
         section_dwell_path=args.section_dwell_path,
         content_interest_path=args.content_interest_path,
         dim_product_path=args.dim_product_path,
@@ -337,6 +361,9 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     duplicates = frames["duplicates"]
     sessionized = frames["sessionized"]
     product_fact = frames["product_fact"]
+    purchase_fact = frames["purchase_fact"]
+    purchase_reason_fact = frames["purchase_reason_fact"]
+    review_event_fact = frames["review_event_fact"]
     section_dwell = frames["section_dwell"]
     content_interest = frames["content_interest"]
     dim_product = frames["dim_product"]
@@ -357,6 +384,9 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "duplicates": duplicates.count(),
         "sessionized": sessionized.count(),
         "product_fact": product_fact.count(),
+        "purchase_fact": purchase_fact.count(),
+        "purchase_reason_fact": purchase_reason_fact.count(),
+        "review_event_fact": review_event_fact.count(),
         "section_dwell": section_dwell.count(),
         "content_interest": content_interest.count(),
         "dim_product": dim_product.count(),
@@ -578,6 +608,142 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "product_event_fact grain=event_id+item_index+product_id",
         )
     )
+    checks.append(
+        _check(
+            "purchase_fact_grain_is_unique",
+            _duplicate_count(purchase_fact, ["order_id", "product_id"]) == 0,
+            "purchase_fact grain=order_id+product_id",
+        )
+    )
+    invalid_purchase_rows = purchase_fact.where(
+        F.col("order_id").isNull()
+        | (F.length(F.trim(F.col("order_id"))) == 0)
+        | F.col("product_id").isNull()
+        | (F.length(F.trim(F.col("product_id"))) == 0)
+        | F.col("quantity").isNull()
+        | (F.col("quantity") <= 0)
+        | F.col("unit_price").isNull()
+        | (F.col("unit_price") < 0)
+        | F.col("item_revenue").isNull()
+        | (F.col("item_revenue") != F.col("quantity") * F.col("unit_price"))
+    ).count()
+    checks.append(
+        _check(
+            "purchase_fact_required_fields_are_valid",
+            invalid_purchase_rows == 0,
+            f"invalid_rows={invalid_purchase_rows}; revenue is behavioral only",
+        )
+    )
+    checks.append(
+        _check(
+            "purchase_fact_references_purchase_events",
+            purchase_fact.select("event_id")
+            .distinct()
+            .join(
+                cleaned.where(F.col("event_name") == "purchase")
+                .select("event_id")
+                .distinct(),
+                ["event_id"],
+                "left_anti",
+            )
+            .count()
+            == 0,
+            "purchase facts must originate from cleaned purchase events",
+        )
+    )
+    checks.append(
+        _check(
+            "purchase_reason_fact_grain_is_unique",
+            _duplicate_count(purchase_reason_fact, ["order_id", "reason"]) == 0,
+            "purchase_reason_fact grain=order_id+reason with NULL-safe skipped row",
+        )
+    )
+    invalid_reason_rows = purchase_reason_fact.where(
+        F.col("order_id").isNull()
+        | (F.length(F.trim(F.col("order_id"))) == 0)
+        | F.col("skipped").isNull()
+        | F.col("is_primary").isNull()
+        | (F.col("reason").isNull() & ~F.col("skipped"))
+        | (F.col("reason").isNotNull() & F.col("skipped"))
+        | (F.col("reason").isNotNull() & (F.col("reason_rank") < 1))
+    ).count()
+    checks.append(
+        _check(
+            "purchase_reason_fact_fields_are_consistent",
+            invalid_reason_rows == 0,
+            f"invalid_rows={invalid_reason_rows}; skipped surveys keep one NULL reason",
+        )
+    )
+    checks.append(
+        _check(
+            "purchase_reason_fact_references_reason_events",
+            purchase_reason_fact.select("event_id")
+            .distinct()
+            .join(
+                cleaned.where(F.col("event_name") == "purchase_reason_select")
+                .select("event_id")
+                .distinct(),
+                ["event_id"],
+                "left_anti",
+            )
+            .count()
+            == 0,
+            "purchase reasons must originate from cleaned purchase_reason_select events",
+        )
+    )
+    checks.append(
+        _check(
+            "review_event_fact_grain_is_unique",
+            _duplicate_count(review_event_fact, ["event_id", "product_id"]) == 0,
+            "review_event_fact grain=event_id+product_id",
+        )
+    )
+    invalid_review_rows = review_event_fact.where(
+        ~F.col("event_name").isin(
+            "section_view", "section_dwell", "review_expand", "review_filter_apply"
+        )
+        | F.col("product_id").isNull()
+        | (F.length(F.trim(F.col("product_id"))) == 0)
+        | ((F.col("event_name") == "review_expand") & ~F.col("target").isin("review_text", "jump_to_reviews"))
+    ).count()
+    checks.append(
+        _check(
+            "review_event_fact_scope_is_valid",
+            invalid_review_rows == 0,
+            f"invalid_rows={invalid_review_rows}; ingredient expands are excluded",
+        )
+    )
+    checks.append(
+        _check(
+            "review_event_fact_references_cleaned",
+            review_event_fact.select("event_id")
+            .distinct()
+            .join(cleaned.select("event_id").distinct(), ["event_id"], "left_anti")
+            .count()
+            == 0,
+            "review facts must originate from cleaned events",
+        )
+    )
+    recommendation_rows = product_fact.where(
+        F.col("event_name").isin("recommendation_impression", "recommendation_click")
+    )
+    invalid_recommendation_rows = recommendation_rows.where(
+        F.col("recommendation_id").isNull()
+        | (F.length(F.trim(F.col("recommendation_id"))) == 0)
+        | F.col("list_id").isNull()
+        | (F.length(F.trim(F.col("list_id"))) == 0)
+        | F.col("algorithm").isNull()
+        | (F.length(F.trim(F.col("algorithm"))) == 0)
+        | F.col("position").isNull()
+        | (F.col("position") < 1)
+    ).count()
+    checks.append(
+        _check(
+            "recommendation_fact_fields_are_valid",
+            invalid_recommendation_rows == 0,
+            f"invalid_rows={invalid_recommendation_rows}; product_event_fact is recommendation truth",
+        )
+    )
     attribution = _attribution_quality(product_fact, dim_product)
     checks.extend(
         [
@@ -605,6 +771,30 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             ),
         ]
     )
+    for fact_name, fact_frame in (
+        ("purchase_fact", purchase_fact),
+        ("review_event_fact", review_event_fact),
+    ):
+        fact_attribution = _attribution_quality(fact_frame, dim_product)
+        checks.extend(
+            [
+                _check(
+                    f"{fact_name}_dimension_join_preserves_row_count",
+                    fact_attribution["fact_rows"] == fact_attribution["join_rows"],
+                    f"before={fact_attribution['fact_rows']} after={fact_attribution['join_rows']}",
+                ),
+                _check(
+                    f"{fact_name}_brand_snapshot_matches_dimension",
+                    fact_attribution["brand_mismatch_rows"] == 0,
+                    f"mismatched_rows={fact_attribution['brand_mismatch_rows']}",
+                ),
+                _check(
+                    f"{fact_name}_unmatched_product_does_not_infer_brand",
+                    fact_attribution["unmatched_with_brand_rows"] == 0,
+                    f"violations={fact_attribution['unmatched_with_brand_rows']}",
+                ),
+            ]
+        )
     null_product_with_brand = sum(
         frame.where(F.col("product_id").isNull() & F.col("brand_id").isNotNull()).count()
         for frame in (sessionized, section_dwell, content_interest)
@@ -909,6 +1099,9 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "duplicates": config.duplicate_path,
         "sessionized": config.sessionized_path,
         "product_fact": config.product_fact_path,
+        "purchase_fact": config.purchase_fact_path,
+        "purchase_reason_fact": config.purchase_reason_fact_path,
+        "review_event_fact": config.review_event_fact_path,
         "section_dwell": config.section_dwell_path,
         "content_interest": config.content_interest_path,
         "dim_product": config.dim_product_path,
