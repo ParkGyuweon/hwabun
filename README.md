@@ -1,63 +1,40 @@
 # S15P21A306
 
-**HWABUN** — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(**BLOOM**)과
-인사이트 대시보드입니다. 행동 로그를 모아 브랜드에게 지표로 돌려주고,
-그 위에서 상품 추천을 계산합니다.
+HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)과 인사이트 대시보드.
+
+기준일 2026-09-09
 
 ## 1. 시스템 아키텍처
 
-가상 사용자가 쇼핑몰을 쓰고, 그 행동 로그가 수집·처리되어 브랜드 대시보드로
-나오는 한 줄기 파이프라인입니다. 추천은 그 옆에서 배치로 계산됩니다.
-
 ```
-[ 행동 생성 ]                     [ 서비스 ]                  [ 수집 ]
+[ 사용자 ]                          [ 서비스 · frontend/ (React, Vite 5173) ]
+ 실제 소비자                          index.html      쇼핑몰 BLOOM — 목록·상세·장바구니·주문, 추천 카드·히어로·배너 행
+ simulator/generator  PC 9,900명  ──▶  dashboard.html  브랜드 대시보드 — 개요·행동·상세 콘텐츠·고객군·성분·리뷰·피드백·상품 등록 (9화면)
+ simulator/agents     PA 100명        platform.html   HWABUN 플랫폼 운영
+ (Playwright + LLM)                   lib/logger.ts   이벤트 36종 조립·버퍼·재시도 (429/502/503 백오프)
+                                          │                         │
+              ┌───────────────────────────┘                         └──────────────────────┐
+              ▼                                                                             ▼
+[ 쇼핑몰 백엔드 · shop_backend/ (Spring, 8090, MySQL) ]          [ 수집 · backend/ (Spring, 8080) ]
+ 로그인(JWT)·브랜드·상품·주문·결제·리뷰·피드백·정산·판매자 대시보드     POST /api/events → 검증 → Kafka activity-events
+ 상품 등록 계약(어휘 검증·unmapped 저장) 구현, dev 머지              key=session_id · 파티션 3 · 백프레셔 429/503
+              │  (예정) /api/recommend 프록시 · 승인 시 POST /api/products            │
+              ▼                                                                       ▼
+[ 추천 · batch/serving/ (FastAPI, 8300, 내부 전용) ]              [ 처리 · streaming/ (Spark 3.5.6) ]
+ GET  /api/recommend    items 10 + hero + banners 6 (전용 칸 5·6 = 신규 브랜드)   Q1 raw_sink → raw_events (Parquet)
+ POST /api/products     등록 즉시 카탈로그 편입 (SSAFY Beauty 8개 편입됨)         Q2 clean_events (스키마 검증·중복 제거)
+ DELETE /api/products   판매 중단                                                 Q3 derive_facts → 상품·배너 Fact
+ POST /api/events       세션 상태 갱신 (Redis 자리, 지금은 메모리)                 Q4 build_marts → content/banner/segment daily Mart
+ POST /api/prescription 대시보드 처방 문장 (LLM gpt-4.1-mini, 자동 거부 포함)      Q5 validate → 품질 리포트
+ POST /api/catalog/sync 쇼핑몰 백엔드 ACTIVE 상품 동기화 (승인 훅 없어도 카탈로그 일치)
+        ▲                                                                              │
+        │ 모델·산출물 (오프라인 배치 batch/jobs/)                                        ▼
+ Sephora 리뷰 844,865건 · 상품 200개                                       [ 소비 ]  브랜드 대시보드 (지금은 mocks/ 표본,
+   → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              Mart 연결은 데이터·백엔드 협의 중)
+   → CF 동시발생 · LTR 278 트리 → batch/ingest/data/serving/
 
- simulator/generator             frontend (React)           backend (Spring Boot)
- PC 9,900명 · 합성 로그   ────▶   상품 목록·상세·장바구니  ────▶  POST /api/events
-                                 lib/logger.ts                  Collector
- simulator/agents        ────▶   이벤트 조립·버퍼링·재시도        백프레셔 429/503
- PA 100명 · Playwright                                              │
- + LLM (실제 브라우저 조작)                                          ▼
-                                                        Kafka  activity-events
-                                                         key = session_id
-                                                                    │
-                                                                    ▼
-[ 처리 ]  streaming/  Spark Structured Streaming
-   Q1 raw_sink       Kafka → raw_events (Parquet)
-   Q2 clean_events   검증·중복 제거 → cleaned_events
-   Q3 derive_facts   Fact 파생
-   Q4 build_marts    Mart 집계
-   Q5 validate       품질 검증 리포트
-        │
-        ▼
-[ 소비 ]  frontend/src/dashboard — B2B 대시보드 (별도 엔트리)
-
-
-[ 추천 ]  batch/ — 위 파이프라인과 분리된 오프라인 배치
-   Sephora 리뷰 844,865건
-     → 상품 벡터 148차원 · 페르소나 9,900명 · 속성 친화도 4,000행
-     → train_ltr.py    학습 결합 모델 (트리 278개)
-     → recommender.py  점수 + MMR
-     → batch/ingest/data/serving/  서빙용 산출물
-     → batch/serving/recommend_server.py   GET /api/recommend (FastAPI, p95 15ms)
-          ┈┈▶ POST /api/products 로 등록 상품 즉시 편입 (Jira 216) — 시연 브랜드 SSAFY Beauty 8개 편입 완료, reserved 칸에 나온다
-          ┈┈▶ (미연결) 백엔드가 이 서버를 프록시하는 단계가 아직 없어 화면 노출에 반영되지 않습니다
-          ┈┈▶ 09-09 로컬 확인: 프론트 Vite 프록시 한 줄로 5173→8300 200. 남은 건 이름 맞추기(프론트)·프록시 컨트롤러(백엔드) — 요청서 전달 완료
-   대표 지표 Recall@10 = 43.95% — CBF + CF 가점 + 학습 결합, holdout_a 2,000명
-   ┈┈▶ 확인 집합 holdout_b 43.20% · 선형 대비 +5.80 / +3.95%p (둘 다 CI 가 0 제외)
-   ┈┈▶ 23.39%(CBF 단독) → 38%대(CF 채택) → 43%대(학습 결합) 순으로 올랐다 (부록 S·T)
-   ┈┈▶ 세 평가 축이 0.6%p 안에 모인다 — 오프라인 43.95 · 재생 43.95 · 동적 44.05%
-
-[ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
+[ 운영 · deploy/ec2-1 ]  docker compose — backend(8080) · recommend(8300) · nginx(443 → /api/ → backend) · Prometheus · Grafana
 ```
-
-**계약이 모듈을 잇습니다.** 이벤트는 `contracts/event-schema.json`, 추천 입출력은
-`contracts/recommendation-io-spec.md` 가 단일 출처입니다. 기준은
-[`contracts/README.md`](contracts/README.md) 를 따릅니다.
-
-**아직 없는 것** — 백엔드가 추천 서버를 프록시하는 경로, 사용자 벡터 Redis 적재, 서빙 테이블 MySQL.
-추천 점수는 `batch/serving/recommend_server.py` 가 계약 §5 대로 내고(참조 구현, Jira 206·214 — 익명·미등록 회원도 받음)
-프론트 프록시 한 줄로 응답까지 확인했지만, 프론트 필드 이름 정렬과 백엔드 프록시 컨트롤러는 2026-09-09 요청서로 전달된 상태입니다.
 
 ---
 
@@ -65,31 +42,27 @@
 
 | 영역 | 기술 | 버전 | 비고 |
 | --- | --- | --- | --- |
-| 프론트엔드 | React · TypeScript · Vite | 19.2 · 6.0 · 8.2 | 엔트리 3개 — 쇼핑몰 `index.html` · 브랜드 대시보드 `dashboard.html` · 플랫폼 운영 `platform.html`. dev 서버 5173(기본값, `PORT` 로 변경) |
+| 프론트엔드 | React · TypeScript · Vite | 19.2 · 6.0 · 8.2 | 엔트리 3개 — 쇼핑몰 `index.html` · 브랜드 대시보드 `dashboard.html` · 플랫폼 운영 `platform.html`. dev 5173. 프록시: 인증·브랜드·상품·주문·리뷰·피드백 → 8090, `/api/recommend` → 8300, 그 외 `/api` → 8080 |
 | | oxlint | 1.79 | ESLint 대신 사용 |
-| 백엔드 | Spring Boot · Java | 4.1.1 · 21 | **수집 서버** `backend/` (8080). `POST /api/events` → Kafka |
-| | Spring Boot · JPA · MySQL 8.4 | — | **쇼핑몰 백엔드** `shop_backend/` (8090, MySQL 13306). 로그인(JWT)·브랜드·상품·주문·리뷰·피드백·대시보드·정산. 본 구현은 `feat/shop-backend` 브랜치, dev 미머지 |
-| | springdoc-openapi | 3.1.0 | API 문서 |
-| | Actuator + Micrometer | — | Prometheus 메트릭 노출 |
-| 메시징 | Apache Kafka | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id` |
-| 스트리밍 | Spark Structured Streaming | 미고정 | Q1~Q5. 출력은 Parquet |
-| 배치 · AI | Python · NumPy · pandas · scikit-learn | — | 상품 벡터·페르소나·CF·학습 결합(LTR) |
-| | FastAPI · uvicorn | — | **추천 추론 서버** `batch/serving/recommend_server.py` (8300). `GET /api/recommend`. 프론트 프록시·백엔드 연결은 미결 |
-| | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 384차원 (GPU) |
-| 시뮬레이터 | Playwright (Chromium) | — | PA 에이전트가 실제 브라우저를 조작 |
-| | OpenAI SDK → GMS | — | `gpt-4.1-nano`. 100명 × 15턴 ≈ 900 크레딧 |
-| | transformers (로컬) | — | `--local-model`. Qwen2.5-3B 기준 크레딧 0 |
-| 운영 | Docker Compose · nginx | — | EC2-1 배포 (`deploy/ec2-1/`) |
-| | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 에 대시보드 프로비저닝 |
-| 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개 |
+| 쇼핑몰 백엔드 | Spring Boot · JPA · MySQL | 4.1.1 · 21 · 8.4 | `shop_backend/` (8090, MySQL 13306). 로그인(JWT)·브랜드·상품(등록 계약 검증)·주문·결제·리뷰·피드백·정산·판매자 대시보드 |
+| 수집 서버 | Spring Boot · Java | 4.1.1 · 21 | `backend/` (8080). `POST /api/events` → Kafka. Actuator + Micrometer 로 Prometheus 메트릭 |
+| | springdoc-openapi | 3.1.0 | Swagger UI |
+| 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id` |
+| 스트리밍 | Spark Structured Streaming | 3.5.6 | `streaming/` Q1~Q5. 출력 Parquet. 로컬은 `infra/spark/` compose |
+| 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 278 트리). sklearn 버전은 모델 pickle 과 고정 |
+| | FastAPI · uvicorn · pydantic | 0.141 · 0.52 · 2.13 | **추천 추론 서버** `batch/serving/` (8300, 내부 전용). 추천·배너·상품 등록·처방 문장. `deploy/recommend.Dockerfile` |
+| | OpenAI SDK → GMS | gpt-4.1-mini | 대시보드 처방 문장 (`POST /api/prescription`, 온도 0·JSON 스키마 강제). 키 없으면 이 엔드포인트만 503 |
+| | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 (GPU, 배치 산출물용). 정확도 목적 리뷰 임베딩은 기각 |
+| 시뮬레이터 | Python 생성기 | — | PC 9,900명 합성 로그 · 배너 이벤트 · 피드백 시연 데이터 |
+| | Playwright (Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | PA 100명이 실제 브라우저를 조작. `--local-model` 로 Qwen2.5 도 가능 |
+| 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`): backend · recommend · nginx(HTTPS) · Prometheus · Grafana |
+| | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 대시보드 2종(backend-overview · collector-validation) 프로비저닝 |
+| 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개 · 페르소나 12,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
+| | 시연 브랜드 | — | SSAFY Beauty 8개 상품 (`simulator/feedback/products.ssafy-beauty.json`) — 등록 경로로 추천 카탈로그에 편입 |
 
 ---
 
 ## 3. 현재 폴더 구조
-
-지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-09)
-
-> 문서 곳곳의 `Research/…` 경로는 **레포 밖** 개인 연구 폴더(실험 스크립트·원천 정리)를 가리킵니다. 레포에는 채택된 결과만 들어오며, `Research/` 는 뒤처져 있어도 됩니다.
 
 ```
 S15P21A306/
@@ -126,6 +99,7 @@ S15P21A306/
 │   ├── validate_product_registration.py 등록 상품 JSON 을 계약으로 검증하는 CLI
 │   ├── event-attribution-contract.md    통합몰 Event 의 브랜드 귀속 계약 (데이터)
 │   ├── user-trait-weights.json          사용자 성향 가중치 30일 창 (`user-trait-v1-proposed`)
+│   ├── prescription-api-spec.md         대시보드 처방 문장 API (AI↔프론트) — 요청·응답·거부 코드·v0.1 과의 차이 (Jira 220)
 │   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·LTR·§5 API·§5-1 배너
 │                                        규칙 5-1: 정독한 미전환 상품은 약한 긍정 (2026-09-03 개정)
 │                                        §5 persona_id 선택(익명 cold_start)·reserved_filled (2026-09-09, Jira 214)
@@ -238,12 +212,14 @@ S15P21A306/
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 12개 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
 │   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
-│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST /api/products(등록 즉시 편입) · POST /api/events · /health
+│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products · POST /api/prescription · POST /api/events · /health
 │       ├── banners.py                   §5-1 hero·배너 6칸 조립 — 축 값(session/profile/coldstart)·전용 칸 5·6·reason 단일 key (Jira 218)
+│       ├── prescription.py              대시보드 처방 문장 POST /api/prescription — v0.3 프롬프트·JSON 스키마 강제·§6 자동 거부·저장 (Jira 220)
+│       ├── catalog_sync.py              쇼핑몰 백엔드(8090) ACTIVE 상품 → 카탈로그 편입·갱신·중단. POST /api/catalog/sync · 주기 실행 (Jira 222)
 │       ├── catalog_registry.py          등록 입력 → §4 파생 → 계약 검사 → 인코딩 → 카탈로그 확장. CLI 로 카탈로그 파일 변환
 │       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
 │       ├── requirements.txt             fastapi · uvicorn · httpx
-│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py   계약 필드·익명·등록·전용 칸·배너 (41개)
+│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py · test_prescription.py · test_catalog_sync.py   (가짜 LLM·가짜 백엔드)
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/
@@ -266,9 +242,10 @@ S15P21A306/
 │   ├── collector_client.py              수집 API 전송 (429/503 백프레셔 대응) — 공용
 │   ├── test_collector_client.py
 │   ├── generator/
-│   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건) — 노출 정책 --exposure
+│   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건) — 노출 정책 --exposure · 추천 서버 연동 --recommend-url (Jira 221)
+│   │   ├── recommend_client.py          추천 서버 클라이언트 — items·hero·banners 식별자를 이벤트에 그대로, 행동은 /api/events 로 상태 전송. 없으면 폴백
 │   │   ├── build_persona_style.py       리뷰에서 페르소나 6축 스타일 추출
-│   │   └── test_gen_behavior_logs.py · README.md
+│   │   └── test_gen_behavior_logs.py · test_recommend_client.py · README.md
 │   ├── agents/
 │   │   ├── agent_runner.py               PA 100명 — 실제 브라우저로 프론트를 조작
 │   │   ├── analyze_run_quality.py        실행 두 개를 대 보고 로그 품질을 재는 도구
@@ -288,13 +265,14 @@ S15P21A306/
 │   └── build.gradle · gradlew
 │
 ├── shop_backend/                    Spring Boot 쇼핑몰 백엔드 (백엔드) — 8090, MySQL 13306
-│   ├── src/main/java/com/cosmetic/shopbackend/  dev 에는 뼈대만. 본 구현(컨트롤러 8종)은 feat/shop-backend
+│   ├── src/main/java/com/cosmetic/shopbackend/  컨트롤러 8종 — identity·brand·catalog·commerce·feedback·dashboard·admin·settlement
 │   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md   테이블 29개 DDL·설명
 │   └── MYSQL-SETUP.md · docker-compose.mysql.yml     로컬 MySQL 실행
 │
-├── deploy/                          EC2 배포 (백엔드·인프라)
+├── deploy/                          EC2 배포 (백엔드·인프라·AI)
 │   ├── backend.Dockerfile · nginx.Dockerfile · nginx/default.conf   nginx 는 /api/ → backend:8080 만
-│   └── ec2-1/                           docker-compose.yml (backend · nginx · Prometheus · Grafana) · README.md
+│   ├── recommend.Dockerfile · recommend.Dockerfile.dockerignore · recommend-entrypoint.sh   ★ 추천 서버 이미지 (AI, Jira 219) — BuildKit 필수
+│   └── ec2-1/                           docker-compose.yml (backend · recommend · nginx · Prometheus · Grafana) · README.md
 │
 ├── kafka/README.md                  Kafka 구조·이벤트 처리 명세 (백엔드·인프라)
 ├── infra/
@@ -330,84 +308,3 @@ S15P21A306/
 └── 1차 평가/                        평가 제출물 (팀원별 폴더)
 ```
 
----
-
-## 4. 참고한 폴더 구조
-
-아래는 처음에 참고한 구조입니다. 2026-09-09 기준 `contracts/` · `frontend/` · `batch/` · `simulator/` · `streaming/` · `backend/` · `shop_backend/` · `infra/`(kafka·spark) · `monitoring/` · `deploy/` 가 채워졌고, `context/`(Redis 사용자 벡터·MySQL 피처 적재) 는 아직 시작하지 않았습니다. 추천은 `batch/serving/` 파이썬 서버가 맡고 있어 아래의 `backend/recommend` 자리는 비어 있습니다.
-
-```
-cosmetic-recsys/
-├── docker-compose.yml
-├── README.md
-│
-├── contracts/                       팀 전체의 계약. 여기가 바뀌면 4개 모듈이 동시에 영향받음
-│   ├── event-schema.json            이벤트 봉투+페이로드 스키마 (JSON Schema)
-│   ├── event-taxonomy.md            event_type 사전: product.click, section.view, scroll.depth ...
-│   ├── user-feature-spec.md         Redis에 저장될 유저 Feature 자료구조 정의
-│   └── api-spec.yaml                백엔드↔프론트 REST 명세 (OpenAPI)
-│
-├── frontend/                        Vue/React
-│   ├── src/tracking/
-│   │   ├── tracker.ts               이벤트 버퍼링 후 묶어서 POST. 개별 전송 금지
-│   │   ├── scrollDepth.ts           25/50/75/100% 통과 시점만 기록
-│   │   ├── dwellTime.ts             visibilitychange로 active/total duration 분리 측정
-│   │   ├── sectionObserver.ts       IntersectionObserver로 섹션별 노출·체류 감지
-│   │   └── sessionExit.ts           이탈 시 sendBeacon으로 잔여 버퍼 flush
-│   ├── src/pages/                   상품목록·상세·검색·장바구니
-│   └── src/components/
-│
-├── backend/                         Spring Boot
-│   ├── collector/                   프론트 로그 수신 → Kafka 투입
-│   │   ├── EventController          POST /api/events (배열 수신)
-│   │   ├── EventValidator           contracts 스키마 검증, 불량 이벤트 격리
-│   │   └── KafkaProducerService     partition_key=session_id로 전송. 동기 처리 금지
-│   ├── product/                     상품 조회 API (MySQL)
-│   ├── recommend/
-│   │   ├── RankingService           Redis 유저Feature × MySQL 상품Feature → 정렬
-│   │   └── AbTestService            A/B 그룹 배정, 노출 정책
-│   └── config/                      Kafka·Redis·JPA 설정
-│
-├── simulator/                       부하 발생기. 실서비스 로직 아님
-│   ├── personas/
-│   │   ├── distribution.py          피부타입·연령 분포 (Sephora·논문 근거)
-│   │   ├── rule_based.py            확률 상태머신: 검색→클릭→비교→장바구니→구매/이탈
-│   │   └── llm_agent.py             LLM 페르소나 100명 (Claude API)
-│   ├── scenarios/
-│   │   ├── normal_day.py            평시 트래픽, 시간대 가중
-│   │   └── sale_burst.py            세일 버스트: 배경 + 급증 + 지수감쇠
-│   ├── event_builder.py             contracts 스키마대로 이벤트 조립·검증
-│   ├── producer.py                  Kafka 직접 전송 (collector 우회)
-│   └── main.py                      CLI: --scenario sale --personas 9900 --tps 2000
-│
-├── streaming/                       Spark Structured Streaming. 분산 트랙 핵심 증명 대상
-│   ├── jobs/
-│   │   ├── user_feature_job.py      Kafka 구독 → 세션 윈도우 집계 → Redis 갱신
-│   │   ├── realtime_stats_job.py    실시간 인기상품·전환율 (대시보드용)
-│   │   └── raw_sink_job.py          원본 이벤트를 Parquet로 적재. retention 만료 대비
-│   ├── transforms/
-│   │   ├── sessionize.py            session_id 기준 묶기, event_time 워터마크
-│   │   └── feature_calc.py          관심 성분·가격대·카테고리 선호도 계산
-│   └── sinks/
-│       └── redis_sink.py            foreachBatch로 Redis write
-│
-├── batch/                           Spark Batch
-│   ├── ingest/
-│   │   ├── load_sephora.py          Kaggle 리뷰 109만건 적재
-│   │   └── load_ingredients.py      성분 데이터 정규화
-│   ├── jobs/
-│   │   ├── product_feature_job.py   리뷰+성분 → 상품별 Feature 테이블 → MySQL
-│   │   └── daily_rollup_job.py      전일 Parquet 집계 → 유저 Feature 갱신 (MVP 경로)
-│   └── quality/validate.py          결측·이상치 체크
-│
-├── context/                         외부 환경 데이터
-│   ├── weather_client.py            기상청 API (기온·습도)
-│   ├── airquality_client.py         에어코리아 API (미세먼지)
-│   └── scheduler.py                 주기 호출 → Redis 적재
-│
-└── infra/
-    ├── kafka/topics.sh              토픽·파티션 수·replication factor 정의
-    ├── spark/                       submit 스크립트, executor 메모리 설정
-    ├── monitoring/                  Grafana: TPS·consumer lag·처리 지연 (발표 근거 자료)
-    └── loadtest/                    노드 추가 시 처리량 변화 측정
-```

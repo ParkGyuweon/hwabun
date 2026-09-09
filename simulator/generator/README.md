@@ -95,8 +95,30 @@ python simulator/generator/gen_behavior_logs.py --post http://localhost:8080 --r
 | `--out PATH` | jsonl 저장 경로 | `--post` 도 `--out` 도 없으면 `behavior_logs.jsonl` |
 | `--show N` | 첫 페르소나의 이벤트 N건을 출력 | 0 |
 | `--exposure {popular_v0,cbf_v1}` | **무엇이 화면에 노출되는가** (아래) | `popular_v0` |
+| `--recommend-url URL` | **추천 서버 연동** (Jira 221, 아래 절). 목록마다 실제 추천을 받아 그 식별자로 이벤트를 만든다 | 없음 |
+| `--banner-slots N` · `--reserved N` | 추천 서버에 요청할 배너 칸 수 · 신규 브랜드 전용 칸 수 | 6 · 2 |
 
 `--post` 와 `--out` 은 같이 쓸 수 있다. 전송하면서 파일로도 남는다.
+
+## 추천 서버 연동 — `--recommend-url` (Jira 221)
+
+```bash
+python -m uvicorn batch.serving.recommend_server:app --port 8300      # 추천 서버 먼저
+python simulator/generator/gen_behavior_logs.py --recommend-url http://localhost:8300 --limit 200 --out logs.jsonl
+```
+
+없을 때는 생성기가 배너를 자기 규칙(`banner_axes_v0`)으로 뽑고 `recommendation_id` 도 가짜로 만든다. 주면 **프론트 184 와 같은 경로**로 바뀐다.
+
+| 화면 | 없을 때 | 있을 때 |
+|---|---|---|
+| 목록의 맞춤 기획전 행 | 인기순 10개, 노출 이벤트 없음 | 서버 `items` 10개. `recommendation_snapshot`(list_id `main`) 1건 + 칸마다 `recommendation_impression`. 식별자·`algorithm`(`ltr-278t-…`)은 응답 그대로 |
+| 배너 행 6칸 | 축 3종 + new_brand 2칸, `banner_axes_v0` | 서버 `banners[]` 그대로 — `banner_slot`·`banner_type`·`banner_value`(new_brand 는 null 키 유지)·칸별 `trait_source`(session/profile/coldstart). 칸 5·6 은 등록 브랜드(SSAFY Beauty) |
+| 클릭 | 이번 상품을 배너에 끼워 넣고 누른다 | **서버가 실제로 노출한 상품** 중에서 고른다 — 배너(`p_banner_click`) 또는 메인 카드(`p_rec_click`). 노출과 같은 `recommendation_id`·칸 번호 |
+| 세션 상태 | — | 목록을 열기 전에 그동안의 행동을 `POST /api/events` 로 서버에 넘긴다 → 다음 추천이 그 행동을 반영(`state_source=events`) |
+
+실측 (40명 · 46,934건): 추천 호출 173 · 상태 전송 133회 18,685건 · 6초. 봉투 검증 47,112/47,112 통과. 배너 노출 1,038 → 클릭 18, 메인 노출 2,228 → 클릭 93.
+서버가 죽으면 **한 번 경고하고 예전 방식으로 계속** 돈다 — 부하 테스트는 서버 없이도 돌아야 한다.
+`localhost` 는 클라이언트가 `127.0.0.1` 로 바꿔 부른다 (Windows 에서 ::1 시도로 호출마다 2초를 잃는다).
 
 ## 규모 감각
 

@@ -1,4 +1,11 @@
-# 추천 추론 서버 의존성 (batch/jobs 쪽 numpy·scikit-learn·joblib 은 이미 있다고 본다)
-fastapi>=0.110
-uvicorn>=0.29
-httpx>=0.27          # TestClient · bench --url
+# 추천 추론 서버 의존성 (Jira 206·219).
+# scikit-learn 은 ltr_model.pkl 을 만든 버전과 **정확히** 같아야 한다 — 다르면 pickle 이 안 열리거나
+# 조용히 다른 점수를 낸다. 모델을 다시 학습하면 여기도 같이 올린다 (ltr_model_meta.json 참조).
+numpy==2.2.6
+scikit-learn==1.7.0
+joblib==1.5.3
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.4
+httpx>=0.27          # TestClient·bench_recommend
+openai>=1.60         # 처방 문장 생성 (GMS, Jira 220)
