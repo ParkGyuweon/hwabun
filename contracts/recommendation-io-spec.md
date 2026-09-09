@@ -1127,8 +1127,21 @@ POST /api/products            body = 등록 입력 1건 또는 배열 (product-r
   "products": 208, "registered_products": 8 }
 ```
 
-`GET /api/products/{product_id}` 는 `product_source · supporters · reserved_candidate` 를 돌려준다.
-`/health` 에 `seed_products · registered_products` 가 추가됐다.
+`GET /api/products/{product_id}` 는 `product_source · supporters · reserved_candidate · active` 를 돌려준다.
+`/health` 에 `seed_products · registered_products · inactive_products` 가 추가됐다.
+
+### 판매 중단 · 삭제 (Jira 219)
+
+`DELETE /api/products/{product_id}` — 추천 후보에서 **즉시** 빠진다 (메인·배너·hero 모두). 백엔드가 상품을
+INACTIVE 로 바꾸거나 삭제할 때 한 번 부른다. 벡터·행은 지우지 않고 점수만 막으므로 **나머지 상품 순위는 그대로**다.
+기록은 `registered_products.jsonl` 에 `{"product_id", "_op": "deactivate", "at"}` 행으로 남아 재시작 후에도 유지되고,
+같은 id 를 다시 `POST /api/products` 하면 재활성된다. 원천 200개도 중단할 수 있다. 없는 id 는 404.
+
+### 배포 (Jira 219)
+
+`deploy/recommend.Dockerfile` + `deploy/ec2-1/docker-compose.yml` 의 `recommend` 서비스 (8300, 내부 전용, `/data` 볼륨에 등록 상품).
+백엔드는 `RECOMMEND_URL=http://recommend:8300` 으로 프록시한다. `WORKERS=1` — 사용자 상태·등록 상품이 프로세스 메모리라
+워커를 늘리면 답이 갈린다 (확장은 Redis 뒤). 자세한 절차는 `deploy/ec2-1/README.md`.
 
 ### 기존 순위는 보존된다 — 순위 피처 분모 고정
 

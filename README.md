@@ -48,7 +48,7 @@
    ┈┈▶ 23.39%(CBF 단독) → 38%대(CF 채택) → 43%대(학습 결합) 순으로 올랐다 (부록 S·T)
    ┈┈▶ 세 평가 축이 0.6%p 안에 모인다 — 오프라인 43.95 · 재생 43.95 · 동적 44.05%
 
-[ 운영 ]  deploy/ec2-1  docker compose — backend · nginx · Prometheus · Grafana
+[ 운영 ]  deploy/ec2-1  docker compose — backend · recommend(AI, 8300 내부) · nginx · Prometheus · Grafana
 ```
 
 **계약이 모듈을 잇습니다.** 이벤트는 `contracts/event-schema.json`, 추천 입출력은
@@ -238,12 +238,12 @@ S15P21A306/
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 12개 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
 │   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
-│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST /api/products(등록 즉시 편입) · POST /api/events · /health
+│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products(등록 즉시 편입 · 판매 중단) · POST /api/events · /health
 │       ├── banners.py                   §5-1 hero·배너 6칸 조립 — 축 값(session/profile/coldstart)·전용 칸 5·6·reason 단일 key (Jira 218)
 │       ├── catalog_registry.py          등록 입력 → §4 파생 → 계약 검사 → 인코딩 → 카탈로그 확장. CLI 로 카탈로그 파일 변환
 │       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
 │       ├── requirements.txt             fastapi · uvicorn · httpx
-│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py   계약 필드·익명·등록·전용 칸·배너 (41개)
+│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py   계약 필드·익명·등록·중단·전용 칸·배너 (45개)
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/
@@ -292,9 +292,10 @@ S15P21A306/
 │   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md   테이블 29개 DDL·설명
 │   └── MYSQL-SETUP.md · docker-compose.mysql.yml     로컬 MySQL 실행
 │
-├── deploy/                          EC2 배포 (백엔드·인프라)
+├── deploy/                          EC2 배포 (백엔드·인프라·AI)
 │   ├── backend.Dockerfile · nginx.Dockerfile · nginx/default.conf   nginx 는 /api/ → backend:8080 만
-│   └── ec2-1/                           docker-compose.yml (backend · nginx · Prometheus · Grafana) · README.md
+│   ├── recommend.Dockerfile · recommend.Dockerfile.dockerignore · recommend-entrypoint.sh   ★ 추천 서버 이미지 (AI, Jira 219) — BuildKit 필수
+│   └── ec2-1/                           docker-compose.yml (backend · recommend · nginx · Prometheus · Grafana) · README.md
 │
 ├── kafka/README.md                  Kafka 구조·이벤트 처리 명세 (백엔드·인프라)
 ├── infra/

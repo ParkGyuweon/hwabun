@@ -196,15 +196,17 @@ class TestRegistration(unittest.TestCase):
         self.assertFalse(reg["brand_in_vocab"])
         self.assertEqual(reg["rating_source"], "injected")
         self.assertAlmostEqual(reg["price_usd"], 30800 / rs.KRW_PER_USD, places=2)
-        # 바로 다음 요청부터 전용 칸 후보다 — 다른 테스트가 먼저 등록한 것이 있을 수 있어
-        # 후보 수만큼(최대 10) 전용 칸을 열어 확인한다
+        # 바로 다음 요청부터 전용 칸 후보다. 다른 테스트가 등록한 것까지 후보가 10개를 넘을 수
+        # 있어(reserved 상한 10) 목록 포함 여부 대신 엔진의 신규 마스크로 확인한다
         self.assertTrue(client.get("/api/products/SB0TEST1").json()["reserved_candidate"])
-        n_reg = client.get("/health").json()["registered_products"]
-        rec = client.get("/api/recommend", params={"size": 20, "reserved": min(10, n_reg)}).json()
-        ids = [i["product_id"] for i in rec["items"] if i["reserved"]]
-        self.assertIn("SB0TEST1", ids)
-        # 영속: 파일에 남는다
-        with open(_COPY, encoding="utf-8") as f:
+        e = rs.get_engine()
+        self.assertTrue(e.rec.new_mask()[e.index["SB0TEST1"]])
+        rec = client.get("/api/recommend", params={"size": 20, "reserved": 10}).json()
+        self.assertEqual(rec["reserved_filled"], 10)
+        self.assertTrue(all(i["product_source"] == "brand_registered" for i in rec["items"] if i["reserved"]))
+        # 영속: 파일에 남는다 — 엔진이 실제로 쓰는 경로로 본다 (여러 테스트 모듈이 한 프로세스에
+        # 있으면 env 가 나중 모듈 값으로 바뀌어 _COPY 와 다를 수 있다)
+        with open(rs.get_engine().registry.path, encoding="utf-8") as f:
             self.assertTrue(any(json.loads(l)["product_id"] == "SB0TEST1" for l in f if l.strip()))
 
     def test_register_same_id_replaces(self):
@@ -235,6 +237,60 @@ class TestRegistration(unittest.TestCase):
         b = client.get("/api/recommend", params={"persona_id": pid, "size": 10, "reserved": 2}).json()
         self.assertEqual(b["state_source"], "events")
         self.assertNotIn("SB000003", [i["product_id"] for i in b["items"]])
+
+
+class TestDeactivate(unittest.TestCase):
+    """Jira 219 — 판매 중단. 후보에서 즉시 빠지고, 기록이 남고, 재등록하면 돌아온다"""
+
+    def _ids(self, **q):
+        return [i["product_id"] for i in client.get("/api/recommend", params={
+            "persona_id": PID, "size": 10, "seed": "review", **q}).json()["items"]]
+
+    def test_deactivate_removes_from_candidates_and_persists(self):
+        before = self._ids()
+        victim = before[0]
+        r = client.delete(f"/api/products/{victim}")
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["active"])
+        after = self._ids()
+        self.assertNotIn(victim, after)
+        self.assertEqual(len(after), 10)
+        # 나머지 순서는 그대로 (벡터·행을 지운 게 아니라 후보에서만 뺐다)
+        self.assertEqual([g for g in before if g != victim], after[:9])
+        self.assertFalse(client.get(f"/api/products/{victim}").json()["active"])
+        self.assertGreaterEqual(client.get("/health").json()["inactive_products"], 1)
+        with open(rs.get_engine().registry.path, encoding="utf-8") as f:
+            rows = [json.loads(l) for l in f if l.strip()]
+        self.assertTrue(any(x.get("_op") == "deactivate" and x["product_id"] == victim for x in rows))
+        # 배너에도 안 나온다
+        b = client.get("/api/recommend", params={"persona_id": PID, "size": 10, "seed": "review",
+                                                 "banner_slots": 6, "reserved": 2}).json()
+        self.assertNotIn(victim, [x["product_id"] for x in b["banners"]])
+
+    def test_deactivate_unknown_404(self):
+        self.assertEqual(client.delete("/api/products/NOPE").status_code, 404)
+
+    def test_reregister_reactivates(self):
+        p = {"product_id": "SB0TEST3", "product_name": "a", "brand_name": "SSAFY Beauty",
+             "secondary_category": "Masks", "tertiary_category": "Face Masks",
+             "highlights": ["Pores"], "ingredients": "Water, Kaolin", "price_usd": 6}
+        client.post("/api/products", json=p)
+        client.delete("/api/products/SB0TEST3")
+        self.assertFalse(client.get("/api/products/SB0TEST3").json()["active"])
+        client.post("/api/products", json=p)
+        self.assertTrue(client.get("/api/products/SB0TEST3").json()["active"])
+
+    def test_registry_load_ops_last_wins(self):
+        import catalog_registry as cr
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            r = cr.Registry(os.path.join(d, "r.jsonl"))
+            r.append({"product_id": "A", "v": 1}); r.deactivate("A"); r.deactivate("B")
+            r.append({"product_id": "B", "v": 2})
+            recs, inactive = r.load_ops()
+            self.assertEqual({x["product_id"] for x in recs}, {"B"})
+            self.assertEqual(inactive, {"A"})
+            self.assertEqual([x["product_id"] for x in r.load()], ["B"])
 
 
 if __name__ == "__main__":

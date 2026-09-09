@@ -152,13 +152,35 @@ class Registry:
                     r = json.loads(line)
                     seen[r["product_id"]] = r          # 같은 id 는 마지막 기록이 이긴다
         for r in seen.values():
-            out.append(r)
+            if r.get("_op") != "deactivate":
+                out.append(r)
         return out
 
     def append(self, x: dict):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(x, ensure_ascii=False) + "\n")
+
+    # ── 비활성(판매 중단) 기록 — 같은 파일에 op 행으로 남긴다 (Jira 219) ──
+    # {"product_id": "...", "_op": "deactivate", "at": "..."} 이 마지막이면 비활성, 그 뒤에 상품 기록이
+    # 다시 오면 재활성. 원천 200개도 비활성화할 수 있다 (기록만 남고 벡터는 그대로).
+    def load_ops(self) -> tuple[list[dict], set[str]]:
+        """(상품 기록들, 비활성 id 집합). 같은 id 는 마지막 행이 이긴다"""
+        if not os.path.exists(self.path):
+            return [], set()
+        last: dict[str, dict] = {}
+        with open(self.path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    r = json.loads(line)
+                    last[r["product_id"]] = r
+        records = [r for r in last.values() if r.get("_op") != "deactivate"]
+        inactive = {g for g, r in last.items() if r.get("_op") == "deactivate"}
+        return records, inactive
+
+    def deactivate(self, product_id: str):
+        self.append({"product_id": product_id, "_op": "deactivate",
+                     "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
 
 
 def grow_square(S, k):
