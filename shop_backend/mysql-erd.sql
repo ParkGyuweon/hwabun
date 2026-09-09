@@ -25,6 +25,14 @@ CREATE TABLE skin_tone (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT N
 CREATE TABLE hair_color (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
 CREATE TABLE eye_color (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
 CREATE TABLE concern (code VARCHAR(64) PRIMARY KEY, label_ko VARCHAR(100) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
+CREATE TABLE secondary_category (code VARCHAR(64) PRIMARY KEY, label_ko VARCHAR(100) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
+CREATE TABLE tertiary_category (code VARCHAR(64) PRIMARY KEY, label_ko VARCHAR(100) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
+CREATE TABLE price_bin (code VARCHAR(16) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
+INSERT IGNORE INTO secondary_category(code,label_ko) VALUES
+ ('Cleansers','Cleansers'),('Eye Care','Eye Care'),('Lip Balms & Treatments','Lip Balms & Treatments'),('Masks','Masks'),('Moisturizers','Moisturizers'),('Self Tanners','Self Tanners'),('Sunscreen','Sunscreen'),('Treatments','Treatments');
+INSERT IGNORE INTO tertiary_category(code,label_ko) VALUES
+ ('BB & CC Creams','BB & CC Creams'),('Blemish & Acne Treatments','Blemish & Acne Treatments'),('Exfoliators','Exfoliators'),('Eye Creams & Treatments','Eye Creams & Treatments'),('Eye Masks','Eye Masks'),('Face Masks','Face Masks'),('Face Oils','Face Oils'),('Face Serums','Face Serums'),('Face Sunscreen','Face Sunscreen'),('Face Wash & Cleansers','Face Wash & Cleansers'),('Face Wipes','Face Wipes'),('Facial Peels','Facial Peels'),('For Face','For Face'),('Lip Balms & Treatments','Lip Balms & Treatments'),('Makeup Removers','Makeup Removers'),('Mists & Essences','Mists & Essences'),('Moisturizers','Moisturizers'),('Night Creams','Night Creams'),('Toners','Toners');
+INSERT IGNORE INTO price_bin(code,label_ko) VALUES ('~20','~20'),('20-35','20-35'),('35-50','35-50'),('50-80','50-80'),('80+','80+');
 ALTER TABLE member ADD CONSTRAINT fk_member_skin_type FOREIGN KEY(skin_type_code) REFERENCES skin_type(code);
 ALTER TABLE member ADD CONSTRAINT fk_member_skin_tone FOREIGN KEY(skin_tone_code) REFERENCES skin_tone(code);
 ALTER TABLE member ADD CONSTRAINT fk_member_hair_color FOREIGN KEY(hair_color_code) REFERENCES hair_color(code);
@@ -42,7 +50,8 @@ CREATE TABLE product (
  source_price_usd DECIMAL(12,2) NULL, source_rating DECIMAL(4,2) NULL, source_review_count INT NULL, source_loves_count INT NULL, source_rank INT NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  FOREIGN KEY(brand_id) REFERENCES brand(brand_id) ON DELETE RESTRICT, FOREIGN KEY(category_id) REFERENCES category(category_id) ON DELETE RESTRICT,
- UNIQUE KEY uq_product_brand(product_id,brand_id), INDEX ix_product_brand_status(brand_id,status), INDEX ix_product_category_status(category_id,status)
+ UNIQUE KEY uq_product_brand(product_id,brand_id), INDEX ix_product_brand_status(brand_id,status), INDEX ix_product_category_status(category_id,status),
+ FOREIGN KEY(secondary_category) REFERENCES secondary_category(code), FOREIGN KEY(tertiary_category) REFERENCES tertiary_category(code), FOREIGN KEY(price_bin) REFERENCES price_bin(code)
 );
 CREATE TABLE product_variant (
  variant_id VARCHAR(64) PRIMARY KEY, product_id VARCHAR(64) NOT NULL, sku_id VARCHAR(64) NOT NULL UNIQUE, label VARCHAR(200) NOT NULL, size VARCHAR(100) NULL,

@@ -1,6 +1,6 @@
 # 테이블 설명
 
-최종 기준은 [mysql-erd.md](mysql-erd.md)와 [mysql-erd.sql](mysql-erd.sql)입니다. 총 29개 테이블이며, 쇼핑몰 서버의 영속 데이터만 둡니다.
+최종 기준은 [mysql-erd.md](mysql-erd.md)와 [mysql-erd.sql](mysql-erd.sql)입니다. 총 35개 테이블이며, 쇼핑몰 서버의 영속 데이터만 둡니다.
 
 ## 계정·브랜드
 
@@ -37,3 +37,5 @@ clean과 texture는 코드표와 다대다 매핑으로 저장합니다. 원문 
 - settlement / settlement_item: 브랜드별 월 정산
 
 추천 벡터, 페르소나, DW 집계용 리뷰·속성 친화도 테이블은 이 DB에서 제거하고 Redis/AI/DW에서 관리합니다.
+
+

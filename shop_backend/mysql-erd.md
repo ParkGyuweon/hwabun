@@ -36,3 +36,5 @@ PRODUCT N:M SKIN_TYPE, CONCERN, CLEAN, TEXTURE, INGREDIENT
 추천 벡터·속성 친화도·페르소나·DW용 수입 리뷰 테이블은 제거했습니다. 상품 원천 속성은 모두 보존해야 하므로 clean/texture 코드와 매핑 테이블은 다시 포함했습니다.
 
 실행 DDL: mysql-erd.sql
+
+
