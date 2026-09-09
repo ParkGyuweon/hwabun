@@ -834,6 +834,20 @@ def build_derived_frames(
     }
 
 
+def _write_processed_dataset(
+    frame: Any,
+    path: str,
+    partition_column: str | None = None,
+) -> None:
+    """Write empty data without partitioning so its Parquet schema stays readable."""
+
+    writer = frame.write.mode("overwrite")
+    if partition_column is not None and not frame.isEmpty():
+        writer.parquet(path, partitionBy=partition_column)
+    else:
+        writer.parquet(path)
+
+
 def run(spark: Any, config: DeriveFactsConfig) -> None:
     spark.conf.set("spark.sql.session.timeZone", "UTC")
     catalog_df = spark.read.option("multiLine", "true").json(
@@ -848,21 +862,25 @@ def run(spark: Any, config: DeriveFactsConfig) -> None:
         dim_product,
         weights,
     )
-    frames["sessionized_events"].write.mode("overwrite").parquet(
+    _write_processed_dataset(
+        frames["sessionized_events"],
         config.sessionized_path,
-        partitionBy="event_date_kst",
+        "event_date_kst",
     )
-    frames["product_event_fact"].write.mode("overwrite").parquet(
+    _write_processed_dataset(
+        frames["product_event_fact"],
         config.product_fact_path,
-        partitionBy="event_date_kst",
+        "event_date_kst",
     )
-    frames["section_dwell_agg"].write.mode("overwrite").parquet(
+    _write_processed_dataset(
+        frames["section_dwell_agg"],
         config.section_dwell_path,
-        partitionBy="event_date_kst",
+        "event_date_kst",
     )
-    frames["content_interest_fact"].write.mode("overwrite").parquet(
+    _write_processed_dataset(
+        frames["content_interest_fact"],
         config.content_interest_path,
-        partitionBy="event_date_kst",
+        "event_date_kst",
     )
     dim_product.write.mode("overwrite").parquet(
         config.dim_product_path,
