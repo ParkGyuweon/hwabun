@@ -1,4 +1,5 @@
 import { EVENT_INTENT, SCHEMA_VERSION } from '../types/log';
+import { ingestForTrait } from './trait';
 import type { ActorType, EventName, LogEnvelope, PageType } from '../types/log';
 
 /**
@@ -373,6 +374,9 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
 
     properties: dropDisallowedNulls(eventName, finalProperties),
   };
+
+  // 세션 성향은 이벤트가 나가는 바로 이 자리에서 같이 누적한다 (lib/trait.ts). 지연 0
+  ingestForTrait(eventName, event.properties);
 
   queue.push(event);
 

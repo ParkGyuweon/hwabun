@@ -7,6 +7,7 @@ import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
+import { setTraitProfile } from './lib/trait';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
@@ -155,6 +156,11 @@ export default function App() {
     () => personas.find((item) => item.persona_id === personaId) ?? null,
     [personaId],
   );
+
+  // 피부 타입을 아는 사용자는 concern 축에 고정 가점 (lib/trait.ts)
+  useEffect(() => {
+    setTraitProfile({ hasSkinProfile: persona !== null });
+  }, [persona]);
 
   const product = useMemo(
     () => resolveProduct(productId, products, draft),

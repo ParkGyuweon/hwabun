@@ -3,6 +3,9 @@ import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
+import { useTrait } from '../hooks/useTrait';
+import { BANNER_RESERVED, BANNER_SLOTS, MAIN_SLOTS } from '../lib/bannerConfig';
+import { buildRecommendation } from '../lib/recommendMock';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useTextSelection } from '../hooks/useTextSelection';
@@ -11,7 +14,6 @@ import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
 import { labelKo } from '../lib/formLabels';
 import AdBanner from '../components/banner/AdBanner';
-import { pickBannerProducts } from '../lib/bannerCreative';
 import type { BannerAxis } from '../lib/bannerCreative';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
@@ -19,8 +21,8 @@ import type { Product, SkinType } from '../types/product';
 import type { Review } from '../types/review';
 import type { CartItem } from '../types/cart';
 
-/** 기획전에 올리는 상품 수 */
-const PROMO_SIZE = 10;
+/** 기획전(메인 칸)에 올리는 상품 수. 계약 §5 `k` */
+const PROMO_SIZE = MAIN_SLOTS;
 /**
  * 한 번에 그리는 카드 수. 200개를 한 번에 그리면 노출 로그가 의미를 잃는다.
  * 넓은 화면의 열 수(5)의 배수로 둬서 마지막 줄이 꽉 차게 한다.
@@ -139,58 +141,74 @@ export default function ProductListPage({
   }, [reviews]);
 
   /**
-   * 기획전. 페르소나가 있으면 그 피부 타입에 맞는 상품을 올린다.
+   * 추천 응답 — 히어로 1 + 배너 6 + 메인 10 이 **한 응답**에서 나온다 (계약 §5-1).
    *
-   * 추천 API 가 붙기 전까지의 규칙 기반 대체다. 점수는 설명 가능한 두 축만 쓴다.
-   *   피부 타입 일치 +2 (원본 표기 우선, 없으면 리뷰어 분포)
-   *   품질 사전확률: 평점(0~1) + 리뷰 수 로그 스케일(0~1)
-   * 페르소나가 없으면 이전처럼 신제품·한정판·단독을 인기순으로 올린다.
+   * 백엔드 서빙이 없어 프론트 목(`lib/recommendMock`)이 같은 형태를 만든다.
+   * 어느 축을 배너에 올릴지는 세션 성향(`useTrait`)이 정해 `axes` 로 넘긴다.
+   * 담은 상품은 후보에서 뺀다. 빼면 다음 순위가 올라와 칸 수는 유지된다.
    */
-  const promo = useMemo(() => {
-    // 담은 상품은 추천에서 뺀다. 빼면 다음 순위가 올라와 10개는 유지된다
-    const candidates = products.filter((p) => !cartProductIds.has(p.product_id));
+  const trait = useTrait();
+  const recommendation = useMemo(
+    () =>
+      buildRecommendation({
+        products,
+        persona,
+        excluded: cartProductIds,
+        reviewSkinTypes,
+        axes: trait.axes,
+        k: PROMO_SIZE,
+        bannerSlots: BANNER_SLOTS,
+        reserved: BANNER_RESERVED,
+      }),
+    [products, persona, reviewSkinTypes, cartProductIds, trait.axes],
+  );
 
-    if (!persona) {
-      return candidates
-        .filter((p) => (p.badges ?? []).length > 0)
-        .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
-        .slice(0, PROMO_SIZE);
-    }
+  const productsById = useMemo(() => new Map(products.map((p) => [p.product_id, p])), [products]);
 
-    const score = (p: Product): number => {
-      const types = p.suitable_skin_types.length
-        ? p.suitable_skin_types
-        : (reviewSkinTypes.get(p.product_id) ?? []);
-      const match = types.includes(persona.skin_type) ? 2 : 0;
-      const quality =
-        (p.rating ?? 0) / 5 + Math.min(1, Math.log10((p.review_count ?? 0) + 1) / 5);
-      return match + quality;
-    };
-
-    return [...candidates].sort((a, b) => score(b) - score(a)).slice(0, PROMO_SIZE);
-  }, [products, persona, reviewSkinTypes, cartProductIds]);
+  const promo = useMemo(
+    () =>
+      recommendation.items
+        .map((item) => productsById.get(item.product_id))
+        .filter((p): p is Product => p !== undefined),
+    [recommendation, productsById],
+  );
 
   /**
-   * 광고 배너 — 히어로 1 + 카드 3.
+   * 광고 배너 칸.
    *
-   * 축 순서를 페르소나로 정한다. 추천 API(`/api/recommend` 의 `axes`·`banners[]`)가 붙으면
-   * 이 블록이 API 응답으로 대체된다. 지금은 프론트 규칙이고, 전용 칸 2개는 신규 브랜드
-   * (SSAFY Beauty)를 마지막에 둔다 (계약 §5-1 `reserved`).
+   * 무엇을 올릴지는 추천 응답(`recommendation.hero` · `recommendation.banners`)이 정하고,
+   * 어떻게 보일지는 `AdBanner` 가 정한다. 뽑는 규칙과 그림을 한 파일에 두면 API 가 붙을 때
+   * 그림까지 같이 뜯어야 한다. 그래서 여기서는 응답을 배너 칸으로 옮기기만 한다.
+   *
+   * 축(`banner_type`)은 세션 성향이 고르고, 전용 칸 2개는 신규 브랜드가 받는다 (계약 §5-1).
+   * `/api/recommend` 가 붙으면 `buildRecommendation` 자리만 fetch 로 바뀐다.
    */
   const bannerSlots = useMemo(() => {
-    const axes: BannerAxis[] = persona
-      ? ['concern', 'ingredient', 'segment', 'price_bin', 'new_brand']
-      : ['category', 'ingredient', 'price_bin', 'new_brand'];
-    const pool = products.filter((p) => !cartProductIds.has(p.product_id));
-    // 신규 브랜드는 전용 칸이라 후보를 따로 준다
-    const fresh = pool.filter((p) => /^SB\d+$/.test(p.product_id));
-    const picked = pickBannerProducts([...fresh, ...pool], axes, 4, persona?.skin_type);
-    return picked;
-  }, [products, persona, cartProductIds]);
+    const slots: Array<{ product: Product; banner_type: BannerAxis; banner_value: string | null }> = [];
+    if (recommendation.hero) {
+      const hero = productsById.get(recommendation.hero.product_id);
+      if (hero) {
+        slots.push({
+          product: hero,
+          banner_type: recommendation.hero.banner_type as BannerAxis,
+          banner_value: recommendation.hero.banner_value,
+        });
+      }
+    }
+    for (const b of recommendation.banners) {
+      const product = productsById.get(b.product_id);
+      if (product) {
+        slots.push({ product, banner_type: b.banner_type as BannerAxis, banner_value: b.banner_value });
+      }
+    }
+    return slots;
+  }, [recommendation, productsById]);
 
   /** 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름 */
-  const promoAlgorithm = persona ? 'skin_match_v0' : 'badge_rank_v0';
+  const promoAlgorithm = recommendation.model_version;
   const promoRecommendationId = persona ? `rec-promo-${persona.persona_id}` : undefined;
+  /** 배너·히어로는 별도 목록으로 센다. 같은 응답이라 식별자는 공유한다 */
+  const bannerAlgorithm = `${recommendation.model_version}/banner`;
 
   const filtered = useMemo(() => {
     const band = PRICE_BANDS.find((b) => b.key === price) ?? PRICE_BANDS[0];
@@ -273,6 +291,52 @@ export default function ProductListPage({
     eventName: 'product_impression',
     listId: 'list_grid',
   });
+  /**
+   * 배너 노출. `banner_impression` 은 계약 enum 등록 전이라 (lib/bannerConfig)
+   * `recommendation_impression` 에 배너 property 를 얹어 보낸다. 노출은 분모일 뿐이다.
+   */
+  const heroRef = useImpression({
+    pageViewKey: `hero:${persona?.persona_id ?? 'anonymous'}:${trait.trait_source}`,
+    eventName: 'recommendation_impression',
+    listId: 'hero_banner',
+    algorithm: bannerAlgorithm,
+    recommendationId: promoRecommendationId,
+  });
+  const bannerRef = useImpression({
+    pageViewKey: `banner:${persona?.persona_id ?? 'anonymous'}:${trait.trait_source}`,
+    eventName: 'recommendation_impression',
+    listId: 'banner_row',
+    algorithm: bannerAlgorithm,
+    recommendationId: promoRecommendationId,
+  });
+
+  /** 배너·히어로 클릭. 추천 클릭 + 상품 클릭. entry_source 는 계약 enum 안의 promo_pick 을 쓴다 */
+  const selectFromBanner = (listId: 'hero_banner' | 'banner_row') => (productId: string) => {
+    const banner =
+      listId === 'hero_banner'
+        ? recommendation.hero && recommendation.hero.product_id === productId
+          ? { ...recommendation.hero, slot: 0 }
+          : null
+        : (recommendation.banners.find((b) => b.product_id === productId) ?? null);
+
+    track('recommendation_click', {
+      ...(promoRecommendationId ? { recommendation_id: promoRecommendationId } : {}),
+      list_id: listId,
+      algorithm: bannerAlgorithm,
+      product_id: productId,
+      position: banner ? banner.slot : null,
+      ...(banner
+        ? {
+            banner_type: banner.banner_type,
+            ...(banner.banner_value !== null ? { banner_value: banner.banner_value } : {}),
+            banner_slot: banner.slot,
+            trait_source: trait.trait_source,
+          }
+        : {}),
+    });
+    track('product_click', { product_id: productId, entry_source: 'promo_pick', position: banner ? banner.slot : null });
+    onSelectProduct(productId);
+  };
 
   /**
    * 그리드의 실제 열 수.
@@ -373,9 +437,15 @@ export default function ProductListPage({
 
   return (
     <main className="page list">
+      {/*
+        배너 영역에는 data-log-section 을 붙이지 않는다. 계약 `section_id` enum
+        (event-properties-schema §3.1) 에 배너 값이 없고, 아래 상품 줄과 같은 `promo_row` 를
+        쓰면 section_view 가 두 번 세어진다. 배너는 `banner_slot`·`banner_type` 으로 이미
+        식별된다. enum 에 `banner_row` 가 추가되면 그때 붙인다 (데이터 파트 요청 목록).
+      */}
       {bannerSlots.length > 0 ? (
-        <section className="ads" data-log-section="promo_row">
-          <div className="ads__hero">
+        <section className="ads">
+          <div className="ads__hero" ref={heroRef as React.Ref<HTMLDivElement>}>
             <AdBanner
               product={bannerSlots[0].product}
               axis={bannerSlots[0].banner_type}
@@ -383,11 +453,11 @@ export default function ProductListPage({
               shape="hero"
               skinTone={persona?.skin_tone}
               slot={1}
-              onSelect={selectFrom('promo_pick')}
+              onSelect={selectFromBanner('hero_banner')}
             />
           </div>
           {bannerSlots.length > 1 ? (
-            <ul className="ads__row">
+            <ul className="ads__row" ref={bannerRef as React.Ref<HTMLUListElement>}>
               {bannerSlots.slice(1).map((b, i) => (
                 <li key={b.product.product_id}>
                   <AdBanner
@@ -397,7 +467,7 @@ export default function ProductListPage({
                     shape="card"
                     skinTone={persona?.skin_tone}
                     slot={i + 2}
-                    onSelect={selectFrom('promo_pick')}
+                    onSelect={selectFromBanner('banner_row')}
                   />
                 </li>
               ))}

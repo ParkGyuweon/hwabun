@@ -42,6 +42,24 @@ export type P0EventName =
   | 'add_to_cart'
   /** 장바구니 화면 진입. GA4 표준 퍼널 단계 */
   | 'view_cart'
+  /**
+   * 주문 3종. 계약 §6 에서 활성으로 옮겨졌다 (2026-09-07).
+   * 매출·정산의 정본은 백엔드 PAID 주문이고, 이 이벤트는 **전환 분석에만** 쓴다.
+   */
+  | 'begin_checkout'
+  | 'purchase'
+  /**
+   * 구매 직후 한 번 뜨는 클릭 설문. 주문당 1회. 건너뛰면 `skipped=true` + 빈 `reasons`.
+   * 상품 선호가 아니라 **이유 선언**이라 가중치는 0 이고, `reasons` 값 자체를 AI 가 따로 쓴다.
+   */
+  | 'purchase_reason_select'
+  /**
+   * 추천 배너. 유료 광고가 아니라 추천 결과를 강조해 보여주는 영역이다 (기획 §15-10).
+   * 노출은 선호 신호가 아니라 클릭률의 **분모**이고, 클릭 이후 행동만 추천에 반영한다.
+   * `banner_skip` 은 만들지 않는다 — 마트에서 "노출 − 클릭" 으로 계산한다.
+   */
+  | 'banner_impression'
+  | 'banner_click'
   | 'exit_summary';
 
 /** 우선순위 P1. 관심 강도를 보조하는 이벤트 */
@@ -213,6 +231,11 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   quantity_change: 'conversion',
   add_to_cart: 'conversion',
   view_cart: 'conversion',
+  begin_checkout: 'conversion',
+  purchase: 'conversion',
+  // 왜 샀는지를 말하는 것이지 사는 쪽으로 움직인 것이 아니다
+  purchase_reason_select: 'validation',
+
   // 담았다 뺀 것은 재고(再考)다. 좌절(friction)이 아니라 망설임 축에 둔다
   remove_from_cart: 'hesitation',
 
@@ -225,7 +248,7 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
  *
  * 근거는 `docs/analytics/marketing-signal-research.md` 7-3 이다.
  * 척도는 AI 추천 설계서를 그대로 따른다 — `page_view`(설계서 `PRODUCT_VIEW`) = 1.0 기준,
- * `wishlist_toggle`(`LIKE`) = 3.0, `add_to_cart`(`CART`) = 4.0.
+ * `wishlist_toggle`(`LIKE`) = 3.0, `add_to_cart`(`CART`) = 3.0.
  *
  * **이 표가 단일 출처다.** 프론트·AI·데이터셋이 각자 숫자를 들고 있으면
  * 조용히 어긋난다. 값을 바꿀 때는 조사 문서와 함께 바꾼다.
@@ -233,8 +256,17 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
  * 값이 확정값이라는 뜻은 아니다. 초기 가설이고 Ablation 으로 검증해야 한다.
  */
 export const EVENT_WEIGHT: Record<EventName, number> = {
-  // 전환 — 구매 데이터가 없는 환경에서 가장 강한 신호
-  add_to_cart: 4.0,
+  /**
+   * 전환. 구매가 들어오면서 담기는 **구매의 약한 대리**로 내려간다 (2026-09-07, AI 제안).
+   *
+   * 담기→구매 전환이 100% 가 아니므로 "담고 안 산 사람" 과 "산 사람" 을 같은 무게로
+   * 두면 안 된다. 지켜야 하는 것은 절대값이 아니라 **purchase : add_to_cart ≥ 2 : 1**.
+   * 아직 측정값이 아니다 — 첫 구매 로그 1,000건쯤 쌓이면 실제 전환율로 재조정한다.
+   */
+  purchase: 8.0,
+  // 결제 화면까지 갔다. 담기보다 세지만 완결은 아니다. 전환 정의(CONVERT)에는 넣지 않는다
+  begin_checkout: 5.0,
+  add_to_cart: 3.0,
   // 장바구니를 열어본 것 자체가 구매 검토 신호다
   view_cart: 1.0,
   wishlist_toggle: 3.0,
@@ -303,6 +335,13 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
   recommendation_snapshot: 0,
   scroll_depth: 0, // 도달 깊이는 scrollDepthWeight() 로 따로 계산한다
 
+  /**
+   * 이유 선언은 상품 선호가 아니다. 벡터에 넣으면 purchase 와 이중 계산이 된다.
+   * `reasons` 값은 AI 가 선언 이유 vs 행동 추론 대조에 따로 쓴다.
+   */
+  purchase_reason_select: 0,
+
+
   // 메타. 선호도가 아니다
   session_start: 0,
   exit_summary: 0,
@@ -314,7 +353,7 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
    */
   /**
    * 담았다 뺀 상품. UI 좌절 3종과 달리 **상품을 특정하는** 부정 신호라
-   * 조사(7-2)가 가장 명확한 감점으로 꼽았다. add_to_cart 4.0 의 과대평가 검증에도 쓴다.
+   * 조사(7-2)가 가장 명확한 감점으로 꼽았다. add_to_cart 3.0 의 과대평가 검증에도 쓴다.
    */
   remove_from_cart: -2.0,
   rage_click: -2.0,
@@ -398,6 +437,86 @@ export function scrollDepthWeight(depthPercent: number): number {
   if (depthPercent >= 50) return 0.5;
   if (depthPercent >= 25) return 0.2;
   return 0;
+}
+
+/**
+ * 추천 배너 property. 계약 `recommendation-io-spec.md` §5-1.
+ *
+ * `banner_value` 는 **어휘집 문자열 그대로** 보낸다 (`contracts/product-feature-vocab.json`).
+ * 화면의 한국어 라벨(`product-form-labels-ko.json` 의 `ko`)을 보내면 한 글자 차이로
+ * 그 축이 통째로 매칭 실패하고 화면에는 아무 표시도 나지 않는다.
+ */
+export type BannerType =
+  | 'concern'
+  | 'ingredient'
+  | 'clean'
+  | 'price_bin'
+  | 'category'
+  | 'segment'
+  /** 신규·저노출 브랜드 전용 칸. 축이 아니라 자리라 `banner_value` 는 null */
+  | 'new_brand';
+
+/**
+ * 이 배너의 축을 어디서 골랐나. 없으면 "성향 추정이 맞았는지" 를 나중에 가릴 수 없다.
+ * - session    세션 행동으로 추정한 성향
+ * - profile    장기 성향(마트)
+ * - coldstart  성향 없음 → AI 기본값(concern·segment)
+ * - explore    성향이 있어도 20% 는 다른 축을 준다. A/B 표본
+ */
+export type TraitSource = 'session' | 'profile' | 'coldstart' | 'explore';
+
+export interface BannerEventProperties {
+  banner_type: BannerType;
+  banner_value: string | null;
+  /** 배너 영역에서 몇 번째 칸인가 (히어로는 0) */
+  banner_slot: number;
+  product_id: string;
+  trait_source: TraitSource;
+}
+
+/** 계약 §3.9. 10개로 고정 — 늘리면 응답이 흩어져 행동 추론과 대조할 표본이 준다 */
+export type PurchaseReason =
+  | 'ingredient'
+  | 'skin_fit'
+  | 'reviews'
+  | 'review_same_skin'
+  | 'price'
+  | 'brand_trust'
+  | 'texture_finish'
+  | 'clean_claim'
+  | 'recommendation'
+  | 'restock';
+
+/** 계약 §5 `items[]`. 단가는 전환 분석용이고 매출의 정본이 아니다 */
+export interface OrderItem {
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  sku_id?: string;
+}
+
+export interface BeginCheckoutProperties {
+  items: OrderItem[];
+  cart_value?: number;
+  currency?: string;
+}
+
+export interface PurchaseProperties {
+  order_id: string;
+  items: OrderItem[];
+  order_value?: number;
+  currency?: string;
+}
+
+/** 주문당 1회. 건너뛰면 `skipped: true` 와 빈 `reasons` 를 **반드시** 보낸다 — 유실과 구분해야 응답률을 센다 */
+export interface PurchaseReasonSelectProperties {
+  order_id: string;
+  /** 1~2개. `skipped` 면 [] */
+  reasons: PurchaseReason[];
+  primary_reason?: PurchaseReason;
+  /** 자유 입력 원문은 보내지 않는다. 분류값만 */
+  free_text_kind?: string;
+  skipped?: boolean;
 }
 
 export type PageType = 'product_detail' | 'product_list' | 'cart';

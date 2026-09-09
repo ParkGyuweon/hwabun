@@ -101,7 +101,7 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
           <Kpi label="상세 진입률" value={fmt.pct(overview.detailRate)} sub="노출 대비" />
           <Kpi label="상세 이탈률" value={fmt.pct(overview.bounceRate)} sub="추가 행동 없이 이탈" />
         </div>
-        <Panel title="관심도 TOP 5" source="mock" aside="행동 가중 합산 (담기 4.0 · 클릭 1.0 · 제거 −2.0)">
+        <Panel title="관심도 TOP 5" source="mock" aside="행동 가중 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)">
           <BarList
             items={productMetrics.slice(0, 5).map((m) => ({
               label: m.product.product_name,
@@ -111,6 +111,9 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
             }))}
             rank
           />
+          <p className="note">
+            관심도 = 행동별 발생 수 × 가중치. 가중치의 단일 출처는 frontend/src/types/log.ts 이며 값은 초기 가설입니다.
+          </p>
         </Panel>
       </details>
     </div>
