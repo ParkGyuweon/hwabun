@@ -87,10 +87,9 @@ public class CommerceController {
         }
 
         Cart cart = cart(actor.accountId());
-        CartItem item = cartItems.findByCartIdAndVariantId(cart.getId(), request.variantId())
-                .orElseGet(() -> new CartItem(UUID.randomUUID().toString(), cart.getId(), request.variantId(), 0));
-        item.quantity(item.getQuantity() + request.quantity());
-        return ResponseEntity.ok(cartItems.save(item));
+        cartItems.insertIfAbsent(UUID.randomUUID().toString(), cart.getId(), request.variantId());
+        cartItems.incrementQuantity(cart.getId(), request.variantId(), request.quantity());
+        return ResponseEntity.ok(cartItems.findByCartIdAndVariantId(cart.getId(), request.variantId()).orElseThrow());
     }
 
     @DeleteMapping("/cart/items/{id}")
@@ -170,13 +169,10 @@ public class CommerceController {
             @PathVariable String id
     ) {
         requireMember(actor);
-        return orders.findById(id)
-                .filter(order -> order.getMemberId().equals(actor.accountId()))
-                .map(order -> {
-                    order.paid();
-                    return ResponseEntity.ok(orders.save(order));
-                })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Optional<ShopOrder> order = orders.findById(id);
+        if (order.isEmpty() || !order.get().getMemberId().equals(actor.accountId())) return ResponseEntity.notFound().build();
+        orders.markPaid(id, actor.accountId());
+        return ResponseEntity.ok(orders.findById(id).orElseThrow());
     }
 
     private Cart cart(String memberId) {
