@@ -52,6 +52,10 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     → §4 파생(price_usd·rating 주입·loves 0) → 계약 검사(422) → 인코딩 → 즉시 카탈로그 편입
     → `batch/ingest/data/serving/registered_products.jsonl` 에 남아 재시작 후에도 유지
     시연 브랜드 SSAFY Beauty 8개는 이 파일에 미리 들어 있다 (catalog_registry.py 로 변환).
+    DELETE /api/products/{id}  판매 중단 — 후보에서 즉시 제외, 재등록하면 복귀 (Jira 219)
+
+배포 (Jira 219): deploy/recommend.Dockerfile · deploy/ec2-1 compose 의 `recommend` 서비스 (8300, 내부 전용).
+    등록 상품은 /data 볼륨. WORKERS=1 — 상태가 프로세스 메모리라 워커를 늘리면 답이 갈린다.
 """
 import glob
 import json
@@ -113,7 +117,10 @@ class Engine:
             if os.environ.get("REGISTERED_PRODUCTS_PATH") else Registry()
         self._vocab = vpr.load_vocab()
         self._medians, self._overall = vpr.rating_reference()
-        self._append(self.registry.load(), persist=False)
+        records, inactive = self.registry.load_ops()
+        self._append(records, persist=False)
+        # 비활성(판매 중단) 상품 — 후보에서만 빠진다. 벡터·행은 남아 기존 순위 계산이 안 흔들린다 (Jira 219)
+        self.inactive: set[str] = {g for g in inactive if g in self.index}
         self.planner = BannerPlanner(self.enc, self.products, self.index)   # §5-1 hero·banners (Jira 218)
         # 클릭·상세 진입 이벤트가 그대로 싣는 값 (event-properties recommendation_click.algorithm).
         # 모델이 바뀌면 문자열이 바뀌어야 하므로 학습 시각과 트리 수를 넣는다
@@ -185,6 +192,21 @@ class Engine:
                 self.registry.append(x)
         return [x["product_id"] for x, _ in new_rows], replaced
 
+    def deactivate(self, product_id):
+        """판매 중단 — 추천 후보에서 즉시 빠진다. 재등록(POST)하면 돌아온다"""
+        if product_id not in self.index:
+            raise KeyError(product_id)
+        self.inactive.add(product_id)
+        self.registry.deactivate(product_id)
+
+    def _mask_inactive(self, scores):
+        if not self.inactive:
+            return scores
+        s = np.asarray(scores, float).copy()
+        for g in self.inactive:
+            s[self.index[g]] = -np.inf
+        return s
+
     def register(self, inputs):
         """등록 입력(계약 필드) 여러 건 → 파생 → 검사 → 편입. 하나라도 계약 위반이면 전부 거절"""
         derived, warnings = [], {}
@@ -193,6 +215,8 @@ class Engine:
             warnings[x["product_id"]] = validate(x, self._vocab, self._medians, self._overall)
             derived.append(x)
         added, replaced = self._append(derived)
+        for x in derived:
+            self.inactive.discard(x["product_id"])          # 다시 등록하면 재활성
         is_new = self.rec.new_mask()
         out = []
         for x in derived:
@@ -273,7 +297,7 @@ class Engine:
         else:
             st, source = UserVector(), "cold_start"
         t0 = time.perf_counter()
-        scores = self.rec.score(st, persona)                      # 한 번만 계산 — 메인·배너가 같이 쓴다
+        scores = self._mask_inactive(self.rec.score(st, persona))   # 한 번만 계산 — 메인·배너가 같이 쓴다
         reserved_main = 0 if banner_slots > 0 else reserved
         ranked = self.rec.rank(st, persona=persona, k=size, reserved=reserved_main, flags=True,
                                scores=scores)
@@ -365,6 +389,7 @@ def health():
     e = get_engine()
     return {"ok": True, "scorer": e.scorer, "products": len(e.products),
             "seed_products": e.n_seed, "registered_products": len(e.products) - e.n_seed,
+            "inactive_products": len(e.inactive),
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
@@ -426,8 +451,21 @@ def get_product(product_id: str):
     p = e.products[i]
     return {"product_id": product_id, "brand_name": p.get("brand_name"),
             "product_source": p.get("product_source", "seed_catalog"),
+            "active": product_id not in e.inactive,
             "supporters": int(e.supporters[i]) if e.supporters is not None else None,
             "reserved_candidate": bool(e.rec.new_mask()[i])}
+
+
+@app.delete("/api/products/{product_id}")
+def deactivate_product(product_id: str):
+    """판매 중단·삭제 — 추천 후보에서 즉시 빠진다 (Jira 219). 백엔드가 상품 INACTIVE/삭제 시 부른다.
+    기록은 registered_products.jsonl 에 op 행으로 남아 재시작 후에도 유지. 재등록(POST)하면 재활성."""
+    e = get_engine()
+    try:
+        e.deactivate(product_id)
+    except KeyError:
+        raise HTTPException(404, f"product_id {product_id} 없음")
+    return {"product_id": product_id, "active": False, "inactive_products": len(e.inactive)}
 
 
 @app.post("/api/events")

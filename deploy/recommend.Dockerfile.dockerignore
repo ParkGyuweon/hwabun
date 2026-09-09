@@ -1,0 +1,38 @@
+# recommend.Dockerfile 전용 ignore (BuildKit 이 Dockerfile 옆의 <이름>.dockerignore 를 쓴다).
+# 루트 .dockerignore 는 batch/·contracts/·simulator/ 를 통째로 빼서 백엔드 이미지용이다 — 여기서는
+# 필요한 것만 남기고 큰 데이터·산출물을 뺀다. COPY 에 적힌 파일이 여기 걸리면 빌드가 실패한다.
+.git
+**/__pycache__
+**/node_modules
+**/build
+**/dist
+**/.gradle
+**/.idea
+1차 평가
+docs
+monitoring
+infra
+kafka
+streaming
+backend
+shop_backend
+deploy/ec2-1
+frontend/**
+!frontend/src/types/log.ts
+simulator/**
+!simulator/personas/data/personas_9900.json
+!simulator/personas/data/personas_100_agent.json
+!simulator/personas/data/personas_holdout_a.json
+!simulator/personas/data/personas_holdout_b.json
+batch/ingest/data/**
+!batch/ingest/data/products_200.json
+!batch/ingest/data/concern_from_reviews.npz
+!batch/ingest/data/affinity_lift.csv
+!batch/ingest/data/eval_metadata.jsonl
+!batch/ingest/data/eval_metadata_agent.jsonl
+!batch/ingest/data/eval_metadata_holdout_a.jsonl
+!batch/ingest/data/eval_metadata_holdout_b.jsonl
+!batch/ingest/data/serving/**
+batch/jobs/test_*.py
+batch/serving/test_*.py
+contracts/persona/data

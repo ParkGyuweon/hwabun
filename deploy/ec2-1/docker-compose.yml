@@ -9,8 +9,27 @@ services:
       ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
       ACTIVITY_EVENTS_PARTITIONS: ${ACTIVITY_EVENTS_PARTITIONS:-3}
       CREATE_ACTIVITY_EVENTS_TOPIC: "false"
+      RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
     expose:
       - "8080"
+    mem_limit: 1g
+
+  # 추천 추론 서버 (AI, 계약 §5). 백엔드가 RECOMMEND_URL=http://recommend:8300 으로 프록시한다.
+  # 외부 포트는 열지 않는다 — 인증이 없어 내부 네트워크 전용. 상태는 메모리 + /data 볼륨(등록 상품).
+  # WORKERS 는 1 로 둔다: 사용자 상태·등록 상품이 프로세스 메모리라 워커를 늘리면 서로 다른 답을 낸다.
+  recommend:
+    build:
+      context: ../..
+      dockerfile: deploy/recommend.Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: "8300"
+      WORKERS: "1"
+      REGISTERED_PRODUCTS_PATH: /data/registered_products.jsonl
+    volumes:
+      - recommend-data:/data
+    expose:
+      - "8300"
     mem_limit: 1g
 
   nginx:
@@ -70,3 +89,4 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
+  recommend-data:
