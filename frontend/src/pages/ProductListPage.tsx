@@ -13,6 +13,7 @@ import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
 import { labelKo } from '../lib/formLabels';
+import type { FilterKind } from '../types/log';
 import AdBanner from '../components/banner/AdBanner';
 import type { BannerAxis } from '../lib/bannerCreative';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
@@ -430,7 +431,7 @@ export default function ProductListPage({
   };
 
   /** 무엇으로 좁혔는지가 취향을 말해준다. 필터 종류를 함께 남긴다 */
-  const applyFilter = (kind: string, value: string, reset = true) => {
+  const applyFilter = (kind: FilterKind, value: string, reset = true) => {
     track('filter_change', { filter_kind: kind, filter_value: value });
     if (reset) setShown(PAGE_SIZE);
   };
