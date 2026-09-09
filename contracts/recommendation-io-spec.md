@@ -1137,6 +1137,21 @@ INACTIVE 로 바꾸거나 삭제할 때 한 번 부른다. 벡터·행은 지우
 기록은 `registered_products.jsonl` 에 `{"product_id", "_op": "deactivate", "at"}` 행으로 남아 재시작 후에도 유지되고,
 같은 id 를 다시 `POST /api/products` 하면 재활성된다. 원천 200개도 중단할 수 있다. 없는 id 는 404.
 
+### 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222)
+
+승인 훅(요청서 4-1)이 없어도 카탈로그가 어긋나지 않게, 추천 서버가 **백엔드 공개 API** 를 읽어 맞춘다.
+`POST /api/catalog/sync?source=http://shop-backend:8090` (수동) 또는 `SHOP_BACKEND_URL` + `CATALOG_SYNC_INTERVAL_SEC`(기본 300) 로 주기 실행.
+
+| 단계 | 규칙 |
+|---|---|
+| 읽기 | `GET /api/products` (ACTIVE 요약) → 새 상품·요약이 바뀐 상품만 `GET /api/products/{id}` 로 전성분을 받는다 |
+| 매핑 | `productId·productName·brandName(없으면 brandId)·secondaryCategory·tertiaryCategory·highlights·ingredients·priceKrw` → 등록 입력. **rating 은 넘기지 않는다** — 백엔드 값도 중앙값 주입이라 우리 §4.2 로 다시 주입해 기준을 하나로 |
+| 편입 | `POST /api/products` 와 같은 경로(§4 파생·검사·인코딩). 기록에 `sync_source=shop_backend`·`sync_hash` 를 남겨 바뀐 것만 다시 인코딩 |
+| 중단 | 이전 동기화로 들어온 상품이 ACTIVE 목록에서 빠지면 `deactivate`. 시연 시드(SSAFY Beauty, sync_source 없음)는 건드리지 않는다 |
+| 실패 | 백엔드에 못 붙으면 `error` 를 채워 200 — 추천은 영향 없음. 상품 하나가 계약 위반이면 `rejected[id]` 에만 남고 나머지는 진행 |
+
+응답·`/health.catalog_sync.last`: `listed · added · replaced · unchanged · deactivated · rejected · ms`. 훅과 동기화가 같이 돌아도 같은 id 는 갈아 끼우기라 충돌이 없다.
+
 ### 배포 (Jira 219)
 
 `deploy/recommend.Dockerfile` + `deploy/ec2-1/docker-compose.yml` 의 `recommend` 서비스 (8300, 내부 전용, `/data` 볼륨에 등록 상품).
