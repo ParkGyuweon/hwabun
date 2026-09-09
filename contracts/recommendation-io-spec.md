@@ -936,9 +936,9 @@ GET /api/recommend?persona_id={id}&size=10
 |---|---:|---|
 | `persona_id` | — | **선택** (2026-09-09, Jira 214). 없으면 **익명 cold_start** — 상태·속성 친화도 없이 인기 prior + MMR. 페르소나 표에 **없는 값**(실회원 `accountId`)도 받는다: 속성 친화도만 빠지고, `POST /api/events` 로 쌓인 행동으로 개인화된다. **404 는 내지 않는다** — 백엔드 프록시가 회원↔페르소나 매핑 없이 호출할 수 있게 |
 | `size` | 10 | 메인 목록 칸 수 |
-| `banner_slots` | 0 | 배너 칸 수. 0 이면 `banners` 를 안 내린다 |
-| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). ⚠ **어느 자리인지 확정 대기** — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 카탈로그에 **없으면 칸은 일반 순위로 채워지고** 응답 `reserved_filled` 가 0 이다 — 원천 200개는 그 상태. **등록 상품**(§5-2, Jira 216)이 들어오면 채워진다. 시연용 자사 브랜드 **SSAFY Beauty 8개**는 시작 시 이미 편입돼 있어 `reserved=2` 면 칸 9·10 이 SSAFY 상품이다 |
-| `axes` | — | 축 배너에 쓸 축 순서. 안 주면 `concern,segment` |
+| `banner_slots` | 0 | 배너 칸 수 (최대 12). 0 이면 `hero`·`banners` 를 안 내린다. **> 0 이면 `reserved` 전용 칸이 배너 뒤 칸으로 가고 `items` 는 순수 순위** (프론트 확정 2026-09-09, Jira 218) |
+| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). **자리 확정 (2026-09-09): `banner_slots > 0` 이면 배너 뒤 칸, 아니면 메인 안.** 이전 메모 — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 카탈로그에 **없으면 칸은 일반 순위로 채워지고** 응답 `reserved_filled` 가 0 이다 — 원천 200개는 그 상태. **등록 상품**(§5-2, Jira 216)이 들어오면 채워진다. 시연용 자사 브랜드 **SSAFY Beauty 8개**는 시작 시 이미 편입돼 있어 `reserved=2` 면 칸 9·10 이 SSAFY 상품이다 |
+| `axes` | `concern,segment` | 축 배너 순환 순서. `concern · ingredient · clean · price_bin · category · segment` 중 쉼표 구분, 그 외 값은 **422** `INVALID_AXES`. 축 칸(`banner_slots − reserved`)을 이 순서로 돌며 채운다 |
 
 > **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
 > 중복을 배제해야** 합니다. 엔드포인트를 나누면 같은 상품이 두 자리에 뜨거나
@@ -1066,20 +1066,26 @@ GET /api/recommend?persona_id={id}&size=10
     }
   ],
 
+  "banner_slots": 6, "axes": ["concern", "segment"], "banner_list_id": "banner_row",
   "hero": {
     "product_id": "P420652",
     "banner_type": "concern",
-    "banner_value": "Pores"
+    "banner_value": "Pores",
+    "trait_source": "session"
   },
   "banners": [
     { "banner_slot": 1, "banner_type": "concern",   "banner_value": "Pores",
-      "product_id": "P310022", "score": 0.7112 },
+      "product_id": "P310022", "product_name": "…", "brand_name": "…", "score": 0.7112,
+      "reserved": false, "trait_source": "session", "reason": { "cf": "…" }, "product_source": "seed_catalog" },
     { "banner_slot": 2, "banner_type": "segment",   "banner_value": "oily",
-      "product_id": "P448821", "score": 0.6640 },
+      "product_id": "P448821", "product_name": "…", "brand_name": "…", "score": 0.6640,
+      "reserved": false, "trait_source": "profile", "reason": { "attribute": "…" }, "product_source": "seed_catalog" },
     { "banner_slot": 5, "banner_type": "new_brand", "banner_value": null,
-      "product_id": "P901133", "score": 0.3104, "reserved": true },
+      "product_id": "SB000001", "product_name": "…", "brand_name": "SSAFY Beauty", "score": 0.3104,
+      "reserved": true, "trait_source": "session", "reason": { "attribute": "…" }, "product_source": "brand_registered" },
     { "banner_slot": 6, "banner_type": "new_brand", "banner_value": null,
-      "product_id": "P902470", "score": 0.2988, "reserved": true }
+      "product_id": "SB000002", "product_name": "…", "brand_name": "SSAFY Beauty", "score": 0.2988,
+      "reserved": true, "trait_source": "session", "reason": { "new_brand": "…" }, "product_source": "brand_registered" }
   ]
 }
 ```
@@ -1163,9 +1169,21 @@ r/200 → r/208 로 흔들리고, **그것만으로 트리 모델이 순위를 �
 > `banner_click` 에 그대로 싣도록 응답 필드도 같은 이름으로 맞췄다. 합성 로그 생성기
 > (`gen_behavior_logs.py`, `--no-banner-events` 로 끔)도 같은 이름으로 배너 2종을 낸다.
 
-> **상태: 제안.** 프론트와 형태를 합의한 단계이고 백엔드 `RankingService` 가
-> 아직 없어 지금은 배치 산출물까지만 나옵니다. **형태를 먼저 확정해 두고 만들 때
-> 이대로 만드는** 순서입니다.
+> **상태: 구현 (2026-09-09, Jira 218).** `batch/serving/banners.py` — `banner_slots > 0` 이면 응답에
+> `hero`·`banners[]` 가 실린다. 프론트 확정(09-09) 네 가지를 그대로 따른다:
+>
+> | 확정 | 구현 |
+> |---|---|
+> | 전용 칸은 **배너 칸** | `banner_slots=6&reserved=2` → 칸 5·6 `new_brand`(`banner_value: null`, 키 유지). `items` 는 순수 순위(reserved=0 과 동일). `list_id=banner_row` 로 CTR 을 따로 본다 |
+> | `hero.banner_type` **항상** 있음 | `items[0]` 에 사용자 축과 맞는 값, 없으면 상품 자신의 값(concern → ingredient → clean → category → price_bin). 이미지 변형 5종 선택용 |
+> | 성분 축은 **위치가중 ≥ 0.3** | `ingredient` 소속은 전성분 앞 30% 성분만 (`INGREDIENT_MIN_POSITION`). 대시보드 미량 경고와 충돌 안 함 |
+> | `reason` 은 **key 하나** | 아이템·배너 모두 `attribute → content → cf → new_brand → popular` 우선순위로 하나. 문장은 프론트가 다시 쓴다 |
+>
+> **축 값은 어디서 오나 (`trait_source`)** — `session`: 시드 상품(긍정 가중)에서 가장 많은 값(concern·ingredient·clean·category·price_bin) ·
+> `profile`: 페르소나 속성(segment, skin_type → skin_tone → eye_color → hair_color 순) · `coldstart`: 시드도 속성도 없으면 축에서 상품이 가장 많은 값 ·
+> `explore`: 서버는 안 쓴다(화면 몫). 축 안 순위는 추천 점수 그대로, 축은 필터다. 축이 마르면 점수순 일반 상품으로 채우고 문구는 그 상품의 축.
+> 신규가 `reserved` 보다 적으면 남은 칸은 일반 상품(`reserved: false`)으로 채운다 — **칸은 비지 않는다.**
+> 성능: 점수 계산 1회를 메인·배너가 같이 쓴다. 6칸 포함 HTTP 왕복 p95 ≈ 12ms (SLA 기준 **p95 200ms**, 프론트 확정).
 
 ### 배너는 정확도 장치가 아닙니다
 
@@ -1301,10 +1319,10 @@ FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서
 | CF 가점 (§4-1) | **채택** (2026-09-07). β = 1.0 · 가점 전용 · 지지자 3명 미만 차단 |
 | 학습 결합 (§4-2) | **채택** (2026-09-07). §5 처리 4단계가 모델 추론으로 바뀌고 `breakdown` 항별 분해가 사라진다. 선형은 폴백으로 남는다 |
 | 모델을 자바에서 어떻게 읽나 | **파이썬 추론 서버 참조 구현 있음** (2026-09-08, `batch/serving/recommend_server.py`, §5). 백엔드가 프록시하는 형태를 권함. ONNX 는 백엔드 결정 시 — 그때도 이 서버가 대조 기준 |
-| `breakdown` 대체 형태 | **초안 있음 — 프론트 확정 대기.** `items[].reason` 에 실제로 있던 신호만 문장으로 (`cf`·`content`·`attribute`·`new_brand`·`popular`, §5 참조 구현 표). 문구·개수는 프론트와 협의 |
-| 응답 시간 기준 | **실측 p95 15.2ms** (HTTP 왕복, 파이썬 단일 프로세스). 기준값(SLA)은 미정 — 백엔드 프록시·네트워크 포함해 다시 잰 뒤 정한다 |
+| `breakdown` 대체 형태 | **확정 (2026-09-09, Jira 218).** 아이템당 **key 하나**, 우선순위 attribute → content → cf → new_brand → popular. 문장은 프론트가 종류별로 다시 쓴다. (이전: `items[].reason` 에 실제로 있던 신호만 문장으로 (`cf`·`content`·`attribute`·`new_brand`·`popular`, §5 참조 구현 표). 문구·개수는 프론트와 협의 |
+| 응답 시간 기준 | **p95 200ms 확정** (프론트, 2026-09-09) — 넘기면 프론트가 배너를 접고 인기순으로 그린다. 실측 p95 15.2ms(메인만)·≈12ms(배너 6칸 포함, TestClient). 이전 문구: 기준값(SLA)은 미정 — 백엔드 프록시·네트워크 포함해 다시 잰 뒤 정한다 |
 | 신규 브랜드 전용 칸 (§5-1) | **구현** (2026-09-08, Jira 129). `Recommender.rank(reserved=N, flags=True)`. 지금 카탈로그는 신규 0개라 결과 불변 (부록 U) |
-| 전용 칸의 자리 | **미정 · 프론트와 협의.** 측정·구현은 메인 `size` 칸 안. `reserved` 파라미터 설명은 배너 칸으로 적혀 있어 어긋남 — 확정 후 한쪽으로 정리 |
+| 전용 칸의 자리 | **배너 칸으로 확정 (2026-09-09, 프론트).** `banner_slots > 0` 이면 배너 뒤 `reserved` 칸, `= 0` 이면 예전처럼 메인 안(측정 형태 보존). 이전: 측정·구현은 메인 `size` 칸 안. `reserved` 파라미터 설명은 배너 칸으로 적혀 있어 어긋남 — 확정 후 한쪽으로 정리 |
 | 사용자 식별 (`persona_id`) | **선택 파라미터로 열었다** (2026-09-09, Jira 214). 없으면 익명 cold_start, 표에 없는 값은 실회원 id 로 받아 행동으로만 개인화. 404 없음. 회원 `accountId` ↔ 페르소나 매핑은 **백엔드 결정 대기** (요청서 A 매핑표 / B 프론트 전달 / C 익명 — C 는 서버 준비 완료) |
 | 프론트·백엔드 연결 | **2026-09-09 요청서 전달.** 프론트: 이름 5개(`user_id→persona_id`·`k→size`·`rank→position`·`slot→banner_slot`·`model_version→algorithm`) + `recommendation_id`·`list_id` 추가 + Vite 프록시. 백엔드: `/api/recommend` 패스스루 컨트롤러·폴백·타임아웃 300ms 제안. 로컬 실측: Vite 프록시 한 줄로 5173→8300 200 |
 | 시연용 자사 브랜드 (SSAFY Beauty) | **편입 완료** (2026-09-09, Jira 216, §5-2). `POST /api/products` 로 등록 즉시 카탈로그에 들어가고, 8개는 `registered_products.jsonl` 에 미리 들어 있다. `reserved=2` 면 칸 9·10 이 SSAFY. 기존 200개 순위는 분모 고정으로 보존. 편향 의혹은 Jira 217 에서 측정으로 닫힘 — 등록 상품 특유 편향 아님, 고침 둘 기각 (§5-2 표) |
