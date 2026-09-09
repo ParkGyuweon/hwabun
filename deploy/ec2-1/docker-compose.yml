@@ -28,6 +28,8 @@ services:
       REGISTERED_PRODUCTS_PATH: /data/registered_products.jsonl
       PRESCRIPTIONS_PATH: /data/prescriptions.jsonl
       GMS_KEY: ${GMS_KEY:-}                      # 처방 문장 생성 (없으면 /api/prescription 만 503)
+      SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222). 비우면 안 함
+      CATALOG_SYNC_INTERVAL_SEC: ${CATALOG_SYNC_INTERVAL_SEC:-300}
     volumes:
       - recommend-data:/data
     expose:

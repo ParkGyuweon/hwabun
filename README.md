@@ -1,14 +1,10 @@
 # S15P21A306
 
-**HWABUN** — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(**BLOOM**)과
-인사이트 대시보드입니다. 행동 로그를 모아 브랜드에게 지표로 돌려주고,
-그 위에서 상품 추천을 계산합니다.
+HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)과 인사이트 대시보드.
+
+기준일 2026-09-09
 
 ## 1. 시스템 아키텍처
-
-한 통합 쇼핑몰(BLOOM)에 여러 브랜드가 입점합니다. 소비자 행동 로그가 **수집 → Kafka → Spark → Mart** 로 흘러
-브랜드 대시보드가 되고, 그 옆에서 **추천 서버**가 같은 카탈로그로 개인화 추천·배너·처방 문장을 냅니다.
-모든 경계는 `contracts/` 의 계약이 잇습니다. (2026-09-09 기준)
 
 ```
 [ 사용자 ]                          [ 서비스 · frontend/ (React, Vite 5173) ]
@@ -21,7 +17,7 @@
               ▼                                                                             ▼
 [ 쇼핑몰 백엔드 · shop_backend/ (Spring, 8090, MySQL) ]          [ 수집 · backend/ (Spring, 8080) ]
  로그인(JWT)·브랜드·상품·주문·결제·리뷰·피드백·정산·판매자 대시보드     POST /api/events → 검증 → Kafka activity-events
- 본 구현은 feat/shop-backend 브랜치 (dev 미머지)                      key=session_id · 파티션 3 · 백프레셔 429/503
+ 상품 등록 계약(어휘 검증·unmapped 저장) 구현, dev 머지              key=session_id · 파티션 3 · 백프레셔 429/503
               │  (예정) /api/recommend 프록시 · 승인 시 POST /api/products            │
               ▼                                                                       ▼
 [ 추천 · batch/serving/ (FastAPI, 8300, 내부 전용) ]              [ 처리 · streaming/ (Spark 3.5.6) ]
@@ -30,6 +26,7 @@
  DELETE /api/products   판매 중단                                                 Q3 derive_facts → 상품·배너 Fact
  POST /api/events       세션 상태 갱신 (Redis 자리, 지금은 메모리)                 Q4 build_marts → content/banner/segment daily Mart
  POST /api/prescription 대시보드 처방 문장 (LLM gpt-4.1-mini, 자동 거부 포함)      Q5 validate → 품질 리포트
+ POST /api/catalog/sync 쇼핑몰 백엔드 ACTIVE 상품 동기화 (승인 훅 없어도 카탈로그 일치)
         ▲                                                                              │
         │ 모델·산출물 (오프라인 배치 batch/jobs/)                                        ▼
  Sephora 리뷰 844,865건 · 상품 200개                                       [ 소비 ]  브랜드 대시보드 (지금은 mocks/ 표본,
@@ -39,20 +36,6 @@
 [ 운영 · deploy/ec2-1 ]  docker compose — backend(8080) · recommend(8300) · nginx(443 → /api/ → backend) · Prometheus · Grafana
 ```
 
-**추천 품질.** 대표 지표 Recall@10 **43.95%** (holdout_a 2,000명) · 확인 집합 holdout_b 43.20%.
-CBF 단독 23.39% → CF 가점 38%대 → 학습 결합(LTR) 43%대. 세 평가 축(오프라인·재생·동적)이 0.6%p 안에 모입니다.
-서버 응답은 배너 6칸 포함 p95 15ms, 프론트 기준 SLA 200ms.
-
-**계약이 모듈을 잇습니다.** 이벤트는 `contracts/event-schema.json`, 추천 입출력은 `contracts/recommendation-io-spec.md`,
-처방 문장은 `contracts/prescription-api-spec.md`, 상품 등록은 `contracts/product-registration-spec.md` 가 단일 출처입니다.
-기준은 [`contracts/README.md`](contracts/README.md) 를 따릅니다.
-
-**아직 이어지지 않은 것 (2026-09-09).**
-- 쇼핑몰 백엔드 → 추천 서버 프록시(`/api/recommend`)와 상품 승인 시 등록 호출 — 백엔드 요청서 전달, 답 대기. 그동안 프론트는 Vite 프록시로 8300 직접
-- 프론트 추천 필드 이름 정렬(`persona_id·size·position·banner_slot·algorithm`)과 `recommendation_id` 싣기 — 프론트 진행 중
-- 회원 `accountId` ↔ 페르소나 매핑 — 서버는 익명·미등록 회원 cold_start 로 열어 둠 (A/B/C 안 중 백엔드 결정)
-- 대시보드 ↔ Mart 연결, 사용자 상태 Redis, `shop_backend` dev 머지
-
 ---
 
 ## 2. 기술 스택
@@ -61,7 +44,7 @@ CBF 단독 23.39% → CF 가점 38%대 → 학습 결합(LTR) 43%대. 세 평가
 | --- | --- | --- | --- |
 | 프론트엔드 | React · TypeScript · Vite | 19.2 · 6.0 · 8.2 | 엔트리 3개 — 쇼핑몰 `index.html` · 브랜드 대시보드 `dashboard.html` · 플랫폼 운영 `platform.html`. dev 5173. 프록시: 인증·브랜드·상품·주문·리뷰·피드백 → 8090, `/api/recommend` → 8300, 그 외 `/api` → 8080 |
 | | oxlint | 1.79 | ESLint 대신 사용 |
-| 쇼핑몰 백엔드 | Spring Boot · JPA · MySQL | 4.1.1 · 21 · 8.4 | `shop_backend/` (8090, MySQL 13306). 로그인(JWT)·브랜드·상품·주문·결제·리뷰·피드백·정산·판매자 대시보드. 본 구현은 `feat/shop-backend`, dev 미머지 |
+| 쇼핑몰 백엔드 | Spring Boot · JPA · MySQL | 4.1.1 · 21 · 8.4 | `shop_backend/` (8090, MySQL 13306). 로그인(JWT)·브랜드·상품(등록 계약 검증)·주문·결제·리뷰·피드백·정산·판매자 대시보드 |
 | 수집 서버 | Spring Boot · Java | 4.1.1 · 21 | `backend/` (8080). `POST /api/events` → Kafka. Actuator + Micrometer 로 Prometheus 메트릭 |
 | | springdoc-openapi | 3.1.0 | Swagger UI |
 | 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id` |
@@ -80,10 +63,6 @@ CBF 단독 23.39% → CF 가점 38%대 → 학습 결합(LTR) 43%대. 세 평가
 ---
 
 ## 3. 현재 폴더 구조
-
-지금 레포에 실제로 들어있는 것입니다. (최종 확인 2026-09-09)
-
-> 문서 곳곳의 `Research/…` 경로는 **레포 밖** 개인 연구 폴더(실험 스크립트·원천 정리)를 가리킵니다. 레포에는 채택된 결과만 들어오며, `Research/` 는 뒤처져 있어도 됩니다.
 
 ```
 S15P21A306/
@@ -236,10 +215,11 @@ S15P21A306/
 │       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products · POST /api/prescription · POST /api/events · /health
 │       ├── banners.py                   §5-1 hero·배너 6칸 조립 — 축 값(session/profile/coldstart)·전용 칸 5·6·reason 단일 key (Jira 218)
 │       ├── prescription.py              대시보드 처방 문장 POST /api/prescription — v0.3 프롬프트·JSON 스키마 강제·§6 자동 거부·저장 (Jira 220)
+│       ├── catalog_sync.py              쇼핑몰 백엔드(8090) ACTIVE 상품 → 카탈로그 편입·갱신·중단. POST /api/catalog/sync · 주기 실행 (Jira 222)
 │       ├── catalog_registry.py          등록 입력 → §4 파생 → 계약 검사 → 인코딩 → 카탈로그 확장. CLI 로 카탈로그 파일 변환
 │       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
 │       ├── requirements.txt             fastapi · uvicorn · httpx
-│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py · test_prescription.py   (63개, 처방은 가짜 LLM)
+│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py · test_prescription.py · test_catalog_sync.py   (가짜 LLM·가짜 백엔드)
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/
@@ -285,7 +265,7 @@ S15P21A306/
 │   └── build.gradle · gradlew
 │
 ├── shop_backend/                    Spring Boot 쇼핑몰 백엔드 (백엔드) — 8090, MySQL 13306
-│   ├── src/main/java/com/cosmetic/shopbackend/  dev 에는 뼈대만. 본 구현(컨트롤러 8종)은 feat/shop-backend
+│   ├── src/main/java/com/cosmetic/shopbackend/  컨트롤러 8종 — identity·brand·catalog·commerce·feedback·dashboard·admin·settlement
 │   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md   테이블 29개 DDL·설명
 │   └── MYSQL-SETUP.md · docker-compose.mysql.yml     로컬 MySQL 실행
 │

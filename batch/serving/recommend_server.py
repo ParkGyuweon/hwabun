@@ -53,6 +53,8 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     → `batch/ingest/data/serving/registered_products.jsonl` 에 남아 재시작 후에도 유지
     시연 브랜드 SSAFY Beauty 8개는 이 파일에 미리 들어 있다 (catalog_registry.py 로 변환).
     DELETE /api/products/{id}  판매 중단 — 후보에서 즉시 제외, 재등록하면 복귀 (Jira 219)
+    POST /api/catalog/sync     쇼핑몰 백엔드(8090) ACTIVE 상품을 읽어 편입·갱신·중단 (Jira 222).
+                               SHOP_BACKEND_URL + CATALOG_SYNC_INTERVAL_SEC 로 주기 실행. 승인 훅 없어도 카탈로그 일치
 
 대시보드 처방 문장 (Jira 220) — POST /api/prescription
     입력은 docs/dashboard/action-prescription-prompt.md §2 그대로 (판정 verb 는 프론트가 정함).
@@ -90,6 +92,7 @@ from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive, 
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
+import catalog_sync                                                     # noqa: E402  (Jira 222)
 import validate_product_registration as vpr                    # noqa: E402
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
@@ -385,8 +388,45 @@ def get_engine():
     return engine
 
 
+# ── 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222) ─────────────────────────────────
+SHOP_BACKEND_URL = os.environ.get("SHOP_BACKEND_URL")                       # 예: http://shop-backend:8090
+CATALOG_SYNC_INTERVAL = int(os.environ.get("CATALOG_SYNC_INTERVAL_SEC", "0") or 0)   # 0 이면 주기 실행 안 함
+_last_sync: Optional[dict] = None
+_sync_lock = __import__("threading").Lock()
+
+
+def run_catalog_sync(base_url=None):
+    """한 번 동기화. 동시에 두 번 돌지 않게 잠근다 (주기 스레드 + 수동 호출)"""
+    global _last_sync
+    url = base_url or SHOP_BACKEND_URL
+    if not url:
+        return {"error": "SHOP_BACKEND_URL 이 없다", "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    with _sync_lock:
+        _last_sync = catalog_sync.sync(get_engine(), url, log=lambda m: print(m, flush=True))
+    return _last_sync
+
+
+def _sync_loop():
+    import threading
+    while True:
+        time.sleep(CATALOG_SYNC_INTERVAL)
+        try:
+            run_catalog_sync()
+        except Exception as ex:                    # 동기화가 죽어도 추천은 계속 돈다
+            print(f"[catalog-sync] 실패: {ex.__class__.__name__}: {ex}", flush=True)
+
+
 @app.on_event("startup")
 def _startup():
+    if SHOP_BACKEND_URL:
+        import threading
+        try:
+            run_catalog_sync()                     # 첫 동기화는 기동 때 바로
+        except Exception as ex:
+            print(f"[catalog-sync] 첫 동기화 실패: {ex.__class__.__name__}: {ex}", flush=True)
+        if CATALOG_SYNC_INTERVAL > 0:
+            threading.Thread(target=_sync_loop, daemon=True, name="catalog-sync").start()
+            print(f"[catalog-sync] {SHOP_BACKEND_URL} 를 {CATALOG_SYNC_INTERVAL}초마다 읽는다", flush=True)
     get_engine()
 
 
@@ -396,6 +436,10 @@ def health():
     return {"ok": True, "scorer": e.scorer, "products": len(e.products),
             "seed_products": e.n_seed, "registered_products": len(e.products) - e.n_seed,
             "inactive_products": len(e.inactive),
+            "catalog_sync": ({"source": SHOP_BACKEND_URL, "interval_sec": CATALOG_SYNC_INTERVAL,
+                              "last": ({k: (len(v) if isinstance(v, (list, dict)) else v)
+                                        for k, v in _last_sync.items()} if _last_sync else None)}
+                             if SHOP_BACKEND_URL else None),
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
@@ -460,6 +504,15 @@ def get_product(product_id: str):
             "active": product_id not in e.inactive,
             "supporters": int(e.supporters[i]) if e.supporters is not None else None,
             "reserved_candidate": bool(e.rec.new_mask()[i])}
+
+
+@app.post("/api/catalog/sync")
+def catalog_sync_now(source: Optional[str] = Query(None, description="백엔드 베이스 URL. 없으면 SHOP_BACKEND_URL")):
+    """쇼핑몰 백엔드 ACTIVE 상품을 지금 읽어 카탈로그에 맞춘다 (Jira 222). 승인 훅이 없어도 카탈로그가 어긋나지 않게.
+    추가·갱신·중단·거부 목록을 돌려준다. 백엔드에 못 붙으면 error 를 채워 200 으로 답한다 (추천은 영향 없음)."""
+    if not (source or SHOP_BACKEND_URL):
+        raise HTTPException(400, {"code": "NO_SOURCE", "message": "source 파라미터나 SHOP_BACKEND_URL 이 필요하다"})
+    return run_catalog_sync(source)
 
 
 @app.delete("/api/products/{product_id}")
