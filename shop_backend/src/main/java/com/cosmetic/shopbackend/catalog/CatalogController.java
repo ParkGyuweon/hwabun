@@ -1,6 +1,7 @@
 package com.cosmetic.shopbackend.catalog;
+import org.springframework.transaction.annotation.Transactional;
 import com.cosmetic.shopbackend.brand.*; import com.cosmetic.shopbackend.identity.AccountRole; import com.cosmetic.shopbackend.security.ShopPrincipal; import com.fasterxml.jackson.core.JsonProcessingException; import com.fasterxml.jackson.databind.ObjectMapper; import jakarta.validation.Valid; import jakarta.validation.constraints.*; import org.springframework.http.*; import org.springframework.security.core.annotation.AuthenticationPrincipal; import org.springframework.web.bind.annotation.*; import org.springframework.web.server.ResponseStatusException; import java.math.*; import java.util.*;
-@RestController @RequestMapping("/api/products") public class CatalogController {
+@RestController @RequestMapping("/api/products") @Transactional public class CatalogController {
  private final ProductRepository products; private final ProductVariantRepository variants; private final BrandRepository brands; private final ProductUnmappedValueRepository unmapped; private final ObjectMapper mapper;
  public CatalogController(ProductRepository p,ProductVariantRepository v,BrandRepository b,ProductUnmappedValueRepository u,ObjectMapper m){products=p;variants=v;brands=b;unmapped=u;mapper=m;}
  @GetMapping public List<ProductSummary> list(){return products.findByStatus(Product.Status.ACTIVE).stream().filter(this::visible).map(p->summary(p)).toList();}
