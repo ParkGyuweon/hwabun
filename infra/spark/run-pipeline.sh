@@ -39,6 +39,9 @@ validate_pipeline() {
     --duplicate-path "$data_root/processed/duplicate_events" \
     --sessionized-path "$data_root/processed/sessionized_events" \
     --product-fact-path "$data_root/processed/product_event_fact" \
+    --purchase-fact-path "$data_root/processed/purchase_fact" \
+    --purchase-reason-fact-path "$data_root/processed/purchase_reason_fact" \
+    --review-event-fact-path "$data_root/processed/review_event_fact" \
     --section-dwell-path "$data_root/processed/section_dwell_agg" \
     --content-interest-path "$data_root/processed/content_interest_fact" \
     --dim-product-path "$data_root/processed/dim_product" \
@@ -67,6 +70,9 @@ run_batch_pipeline() {
     --input-path "$data_root/processed/cleaned_events" \
     --sessionized-path "$data_root/processed/sessionized_events" \
     --product-fact-path "$data_root/processed/product_event_fact" \
+    --purchase-fact-path "$data_root/processed/purchase_fact" \
+    --purchase-reason-fact-path "$data_root/processed/purchase_reason_fact" \
+    --review-event-fact-path "$data_root/processed/review_event_fact" \
     --section-dwell-path "$data_root/processed/section_dwell_agg" \
     --content-interest-path "$data_root/processed/content_interest_fact" \
     --dim-product-path "$data_root/processed/dim_product" \

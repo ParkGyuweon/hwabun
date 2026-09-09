@@ -182,6 +182,9 @@ spark-submit streaming/jobs/derive_facts_job.py \
   --input-path data/processed/cleaned_events \
   --sessionized-path data/processed/sessionized_events \
   --product-fact-path data/processed/product_event_fact \
+  --purchase-fact-path data/processed/purchase_fact \
+  --purchase-reason-fact-path data/processed/purchase_reason_fact \
+  --review-event-fact-path data/processed/review_event_fact \
   --dim-product-path data/processed/dim_product \
   --dim-brand-path data/processed/dim_brand
 ```
@@ -196,6 +199,13 @@ event_id` 순으로 `event_order`를 만들고 앞뒤 Event 이름과 sequence g
 `items[].product_id` 기준으로 explode한다. 구매 매출은 `quantity * unit_price`
 인 `item_revenue`만 합산하며 주문 전체 금액 `order_value`를 상품별로 합산하지
 않는다.
+
+`purchase_fact`는 행동 `purchase`의 상품 행을 `order_id + product_id` grain으로
+보존하며 Backend PAID 주문 매출·정산 Fact와 구분한다. `purchase_reason_fact`는
+선택 이유를 행으로 펼치고 설문 건너뛰기는 `reason=NULL`, `skipped=true` 한 행으로
+남긴다. 추천 노출·클릭의 정본은 `product_event_fact`이며 별도 중복 Fact를 만들지
+않는다. `review_event_fact`는 리뷰 펼침·필터·정렬·리뷰 영역 체류의 상세 속성을
+`event_id + product_id` grain으로 보존하고 성분 펼침은 제외한다.
 
 상품 Fact와 콘텐츠 Fact의 `brand_id`는 `product_id → dim_product.brand_id` left
 join으로 보강한다. `dim_brand` grain은 `brand_id`, `dim_product` grain은
@@ -300,6 +310,8 @@ spark-submit streaming/jobs/validate_pipeline_job.py --require-events \
 - `duplicate_events`가 실제 canonical Event를 가리키는지
 - `sessionized_events`가 cleaned Event의 1:1 투영인지
 - `product_event_fact`의 product ID와 cleaned Event 참조 무결성
+- `purchase_fact`, `purchase_reason_fact`, `review_event_fact` grain과 필수값
+- 추천 Fact 식별자와 위치, 행동 구매 `item_revenue` 계산 일치
 - `dim_brand`/`dim_product` grain과 모든 상품의 브랜드 참조 무결성
 - 상품 Dimension Join 전후 row 수, 미등록 상품 ID 표본, 브랜드 스냅샷 일치
 - 상품 미귀속 Event가 `brand_id=NULL`을 유지하는지

@@ -21,6 +21,9 @@ from typing import Any
 DEFAULT_INPUT_PATH = "data/processed/cleaned_events"
 DEFAULT_SESSIONIZED_PATH = "data/processed/sessionized_events"
 DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
+DEFAULT_PURCHASE_FACT_PATH = "data/processed/purchase_fact"
+DEFAULT_PURCHASE_REASON_FACT_PATH = "data/processed/purchase_reason_fact"
+DEFAULT_REVIEW_EVENT_FACT_PATH = "data/processed/review_event_fact"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
 DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
@@ -56,6 +59,14 @@ CONTENT_INTEREST_EVENTS = (
     "text_selection",
     "text_copy",
 )
+REVIEW_EVENT_NAMES = (
+    "section_view",
+    "section_dwell",
+    "review_expand",
+    "review_filter_apply",
+)
+REVIEW_CONTENT_KINDS = ("user_review", "review_stats", "review_filter")
+REVIEW_EXPAND_TARGETS = ("review_text", "jump_to_reviews")
 
 
 @dataclass(frozen=True)
@@ -63,6 +74,9 @@ class DeriveFactsConfig:
     input_path: str = DEFAULT_INPUT_PATH
     sessionized_path: str = DEFAULT_SESSIONIZED_PATH
     product_fact_path: str = DEFAULT_PRODUCT_FACT_PATH
+    purchase_fact_path: str = DEFAULT_PURCHASE_FACT_PATH
+    purchase_reason_fact_path: str = DEFAULT_PURCHASE_REASON_FACT_PATH
+    review_event_fact_path: str = DEFAULT_REVIEW_EVENT_FACT_PATH
     section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
     content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
@@ -76,6 +90,9 @@ class DeriveFactsConfig:
             "input_path": self.input_path,
             "sessionized_path": self.sessionized_path,
             "product_fact_path": self.product_fact_path,
+            "purchase_fact_path": self.purchase_fact_path,
+            "purchase_reason_fact_path": self.purchase_reason_fact_path,
+            "review_event_fact_path": self.review_event_fact_path,
             "section_dwell_path": self.section_dwell_path,
             "content_interest_path": self.content_interest_path,
             "dim_product_path": self.dim_product_path,
@@ -112,6 +129,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--product-fact-path",
         default=_env("PRODUCT_EVENT_FACT_PATH", DEFAULT_PRODUCT_FACT_PATH),
         help="Output path for product_event_fact",
+    )
+    parser.add_argument(
+        "--purchase-fact-path",
+        default=_env("PURCHASE_FACT_PATH", DEFAULT_PURCHASE_FACT_PATH),
+        help="Output path for purchase_fact",
+    )
+    parser.add_argument(
+        "--purchase-reason-fact-path",
+        default=_env("PURCHASE_REASON_FACT_PATH", DEFAULT_PURCHASE_REASON_FACT_PATH),
+        help="Output path for purchase_reason_fact",
+    )
+    parser.add_argument(
+        "--review-event-fact-path",
+        default=_env("REVIEW_EVENT_FACT_PATH", DEFAULT_REVIEW_EVENT_FACT_PATH),
+        help="Output path for review_event_fact",
     )
     parser.add_argument(
         "--section-dwell-path",
@@ -157,6 +189,9 @@ def parse_args(argv: list[str] | None = None) -> DeriveFactsConfig:
         input_path=args.input_path,
         sessionized_path=args.sessionized_path,
         product_fact_path=args.product_fact_path,
+        purchase_fact_path=args.purchase_fact_path,
+        purchase_reason_fact_path=args.purchase_reason_fact_path,
+        review_event_fact_path=args.review_event_fact_path,
         section_dwell_path=args.section_dwell_path,
         content_interest_path=args.content_interest_path,
         dim_product_path=args.dim_product_path,
@@ -214,8 +249,19 @@ def _properties_schema() -> Any:
         "banner_slot",
         "trait_source",
         "policy_version",
+        "primary_reason",
+        "free_text_kind",
+        "skipped",
+        "target",
+        "review_id",
+        "revealed_count",
+        "filter",
+        "sort",
+        "result_count",
+        "persona_skin_type",
+        "persona_skin_tone",
     )
-    array_names = ("matched_ingredients", "matched_keywords")
+    array_names = ("matched_ingredients", "matched_keywords", "reasons")
     return StructType(
         [
             *(StructField(name, StringType(), True) for name in scalar_names),
@@ -444,6 +490,140 @@ def _product_event_fact(
         return fact.withColumn("category_id", F.lit(None).cast("string")).withColumn(
             "brand_id", F.lit(None).cast("string")
         )
+    return _attach_product_dimension(fact, dim_product_df)
+
+
+def _purchase_fact(product_event_fact_df: Any) -> Any:
+    """Project purchase item rows without turning behavior revenue into finance truth."""
+
+    from pyspark.sql import functions as F
+
+    return product_event_fact_df.where(F.col("event_name") == "purchase").select(
+        "order_id",
+        "product_id",
+        "event_id",
+        "event_date_kst",
+        "event_time",
+        "processed_at",
+        "user_id",
+        "persona_id",
+        "scenario_id",
+        "simulation_run_id",
+        "generator_type",
+        "session_id",
+        "category_id",
+        "brand_id",
+        "sku_id",
+        F.col("purchase_quantity").alias("quantity"),
+        "unit_price",
+        "item_revenue",
+        "order_value",
+        "currency",
+        "actor_type",
+        "source",
+    )
+
+
+def _purchase_reason_fact(cleaned_df: Any) -> Any:
+    """Expand declared purchase reasons and preserve skipped surveys as one NULL row."""
+
+    from pyspark.sql import functions as F
+
+    events = _typed_properties(cleaned_df).where(
+        F.col("event_name") == "purchase_reason_select"
+    )
+    exploded = events.select(
+        "*",
+        F.posexplode_outer(_prop(F.col("_properties"), "reasons")).alias(
+            "_reason_index", "_reason"
+        ),
+    )
+    reason = F.trim(F.col("_reason"))
+    primary_reason = F.trim(_prop(F.col("_properties"), "primary_reason"))
+    return exploded.select(
+        _prop(F.col("_properties"), "order_id").alias("order_id"),
+        F.when(F.length(reason) > 0, reason).alias("reason"),
+        "event_id",
+        "event_date_kst",
+        "event_time",
+        "processed_at",
+        "user_id",
+        "persona_id",
+        "scenario_id",
+        "simulation_run_id",
+        "generator_type",
+        "session_id",
+        F.coalesce(reason == primary_reason, F.lit(False)).alias("is_primary"),
+        F.when(F.col("_reason_index").isNotNull(), F.col("_reason_index") + 1)
+        .cast("int")
+        .alias("reason_rank"),
+        _prop(F.col("_properties"), "free_text_kind").alias("free_text_kind"),
+        F.coalesce(
+            _prop(F.col("_properties"), "skipped").cast("boolean"), F.lit(False)
+        ).alias("skipped"),
+        "actor_type",
+        "source",
+    )
+
+
+def _review_event_fact(
+    cleaned_df: Any, dim_product_df: Any | None = None
+) -> Any:
+    """Keep typed review interactions while excluding ingredient-only expands."""
+
+    from pyspark.sql import functions as F
+
+    events = _typed_properties(cleaned_df)
+    properties = F.col("_properties")
+    event_name = F.col("event_name")
+    section_id = _prop(properties, "section_id")
+    content_kind = _prop(properties, "content_kind")
+    target = _prop(properties, "target")
+    is_review_event = event_name.isin(*REVIEW_EVENT_NAMES) & (
+        (event_name == "review_filter_apply")
+        | ((event_name == "review_expand") & target.isin(*REVIEW_EXPAND_TARGETS))
+        | (
+            event_name.isin("section_view", "section_dwell")
+            & (
+                (section_id == "reviews")
+                | content_kind.isin(*REVIEW_CONTENT_KINDS)
+            )
+        )
+    )
+    fact = events.where(is_review_event).select(
+        "event_id",
+        "event_date_kst",
+        "event_time",
+        "processed_at",
+        "event_name",
+        "intent",
+        "user_id",
+        "persona_id",
+        "scenario_id",
+        "simulation_run_id",
+        "generator_type",
+        "session_id",
+        "page_view_id",
+        "product_id",
+        F.lit(None).cast("string").alias("category_id"),
+        F.lit(None).cast("string").alias("brand_id"),
+        section_id.alias("section_id"),
+        content_kind.alias("content_kind"),
+        _prop(properties, "review_id").alias("review_id"),
+        target.alias("target"),
+        _prop(properties, "revealed_count").cast("int").alias("revealed_count"),
+        _prop(properties, "filter").alias("filter"),
+        _prop(properties, "sort").alias("sort"),
+        _prop(properties, "result_count").cast("int").alias("result_count"),
+        _prop(properties, "persona_skin_type").alias("persona_skin_type"),
+        _prop(properties, "persona_skin_tone").alias("persona_skin_tone"),
+        _prop(properties, "dwell_ms").cast("long").alias("dwell_ms"),
+        "actor_type",
+        "source",
+    ).where(
+        F.col("product_id").isNotNull()
+        & (F.length(F.trim(F.col("product_id"))) > 0)
+    )
     return _attach_product_dimension(fact, dim_product_df)
 
 
@@ -820,13 +1000,17 @@ def build_derived_frames(
     weights: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     section_dwell = _section_dwell_agg(cleaned_df, dim_product_df)
+    product_event_fact = _product_event_fact(
+        cleaned_df, time_zone, dim_product_df
+    )
     if weights is None:
         weights = _load_behavior_weights()
     return {
         "sessionized_events": _sessionized_events(cleaned_df, dim_product_df),
-        "product_event_fact": _product_event_fact(
-            cleaned_df, time_zone, dim_product_df
-        ),
+        "product_event_fact": product_event_fact,
+        "purchase_fact": _purchase_fact(product_event_fact),
+        "purchase_reason_fact": _purchase_reason_fact(cleaned_df),
+        "review_event_fact": _review_event_fact(cleaned_df, dim_product_df),
         "section_dwell_agg": section_dwell,
         "content_interest_fact": _content_interest_fact(
             cleaned_df, section_dwell, weights, dim_product_df
@@ -870,6 +1054,21 @@ def run(spark: Any, config: DeriveFactsConfig) -> None:
     _write_processed_dataset(
         frames["product_event_fact"],
         config.product_fact_path,
+        "event_date_kst",
+    )
+    _write_processed_dataset(
+        frames["purchase_fact"],
+        config.purchase_fact_path,
+        "event_date_kst",
+    )
+    _write_processed_dataset(
+        frames["purchase_reason_fact"],
+        config.purchase_reason_fact_path,
+        "event_date_kst",
+    )
+    _write_processed_dataset(
+        frames["review_event_fact"],
+        config.review_event_fact_path,
         "event_date_kst",
     )
     _write_processed_dataset(

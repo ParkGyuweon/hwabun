@@ -30,6 +30,7 @@ Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별�
 | --- | --- | --- |
 | `cleaned_events` | `event_id` | 정상 Event 수와 실시간 통계 |
 | `product_event_fact` | `event_id + item_index + product_id` | 상품·추천·구매 집계 |
+| `review_event_fact` | `event_id + product_id` | 리뷰 펼침·필터·정렬·리뷰 영역 체류 상세 |
 | `search_event_fact` | `event_id` | 검색 집계 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 체류 검증·재집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 콘텐츠 관심 집계 |

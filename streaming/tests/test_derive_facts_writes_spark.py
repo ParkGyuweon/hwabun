@@ -23,7 +23,7 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
     def setUpClass(cls):
         cls.spark = (
             SparkSession.builder.master("local[1]")
-            .appName("jira-215-derive-facts-write-test")
+            .appName("derive-facts-write-contract-test")
             .getOrCreate()
         )
 
@@ -80,6 +80,9 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 for name in (
                     "sessionized",
                     "product_fact",
+                    "purchase_fact",
+                    "purchase_reason_fact",
+                    "review_event_fact",
                     "section_dwell",
                     "content_interest",
                 )
@@ -94,6 +97,9 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 duplicate_path=supporting_path,
                 sessionized_path=derived_paths["sessionized"],
                 product_fact_path=derived_paths["product_fact"],
+                purchase_fact_path=derived_paths["purchase_fact"],
+                purchase_reason_fact_path=derived_paths["purchase_reason_fact"],
+                review_event_fact_path=derived_paths["review_event_fact"],
                 section_dwell_path=derived_paths["section_dwell"],
                 content_interest_path=derived_paths["content_interest"],
                 dim_product_path=supporting_path,

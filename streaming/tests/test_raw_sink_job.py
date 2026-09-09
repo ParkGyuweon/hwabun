@@ -24,6 +24,9 @@ from streaming.jobs.derive_facts_job import (
     DEFAULT_DIM_PRODUCT_PATH,
     DEFAULT_DIM_BRAND_PATH,
     DEFAULT_PRODUCT_FACT_PATH,
+    DEFAULT_PURCHASE_FACT_PATH,
+    DEFAULT_PURCHASE_REASON_FACT_PATH,
+    DEFAULT_REVIEW_EVENT_FACT_PATH,
     DEFAULT_SECTION_DWELL_PATH,
     DEFAULT_SESSIONIZED_PATH,
     DEFAULT_BEHAVIOR_WEIGHTS_PATH,
@@ -53,6 +56,9 @@ from streaming.jobs.validate_pipeline_job import (
     DEFAULT_FUNNEL_DAILY_PATH as DEFAULT_VALIDATE_FUNNEL_DAILY_PATH,
     DEFAULT_INGREDIENT_WEEKLY_PATH as DEFAULT_VALIDATE_INGREDIENT_WEEKLY_PATH,
     DEFAULT_PRODUCT_DAILY_PATH as DEFAULT_VALIDATE_PRODUCT_DAILY_PATH,
+    DEFAULT_PURCHASE_FACT_PATH as DEFAULT_VALIDATE_PURCHASE_FACT_PATH,
+    DEFAULT_PURCHASE_REASON_FACT_PATH as DEFAULT_VALIDATE_PURCHASE_REASON_FACT_PATH,
+    DEFAULT_REVIEW_EVENT_FACT_PATH as DEFAULT_VALIDATE_REVIEW_EVENT_FACT_PATH,
     DEFAULT_SECTION_DWELL_PATH as DEFAULT_VALIDATE_SECTION_DWELL_PATH,
     ValidatePipelineConfig,
     parse_args as parse_validate_args,
@@ -207,6 +213,11 @@ class DeriveFactsConfigTest(unittest.TestCase):
         self.assertEqual("data/processed/cleaned_events", config.input_path)
         self.assertEqual(DEFAULT_SESSIONIZED_PATH, config.sessionized_path)
         self.assertEqual(DEFAULT_PRODUCT_FACT_PATH, config.product_fact_path)
+        self.assertEqual(DEFAULT_PURCHASE_FACT_PATH, config.purchase_fact_path)
+        self.assertEqual(
+            DEFAULT_PURCHASE_REASON_FACT_PATH, config.purchase_reason_fact_path
+        )
+        self.assertEqual(DEFAULT_REVIEW_EVENT_FACT_PATH, config.review_event_fact_path)
         self.assertEqual(DEFAULT_SECTION_DWELL_PATH, config.section_dwell_path)
         self.assertEqual(DEFAULT_CONTENT_INTEREST_PATH, config.content_interest_path)
         self.assertEqual(DEFAULT_DIM_PRODUCT_PATH, config.dim_product_path)
@@ -281,6 +292,16 @@ class ValidatePipelineConfigTest(unittest.TestCase):
 
         self.assertEqual("data/raw_events", config.raw_path)
         self.assertEqual("data/processed/cleaned_events", config.cleaned_path)
+        self.assertEqual(
+            DEFAULT_VALIDATE_PURCHASE_FACT_PATH, config.purchase_fact_path
+        )
+        self.assertEqual(
+            DEFAULT_VALIDATE_PURCHASE_REASON_FACT_PATH,
+            config.purchase_reason_fact_path,
+        )
+        self.assertEqual(
+            DEFAULT_VALIDATE_REVIEW_EVENT_FACT_PATH, config.review_event_fact_path
+        )
         self.assertEqual(
             DEFAULT_VALIDATE_SECTION_DWELL_PATH, config.section_dwell_path
         )
