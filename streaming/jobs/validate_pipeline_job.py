@@ -806,17 +806,17 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             f"violations={null_product_with_brand}; no previous/session product inference",
         )
     )
-    business_columns = {
-        name: "business_id" in frame.columns
+    owner_columns = {
+        name: sorted({"tenant_id", "business_id"}.intersection(frame.columns))
         for name, frame in frames.items()
         if name not in {"raw", "bad", "duplicates"}
     }
     checks.append(
         _check(
-            "processed_fact_mart_contract_has_no_business_id",
-            not any(business_columns.values()),
-            "datasets_with_business_id="
-            f"{sorted(name for name, present in business_columns.items() if present)}",
+            "processed_contract_has_no_tenant_or_business_id",
+            not any(owner_columns.values()),
+            "datasets_with_forbidden_owner_columns="
+            f"{sorted((name, columns) for name, columns in owner_columns.items() if columns)}",
         )
     )
     checks.append(
