@@ -18,6 +18,8 @@ Event.product_id
 ```
 
 - Event는 상품 대상 행동의 `product_id`를 직접 기록한다.
+- Event와 Processed Dataset은 `tenant_id`, `business_id`를 기록하거나 처리 축으로
+  사용하지 않는다.
 - `brand_id`는 Processed에서 `dim_product` Join으로 파생한다.
 - Fact·Mart는 Join 시점의 `brand_id`를 스냅샷으로 보존한다.
 - 브랜드 대시보드는 로그인 계정에 연결된 단일 `brand_id`만 조회한다.

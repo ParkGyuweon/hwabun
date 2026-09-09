@@ -35,7 +35,7 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | 재실행 | 같은 입력 범위 재실행 시 Dataset key 기준 동일 결과로 수렴 |
 | 업무 중복 | `cleaned_events` 생성 전에 `event_id` 정본 1건 선택 |
 | Schema 확장 | 신규 컬럼은 nullable 추가를 기본으로 하고 기존 컬럼 의미·타입 변경 금지 |
-| 통합몰 귀속 | Event에는 `tenant_id`를 두지 않고 상품 Fact가 `brand_id`를 `dim_product`에서 파생한다 |
+| 통합몰 귀속 | Event와 Processed Dataset에는 `tenant_id`, `business_id`를 두지 않고 상품 Fact가 `brand_id`를 `dim_product`에서 파생한다 |
 
 환경별 Delta root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
 하위 경로는 환경이 달라도 유지한다.
