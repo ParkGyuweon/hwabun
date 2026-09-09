@@ -1,3 +1,19 @@
 package com.cosmetic.shopbackend.catalog;
-import org.springframework.data.jpa.repository.*; import org.springframework.data.repository.query.Param; import java.math.BigDecimal; import java.util.*;
-public interface ProductRepository extends JpaRepository<Product,String>{ List<Product> findByStatus(Product.Status status); List<Product> findByBrandId(String brandId); @Query("select p.rating from Product p where p.tertiaryCategory = :category and p.rating is not null") List<BigDecimal> ratingsByTertiary(@Param("category") String category); @Query("select p.rating from Product p where p.rating is not null") List<BigDecimal> allRatings(); }
+
+import java.math.BigDecimal;
+import java.util.*;
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
+
+public interface ProductRepository extends JpaRepository<Product, String> {
+  List<Product> findByStatus(Product.Status status);
+  List<Product> findByBrandId(String brandId);
+
+  @Query(
+    "select p.rating from Product p where p.tertiaryCategory = :category and p.rating is not null"
+  )
+  List<BigDecimal> ratingsByTertiary(@Param("category") String category);
+
+  @Query("select p.rating from Product p where p.rating is not null")
+  List<BigDecimal> allRatings();
+}

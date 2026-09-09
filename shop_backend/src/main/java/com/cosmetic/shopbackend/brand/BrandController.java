@@ -1,15 +1,133 @@
 package com.cosmetic.shopbackend.brand;
-import com.cosmetic.shopbackend.identity.*; import com.cosmetic.shopbackend.security.ShopPrincipal; import jakarta.validation.Valid; import jakarta.validation.constraints.NotBlank; import org.springframework.http.*; import org.springframework.web.bind.annotation.*; import org.springframework.security.core.annotation.AuthenticationPrincipal; import org.springframework.web.server.ResponseStatusException; import java.util.*;
-@RestController @RequestMapping("/api/brands")
+
+import com.cosmetic.shopbackend.identity.*;
+import com.cosmetic.shopbackend.security.ShopPrincipal;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import java.util.*;
+import org.springframework.http.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+@RestController
+@RequestMapping("/api/brands")
 public class BrandController {
- private final BrandRepository brands; private final SellerAccountRepository sellers;
- public BrandController(BrandRepository b,SellerAccountRepository s){brands=b;sellers=s;}
- public record BrandRequest(@NotBlank String name,String description,String logoUrl){} public record BrandResponse(String id,String sellerAccountId,String name,String description,String logoUrl,String status){}
- @GetMapping public List<BrandResponse> list(@AuthenticationPrincipal ShopPrincipal actor){ if(actor.role()==AccountRole.ADMIN) return brands.findAll().stream().map(BrandController::view).toList(); return brands.findAllBySeller_Id(actor.accountId()).stream().map(BrandController::view).toList(); }
- @PostMapping public ResponseEntity<BrandResponse> create(@AuthenticationPrincipal ShopPrincipal actor,@Valid @RequestBody BrandRequest r){if(actor.role()!=AccountRole.SELLER)throw new ResponseStatusException(HttpStatus.FORBIDDEN); Brand b=new Brand();b.setSeller(sellers.findById(actor.accountId()).orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED)));copy(b,r);brands.save(b);return ResponseEntity.status(HttpStatus.CREATED).body(view(b)); }
- @GetMapping("/{id}") public BrandResponse get(@PathVariable String id,@AuthenticationPrincipal ShopPrincipal actor){return view(authorized(id,actor));}
- @PutMapping("/{id}") public BrandResponse update(@PathVariable String id,@AuthenticationPrincipal ShopPrincipal actor,@Valid @RequestBody BrandRequest r){Brand b=authorized(id,actor);copy(b,r);return view(brands.save(b));}
- @PatchMapping("/{id}/status") public BrandResponse status(@PathVariable String id,@RequestParam BrandStatus status,@AuthenticationPrincipal ShopPrincipal actor){Brand b=authorized(id,actor);b.setStatus(status);return view(brands.save(b));}
- private Brand authorized(String id,ShopPrincipal actor){if(actor.role()==AccountRole.ADMIN)return brands.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));if(actor.role()!=AccountRole.SELLER)throw new ResponseStatusException(HttpStatus.FORBIDDEN);return brands.findByIdAndSeller_Id(id,actor.accountId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));}
- private static void copy(Brand b,BrandRequest r){b.setName(r.name());b.setDescription(r.description());b.setLogoUrl(r.logoUrl());} private static BrandResponse view(Brand b){return new BrandResponse(b.getId(),b.getSeller().getId(),b.getName(),b.getDescription(),b.getLogoUrl(),b.getStatus().name());}
+
+  private final BrandRepository brands;
+  private final SellerAccountRepository sellers;
+
+  public BrandController(BrandRepository b, SellerAccountRepository s) {
+    brands = b;
+    sellers = s;
+  }
+
+  public record BrandRequest(
+    @NotBlank String name,
+    String description,
+    String logoUrl
+  ) {}
+
+  public record BrandResponse(
+    String id,
+    String sellerAccountId,
+    String name,
+    String description,
+    String logoUrl,
+    String status
+  ) {}
+
+  @GetMapping
+  public List<BrandResponse> list(
+    @AuthenticationPrincipal ShopPrincipal actor
+  ) {
+    if (actor.role() == AccountRole.ADMIN) return brands
+      .findAll()
+      .stream()
+      .map(BrandController::view)
+      .toList();
+    return brands
+      .findAllBySeller_Id(actor.accountId())
+      .stream()
+      .map(BrandController::view)
+      .toList();
+  }
+
+  @PostMapping
+  public ResponseEntity<BrandResponse> create(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @Valid @RequestBody BrandRequest r
+  ) {
+    if (actor.role() != AccountRole.SELLER) throw new ResponseStatusException(
+      HttpStatus.FORBIDDEN
+    );
+    Brand b = new Brand();
+    b.setSeller(
+      sellers
+        .findById(actor.accountId())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED))
+    );
+    copy(b, r);
+    brands.save(b);
+    return ResponseEntity.status(HttpStatus.CREATED).body(view(b));
+  }
+
+  @GetMapping("/{id}")
+  public BrandResponse get(
+    @PathVariable String id,
+    @AuthenticationPrincipal ShopPrincipal actor
+  ) {
+    return view(authorized(id, actor));
+  }
+
+  @PutMapping("/{id}")
+  public BrandResponse update(
+    @PathVariable String id,
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @Valid @RequestBody BrandRequest r
+  ) {
+    Brand b = authorized(id, actor);
+    copy(b, r);
+    return view(brands.save(b));
+  }
+
+  @PatchMapping("/{id}/status")
+  public BrandResponse status(
+    @PathVariable String id,
+    @RequestParam BrandStatus status,
+    @AuthenticationPrincipal ShopPrincipal actor
+  ) {
+    Brand b = authorized(id, actor);
+    b.setStatus(status);
+    return view(brands.save(b));
+  }
+
+  private Brand authorized(String id, ShopPrincipal actor) {
+    if (actor.role() == AccountRole.ADMIN) return brands
+      .findById(id)
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    if (actor.role() != AccountRole.SELLER) throw new ResponseStatusException(
+      HttpStatus.FORBIDDEN
+    );
+    return brands
+      .findByIdAndSeller_Id(id, actor.accountId())
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+  }
+
+  private static void copy(Brand b, BrandRequest r) {
+    b.setName(r.name());
+    b.setDescription(r.description());
+    b.setLogoUrl(r.logoUrl());
+  }
+
+  private static BrandResponse view(Brand b) {
+    return new BrandResponse(
+      b.getId(),
+      b.getSeller().getId(),
+      b.getName(),
+      b.getDescription(),
+      b.getLogoUrl(),
+      b.getStatus().name()
+    );
+  }
 }

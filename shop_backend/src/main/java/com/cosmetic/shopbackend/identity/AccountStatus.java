@@ -1,3 +1,7 @@
 package com.cosmetic.shopbackend.identity;
 
-public enum AccountStatus { ACTIVE, INACTIVE, LOCKED }
+public enum AccountStatus {
+  ACTIVE,
+  INACTIVE,
+  LOCKED,
+}

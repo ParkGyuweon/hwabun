@@ -1,3 +1,49 @@
 package com.cosmetic.shopbackend.commerce;
+
 import jakarta.persistence.*;
-@Entity @Table(name="cart_item") public class CartItem { @Id @Column(name="cart_item_id") private String id; @Column(name="cart_id") private String cartId; @Column(name="variant_id") private String variantId; private int quantity; protected CartItem(){} public CartItem(String id,String c,String v,int q){this.id=id;cartId=c;variantId=v;quantity=q;} public String getId(){return id;} public String getCartId(){return cartId;} public String getVariantId(){return variantId;} public int getQuantity(){return quantity;} public void quantity(int q){quantity=q;} }
+
+@Entity
+@Table(name = "cart_item")
+public class CartItem {
+
+  @Id
+  @Column(name = "cart_item_id")
+  private String id;
+
+  @Column(name = "cart_id")
+  private String cartId;
+
+  @Column(name = "variant_id")
+  private String variantId;
+
+  private int quantity;
+
+  protected CartItem() {}
+
+  public CartItem(String id, String c, String v, int q) {
+    this.id = id;
+    cartId = c;
+    variantId = v;
+    quantity = q;
+  }
+
+  public String getId() {
+    return id;
+  }
+
+  public String getCartId() {
+    return cartId;
+  }
+
+  public String getVariantId() {
+    return variantId;
+  }
+
+  public int getQuantity() {
+    return quantity;
+  }
+
+  public void quantity(int q) {
+    quantity = q;
+  }
+}
