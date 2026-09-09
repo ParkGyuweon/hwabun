@@ -22,4 +22,16 @@ class ProductVariantTest {
 
         assertEquals(BigDecimal.valueOf(20000), variant.unitPrice());
     }
+
+    @Test
+    void basePriceUpdateEndsExistingMvpDiscount() {
+        ProductVariant variant = new ProductVariant("v-1", "p-1", "sku-1", "Default",
+                BigDecimal.valueOf(20000), BigDecimal.valueOf(15000));
+
+        variant.updateBasePrice(BigDecimal.valueOf(25000));
+
+        assertEquals(BigDecimal.valueOf(25000), variant.getPrice());
+        assertEquals(null, variant.getSalePrice());
+        assertEquals(BigDecimal.valueOf(25000), variant.unitPrice());
+    }
 }

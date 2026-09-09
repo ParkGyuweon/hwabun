@@ -6,6 +6,7 @@ import jakarta.persistence.*; import java.math.BigDecimal;
  @Enumerated(EnumType.STRING) @Column(nullable=false) private Status status=Status.ACTIVE; @Column(name="sort_order") private int sortOrder;
  protected ProductVariant(){} public ProductVariant(String id,String productId,String sku,String label,BigDecimal price,BigDecimal salePrice){this.id=id;this.productId=productId;this.sku=sku;this.label=label;this.price=price;this.salePrice=salePrice;}
  public String getId(){return id;} public String getProductId(){return productId;} public String getSku(){return sku;} public String getLabel(){return label;} public String getSize(){return size;} public BigDecimal getPrice(){return price;} public BigDecimal getSalePrice(){return salePrice;} public BigDecimal unitPrice(){return salePrice!=null?salePrice:price;} public Status getStatus(){return status;}
- public void updateBasePrice(BigDecimal value){this.price=value;}
+ /** MVP 정책: 상품 가격 수정은 기존 할인을 종료하고 새 정가를 적용한다. */
+ public void updateBasePrice(BigDecimal value){this.price=value;this.salePrice=null;}
  public enum Status{ACTIVE,INACTIVE}
 }
