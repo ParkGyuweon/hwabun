@@ -56,6 +56,10 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     POST /api/catalog/sync     쇼핑몰 백엔드(8090) ACTIVE 상품을 읽어 편입·갱신·중단 (Jira 222).
                                SHOP_BACKEND_URL + CATALOG_SYNC_INTERVAL_SEC 로 주기 실행. 승인 훅 없어도 카탈로그 일치
 
+실시간 행동 유입 (Jira 226) — KAFKA_BOOTSTRAP_SERVERS 가 있으면 activity-events 를 별도 consumer group
+    (recommend-state-v1) 으로 구독해 Engine.observe 로 넘긴다. Spark 와 독립. 수동 commit·event_id 중복 제거·
+    상태 이벤트 필터. /health.kafka_state 에 alive·connected·lag. 단일 replica MVP — 확장은 updater→Redis.
+
 세션 상태 영속화 (Jira 224) — POST /api/events 로 받은 이벤트를 session_events.jsonl 에 append 하고
     기동 때 재생한다. 재시작해도 개인화 상태가 남는다. SESSION_EVENTS_PATH (컨테이너 /data). 워커 1개 전제 그대로.
     POST /api/sessions/compact 로 페르소나별 마지막 N건만 남겨 줄인다.
@@ -98,6 +102,7 @@ from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: 
 import prescription as rx                                               # noqa: E402
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
+import kafka_state                                                      # noqa: E402  (Jira 226)
 import validate_product_registration as vpr                    # noqa: E402
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
@@ -427,8 +432,23 @@ def _sync_loop():
             print(f"[catalog-sync] 실패: {ex.__class__.__name__}: {ex}", flush=True)
 
 
+# ── Kafka 행동 이벤트 구독 (Jira 226) ───────────────────────────────────────
+KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP_SERVERS")        # 없으면 구독 안 함 — POST /api/events 만
+_kafka: Optional[kafka_state.StateConsumer] = None
+
+
+@app.on_event("shutdown")
+def _shutdown():
+    if _kafka is not None:
+        _kafka.stop()
+
+
 @app.on_event("startup")
 def _startup():
+    global _kafka
+    if KAFKA_BOOTSTRAP:
+        _kafka = kafka_state.StateConsumer(get_engine(), KAFKA_BOOTSTRAP, log=lambda m: print(m, flush=True))
+        _kafka.start()
     if SHOP_BACKEND_URL:
         import threading
         try:
@@ -449,6 +469,8 @@ def health():
             "inactive_products": len(e.inactive),
             "sessions": {"personas_in_memory": len(e.states), "replayed": e.session_replayed,
                          "appended_events": e.session_log.appended},
+            # Kafka 구독 상태 (Jira 226). alive·connected·lag·last_processed_at 를 그대로 — 스레드는 장애 경계가 아니다
+            "kafka_state": (_kafka.health() if _kafka is not None else None),
             "catalog_sync": ({"source": SHOP_BACKEND_URL, "interval_sec": CATALOG_SYNC_INTERVAL,
                               "last": ({k: (len(v) if isinstance(v, (list, dict)) else v)
                                         for k, v in _last_sync.items()} if _last_sync else None)}
