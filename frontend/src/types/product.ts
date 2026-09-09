@@ -37,6 +37,11 @@ export interface Product {
   highlights: string[];
   /** 원소 1개에 전 성분이 쉼표로 이어붙은 통짜 문자열인 경우가 대부분 */
   ingredients: string[];
+  /**
+   * 한국어 전성분 (표시 전용). 분석·매칭은 위 영문 `ingredients` 를 읽는다.
+   * 번역이 없는 상품(시드·브랜드 등록)은 비어 있고, 화면은 `ingredients` 로 대신한다.
+   */
+  ingredients_ko?: string[];
   /** 파생 필드. 빈 배열인 상품이 절반 가까이 된다 */
   suitable_skin_types: SkinType[];
   skincare_concerns: string[];

@@ -80,7 +80,6 @@ export default function ProductDetailPage({
     const filtered = reviews.filter((review) => {
       if (filter === 'same_skin_type') return persona !== null && review.skin_type === persona.skin_type;
       if (filter === 'same_skin_tone') return persona !== null && review.skin_tone === persona.skin_tone;
-      if (filter === 'recommended') return review.is_recommended === true;
       return true;
     });
 
@@ -142,7 +141,8 @@ export default function ProductDetailPage({
           hint={ingredientCount > 0 ? `${ingredientCount}개` : '정보 없음'}
           sectionId="ingredients"
         >
-          <IngredientsSection ingredients={product.ingredients} productId={product.product_id} />
+          <IngredientsSection
+          ingredients={product.ingredients_ko ?? product.ingredients} productId={product.product_id} />
         </Accordion>
       </section>
 

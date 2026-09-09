@@ -1,6 +1,7 @@
 import AccountMenu from '../auth/AccountMenu';
 import PersonaSwitcher from './PersonaSwitcher';
 import { isDevtoolsOn } from '../../lib/devtools';
+import { categoryKo } from '../../lib/localize';
 import type { PersonaProfile } from '../../types/persona';
 
 interface SiteHeaderProps {
@@ -61,7 +62,7 @@ export default function SiteHeader({
         <nav className="site-header__nav" aria-label="주요 카테고리">
           {categories.map((category) => (
             <button key={category} type="button" onClick={() => onCategorySelect(category)}>
-              {category}
+              {categoryKo(category)}
             </button>
           ))}
         </nav>

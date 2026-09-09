@@ -199,22 +199,63 @@
   list-style: none;
 }
 
-.list__more {
+/* 페이지 넘김. 양옆 화살표 + 번호. 끝이 보여야 다 봤다는 느낌이 든다 */
+.list__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-8) 0 0;
+}
+
+.list__pager-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list__pager button {
   appearance: none;
-  display: block;
-  margin: var(--space-7) auto 0;
-  padding: 12px 28px;
-  border: 1px solid var(--color-ink);
-  background: var(--color-surface);
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
+  background: none;
   font: inherit;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
   cursor: pointer;
 }
 
-.list__more:hover {
+.list__pager button:hover:not(:disabled):not(.is-active) {
+  border-color: var(--color-ink);
+}
+
+.list__pager button.is-active {
   background: var(--color-ink);
   color: #ffffff;
+  cursor: default;
+}
+
+.list__pager-arrow {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.list__pager button:disabled {
+  color: #b5b5b5;
+  cursor: default;
+}
+
+.list__pager-gap {
+  min-width: 24px;
+  text-align: center;
+  color: #b5b5b5;
 }
 
 /* ---------- 상품 카드 ---------- */

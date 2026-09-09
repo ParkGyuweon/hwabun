@@ -1,7 +1,7 @@
 import { track } from '../../lib/logger';
 import type { PersonaProfile } from '../../types/persona';
 
-export type ReviewFilter = 'all' | 'same_skin_type' | 'same_skin_tone' | 'recommended';
+export type ReviewFilter = 'all' | 'same_skin_type' | 'same_skin_tone';
 export type ReviewSort = 'recent' | 'rating-desc' | 'rating-asc';
 
 interface ReviewFilterBarProps {
@@ -21,6 +21,8 @@ interface ReviewFilterBarProps {
  * 이 필터를 쓰는 행동은 일반 스크롤보다 훨씬 강한 관심 신호다.
  *
  * eye_color 에 Grey 와 gray 가 섞여 있어(정규화 전) 눈/머리색 필터는 아직 노출하지 않는다.
+ * "추천 리뷰" 칩은 뺐다 (기획 검토 2026-09-10). 추천 여부는 카드 안 표시로 남고, 필터는
+ * "나와 같은가" 한 질문만 묻는다.
  */
 export default function ReviewFilterBar({
   persona,
@@ -33,8 +35,8 @@ export default function ReviewFilterBar({
   const options: Array<{ value: ReviewFilter; label: string; disabled?: boolean }> = [
     { value: 'all', label: '전체' },
     { value: 'same_skin_type', label: '나와 같은 피부 타입', disabled: !persona },
-    { value: 'same_skin_tone', label: '피부 톤 유사', disabled: !persona },
-    { value: 'recommended', label: '추천 리뷰' },
+    // 피부 타입과 같은 문장 구조로. 두 칩이 같은 질문("나와 같은가")을 묻는다는 게 보여야 한다
+    { value: 'same_skin_tone', label: '나와 같은 피부 톤', disabled: !persona },
   ];
 
   const apply = (value: ReviewFilter) => {

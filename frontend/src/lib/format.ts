@@ -1,8 +1,15 @@
 import type { Review } from '../types/review';
 import type { SkinType } from '../types/product';
 
+import { toKrw } from './localize';
+
+/**
+ * 가격은 원화로 **표시만** 한다. 데이터는 `price_usd` 그대로다.
+ * 환율·반올림은 번역 데이터(products-ko.json 의 price_krw)와 같은 식이라 표시가 어긋나지 않는다.
+ * 이벤트의 `cart_value`·`currency:'USD'` 는 데이터 팀과 단위 합의 전이라 건드리지 않는다.
+ */
 export function formatPrice(usd: number): string {
-  return `$${usd.toFixed(2)}`;
+  return `${toKrw(usd).toLocaleString('ko-KR')}원`;
 }
 
 export function formatCount(n: number): string {

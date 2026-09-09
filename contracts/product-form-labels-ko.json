@@ -126,7 +126,7 @@
     },
     {
       "value": "Vitamin C",
-      "ko": "비타민C"
+      "ko": "비타민 C"
     },
     {
       "value": "Squalane",
@@ -150,7 +150,7 @@
     },
     {
       "value": "Lactic Acid",
-      "ko": "락틱애시드"
+      "ko": "락틱애씨드"
     },
     {
       "value": "Licorice",
@@ -158,7 +158,7 @@
     },
     {
       "value": "SPF",
-      "ko": "자외선 차단"
+      "ko": "SPF 자외선 차단"
     },
     {
       "value": "Shea Butter",
@@ -178,11 +178,11 @@
     },
     {
       "value": "AHA/Glycolic Acid",
-      "ko": "AHA·글리콜산"
+      "ko": "AHA·글라이콜릭애씨드"
     },
     {
       "value": "Salicylic Acid",
-      "ko": "살리실산(BHA)"
+      "ko": "살리실산"
     },
     {
       "value": "Ceramide",
@@ -262,23 +262,23 @@
   "secondary_category": [
     {
       "value": "Cleansers",
-      "ko": "클렌저"
+      "ko": "클렌징"
     },
     {
       "value": "Eye Care",
-      "ko": "아이케어"
+      "ko": "아이 케어"
     },
     {
       "value": "Lip Balms & Treatments",
-      "ko": "립밤·립케어"
+      "ko": "립 케어"
     },
     {
       "value": "Masks",
-      "ko": "마스크·팩"
+      "ko": "마스크팩"
     },
     {
       "value": "Moisturizers",
-      "ko": "보습·크림"
+      "ko": "크림·로션"
     },
     {
       "value": "Self Tanners",
@@ -290,33 +290,33 @@
     },
     {
       "value": "Treatments",
-      "ko": "집중 케어(트리트먼트)"
+      "ko": "집중 케어"
     }
   ],
   "tertiary_category": [
     {
       "value": "BB & CC Creams",
-      "ko": "BB·CC 크림"
+      "ko": "BB·CC크림"
     },
     {
       "value": "Blemish & Acne Treatments",
-      "ko": "여드름·트러블 케어"
+      "ko": "트러블 케어"
     },
     {
       "value": "Exfoliators",
-      "ko": "각질 제거"
+      "ko": "필링·스크럽"
     },
     {
       "value": "Eye Creams & Treatments",
-      "ko": "아이크림"
+      "ko": "아이크림·아이 케어"
     },
     {
       "value": "Eye Masks",
-      "ko": "아이패치·아이마스크"
+      "ko": "아이 패치"
     },
     {
       "value": "Face Masks",
-      "ko": "페이스 마스크·팩"
+      "ko": "마스크팩"
     },
     {
       "value": "Face Oils",
@@ -324,31 +324,31 @@
     },
     {
       "value": "Face Serums",
-      "ko": "세럼·앰플"
+      "ko": "에센스·세럼·앰플"
     },
     {
       "value": "Face Sunscreen",
-      "ko": "얼굴용 선크림"
+      "ko": "페이스 선케어"
     },
     {
       "value": "Face Wash & Cleansers",
-      "ko": "클렌징 폼·워시"
+      "ko": "클렌징폼·젤"
     },
     {
       "value": "Face Wipes",
-      "ko": "클렌징 티슈"
+      "ko": "클렌징 티슈·패드"
     },
     {
       "value": "Facial Peels",
-      "ko": "필링"
+      "ko": "필링 케어"
     },
     {
       "value": "For Face",
-      "ko": "얼굴용 (기타)"
+      "ko": "페이스용"
     },
     {
       "value": "Lip Balms & Treatments",
-      "ko": "립밤·립케어"
+      "ko": "립 케어"
     },
     {
       "value": "Makeup Removers",
@@ -360,21 +360,21 @@
     },
     {
       "value": "Moisturizers",
-      "ko": "수분크림·로션"
+      "ko": "크림·로션"
     },
     {
       "value": "Night Creams",
-      "ko": "나이트 크림"
+      "ko": "나이트 케어"
     },
     {
       "value": "Toners",
-      "ko": "토너·스킨"
+      "ko": "스킨·토너"
     }
   ],
   "concern": [
     {
       "value": "Dullness/Uneven Texture",
-      "ko": "칙칙함·피부결"
+      "ko": "칙칙함·거친 피부결"
     },
     {
       "value": "Dryness",
@@ -382,7 +382,7 @@
     },
     {
       "value": "Anti-Aging",
-      "ko": "주름·안티에이징"
+      "ko": "안티에이징"
     },
     {
       "value": "Pores",
@@ -398,21 +398,21 @@
     },
     {
       "value": "Acne/Blemishes",
-      "ko": "여드름·트러블"
+      "ko": "트러블·여드름"
     },
     {
       "value": "Redness",
-      "ko": "홍조"
+      "ko": "붉은 기"
     },
     {
       "value": "Dark spots",
-      "ko": "색소침착·잡티"
+      "ko": "기미·잡티"
     }
   ],
   "clean": [
     {
       "value": "Clean at Sephora",
-      "ko": "클린 뷰티 인증"
+      "ko": "세포라 클린"
     },
     {
       "value": "Vegan",
@@ -424,15 +424,15 @@
     },
     {
       "value": "Cruelty-Free",
-      "ko": "동물실험 반대"
+      "ko": "크루얼티 프리"
     },
     {
       "value": "Clean + Planet Positive",
-      "ko": "친환경 클린"
+      "ko": "클린·친환경 뷰티"
     },
     {
       "value": "Fragrance Free",
-      "ko": "무향"
+      "ko": "무향료"
     },
     {
       "value": "Oil Free",
@@ -468,7 +468,7 @@
     },
     {
       "value": "Hypoallergenic",
-      "ko": "저자극"
+      "ko": "저자극 포뮬러"
     },
     {
       "value": "Without Oxybenzone",
@@ -478,23 +478,23 @@
   "texture": [
     {
       "value": "Hydrating",
-      "ko": "촉촉한"
+      "ko": "수분·보습"
     },
     {
       "value": "Plumping",
-      "ko": "탄탄한(플럼핑)"
+      "ko": "플럼핑 케어"
     },
     {
       "value": "Radiant Finish",
-      "ko": "광채 마무리"
+      "ko": "광채 피니시"
     },
     {
       "value": "Natural Finish",
-      "ko": "자연스러운 마무리"
+      "ko": "내추럴 피니시"
     },
     {
       "value": "High Shine Finish",
-      "ko": "윤광 마무리"
+      "ko": "글로시 피니시"
     }
   ]
 }

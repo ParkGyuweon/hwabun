@@ -1,4 +1,5 @@
 import EmptyState from '../common/EmptyState';
+import { highlightKo } from '../../lib/localize';
 
 interface HighlightGridProps {
   highlights: string[];
@@ -22,7 +23,7 @@ export default function HighlightGrid({ highlights }: HighlightGridProps) {
           <span className="highlight-grid__icon" aria-hidden="true">
             {item.trim().charAt(0).toUpperCase()}
           </span>
-          <span className="highlight-grid__label">{item}</span>
+          <span className="highlight-grid__label">{highlightKo(item)}</span>
         </li>
       ))}
     </ul>

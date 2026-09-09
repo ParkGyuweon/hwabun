@@ -1,4 +1,5 @@
 import Chip from '../common/Chip';
+import { categoryPathKo, concernKo } from '../../lib/localize';
 import EmptyState from '../common/EmptyState';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../../lib/format';
 import type { PersonaProfile } from '../../types/persona';
@@ -94,7 +95,7 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
 
       <dl className="about__list">
         <div data-log-content="persona_match" data-log-ref="skin_type">
-          <dt>Skin Type</dt>
+          <dt>피부 타입</dt>
           <dd>
             {hasSkinTypeInfo ? (
               <ul className="chip-list">
@@ -134,13 +135,13 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
         </div>
 
         <div data-log-content="persona_match" data-log-ref="concerns">
-          <dt>Skincare Concerns</dt>
+          <dt>피부 고민</dt>
           <dd>
             {product.skincare_concerns.length > 0 ? (
               <ul className="chip-list">
                 {product.skincare_concerns.map((concern) => (
                   <li key={concern}>
-                    <Chip tone="muted">{concern}</Chip>
+                    <Chip tone="muted">{concernKo(concern)}</Chip>
                   </li>
                 ))}
               </ul>
@@ -151,15 +152,15 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
         </div>
 
         <div data-log-content="product_meta" data-log-ref="category">
-          <dt>Category</dt>
+          <dt>카테고리</dt>
           <dd>
-            <p className="about__text">{product.category.join(' › ')}</p>
+            <p className="about__text">{categoryPathKo(product.category)}</p>
           </dd>
         </div>
 
         {product.size ? (
           <div data-log-content="product_meta" data-log-ref="size">
-            <dt>Size</dt>
+            <dt>용량</dt>
             <dd>
               <p className="about__text">{product.size}</p>
             </dd>
