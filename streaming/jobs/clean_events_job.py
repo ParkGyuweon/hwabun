@@ -35,6 +35,84 @@ RFC3339_WITH_OFFSET_PATTERN = (
 )
 SUPPORTED_SCHEMA_VERSIONS = ("0.2.0-draft",)
 
+# Keep the Q2 semantic gate explicit.  A lower_snake_case value is not enough:
+# only events registered by contracts/event-schema.json may enter Cleaned, and
+# each registered event has exactly one intent.  The lightweight contract test
+# fails when the JSON contract changes without this projection being updated.
+EVENT_INTENTS = {
+    "session_start": "session",
+    "page_view": "session",
+    "navigation_click": "session",
+    "exit_summary": "session",
+    "banner_impression": "session",
+    "product_impression": "exposure",
+    "recommendation_impression": "exposure",
+    "scroll_depth": "exposure",
+    "impression_dwell": "exposure",
+    "recommendation_snapshot": "exposure",
+    "product_view": "interest",
+    "section_view": "interest",
+    "section_dwell": "interest",
+    "scroll_pause": "interest",
+    "media_view": "interest",
+    "quick_look": "interest",
+    "quick_look_close": "interest",
+    "banner_click": "interest",
+    "scroll_backtrack": "comparison",
+    "variant_select": "comparison",
+    "product_click": "comparison",
+    "recommendation_click": "comparison",
+    "filter_change": "comparison",
+    "sort_change": "comparison",
+    "accordion_toggle": "validation",
+    "ingredient_view_mode_change": "validation",
+    "review_expand": "validation",
+    "review_filter_apply": "validation",
+    "text_selection": "validation",
+    "text_copy": "validation",
+    "purchase_reason_select": "validation",
+    "hover_dwell": "hesitation",
+    "remove_from_cart": "hesitation",
+    "wishlist_toggle": "conversion",
+    "quantity_change": "conversion",
+    "add_to_cart": "conversion",
+    "view_cart": "conversion",
+    "begin_checkout": "conversion",
+    "purchase": "conversion",
+    "rage_click": "friction",
+    "dead_click": "friction",
+}
+
+PRODUCT_ID_REQUIRED_EVENTS = (
+    "product_view",
+    "product_impression",
+    "product_click",
+    "accordion_toggle",
+    "recommendation_impression",
+    "recommendation_click",
+    "wishlist_toggle",
+    "add_to_cart",
+    "scroll_depth",
+    "impression_dwell",
+    "media_view",
+    "quick_look",
+    "quick_look_close",
+    "remove_from_cart",
+    "variant_select",
+    "quantity_change",
+    "review_filter_apply",
+    "review_expand",
+    "ingredient_view_mode_change",
+    "scroll_pause",
+    "scroll_backtrack",
+    "text_selection",
+    "text_copy",
+    "hover_dwell",
+    "banner_impression",
+    "banner_click",
+)
+PRODUCT_DETAIL_SCOPED_EVENTS = ("page_view", "section_view", "section_dwell")
+
 CANONICAL_ORDER_FIELDS = (
     "received_at",
     "kafka_topic",
@@ -183,7 +261,14 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
     schema_version_ok = c("schema_version").isin(*SUPPORTED_SCHEMA_VERSIONS).eqNullSafe(
         True
     )
-    source_ok = (~_non_blank(c("source"))) | c("source").isin("web", "simulator")
+    source_missing = ~_non_blank(c("source"))
+    source_ok = source_missing | (
+        ((c("actor_type") == F.lit("user")) & (c("source") == F.lit("web")))
+        | (
+            (c("actor_type") == F.lit("synthetic"))
+            & (c("source") == F.lit("simulator"))
+        )
+    )
 
     coordinate_ok = (
         _non_blank(c("kafka_cluster_id"))
@@ -192,20 +277,31 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         & c("kafka_offset").isNotNull()
     )
     sequence_ok = c("sequence_no").isNotNull() & (c("sequence_no") > 0)
-    enum_ok = (
-        c("event_name").rlike(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
-        & c("intent").isin(
-            "exposure",
-            "interest",
-            "comparison",
-            "validation",
-            "hesitation",
-            "conversion",
-            "friction",
-            "session",
+    event_index_ok = c("event_index").isNotNull() & (c("event_index") >= 0)
+    properties_ok = _non_blank(c("properties_json")) & c("properties_json").rlike(
+        r"^\s*\{.*\}\s*$"
+    )
+    registered_event_ok = c("event_name").isin(*EVENT_INTENTS)
+    event_intent_ok = F.lit(False)
+    for event_name, intent in EVENT_INTENTS.items():
+        event_intent_ok = event_intent_ok | (
+            (c("event_name") == F.lit(event_name)) & (c("intent") == F.lit(intent))
         )
+
+    enum_ok = (
+        registered_event_ok
+        & event_intent_ok
         & c("page_type").isin("product_list", "product_detail", "cart")
         & c("actor_type").isin("user", "synthetic")
+    )
+
+    product_id_present = _non_blank(c("product_id"))
+    product_id_required = c("event_name").isin(*PRODUCT_ID_REQUIRED_EVENTS) | (
+        c("event_name").isin(*PRODUCT_DETAIL_SCOPED_EVENTS)
+        & (c("page_type") == F.lit("product_detail"))
+    )
+    product_scope_ok = (c("product_id").isNull() | product_id_present) & (
+        (~product_id_required) | product_id_present
     )
 
     synthetic_properties_ok = (
@@ -214,7 +310,9 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
             _non_blank(c("persona_id"))
             & _non_blank(_properties_column(raw_df, "scenario_id"))
             & _non_blank(_properties_column(raw_df, "simulation_run_id"))
-            & _non_blank(_properties_column(raw_df, "generator_type"))
+            & _properties_column(raw_df, "generator_type").isin(
+                "python_batch", "agent_llm"
+            )
         )
     )
 
@@ -261,7 +359,10 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
             & _rfc3339_with_offset(received_at_raw)
         ),
         "sequence_ok": sequence_ok,
+        "event_index_ok": event_index_ok,
+        "properties_ok": properties_ok,
         "enum_ok": enum_ok,
+        "product_scope_ok": product_scope_ok,
         "banner_contract_ok": banner_contract_ok,
         "synthetic_properties_ok": synthetic_properties_ok,
     }
@@ -279,7 +380,10 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         .when(~expressions["timestamp_ok"], F.lit("invalid_timestamp"))
         .when(~expressions["timestamp_format_ok"], F.lit("invalid_timestamp_format"))
         .when(~expressions["sequence_ok"], F.lit("invalid_sequence_no"))
+        .when(~expressions["event_index_ok"], F.lit("invalid_event_index"))
+        .when(~expressions["properties_ok"], F.lit("invalid_properties"))
         .when(~expressions["enum_ok"], F.lit("invalid_enum"))
+        .when(~expressions["product_scope_ok"], F.lit("missing_product_id"))
         .when(~expressions["banner_contract_ok"], F.lit("invalid_banner_properties"))
         .when(~expressions["synthetic_properties_ok"], F.lit("invalid_properties"))
         .otherwise(F.lit("invalid_record"))
