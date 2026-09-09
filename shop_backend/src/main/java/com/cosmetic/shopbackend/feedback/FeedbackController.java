@@ -48,7 +48,8 @@ public class FeedbackController {
     public List<Map<String,Object>> reviews(@PathVariable String productId) {
         return jdbc.queryForList("select r.review_id reviewId,r.rating,r.is_recommended isRecommended,r.title,r.body,r.created_at createdAt " +
                 "from review r join order_item oi on oi.order_item_id=r.order_item_id join shop_order o on o.order_id=oi.order_id " +
-                "where oi.product_id=? and r.status='PUBLISHED' order by r.created_at desc", productId);
+                "join product p on p.product_id=oi.product_id join brand b on b.brand_id=p.brand_id " +
+                "where oi.product_id=? and r.status='PUBLISHED' and p.status='ACTIVE' and b.status='ACTIVE' order by r.created_at desc", productId);
     }
 
     @PostMapping("/feedback")
