@@ -97,6 +97,23 @@ class AffinityTable:
                 v[index[gid]] = float(row["affinity"])
                 self.n_rows += 1
 
+    def grow(self, product_ids):
+        """등록 상품을 뒤에 붙인다 — 리뷰 통계가 없으니 모든 세그먼트에서 **중립**.
+        Recommender·인코더의 행 순서와 같은 순서로 불러야 한다 (Jira 216)"""
+        # index 는 Recommender 와 **공유하는 dict** 일 수 있어(서버가 그렇게 넘긴다) 이미
+        # 새 id 가 들어와 있을 수 있다. 그래서 "몇 개가 늘었나" 는 index 길이로 잰다
+        for gid in product_ids:
+            if gid not in self.index:
+                self.index[gid] = len(self.index)
+        k = len(self.index) - self.n
+        if k <= 0:
+            return 0
+        for attr in self.table:
+            for seg, v in list(self.table[attr].items()):
+                self.table[attr][seg] = np.concatenate([v, np.full(k, NEUTRAL, np.float32)])
+        self.n += k
+        return k
+
     def segments(self, attr):
         return sorted(self.table[attr])
 

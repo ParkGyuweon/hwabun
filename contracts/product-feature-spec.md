@@ -13,7 +13,7 @@
 >   상품 벡터는 그대로고, 추천 점수에 항이 하나 붙습니다 —
 >   [`recommendation-io-spec.md`](recommendation-io-spec.md) 1장 참조.
 > 대상: 상위 200개 Sephora 스킨케어 상품
-> 소비처: `batch/jobs/product_encoder.py` (인코딩) → `batch/jobs/export_features.py` (서빙 산출물) → MySQL → `backend/recommend/RankingService`
+> 소비처: `batch/jobs/product_encoder.py` (인코딩) → `batch/jobs/export_features.py` (서빙 산출물, `batch/ingest/data/serving/`) → `batch/serving/recommend_server.py` (추천 추론 서버, Jira 206). MySQL 적재·백엔드 `RankingService` 는 만들지 않는 방향 — 백엔드는 이 서버를 프록시한다 (2026-09-09 요청서)
 > 어휘집: [`product-feature-vocab.json`](product-feature-vocab.json)
 
 `category`, `highlights`, `price_usd`, `rating`, `loves_count` 5개 필드를 실측 분석하고 상품 벡터 Encoding 방식을 정의한 초안입니다. 모든 수치는 상위 200개 상품 전수 기준입니다.

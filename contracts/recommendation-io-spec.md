@@ -213,7 +213,7 @@ CREATE TABLE product_feature (
 
 ### 소비처
 
-- `backend/recommend/RankingService` — 코사인 유사도 계산
+- ~~`backend/recommend/RankingService`~~ → `batch/serving/recommend_server.py` (파이썬 참조 구현, Jira 206). 백엔드는 프록시 예정 — 코사인·LTR 계산은 여기서
 - `batch/jobs/build_user_vectors.py` — **User Behavior Vector 생성의 재료.** 이벤트의 `product_id`를 벡터로 변환하려면 이 테이블이 필요합니다. 스트리밍으로 옮길 때는 잡 기동 시 브로드캐스트로 적재해야 합니다
 
 ---
@@ -788,8 +788,8 @@ PC 9,900 · PA 100 · 홀드아웃까지 **14,000명**. 파일이 늘 때마다 
 
 | 파일 | 크기 | 내용 |
 |---|---:|---|
-| `serving/ltr_model.pkl` | 약 1.0MB | sklearn `HistGradientBoostingClassifier`, 트리 278개 |
-| `serving/ltr_model_meta.json` | — | 피처 이름 19개 · 학습 조건 · 순열 중요도 |
+| `batch/ingest/data/serving/ltr_model.pkl` | 약 1.0MB | sklearn `HistGradientBoostingClassifier`, 트리 278개 |
+| `batch/ingest/data/serving/ltr_model_meta.json` | — | 피처 이름 19개 · 학습 조건 · 순열 중요도 |
 
 **학습은 `eval_metadata` 의 `train` 분할 5,954명에서만** 합니다. valid·test·홀드아웃은
 한 명도 들어가지 않습니다. 재현: `python batch/jobs/train_ltr.py`
@@ -859,7 +859,7 @@ CF 점수의 **절대값이 아니라 후보 중 몇 등인가**입니다. 사�
 
 ### 검증
 
-`serving/ranking_golden.json` 이 **LTR 기준으로** 만들어집니다. 파일이 `scorer`
+`batch/ingest/data/serving/ranking_golden.json` 이 **LTR 기준으로** 만들어집니다. 파일이 `scorer`
 필드로 무엇으로 만들어졌는지 말합니다.
 
 > **골든은 내보낸 정밀도로 계산합니다.** `product_feature.jsonl` 은 벡터를 소수
@@ -934,9 +934,10 @@ GET /api/recommend?persona_id={id}&size=10
 
 | 파라미터 | 기본 | 뜻 |
 |---|---:|---|
+| `persona_id` | — | **선택** (2026-09-09, Jira 214). 없으면 **익명 cold_start** — 상태·속성 친화도 없이 인기 prior + MMR. 페르소나 표에 **없는 값**(실회원 `accountId`)도 받는다: 속성 친화도만 빠지고, `POST /api/events` 로 쌓인 행동으로 개인화된다. **404 는 내지 않는다** — 백엔드 프록시가 회원↔페르소나 매핑 없이 호출할 수 있게 |
 | `size` | 10 | 메인 목록 칸 수 |
 | `banner_slots` | 0 | 배너 칸 수. 0 이면 `banners` 를 안 내린다 |
-| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). ⚠ **어느 자리인지 확정 대기** — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다 |
+| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). ⚠ **어느 자리인지 확정 대기** — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 카탈로그에 **없으면 칸은 일반 순위로 채워지고** 응답 `reserved_filled` 가 0 이다 — 원천 200개는 그 상태. **등록 상품**(§5-2, Jira 216)이 들어오면 채워진다. 시연용 자사 브랜드 **SSAFY Beauty 8개**는 시작 시 이미 편입돼 있어 `reserved=2` 면 칸 9·10 이 SSAFY 상품이다 |
 | `axes` | — | 축 배너에 쓸 축 순서. 안 주면 `concern,segment` |
 
 > **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
@@ -1034,10 +1035,13 @@ GET /api/recommend?persona_id={id}&size=10
 ```json
 {
   "persona_id": "PC00001",
+  "persona_known": true,
   "n_products": 3,
   "recommendation_id": "3f9c1e2a7b4d4c0e9a1b2c3d4e5f6071",
   "list_id": "main",
   "algorithm": "ltr-278t-2026-09-07",
+  "state_source": "events",
+  "reserved_filled": 0,
   "weights": { "cosine": 0.60, "attr": 0.35, "prior": 0.05 },
   "items": [
     {
@@ -1046,6 +1050,7 @@ GET /api/recommend?persona_id={id}&size=10
       "score": 0.7231,
       "position": 1,
       "reserved": false,
+      "product_source": "seed_catalog",
       "breakdown": {
         "_note": "선형 폴백일 때만. 현행(LTR, §4-2)에서는 이 객체가 없다 — 대체 형태는 §7 미확정",
         "cosine": 0.6120,
@@ -1078,6 +1083,77 @@ GET /api/recommend?persona_id={id}&size=10
   ]
 }
 ```
+
+## 5-2. 상품 등록 → 즉시 편입 (2026-09-09 신설 · Jira 216)
+
+실서비스 흐름: **판매자 등록 → 쇼핑몰 백엔드 승인 → `POST /api/products` → 다음 추천 요청부터 후보.**
+추천 서버가 상품을 자기 카탈로그에 갖고 있어야 점수를 낼 수 있으므로, 백엔드는 상품 승인 시
+이 호출을 한 번 한다. 배치 재생성이 아니라 **요청 하나로 즉시** 들어간다 (208개 기준 재조립 수 ms).
+
+### 요청
+
+```
+POST /api/products            body = 등록 입력 1건 또는 배열 (product-registration-spec §3 필드)
+{
+  "product_id": "SB000001",             // 없으면 서버가 발급 (R…)
+  "product_name": "…", "brand_name": "SSAFY Beauty", "brand_id": "…",
+  "secondary_category": "Treatments", "tertiary_category": "Exfoliators",
+  "highlights": ["Pores", "Without Parabens"],
+  "ingredients": "Water, Lactic Acid, …",       // 문자열 또는 문자열 배열
+  "price_krw": 30800                            // 또는 price_usd
+}
+```
+
+| 단계 | 규칙 | 근거 |
+|---|---|---|
+| 파생 | `price_krw` → `price_usd` **고정 환율 1,400** · `rating` 카테고리 중앙값 주입(`rating_source=injected`) · `loves_count=0` | product-registration-spec §4 |
+| 검사 | `contracts/validate_product_registration.py` 의 `check()` 그대로. 위반이면 **422** `REGISTRATION_CONTRACT_VIOLATION` + 위반 목록, **한 건이라도 위반이면 배열 전체 거절** | 등록 폼과 같은 기준 |
+| 인코딩 | 어휘집(`product-feature-vocab.json`)으로 148차원. 어휘집 밖 브랜드는 brand 블록 0 벡터 | product-feature-spec |
+| 편입 | 콘텐츠 벡터·prior(0)·속성 친화도(중립 0.5)·CF 동시발생(0 행·열)·지지자(0) 를 한 행씩 늘리고 Recommender·LTR 피처를 재조립 | — |
+| 영속 | `batch/ingest/data/serving/registered_products.jsonl` 에 파생값까지 append. 재시작 시 다시 읽음. 같은 `product_id` 재등록은 **그 행을 갈아 끼움**(`action: replaced`) | Redis/DB 자리 |
+
+### 응답 (201)
+
+```json
+{ "registered": [ { "product_id": "SB000001", "brand_name": "SSAFY Beauty", "position_in_catalog": 200,
+                    "price_usd": 22.0, "rating": 4.461, "rating_source": "injected",
+                    "brand_in_vocab": false, "reserved_candidate": true, "action": "added", "warnings": [] } ],
+  "products": 208, "registered_products": 8 }
+```
+
+`GET /api/products/{product_id}` 는 `product_source · supporters · reserved_candidate` 를 돌려준다.
+`/health` 에 `seed_products · registered_products` 가 추가됐다.
+
+### 기존 순위는 보존된다 — 순위 피처 분모 고정
+
+LTR 피처 `pop_rank`·`cf_rank` 는 순위/카탈로그 크기다. 카탈로그가 200→208 이 되면 기존 상품 값이
+r/200 → r/208 로 흔들리고, **그것만으로 트리 모델이 순위를 뒤집었다** (PC00001 2위 상품 0.257 → 0.142).
+그래서 서빙은 분모를 **원천 카탈로그 크기(200)로 고정**한다 (`LtrFeatures(n_ref=)`). 등록 상품은 리뷰 0·CF 0 이라
+맨 뒤에 서고 1.0 에서 잘린다. 검증: 등록 전후 원천 200개 피처가 bit 단위로 같고(`test_catalog_registry`),
+`reserved=0` 응답이 214 서버와 동일.
+
+### 등록 상품이 일반 칸에 오는 조건
+
+신호가 없으면(행동 0·CF 0·prior 0) 일반 칸에는 **오지 않는다** — 전용 칸이 유일한 노출이다. 이것이 §5-1 의
+설계다. 사용자가 등록 상품을 한 번 담으면 그 사용자에게는 같은 브랜드 상품이 일반 칸으로 올라온다.
+
+> **측정 결과 (2026-09-09, Jira 217 · `batch/jobs/eval_registered_brand_share.py`, holdout_a 300명):**
+> "10칸 중 7칸" 은 **페르소나 없는 사용자 + 전용 칸 2개**가 겹친 관찰이었고, 등록 상품 특유의 편향은 아니다.
+>
+> | 시드 상품 1개 담음 → top-10 중 같은 브랜드 | 페르소나 있음 | 페르소나 없음 |
+> |---|---:|---:|
+> | 등록 상품 (SSAFY Beauty 8개) | **24.0%** | 35.0% |
+> | 원천 · 브랜드 상품수 ≥7 (크기 맞춘 대조군) | 37.1% | 25.5% |
+> | 원천 · 임의 | 27.9% | 19.9% |
+>
+> 속성 친화도가 있으면 등록 상품은 같은 크기의 원천 브랜드보다 **덜** 끌어온다. 초과는 페르소나도 CF 도 없는
+> 경로에서 **약 1칸**이고, 이는 CF 가 0 이라 코사인만 남은 콜드 상태의 성질이다 (행동이 쌓이면 사라진다).
+>
+> **기각한 고침 둘.** ① brand 블록 가중치 0 + LTR 재학습: 등록 57% / 70% 로 **악화** (same_brand 피처 중요도
+> 0.003→0.038, holdout_a 43.95→43.40%). ② 등록 브랜드에 원핫 차원 추가: 57% / 70% 로 악화 (등록↔등록 코사인
+> 0.34→0.88). 브랜드를 "더 잘" 표현하면 브랜드 재구매 설계가 그대로 작동해 같은 브랜드가 더 나온다.
+> 남은 손잡이는 브랜드 상한·MMR λ 인데 그건 전역 노출 정책이다 (부록 · brand-exposure 프론티어: 상한은 비시드
+> 1칸당 −1.8%p). **결론: 등록 상품 쪽에서 고칠 것은 없다.** §8.1 관계 피처 전환은 "어휘 없이 브랜드를 받는" 목적으로만 남는다.
 
 ## 5-1. 배너 (2026-09-07 신설 · 제안)
 
@@ -1229,3 +1305,6 @@ FAISS·벡터DB·ANN 인덱스는 사용하지 않습니다. 200개 규모에서
 | 응답 시간 기준 | **실측 p95 15.2ms** (HTTP 왕복, 파이썬 단일 프로세스). 기준값(SLA)은 미정 — 백엔드 프록시·네트워크 포함해 다시 잰 뒤 정한다 |
 | 신규 브랜드 전용 칸 (§5-1) | **구현** (2026-09-08, Jira 129). `Recommender.rank(reserved=N, flags=True)`. 지금 카탈로그는 신규 0개라 결과 불변 (부록 U) |
 | 전용 칸의 자리 | **미정 · 프론트와 협의.** 측정·구현은 메인 `size` 칸 안. `reserved` 파라미터 설명은 배너 칸으로 적혀 있어 어긋남 — 확정 후 한쪽으로 정리 |
+| 사용자 식별 (`persona_id`) | **선택 파라미터로 열었다** (2026-09-09, Jira 214). 없으면 익명 cold_start, 표에 없는 값은 실회원 id 로 받아 행동으로만 개인화. 404 없음. 회원 `accountId` ↔ 페르소나 매핑은 **백엔드 결정 대기** (요청서 A 매핑표 / B 프론트 전달 / C 익명 — C 는 서버 준비 완료) |
+| 프론트·백엔드 연결 | **2026-09-09 요청서 전달.** 프론트: 이름 5개(`user_id→persona_id`·`k→size`·`rank→position`·`slot→banner_slot`·`model_version→algorithm`) + `recommendation_id`·`list_id` 추가 + Vite 프록시. 백엔드: `/api/recommend` 패스스루 컨트롤러·폴백·타임아웃 300ms 제안. 로컬 실측: Vite 프록시 한 줄로 5173→8300 200 |
+| 시연용 자사 브랜드 (SSAFY Beauty) | **편입 완료** (2026-09-09, Jira 216, §5-2). `POST /api/products` 로 등록 즉시 카탈로그에 들어가고, 8개는 `registered_products.jsonl` 에 미리 들어 있다. `reserved=2` 면 칸 9·10 이 SSAFY. 기존 200개 순위는 분모 고정으로 보존. 편향 의혹은 Jira 217 에서 측정으로 닫힘 — 등록 상품 특유 편향 아님, 고침 둘 기각 (§5-2 표) |
