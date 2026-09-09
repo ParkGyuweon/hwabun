@@ -103,6 +103,14 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "[additionalProperties] $")
 
+    def test_current_schema_does_not_accept_business_id(self) -> None:
+        event = copy.deepcopy(self.user_event)
+        event["business_id"] = "legacy-business"
+
+        result = self.validate_values(event)
+
+        self.assert_has_error(result.errors, "[additionalProperties] $")
+
     def test_withdrawn_tenant_schema_version_is_rejected(self) -> None:
         event = copy.deepcopy(self.user_event)
         event["schema_version"] = "0.3.0-draft"
