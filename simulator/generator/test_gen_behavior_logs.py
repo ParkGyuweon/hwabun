@@ -158,11 +158,11 @@ class SyntheticEventMetadataTest(unittest.TestCase):
             self.assertEqual(pr["list_id"], "banner_row")
             self.assertIn(pr["trait_source"], ("coldstart", "profile", "session", "explore"))
         self.assertEqual(len({e["properties"]["recommendation_id"] for e in imps}), 1)
-        batch, shown, source = emitter.last_banner
+        batch, shown, source, algo = emitter.last_banner
         self.assertEqual(batch, imps[0]["properties"]["recommendation_id"])
-        # new_brand 칸은 banner_value 키 자체가 없어야 한다 (선택 string 을 null 로 보내면 타입 위반)
-        self.assertTrue(all("banner_value" not in e["properties"] for e in imps
-                            if e["properties"]["banner_type"] == "new_brand"))
+        # new_brand 칸은 banner_value 키를 **남기고 null** 로 보낸다 (DATA 계약 required, Jira 213)
+        self.assertTrue(all("banner_value" in e["properties"] and e["properties"]["banner_value"] is None
+                            for e in imps if e["properties"]["banner_type"] == "new_brand"))
 
     def test_selectable_variants_excludes_initial_frontend_selection(self):
         product = {
