@@ -1069,3 +1069,227 @@ table.data td.is-warn {
   padding: 3px 10px;
   font-size: var(--fs-xs);
 }
+
+
+/* ---------- 산점도 v2 ---------- */
+
+.scatter-wrap {
+  margin: 2px 0 0;
+}
+.scatter {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--font);
+  overflow: visible;
+}
+.scatter__field {
+  fill: var(--ground);
+}
+.scatter__q {
+  stroke: none;
+}
+.scatter__q--lift {
+  fill: rgb(var(--brand-rgb) / 0.1);
+}
+.scatter__q--fix {
+  fill: rgb(230 143 161 / 0.12);
+}
+.scatter__grid {
+  stroke: rgb(0 0 0 / 0.05);
+  stroke-width: 1;
+}
+.scatter__axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.scatter__ref {
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+  opacity: 0.7;
+}
+.scatter__ref--strong {
+  stroke: var(--ink-soft);
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
+.scatter__ref-label,
+.scatter__tick,
+.scatter__axis-name {
+  font-size: 11px;
+  fill: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.scatter__axis-name {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--ink-soft);
+}
+.scatter__quad {
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: rgb(0 0 0 / 0.34);
+  letter-spacing: -0.01em;
+}
+.scatter__quad--fix {
+  fill: rgb(176 74 98 / 0.62);
+}
+.scatter__halo {
+  fill: rgb(var(--brand-rgb) / 0.18);
+}
+.scatter__dot {
+  fill: var(--brand);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.scatter__pt.is-below .scatter__halo {
+  fill: rgb(230 143 161 / 0.22);
+}
+.scatter__pt.is-below .scatter__dot {
+  fill: var(--accent);
+}
+.scatter__pt.is-thin {
+  opacity: 0.5;
+}
+.scatter__name {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--ink);
+  letter-spacing: -0.01em;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+}
+.scatter__lift {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.scatter__leader {
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+/* 호버는 후광만 진하게. SVG r 을 CSS 로 건드리면 원이 화면을 덮는다 */
+.scatter__pt:hover .scatter__halo {
+  fill: rgb(var(--brand-rgb) / 0.38);
+}
+.scatter__pt.is-below:hover .scatter__halo {
+  fill: rgb(230 143 161 / 0.42);
+}
+.scatter__pt:hover .scatter__name {
+  font-weight: 700;
+}
+
+.scatter-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 10px 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-soft);
+}
+.scatter-legend__key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: -6px;
+  border-radius: 50%;
+}
+.scatter-legend__key--lift {
+  background: var(--brand);
+}
+.scatter-legend__key--fix {
+  background: var(--accent);
+}
+.scatter-legend__size {
+  display: inline-block;
+  width: 26px;
+  height: 10px;
+  margin-right: -6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.35), var(--brand));
+}
+
+
+/* ---------- 패널 리드 문장 · 정의 접힘 ---------- */
+
+.panel__lead {
+  margin: -4px 0 14px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  letter-spacing: var(--ls-sm);
+  color: var(--ink-soft);
+}
+.panel__lead b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.defn {
+  margin-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+.defn > summary {
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-soft);
+  list-style: none;
+}
+.defn > summary::-webkit-details-marker {
+  display: none;
+}
+.defn > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 7px;
+  transition: transform 120ms var(--ease);
+}
+.defn[open] > summary::before {
+  transform: rotate(90deg);
+}
+.defn__list {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 14px 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.defn__list dt {
+  font-weight: 600;
+  color: var(--ink);
+}
+.defn__list dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+.defn__list dd b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.defn__list code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--ground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+@media (max-width: 700px) {
+  .defn__list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px 0;
+  }
+  .defn__list dd {
+    margin-bottom: 10px;
+  }
+}

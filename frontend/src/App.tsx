@@ -7,14 +7,7 @@ import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
-import {
-  DEFAULT_STOREFRONT,
-  STOREFRONT_KEY,
-  applyStorefront,
-  loadStorefront,
-  storefrontEventProps,
-} from './lib/storefront';
-import type { StorefrontPrefs } from './lib/storefront';
+import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import reviewsData from './mocks/reviews.sample.json';
@@ -340,27 +333,18 @@ export default function App() {
   }, []);
 
   /**
-   * 소상공인이 대시보드에서 고른 쇼핑몰 진열 설정.
-   * 같은 브라우저의 localStorage 로 건너온다. 대시보드 탭에서 바꾸면 storage 이벤트로
-   * 이 탭도 새로고침 없이 따라온다 — 시연에서 두 탭을 나란히 놓고 보여줄 수 있다.
+   * 쇼핑몰 진열. **하나로 고정이다.**
+   *
+   * 올리브영·세포라처럼 소비자가 보는 몰이 하나이고, 브랜드는 거기에 상품을 등록하고
+   * 대시보드만 받는다. 브랜드가 진열을 고르던 화면은 없앴다. 진열 값은 로그에 계속 실어
+   * 두는데, 나중에 플랫폼이 진열을 바꿀 때 그 전후를 비교하려면 이벤트에 남아 있어야 한다.
    */
-  const [storefront, setStorefront] = useState<StorefrontPrefs>(
-    () => loadStorefront() ?? DEFAULT_STOREFRONT,
-  );
+  const storefront = DEFAULT_STOREFRONT;
 
   useEffect(() => {
     applyStorefront(storefront);
-    // 진열이 바뀌면 그 다음 이벤트부터 새 진열로 기록된다
     setLoggerContext({ storefront: storefrontEventProps(storefront) });
   }, [storefront]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === STOREFRONT_KEY) setStorefront(loadStorefront() ?? DEFAULT_STOREFRONT);
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
 
   /**
    * 스크롤 복원을 브라우저에서 가져온다.
@@ -502,7 +486,6 @@ export default function App() {
         onCategorySelect={selectCategory}
         cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
         onCart={openCart}
-        brandName={storefront.brandName}
       />
 
       {cartOpen ? (

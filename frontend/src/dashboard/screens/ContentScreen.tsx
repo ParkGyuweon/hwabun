@@ -51,12 +51,46 @@ export default function ContentScreen() {
         source="mock"
         aside="co_visible_blocks ≤ 2 인 체류만 집계 · 겹쳐 보인 체류는 귀속 불가"
       >
+        <p className="panel__lead">
+          내 브랜드 상품의 <b>상세페이지 안</b> 콘텐츠 10종만 봅니다. 목록·장바구니 요소는 상세 결정과 무관해 제외했습니다.
+        </p>
         <Scatter
           points={contentAttention.map((c) => ({ label: c.ko, x: c.avgDwellMs / 1000, y: c.conversionLift, n: c.sampleSize }))}
         />
         <p className="note">
           오른쪽 아래 칸(오래 보지만 안 산다)이 손볼 곳, 왼쪽 위 칸(짧게 보지만 결정에 기여)이 위로 올릴 것. 점 크기는 표본.
         </p>
+
+        <details className="defn">
+          <summary>이 그래프의 정의와 선정 기준</summary>
+          <dl className="defn__list">
+            <dt>무엇을 그리나</dt>
+            <dd>
+              상세페이지 콘텐츠 <b>10종</b>. 계약 <code>content_kind</code> 21종 중 상품 상세 안에서 읽는 것만 골랐습니다.
+              넣은 것은 성분 목록·성분 특징·임상 결과·사용자 리뷰·평점 분포·제품 소개·추가 설명·사용법·브랜드 소개·상품 이미지입니다.
+              제외한 것은 목록·장바구니·내비게이션 요소(<code>product_card</code>·<code>cart_item</code>·<code>navigation</code> 등)입니다.
+            </dd>
+            <dt>가로 · 주목도</dt>
+            <dd>
+              그 콘텐츠의 체류 시간 합계 ÷ 상세 조회 세션 수. <code>section_dwell</code> 이벤트를 <code>content_kind</code> 별로 합산합니다.
+              한 화면에 블록이 3개 이상 겹쳐 보인 체류(<code>co_visible_blocks &gt; 2</code>)는 어느 콘텐츠를 향한 것인지 단정할 수 없어 뺍니다.
+            </dd>
+            <dt>세로 · 담기 기여</dt>
+            <dd>
+              그 콘텐츠를 본 세션의 담기율 ÷ 내 브랜드 전체 담기율. 1.0×이면 평균과 같고, 1.6×이면 그 콘텐츠를 본 사람이
+              평균보다 1.6배 더 담았다는 뜻입니다. <b>상관이지 인과가 아닙니다</b> — 살 마음이 큰 사람이 성분을 더 볼 수도 있습니다.
+            </dd>
+            <dt>원 크기 · 표본</dt>
+            <dd>그 콘텐츠가 한 번이라도 보인 세션 수. 200 미만은 흐리게, 50 미만은 그리지 않습니다.</dd>
+            <dt>기준선</dt>
+            <dd>세로 점선은 담기 기여 1.0×. 가로 점선은 콘텐츠 10종의 주목도 단순 평균입니다.</dd>
+            <dt>지금 상태</dt>
+            <dd>
+              체류·표본은 계약에 정의가 있고(<code>content_daily_kpi</code>), <b>담기 기여와 콘텐츠 선정 목록은 아직 계약에 없습니다</b>.
+              지금 화면 값은 모의 집계이고, 데이터 파트에 마트를 요청해 둔 상태입니다.
+            </dd>
+          </dl>
+        </details>
         <details className="fold">
           <summary>표로 보기</summary>
         <table className="table">
