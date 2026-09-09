@@ -59,11 +59,12 @@ Join 시점 스냅샷으로 보존한다.
 | `cleaned_events` | Processed Base | `event_id` | `event_date_kst` | 구현, Q3 Dimension 결과는 후속 보강 |
 | `sessionized_events` | Processed Base | `event_id` | `event_date_kst` | 구현, 통합몰 세션 순서·seed Dimension 조인 동기화 대기 |
 | `product_event_fact` | Processed Fact | `event_id + item_index + product_id` | `event_date_kst` | 구현, seed Dimension Join |
+| `review_event_fact` | Processed Fact | `event_id + product_id` | `event_date_kst` | 구현, 리뷰 상세 행동 및 Dimension Join |
 | `search_event_fact` | Processed Fact | `event_id` | `event_date_kst` | 미구현 |
 | `section_dwell_agg` | Processed Aggregate | section dwell grain | `event_date_kst` | 구현, delta 합산 |
 | `content_interest_fact` | Processed Fact | content interest grain | `event_date_kst` | 구현, 산식·가중치 연결 |
-| `purchase_fact` | Processed Fact | `order_id + product_id` | `event_date_kst` | 미구현 |
-| `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 미구현 |
+| `purchase_fact` | Processed Fact | `order_id + product_id` | `event_date_kst` | 구현 |
+| `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 구현, 설문 건너뛰기 NULL reason 보존 |
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
 | `dim_brand` | Dimension | `brand_id` | 없음 | seed 상품 기준 projection 구현 |
@@ -362,6 +363,40 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 
 선언한 이유와 행동에서 추론한 관심을 대조하는 집계는 Mart 단계에서 수행한다.
 이 Dataset은 선언 쪽 입력만 보존한다.
+
+### 10.1 `review_event_fact`
+
+입력은 `cleaned_events`의 리뷰 상세 행동이다. unique key는
+`event_id + product_id`다. `review_expand`는 `target`이 `review_text` 또는
+`jump_to_reviews`인 Event만 포함하며 `target=ingredients`는 리뷰 Fact에서 제외한다.
+`section_view`와 `section_dwell`은 `section_id=reviews` 또는 `content_kind`가
+`user_review`, `review_stats`, `review_filter`일 때 포함한다.
+
+| column | type | nullable | source / rule |
+| --- | --- | --- | --- |
+| `event_id` | string | N | Grain |
+| `product_id` | string | N | Grain |
+| `event_date_kst` | date | N | Partition |
+| `event_time`, `processed_at` | timestamp | N | 발생·처리 시각 |
+| `event_name`, `intent` | string | N | 리뷰 행동 Event와 의미 |
+| `user_id`, `persona_id` | string | Y | 분석 사용자·Persona |
+| `scenario_id`, `simulation_run_id`, `generator_type` | string | Y | synthetic 실행 축 |
+| `session_id`, `page_view_id` | string | N | 세션·페이지 방문 ID |
+| `category_id`, `brand_id` | string | Y | 상품 Dimension 스냅샷 |
+| `section_id`, `content_kind` | string | Y | 리뷰 영역 분류 |
+| `review_id` | string | Y | 펼친 리뷰 식별자 |
+| `target` | string | Y | `review_text`, `jump_to_reviews` |
+| `revealed_count` | int | Y | 펼침으로 추가 노출된 리뷰 수 |
+| `filter`, `sort` | string | Y | 적용한 필터 또는 정렬 |
+| `result_count` | int | Y | 적용 후 결과 수 |
+| `persona_skin_type`, `persona_skin_tone` | string | Y | 필터 적용 시점 Persona 조건 |
+| `dwell_ms` | long | Y | 리뷰 영역 체류 Event 값 |
+| `actor_type`, `source` | string | N | 사용자 유형·유입 경로 |
+
+추천 행동은 별도 중복 Dataset을 만들지 않고 §8 `product_event_fact`의
+`recommendation_impression`, `recommendation_click` 행을 정본으로 사용한다.
+두 Event의 `recommendation_id`, `list_id`, `algorithm`, `position`은 검증 Job에서
+필수값으로 검사한다.
 
 ## 11. `search_event_fact`
 
