@@ -68,6 +68,7 @@ restock           쓰던 걸 다시 사서
 
 | event_name | 추가 속성 | 왜 |
 |---|---|---|
+| **모든 이벤트** | ~~`brand_id`~~ → **`tenant_id`** (봉투 top-level, `0.3.0-draft` 부터 필수, slug `^[a-z0-9]+(-[a-z0-9]+)*$`) | 데이터 파트 확정(2026-09-03): 격리 키는 "이 쇼핑몰이 누구 것인가"인 `tenant_id`. 상품 브랜드 `brand_id`는 봉투에 넣지 않고 `product_id → dim_product` 조인으로 파생한다. 프론트는 표시명에서 NFKD slug 를 한 번 만들어 저장하고 봉투에 싣는다 (`storefront.ts` `slugifyTenant`) |
 | **브랜드 자체 대상 Event(향후)** | `brand_id: string` (선택) | 상품 없는 플랫폼 공통 Event에는 기록하지 않고, 브랜드관 도입 시 별도 계약으로 명시 |
 | `text_selection` / `text_copy` | `selection_kind: ingredient \| claim \| usage \| price \| other` | 지금은 성분만 매칭, 나머지는 버림. 분류만 남기고 원문은 여전히 저장하지 않는다 |
 | `section_view` / `section_dwell` (`content_kind=highlight_badge`) | `badge_id: string` (clean 태그 16종 값) | "Vegan 배지는 읽히나" 를 재려면 배지 단위 식별이 필요 |

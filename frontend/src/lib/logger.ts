@@ -1,6 +1,7 @@
 import { EVENT_INTENT, SCHEMA_VERSION } from '../types/log';
 import { ingestForTrait } from './trait';
 import type { ActorType, EventName, LogEnvelope, PageType } from '../types/log';
+import { DEFAULT_STOREFRONT, DEFAULT_TENANT_ID, loadStorefront, tenantIdOf } from './storefront';
 
 /**
  * 프론트 전역 로거.
@@ -31,6 +32,12 @@ interface LoggerContext {
    * 쇼핑몰만 채운다. 대시보드·플랫폼 화면은 로그를 남기지 않는다.
    */
   storefront: Record<string, string> | null;
+  /**
+   * 이 쇼핑몰이 누구 것인가 — 봉투 top-level `tenant_id` (계약 §1.1). 0.3.0-draft 필수.
+   * 쇼핑몰(App.tsx)이 진열 설정에서 꺼내 넣는다. 비어 있으면 기본 테넌트로 보낸다 —
+   * 격리 키가 없는 이벤트를 만들지 않기 위해서다.
+   */
+  tenantId: string | null;
 }
 
 /**
@@ -135,6 +142,10 @@ let context: LoggerContext = {
   environment: 'local',
   synthetic: syntheticContext,
   storefront: null,
+  // 첫 이벤트(session_start·page_view)는 App 의 effect 가 돌기 전에 나간다.
+  // 그때 기본 테넌트로 보내면 한 세션의 앞머리가 다른 파티션에 떨어진다 —
+  // 저장된 진열 설정에서 모듈 로드 시점에 바로 읽는다
+  tenantId: tenantIdOf(loadStorefront() ?? DEFAULT_STOREFRONT),
 };
 
 let sessionId = createId();
@@ -362,6 +373,7 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     intent: EVENT_INTENT[eventName],
     occurred_at: new Date().toISOString(),
 
+    tenant_id: context.tenantId ?? DEFAULT_TENANT_ID,
     persona_id: context.personaId,
     session_id: sessionId,
     page_view_id: pageViewId,

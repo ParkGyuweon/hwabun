@@ -6,7 +6,11 @@
  */
 
 /** 팀과 스키마를 합의할 때마다 올린다 */
-export const SCHEMA_VERSION = '0.2.0-draft';
+/**
+ * 0.3.0-draft 부터 봉투에 `tenant_id` 가 필수다 (contracts/event-schema.json).
+ * 계약은 두 버전을 함께 받으므로 다른 모듈이 아직 0.2.0-draft 여도 수집은 깨지지 않는다.
+ */
+export const SCHEMA_VERSION = '0.3.0-draft';
 
 /** 우선순위 P0. 추천과 마케팅 분석에 반드시 필요한 이벤트 */
 export type P0EventName =
@@ -556,6 +560,12 @@ export interface LogEnvelope {
   /** 클라이언트 발생 시각. 서버 수신 시각과는 별개로 관리한다 */
   occurred_at: string;
 
+  /**
+   * 이 이벤트가 일어난 쇼핑몰이 누구 것인가. 격리·파티션 키 (계약 §1.1).
+   * 상품 브랜드(`brand_id`)와 다르다 — 그건 상품이 없는 이벤트에서 정해지지 않아
+   * 봉투에 싣지 않고 처리 단계에서 `product_id` 로 파생한다.
+   */
+  tenant_id: string;
   persona_id: string | null;
   session_id: string;
   page_view_id: string;
