@@ -934,9 +934,10 @@ GET /api/recommend?persona_id={id}&size=10
 
 | 파라미터 | 기본 | 뜻 |
 |---|---:|---|
+| `persona_id` | — | **선택** (2026-09-09, Jira 214). 없으면 **익명 cold_start** — 상태·속성 친화도 없이 인기 prior + MMR. 페르소나 표에 **없는 값**(실회원 `accountId`)도 받는다: 속성 친화도만 빠지고, `POST /api/events` 로 쌓인 행동으로 개인화된다. **404 는 내지 않는다** — 백엔드 프록시가 회원↔페르소나 매핑 없이 호출할 수 있게 |
 | `size` | 10 | 메인 목록 칸 수 |
 | `banner_slots` | 0 | 배너 칸 수. 0 이면 `banners` 를 안 내린다 |
-| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). ⚠ **어느 자리인지 확정 대기** — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다 |
+| `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). ⚠ **어느 자리인지 확정 대기** — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 카탈로그에 **없으면 칸은 일반 순위로 채워지고** 응답 `reserved_filled` 가 0 이다 — 현재 200개 카탈로그가 그 상태 |
 | `axes` | — | 축 배너에 쓸 축 순서. 안 주면 `concern,segment` |
 
 > **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
@@ -1034,10 +1035,13 @@ GET /api/recommend?persona_id={id}&size=10
 ```json
 {
   "persona_id": "PC00001",
+  "persona_known": true,
   "n_products": 3,
   "recommendation_id": "3f9c1e2a7b4d4c0e9a1b2c3d4e5f6071",
   "list_id": "main",
   "algorithm": "ltr-278t-2026-09-07",
+  "state_source": "events",
+  "reserved_filled": 0,
   "weights": { "cosine": 0.60, "attr": 0.35, "prior": 0.05 },
   "items": [
     {
