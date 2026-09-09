@@ -53,8 +53,48 @@ class TestServer(unittest.TestCase):
         self.assertEqual(r["state_source"], "review_seed")
         self.assertGreater(r["n_products"], 0)
 
-    def test_unknown_persona_404(self):
-        self.assertEqual(client.get("/api/recommend", params={"persona_id": "NOPE"}).status_code, 404)
+    # ── Jira 214: persona_id 없음 · 표에 없는 값 → 익명/미등록 cold_start, 404 없음 ──
+    def test_anonymous_without_persona_id(self):
+        r = client.get("/api/recommend", params={"size": 5})
+        self.assertEqual(r.status_code, 200)
+        b = r.json()
+        self.assertIsNone(b["persona_id"])
+        self.assertFalse(b["persona_known"])
+        self.assertEqual(b["state_source"], "cold_start")
+        self.assertEqual(len(b["items"]), 5)
+        self.assertEqual(b["items"][0]["reason"], {"popular": "많은 사용자가 선택한 상품"})
+
+    def test_empty_persona_id_is_anonymous(self):
+        b = client.get("/api/recommend", params={"persona_id": "", "size": 5}).json()
+        self.assertIsNone(b["persona_id"])
+        self.assertFalse(b["persona_known"])
+
+    def test_unknown_member_id_is_accepted_and_personalized_by_events(self):
+        pid = "member-test-214"
+        first = client.get("/api/recommend", params={"persona_id": pid, "size": 10})
+        self.assertEqual(first.status_code, 200)
+        f = first.json()
+        self.assertEqual(f["persona_id"], pid)
+        self.assertFalse(f["persona_known"])
+        self.assertEqual(f["state_source"], "cold_start")
+        # 익명과 같은 순위에서 시작한다 (속성 친화도 없음, 상태 없음)
+        anon = client.get("/api/recommend", params={"size": 10}).json()
+        self.assertEqual([i["product_id"] for i in f["items"]], [i["product_id"] for i in anon["items"]])
+        g = f["items"][0]["product_id"]
+        ev = client.post("/api/events", json={"persona_id": pid, "events": [
+            {"event_name": "add_to_cart", "product_id": g, "properties": {}}]})
+        self.assertEqual(ev.status_code, 200)
+        second = client.get("/api/recommend", params={"persona_id": pid, "size": 10}).json()
+        self.assertEqual(second["state_source"], "events")
+        self.assertFalse(second["persona_known"])
+        self.assertNotIn(g, [it["product_id"] for it in second["items"]])
+
+    def test_known_persona_flag_and_reserved_filled(self):
+        b = client.get("/api/recommend", params={"persona_id": PID, "size": 10, "reserved": 2}).json()
+        self.assertTrue(b["persona_known"])
+        self.assertEqual(b["reserved"], 2)
+        self.assertEqual(b["reserved_filled"], sum(1 for it in b["items"] if it["reserved"]))
+        self.assertLessEqual(b["reserved_filled"], 2)
 
     def test_converted_products_are_excluded(self):
         pid = "PC00002"
