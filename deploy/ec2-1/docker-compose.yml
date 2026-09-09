@@ -27,6 +27,7 @@ services:
       WORKERS: "1"
       REGISTERED_PRODUCTS_PATH: /data/registered_products.jsonl
       PRESCRIPTIONS_PATH: /data/prescriptions.jsonl
+      SESSION_EVENTS_PATH: /data/session_events.jsonl    # 세션 상태 이벤트 로그 (Jira 224) — 재시작 시 재생
       GMS_KEY: ${GMS_KEY:-}                      # 처방 문장 생성 (없으면 /api/prescription 만 503)
       SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222). 비우면 안 함
       CATALOG_SYNC_INTERVAL_SEC: ${CATALOG_SYNC_INTERVAL_SEC:-300}

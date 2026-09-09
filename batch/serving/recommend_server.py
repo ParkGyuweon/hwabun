@@ -56,6 +56,10 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     POST /api/catalog/sync     쇼핑몰 백엔드(8090) ACTIVE 상품을 읽어 편입·갱신·중단 (Jira 222).
                                SHOP_BACKEND_URL + CATALOG_SYNC_INTERVAL_SEC 로 주기 실행. 승인 훅 없어도 카탈로그 일치
 
+세션 상태 영속화 (Jira 224) — POST /api/events 로 받은 이벤트를 session_events.jsonl 에 append 하고
+    기동 때 재생한다. 재시작해도 개인화 상태가 남는다. SESSION_EVENTS_PATH (컨테이너 /data). 워커 1개 전제 그대로.
+    POST /api/sessions/compact 로 페르소나별 마지막 N건만 남겨 줄인다.
+
 대시보드 처방 문장 (Jira 220) — POST /api/prescription
     입력은 docs/dashboard/action-prescription-prompt.md §2 그대로 (판정 verb 는 프론트가 정함).
     v0.3 프롬프트 · gpt-4.1-mini · 온도 0 · json_schema 강제 → §6 자동 거부 → 저장(prescriptions.jsonl).
@@ -93,6 +97,7 @@ from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive, 
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
 import catalog_sync                                                     # noqa: E402  (Jira 222)
+from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import validate_product_registration as vpr                    # noqa: E402
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
@@ -148,6 +153,10 @@ class Engine:
                     r = json.loads(l)
                     self.seeds.setdefault(r["persona_id"], r["seed_product_ids"])
         self.states = {}                        # persona_id -> UserVector (Redis 자리)
+        # 세션 상태 영속화 (Jira 224) — 이벤트 로그를 재생해 재시작 전 상태로 돌아간다
+        self.session_log = SessionLog()
+        n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False))
+        self.session_replayed = {"personas": n_p, "events": n_e, "ms": ms, "path": self.session_log.path}
         self.load_ms = (time.perf_counter() - t0) * 1000
 
     def _assemble(self):
@@ -251,11 +260,13 @@ class Engine:
             return st, "review_seed"
         return st or UserVector(), "cold_start"
 
-    def observe(self, persona_id, events):
+    def observe(self, persona_id, events, persist=True):
         st = self.states.setdefault(persona_id, UserVector())
         n = 0
         for ev in events:
             st.observe(ev); n += 1
+        if persist and n:
+            self.session_log.append(persona_id, events)          # 상태에 영향 있는 이벤트만 남는다
         return n
 
     # ── 근거 문구 ─────────────────────────────────────────────────────────
@@ -436,6 +447,8 @@ def health():
     return {"ok": True, "scorer": e.scorer, "products": len(e.products),
             "seed_products": e.n_seed, "registered_products": len(e.products) - e.n_seed,
             "inactive_products": len(e.inactive),
+            "sessions": {"personas_in_memory": len(e.states), "replayed": e.session_replayed,
+                         "appended_events": e.session_log.appended},
             "catalog_sync": ({"source": SHOP_BACKEND_URL, "interval_sec": CATALOG_SYNC_INTERVAL,
                               "last": ({k: (len(v) if isinstance(v, (list, dict)) else v)
                                         for k, v in _last_sync.items()} if _last_sync else None)}
@@ -504,6 +517,14 @@ def get_product(product_id: str):
             "active": product_id not in e.inactive,
             "supporters": int(e.supporters[i]) if e.supporters is not None else None,
             "reserved_candidate": bool(e.rec.new_mask()[i])}
+
+
+@app.post("/api/sessions/compact")
+def sessions_compact(keep_last: int = Query(500, ge=10, le=10000)):
+    """세션 이벤트 로그를 페르소나별 마지막 keep_last 건만 남겨 줄인다 (Jira 224). 기동 재생 시간이 길어질 때 운영자가 부른다"""
+    e = get_engine()
+    before, after = e.session_log.compact(keep_last)
+    return {"before": before, "after": after, "path": e.session_log.path}
 
 
 @app.post("/api/catalog/sync")
