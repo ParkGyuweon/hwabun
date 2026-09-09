@@ -41,6 +41,10 @@ PA 100명(personas_100_agent.json)은 생성하지 않는다 — 인터랙티브
   python gen_behavior_logs.py --include-agents              # PA 100명까지 (기본 제외)
   python gen_behavior_logs.py --post http://localhost:8080  # 수집 API 로 전송
   python gen_behavior_logs.py --post http://localhost:8080 --rps 200 --limit 500
+  python gen_behavior_logs.py --recommend-url http://localhost:8300 --limit 200 --out logs.jsonl
+      # 추천 서버 연동 (Jira 221): 목록마다 실제 추천을 받아 items·hero·banners 의
+      # recommendation_id·algorithm·banner_slot·trait_source 를 그대로 싣고, 행동을 서버 상태에 넘긴다.
+      # 서버가 없으면 한 번 경고하고 예전 방식(banner_axes_v0)으로 돈다
   python gen_behavior_logs.py --limit 50 --scenario-id normal_day \
       --simulation-run-id run_20260831_001
 
@@ -67,6 +71,8 @@ PROPERTIES_CONTRACT = os.path.join(ROOT, "contracts", "event-properties-schema.m
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 import behavior_weights as BW
+sys.path.insert(0, BD)                     # 패키지로 import 될 때(테스트)도 옆 모듈이 보이게
+from recommend_client import RecommendClient, banners_from_response   # noqa: E402  (Jira 221)
 
 # ── 행동을 무엇이 정하는가 ──────────────────────────────────────────────────
 # 기본(rule) 모드는 **평가 정답(target)을 알고 그 상품에 반드시 전환**한다.
@@ -326,6 +332,9 @@ BANNER_RESERVED = 2
 BANNER_AXES = ("concern", "segment", "price_bin")
 BANNER_ALGO = "banner_axes_v0"
 BANNER_LIST_ID = "banner_row"
+MAIN_LIST_ID = "main"            # 추천 서버 응답의 list_id (recommendation-io-spec §5)
+# 추천 서버 클라이언트 (Jira 221). main() 이 --recommend-url 로 만든다. None 이면 예전 방식
+RECO = None
 # DATA 계약이 required 로 두되 null 을 허용하는 property — emit 의 None 제거에서 제외
 NULLABLE_REQUIRED_PROPS = frozenset({"banner_value"})
 PRICE_BINS = ((20, "~20"), (35, "20-35"), (50, "35-50"), (80, "50-80"), (10**9, "80+"))
@@ -424,7 +433,8 @@ class Emitter:
         self.n = 0
         self.page = "product_list"
         self.last_rec = None      # 직전 상세에서 노출한 (recommendation_id, [상품])
-        self.last_banner = None   # 직전 목록에서 노출한 (recommendation_id, [배너], trait_source)
+        self.last_banner = None   # 직전 목록에서 노출한 (recommendation_id, [배너], trait_source, algorithm)
+        self.last_main = None     # 직전 목록의 추천 서버 메인 10 (recommendation_id, algorithm, [상품]) — Jira 221
 
     def tick(self, lo=200, hi=1500, rng=None):
         """시간을 흘린다.
@@ -624,7 +634,10 @@ def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
 
 # ── 목록 페이지 체류 ──────────────────────────────────────────────────────
 def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
-                SC=SCENARIO, qrng=None, banners=None):
+                SC=SCENARIO, qrng=None, banners=None, reco=None):
+    """reco: 추천 서버 응답 (Jira 221). 주면 promo_row 가 서버 items 가 되고
+    recommendation_snapshot · recommendation_impression(list_id=main) 을 서버 식별자로 낸다.
+    banners 도 서버 값(banner_slot·trait_source 포함)이면 그대로 싣는다."""
     e.new_page("product_list")
     e.tick(300, 1200)
     if first:
@@ -655,18 +668,40 @@ def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
             e.emit("impression_dwell", g, position=pos,
                    list_id="list_grid", algorithm=EXPOSURE_NAME,
                    visible_ms=int(rng.integers(400, 5000) / (1 + 0.12 * (pos - 1))))
+    # 추천 서버의 메인 목록 (Jira 221) — 프론트 184 와 같은 자리(맞춤 기획전 행 = items 10).
+    # recommendation_snapshot 1건 + 칸마다 recommendation_impression. 식별자는 서버 응답 그대로
+    if reco:
+        items = reco.get("items") or []
+        e.emit("recommendation_snapshot", None,
+               recommendation_id=reco["recommendation_id"], list_id=MAIN_LIST_ID,
+               algorithm=reco["algorithm"], size=len(items),
+               ranking=[{"product_id": it["product_id"], "position": it["position"],
+                         "score": it.get("score")} for it in items])
+        for it in items:
+            e.tick(20, 120)
+            e.emit("recommendation_impression", it["product_id"],
+                   recommendation_id=reco["recommendation_id"], list_id=MAIN_LIST_ID,
+                   algorithm=reco["algorithm"], position=it["position"],
+                   hold_ms=LIST_IMPRESSION_HOLD_MS, visible_ratio=IMPRESSION_VISIBLE_RATIO)
+        e.last_main = (reco["recommendation_id"], reco["algorithm"],
+                       [it["product_id"] for it in items])
     # 배너 노출 — 칸마다 banner_impression. 클릭과 같은 recommendation_id / banner_slot 을
-    # 써야 배너 CTR(banner_daily) 이 성립한다. 프론트 useImpression.ts 의 property 와 같다
+    # 써야 배너 CTR(banner_daily) 이 성립한다. 프론트 useImpression.ts 의 property 와 같다.
+    # 서버 응답(reco)이 있으면 recommendation_id·algorithm·trait_source 는 서버 값이다
     if banners:
-        batch = "banner-%d" % int(rng.integers(10**10, 10**11))
-        source = trait_source_of(first, rng, SC)
-        e.last_banner = (batch, banners, source)
+        if reco:
+            batch, algo = reco["recommendation_id"], reco["algorithm"]
+            source = None                       # 칸마다 서버가 준 trait_source
+        else:
+            batch, algo = "banner-%d" % int(rng.integers(10**10, 10**11)), BANNER_ALGO
+            source = trait_source_of(first, rng, SC)
+        e.last_banner = (batch, banners, source, algo)
         for b in banners:
             e.tick(20, 120)
             e.emit("banner_impression", b["product_id"],
-                   recommendation_id=batch, list_id=BANNER_LIST_ID, algorithm=BANNER_ALGO,
+                   recommendation_id=batch, list_id=BANNER_LIST_ID, algorithm=algo,
                    position=b["slot"], banner_type=b["type"], banner_value=b["value"],
-                   banner_slot=b["slot"], trait_source=source,
+                   banner_slot=b["slot"], trait_source=source or b.get("trait_source"),
                    hold_ms=LIST_IMPRESSION_HOLD_MS, visible_ratio=IMPRESSION_VISIBLE_RATIO)
     # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
     # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
@@ -1016,6 +1051,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     promo = popular[:PROMO_SIZE]
     liked = False
     visited = set()
+    sync_from = len(sink)          # 추천 서버에 아직 안 넘긴 이벤트의 시작 (Jira 221)
     for i in range(len(route)):
         if i in splits:
             visit_i += 1
@@ -1054,29 +1090,65 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             grid = list(rng.choice(cards, size=min(PAGE_SIZE, len(cards)),
                                    replace=False))
             grid = [g] + [x for x in grid if x != g]
-            # 배너 경유 — 이번 상품을 배너 축 칸에 넣어 두고 그 배너를 누른다 (Jira 212)
-            via_banner = BANNER_EVENTS and g != target and rng.random() < SC["p_banner_click"]
-            banners = (make_banners(p, catalog, pool, popular, rng,
-                                    force=g if via_banner else None, exclude=set(seq))
-                       if BANNER_EVENTS else None)
-            browse_list(e, promo, grid[:PAGE_SIZE], catalog, rng,
+            # ── 추천 서버 연동 (Jira 221) ──
+            # 지금까지의 행동을 서버 상태에 넘기고 실제 추천을 받는다. 배너·메인 카드 클릭은
+            # **서버가 실제로 노출한 상품** 중에서 고른다 — 프론트와 같은 경로.
+            reco, via_main = None, False
+            if RECO is not None and RECO.available:
+                RECO.observe(p["persona_id"], sink[sync_from:])
+                sync_from = len(sink)
+                reco = RECO.recommend(p["persona_id"])
+            if reco:
+                banners = banners_from_response(reco) if BANNER_EVENTS else None
+                shown_b = [b["product_id"] for b in (banners or [])
+                           if b["product_id"] not in seq and b["product_id"] not in visited]
+                shown_m = [it["product_id"] for it in reco.get("items") or []
+                           if it["product_id"] not in seq and it["product_id"] not in visited]
+                via_banner = bool(shown_b) and g != target and rng.random() < SC["p_banner_click"]
+                if via_banner:
+                    g = shown_b[0]; route[i] = g
+                elif shown_m and g != target and rng.random() < SC["p_rec_click"]:
+                    via_main = True
+                    g = shown_m[0]; route[i] = g          # 메인 상위부터 (위치 편향 재현)
+                visited.add(g)
+                grid = [g] + [x for x in grid if x != g]
+                promo_now = [it["product_id"] for it in reco.get("items") or []] or promo
+            else:
+                # 배너 경유 — 이번 상품을 배너 축 칸에 넣어 두고 그 배너를 누른다 (Jira 212)
+                via_banner = BANNER_EVENTS and g != target and rng.random() < SC["p_banner_click"]
+                banners = (make_banners(p, catalog, pool, popular, rng,
+                                        force=g if via_banner else None, exclude=set(seq))
+                           if BANNER_EVENTS else None)
+                promo_now = promo
+            browse_list(e, promo_now, grid[:PAGE_SIZE], catalog, rng,
                         dwell_ms=int(rng.integers(*SC["list_dwell_ms"])),
                         first=(i == 0 or i in splits),
-                        SC=SC, qrng=qrng, banners=banners)
+                        SC=SC, qrng=qrng, banners=banners, reco=reco)
             if via_banner:
-                batch, shown, source = e.last_banner
+                batch, shown, source, algo = e.last_banner
                 b = next(x for x in shown if x["product_id"] == g)
                 e.tick(); e.emit("banner_click", g,
                                  recommendation_id=batch, list_id=BANNER_LIST_ID,
-                                 algorithm=BANNER_ALGO, position=b["slot"],
+                                 algorithm=algo, position=b["slot"],
                                  banner_type=b["type"], banner_value=b["value"],
-                                 banner_slot=b["slot"], trait_source=source)
+                                 banner_slot=b["slot"],
+                                 trait_source=source or b.get("trait_source"))
                 # entry_source enum(§3.3) 에 배너 값이 없어 promo_pick 을 쓴다 — 배너 행은
                 # 맞춤 기획전 자리다. list_id 로 배너인지 가른다
                 e.tick(); e.emit("product_click", g, entry_source="promo_pick",
                                  list_id=BANNER_LIST_ID, position=b["slot"])
                 rec_meta = {"recommendation_id": batch, "list_id": BANNER_LIST_ID,
                             "position": b["slot"]}
+            elif via_main:
+                rid, algo, ids = e.last_main
+                pos_m = ids.index(g) + 1
+                e.tick(); e.emit("recommendation_click", g,
+                                 recommendation_id=rid, list_id=MAIN_LIST_ID,
+                                 algorithm=algo, position=pos_m)
+                e.tick(); e.emit("product_click", g, entry_source="promo_pick",
+                                 list_id=MAIN_LIST_ID, position=pos_m)
+                rec_meta = {"recommendation_id": rid, "list_id": MAIN_LIST_ID,
+                            "position": pos_m}
             else:
                 e.tick(); e.emit("product_click", g,
                                  entry_source="list_grid" if rng.random() < 0.8 else "promo_pick",
@@ -1172,7 +1244,18 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
 def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
          scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
          generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
-         pref_profile="default", pref_seed=0, exposure=EXPOSURE_POPULAR):
+         pref_profile="default", pref_seed=0, exposure=EXPOSURE_POPULAR,
+         recommend_url=None, banner_slots=BANNER_SLOTS, reserved=BANNER_RESERVED):
+    global RECO
+    RECO = None
+    if recommend_url:
+        RECO = RecommendClient(recommend_url, banner_slots=banner_slots, reserved=reserved, log=log)
+        h = RECO._call("GET", "/health")
+        if h:
+            log(f"추천 서버 연동: {recommend_url} — 상품 {h.get('products')}개 · {h.get('scorer')} · "
+                f"배너 {banner_slots}칸(전용 {reserved}). 메인·배너 식별자는 서버 응답 그대로 (Jira 221)")
+        else:
+            log(f"추천 서버 {recommend_url} 에 붙지 못했다 — 예전 방식({BANNER_ALGO})으로 돈다")
     context = SimulationContext(
         scenario_id=scenario_id,
         simulation_run_id=simulation_run_id or default_simulation_run_id(),
@@ -1299,6 +1382,14 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
     imp, clk = c["product_impression"], c["product_click"]
     print(f"퍼널  노출 {imp:,} -> 클릭 {clk:,} ({clk/imp*100:.1f}%) "
           f"-> 장바구니 {c['add_to_cart']-seed_cart:,}")
+    if RECO is not None:
+        rec_imp = c.get("recommendation_impression", 0); rec_clk = c.get("recommendation_click", 0)
+        b_imp = c.get("banner_impression", 0); b_clk = c.get("banner_click", 0)
+        algos = sorted({x["properties"].get("algorithm") for x in sink
+                        if x["event_name"] in ("banner_impression", "recommendation_impression")} - {None})
+        print(f"추천 서버 연동  메인 노출 {rec_imp:,} -> 클릭 {rec_clk:,} · 배너 노출 {b_imp:,} -> 클릭 {b_clk:,} "
+              f"· algorithm {algos}")
+        log(RECO.summary())
 
     if post:
         log(f"수집 API 전송 시작 -> {post}  (배치 {BATCH}건"
@@ -1362,6 +1453,14 @@ if __name__ == "__main__":
                     help="hidden preference 잡음 seed")
     ap.add_argument("--rps", type=int, default=0,
                     help="초당 이벤트 수 제한. 0 이면 제한 없음")
+    ap.add_argument("--recommend-url", default=None, metavar="URL",
+                    help="추천 서버 베이스 URL (Jira 221). 예) http://localhost:8300. 주면 목록마다 "
+                         "실제 추천(items·banners)을 받아 그 식별자로 이벤트를 만들고 행동을 서버 상태에 넘긴다. "
+                         "서버가 없으면 경고 뒤 예전 방식")
+    ap.add_argument("--banner-slots", type=int, default=BANNER_SLOTS,
+                    help="추천 서버에 요청할 배너 칸 수 (기본 6)")
+    ap.add_argument("--reserved", type=int, default=BANNER_RESERVED,
+                    help="추천 서버에 요청할 신규 브랜드 전용 칸 수 (기본 2)")
     a = ap.parse_args()
     BANNER_EVENTS = not a.no_banner_events      # 모듈 전역 (if __name__ 블록)
     if not a.out and not a.post:
@@ -1381,4 +1480,7 @@ if __name__ == "__main__":
         pref_profile=a.pref_profile,
         pref_seed=a.pref_seed,
         exposure=a.exposure,
+        recommend_url=a.recommend_url,
+        banner_slots=a.banner_slots,
+        reserved=a.reserved,
     )

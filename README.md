@@ -262,9 +262,10 @@ S15P21A306/
 │   ├── collector_client.py              수집 API 전송 (429/503 백프레셔 대응) — 공용
 │   ├── test_collector_client.py
 │   ├── generator/
-│   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건) — 노출 정책 --exposure
+│   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건) — 노출 정책 --exposure · 추천 서버 연동 --recommend-url (Jira 221)
+│   │   ├── recommend_client.py          추천 서버 클라이언트 — items·hero·banners 식별자를 이벤트에 그대로, 행동은 /api/events 로 상태 전송. 없으면 폴백
 │   │   ├── build_persona_style.py       리뷰에서 페르소나 6축 스타일 추출
-│   │   └── test_gen_behavior_logs.py · README.md
+│   │   └── test_gen_behavior_logs.py · test_recommend_client.py · README.md
 │   ├── agents/
 │   │   ├── agent_runner.py               PA 100명 — 실제 브라우저로 프론트를 조작
 │   │   ├── analyze_run_quality.py        실행 두 개를 대 보고 로그 품질을 재는 도구
