@@ -145,8 +145,11 @@ received_at ASC
 
 Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하고, 그 다음
 `event_id` 기준 정본을 고른다. 같은 `event_id`의 나머지 후보는
-`duplicate_events`에 보존한다. JSON 파싱·공통 필드·enum·sequence·synthetic
-필수 properties 검증에 실패한 row는 원문과 좌표를 `bad_events`에 남긴다.
+`duplicate_events`에 보존한다. JSON 파싱·공통 필드·41종 Event 등록 여부와
+Event-intent 조합·sequence/event index·actor-source 조합·상품 대상 Event의
+`product_id`·synthetic 필수 properties 검증에 실패한 row는 원문과 좌표를
+`bad_events`에 남긴다. `banner_impression`과 `banner_click`은 배너 타입·값·slot·
+성향 출처와 각 intent까지 추가로 검사한다.
 
 파이프라인 검증 Job은 synthetic 세션의 Persona 혼합, 세션 내
 `sequence_no` 충돌, `simulation_run_id`별 `scenario_id`·`generator_type` 불일치를
@@ -156,6 +159,18 @@ Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하
 현재 Q2는 전체 snapshot을 `overwrite`하는 MVP다. 운영 환경에서 Raw가 커지면
 날짜/offset 범위 증분 처리와 transactional upsert를 도입하되, 정본 비교 규칙과
 출력 grain은 유지한다.
+
+Raw→Cleaned Spark 계약 테스트는 Spark 런타임에서 다음처럼 실행한다.
+
+```bash
+PYTHONPATH=. spark-submit --master local[1] \
+  streaming/tests/test_raw_cleaned_spark.py
+```
+
+이 테스트는 Kafka source 형태의 입력을 사용해 Raw 원문·좌표 보존, 배너 2종 통과,
+업무 중복의 정본/감사 분리, 미등록 Event·잘못된 intent·상품 누락·배너 속성 오류의
+격리를 함께 확인한다. 실제 Broker와 checkpoint 재시작은 위 테스트와 별도로
+로컬 Kafka/Spark Compose에서 확인한다.
 
 ## Q3 세션·상품 Fact
 
