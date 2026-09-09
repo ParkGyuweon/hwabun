@@ -45,9 +45,59 @@ export interface Prescription {
 }
 
 const byKind = new Map(contentAttention.map((c) => [c.kind, c]));
+
 const dwellSec = (kind: string) => Math.round((byKind.get(kind)?.avgDwellMs ?? 0) / 1000);
 const viewPct = (kind: string) => fmt.pct(byKind.get(kind)?.viewRate ?? 0);
 const liftOf = (kind: string) => (byKind.get(kind)?.conversionLift ?? 1).toFixed(1);
+
+/**
+ * 옮길 위치를 정한다. AI 가 아니라 여기서 정한다 (규격 v0.3 §2-1).
+ *
+ * AI 파트 실측 회신: 모델은 매번 "맨 위로" 를 고른다. 규칙상 틀리지 않지만 처방이
+ * 단조로워지고, 더 잘 먹히는 칸을 아래로 밀어낸다. 위치는 문장 감각이 아니라 규칙
+ * 문제라서 프론트가 계산해 입력으로 넘긴다.
+ *
+ *   더 잘 먹히는 칸은 그대로 위에 두고, 그 바로 아래에 넣는다.
+ *   = 담기율 배수가 대상보다 높은 칸 중 **가장 낮은** 칸의 바로 아래
+ *
+ * 상품별 블록 노출 순서 마트가 없어서(§9 요청 4번) 지금은 담기율 순서로 대신한다.
+ * 순서 마트가 오면 그 순서에서 "대상보다 앞이면서 담기율이 높은 칸 중 가장 아래" 로
+ * 바꾼다. 규칙 문장은 그대로다.
+ */
+export function insertAfter(kind: string): string | null {
+  const target = byKind.get(kind);
+  if (!target) return null;
+  const better = contentAttention
+    .filter((c) => c.conversionLift > target.conversionLift)
+    .sort((a, b) => a.conversionLift - b.conversionLift);
+  return better[0]?.ko ?? null;
+}
+
+/**
+ * AI 파트가 내려 줄 응답 봉투 (규격 v0.3 §8).
+ *
+ * 자동 거부는 생성하는 쪽이 건다. 입력 JSON 을 들고 있어야 "없는 숫자" 를 대조할 수
+ * 있기 때문이다. 그래서 프론트는 `prescription` 이 null 이면 지시 없이 판정만 그린다.
+ */
+export interface PrescriptionEnvelope {
+  content_kind: string;
+  verb: 'up' | 'fix';
+  prescription: Prescription | null;
+  /** 거부 사유 코드. 비어 있지 않으면 prescription 은 null */
+  rejected_by: string[];
+  /** 실증자료가 필요한 표현. 있으면 화면에 꼬리표를 붙인다 */
+  needs_evidence: string[];
+  model: string;
+  prompt_version: string;
+  input_hash: string;
+  generated_at: string;
+}
+
+/** 봉투에서 처방만 꺼낸다. API 를 붙일 때 목 대신 이 함수를 태운다 */
+export function fromEnvelope(envelope: PrescriptionEnvelope): Prescription | null {
+  if (envelope.rejected_by.length > 0) return null;
+  return envelope.prescription;
+}
 
 const drag3 = scrapedIngredients.slice(0, 3).map((i) => labelKo(i.name));
 const behavior = (event: string) => validationBehaviors.find((v) => v.event === event);
@@ -79,7 +129,7 @@ const hesitate = friction('담기 버튼');
  */
 export const PRESCRIPTION: Record<string, Prescription> = {
   clinical_claim: {
-    how: `임상 결과를 사용자 리뷰 위, 성분 목록 바로 아래로 옮기세요. 줄글 대신 시험 대상 인원·기간·측정 항목·결과를 4줄 표로 바꾸고, 표 아래에 시험 기관명을 한 줄 적으세요.`,
+    how: `임상 결과를 ${insertAfter('clinical_claim') ?? '맨 위'} 바로 아래로 옮기세요. 줄글 대신 시험 대상 인원·기간·측정 항목·결과를 4줄 표로 바꾸고, 표 아래에 시험 기관명을 한 줄 적으세요.`,
     basis: [
       {
         from: '무엇을 보고 사나',
@@ -98,7 +148,7 @@ export const PRESCRIPTION: Record<string, Prescription> = {
   },
 
   ingredient_callout: {
-    how: `성분 특징을 전성분 목록 위로 올리고, 고객이 가장 많이 드래그한 성분 ${drag3.length}개(${drag3.join('·')})를 맨 앞 카드로 세우세요. 성분마다 무엇인지 한 줄, 이 제품에 왜 넣었는지 한 줄이면 됩니다.`,
+    how: `성분 특징을 ${insertAfter('ingredient_callout') ?? '맨 위'} 바로 아래로 옮기세요. 고객이 가장 많이 드래그한 성분 ${drag3.length}개, ${drag3.join('·')}를 맨 앞 카드로 세우세요. 성분마다 무엇인지 한 줄, 이 제품에 왜 넣었는지 한 줄이면 됩니다.`,
     basis: [
       {
         from: '무엇을 보고 사나',
