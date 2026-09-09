@@ -21,9 +21,10 @@ validation에서 검사한다.
 - `required properties`의 키는 `properties` object에 반드시 존재해야 한다.
 - `A 또는 B`는 두 키 중 하나 이상이 존재해야 한다.
 - `string|null`은 키는 필수지만 값은 null일 수 있다는 뜻이다.
-- 상품 자체가 대상인 Event와 상품 상세의 `page_view`·섹션 Event는 top-level
-  `product_id`가 필수다.
-- 플랫폼 목록의 `section_view`·`section_dwell`은 `product_id = NULL`을 허용한다.
+- 상품 자체가 대상인 Event와 상품 상세의 `page_view`·섹션·`scroll_depth`·
+  `scroll_pause` Event는 top-level `product_id`가 필수다.
+- 플랫폼 목록의 `section_view`·`section_dwell`·`scroll_depth`·`scroll_pause`는
+  `product_id = NULL`을 허용한다.
   상품 미귀속은 빈 문자열이 아니라 JSON `null`로 표현한다.
 - Planned Event는 `event-schema.json` enum에 등록되기 전까지 전송하지 않는다.
 
@@ -45,10 +46,11 @@ Event.product_id
 | `product_id` | 상품 대상 Event의 top-level Envelope | Event가 직접 싣는다 |
 | `brand_id` | Processed Fact·Mart | `product_id`를 `dim_product`와 Join해 파생 |
 
-상품 상세 화면의 `page_view`, `section_view`, `section_dwell`은 `product_id`가
-필수다. 홈·검색·장바구니 등 플랫폼 공통 화면의 `page_view`와 상품 목록의
-프로모션·필터·상품 그리드 전체를 측정하는 `section_view`, `section_dwell`은 특정
-상품·브랜드에 귀속하지 않으며 `product_id = NULL`을 허용한다. 빈 문자열은
+상품 상세 화면의 `page_view`, `section_view`, `section_dwell`, `scroll_depth`,
+`scroll_pause`는 `product_id`가 필수다. 홈·검색·장바구니 등 플랫폼 공통 화면의
+`page_view`와 상품 목록의 프로모션·필터·상품 그리드 전체를 측정하는
+`section_view`, `section_dwell`, `scroll_depth`, `scroll_pause`는 특정 상품·브랜드에
+귀속하지 않으며 `product_id = NULL`을 허용한다. 빈 문자열은
 상품 미귀속을 뜻하지 않으며 모든 페이지에서 거부한다. 향후 상품 없이 브랜드 자체가
 명시적 대상인 Event를 도입할 때만 `brand_id` 선택 필드를 별도 계약한다. route,
 표시명, 직전 상품 또는 세션 내 상품으로 브랜드를 추정하지 않는다.
@@ -108,10 +110,10 @@ Event.product_id
 | `text_selection` | `validation` | 텍스트 선택 | 관심 문장·성분 |
 | `text_copy` | `validation` | 텍스트 복사 | 강한 검증 의도 |
 
-`section_view`와 `section_dwell`은 상품 상세 콘텐츠뿐 아니라 상품 목록의 플랫폼 공통
-섹션도 측정한다. 상품 상세에서는 `product_id`가 필수이고, 목록의 프로모션·필터·상품
-그리드 전체 섹션에서는 `product_id = NULL`을 허용한다. 목록 섹션을 직전 상품이나
-세션 내 상품에 귀속하지 않는다.
+`section_view`, `section_dwell`, `scroll_depth`, `scroll_pause`는 상품 상세 콘텐츠뿐
+아니라 상품 목록의 플랫폼 공통 탐색도 측정한다. 상품 상세에서는 `product_id`가
+필수이고, 목록의 프로모션·필터·상품 그리드 전체 탐색에서는 `product_id = NULL`을
+허용한다. 목록 탐색을 직전 상품이나 세션 내 상품에 귀속하지 않는다.
 
 ### 2.4 Review / Ingredient
 
