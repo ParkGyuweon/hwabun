@@ -568,14 +568,15 @@ def _rx_deps():
 def prescribe(body: rx.PrescriptionInput,
               force: bool = Query(False, description="저장본이 있어도 다시 생성"),
               model: str = Query(rx.MODEL)):
-    """브랜드 대시보드 할 일 처방 문장 (docs/dashboard/action-prescription-prompt.md, v0.3).
-    판정(verb)은 프론트가 정해서 보낸다. 여기서는 문장만 만들고 §6 자동 거부를 건다 —
-    거부되면 prescription=null, rejected_by 에 사유. 같은 입력은 저장본을 준다 (cached=true)."""
+    """브랜드 대시보드 할 일 처방 문장 (docs/dashboard/action-prescription-prompt.md v0.3, Jira 225).
+    판정(verb)과 옮길 위치(insert_after)는 프론트가 정해서 보낸다. 여기서는 문장만 만들고 §7 자동 거부 11개를 건다 —
+    거부되면 prescription=null, rejected_by 에 코드. 실증 필요 표현은 needs_evidence 꼬리표.
+    봉투는 프론트 PrescriptionEnvelope (input_hash 포함). 같은 입력은 저장본을 준다 (cached=true)."""
     store, client = _rx_deps()
     problems = rx.input_problems(body)
     if problems:                       # LLM 을 부르기 전에 끝나는 경우 — 키가 없어도 답한다
         return rx.prescribe(body, None, store, force=force, model=model)
-    key = f"{rx.input_hash(body)}-{rx.PROMPT_VERSION}-{model}"
+    key = rx.store_key(body, model)
     if not force and store.get(key):
         return dict(store.get(key), cached=True)
     if client is None:

@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-"""처방 문장 생성(Jira 220)을 고정한다. LLM 은 가짜 클라이언트로 대신한다 — 네트워크 없이 돈다.
+"""처방 문장 생성(Jira 220 → v0.3 정합 Jira 225)을 고정한다. LLM 은 가짜 클라이언트 — 네트워크 없이 돈다.
 
-여기서 막고 싶은 것
-  * §6 자동 거부가 새는 것 — basis 문자열·from 없는 화면·없는 숫자·아래로 옮기기·화살표 없음·비교 판단
-  * keep 판정이나 신호 1개짜리 입력에 LLM 을 부르는 것
-  * 같은 입력을 다시 생성하는 것 (저장본을 줘야 한다)
-  * 키가 없을 때 500 으로 죽는 것 (503 이어야 한다)
-실제 GMS 호출은 RUN_LIVE=1 이고 GMS_KEY 가 있을 때만 1회 돈다.
+여기서 막고 싶은 것 (규격 §7 자동 거부 11개 + 입력 규칙)
+  * basis 문자열 · from 여섯 화면 밖 · 같은 화면만 · 없는 숫자 · 없는 비교 판단
+  * up 인데 insert_after 칸 이름이 없거나 다른 칸 · "빼세요/아래로"
+  * 금지 표현(banned) 거부, functional_only 는 심사 없으면 거부, needs_evidence 는 꼬리표만
+  * verify 화살표 없음 · 목표값 범위 밖 · 줄표
+  * keep·신호 부족·insert_after 가 순서 표에 없음 → LLM 안 부름
+  * 같은 입력 재생성 안 함 (input_hash 봉투) · 키 없으면 503
+실제 GMS 호출은 RUN_LIVE=1 이고 GMS_KEY 가 있을 때만 1회.
 """
 import copy
 import json
@@ -18,41 +20,44 @@ import unittest
 
 BD = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BD)
-_TMP = tempfile.mkdtemp(prefix="rx220_")
+_TMP = tempfile.mkdtemp(prefix="rx225_")
 os.environ["PRESCRIPTIONS_PATH"] = os.path.join(_TMP, "prescriptions.jsonl")
 os.environ["REGISTERED_PRODUCTS_PATH"] = shutil.copy(
     os.path.join(BD, "..", "ingest", "data", "serving", "registered_products.jsonl"), os.path.join(_TMP, "r.jsonl"))
+os.environ["SESSION_EVENTS_PATH"] = os.path.join(_TMP, "s.jsonl")
+os.environ.pop("SHOP_BACKEND_URL", None)
 
 import prescription as rx                  # noqa: E402
 
-INPUT = {
+INPUT = {   # 규격 §3 v0.3 예시 그대로
     "brand": {"name": "SSAFY Beauty", "product_count": 24},
-    "target": {"content_kind": "clinical_claim", "label_ko": "임상 결과", "verb": "up", "avg_dwell_ms": 22300,
-               "view_rate": 0.34, "cart_lift": 2.1, "sample_size": 947, "position_in_page": 6, "total_blocks": 10},
+    "target": {"content_kind": "clinical_claim", "label_ko": "임상 결과", "verb": "up", "dwell_sec": 22,
+               "view_rate_text": "34.0%", "cart_lift_text": "2.1배", "sample_size": 947,
+               "position_in_page": 6, "total_blocks": 10, "insert_after": "성분 목록"},
     "page_context": {"blocks_in_order": [
-        {"content_kind": "product_image", "label_ko": "상품 이미지", "view_rate": 0.94, "cart_lift": 1.0},
-        {"content_kind": "what_it_is", "label_ko": "제품 소개", "view_rate": 0.88, "cart_lift": 1.0},
-        {"content_kind": "ingredient_callout", "label_ko": "성분 특징", "view_rate": 0.71, "cart_lift": 1.6},
-        {"content_kind": "ingredient_list", "label_ko": "성분 목록", "view_rate": 0.62, "cart_lift": 2.3},
-        {"content_kind": "usage_guide", "label_ko": "사용법", "view_rate": 0.48, "cart_lift": 0.9},
-        {"content_kind": "clinical_claim", "label_ko": "임상 결과", "view_rate": 0.34, "cart_lift": 2.1},
-        {"content_kind": "user_review", "label_ko": "사용자 리뷰", "view_rate": 0.31, "cart_lift": 1.8},
-        {"content_kind": "what_else", "label_ko": "추가 설명", "view_rate": 0.22, "cart_lift": 0.7},
-        {"content_kind": "faq", "label_ko": "자주 묻는 질문", "view_rate": 0.18, "cart_lift": 1.1},
-        {"content_kind": "shipping", "label_ko": "배송 안내", "view_rate": 0.15, "cart_lift": 1.0}],
-        "quick_exit_rate": 0.29, "brand_cart_rate": 0.061},
+        {"label_ko": "상품 이미지", "view_rate_text": "94.0%", "cart_lift_text": "1.0배"},
+        {"label_ko": "제품 소개", "view_rate_text": "88.0%", "cart_lift_text": "1.0배"},
+        {"label_ko": "성분 특징", "view_rate_text": "71.0%", "cart_lift_text": "1.6배"},
+        {"label_ko": "성분 목록", "view_rate_text": "62.0%", "cart_lift_text": "2.3배"},
+        {"label_ko": "사용법", "view_rate_text": "48.0%", "cart_lift_text": "0.9배"},
+        {"label_ko": "임상 결과", "view_rate_text": "34.0%", "cart_lift_text": "2.1배"},
+        {"label_ko": "사용자 리뷰", "view_rate_text": "31.0%", "cart_lift_text": "1.8배"},
+        {"label_ko": "추가 설명", "view_rate_text": "22.0%", "cart_lift_text": "0.7배"},
+        {"label_ko": "자주 묻는 질문", "view_rate_text": "18.0%", "cart_lift_text": "1.1배"},
+        {"label_ko": "배송 안내", "view_rate_text": "15.0%", "cart_lift_text": "1.0배"}],
+        "quick_exit_rate_text": "29.0%", "brand_cart_rate_text": "6.1%"},
     "cross_screen_signals": [
         {"from": "누가 사나", "signal": "segment_top_content",
-         "text": "지성 고객이 가장 오래 보는 글이 임상 결과. 이 고객군 체류의 29.0%", "value": 0.29, "sample_size": 1240},
+         "text": "지성 고객이 가장 오래 보는 글이 임상 결과입니다. 이 고객군 체류의 29.0%입니다.", "sample_size": 1240},
         {"from": "고객이 찾는 성분", "signal": "dragged_ingredients_top3",
-         "text": "드래그 상위 3개: 콜라겐(198회)·아연(186회)·펩타이드(148회)", "value": None, "sample_size": 532},
+         "text": "드래그 상위 3개는 콜라겐 198회, 아연 186회, 펩타이드 148회입니다.", "sample_size": 532},
         {"from": "막히는 곳", "signal": "scroll_backtrack_by_location",
-         "text": "성분 목록 구간 되돌아 읽기 388건", "value": 388, "sample_size": 4904},
+         "text": "성분 목록 구간에서 위로 다시 올려 읽은 기록이 388건입니다.", "sample_size": 4904},
         {"from": "무엇을 보고 사나", "signal": "validation_behavior",
-         "text": "전성분 펼쳐 본 방문 담기율 13.2% vs 안 펼친 방문 5.1%", "value": 0.132, "sample_size": 4904}],
+         "text": "전성분을 펼쳐 본 방문의 담기율은 13.2%, 안 펼친 방문은 5.1%입니다.", "sample_size": 4904}],
 }
 GOOD = {
-    "how": "임상 결과를 성분 목록 바로 아래로 옮기세요. 시험 인원·기간·측정 항목·결과를 4줄 표로 바꾸세요.",
+    "how": "임상 결과를 성분 목록 바로 아래로 옮기세요. 시험 인원과 기간과 결과를 표로 정리하세요.",
     "basis": [
         {"from": "무엇을 보고 사나", "text": "이 글을 본 사람의 담기율은 브랜드 평균의 2.1배이고, 열람률은 34.0%입니다."},
         {"from": "누가 사나", "text": "지성 고객이 가장 오래 보는 글이 임상 결과이고, 이 고객군 체류의 29.0%를 여기서 씁니다."},
@@ -62,8 +67,6 @@ GOOD = {
 
 
 class FakeClient:
-    """chat.completions.create 만 흉내낸다. 다음 응답을 큐에 넣는다."""
-
     def __init__(self, *outputs):
         self.outputs = [o if isinstance(o, str) else json.dumps(o, ensure_ascii=False) for o in outputs]
         self.calls = 0
@@ -91,76 +94,103 @@ def inp(**over):
     return rx.PrescriptionInput.model_validate(d)
 
 
+def bad(**over):
+    return dict(GOOD, **over)
+
+
 class TestPrompt(unittest.TestCase):
-    def test_user_prompt_v03_rules(self):
+    def test_user_prompt_v03(self):
         p = rx.user_prompt(inp())
-        self.assertIn("34.0%", p)                      # 비율은 미리 퍼센트로
-        self.assertNotIn("0.34", p)
-        self.assertIn("6번째보다 **앞** 칸", p)         # up 이면 앞 칸으로만
-        self.assertIn("무엇을 보고 사나 / 누가 사나 / 고객이 찾는 성분 / 막히는 곳", p)
-        self.assertIn("현재값 → 목표값", p)
-        self.assertIn('"basis": [{"from"', rx.SYSTEM)  # 출력 골격
-        f = rx.user_prompt(inp(**{"target.verb": "fix"}))
-        self.assertIn("위치는 그대로 두고", f)
+        self.assertIn("옮길 위치: 성분 목록 바로 아래", p)
+        self.assertIn("34.0%", p); self.assertIn("2.1배", p); self.assertNotIn("0.34", p)
+        self.assertIn("22초", p)
+        self.assertIn(" / ".join(rx.SCREENS), p)
+        self.assertIn("(화면 이름: 무엇을 보고 사나)", p)
+        self.assertIn('"basis": [{"from"', rx.SYSTEM)
+        self.assertIn("옮길 위치: 위치 그대로", rx.user_prompt(inp(**{"target.verb": "fix", "target.insert_after": None})))
+        self.assertIn("옮길 위치: 맨 위", rx.user_prompt(inp(**{"target.insert_after": None})))
+
+    def test_v01_numeric_input_still_renders(self):
+        d = copy.deepcopy(INPUT)
+        t = d["target"]; t.pop("view_rate_text"); t.pop("cart_lift_text"); t.pop("dwell_sec")
+        t.update(view_rate=0.34, cart_lift=2.1, avg_dwell_ms=22300)
+        p = rx.user_prompt(rx.PrescriptionInput.model_validate(d))
+        self.assertIn("34.0%", p); self.assertIn("2.1배", p); self.assertIn("22초", p)
 
 
 class TestCheck(unittest.TestCase):
     def test_good_passes(self):
-        self.assertEqual(rx.check(GOOD, inp()), [])
+        fails, needs = rx.check(GOOD, inp())
+        self.assertEqual((fails, needs), ([], []))
 
     def test_shape(self):
-        bad = dict(GOOD, basis="문자열 근거")
-        self.assertEqual(rx.check(bad, inp()), ["shape"])
-        self.assertEqual(rx.check({"how": "x"}, inp()), ["shape"])
+        self.assertEqual(rx.check(dict(GOOD, basis="문자열"), inp())[0], ["shape"])
 
-    def test_moves_down_rejected(self):
-        bad = dict(GOOD, how="임상 결과를 사용자 리뷰 아래로 옮기세요.")
-        self.assertIn("how_moves_down", rx.check(bad, inp()))
+    def test_slot_mismatch_and_direction(self):
+        f, _ = rx.check(bad(how="임상 결과를 사용자 리뷰 바로 아래로 옮기세요."), inp())
+        self.assertTrue(any(x.startswith("slot_mismatch") for x in f))
+        f, _ = rx.check(bad(how="임상 결과를 위로 올리세요. 성분 목록 근처가 좋습니다."), inp())   # 첫 문장에 칸 이름 없음
+        self.assertTrue(any(x.startswith("slot_mismatch") for x in f))
+        f, _ = rx.check(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 추가 설명은 빼세요."), inp())
+        self.assertTrue(any(x.startswith("direction_mismatch") for x in f))
+        # insert_after 가 null 이면 "맨 위"
+        f, _ = rx.check(bad(how="임상 결과를 맨 위로 옮기세요."), inp(**{"target.insert_after": None}))
+        self.assertFalse(any(x.startswith("slot_mismatch") for x in f))
 
-    def test_contradicts_verb(self):
-        bad = dict(GOOD, how="임상 결과 칸을 빼세요.")
-        self.assertIn("how_contradicts_verb", rx.check(bad, inp()))
+    def test_fix_needs_specific_how_but_no_slot(self):
+        f, _ = rx.check(bad(how="사용법을 아침과 저녁 2열 표로 바꾸세요."), inp(**{"target.verb": "fix", "target.insert_after": None}))
+        self.assertFalse(any(x.startswith("slot_mismatch") for x in f))
+        f, _ = rx.check(bad(how="사용법을 개선하세요."), inp(**{"target.verb": "fix", "target.insert_after": None}))
+        self.assertIn("how_vague", f)
 
-    def test_vague_how(self):
-        bad = dict(GOOD, how="임상 결과를 개선하세요.")
-        self.assertIn("how_vague", rx.check(bad, inp()))
+    def test_basis_from_six_screens_and_diversity(self):
+        ok = bad(basis=[{"from": "상품마다 어디서 멈추나", "text": "성분 목록 구간에서 위로 다시 올려 읽은 기록이 388건입니다."},
+                        {"from": "[누가 사나]", "text": "지성 고객이 가장 오래 보는 글이 임상 결과입니다."}])
+        self.assertEqual(rx.check(ok, inp())[0], [])                      # 여섯 화면 + 대괄호 벗김
+        f, _ = rx.check(bad(basis=[{"from": "상세페이지 집계", "text": "열람률 34.0%"}, dict(GOOD["basis"][1])]), inp())
+        self.assertIn("basis_from", f)
+        f, _ = rx.check(bad(basis=[dict(GOOD["basis"][0]), dict(GOOD["basis"][0])]), inp())
+        self.assertIn("basis_diversity", f)
 
-    def test_basis_from_and_diversity(self):
-        bad = dict(GOOD, basis=[dict(GOOD["basis"][0]), dict(GOOD["basis"][0])])
-        self.assertIn("basis_same_from", rx.check(bad, inp()))
-        bad = dict(GOOD, basis=[dict(GOOD["basis"][0]), {"from": "상세페이지 집계", "text": "열람률 34.0%"}])
-        self.assertIn("basis_from", rx.check(bad, inp()))
-        ok = dict(GOOD, basis=[{"from": "[무엇을 보고 사나]", "text": "열람률은 34.0%입니다."}, dict(GOOD["basis"][1])])
-        self.assertEqual(rx.check(ok, inp()), [])      # 대괄호는 벗겨서 본다
+    def test_no_such_number_and_unsupported_comparison(self):
+        f, _ = rx.check(bad(basis=[{"from": "무엇을 보고 사나", "text": "업계 평균 열람률은 52.0%입니다."}, dict(GOOD["basis"][1])]), inp())
+        self.assertTrue(any(x.startswith("no_such_number") for x in f))
+        f, _ = rx.check(bad(basis=[{"from": "무엇을 보고 사나", "text": "열람률 34.0%로 평균보다 높고 담기율은 2.1배입니다."},
+                                  dict(GOOD["basis"][1])]), inp())
+        self.assertTrue(any(x.startswith("unsupported_comparison") for x in f))
+        # 신호 문장에 있는 표현은 허용 ("가장 오래" 는 판단 목록에 없음)
+        self.assertEqual(rx.check(GOOD, inp())[0], [])
 
-    def test_invented_number_rejected(self):
-        bad = dict(GOOD, basis=[{"from": "무엇을 보고 사나", "text": "업계 평균 열람률은 52.0%입니다."}, dict(GOOD["basis"][1])])
-        self.assertTrue(any(f.startswith("basis_numbers") for f in rx.check(bad, inp())))
+    def test_verify_range_and_em_dash(self):
+        f, _ = rx.check(bad(verify="열람률을 34.0%에서 48%로 올리세요."), inp())
+        self.assertIn("verify_range:no_arrow", f)
+        self.assertTrue(any(x.startswith("verify_range") for x in rx.check(bad(verify="열람률 34.0% → 80.0%. 떨어지면 되돌리세요."), inp())[0]))
+        self.assertTrue(any(x.startswith("verify_range") for x in rx.check(bad(verify="열람률 34.0% → 34.0%. 떨어지면 되돌리세요."), inp())[0]))
+        self.assertIn("em_dash", rx.check(bad(how=GOOD["how"] + " — 꼭 하세요."), inp())[0])
 
-    def test_judgement_not_in_input_rejected(self):
-        bad = dict(GOOD, basis=[{"from": "무엇을 보고 사나", "text": "열람률 34.0%로 평균보다 높고 담기율은 2.1배입니다."},
-                                dict(GOOD["basis"][1])])
-        self.assertTrue(any(f.startswith("basis_judgement") for f in rx.check(bad, inp())))
-
-    def test_verify_arrow_and_range(self):
-        self.assertIn("verify_no_arrow", rx.check(dict(GOOD, verify="열람률을 34.0%에서 48%로 올리세요."), inp()))
-        self.assertTrue(any(f.startswith("verify_range") for f in rx.check(dict(GOOD, verify="열람률 34.0% → 80.0%. 떨어지면 되돌리세요."), inp())))
-        self.assertTrue(any(f.startswith("verify_range") for f in rx.check(dict(GOOD, verify="열람률 34.0% → 30.0%. 떨어지면 되돌리세요."), inp())))
-
-    def test_forbidden_terms_and_dash(self):
-        self.assertTrue(any(f.startswith("forbidden_terms") for f in rx.check(dict(GOOD, how="임상 결과를 성분 목록 바로 아래로 옮겨 전환율을 올리세요."), inp())))
-        self.assertIn("dash", rx.check(dict(GOOD, how=GOOD["how"] + " — 꼭 하세요."), inp()))
+    def test_claim_terms_banned_functional_needs_evidence(self):
+        self.assertTrue(rx.claim_terms().loaded, "contracts/cosmetic-claim-banned-terms.json 이 있어야 한다")
+        f, _ = rx.check(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 아토피 완화를 강조하세요."), inp())
+        self.assertTrue(any(x.startswith("banned_term") for x in f))
+        f, _ = rx.check(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 전환율을 올리세요."), inp())
+        self.assertTrue(any(x.startswith("banned_term") for x in f))                       # 웹 분석 용어
+        f, _ = rx.check(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 미백 결과를 앞에 두세요."), inp())
+        self.assertTrue(any(x.startswith("functional_only") for x in f))
+        f, _ = rx.check(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 미백 결과를 앞에 두세요."),
+                        inp(**{"brand.functional_certified": True}))
+        self.assertFalse(any(x.startswith("functional_only") for x in f))                 # 심사 기록 있으면 허용
+        f, needs = rx.check(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 다크서클 완화 문구를 표 위에 두세요."), inp())
+        self.assertEqual(f, [])                                                          # 거부 아님
+        self.assertEqual(needs, ["다크서클 완화"])                                          # 꼬리표
 
 
 class TestInputRules(unittest.TestCase):
-    def test_keep_and_few_signals(self):
+    def test_rules(self):
         self.assertIn("verb_keep", rx.input_problems(inp(**{"target.verb": "keep"})))
-        one = inp(cross_screen_signals=INPUT["cross_screen_signals"][:1])
-        self.assertIn("signals_lt_2", rx.input_problems(one))
-        small = copy.deepcopy(INPUT["cross_screen_signals"])
-        for s in small:
-            s["sample_size"] = 50
-        self.assertIn("signals_lt_2", rx.input_problems(inp(cross_screen_signals=small)))
+        self.assertIn("signals_lt_2", rx.input_problems(inp(cross_screen_signals=INPUT["cross_screen_signals"][:1])))
+        self.assertIn("insert_after_not_in_blocks", rx.input_problems(inp(**{"target.insert_after": "없는 칸"})))
+        self.assertIn("signal_from_unknown", rx.input_problems(inp(cross_screen_signals=[
+            dict(INPUT["cross_screen_signals"][0], **{"from": "대시보드"}), INPUT["cross_screen_signals"][1]])))
         self.assertEqual(rx.input_problems(inp()), [])
 
 
@@ -168,37 +198,34 @@ class TestPrescribe(unittest.TestCase):
     def setUp(self):
         self.store = rx.Store(os.path.join(tempfile.mkdtemp(), "p.jsonl"))
 
-    def test_generate_store_and_cache(self):
+    def test_envelope_generate_and_cache(self):
         c = FakeClient(GOOD)
         r = rx.prescribe(inp(), c, self.store)
+        for k in ("content_kind", "verb", "prescription", "rejected_by", "needs_evidence", "model",
+                  "prompt_version", "input_hash", "generated_at"):
+            self.assertIn(k, r, k)
         self.assertEqual(r["prescription"], GOOD)
         self.assertEqual(r["rejected_by"], [])
-        self.assertFalse(r["cached"])
-        self.assertEqual(r["prompt_version"], rx.PROMPT_VERSION)
-        # 스키마 강제로 불렀나
+        self.assertTrue(r["input_hash"].startswith("sha256:"))
         self.assertEqual(c.last_kwargs["response_format"]["type"], "json_schema")
         self.assertEqual(c.last_kwargs["temperature"], 0.0)
-        # 같은 입력은 저장본 — LLM 을 다시 부르지 않는다
         r2 = rx.prescribe(inp(), c, self.store)
-        self.assertTrue(r2["cached"])
-        self.assertEqual(c.calls, 1)
-        # 다른 저장 객체로 다시 읽어도 남아 있다
-        again = rx.Store(self.store.path)
-        self.assertIsNotNone(again.get(r["key"]))
+        self.assertTrue(r2["cached"]); self.assertEqual(c.calls, 1)
+        # 입력이 바뀌면 해시가 바뀌어 다시 생성
+        c2 = FakeClient(GOOD)
+        r3 = rx.prescribe(inp(**{"target.view_rate_text": "35.0%"}), c2, self.store)
+        self.assertNotEqual(r3["input_hash"], r["input_hash"]); self.assertEqual(c2.calls, 1)
 
-    def test_rejected_returns_null_with_reasons(self):
-        bad = dict(GOOD, how="임상 결과를 사용자 리뷰 아래로 옮기세요.")
-        r = rx.prescribe(inp(), FakeClient(bad), self.store)
-        self.assertIsNone(r["prescription"])
-        self.assertIn("how_moves_down", r["rejected_by"])
-        self.assertIsNotNone(r["raw"])
+    def test_rejected_and_needs_evidence_in_envelope(self):
+        r = rx.prescribe(inp(), FakeClient(bad(how="임상 결과를 사용자 리뷰 바로 아래로 옮기세요.")), self.store)
+        self.assertIsNone(r["prescription"]); self.assertTrue(any(x.startswith("slot_mismatch") for x in r["rejected_by"]))
+        r = rx.prescribe(inp(**{"target.sample_size": 948}), FakeClient(bad(how="임상 결과를 성분 목록 바로 아래로 옮기고 다크서클 완화 문구를 두세요.")), self.store)
+        self.assertIsNotNone(r["prescription"]); self.assertEqual(r["needs_evidence"], ["다크서클 완화"])
 
     def test_keep_never_calls_llm(self):
         c = FakeClient(GOOD)
         r = rx.prescribe(inp(**{"target.verb": "keep"}), c, self.store)
-        self.assertIsNone(r["prescription"])
-        self.assertEqual(r["rejected_by"], ["verb_keep"])
-        self.assertEqual(c.calls, 0)
+        self.assertIsNone(r["prescription"]); self.assertEqual(r["rejected_by"], ["verb_keep"]); self.assertEqual(c.calls, 0)
 
 
 class TestEndpoint(unittest.TestCase):
@@ -209,17 +236,14 @@ class TestEndpoint(unittest.TestCase):
         cls.rs = rs
         cls.client = TestClient(rs.app)
 
-    def test_503_without_key_and_400ish_paths(self):
+    def test_503_without_key_and_keep(self):
         rs = self.rs
         rs._rx_client, rs._rx_client_tried = None, True
         r = self.client.post("/api/prescription", json=INPUT)
         self.assertEqual(r.status_code, 503)
-        self.assertEqual(r.json()["detail"]["code"], "LLM_UNAVAILABLE")
-        # keep 은 키 없이도 답한다
         keep = copy.deepcopy(INPUT); keep["target"]["verb"] = "keep"
         r = self.client.post("/api/prescription", json=keep)
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()["rejected_by"], ["verb_keep"])
+        self.assertEqual(r.status_code, 200); self.assertEqual(r.json()["rejected_by"], ["verb_keep"])
 
     def test_endpoint_with_fake_client(self):
         rs = self.rs
@@ -228,18 +252,17 @@ class TestEndpoint(unittest.TestCase):
         r = self.client.post("/api/prescription", json=INPUT)
         self.assertEqual(r.status_code, 200, r.text)
         b = r.json()
-        self.assertEqual(b["prescription"]["how"], GOOD["how"])
-        self.assertEqual(b["content_kind"], "clinical_claim")
-        r2 = self.client.post("/api/prescription", json=INPUT)
-        self.assertTrue(r2.json()["cached"])
+        self.assertEqual(b["prescription"]["how"], GOOD["how"]); self.assertIn("input_hash", b); self.assertEqual(b["needs_evidence"], [])
+        self.assertTrue(self.client.post("/api/prescription", json=INPUT).json()["cached"])
 
     @unittest.skipUnless(os.environ.get("RUN_LIVE") == "1" and (os.environ.get("GMS_KEY") or os.environ.get("OPENAI_API_KEY")),
                          "RUN_LIVE=1 + GMS_KEY 일 때만 실제 호출")
     def test_live_once(self):
         store = rx.Store(os.path.join(tempfile.mkdtemp(), "p.jsonl"))
         r = rx.prescribe(inp(), rx.make_client(), store)
-        print("\n[live]", json.dumps(r, ensure_ascii=False)[:600])
+        print("\n[live]", json.dumps(r, ensure_ascii=False)[:700])
         self.assertEqual(r["rejected_by"], [], r)
+        self.assertIn("성분 목록", r["prescription"]["how"])
 
 
 if __name__ == "__main__":

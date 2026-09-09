@@ -23,6 +23,7 @@ _TMP = tempfile.mkdtemp(prefix="reg216_")
 _COPY = os.path.join(_TMP, "registered_products.jsonl")
 shutil.copy(os.path.join(BD, "..", "ingest", "data", "serving", "registered_products.jsonl"), _COPY)
 os.environ["REGISTERED_PRODUCTS_PATH"] = _COPY
+os.environ.setdefault("SESSION_EVENTS_PATH", os.path.join(tempfile.mkdtemp(prefix="sess_"), "session_events.jsonl"))  # 세션 로그가 레포에 쌓이지 않게
 
 from fastapi.testclient import TestClient  # noqa: E402
 

@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import unittest
+os.environ.setdefault("SESSION_EVENTS_PATH", os.path.join(tempfile.mkdtemp(prefix="sess_"), "session_events.jsonl"))  # 세션 로그가 레포에 쌓이지 않게
 
 import numpy as np
 
