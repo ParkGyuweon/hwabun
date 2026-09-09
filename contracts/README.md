@@ -35,6 +35,7 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | Product Feature | `product-feature-spec.md`, `product-feature-vocab.json` |
 | 상품 등록 입력 필드·어휘 제약·파생값 | `product-registration-spec.md` |
 | 상품 등록 폼 어휘와 한국어 표시 문구 | `product-form-labels-ko.json` |
+| 사이트 상품·리뷰 한국어 문장과 화면 라벨 | `localization/` (`products-ko.json`, `reviews-ko.json`, `labels-ko.json`) |
 | Recommendation 입출력과 행동 집계 | `recommendation-io-spec.md` |
 | 고객 피드백 분류 입출력·축·카테고리 어휘 | `feedback-classification.md`, `feedback-category-vocab.json` |
 | 고객 피드백 금지어 목록 (기본 숨김 표시) | `feedback-banned-terms.json` |
