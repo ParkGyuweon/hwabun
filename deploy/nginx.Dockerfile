@@ -4,6 +4,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
+COPY contracts/product-feature-vocab.json /app/contracts/product-feature-vocab.json
 RUN npm run build
 
 FROM nginx:1.27-alpine
