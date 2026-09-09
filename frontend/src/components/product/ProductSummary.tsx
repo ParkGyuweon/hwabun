@@ -40,9 +40,13 @@ export default function ProductSummary({
     track('quantity_change', { product_id: product.product_id, quantity: clamped });
   };
 
+  /** 마지막 찜 동작. 담기와 같은 자리에 같은 방식으로 알린다 — 눌렀는데 아무 말 없으면 dead_click 으로 보인다 */
+  const [wishNotice, setWishNotice] = useState<'add' | 'remove' | null>(null);
+
   const toggleWishlist = () => {
     const next = !loved;
     setLoved(next);
+    setWishNotice(next ? 'add' : 'remove');
     track('wishlist_toggle', { product_id: product.product_id, action: next ? 'add' : 'remove' });
   };
 
@@ -140,6 +144,11 @@ export default function ProductSummary({
         </button>
       </div>
 
+      {wishNotice !== null ? (
+        <p className="summary__toast summary__toast--wish" role="status">
+          {wishNotice === 'add' ? '찜 목록에 담았습니다 ♥' : '찜을 해제했습니다'}
+        </p>
+      ) : null}
       {addedAt !== null ? (
         <p className="summary__toast" role="status">
           장바구니에 담았습니다 · 수량 {quantity}
