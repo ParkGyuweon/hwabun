@@ -37,8 +37,17 @@ const MIN_BURST_PX = 24;
 /** 아래로 보던 중 이만큼 다시 올라가면 되돌아본 것으로 본다 */
 const BACKTRACK_PX = 240;
 
-export function useScrollDepth(pageViewKey: string) {
+/**
+ * @param productId 이 화면의 상품. 상세 페이지는 넘기고 목록은 비운다.
+ *
+ * 로거 컨텍스트의 productId 에 기대지 않고 직접 싣는 이유: 이 훅은 자식 컴포넌트의
+ * effect 라서 부모(App)가 startPageView 로 컨텍스트를 갱신하기 **전에** 돈다. 그 순서에
+ * 맡기면 상세 페이지 첫 scroll_depth 가 product_id 없이 나간다 (계약 검증 실패, 2026-09-09).
+ */
+export function useScrollDepth(pageViewKey: string, productId: string | null = null) {
   useEffect(() => {
+    /** 이 훅이 찍는 모든 이벤트에 대상 상품을 싣는다. null 이면 로거가 컨텍스트 값을 쓴다 */
+    const target = productId === null ? {} : { product_id: productId };
     let lastY = window.scrollY;
     /** 마지막 멈춤 이후 이동을 한 덩어리로 묶어 속도를 낸다 */
     let burstStartY = window.scrollY;
@@ -61,6 +70,7 @@ export function useScrollDepth(pageViewKey: string) {
       for (let milestone = MILESTONE_STEP; milestone <= 100; milestone += MILESTONE_STEP) {
         if (reached >= milestone) {
           trackOnce(`scroll_depth:${pageViewKey}:${milestone}`, 'scroll_depth', {
+            ...target,
             depth_percent: milestone,
             ...dominantRegion(),
           });
@@ -81,6 +91,7 @@ export function useScrollDepth(pageViewKey: string) {
       const durationMs = Math.max(1, Date.now() - burstStartAt);
 
       track('scroll_pause', {
+        ...target,
         ...dominantRegion(),
         /**
          * 멈춘 화면에 콘텐츠가 여러 종류 같이 떠 있으면 무엇을 보던 중인지 단정할 수 없다.
@@ -115,6 +126,7 @@ export function useScrollDepth(pageViewKey: string) {
 
         if (direction === 'up' && reversalDistance >= BACKTRACK_PX) {
           track('scroll_backtrack', {
+            ...target,
             ...dominantRegion(),
             depth_percent: scrollPercent(),
             distance_px: Math.round(reversalDistance),
@@ -144,12 +156,20 @@ export function useScrollDepth(pageViewKey: string) {
      * 측정 자체가 숫자 비교 몇 번이라 매 스크롤마다 돌려도 부담이 없다.
      */
     window.addEventListener('scroll', onScroll, { passive: true });
-    // 첫 화면이 이미 100% 인 경우도 있으므로 한 번 측정하고 시작한다
-    measureDepth();
+    /**
+     * 첫 화면이 이미 100% 인 경우도 있으므로 한 번 측정하고 시작한다.
+     *
+     * 다음 틱으로 미룬다. 자식 effect 인 이 훅이 부모(App)의 startPageView 보다 먼저 돌기
+     * 때문에, 지금 바로 찍으면 이전 page_view_id 에 붙고 startPageView 가 곧바로 1회성
+     * 기록(firedOnceKeys)을 지워 같은 구간이 두 번 찍힌다. setTimeout(0) 은 같은 커밋의
+     * 부모 effect 가 모두 끝난 뒤에 돈다.
+     */
+    const initial = window.setTimeout(measureDepth, 0);
 
     return () => {
+      window.clearTimeout(initial);
       window.removeEventListener('scroll', onScroll);
       if (pauseTimer !== undefined) window.clearTimeout(pauseTimer);
     };
-  }, [pageViewKey]);
+  }, [pageViewKey, productId]);
 }

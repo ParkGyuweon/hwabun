@@ -52,7 +52,7 @@ export default function ProductDetailPage({
 
   // 클릭 로그만으로는 구매까지 안 간 방문이 빈 세션으로 남아서, 주목 신호를 함께 남긴다
   useSectionView(pageViewKey);
-  useScrollDepth(pageViewKey);
+  useScrollDepth(pageViewKey, product.product_id);
   useTextSelection(pageViewKey);
   useInteractionSignals(pageViewKey);
   useExitSummary(pageViewKey);
