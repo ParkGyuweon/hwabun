@@ -1,5 +1,7 @@
 import re
+import json
 import unittest
+from pathlib import Path
 
 from streaming.jobs.raw_sink_job import (
     RAW_EVENT_FIELDS,
@@ -9,6 +11,9 @@ from streaming.jobs.raw_sink_job import (
 from streaming.jobs.clean_events_job import (
     CANONICAL_ORDER_FIELDS,
     CleanEventsConfig,
+    EVENT_INTENTS,
+    PRODUCT_DETAIL_SCOPED_EVENTS,
+    PRODUCT_ID_REQUIRED_EVENTS,
     RFC3339_WITH_OFFSET_PATTERN,
     SUPPORTED_SCHEMA_VERSIONS,
     parse_args as parse_clean_args,
@@ -103,6 +108,41 @@ class RawSinkConfigTest(unittest.TestCase):
 
 
 class CleanEventsConfigTest(unittest.TestCase):
+    def test_q2_event_intents_match_the_41_event_json_contract(self):
+        contract_path = Path(__file__).parents[2] / "contracts" / "event-schema.json"
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        registered = set(contract["properties"]["event_name"]["enum"])
+        contracted_intents = {}
+        for rule in contract["allOf"]:
+            intent = (
+                rule.get("then", {})
+                .get("properties", {})
+                .get("intent", {})
+                .get("const")
+            )
+            events = (
+                rule.get("if", {})
+                .get("properties", {})
+                .get("event_name", {})
+                .get("enum", [])
+            )
+            if intent:
+                contracted_intents.update({event_name: intent for event_name in events})
+
+        self.assertEqual(41, len(registered))
+        self.assertEqual(registered, set(EVENT_INTENTS))
+        self.assertEqual(contracted_intents, EVENT_INTENTS)
+        self.assertEqual("session", EVENT_INTENTS["banner_impression"])
+        self.assertEqual("interest", EVENT_INTENTS["banner_click"])
+
+    def test_q2_product_scope_includes_banners_and_detail_scoped_events(self):
+        self.assertIn("banner_impression", PRODUCT_ID_REQUIRED_EVENTS)
+        self.assertIn("banner_click", PRODUCT_ID_REQUIRED_EVENTS)
+        self.assertEqual(
+            {"page_view", "section_view", "section_dwell"},
+            set(PRODUCT_DETAIL_SCOPED_EVENTS),
+        )
+
     def test_canonical_order_matches_team_contract(self):
         self.assertEqual(
             (
