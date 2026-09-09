@@ -320,7 +320,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
 
   const sx = (v: number) => x0 + (v / maxX) * (x1 - x0);
   const sy = (v: number) => y1 - ((v - loY) / (hiY - loY)) * (y1 - y0);
-  // 점 크기는 표본. 너무 크면 서로 닿고 위치를 못 읽는다 — 반지름 4.5~9px 로 묶는다
+  // 점 크기는 표본. 너무 크면 서로 닿고 위치를 못 읽는다. 반지름 4.5~9px 로 묶는다
   const rOf = (n: number) => 4.5 + Math.min(4.5, Math.log10(Math.max(10, n)) * 1.5);
 
   const cx = sx(meanX);
@@ -556,6 +556,12 @@ export interface ActionItem {
   num: string;
   /** 그 숫자가 무엇인지 */
   unit: string;
+  /** 무엇을 어떻게. 위치·형식·개수까지 적은 명령 */
+  how?: string;
+  /** 그 명령을 지지하는 근거. 어느 화면에서 가져왔는지 함께 */
+  basis?: Array<{ from: string; text: string }>;
+  /** 무엇이 얼마나 바뀌면 성공인가 */
+  verify?: string;
 }
 
 const VERB_KO: Record<ActionItem['verb'], string> = {
@@ -569,6 +575,12 @@ const VERB_KO: Record<ActionItem['verb'], string> = {
  *
  * 지표를 늘어놓으면 사장님이 "그래서 뭘 하지" 를 스스로 풀어야 한다. 그 계산을
  * 화면이 대신한다. 한 줄에 **동작 하나 · 대상 하나 · 근거 숫자 하나**만 둔다.
+ *
+ * 동작 이름만으로는 안 된다. "위로 올리세요" 다음에 **무엇을 어떻게**(`how`) 가
+ * 붙고, 그 지시가 어느 화면의 어떤 숫자에서 나왔는지(`basis`)와 다음 주에 무엇으로
+ * 채점할지(`verify`)를 접어 둔다. 근거를 접어 두는 이유는 감추려는 게 아니라
+ * 지시부터 읽게 하려는 것이다.
+ *
  * 그래프는 이 판단이 어디서 나왔는지 확인하고 싶을 때 펼쳐 보는 부록으로 내린다.
  */
 export function Actions({ items }: { items: ActionItem[] }) {
@@ -576,15 +588,44 @@ export function Actions({ items }: { items: ActionItem[] }) {
     <ol className="acts">
       {items.map((a) => (
         <li key={a.what} className={`act act--${a.verb}`}>
-          <span className="act__verb">{VERB_KO[a.verb]}</span>
-          <div className="act__body">
-            <p className="act__what">{a.what}</p>
-            <p className="act__why">{a.why}</p>
+          <div className="act__row">
+            <span className="act__verb">{VERB_KO[a.verb]}</span>
+            <div className="act__body">
+              <p className="act__what">{a.what}</p>
+              <p className="act__why">{a.why}</p>
+            </div>
+            <div className="act__fig">
+              <strong className="act__num">{a.num}</strong>
+              <span className="act__unit">{a.unit}</span>
+            </div>
           </div>
-          <div className="act__fig">
-            <strong className="act__num">{a.num}</strong>
-            <span className="act__unit">{a.unit}</span>
-          </div>
+
+          {a.how ? (
+            <div className="act__rx">
+              <p className="act__how">
+                <span className="act__rx-tag">이렇게 하세요</span>
+                {a.how}
+              </p>
+              {a.basis && a.basis.length > 0 ? (
+                <details className="act__more">
+                  <summary>왜 이렇게 하라는 건지 · 다른 화면에서 모은 근거 {a.basis.length}개</summary>
+                  <ul className="act__basis">
+                    {a.basis.map((b) => (
+                      <li key={b.from + b.text}>
+                        <span className="act__from">{b.from}</span>
+                        {b.text}
+                      </li>
+                    ))}
+                  </ul>
+                  {a.verify ? (
+                    <p className="act__verify">
+                      <b>다음 주에 이걸로 채점하세요</b> {a.verify}
+                    </p>
+                  ) : null}
+                </details>
+              ) : null}
+            </div>
+          ) : null}
         </li>
       ))}
     </ol>

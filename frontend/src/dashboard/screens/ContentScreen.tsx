@@ -1,5 +1,6 @@
 import { Actions, BarList, Kpi, Panel, Scatter } from '../components';
 import { contentAttention, fmt, scrapedIngredients, validationBehaviors } from '../lib/metrics';
+import { prescriptionFor } from '../lib/prescription';
 import { labelKo } from '../../lib/formLabels';
 import type { ActionItem } from '../components';
 
@@ -52,16 +53,24 @@ export default function ContentScreen() {
   const firstFix = todo.find((r) => r.verb === 'fix');
   const best = [...rows].sort((a, b) => b.conversionLift - a.conversionLift)[0];
 
-  const actions: ActionItem[] = todo.map((r) => ({
-    verb: r.verb,
-    what: r.ko,
-    why:
-      r.verb === 'up'
-        ? `본 사람이 평균보다 ${r.conversionLift.toFixed(1)}배 더 담았는데, 상세페이지를 연 사람 중 ${fmt.pct(r.viewRate)}만 여기까지 내려왔습니다.`
-        : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 본 사람이 평균보다 덜 담았습니다. 읽고도 마음이 안 움직인 글입니다.`,
-    num: `${r.conversionLift.toFixed(1)}배`,
-    unit: '본 사람의 담기율',
-  }));
+  // 처방(무엇을 어떻게)은 이 화면 숫자만으로 못 쓴다. 다른 화면의 근거까지 모아
+  // lib/prescription.ts 가 만든다. 규칙에 없는 콘텐츠는 지시 없이 판정만 보여준다.
+  const actions: ActionItem[] = todo.map((r) => {
+    const rx = prescriptionFor(r.kind);
+    return {
+      verb: r.verb,
+      what: r.ko,
+      why:
+        r.verb === 'up'
+          ? `본 사람이 평균보다 ${r.conversionLift.toFixed(1)}배 더 담았는데, 상세페이지를 연 사람 중 ${fmt.pct(r.viewRate)}만 여기까지 내려왔습니다.`
+          : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 본 사람이 평균보다 덜 담았습니다. 읽고도 마음이 안 움직인 글입니다.`,
+      num: `${r.conversionLift.toFixed(1)}배`,
+      unit: '본 사람의 담기율',
+      how: rx?.how,
+      basis: rx?.basis,
+      verify: rx?.verify,
+    };
+  });
 
   return (
     <div className="stack">
@@ -85,7 +94,8 @@ export default function ContentScreen() {
         <Actions items={actions} />
         <p className="note">
           담기율 1.0배는 내 브랜드 전체 평균과 같다는 뜻입니다. 1.0배 미만은 손볼 것, 1.5배 이상인데 절반도 못 본 것은 위로
-          올릴 것으로 골랐습니다.
+          올릴 것으로 골랐습니다. 지시 문장은 이 화면 숫자만으로 쓰지 않고, 고객군·성분·막히는 곳 화면에서 모은 근거까지
+          모아 만듭니다. 근거는 각 줄을 펼치면 나옵니다.
         </p>
       </Panel>
 

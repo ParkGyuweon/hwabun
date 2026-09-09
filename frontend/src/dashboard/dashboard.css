@@ -1381,28 +1381,18 @@ table.data tr:hover td {
 }
 
 .act {
-  display: grid;
-  grid-template-columns: 108px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 18px;
-  padding: 16px 20px;
+  padding: 16px 20px 14px;
   border-radius: var(--radius);
   background: var(--panel);
   border: 1px solid var(--line-soft);
   border-left: 4px solid var(--line);
 }
 
-/* 동작마다 색을 다르게 둔다. 색만 봐도 올릴 것과 손볼 것이 갈린다 */
-.act--up {
-  border-left-color: var(--brand);
-  background: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.13), var(--panel) 42%);
-}
-.act--fix {
-  border-left-color: var(--accent);
-  background: linear-gradient(90deg, rgb(230 143 161 / 0.14), var(--panel) 42%);
-}
-.act--keep {
-  border-left-color: var(--line);
+.act__row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
 }
 
 .act__verb {
@@ -1464,7 +1454,7 @@ table.data tr:hover td {
 }
 
 @media (max-width: 720px) {
-  .act {
+  .act__row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 4px 14px;
   }
@@ -1494,4 +1484,111 @@ table.data tr:hover td {
 .pill--keep {
   background: var(--line-soft);
   color: var(--ink-faint);
+}
+
+/* ---------- 처방: 무엇을 어떻게 ---------- */
+
+.act__rx {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.act__how {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.62;
+  color: var(--ink);
+}
+
+/* 지시라는 것을 한눈에. 문장 앞에 붙는 작은 꼬리표 */
+.act__rx-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 8px 3px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  vertical-align: 2px;
+}
+
+.act--up .act__rx-tag {
+  background: #5d7a2e;
+}
+.act--fix .act__rx-tag {
+  background: #b45268;
+}
+
+.act__more {
+  margin-top: 10px;
+}
+
+.act__more > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.act__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.act__more > summary::before {
+  content: '＋';
+  margin-right: 6px;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+
+.act__more[open] > summary::before {
+  content: '−';
+}
+
+.act__basis {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.act__basis li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+/* 근거를 어느 화면에서 가져왔는지. 사장님이 직접 가서 확인할 수 있어야 한다 */
+.act__from {
+  display: inline-block;
+  margin-right: 7px;
+  padding: 1px 7px 2px;
+  border-radius: 5px;
+  background: var(--line-soft);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.act__verify {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.act__verify b {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ink);
+  font-weight: 600;
 }
