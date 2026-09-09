@@ -2091,7 +2091,7 @@ Start 적중 여부로 갈라 네 칸으로 본다 (target 을 직접 만난 실
 | 파일 | 무엇 |
 |---|---|
 | `batch/jobs/ltr_features.py` | 피처 19개. **학습과 서빙이 같은 코드를 쓴다** |
-| `batch/jobs/train_ltr.py` | 학습 (train 5,954명) → `serving/ltr_model.pkl` |
+| `batch/jobs/train_ltr.py` | 학습 (train 5,954명) → `batch/ingest/data/serving/ltr_model.pkl` |
 | `batch/regenerate_all.py` 8.5단계 | 골든(9단계)보다 **먼저** 돌아야 한다 |
 | 계약 §4-2 | 산출물·피처·증강·성능·검증 |
 
