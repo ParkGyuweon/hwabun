@@ -2,7 +2,7 @@ package com.cosmetic.shopbackend.feedback;
 
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

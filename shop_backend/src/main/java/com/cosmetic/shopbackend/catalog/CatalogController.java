@@ -3,8 +3,7 @@ package com.cosmetic.shopbackend.catalog;
 import com.cosmetic.shopbackend.brand.*;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.math.*;
@@ -188,7 +187,7 @@ public class CatalogController {
         r.primaryImageUrl(),
         r.description == null ? null : mapper.writeValueAsString(r.description)
       );
-    } catch (JsonProcessingException e) {
+    } catch (Exception e) {
       throw new ResponseStatusException(
         HttpStatus.BAD_REQUEST,
         "description 형식이 올바르지 않습니다"
