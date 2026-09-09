@@ -98,6 +98,7 @@ docker compose exec recommend python -c "import urllib.request;print(urllib.requ
 | 워커 | **1**. 사용자 상태·등록 상품이 프로세스 메모리라 늘리면 답이 갈린다. 확장은 Redis 도입 뒤 |
 | 등록 상품 | `POST /api/products` 가 `/data/registered_products.jsonl` 에 append. 첫 기동에 이미지 시드(SSAFY Beauty 8개) 복사. 볼륨을 지우면 시드로 돌아간다 |
 | 모델 교체 | `batch/ingest/data/serving/ltr_model.pkl` 을 바꾸고 이미지를 다시 빌드. `requirements.txt` 의 scikit-learn 버전이 학습 버전과 같아야 한다 |
+| 행동 유입 | `KAFKA_BOOTSTRAP_SERVERS`(백엔드와 같은 값)가 있으면 `activity-events` 를 group `recommend-state-v1` 로 구독해 세션 상태를 초 단위로 갱신 (Jira 226). Spark 와 별도 group. `/health.kafka_state` 의 `connected`·`lag`·`last_processed_at` 확인. 비우면 `POST /api/events` 만 |
 
 nginx 는 `/api/` 를 백엔드 8080 으로만 보낸다. 추천 경로는 백엔드가 프록시하는 형태로 확정되기 전까지
 nginx 에 따로 열지 않는다. 임시로 직접 열어야 하면 `location /api/recommend { proxy_pass http://recommend:8300; }`
