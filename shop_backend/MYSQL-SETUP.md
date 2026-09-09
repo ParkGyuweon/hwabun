@@ -17,7 +17,7 @@ $env:SHOP_BACKEND_MYSQL_PORT = "13307"
 docker compose -f docker-compose.mysql.yml up -d
 ```
 
-`mysql-erd.sql`은 MySQL 초기화 디렉터리에 마운트되어 데이터 볼륨이 비어 있는 첫 시작 때 29개 테이블을 자동 생성합니다. 이미 실행한 뒤 SQL을 수정했다면 자동 재실행되지 않으므로 다음처럼 명시적으로 적용합니다.
+`mysql-erd.sql`은 MySQL 초기화 디렉터리에 마운트되어 데이터 볼륨이 비어 있는 첫 시작 때 35개 테이블을 자동 생성합니다. 이미 실행한 뒤 SQL을 수정했다면 자동 재실행되지 않으므로 다음처럼 명시적으로 적용합니다.
 
 ```powershell
 Get-Content .\mysql-erd.sql -Raw | docker exec -i shop-backend-mysql mysql -u root -pshop_backend_root_dev
@@ -40,3 +40,5 @@ docker logs shop-backend-mysql
 ```
 
 같은 Docker 네트워크에서 애플리케이션이 접속할 때는 `localhost:13306`이 아니라 `shop-backend-mysql:3306`을 사용합니다.
+
+
