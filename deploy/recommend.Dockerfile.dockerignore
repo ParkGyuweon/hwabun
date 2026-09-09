@@ -24,6 +24,7 @@ simulator/**
 !simulator/personas/data/personas_100_agent.json
 !simulator/personas/data/personas_holdout_a.json
 !simulator/personas/data/personas_holdout_b.json
+!simulator/feedback/banned_terms.py
 batch/ingest/data/**
 !batch/ingest/data/products_200.json
 !batch/ingest/data/concern_from_reviews.npz

@@ -54,6 +54,11 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     시연 브랜드 SSAFY Beauty 8개는 이 파일에 미리 들어 있다 (catalog_registry.py 로 변환).
     DELETE /api/products/{id}  판매 중단 — 후보에서 즉시 제외, 재등록하면 복귀 (Jira 219)
 
+대시보드 처방 문장 (Jira 220) — POST /api/prescription
+    입력은 docs/dashboard/action-prescription-prompt.md §2 그대로 (판정 verb 는 프론트가 정함).
+    v0.3 프롬프트 · gpt-4.1-mini · 온도 0 · json_schema 강제 → §6 자동 거부 → 저장(prescriptions.jsonl).
+    응답 {prescription|null, rejected_by[], cached, model, prompt_version}. GMS_KEY 없으면 503.
+
 배포 (Jira 219): deploy/recommend.Dockerfile · deploy/ec2-1 compose 의 `recommend` 서비스 (8300, 내부 전용).
     등록 상품은 /data 볼륨. WORKERS=1 — 상태가 프로세스 메모리라 워커를 늘리면 답이 갈린다.
 """
@@ -84,6 +89,7 @@ from user_vector import UserVector                             # noqa: E402
 from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
+import prescription as rx                                               # noqa: E402
 import validate_product_registration as vpr                    # noqa: E402
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
@@ -466,6 +472,41 @@ def deactivate_product(product_id: str):
     except KeyError:
         raise HTTPException(404, f"product_id {product_id} 없음")
     return {"product_id": product_id, "active": False, "inactive_products": len(e.inactive)}
+
+
+# ── 대시보드 처방 문장 (Jira 220) ──────────────────────────────────────────
+_rx_store: Optional[rx.Store] = None
+_rx_client = None
+_rx_client_tried = False
+
+
+def _rx_deps():
+    global _rx_store, _rx_client, _rx_client_tried
+    if _rx_store is None:
+        _rx_store = rx.Store()
+    if not _rx_client_tried:
+        _rx_client = rx.make_client()
+        _rx_client_tried = True
+    return _rx_store, _rx_client
+
+
+@app.post("/api/prescription")
+def prescribe(body: rx.PrescriptionInput,
+              force: bool = Query(False, description="저장본이 있어도 다시 생성"),
+              model: str = Query(rx.MODEL)):
+    """브랜드 대시보드 할 일 처방 문장 (docs/dashboard/action-prescription-prompt.md, v0.3).
+    판정(verb)은 프론트가 정해서 보낸다. 여기서는 문장만 만들고 §6 자동 거부를 건다 —
+    거부되면 prescription=null, rejected_by 에 사유. 같은 입력은 저장본을 준다 (cached=true)."""
+    store, client = _rx_deps()
+    problems = rx.input_problems(body)
+    if problems:                       # LLM 을 부르기 전에 끝나는 경우 — 키가 없어도 답한다
+        return rx.prescribe(body, None, store, force=force, model=model)
+    key = f"{rx.input_hash(body)}-{rx.PROMPT_VERSION}-{model}"
+    if not force and store.get(key):
+        return dict(store.get(key), cached=True)
+    if client is None:
+        raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "GMS_KEY 가 없어 처방 문장을 만들 수 없습니다"})
+    return rx.prescribe(body, client, store, force=force, model=model)
 
 
 @app.post("/api/events")

@@ -26,6 +26,8 @@ services:
       PORT: "8300"
       WORKERS: "1"
       REGISTERED_PRODUCTS_PATH: /data/registered_products.jsonl
+      PRESCRIPTIONS_PATH: /data/prescriptions.jsonl
+      GMS_KEY: ${GMS_KEY:-}                      # 처방 문장 생성 (없으면 /api/prescription 만 503)
     volumes:
       - recommend-data:/data
     expose:

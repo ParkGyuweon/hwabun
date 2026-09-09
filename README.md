@@ -126,6 +126,7 @@ S15P21A306/
 │   ├── validate_product_registration.py 등록 상품 JSON 을 계약으로 검증하는 CLI
 │   ├── event-attribution-contract.md    통합몰 Event 의 브랜드 귀속 계약 (데이터)
 │   ├── user-trait-weights.json          사용자 성향 가중치 30일 창 (`user-trait-v1-proposed`)
+│   ├── prescription-api-spec.md         대시보드 처방 문장 API (AI↔프론트) — 요청·응답·거부 코드·v0.1 과의 차이 (Jira 220)
 │   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·LTR·§5 API·§5-1 배너
 │                                        규칙 5-1: 정독한 미전환 상품은 약한 긍정 (2026-09-03 개정)
 │                                        §5 persona_id 선택(익명 cold_start)·reserved_filled (2026-09-09, Jira 214)
@@ -238,12 +239,13 @@ S15P21A306/
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 12개 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
 │   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
-│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products(등록 즉시 편입 · 판매 중단) · POST /api/events · /health
+│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products · POST /api/prescription · POST /api/events · /health
 │       ├── banners.py                   §5-1 hero·배너 6칸 조립 — 축 값(session/profile/coldstart)·전용 칸 5·6·reason 단일 key (Jira 218)
+│       ├── prescription.py              대시보드 처방 문장 POST /api/prescription — v0.3 프롬프트·JSON 스키마 강제·§6 자동 거부·저장 (Jira 220)
 │       ├── catalog_registry.py          등록 입력 → §4 파생 → 계약 검사 → 인코딩 → 카탈로그 확장. CLI 로 카탈로그 파일 변환
 │       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
 │       ├── requirements.txt             fastapi · uvicorn · httpx
-│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py   계약 필드·익명·등록·중단·전용 칸·배너 (45개)
+│       └── test_recommend_server.py · test_catalog_registry.py · test_banners.py · test_prescription.py   (63개, 처방은 가짜 LLM)
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/

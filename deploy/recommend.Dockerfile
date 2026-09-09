@@ -13,6 +13,7 @@
 #   contracts/                          어휘집·등록 검증기 (validate_product_registration.py 가 vocab·labels 를 읽는다)
 #   simulator/personas/data/personas_*.json   페르소나 12,000명 (속성 친화도 입력, ~84MB)
 #   frontend/src/types/log.ts           행동 가중치의 단일 소스 (behavior_weights.py 가 직접 읽는다)
+#   simulator/feedback/banned_terms.py  처방 문장 금지어 검사 (Jira 220, contracts/feedback-banned-terms.json 과 함께)
 #
 # 등록 상품(POST /api/products)은 /data/registered_products.jsonl 에 쌓인다 — 볼륨으로 두어
 # 컨테이너를 갈아도 남게 한다. 첫 기동에 이미지 안의 시드(SSAFY Beauty 8개)를 복사한다.
@@ -50,6 +51,7 @@ COPY simulator/personas/data/personas_9900.json \
      simulator/personas/data/personas_holdout_b.json \
                             /app/simulator/personas/data/
 COPY frontend/src/types/log.ts /app/frontend/src/types/log.ts
+COPY simulator/feedback/banned_terms.py /app/simulator/feedback/banned_terms.py
 COPY deploy/recommend-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && mkdir -p /data
 
