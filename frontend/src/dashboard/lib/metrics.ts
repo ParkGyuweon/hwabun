@@ -294,7 +294,7 @@ export const intentFunnel = [
   { label: 'conversion', ko: '전환', value: totals.addToCart + Math.round(totals.addToCart * 0.9) },
 ];
 
-/** 마찰 신호. 어느 단계에서든 새는 구멍이라 퍼널 밖에 따로 둔다 */
+/** 막힌 기록. 어느 단계에서든 새는 구멍이라 퍼널 밖에 따로 둔다 */
 export const frictionCounts = {
   rage_click: Math.round(totals.detailViews * 0.013),
   dead_click: Math.round(totals.detailViews * 0.058),
@@ -619,20 +619,20 @@ export const segmentTopContent = [
 /** 리뷰 필터에서 "나와 같은 피부 타입" 을 고른 방문 비율 */
 export const sameSkinFilterRate = 0.63;
 
-/* ---------- ⑤ 마찰 위치 ---------- */
+/* ---------- ⑤ 막히는 곳 ---------- */
 
 /**
- * 좌절 신호를 위치와 함께 본다.
+ * 막힌 기록를 위치와 함께 본다.
  * dead_click 이 상품 이미지에 몰리면 확대를 기대했는데 안 되는 것이고,
  * scroll_backtrack 이 성분에 몰리면 그 구간 설명이 어렵다는 뜻이다.
  * 상품 선호와 UI 품질은 같은 축이 아니라서 여기 값은 선호 벡터에 넣지 않는다.
  */
 export const frictionByLocation = [
-  { where: '상품 이미지', event: 'dead_click', count: 412, meaning: '확대 기대 · 줌 없음' },
-  { where: '성분 목록', event: 'scroll_backtrack', count: 388, meaning: '되돌아 읽기 · 설명 난이도' },
-  { where: '옵션 선택', event: 'rage_click', count: 214, meaning: '품절 옵션 반응 없음' },
-  { where: '리뷰 더보기', event: 'dead_click', count: 156, meaning: '버튼처럼 보이는 비버튼' },
-  { where: '담기 버튼', event: 'hover_dwell', count: 1893, meaning: '평균 2.4초 망설임' },
+  { where: '상품 이미지', event: 'dead_click', ko: '눌러도 아무 일이 없었습니다', count: 412, meaning: '확대해서 보려고 눌렀는데 확대가 안 됩니다' },
+  { where: '성분 목록', event: 'scroll_backtrack', ko: '위로 다시 올려 읽었습니다', count: 388, meaning: '한 번 읽고 이해가 안 돼 다시 봤을 수 있습니다' },
+  { where: '옵션 선택', event: 'rage_click', ko: '같은 자리를 여러 번 눌렀습니다', count: 214, meaning: '고를 수 없는 옵션을 계속 누르고 있습니다' },
+  { where: '리뷰 더보기', event: 'dead_click', ko: '눌러도 아무 일이 없었습니다', count: 156, meaning: '버튼처럼 보이는데 버튼이 아닙니다' },
+  { where: '담기 버튼', event: 'hover_dwell', ko: '누르기 전에 머뭇거렸습니다', count: 1893, meaning: '커서를 얹고 평균 2.4초 망설였습니다' },
 ];
 
 /* ---------- ④ 성분 갭 (명세 I1·I2) ---------- */
@@ -753,7 +753,7 @@ export function reviewsBySkinType(productId: string | null): SkinReviewRow[] {
   });
 }
 
-/* ---------- 행동·마찰 보조 (모의) ---------- */
+/* ---------- 막히는 곳 보조 (모의) ---------- */
 
 /** 진입 경로별 상세→담기 전환 (entry_source). 추천 진입 lift 가 이 표의 답이다 */
 export const entryConversion = [

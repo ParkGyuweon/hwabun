@@ -42,15 +42,15 @@ const SCREEN_SCOPE: Record<ScreenKey, ScopeKind> = {
 };
 
 const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
-  // 순서 = 브랜드가 결정하는 순서 (명세 §1). 범용 지표·마찰은 뒤로
-  { key: 'overview', label: '개요', title: '개요', desc: '지금 손봐야 할 것 하나' },
-  { key: 'content', label: '정보 관심도', title: '정보 관심도', desc: '무엇을 보고 사나 · 콘텐츠 단위 주목도와 전환 기여' },
-  { key: 'segments', label: '고객군', title: '고객군', desc: '누가 사나 · 피부 타입 × 톤' },
-  { key: 'ingredients', label: '성분', title: '성분', desc: '고객이 찾는 성분과 내 라인의 갭' },
-  { key: 'products', label: '상품', title: '상품', desc: '상품별 병목과 이탈 지점' },
-  { key: 'feedback', label: '고객 피드백', title: '고객 피드백', desc: '고객이 고쳐 달라는 것 · 5축' },
-  { key: 'reviews', label: '리뷰', title: '리뷰', desc: '공개 평가 · 피부 타입별 갈림과 자극 언급' },
-  { key: 'behavior', label: '행동·마찰', title: '행동·마찰', desc: '화면이 막는 곳 · 상품 선호와 분리해서 본다' },
+  // 순서 = 브랜드가 결정하는 순서 (명세 §1). 범용 지표와 화면 문제는 뒤로
+  { key: 'overview', label: '요약', title: '지금 손봐야 할 것', desc: '오늘 하나만 고친다면 이것입니다' },
+  { key: 'content', label: '상세 콘텐츠', title: '무엇을 보고 사나', desc: '상세페이지의 어떤 글이 고객을 담게 만드나' },
+  { key: 'segments', label: '고객군', title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지' },
+  { key: 'ingredients', label: '성분', title: '고객이 찾는 성분', desc: '많이 찾는데 내 상품에는 없는 성분' },
+  { key: 'products', label: '상품', title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점' },
+  { key: 'feedback', label: '고객 피드백', title: '고객이 고쳐 달라는 것', desc: '고객이 직접 고른 축과 그 안의 이유' },
+  { key: 'reviews', label: '리뷰', title: '공개 리뷰', desc: '피부 타입에 따라 갈리는 평가와 자극 언급' },
+  { key: 'behavior', label: '막히는 곳', title: '막히는 곳', desc: '고객이 화면에서 헤매는 자리 · 상품이 싫다는 뜻이 아닙니다' },
   { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기' },
 ];
 

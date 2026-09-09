@@ -43,7 +43,7 @@ export default function ProductsScreen() {
       <div className="grid grid--kpi">
         <Kpi label="가장 많이 막히는 단계" value={STEP_KO[topBottleneck]} sub={`상품 ${bottleneckCount[topBottleneck] ?? 0}개 (상세 200건 이상 ${eligible.length}개 중)`} source="mock" />
         <Kpi label="가장 흔한 이탈 지점" value={EXIT_HINT[topExit].ko} sub={`${exitCount[topExit] ?? 0}개 상품 · ${EXIT_HINT[topExit].hint}`} source="mock" />
-        <Kpi label="옵션 왕복 3회 이상" value={`${friction}개`} sub="용량·색상 사이를 오가는 상품. 마찰 신호" source="mock" />
+        <Kpi label="옵션 왕복 3회 이상" value={`${friction}개`} sub="용량·색상 사이를 오가는 상품. 막힌 기록" source="mock" />
         <Kpi label="담기 후 제거 30% 이상" value={`${highRemove}개`} sub="배송비·묶음 조건 점검 대상" source="mock" />
       </div>
 

@@ -540,3 +540,53 @@ export function Heatmap({
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * 할 일 목록
+ * ------------------------------------------------------------------ */
+
+export interface ActionItem {
+  /** 무엇을 해야 하나. 색과 말이 여기서 갈린다 */
+  verb: 'up' | 'fix' | 'keep';
+  /** 대상 이름. 콘텐츠 이름, 상품 이름처럼 짧은 명사 */
+  what: string;
+  /** 왜 그래야 하나. 한 문장, 숫자를 품는다 */
+  why: string;
+  /** 오른쪽에 세우는 근거 숫자 */
+  num: string;
+  /** 그 숫자가 무엇인지 */
+  unit: string;
+}
+
+const VERB_KO: Record<ActionItem['verb'], string> = {
+  up: '위로 올리세요',
+  fix: '손보세요',
+  keep: '그대로 두세요',
+};
+
+/**
+ * 화면 맨 위에 놓는 할 일 목록.
+ *
+ * 지표를 늘어놓으면 사장님이 "그래서 뭘 하지" 를 스스로 풀어야 한다. 그 계산을
+ * 화면이 대신한다. 한 줄에 **동작 하나 · 대상 하나 · 근거 숫자 하나**만 둔다.
+ * 그래프는 이 판단이 어디서 나왔는지 확인하고 싶을 때 펼쳐 보는 부록으로 내린다.
+ */
+export function Actions({ items }: { items: ActionItem[] }) {
+  return (
+    <ol className="acts">
+      {items.map((a) => (
+        <li key={a.what} className={`act act--${a.verb}`}>
+          <span className="act__verb">{VERB_KO[a.verb]}</span>
+          <div className="act__body">
+            <p className="act__what">{a.what}</p>
+            <p className="act__why">{a.why}</p>
+          </div>
+          <div className="act__fig">
+            <strong className="act__num">{a.num}</strong>
+            <span className="act__unit">{a.unit}</span>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
