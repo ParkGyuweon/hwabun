@@ -24,6 +24,18 @@
     pip install fastapi uvicorn
     python -m uvicorn batch.serving.recommend_server:app --port 8300
     curl "http://localhost:8300/api/recommend?persona_id=PC00001&size=10&reserved=2&seed=review"
+    curl "http://localhost:8300/api/recommend?size=10"                  # 익명 cold_start
+    curl "http://localhost:8300/api/recommend?persona_id=member-42"     # 미등록 회원: 상태만 개인화
+
+persona_id 규칙 (Jira 214)
+    없음            → 익명. 상태 없음, 속성 친화도 없음. 인기 prior 순 + MMR. state_source=cold_start
+    표에 없는 값    → 실회원 accountId 로 본다. persona_known=false, 속성 친화도 없음.
+                      /api/events 로 온 행동은 그 키로 쌓여 다음 요청부터 개인화된다
+    표에 있는 값    → 기존과 같다 (persona_known=true)
+    404 는 더 내지 않는다 — 백엔드 프록시가 회원↔페르소나 매핑 없이도 호출할 수 있게
+
+reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 있을 때만 채워진다.
+현재 200개 카탈로그는 신규가 0 이라 reserved_filled=0 이고 그 칸은 일반 순위다.
 """
 import glob
 import json
@@ -34,7 +46,7 @@ import uuid
 from typing import List, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
 BD = os.path.dirname(os.path.abspath(__file__))
@@ -149,11 +161,15 @@ class Engine:
         return out
 
     # ── 추천 ──────────────────────────────────────────────────────────────
-    def recommend(self, persona_id, size=10, reserved=RESERVED, seed_from_reviews=False):
-        persona = self.personas.get(persona_id)
-        if persona is None:
-            raise KeyError(persona_id)
-        st, source = self.state_of(persona_id, seed_from_reviews)
+    def recommend(self, persona_id=None, size=10, reserved=RESERVED, seed_from_reviews=False):
+        """persona_id 가 없거나(익명) 페르소나 표에 없어도(실회원 accountId) 동작한다.
+        속성 친화도는 빠지고 행동 상태 + 인기 prior 로 순위를 매긴다 — 요청서 C 안 (Jira 214).
+        상태는 persona_id 가 있으면 그 키로 쌓이므로, 미등록 회원도 행동이 오면 개인화된다."""
+        persona = self.personas.get(persona_id) if persona_id else None
+        if persona_id:
+            st, source = self.state_of(persona_id, seed_from_reviews)
+        else:
+            st, source = UserVector(), "cold_start"
         t0 = time.perf_counter()
         ranked = self.rec.rank(st, persona=persona, k=size, reserved=reserved, flags=True)
         ms = (time.perf_counter() - t0) * 1000
@@ -172,11 +188,15 @@ class Engine:
         n_products = len(st.converted | st.viewed)
         # 유입 추적 식별자 (교차 브랜드 유입 · 추천 CTR). FE 는 recommendation_click ·
         # product_view 에 recommendation_id / list_id / position / algorithm 을 그대로 싣는다.
-        body = {"persona_id": persona_id, "n_products": n_products,
+        body = {"persona_id": persona_id, "persona_known": persona is not None,
+                "n_products": n_products,
                 "recommendation_id": uuid.uuid4().hex, "list_id": "main",
                 "algorithm": self.algorithm,
                 "state_source": source, "scorer": self.scorer,
                 "size": size, "reserved": int(reserved),
+                # 전용 칸에 실제로 들어간 수. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이
+                # 카탈로그에 없으면 0 이고 그 칸은 일반 순위로 채워진다 — 설계된 동작
+                "reserved_filled": sum(1 for it in items if it["reserved"]),
                 "items": items, "latency_ms": round(ms, 2)}
         if self.scorer == "linear":
             w1, w2, w3 = schedule_for(len(pos))
@@ -221,21 +241,17 @@ def health():
 
 
 @app.get("/api/recommend")
-def recommend(persona_id: str, size: int = Query(10, ge=1, le=50),
+def recommend(persona_id: Optional[str] = Query(None, description="없으면 익명 cold_start. 페르소나 표에 없는 값(실회원 id)도 받는다"),
+              size: int = Query(10, ge=1, le=50),
               reserved: int = Query(RESERVED, ge=0, le=10),
               seed: Optional[str] = Query(None, description="'review' 면 리뷰 시드를 상태로 쓴다 (시연용)")):
     e = get_engine()
-    try:
-        return e.recommend(persona_id, size, reserved, seed_from_reviews=(seed == "review"))
-    except KeyError:
-        raise HTTPException(404, f"persona_id {persona_id} 없음")
+    return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"))
 
 
 @app.post("/api/events")
 def events(batch: EventBatch):
     e = get_engine()
-    if batch.persona_id not in e.personas:
-        raise HTTPException(404, f"persona_id {batch.persona_id} 없음")
     n = e.observe(batch.persona_id, [ev.model_dump() for ev in batch.events])
     st = e.states[batch.persona_id]
     return {"persona_id": batch.persona_id, "observed": n,
