@@ -37,6 +37,7 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 | `product_ingredient.csv` | 850 | 상품 x 성분 (`position_weight`·`source`) |
 | `product_concern.csv` | 363 | 상품 x 고민 상위 2축 |
 | `ingredient_skin_affinity.csv` | 76 | 피부타입 x 성분 |
+| `registered_products.jsonl` | 8 | **등록 상품** (Jira 216) — `POST /api/products` 가 §4 파생값까지 채워 append. 서버 재시작 시 원천 200개 뒤에 다시 붙는다. 지금은 시연 브랜드 SSAFY Beauty 8개. 오프라인 평가는 읽지 않는다 |
 
 **위쪽 대시보드용 CSV(`product_ingredient_position.csv` 등)와 같은 값이다.**
 대시보드용은 상품명·브랜드명을 행마다 붙여 바로 그릴 수 있게 한 것이고, 이쪽은

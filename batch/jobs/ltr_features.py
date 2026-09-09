@@ -74,29 +74,38 @@ def block_matrices(enc, V):
     return out
 
 
-def pop_rank_of(products):
-    """리뷰 수 순위를 0~1 로. 상수라 한 번만 만든다"""
+def pop_rank_of(products, n_ref=None):
+    """리뷰 수 순위를 0~1 로. 상수라 한 번만 만든다.
+
+    n_ref: 분모. 기본은 상품 수. **서빙에서 등록 상품이 붙어 카탈로그가 늘어도**
+    학습 때의 분모(원천 200)를 그대로 쓰면 기존 상품의 피처가 한 자리도 안 바뀐다 —
+    r/200 이 r/208 로 바뀌는 것만으로 트리 모델이 순위를 뒤집었다 (Jira 216 실측:
+    P454018 0.257 → 0.142). 등록 상품은 리뷰 0 이라 맨 뒤에 서고 1.0 에서 잘린다"""
     n = len(products)
+    d = float(n_ref or n)
     order = sorted(range(n), key=lambda i: -products[i]["_review_stats"]["review_count"])
     out = np.zeros(n, np.float32)
     for r, i in enumerate(order):
-        out[i] = r / n
+        out[i] = min(r / d, 1.0)
     return out
 
 
 class LtrFeatures:
-    def __init__(self, enc, V, prior, affinity, cooc, supporters):
+    def __init__(self, enc, V, prior, affinity, cooc, supporters, n_ref=None):
+        """n_ref: 순위 피처(pop_rank·cf_rank)의 분모. 학습 때는 상품 수와 같다.
+        서빙에서 등록 상품을 붙일 때 원천 카탈로그 크기를 넘기면 기존 상품 피처가 보존된다"""
         self.V = np.asarray(V, np.float32)
         self.prior = np.asarray(prior, np.float32)
         self.affinity = affinity
         self.N = len(self.V)
+        self.n_ref = float(n_ref or self.N)
         self.cooc = None if cooc is None else np.asarray(cooc, np.float32)
         self.supporters = (np.zeros(self.N, np.float32) if supporters is None
                            else np.asarray(supporters, np.float32))
         P = enc.products
         self.brand_of = np.array([p.get("brand_name") or "" for p in P])
         self.price = np.array([float(p.get("price_usd") or 0) for p in P], np.float32)
-        self.pop_rank = pop_rank_of(P)
+        self.pop_rank = pop_rank_of(P, self.n_ref)
         self.BM = block_matrices(enc, self.V)
         self.names = list(NAMES)
 
@@ -124,7 +133,11 @@ class LtrFeatures:
         if mask.any():
             rows = np.flatnonzero(mask)
             r = np.argsort(np.argsort(-cfn[rows]))
-            cfr[rows] = r / max(len(rows), 1)
+            # 분모는 후보 수가 아니라 학습 카탈로그 크기(n_ref) 기준 — 후보가 전체일 때
+            # 학습과 같고, 등록 상품이 붙어도 기존 상품의 값이 보존된다. 후보를 좁혔을 때는
+            # 후보 수를 쓴다 (학습·평가에서 cand 를 쓰는 경로 유지)
+            denom = self.n_ref if len(rows) >= self.n_ref else max(len(rows), 1)
+            cfr[rows] = np.minimum(r / denom, 1.0)
 
         sb = np.isin(self.brand_of, [self.brand_of[i] for i in si]).astype(np.float32)
         ref = float(np.median([self.price[i] for i in si])) or 1.0

@@ -40,6 +40,7 @@
      → recommender.py  점수 + MMR
      → batch/ingest/data/serving/  서빙용 산출물
      → batch/serving/recommend_server.py   GET /api/recommend (FastAPI, p95 15ms)
+          ┈┈▶ POST /api/products 로 등록 상품 즉시 편입 (Jira 216) — 시연 브랜드 SSAFY Beauty 8개 편입 완료, reserved 칸에 나온다
           ┈┈▶ (미연결) 백엔드가 이 서버를 프록시하는 단계가 아직 없어 화면 노출에 반영되지 않습니다
           ┈┈▶ 09-09 로컬 확인: 프론트 Vite 프록시 한 줄로 5173→8300 200. 남은 건 이름 맞추기(프론트)·프록시 컨트롤러(백엔드) — 요청서 전달 완료
    대표 지표 Recall@10 = 43.95% — CBF + CF 가점 + 학습 결합, holdout_a 2,000명
@@ -54,8 +55,7 @@
 `contracts/recommendation-io-spec.md` 가 단일 출처입니다. 기준은
 [`contracts/README.md`](contracts/README.md) 를 따릅니다.
 
-**아직 없는 것** — 백엔드가 추천 서버를 프록시하는 경로, 사용자 벡터 Redis 적재, 서빙 테이블 MySQL,
-시연용 자사 브랜드(SSAFY Beauty 8개)의 추천 카탈로그 편입.
+**아직 없는 것** — 백엔드가 추천 서버를 프록시하는 경로, 사용자 벡터 Redis 적재, 서빙 테이블 MySQL.
 추천 점수는 `batch/serving/recommend_server.py` 가 계약 §5 대로 내고(참조 구현, Jira 206·214 — 익명·미등록 회원도 받음)
 프론트 프록시 한 줄로 응답까지 확인했지만, 프론트 필드 이름 정렬과 백엔드 프록시 컨트롤러는 2026-09-09 요청서로 전달된 상태입니다.
 
@@ -236,11 +236,12 @@ S15P21A306/
 │       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
 │       ├── concern_from_reviews.py · explore_choice.py
 │       └── test_*.py                    단위 테스트 12개 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
-│   └── serving/                     ★ 추천 추론 서버 — 계약 §5 참조 구현 (Jira 206·214), 포트 8300
-│       ├── recommend_server.py          FastAPI: GET /api/recommend · POST /api/events · /health. persona_id 없으면 익명 cold_start
+│   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
+│       ├── recommend_server.py          FastAPI: GET /api/recommend · POST /api/products(등록 즉시 편입) · POST /api/events · /health
+│       ├── catalog_registry.py          등록 입력 → §4 파생 → 계약 검사 → 인코딩 → 카탈로그 확장. CLI 로 카탈로그 파일 변환
 │       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
 │       ├── requirements.txt             fastapi · uvicorn · httpx
-│       └── test_recommend_server.py     계약 필드·전환 제외·익명/미등록 회원·reserved_filled (11개)
+│       └── test_recommend_server.py · test_catalog_registry.py   계약 필드·익명·등록·전용 칸·기존 피처 보존 (29개)
 │
 ├── streaming/                       ★ Spark Structured Streaming (데이터)
 │   ├── jobs/

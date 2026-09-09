@@ -35,7 +35,16 @@ persona_id 규칙 (Jira 214)
     404 는 더 내지 않는다 — 백엔드 프록시가 회원↔페르소나 매핑 없이도 호출할 수 있게
 
 reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 있을 때만 채워진다.
-현재 200개 카탈로그는 신규가 0 이라 reserved_filled=0 이고 그 칸은 일반 순위다.
+원천 200개는 신규가 0 이다. **등록 상품**(Jira 216)이 들어오면 그때부터 채워진다.
+
+상품 등록 (Jira 216) — 실서비스 형태
+    POST /api/products  body = 계약 입력 필드 1건 또는 배열
+        {"product_id":"SB000001","product_name":"…","brand_name":"SSAFY Beauty",
+         "secondary_category":"Treatments","tertiary_category":"Exfoliators",
+         "highlights":["Pores"],"ingredients":"Water, Lactic Acid, …","price_krw":30800}
+    → §4 파생(price_usd·rating 주입·loves 0) → 계약 검사(422) → 인코딩 → 즉시 카탈로그 편입
+    → `batch/ingest/data/serving/registered_products.jsonl` 에 남아 재시작 후에도 유지
+    시연 브랜드 SSAFY Beauty 8개는 이 파일에 미리 들어 있다 (catalog_registry.py 로 변환).
 """
 import glob
 import json
@@ -43,16 +52,17 @@ import os
 import sys
 import time
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 JOBS = os.path.join(ROOT, "batch", "jobs")
 sys.path.insert(0, JOBS)
+sys.path.insert(0, BD)                      # catalog_registry (같은 폴더) — 모듈 실행(-m) 에서도 보이게
 
 from ltr_features import LtrFeatures, load_ltr                 # noqa: E402
 from persona_feature import load as load_affinity              # noqa: E402
@@ -60,6 +70,9 @@ from product_encoder import Encoder                            # noqa: E402
 from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
                          Recommender, load_cooc, schedule_for)
 from user_vector import UserVector                             # noqa: E402
+from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive,  # noqa: E402
+                              grow_square, grow_vector, validate)
+import validate_product_registration as vpr                    # noqa: E402
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
 META_DIR = os.path.join(ROOT, "batch", "ingest", "data")
@@ -83,13 +96,16 @@ class Engine:
         self.cooc, self.supporters = load_cooc()
         ltr = load_ltr()
         self.ltr_meta = ltr[1] if ltr else None
-        feat = (LtrFeatures(e, self.V, self.prior, self.affinity, self.cooc, self.supporters)
-                if ltr else None)
-        self.rec = Recommender(self.V, self.index, self.prior, affinity=self.affinity,
-                               brands=self.brands, known_brands=self.known,
-                               cooc=self.cooc, supporters=self.supporters,
-                               ltr=ltr[0] if ltr else None, ltr_feat=feat)
+        self.ltr = ltr
+        self.n_seed = len(self.products)          # 원천 카탈로그 크기 — 순위 피처 분모
+        self._assemble()
         self.scorer = "ltr" if ltr else "linear"
+        # 등록 상품 (Jira 216) — 원천 200개 뒤에 붙는다. 서버가 재시작해도 남는다
+        self.registry = Registry(os.environ.get("REGISTERED_PRODUCTS_PATH") or None) \
+            if os.environ.get("REGISTERED_PRODUCTS_PATH") else Registry()
+        self._vocab = vpr.load_vocab()
+        self._medians, self._overall = vpr.rating_reference()
+        self._append(self.registry.load(), persist=False)
         # 클릭·상세 진입 이벤트가 그대로 싣는 값 (event-properties recommendation_click.algorithm).
         # 모델이 바뀌면 문자열이 바뀌어야 하므로 학습 시각과 트리 수를 넣는다
         m = self.ltr_meta or {}
@@ -108,6 +124,76 @@ class Engine:
                     self.seeds.setdefault(r["persona_id"], r["seed_product_ids"])
         self.states = {}                        # persona_id -> UserVector (Redis 자리)
         self.load_ms = (time.perf_counter() - t0) * 1000
+
+    def _assemble(self):
+        """배열들로 Recommender·LtrFeatures 를 (다시) 만든다. 상품이 늘 때마다 부른다 —
+        208개 기준 수 ms 라 요청 경로에서 불러도 된다"""
+        ltr = self.ltr
+        # n_ref: 순위 피처 분모를 원천 카탈로그 크기로 고정 — 등록 상품이 붙어도 기존 순위 보존
+        feat = (LtrFeatures(self.enc, self.V, self.prior, self.affinity, self.cooc, self.supporters,
+                            n_ref=getattr(self, "n_seed", None))
+                if ltr else None)
+        self.rec = Recommender(self.V, self.index, self.prior, affinity=self.affinity,
+                               brands=self.brands, known_brands=self.known,
+                               cooc=self.cooc, supporters=self.supporters,
+                               ltr=ltr[0] if ltr else None, ltr_feat=feat)
+
+    # ── 등록 상품 편입 (Jira 216) ───────────────────────────────────────────
+    def _append(self, records, persist=True):
+        """파생값까지 채워진 상품 기록들을 카탈로그 뒤에 붙인다. 이미 있는 id 는 그 행을 갈아 끼운다"""
+        new_rows, replaced = [], []
+        for x in records:
+            v = np.asarray(self.enc.encode(x), np.float32)
+            gid = x["product_id"]
+            if gid in self.index:
+                i = self.index[gid]
+                self.V[i] = v
+                self.products[i] = x
+                self.brands[i] = x.get("brand_name")
+                replaced.append(gid)
+            else:
+                new_rows.append((x, v))
+        if new_rows:
+            k = len(new_rows)
+            self.V = np.vstack([self.V] + [v for _, v in new_rows]).astype(np.float32)
+            # 신규는 loves 0 → prior 0. 원천 200개의 정규화는 건드리지 않는다
+            self.prior = grow_vector(self.prior, k, 0.0).astype(np.float32)
+            self.cooc = grow_square(self.cooc, k)
+            self.supporters = grow_vector(self.supporters, k, 0)
+            for x, _ in new_rows:
+                self.index[x["product_id"]] = len(self.products)
+                self.products.append(x)
+                self.brands.append(x.get("brand_name"))
+            self.affinity.grow([x["product_id"] for x, _ in new_rows])
+            # LtrFeatures 가 enc.products 를 읽는다 — 같은 리스트 객체를 유지한다
+            self.enc.products = self.products
+        if new_rows or replaced:
+            self._assemble()
+        if persist:
+            for x in records:
+                self.registry.append(x)
+        return [x["product_id"] for x, _ in new_rows], replaced
+
+    def register(self, inputs):
+        """등록 입력(계약 필드) 여러 건 → 파생 → 검사 → 편입. 하나라도 계약 위반이면 전부 거절"""
+        derived, warnings = [], {}
+        for inp in inputs:
+            x = derive(inp, self._medians, self._overall)
+            warnings[x["product_id"]] = validate(x, self._vocab, self._medians, self._overall)
+            derived.append(x)
+        added, replaced = self._append(derived)
+        is_new = self.rec.new_mask()
+        out = []
+        for x in derived:
+            i = self.index[x["product_id"]]
+            out.append({"product_id": x["product_id"], "brand_name": x["brand_name"],
+                        "position_in_catalog": i, "price_usd": x["price_usd"],
+                        "rating": x["rating"], "rating_source": x["rating_source"],
+                        "brand_in_vocab": x["brand_name"] in self.known,
+                        "reserved_candidate": bool(is_new[i]),
+                        "action": "replaced" if x["product_id"] in replaced else "added",
+                        "warnings": warnings[x["product_id"]]})
+        return out
 
     # ── 상태 ──────────────────────────────────────────────────────────────
     def state_of(self, persona_id, seed_from_reviews=False):
@@ -184,7 +270,8 @@ class Engine:
             p = self.products[self.index[g]]
             items.append({"product_id": g, "product_name": p.get("product_name"),
                           "brand_name": p.get("brand_name"), "score": round(float(s), 6),
-                          "position": pos, "reserved": bool(f), "reason": r})
+                          "position": pos, "reserved": bool(f), "reason": r,
+                          "product_source": p.get("product_source", "seed_catalog")})
         n_products = len(st.converted | st.viewed)
         # 유입 추적 식별자 (교차 브랜드 유입 · 추천 CTR). FE 는 recommendation_click ·
         # product_view 에 recommendation_id / list_id / position / algorithm 을 그대로 싣는다.
@@ -235,6 +322,7 @@ def _startup():
 def health():
     e = get_engine()
     return {"ok": True, "scorer": e.scorer, "products": len(e.products),
+            "seed_products": e.n_seed, "registered_products": len(e.products) - e.n_seed,
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
@@ -247,6 +335,50 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
               seed: Optional[str] = Query(None, description="'review' 면 리뷰 시드를 상태로 쓴다 (시연용)")):
     e = get_engine()
     return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"))
+
+
+class ProductRegistration(BaseModel):
+    """계약 product-registration-spec 입력. price_krw 또는 price_usd 중 하나."""
+    product_id: Optional[str] = None
+    product_name: str
+    brand_name: str
+    brand_id: Optional[str] = None
+    secondary_category: str
+    tertiary_category: str
+    highlights: List[str] = []
+    ingredients: Union[str, List[str]] = []
+    price_krw: Optional[float] = None
+    price_usd: Optional[float] = None
+    rating: Optional[float] = None
+    image_url: Optional[str] = None
+    review_count: Optional[int] = 0
+
+
+@app.post("/api/products", status_code=201)
+def register_products(body: Union[ProductRegistration, List[ProductRegistration]]):
+    """등록 즉시 추천 카탈로그에 편입한다 (Jira 216). 백엔드가 상품 승인 시 한 번 부른다.
+    계약 위반이면 422 와 위반 목록. 같은 product_id 를 다시 보내면 그 행을 갈아 끼운다."""
+    e = get_engine()
+    items = body if isinstance(body, list) else [body]
+    try:
+        out = e.register([it.model_dump() for it in items])
+    except RegistrationError as ex:
+        raise HTTPException(422, {"code": "REGISTRATION_CONTRACT_VIOLATION", "errors": ex.errors})
+    return {"registered": out, "products": len(e.products),
+            "registered_products": len(e.products) - e.n_seed}
+
+
+@app.get("/api/products/{product_id}")
+def get_product(product_id: str):
+    e = get_engine()
+    i = e.index.get(product_id)
+    if i is None:
+        raise HTTPException(404, f"product_id {product_id} 없음")
+    p = e.products[i]
+    return {"product_id": product_id, "brand_name": p.get("brand_name"),
+            "product_source": p.get("product_source", "seed_catalog"),
+            "supporters": int(e.supporters[i]) if e.supporters is not None else None,
+            "reserved_candidate": bool(e.rec.new_mask()[i])}
 
 
 @app.post("/api/events")
