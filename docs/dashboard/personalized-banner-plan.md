@@ -317,8 +317,18 @@ GET /api/recommend?user_id=…&k=10&banner_slots=6&reserved=2&axes=concern,segme
 | `add_to_cart` | (기존) | **4.0 → 3.0** | 구매의 약한 대리로 강등 |
 
 배너 property: `banner_type` · `banner_value`(원문, `new_brand` 는 null) · `banner_slot` ·
-`product_id` · `trait_source`. `event-schema.json` 에는 구매 3종은 이미 있고 **배너 2종은
-아직 없다** — 데이터 파트 enum 등록이 선행 조건.
+`product_id`(top-level) · `trait_source`, optional `policy_version`.
+`banner_slot` 은 **1 이상의 정수**다 (`event-properties-schema.md` §3.12). `properties` 에
+`slot` 키가 있으면 스키마·전처리 양쪽에서 거부된다.
+
+**막고 있는 것이 바뀌었다 (2026-09-10).** `event-schema.json` `event_name` enum 41종에
+배너 2종이 **등록됐다**(Jira 198). 남은 선행 조건은 수집기(`EventContractValidator`)
+등록이며, 그 전에 켜면 `unregistered_event` 로 400 이 난다. 그래서
+`lib/bannerConfig.ts` 의 `BANNER_EVENTS_ENABLED` 는 계속 `false` 이고, 그동안은
+`recommendation_impression` / `recommendation_click` 에 배너 property 를 얹어 보낸다.
+
+켜기 전까지 `banner_daily` 는 0행이고 소급되지 않는다 (축별 CTR·탐색군 비중 포함).
+`algorithm` 에 `/banner` 접미사를 붙여 두어 추천 CTR 기준선은 오염되지 않는다.
 
 ### 10-6. 회원가입 속성 (AI 문서 9/4)
 

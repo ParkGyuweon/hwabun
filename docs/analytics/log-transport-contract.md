@@ -82,7 +82,7 @@ e × T < B  →  시간 트리거.  전송 간격 = T 초
 | 목적 | 이탈 전에 안전하게 보내기 | 목표 TPS 달성 |
 | 배치 크기 | **20건** (유지) | **500~2,000건** |
 | 전송 주기 | **5초** (유지) | **1초** |
-| 이탈 시 전송 | `sendBeacon` 필수 | 불필요 |
+| 이탈 시 전송 | 필수 (비로그인 `sendBeacon` · 로그인 `keepalive`) | 불필요 |
 | 예상 요청/초 (1만명) | 2,000 | **10~35** |
 
 부하 생성기는 브라우저가 아니므로 이탈 걱정이 없고, 큰 배치로 묶어도 데이터
@@ -102,7 +102,7 @@ e × T < B  →  시간 트리거.  전송 간격 = T 초
 | 전송 조건 | 크기 또는 시간 중 먼저 | |
 | 엔드포인트 | `POST /api/events` | 프론트/백엔드 확정 |
 | 요청 본문 | `{ "schema_version": "0.2.0-draft", "events": [ ...LogEnvelope ] }` | 배치와 Event 각각 버전을 보존 |
-| 이탈 시 | `visibilitychange`(hidden) · `pagehide` 에서 `sendBeacon` | 마지막 배치 유실 방지 |
+| 이탈 시 | 비로그인은 `sendBeacon`, 로그인은 `fetch` + `keepalive` (`visibilitychange` hidden · `pagehide`) | 마지막 배치 유실 방지. beacon 은 `Authorization` 을 못 실어 로그인 경로에 못 쓴다 |
 | 최대 본문 크기 | 미정 | **백엔드 한계 확인 필요** |
 
 `sendBeacon` 은 본문 크기 상한이 있고 브라우저마다 다르다. 배치 20건이 상한을
@@ -190,7 +190,15 @@ e × T < B  →  시간 트리거.  전송 간격 = T 초
 `frontend/src/lib/logger.ts` 에 실제 전송을 붙였다 (기존 TODO 해제).
 
 - 평시: `fetch` + `keepalive`
-- 이탈 시: `navigator.sendBeacon` (`visibilitychange` hidden, `pagehide`)
+- 이탈 시: **로그인 여부로 갈린다** (백엔드 JWT 식별 적용, 2026-09-10)
+  - 비로그인: `navigator.sendBeacon` (`visibilitychange` hidden, `pagehide`)
+  - 로그인: `fetch` + `keepalive`. `sendBeacon` 은 `Authorization` 헤더를 실을 수 없어
+    beacon 으로 보내면 그 사람의 **이탈 직전 화면이 통째로 익명**이 된다
+- 로그인 상태면 `Authorization: Bearer <token>` 을 얹는다. 봉투에 `account_id` 를
+  따로 채우지 않는다 — 백엔드가 JWT `sub` 에서 뽑는 것이 단일 출처다
+- 401 을 받으면 **헤더 없이 한 번만 다시 보낸다.** 비로그인 로그도 수집하기로 했으므로
+  401 은 "이 토큰이 만료됐다" 는 뜻이지 "이 로그가 필요 없다" 는 뜻이 아니다.
+  JWT 가 15분이라 조금만 긴 세션이면 반드시 만료된다
 - 실패 시: 배치를 큐 앞으로 되돌리고 다음 주기에 재시도
 - 큐 상한 **1000건**. 넘치면 오래된 것부터 버린다 (최근 행동이 더 쓸모 있다)
 - 실패 경고는 세션당 한 번만 남긴다

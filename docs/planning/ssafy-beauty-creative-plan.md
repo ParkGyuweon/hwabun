@@ -232,7 +232,32 @@ the frame empty ivory wall. Keep the exact same product container as the referen
 - `HeroBanner`·`BannerRow`가 `product.image_url` 대신 `bannerCreative()`를 쓴다. `data-*`는 그대로.
 - 세이프존 규칙을 CSS로 강제: 히어로 문구 컨테이너 `width: 45%`, 이미지 `object-position: right`.
 - `products.ssafy-beauty.json`의 `images[]`에 M1·M2·M3 세 장을 넣는다. 상세 갤러리가 이미 `images[]`를 읽는다.
-- 로그: 어떤 변형이 떴는지는 `banner_type`으로 1:1 식별된다. 톤별 V4는 `banner_value`(segment 값)로 식별. **추가 property 없음** (데이터 파트 확인 §7).
+- 로그: 어떤 변형이 떴는지는 `banner_type`으로 1:1 식별된다. 톤별 V4는 `banner_value`(segment 값)로 식별.
+
+### 6-1. 구현 이후 바뀐 것 (2026-09-10)
+
+**완성형 배너 이미지를 지원한다.** 글자·가격·CTA 가 이미지 안에 구워진 한 장이 있으면
+CSS 조립 대신 그 이미지를 그대로 쓴다 (`AdBanner` 의 `ad--image` 경로). 목록은
+`src/mocks/banner-images.json` 이고, 없는 상품·변형은 지금처럼 CSS 로 조립한다.
+현재 SB000001·SB000002·SB000003 세 상품 × 5변형이 등록돼 있다.
+
+이 경로에는 세이프존 CSS 가 적용되지 않는다. 자르면 구워진 글자가 잘리므로
+`aspect-ratio: 3 / 1` 로 **원본 비율을 그대로 지킨다.** 높이를 고정하고
+`object-fit: cover` 를 쓰면 폭 1120px 에서 위아래가 깎여 상단 브랜드명과 하단
+상품명이 잘렸다.
+
+**로그에 property 두 개가 늘었다** (데이터 파트 회신 2026-09-10). `trait_source` 는
+노출에도 실어야 하고(20% 탐색군 비중의 분모), `policy_version` 은 `banner_daily` 에서
+정책 배포 전후를 자르는 귀속 키다. `banner_slot` 은 1 이상이어야 한다.
+
+**상품 마스터 컷의 누끼는 쓰지 않는다.** 누끼가 제품의 흰 부분까지 뜯어내 병 몸통과
+스포이드 캡에 구멍을 냈고 잘린 소품 조각이 옆에 남았다. 원본이 이미 흰 배경이라 딸
+이유가 없다. `frontend/scripts/slice_master_grid.py` 가 2x2 마스터 그리드를 네 칸으로
+자르고 흰 여백만 걷어 정사각 캔버스 한가운데 앉힌다. 배경은 지우지 않는다.
+제형 컷(M2)은 멀쩡하므로 건드리지 않는다.
+
+`images[]` 의 첫 장은 `image_url` 과 같은 주소다. 상세 갤러리는 주소가 같으면 한 장으로
+센다 — 그대로 이으면 첫 장이 썸네일에 두 번 나오고 세 장짜리가 네 장으로 보였다.
 
 ---
 
