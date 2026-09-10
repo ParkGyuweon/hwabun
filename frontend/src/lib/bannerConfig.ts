@@ -37,4 +37,12 @@ export const BANNER_EVENTS_ENABLED = false;
  * 배너 뽑는 규칙(`bannerCreative`·`BANNER_RESERVED`·축 선택)을 바꾸면 이 값을 올린다.
  * 올리지 않으면 전후 비교가 한 덩어리로 뭉개진다.
  */
-export const BANNER_POLICY_VERSION = 'banner-2026-09-10';
+export const BANNER_POLICY_VERSION = 'banner-2026-09-10.2';
+
+/*
+ * 판 이력
+ *   banner-2026-09-10    히어로 = ranked[0]. 배너 행 6칸을 빼고 히어로만 그리기 시작
+ *   banner-2026-09-10.2  히어로 = 신규 브랜드 우선. 전용 칸이 화면에서 사라진 몫을
+ *                        히어로가 받는다. 성향 없는 세션은 new_brand(story) 로 말한다.
+ *                        → 이 판부터 `banner_type: new_brand` 노출이 크게 는다
+ */

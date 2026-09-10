@@ -64,11 +64,32 @@ function priceBin(usd: number): string {
   return PRICE_BINS[PRICE_BINS.length - 1];
 }
 
+/**
+ * 이 상품에서 알아본 성분을 **전성분에 나온 순서대로** 돌려준다.
+ *
+ * 전에는 어휘집(`product-feature-vocab.json`) 등재 순서로 돌려줬다. 그래서 배너 문구가
+ * "{성분}이 앞에 있는 {카테고리}" 인데 실제로 앞에 있는 성분이 아니었다 — SSAFY Beauty
+ * 8종 중 7종이 전성분과 무관하게 `Hyaluronic Acid` 로 나왔다(제로 포어 토닝 패드는
+ * Lactic Acid 가 4번째인데도).
+ *
+ * 문구가 위치를 말하므로 순서도 위치여야 한다. `bannerCreative.leadIngredients`
+ * ("전성분 앞 30% 안에 있는 성분만 앞에 있다고 말한다", 계획 §3 · 명세 I2) 와 같은
+ * 규칙이다. 두 곳이 다른 답을 내고 있었다.
+ */
 function ingredientsOf(p: Product): string[] {
   const haystack = p.ingredients.join(' ').toLowerCase();
-  return Object.entries(INGREDIENT_SYNONYMS)
-    .filter(([, aliases]) => aliases.some((a) => haystack.includes(a)))
-    .map(([name]) => name);
+  const hits: Array<{ name: string; at: number }> = [];
+
+  for (const [name, aliases] of Object.entries(INGREDIENT_SYNONYMS)) {
+    let at = -1;
+    for (const alias of aliases) {
+      const i = haystack.indexOf(alias);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+    if (at >= 0) hits.push({ name, at });
+  }
+
+  return hits.sort((a, b) => a.at - b.at).map((h) => h.name);
 }
 
 function skinTypesOf(p: Product, reviewSkinTypes: Map<string, SkinType[]>): SkinType[] {
