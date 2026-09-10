@@ -1,16 +1,16 @@
 product_id,ingredient_id,ingredient,position_weight,source,vocab_version
-P420652,2,Vitamin C,1.0,tag,0.5
 P420652,11,Shea Butter,0.8621,parsed,0.5
 P420652,10,SPF,0.6207,parsed,0.5
+P420652,2,Vitamin C,0.2759,parsed,0.5
 P427421,4,Probiotic / Ferment,0.875,parsed,0.5
 P427421,6,Peptides,0.8393,parsed,0.5
 P427421,0,Hyaluronic Acid,0.4464,parsed,0.5
 P427421,8,Lactic Acid,0.1964,parsed,0.5
 P427421,15,AHA/Glycolic Acid,0.1964,parsed,0.5
 P417238,20,Urea,0.8438,parsed,0.5
-P269122,15,AHA/Glycolic Acid,1.0,tag,0.5
-P269122,16,Salicylic Acid,1.0,tag,0.5
 P269122,25,Alcohol Denat,0.9808,parsed,0.5
+P269122,15,AHA/Glycolic Acid,0.9615,parsed,0.5
+P269122,16,Salicylic Acid,0.9038,parsed,0.5
 P269122,8,Lactic Acid,0.8654,parsed,0.5
 P269122,27,Willow Bark,0.7885,parsed,0.5
 P269122,5,Green Tea,0.7692,parsed,0.5
@@ -25,27 +25,27 @@ P394639,17,Ceramide,0.5294,parsed,0.5
 P394639,11,Shea Butter,0.4902,parsed,0.5
 P394639,12,Panthenol (B5),0.4314,parsed,0.5
 P394639,3,Squalane,0.4118,parsed,0.5
-P427417,13,Niacinamide,1.0,tag,0.5
+P427417,13,Niacinamide,1.0,parsed,0.5
 P427417,24,Zinc,0.8,parsed,0.5
 P411387,7,Aloe,0.8286,parsed,0.5
 P411387,5,Green Tea,0.7429,parsed,0.5
 P411387,2,Vitamin C,0.6571,parsed,0.5
 P411387,12,Panthenol (B5),0.6,parsed,0.5
-P411540,10,SPF,1.0,tag,0.5
 P411540,26,Centella (Cica),1.0,parsed,0.5
 P411540,1,Silicone,0.9701,parsed,0.5
 P411540,13,Niacinamide,0.8358,parsed,0.5
+P411540,10,SPF,0.1,parsed,0.5
 P411540,24,Zinc,0.1,parsed,0.5
-P423688,16,Salicylic Acid,1.0,tag,0.5
 P423688,22,Allantoin,0.6786,parsed,0.5
+P423688,16,Salicylic Acid,0.6071,parsed,0.5
 P423688,5,Green Tea,0.5357,parsed,0.5
 P423688,9,Licorice,0.5,parsed,0.5
-P421275,16,Salicylic Acid,1.0,tag,0.5
+P421275,16,Salicylic Acid,1.0,parsed,0.5
 P421275,7,Aloe,0.75,parsed,0.5
 P421275,23,Retinol,0.5,parsed,0.5
-P429952,0,Hyaluronic Acid,1.0,tag,0.5
-P429952,13,Niacinamide,1.0,tag,0.5
 P429952,11,Shea Butter,0.9062,parsed,0.5
+P429952,13,Niacinamide,0.8438,parsed,0.5
+P429952,0,Hyaluronic Acid,0.6875,parsed,0.5
 P429952,17,Ceramide,0.6562,parsed,0.5
 P429952,2,Vitamin C,0.5625,parsed,0.5
 P429952,22,Allantoin,0.5312,parsed,0.5
@@ -56,18 +56,18 @@ P456412,10,SPF,0.1538,parsed,0.5
 P418218,1,Silicone,1.0,parsed,0.5
 P418218,0,Hyaluronic Acid,0.6154,parsed,0.5
 P418218,10,SPF,0.2308,parsed,0.5
-P460779,13,Niacinamide,1.0,tag,0.5
+P460779,13,Niacinamide,0.9756,parsed,0.5
 P460779,2,Vitamin C,0.9512,parsed,0.5
 P460779,3,Squalane,0.878,parsed,0.5
 P460779,6,Peptides,0.7317,parsed,0.5
 P460779,1,Silicone,0.6341,parsed,0.5
-P309308,8,Lactic Acid,1.0,tag,0.5
 P309308,7,Aloe,0.8125,parsed,0.5
 P309308,4,Probiotic / Ferment,0.75,parsed,0.5
 P309308,3,Squalane,0.6875,parsed,0.5
+P309308,8,Lactic Acid,0.6562,parsed,0.5
 P309308,1,Silicone,0.5,parsed,0.5
 P309308,9,Licorice,0.25,parsed,0.5
-P427419,0,Hyaluronic Acid,1.0,tag,0.5
+P427419,0,Hyaluronic Acid,1.0,parsed,0.5
 P427419,12,Panthenol (B5),0.7333,parsed,0.5
 P394624,25,Alcohol Denat,0.9412,parsed,0.5
 P394624,1,Silicone,0.9216,parsed,0.5
@@ -81,30 +81,29 @@ P7880,20,Urea,0.7857,parsed,0.5
 P7880,18,Rosehip / Rose,0.6071,parsed,0.5
 P7880,7,Aloe,0.5357,parsed,0.5
 P7880,14,Jojoba,0.2857,parsed,0.5
-P433520,0,Hyaluronic Acid,1.0,tag,0.5
 P433520,1,Silicone,0.82,parsed,0.5
 P433520,11,Shea Butter,0.72,parsed,0.5
 P433520,22,Allantoin,0.52,parsed,0.5
 P433520,7,Aloe,0.5,parsed,0.5
 P433520,18,Rosehip / Rose,0.42,parsed,0.5
+P433520,0,Hyaluronic Acid,0.24,parsed,0.5
 P433520,6,Peptides,0.2,parsed,0.5
 P433520,2,Vitamin C,0.16,parsed,0.5
-P458219,0,Hyaluronic Acid,1.0,tag,0.5
-P458219,16,Salicylic Acid,1.0,tag,0.5
+P458219,0,Hyaluronic Acid,0.8571,parsed,0.5
 P458219,27,Willow Bark,0.6667,parsed,0.5
 P458219,9,Licorice,0.4286,parsed,0.5
-P442563,15,AHA/Glycolic Acid,1.0,tag,0.5
+P442563,15,AHA/Glycolic Acid,1.0,parsed,0.5
 P442563,7,Aloe,0.9565,parsed,0.5
 P442563,16,Salicylic Acid,0.7391,parsed,0.5
 P442563,8,Lactic Acid,0.6522,parsed,0.5
 P442563,12,Panthenol (B5),0.5217,parsed,0.5
 P442563,0,Hyaluronic Acid,0.4783,parsed,0.5
-P480612,0,Hyaluronic Acid,1.0,tag,0.5
-P480612,16,Salicylic Acid,1.0,tag,0.5
 P480612,2,Vitamin C,0.7179,parsed,0.5
 P480612,8,Lactic Acid,0.4872,parsed,0.5
 P480612,12,Panthenol (B5),0.4359,parsed,0.5
-P454380,10,SPF,1.0,tag,0.5
+P480612,0,Hyaluronic Acid,0.2821,parsed,0.5
+P480612,16,Salicylic Acid,0.1,parsed,0.5
+P454380,10,SPF,1.0,parsed,0.5
 P454380,1,Silicone,0.8077,parsed,0.5
 P454380,11,Shea Butter,0.3846,parsed,0.5
 P454380,14,Jojoba,0.3462,parsed,0.5
@@ -116,13 +115,13 @@ P456207,4,Probiotic / Ferment,0.5873,parsed,0.5
 P456207,12,Panthenol (B5),0.4444,parsed,0.5
 P456207,20,Urea,0.1587,parsed,0.5
 P456207,16,Salicylic Acid,0.1,parsed,0.5
-P441101,0,Hyaluronic Acid,1.0,tag,0.5
 P441101,4,Probiotic / Ferment,0.9783,parsed,0.5
 P441101,1,Silicone,0.913,parsed,0.5
 P441101,3,Squalane,0.8913,parsed,0.5
 P441101,5,Green Tea,0.6739,parsed,0.5
+P441101,0,Hyaluronic Acid,0.4783,parsed,0.5
 P441101,10,SPF,0.1,parsed,0.5
-P439061,15,AHA/Glycolic Acid,1.0,tag,0.5
+P439061,15,AHA/Glycolic Acid,1.0,parsed,0.5
 P439061,8,Lactic Acid,0.9048,parsed,0.5
 P439061,9,Licorice,0.4286,parsed,0.5
 P439061,4,Probiotic / Ferment,0.2381,parsed,0.5
@@ -133,44 +132,43 @@ P422905,17,Ceramide,0.7593,parsed,0.5
 P422905,26,Centella (Cica),0.7407,parsed,0.5
 P422905,18,Rosehip / Rose,0.5741,parsed,0.5
 P422905,27,Willow Bark,0.4444,parsed,0.5
-P456398,10,SPF,1.0,tag,0.5
 P456398,1,Silicone,0.9211,parsed,0.5
 P456398,5,Green Tea,0.5526,parsed,0.5
-P430337,2,Vitamin C,1.0,tag,0.5
 P430337,14,Jojoba,0.8605,parsed,0.5
 P430337,12,Panthenol (B5),0.7674,parsed,0.5
+P430337,2,Vitamin C,0.7209,parsed,0.5
 P430337,18,Rosehip / Rose,0.4419,parsed,0.5
 P430337,4,Probiotic / Ferment,0.3953,parsed,0.5
 P430337,0,Hyaluronic Acid,0.3023,parsed,0.5
 P430337,28,Collagen,0.2093,parsed,0.5
-P427406,15,AHA/Glycolic Acid,1.0,tag,0.5
+P427406,15,AHA/Glycolic Acid,1.0,parsed,0.5
 P427406,18,Rosehip / Rose,0.975,parsed,0.5
 P427406,20,Urea,0.95,parsed,0.5
 P427406,7,Aloe,0.925,parsed,0.5
-P431180,2,Vitamin C,1.0,tag,0.5
 P431180,25,Alcohol Denat,0.963,parsed,0.5
 P431180,7,Aloe,0.6667,parsed,0.5
+P431180,2,Vitamin C,0.2963,parsed,0.5
 P455364,2,Vitamin C,0.2353,parsed,0.5
 P426836,7,Aloe,0.6818,parsed,0.5
 P426836,9,Licorice,0.3636,parsed,0.5
-P479839,0,Hyaluronic Acid,1.0,tag,0.5
 P479839,1,Silicone,0.9821,parsed,0.5
+P479839,0,Hyaluronic Acid,0.8214,parsed,0.5
 P479839,6,Peptides,0.8036,parsed,0.5
 P479839,3,Squalane,0.6964,parsed,0.5
 P479839,19,Caffeine,0.5,parsed,0.5
 P479839,2,Vitamin C,0.3571,parsed,0.5
-P411403,0,Hyaluronic Acid,1.0,tag,0.5
 P411403,13,Niacinamide,0.9474,parsed,0.5
 P411403,3,Squalane,0.8947,parsed,0.5
 P411403,1,Silicone,0.8158,parsed,0.5
 P411403,11,Shea Butter,0.7895,parsed,0.5
+P411403,0,Hyaluronic Acid,0.4737,parsed,0.5
 P411403,17,Ceramide,0.4474,parsed,0.5
 P411403,21,Adenosine,0.4211,parsed,0.5
 P411403,6,Peptides,0.1,parsed,0.5
 P421996,1,Silicone,0.92,parsed,0.5
 P421996,3,Squalane,0.88,parsed,0.5
 P421996,16,Salicylic Acid,0.1,parsed,0.5
-P392246,15,AHA/Glycolic Acid,1.0,tag,0.5
+P392246,15,AHA/Glycolic Acid,0.9706,parsed,0.5
 P392246,8,Lactic Acid,0.8529,parsed,0.5
 P392246,16,Salicylic Acid,0.8235,parsed,0.5
 P392246,7,Aloe,0.7353,parsed,0.5
@@ -178,39 +176,35 @@ P392246,5,Green Tea,0.6471,parsed,0.5
 P392246,0,Hyaluronic Acid,0.5,parsed,0.5
 P392246,22,Allantoin,0.4706,parsed,0.5
 P375849,4,Probiotic / Ferment,1.0,parsed,0.5
-P375849,8,Lactic Acid,1.0,tag,0.5
-P375849,15,AHA/Glycolic Acid,1.0,tag,0.5
-P375849,16,Salicylic Acid,1.0,tag,0.5
-P461159,0,Hyaluronic Acid,1.0,tag,0.5
 P461159,4,Probiotic / Ferment,0.9767,parsed,0.5
 P461159,6,Peptides,0.7674,parsed,0.5
+P461159,0,Hyaluronic Acid,0.7442,parsed,0.5
 P461159,19,Caffeine,0.5814,parsed,0.5
 P461159,3,Squalane,0.4884,parsed,0.5
 P461159,14,Jojoba,0.3023,parsed,0.5
-P270594,0,Hyaluronic Acid,1.0,tag,0.5
-P270594,2,Vitamin C,1.0,tag,0.5
 P270594,1,Silicone,0.9706,parsed,0.5
 P270594,11,Shea Butter,0.7941,parsed,0.5
 P270594,3,Squalane,0.7647,parsed,0.5
+P270594,0,Hyaluronic Acid,0.5882,parsed,0.5
 P270594,12,Panthenol (B5),0.2353,parsed,0.5
-P461537,0,Hyaluronic Acid,1.0,tag,0.5
+P270594,2,Vitamin C,0.2059,parsed,0.5
+P461537,0,Hyaluronic Acid,0.5,parsed,0.5
 P415771,4,Probiotic / Ferment,1.0,parsed,0.5
-P415771,8,Lactic Acid,1.0,tag,0.5
 P415771,5,Green Tea,0.6667,parsed,0.5
-P428819,0,Hyaluronic Acid,1.0,tag,0.5
+P428819,0,Hyaluronic Acid,0.625,parsed,0.5
 P428819,9,Licorice,0.2917,parsed,0.5
-P442840,0,Hyaluronic Acid,1.0,tag,0.5
 P442840,11,Shea Butter,0.9348,parsed,0.5
 P442840,14,Jojoba,0.8043,parsed,0.5
 P442840,3,Squalane,0.6522,parsed,0.5
 P442840,7,Aloe,0.3478,parsed,0.5
+P442840,0,Hyaluronic Acid,0.1522,parsed,0.5
 P442840,17,Ceramide,0.1304,parsed,0.5
-P440307,2,Vitamin C,1.0,tag,0.5
+P440307,2,Vitamin C,0.75,parsed,0.5
 P440307,3,Squalane,0.4688,parsed,0.5
 P440307,0,Hyaluronic Acid,0.4062,parsed,0.5
 P440307,22,Allantoin,0.375,parsed,0.5
 P440307,12,Panthenol (B5),0.3438,parsed,0.5
-P415777,15,AHA/Glycolic Acid,1.0,tag,0.5
+P415777,15,AHA/Glycolic Acid,1.0,parsed,0.5
 P415777,16,Salicylic Acid,0.9167,parsed,0.5
 P415777,7,Aloe,0.8889,parsed,0.5
 P415777,4,Probiotic / Ferment,0.8333,parsed,0.5
@@ -239,9 +233,9 @@ P406712,12,Panthenol (B5),0.5556,parsed,0.5
 P406712,0,Hyaluronic Acid,0.4815,parsed,0.5
 P406712,9,Licorice,0.4444,parsed,0.5
 P406712,13,Niacinamide,0.4074,parsed,0.5
-P456213,2,Vitamin C,1.0,tag,0.5
-P456213,15,AHA/Glycolic Acid,1.0,tag,0.5
+P456213,15,AHA/Glycolic Acid,0.925,parsed,0.5
 P456213,3,Squalane,0.85,parsed,0.5
+P456213,2,Vitamin C,0.675,parsed,0.5
 P456213,11,Shea Butter,0.375,parsed,0.5
 P427414,0,Hyaluronic Acid,0.8889,parsed,0.5
 P427414,20,Urea,0.4667,parsed,0.5
@@ -253,11 +247,11 @@ P248407,22,Allantoin,0.3636,parsed,0.5
 P248407,5,Green Tea,0.1818,parsed,0.5
 P248407,9,Licorice,0.1364,parsed,0.5
 P248407,17,Ceramide,0.1,parsed,0.5
-P433887,0,Hyaluronic Acid,1.0,tag,0.5
 P433887,3,Squalane,1.0,parsed,0.5
 P433887,11,Shea Butter,0.84,parsed,0.5
 P433887,17,Ceramide,0.72,parsed,0.5
 P433887,14,Jojoba,0.68,parsed,0.5
+P433887,0,Hyaluronic Acid,0.64,parsed,0.5
 P421235,3,Squalane,0.6078,parsed,0.5
 P421235,2,Vitamin C,0.1,parsed,0.5
 P427416,19,Caffeine,1.0,parsed,0.5
@@ -270,12 +264,12 @@ P432829,6,Peptides,0.6774,parsed,0.5
 P432829,11,Shea Butter,0.4839,parsed,0.5
 P432829,12,Panthenol (B5),0.2258,parsed,0.5
 P432829,22,Allantoin,0.1,parsed,0.5
-P466123,13,Niacinamide,1.0,tag,0.5
+P466123,13,Niacinamide,0.8095,parsed,0.5
 P466123,0,Hyaluronic Acid,0.6667,parsed,0.5
 P432668,6,Peptides,0.7059,parsed,0.5
 P432668,5,Green Tea,0.5882,parsed,0.5
 P432668,0,Hyaluronic Acid,0.5294,parsed,0.5
-P456218,10,SPF,1.0,tag,0.5
+P456218,10,SPF,1.0,parsed,0.5
 P456218,13,Niacinamide,0.7949,parsed,0.5
 P456218,0,Hyaluronic Acid,0.3077,parsed,0.5
 P456218,4,Probiotic / Ferment,0.1538,parsed,0.5
@@ -285,17 +279,17 @@ P475908,11,Shea Butter,0.913,parsed,0.5
 P475908,26,Centella (Cica),0.7826,parsed,0.5
 P446938,17,Ceramide,0.5,parsed,0.5
 P446938,0,Hyaluronic Acid,0.4412,parsed,0.5
-P434548,15,AHA/Glycolic Acid,1.0,tag,0.5
 P434548,8,Lactic Acid,0.9804,parsed,0.5
 P434548,14,Jojoba,0.9412,parsed,0.5
+P434548,15,AHA/Glycolic Acid,0.9216,parsed,0.5
 P434548,27,Willow Bark,0.8824,parsed,0.5
 P434548,20,Urea,0.7647,parsed,0.5
 P434548,0,Hyaluronic Acid,0.7059,parsed,0.5
-P462699,0,Hyaluronic Acid,1.0,tag,0.5
+P462699,0,Hyaluronic Acid,0.7941,parsed,0.5
 P462699,6,Peptides,0.6765,parsed,0.5
 P462699,12,Panthenol (B5),0.6471,parsed,0.5
 P462699,4,Probiotic / Ferment,0.2941,parsed,0.5
-P443845,0,Hyaluronic Acid,1.0,tag,0.5
+P443845,0,Hyaluronic Acid,0.9231,parsed,0.5
 P443845,4,Probiotic / Ferment,0.5385,parsed,0.5
 P443845,6,Peptides,0.1538,parsed,0.5
 P248404,22,Allantoin,0.7407,parsed,0.5
@@ -303,28 +297,28 @@ P248404,5,Green Tea,0.6667,parsed,0.5
 P248404,9,Licorice,0.6296,parsed,0.5
 P248404,7,Aloe,0.5926,parsed,0.5
 P446930,5,Green Tea,0.1538,parsed,0.5
-P447791,23,Retinol,1.0,tag,0.5
 P447791,11,Shea Butter,0.8571,parsed,0.5
 P447791,3,Squalane,0.7857,parsed,0.5
 P447791,13,Niacinamide,0.7679,parsed,0.5
 P447791,7,Aloe,0.6786,parsed,0.5
 P447791,0,Hyaluronic Acid,0.6429,parsed,0.5
-P500633,0,Hyaluronic Acid,1.0,tag,0.5
-P500633,13,Niacinamide,1.0,tag,0.5
+P447791,23,Retinol,0.5893,parsed,0.5
+P500633,13,Niacinamide,0.8529,parsed,0.5
 P500633,5,Green Tea,0.7059,parsed,0.5
+P500633,0,Hyaluronic Acid,0.6471,parsed,0.5
 P500633,17,Ceramide,0.6176,parsed,0.5
 P500633,21,Adenosine,0.3235,parsed,0.5
 P440312,11,Shea Butter,0.7838,parsed,0.5
-P500701,0,Hyaluronic Acid,1.0,tag,0.5
 P500701,1,Silicone,0.9811,parsed,0.5
 P500701,4,Probiotic / Ferment,0.9434,parsed,0.5
 P500701,29,Mineral Oil / Petrolatum,0.8868,parsed,0.5
 P500701,6,Peptides,0.7925,parsed,0.5
+P500701,0,Hyaluronic Acid,0.7358,parsed,0.5
 P500701,19,Caffeine,0.6226,parsed,0.5
 P500701,3,Squalane,0.6038,parsed,0.5
 P500701,14,Jojoba,0.4151,parsed,0.5
-P471237,0,Hyaluronic Acid,1.0,tag,0.5
 P471237,18,Rosehip / Rose,0.7619,parsed,0.5
+P471237,0,Hyaluronic Acid,0.619,parsed,0.5
 P471237,1,Silicone,0.5476,parsed,0.5
 P471237,3,Squalane,0.4762,parsed,0.5
 P448207,0,Hyaluronic Acid,0.3902,parsed,0.5
@@ -332,19 +326,18 @@ P448207,13,Niacinamide,0.3659,parsed,0.5
 P448207,12,Panthenol (B5),0.3415,parsed,0.5
 P448207,9,Licorice,0.2683,parsed,0.5
 P448207,4,Probiotic / Ferment,0.1463,parsed,0.5
-P468351,0,Hyaluronic Acid,1.0,tag,0.5
-P468351,2,Vitamin C,1.0,tag,0.5
 P468351,1,Silicone,0.9767,parsed,0.5
 P468351,20,Urea,0.814,parsed,0.5
 P468351,5,Green Tea,0.7907,parsed,0.5
 P468351,7,Aloe,0.6977,parsed,0.5
 P468351,19,Caffeine,0.6279,parsed,0.5
 P468351,6,Peptides,0.5814,parsed,0.5
+P468351,0,Hyaluronic Acid,0.5581,parsed,0.5
 P468351,4,Probiotic / Ferment,0.4419,parsed,0.5
-P476414,13,Niacinamide,1.0,tag,0.5
-P476414,23,Retinol,1.0,tag,0.5
-P476414,28,Collagen,1.0,tag,0.5
+P468351,2,Vitamin C,0.2326,parsed,0.5
 P476414,1,Silicone,0.9737,parsed,0.5
+P476414,13,Niacinamide,0.8684,parsed,0.5
+P476414,23,Retinol,0.6579,parsed,0.5
 P476414,26,Centella (Cica),0.6316,parsed,0.5
 P476414,17,Ceramide,0.4474,parsed,0.5
 P453253,3,Squalane,0.9615,parsed,0.5
@@ -356,7 +349,7 @@ P403818,11,Shea Butter,0.931,parsed,0.5
 P403818,9,Licorice,0.4138,parsed,0.5
 P403818,6,Peptides,0.3793,parsed,0.5
 P403818,2,Vitamin C,0.3448,parsed,0.5
-P439058,2,Vitamin C,1.0,tag,0.5
+P439058,2,Vitamin C,1.0,parsed,0.5
 P439058,9,Licorice,0.4815,parsed,0.5
 P439058,0,Hyaluronic Acid,0.2963,parsed,0.5
 P439058,8,Lactic Acid,0.2593,parsed,0.5
@@ -384,11 +377,11 @@ P424948,1,Silicone,0.6842,parsed,0.5
 P424948,19,Caffeine,0.5,parsed,0.5
 P424948,15,AHA/Glycolic Acid,0.2105,parsed,0.5
 P424948,10,SPF,0.1053,parsed,0.5
-P429242,10,SPF,1.0,tag,0.5
+P429242,10,SPF,1.0,parsed,0.5
 P429242,29,Mineral Oil / Petrolatum,0.8077,parsed,0.5
 P429242,9,Licorice,0.3462,parsed,0.5
-P431848,8,Lactic Acid,1.0,tag,0.5
-P431848,16,Salicylic Acid,1.0,tag,0.5
+P431848,8,Lactic Acid,0.8333,parsed,0.5
+P431848,16,Salicylic Acid,0.6,parsed,0.5
 P431848,20,Urea,0.3333,parsed,0.5
 P431848,5,Green Tea,0.1333,parsed,0.5
 P431848,10,SPF,0.1,parsed,0.5
@@ -399,11 +392,11 @@ P453825,3,Squalane,0.7907,parsed,0.5
 P453825,0,Hyaluronic Acid,0.5814,parsed,0.5
 P453825,6,Peptides,0.4186,parsed,0.5
 P453825,7,Aloe,0.3488,parsed,0.5
-P443833,16,Salicylic Acid,1.0,tag,0.5
+P443833,16,Salicylic Acid,0.8,parsed,0.5
 P443833,24,Zinc,0.64,parsed,0.5
 P443833,22,Allantoin,0.52,parsed,0.5
-P447592,15,AHA/Glycolic Acid,1.0,tag,0.5
-P447592,16,Salicylic Acid,1.0,tag,0.5
+P447592,16,Salicylic Acid,0.8704,parsed,0.5
+P447592,15,AHA/Glycolic Acid,0.8333,parsed,0.5
 P447592,8,Lactic Acid,0.8148,parsed,0.5
 P447592,27,Willow Bark,0.7407,parsed,0.5
 P447592,5,Green Tea,0.6296,parsed,0.5
@@ -412,21 +405,21 @@ P447592,12,Panthenol (B5),0.5185,parsed,0.5
 P447592,20,Urea,0.5,parsed,0.5
 P447592,14,Jojoba,0.4815,parsed,0.5
 P447592,23,Retinol,0.4444,parsed,0.5
-P469502,16,Salicylic Acid,1.0,tag,0.5
-P410400,16,Salicylic Acid,1.0,tag,0.5
+P469502,16,Salicylic Acid,0.7143,parsed,0.5
 P410400,9,Licorice,0.6857,parsed,0.5
+P410400,16,Salicylic Acid,0.6571,parsed,0.5
 P410400,7,Aloe,0.2571,parsed,0.5
-P479734,0,Hyaluronic Acid,1.0,tag,0.5
 P479734,11,Shea Butter,0.8806,parsed,0.5
 P479734,5,Green Tea,0.7761,parsed,0.5
 P479734,6,Peptides,0.7313,parsed,0.5
 P479734,4,Probiotic / Ferment,0.6567,parsed,0.5
+P479734,0,Hyaluronic Acid,0.6418,parsed,0.5
 P479734,19,Caffeine,0.5821,parsed,0.5
 P479734,2,Vitamin C,0.5672,parsed,0.5
 P479734,9,Licorice,0.5224,parsed,0.5
 P479734,14,Jojoba,0.4925,parsed,0.5
-P417936,0,Hyaluronic Acid,1.0,tag,0.5
 P417936,18,Rosehip / Rose,0.8421,parsed,0.5
+P417936,0,Hyaluronic Acid,0.6316,parsed,0.5
 P429515,2,Vitamin C,0.9459,parsed,0.5
 P429515,6,Peptides,0.7973,parsed,0.5
 P429515,17,Ceramide,0.7432,parsed,0.5
@@ -442,78 +435,75 @@ P399623,4,Probiotic / Ferment,0.7778,parsed,0.5
 P399623,5,Green Tea,0.75,parsed,0.5
 P399623,0,Hyaluronic Acid,0.6667,parsed,0.5
 P399623,9,Licorice,0.6111,parsed,0.5
-P411388,0,Hyaluronic Acid,1.0,tag,0.5
 P411388,12,Panthenol (B5),0.8108,parsed,0.5
+P411388,0,Hyaluronic Acid,0.7838,parsed,0.5
 P411388,2,Vitamin C,0.7027,parsed,0.5
 P411388,5,Green Tea,0.6216,parsed,0.5
 P411388,7,Aloe,0.4324,parsed,0.5
-P473322,15,AHA/Glycolic Acid,1.0,tag,0.5
 P473322,7,Aloe,0.973,parsed,0.5
+P473322,15,AHA/Glycolic Acid,0.8919,parsed,0.5
 P473322,8,Lactic Acid,0.8378,parsed,0.5
 P473322,9,Licorice,0.5676,parsed,0.5
 P473322,4,Probiotic / Ferment,0.3784,parsed,0.5
 P415619,1,Silicone,1.0,parsed,0.5
-P415619,13,Niacinamide,1.0,tag,0.5
 P415619,11,Shea Butter,0.9333,parsed,0.5
+P415619,13,Niacinamide,0.9111,parsed,0.5
 P415619,2,Vitamin C,0.4889,parsed,0.5
 P415619,21,Adenosine,0.3778,parsed,0.5
-P400207,16,Salicylic Acid,1.0,tag,0.5
 P400207,7,Aloe,0.9545,parsed,0.5
 P400207,4,Probiotic / Ferment,0.7273,parsed,0.5
 P400207,27,Willow Bark,0.6818,parsed,0.5
 P400207,0,Hyaluronic Acid,0.6364,parsed,0.5
-P418346,2,Vitamin C,1.0,tag,0.5
+P418346,2,Vitamin C,0.9583,parsed,0.5
 P418346,3,Squalane,0.9167,parsed,0.5
 P418346,14,Jojoba,0.4583,parsed,0.5
 P418346,15,AHA/Glycolic Acid,0.4167,parsed,0.5
-P448203,0,Hyaluronic Acid,1.0,tag,0.5
 P448203,29,Mineral Oil / Petrolatum,0.9636,parsed,0.5
 P448203,3,Squalane,0.8727,parsed,0.5
 P448203,19,Caffeine,0.5273,parsed,0.5
 P448203,5,Green Tea,0.2727,parsed,0.5
+P448203,0,Hyaluronic Acid,0.2545,parsed,0.5
 P448203,6,Peptides,0.1,parsed,0.5
-P416563,2,Vitamin C,1.0,tag,0.5
 P416563,3,Squalane,1.0,parsed,0.5
+P416563,2,Vitamin C,0.8571,parsed,0.5
 P416563,18,Rosehip / Rose,0.4286,parsed,0.5
 P433435,1,Silicone,1.0,parsed,0.5
-P433435,10,SPF,1.0,tag,0.5
 P433435,21,Adenosine,0.5102,parsed,0.5
 P433435,13,Niacinamide,0.449,parsed,0.5
 P433435,28,Collagen,0.4082,parsed,0.5
 P433435,5,Green Tea,0.3265,parsed,0.5
 P433435,6,Peptides,0.1837,parsed,0.5
 P433435,0,Hyaluronic Acid,0.1633,parsed,0.5
+P433435,10,SPF,0.1,parsed,0.5
 P433435,24,Zinc,0.1,parsed,0.5
-P466155,0,Hyaluronic Acid,1.0,tag,0.5
 P466155,4,Probiotic / Ferment,1.0,parsed,0.5
-P466155,8,Lactic Acid,1.0,tag,0.5
 P466155,3,Squalane,0.8919,parsed,0.5
 P466155,1,Silicone,0.7838,parsed,0.5
 P466155,5,Green Tea,0.7297,parsed,0.5
+P466155,0,Hyaluronic Acid,0.6757,parsed,0.5
 P466155,28,Collagen,0.6486,parsed,0.5
 P466155,2,Vitamin C,0.5135,parsed,0.5
-P456392,10,SPF,1.0,tag,0.5
 P456392,1,Silicone,0.9444,parsed,0.5
 P456392,26,Centella (Cica),0.5,parsed,0.5
 P456392,5,Green Tea,0.3889,parsed,0.5
-P482739,0,Hyaluronic Acid,1.0,tag,0.5
 P482739,1,Silicone,1.0,parsed,0.5
-P482739,10,SPF,1.0,tag,0.5
+P482739,10,SPF,0.9348,parsed,0.5
 P482739,24,Zinc,0.9348,parsed,0.5
 P482739,2,Vitamin C,0.7174,parsed,0.5
 P482739,9,Licorice,0.6739,parsed,0.5
+P482739,0,Hyaluronic Acid,0.6087,parsed,0.5
 P482739,5,Green Tea,0.5652,parsed,0.5
-P474938,16,Salicylic Acid,1.0,tag,0.5
 P474938,18,Rosehip / Rose,0.9565,parsed,0.5
 P474938,13,Niacinamide,0.8696,parsed,0.5
+P474938,16,Salicylic Acid,0.6957,parsed,0.5
 P474938,0,Hyaluronic Acid,0.6522,parsed,0.5
-P454018,0,Hyaluronic Acid,1.0,tag,0.5
 P454018,3,Squalane,1.0,parsed,0.5
-P436359,0,Hyaluronic Acid,1.0,tag,0.5
-P436359,15,AHA/Glycolic Acid,1.0,tag,0.5
+P454018,0,Hyaluronic Acid,0.6154,parsed,0.5
+P436359,0,Hyaluronic Acid,0.8947,parsed,0.5
+P436359,15,AHA/Glycolic Acid,0.7368,parsed,0.5
 P436359,8,Lactic Acid,0.6842,parsed,0.5
 P436359,9,Licorice,0.2105,parsed,0.5
-P458209,13,Niacinamide,1.0,tag,0.5
+P458209,13,Niacinamide,0.913,parsed,0.5
 P458209,0,Hyaluronic Acid,0.7391,parsed,0.5
 P458209,22,Allantoin,0.5652,parsed,0.5
 P470529,14,Jojoba,0.9688,parsed,0.5
@@ -523,27 +513,27 @@ P470529,22,Allantoin,0.8125,parsed,0.5
 P470529,6,Peptides,0.7188,parsed,0.5
 P470529,5,Green Tea,0.3906,parsed,0.5
 P470529,2,Vitamin C,0.25,parsed,0.5
-P415701,0,Hyaluronic Acid,1.0,tag,0.5
 P415701,1,Silicone,0.9545,parsed,0.5
+P415701,0,Hyaluronic Acid,0.8409,parsed,0.5
 P415701,17,Ceramide,0.8182,parsed,0.5
 P415701,2,Vitamin C,0.6136,parsed,0.5
-P439055,28,Collagen,1.0,tag,0.5
+P439055,28,Collagen,1.0,parsed,0.5
 P439055,1,Silicone,0.8537,parsed,0.5
 P439055,17,Ceramide,0.6341,parsed,0.5
 P439055,4,Probiotic / Ferment,0.2439,parsed,0.5
-P439926,23,Retinol,1.0,tag,0.5
 P439926,13,Niacinamide,0.9048,parsed,0.5
+P439926,23,Retinol,0.8254,parsed,0.5
 P439926,6,Peptides,0.746,parsed,0.5
 P439926,2,Vitamin C,0.6825,parsed,0.5
 P439926,17,Ceramide,0.6032,parsed,0.5
 P439926,14,Jojoba,0.5397,parsed,0.5
 P439926,0,Hyaluronic Acid,0.381,parsed,0.5
-P466142,15,AHA/Glycolic Acid,1.0,tag,0.5
+P466142,15,AHA/Glycolic Acid,0.9444,parsed,0.5
 P466142,8,Lactic Acid,0.8056,parsed,0.5
 P466142,9,Licorice,0.5556,parsed,0.5
 P466142,4,Probiotic / Ferment,0.4167,parsed,0.5
-P54509,0,Hyaluronic Acid,1.0,tag,0.5
 P54509,1,Silicone,0.8636,parsed,0.5
+P54509,0,Hyaluronic Acid,0.3182,parsed,0.5
 P462336,7,Aloe,0.4615,parsed,0.5
 P419222,10,SPF,1.0,parsed,0.5
 P419222,24,Zinc,1.0,parsed,0.5
@@ -553,30 +543,30 @@ P446421,1,Silicone,0.9268,parsed,0.5
 P446421,19,Caffeine,0.3171,parsed,0.5
 P446421,0,Hyaluronic Acid,0.2683,parsed,0.5
 P446421,24,Zinc,0.1463,parsed,0.5
-P427413,8,Lactic Acid,1.0,tag,0.5
+P427413,8,Lactic Acid,1.0,parsed,0.5
 P427413,0,Hyaluronic Acid,0.6154,parsed,0.5
-P481989,0,Hyaluronic Acid,1.0,tag,0.5
-P481989,10,SPF,1.0,tag,0.5
-P481989,13,Niacinamide,1.0,tag,0.5
+P481989,10,SPF,1.0,parsed,0.5
 P481989,24,Zinc,0.9333,parsed,0.5
 P481989,1,Silicone,0.6889,parsed,0.5
 P481989,8,Lactic Acid,0.4444,parsed,0.5
+P481989,13,Niacinamide,0.3556,parsed,0.5
 P481989,7,Aloe,0.2444,parsed,0.5
-P422430,16,Salicylic Acid,1.0,tag,0.5
+P481989,0,Hyaluronic Acid,0.1111,parsed,0.5
 P422430,25,Alcohol Denat,0.9032,parsed,0.5
 P422430,26,Centella (Cica),0.7742,parsed,0.5
+P422430,16,Salicylic Acid,0.5806,parsed,0.5
 P422430,1,Silicone,0.5484,parsed,0.5
 P467038,3,Squalane,1.0,parsed,0.5
-P467038,23,Retinol,1.0,tag,0.5
+P467038,23,Retinol,0.6667,parsed,0.5
 P467038,0,Hyaluronic Acid,0.6,parsed,0.5
 P467038,6,Peptides,0.5667,parsed,0.5
-P500718,0,Hyaluronic Acid,1.0,tag,0.5
 P500718,1,Silicone,0.8537,parsed,0.5
 P500718,6,Peptides,0.8049,parsed,0.5
 P500718,2,Vitamin C,0.7561,parsed,0.5
+P500718,0,Hyaluronic Acid,0.6829,parsed,0.5
 P500718,19,Caffeine,0.5854,parsed,0.5
 P500718,29,Mineral Oil / Petrolatum,0.439,parsed,0.5
-P302103,0,Hyaluronic Acid,1.0,tag,0.5
+P302103,0,Hyaluronic Acid,0.4483,parsed,0.5
 P302103,9,Licorice,0.3448,parsed,0.5
 P302103,2,Vitamin C,0.2759,parsed,0.5
 P434545,3,Squalane,0.9512,parsed,0.5
@@ -596,36 +586,35 @@ P416341,29,Mineral Oil / Petrolatum,0.9756,parsed,0.5
 P416341,24,Zinc,0.561,parsed,0.5
 P416341,12,Panthenol (B5),0.2683,parsed,0.5
 P416341,25,Alcohol Denat,0.1,parsed,0.5
-P393718,23,Retinol,1.0,tag,0.5
-P479327,0,Hyaluronic Acid,1.0,tag,0.5
 P479327,3,Squalane,0.873,parsed,0.5
+P479327,0,Hyaluronic Acid,0.8413,parsed,0.5
 P479327,13,Niacinamide,0.6667,parsed,0.5
 P479327,7,Aloe,0.1746,parsed,0.5
 P415237,1,Silicone,0.9048,parsed,0.5
 P415237,9,Licorice,0.4762,parsed,0.5
 P415237,5,Green Tea,0.4286,parsed,0.5
 P415237,4,Probiotic / Ferment,0.381,parsed,0.5
-P428095,8,Lactic Acid,1.0,tag,0.5
+P428095,8,Lactic Acid,0.9333,parsed,0.5
 P428095,27,Willow Bark,0.6,parsed,0.5
-P442858,0,Hyaluronic Acid,1.0,tag,0.5
 P442858,18,Rosehip / Rose,0.9815,parsed,0.5
+P442858,0,Hyaluronic Acid,0.8519,parsed,0.5
 P442858,1,Silicone,0.5556,parsed,0.5
 P442858,3,Squalane,0.4259,parsed,0.5
 P442858,20,Urea,0.3333,parsed,0.5
 P474953,21,Adenosine,0.4412,parsed,0.5
-P456208,0,Hyaluronic Acid,1.0,tag,0.5
-P456208,15,AHA/Glycolic Acid,1.0,tag,0.5
+P456208,15,AHA/Glycolic Acid,1.0,parsed,0.5
 P456208,25,Alcohol Denat,0.963,parsed,0.5
+P456208,0,Hyaluronic Acid,0.5185,parsed,0.5
 P456208,2,Vitamin C,0.4815,parsed,0.5
 P456208,9,Licorice,0.4444,parsed,0.5
 P427397,1,Silicone,0.9697,parsed,0.5
 P427397,18,Rosehip / Rose,0.2727,parsed,0.5
 P427397,5,Green Tea,0.2424,parsed,0.5
 P427397,6,Peptides,0.1,parsed,0.5
-P482742,0,Hyaluronic Acid,1.0,tag,0.5
-P482742,10,SPF,1.0,tag,0.5
+P482742,10,SPF,1.0,parsed,0.5
 P482742,2,Vitamin C,0.5854,parsed,0.5
 P482742,9,Licorice,0.561,parsed,0.5
+P482742,0,Hyaluronic Acid,0.5366,parsed,0.5
 P482742,5,Green Tea,0.4878,parsed,0.5
 P453225,3,Squalane,0.9355,parsed,0.5
 P453225,18,Rosehip / Rose,0.6452,parsed,0.5
@@ -637,37 +626,36 @@ P411539,1,Silicone,0.8387,parsed,0.5
 P411539,26,Centella (Cica),0.6613,parsed,0.5
 P411539,21,Adenosine,0.3548,parsed,0.5
 P411539,12,Panthenol (B5),0.2258,parsed,0.5
-P448937,0,Hyaluronic Acid,1.0,tag,0.5
 P448937,3,Squalane,0.9615,parsed,0.5
 P448937,17,Ceramide,0.8269,parsed,0.5
+P448937,0,Hyaluronic Acid,0.7692,parsed,0.5
 P448937,11,Shea Butter,0.6154,parsed,0.5
 P448937,18,Rosehip / Rose,0.4808,parsed,0.5
 P448937,24,Zinc,0.1346,parsed,0.5
 P463036,11,Shea Butter,0.9487,parsed,0.5
 P463036,12,Panthenol (B5),0.6923,parsed,0.5
 P463036,17,Ceramide,0.6154,parsed,0.5
-P442594,2,Vitamin C,1.0,tag,0.5
 P442594,12,Panthenol (B5),0.3636,parsed,0.5
-P468658,15,AHA/Glycolic Acid,1.0,tag,0.5
+P442594,2,Vitamin C,0.1818,parsed,0.5
 P468658,10,SPF,0.975,parsed,0.5
 P468658,8,Lactic Acid,0.3,parsed,0.5
+P468658,15,AHA/Glycolic Acid,0.3,parsed,0.5
 P278317,7,Aloe,0.9545,parsed,0.5
 P278317,8,Lactic Acid,0.8182,parsed,0.5
 P278317,15,AHA/Glycolic Acid,0.7727,parsed,0.5
 P278317,5,Green Tea,0.5455,parsed,0.5
 P278317,9,Licorice,0.4091,parsed,0.5
 P278317,0,Hyaluronic Acid,0.1818,parsed,0.5
-P379510,0,Hyaluronic Acid,1.0,tag,0.5
-P379510,2,Vitamin C,1.0,tag,0.5
 P379510,4,Probiotic / Ferment,1.0,parsed,0.5
 P379510,25,Alcohol Denat,0.9091,parsed,0.5
 P379510,1,Silicone,0.8636,parsed,0.5
+P379510,2,Vitamin C,0.7727,parsed,0.5
+P379510,0,Hyaluronic Acid,0.7273,parsed,0.5
 P379510,21,Adenosine,0.5455,parsed,0.5
 P415747,7,Aloe,0.1,parsed,0.5
-P473267,0,Hyaluronic Acid,1.0,tag,0.5
-P473267,23,Retinol,1.0,tag,0.5
 P473267,1,Silicone,0.9804,parsed,0.5
 P473267,2,Vitamin C,0.8824,parsed,0.5
+P473267,0,Hyaluronic Acid,0.8627,parsed,0.5
 P473267,3,Squalane,0.8235,parsed,0.5
 P473267,19,Caffeine,0.6667,parsed,0.5
 P473267,6,Peptides,0.6471,parsed,0.5
@@ -686,17 +674,17 @@ P467602,4,Probiotic / Ferment,0.5,parsed,0.5
 P467602,5,Green Tea,0.4833,parsed,0.5
 P467602,12,Panthenol (B5),0.4333,parsed,0.5
 P467602,8,Lactic Acid,0.2,parsed,0.5
-P479841,2,Vitamin C,1.0,tag,0.5
 P479841,3,Squalane,0.9643,parsed,0.5
+P479841,2,Vitamin C,0.8214,parsed,0.5
 P479841,20,Urea,0.75,parsed,0.5
 P479841,0,Hyaluronic Acid,0.1786,parsed,0.5
 P421998,3,Squalane,0.9048,parsed,0.5
 P421998,18,Rosehip / Rose,0.8571,parsed,0.5
 P421998,14,Jojoba,0.7619,parsed,0.5
-P443842,23,Retinol,1.0,tag,0.5
 P443842,1,Silicone,0.8621,parsed,0.5
 P443842,3,Squalane,0.7241,parsed,0.5
 P443842,2,Vitamin C,0.5862,parsed,0.5
+P443842,23,Retinol,0.3103,parsed,0.5
 P443842,4,Probiotic / Ferment,0.2414,parsed,0.5
 P443842,0,Hyaluronic Acid,0.1724,parsed,0.5
 P443842,6,Peptides,0.1034,parsed,0.5
@@ -704,11 +692,10 @@ P472454,11,Shea Butter,0.8947,parsed,0.5
 P472454,0,Hyaluronic Acid,0.2105,parsed,0.5
 P472454,6,Peptides,0.1,parsed,0.5
 P448802,1,Silicone,1.0,parsed,0.5
-P448802,13,Niacinamide,1.0,tag,0.5
 P448802,0,Hyaluronic Acid,0.1071,parsed,0.5
-P416816,15,AHA/Glycolic Acid,1.0,tag,0.5
-P416816,16,Salicylic Acid,1.0,tag,0.5
+P416816,15,AHA/Glycolic Acid,0.84,parsed,0.5
 P416816,8,Lactic Acid,0.8,parsed,0.5
+P416816,16,Salicylic Acid,0.72,parsed,0.5
 P416816,5,Green Tea,0.28,parsed,0.5
 P454120,3,Squalane,0.9825,parsed,0.5
 P454120,13,Niacinamide,0.9474,parsed,0.5
@@ -719,10 +706,10 @@ P454120,2,Vitamin C,0.2456,parsed,0.5
 P431181,7,Aloe,0.7419,parsed,0.5
 P431181,12,Panthenol (B5),0.4194,parsed,0.5
 P431181,2,Vitamin C,0.3871,parsed,0.5
-P405599,0,Hyaluronic Acid,1.0,tag,0.5
 P405599,1,Silicone,0.9697,parsed,0.5
 P405599,3,Squalane,0.9091,parsed,0.5
-P427410,2,Vitamin C,1.0,tag,0.5
+P405599,0,Hyaluronic Acid,0.4545,parsed,0.5
+P427410,2,Vitamin C,1.0,parsed,0.5
 P427410,3,Squalane,0.9333,parsed,0.5
 P427410,0,Hyaluronic Acid,0.4667,parsed,0.5
 P472028,13,Niacinamide,0.9487,parsed,0.5
@@ -732,17 +719,17 @@ P472028,0,Hyaluronic Acid,0.2308,parsed,0.5
 P397890,14,Jojoba,0.8947,parsed,0.5
 P397890,0,Hyaluronic Acid,0.2368,parsed,0.5
 P397890,10,SPF,0.1,parsed,0.5
-P474377,0,Hyaluronic Acid,1.0,tag,0.5
 P474377,1,Silicone,0.9714,parsed,0.5
 P474377,17,Ceramide,0.6286,parsed,0.5
+P474377,0,Hyaluronic Acid,0.5429,parsed,0.5
 P474377,4,Probiotic / Ferment,0.3429,parsed,0.5
 P474377,10,SPF,0.1,parsed,0.5
 P433444,14,Jojoba,0.8409,parsed,0.5
 P433444,19,Caffeine,0.4091,parsed,0.5
 P433444,0,Hyaluronic Acid,0.3864,parsed,0.5
 P433444,10,SPF,0.1,parsed,0.5
-P500757,0,Hyaluronic Acid,1.0,tag,0.5
-P500757,23,Retinol,1.0,tag,0.5
+P500757,0,Hyaluronic Acid,1.0,parsed,0.5
+P500757,23,Retinol,0.6842,parsed,0.5
 P500757,6,Peptides,0.6316,parsed,0.5
 P500757,2,Vitamin C,0.3684,parsed,0.5
 P500757,21,Adenosine,0.3158,parsed,0.5
@@ -758,12 +745,12 @@ P423259,13,Niacinamide,0.8333,parsed,0.5
 P423259,12,Panthenol (B5),0.7222,parsed,0.5
 P423259,26,Centella (Cica),0.5556,parsed,0.5
 P423259,21,Adenosine,0.4444,parsed,0.5
-P454378,0,Hyaluronic Acid,1.0,tag,0.5
 P454378,1,Silicone,0.5405,parsed,0.5
+P454378,0,Hyaluronic Acid,0.3243,parsed,0.5
 P454378,21,Adenosine,0.2432,parsed,0.5
 P500777,2,Vitamin C,0.3704,parsed,0.5
 P500777,9,Licorice,0.2593,parsed,0.5
-P421277,28,Collagen,1.0,tag,0.5
+P421277,28,Collagen,1.0,parsed,0.5
 P421277,13,Niacinamide,0.6389,parsed,0.5
 P421277,6,Peptides,0.5833,parsed,0.5
 P421277,21,Adenosine,0.5278,parsed,0.5
@@ -778,37 +765,37 @@ P426707,0,Hyaluronic Acid,0.8148,parsed,0.5
 P426707,4,Probiotic / Ferment,0.7778,parsed,0.5
 P426707,9,Licorice,0.5556,parsed,0.5
 P426707,5,Green Tea,0.4815,parsed,0.5
-P400259,2,Vitamin C,1.0,tag,0.5
+P400259,2,Vitamin C,0.9375,parsed,0.5
 P400259,4,Probiotic / Ferment,0.8125,parsed,0.5
 P400259,9,Licorice,0.75,parsed,0.5
 P400259,5,Green Tea,0.5938,parsed,0.5
 P400259,0,Hyaluronic Acid,0.5,parsed,0.5
 P430146,3,Squalane,0.88,parsed,0.5
 P430146,18,Rosehip / Rose,0.4,parsed,0.5
-P454838,0,Hyaluronic Acid,1.0,tag,0.5
-P454838,2,Vitamin C,1.0,tag,0.5
 P454838,1,Silicone,0.9583,parsed,0.5
+P454838,2,Vitamin C,0.875,parsed,0.5
 P454838,10,SPF,0.5417,parsed,0.5
 P454838,21,Adenosine,0.5,parsed,0.5
+P454838,0,Hyaluronic Acid,0.4583,parsed,0.5
 P454838,6,Peptides,0.2083,parsed,0.5
-P456566,0,Hyaluronic Acid,1.0,tag,0.5
-P456566,2,Vitamin C,1.0,tag,0.5
 P456566,12,Panthenol (B5),0.7209,parsed,0.5
+P456566,0,Hyaluronic Acid,0.4419,parsed,0.5
 P456566,9,Licorice,0.3721,parsed,0.5
 P456566,18,Rosehip / Rose,0.2791,parsed,0.5
+P456566,2,Vitamin C,0.2326,parsed,0.5
 P456566,4,Probiotic / Ferment,0.1628,parsed,0.5
 P456566,10,SPF,0.1,parsed,0.5
-P472050,16,Salicylic Acid,1.0,tag,0.5
+P472050,16,Salicylic Acid,0.7714,parsed,0.5
 P472050,1,Silicone,0.7143,parsed,0.5
 P472050,9,Licorice,0.4286,parsed,0.5
 P472050,5,Green Tea,0.2857,parsed,0.5
 P460515,17,Ceramide,0.4444,parsed,0.5
-P475589,2,Vitamin C,1.0,tag,0.5
-P475589,13,Niacinamide,1.0,tag,0.5
 P475589,1,Silicone,0.9483,parsed,0.5
 P475589,19,Caffeine,0.8276,parsed,0.5
+P475589,2,Vitamin C,0.7931,parsed,0.5
 P475589,11,Shea Butter,0.6034,parsed,0.5
 P475589,0,Hyaluronic Acid,0.569,parsed,0.5
+P475589,13,Niacinamide,0.5517,parsed,0.5
 P475589,14,Jojoba,0.3103,parsed,0.5
 P475589,10,SPF,0.1,parsed,0.5
 P421276,1,Silicone,0.9302,parsed,0.5
@@ -816,16 +803,15 @@ P421276,3,Squalane,0.907,parsed,0.5
 P421276,8,Lactic Acid,0.8837,parsed,0.5
 P421276,15,AHA/Glycolic Acid,0.7907,parsed,0.5
 P421276,4,Probiotic / Ferment,0.6977,parsed,0.5
-P455926,23,Retinol,1.0,tag,0.5
 P455926,8,Lactic Acid,0.9318,parsed,0.5
 P455926,4,Probiotic / Ferment,0.9091,parsed,0.5
+P455926,23,Retinol,0.8636,parsed,0.5
 P455926,5,Green Tea,0.75,parsed,0.5
 P455926,7,Aloe,0.7273,parsed,0.5
 P455926,13,Niacinamide,0.6818,parsed,0.5
 P455936,11,Shea Butter,0.7333,parsed,0.5
 P455936,0,Hyaluronic Acid,0.1,parsed,0.5
-P458755,2,Vitamin C,1.0,tag,0.5
-P458755,13,Niacinamide,1.0,tag,0.5
+P458755,13,Niacinamide,0.9846,parsed,0.5
 P458755,11,Shea Butter,0.8154,parsed,0.5
 P458755,0,Hyaluronic Acid,0.6,parsed,0.5
 P458755,20,Urea,0.5538,parsed,0.5
@@ -834,14 +820,15 @@ P458755,24,Zinc,0.4462,parsed,0.5
 P458755,18,Rosehip / Rose,0.4308,parsed,0.5
 P458755,8,Lactic Acid,0.2615,parsed,0.5
 P458755,6,Peptides,0.1538,parsed,0.5
+P458755,2,Vitamin C,0.1077,parsed,0.5
 P447210,3,Squalane,0.9474,parsed,0.5
 P447210,14,Jojoba,0.7368,parsed,0.5
 P447210,12,Panthenol (B5),0.6316,parsed,0.5
 P447210,6,Peptides,0.4737,parsed,0.5
 P447210,0,Hyaluronic Acid,0.2632,parsed,0.5
-P411365,23,Retinol,1.0,tag,0.5
 P411365,1,Silicone,0.9811,parsed,0.5
 P411365,11,Shea Butter,0.8302,parsed,0.5
+P411365,23,Retinol,0.8113,parsed,0.5
 P411365,17,Ceramide,0.7736,parsed,0.5
 P411365,0,Hyaluronic Acid,0.7547,parsed,0.5
 P411365,3,Squalane,0.6981,parsed,0.5

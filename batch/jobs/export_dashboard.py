@@ -9,7 +9,7 @@
     ① 상품 x 성분 **위치가중값**
        `product_encoder.ingredient_values()` 안에서 계산되고 벡터에 들어간 뒤
        **버려진다.** 대시보드가 "이 상품에서 어떤 성분이 앞쪽에 있나" 를 말하려면
-       그 값이 필요하다. 태그로 표시된 성분은 1.0, 전성분에서만 찾은 것은 위치
+       그 값이 필요하다. 전성분 위치 기반 값만 쓴다(태그는 계약 §3.1 로 제외, 2026-09-10). 맨 앞이 1.0, 뒤로 갈수록 위치
        기반 감쇠다 — **1.0 이 곧 "함량이 많다" 가 아니다** (§주의).
 
     ② 상품 x concern 상위 2축
@@ -77,11 +77,11 @@ def export_ingredient_position(enc, path):
     rows = []
     for p in enc.products:
         vals = enc.ingredient_values(p)
-        tagged = {h for h in p["highlights"] if h in enc.tag_ing}
+        # source 는 전부 "parsed" — 인코더가 highlights 성분 태그를 더 쓰지 않는다(계약 §3.1, 2026-09-10).
+        # 열은 대시보드 스키마 호환을 위해 남긴다
         for name, v in sorted(vals.items(), key=lambda kv: -kv[1]):
             rows.append([p["product_id"], p["product_name"], p["brand_name"],
-                         name, round(float(v), 4),
-                         "tag" if name in tagged else "parsed"])
+                         name, round(float(v), 4), "parsed"])
     return write_csv(path,
                      ["product_id", "product_name", "brand_name",
                       "ingredient", "position_weight", "source"], rows)
@@ -185,7 +185,7 @@ def main():
     print(f"④ affinity_lift.csv 는 이미 나가고 있어 다시 만들지 않습니다")
     print()
     print("⚠️ 대시보드 문구로 쓸 때 주의")
-    print("  ① position_weight 1.0 은 **태그로 표시된 성분**이지 함량이 아닙니다.")
+    print("  ① position_weight 1.0 은 **전성분 맨 앞 성분**이지 함량이 아닙니다 (태그는 더 쓰지 않음, 계약 §3.1).")
     print("     전성분 순서는 함량순이지만 1% 미만은 순서가 자유라 하위는 뜻이 약합니다")
     print("  ③ 은 두 표의 **곱**입니다. '지성 피부에 세라마이드가 좋다' 가 아니라")
     print("     '지성 피부가 반응한 상품에 세라마이드가 많더라' 입니다. 인과가 아닙니다")

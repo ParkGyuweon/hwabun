@@ -12,18 +12,20 @@
 >
 > | 축 | CBF 단독 | CBF + CF | **현행 (LTR)** |
 > |---|---:|---:|---:|
-> | 오프라인 Recall@10 | 23.39% | 38.15 / 39.25% | **43.95 / 43.20%** |
-> | 리뷰 순차 재생 | 22.63% | — | **43.95 / 43.20%** |
-> | 동적 Start / Ever HR@10 | 23.39 / 28.97% | 37.4 / 40.55% | **44.05 / 50.50%** |
-> | 최다 브랜드 칸 수 | 5.92칸 | 4.43칸 | **2.62칸** |
-> | 10칸 전부 한 브랜드 | 9.8% | 3.6% | **0.1%** |
+> | 오프라인 Recall@10 | 23.39% | 38.15 / 39.25% | **43.30 / 42.60%** |
+> | 리뷰 순차 재생 | 22.63% | — | **43.30 / 42.60%** |
+> | 동적 Start / Ever HR@10 (holdout_a) | 23.39 / 28.97% | 37.4 / 40.55% | **43.65 / 49.60%** (b: 42.60 / 48.45%) |
+> | 최다 브랜드 칸 수 (09-07 측정) | 5.92칸 | 4.43칸 | **2.62칸** |
+> | 10칸 전부 한 브랜드 (09-07 측정) | 9.8% | 3.6% | **0.1%** |
 >
 > **두 값은 `holdout_a / holdout_b` 입니다.** `test` 는 소진돼 대표 지표에 쓰지
 > 않습니다 (`evaluation-framework.md` 부록 Q). CBF 단독 열만 옛 `test` 값입니다.
 >
-> **대표 지표는 `Recall@10 = 43.95%` (holdout_a 2,000명)** 이고, 확인 집합
-> `holdout_b` 에서 43.20% 입니다. 선형 대비 **+5.80%p [+4.02, +7.48]** ·
-> **+3.95%p [+1.95, +5.65]** 로 두 집합 다 CI 가 0 을 제외합니다.
+> **대표 지표는 `Recall@10 = 43.30%` (holdout_a 2,000명)** 이고, 확인 집합
+> `holdout_b` 에서 42.60% 입니다. 선형 대비 **+5.10%p [+3.25, +6.55]** ·
+> **+3.30%p [+1.52, +5.00]** 로 두 집합 다 CI 가 0 을 제외합니다.
+> (2026-09-10 갱신 — highlights 성분 태그를 벡터에서 뺀 뒤 값. 09-07 의 43.95 / 43.20% 는
+> 계약 §3.1 과 어긋난 인코더의 값이었다. `evaluation-framework.md` 부록 V)
 >
 > **바뀌는 것은 §5 처리의 4단계 하나입니다.** Redis 스키마·실시간 증분 갱신
 > (§2-1)·노출 정책·MMR·배너(§5-1)는 그대로입니다. 다만 §2 에 **`positive` 집합이
@@ -934,11 +936,12 @@ GET /api/recommend?persona_id={id}&size=10
 
 | 파라미터 | 기본 | 뜻 |
 |---|---:|---|
-| `persona_id` | — | **선택** (2026-09-09, Jira 214). 없으면 **익명 cold_start** — 상태·속성 친화도 없이 인기 prior + MMR. 페르소나 표에 **없는 값**(실회원 `accountId`)도 받는다: 속성 친화도만 빠지고, `POST /api/events` 로 쌓인 행동으로 개인화된다. **404 는 내지 않는다** — 백엔드 프록시가 회원↔페르소나 매핑 없이 호출할 수 있게 |
+| `persona_id` | — | **선택** (2026-09-09, Jira 214). **운영 합의 (2026-09-10, 백엔드·AI): 추천은 로그인 회원에게만 낸다. 비로그인 사용자는 추천을 받지 않고(백엔드 프록시가 이 API 를 부르지 않음), 행동 로그 `POST /api/events`·수집기 이벤트는 비로그인도 보낸다. 비로그인은 상세 페이지 열람까지만 가능하고 좋아요·장바구니·주문은 로그인 필요(기획 §15-11).** 아래 익명 cold_start 는 서버 능력으로 남겨 두는 것이고 화면 정책이 아니다. 없으면 **익명 cold_start** — 상태·속성 친화도 없이 인기 prior + MMR. 페르소나 표에 **없는 값**(실회원 `accountId`)도 받는다: 속성 친화도만 빠지고, `POST /api/events` 로 쌓인 행동으로 개인화된다. **404 는 내지 않는다** — 백엔드 프록시가 회원↔페르소나 매핑 없이 호출할 수 있게 |
 | `size` | 10 | 메인 목록 칸 수 |
 | `banner_slots` | 0 | 배너 칸 수 (최대 12). 0 이면 `hero`·`banners` 를 안 내린다. **> 0 이면 `reserved` 전용 칸이 배너 뒤 칸으로 가고 `items` 는 순수 순위** (프론트 확정 2026-09-09, Jira 218) |
 | `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). **자리 확정 (2026-09-09): `banner_slots > 0` 이면 배너 뒤 칸, 아니면 메인 안.** 이전 메모 — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 카탈로그에 **없으면 칸은 일반 순위로 채워지고** 응답 `reserved_filled` 가 0 이다 — 원천 200개는 그 상태. **등록 상품**(§5-2, Jira 216)이 들어오면 채워진다. 시연용 자사 브랜드 **SSAFY Beauty 8개**는 시작 시 이미 편입돼 있어 `reserved=2` 면 칸 9·10 이 SSAFY 상품이다 |
 | `axes` | `concern,segment` | 축 배너 순환 순서. `concern · ingredient · clean · price_bin · category · segment` 중 쉼표 구분, 그 외 값은 **422** `INVALID_AXES`. 축 칸(`banner_slots − reserved`)을 이 순서로 돌며 채운다 |
+| `hero` | `top` | **히어로 정책 (2026-09-10, Jira 237).** `top` = `items[0]` 에 축 문구(원안). `new_brand` = 신규 상품(지지자 <3 또는 어휘집 밖 브랜드) 중 이 사용자 점수가 가장 높은 것을 히어로로 — 배너 행이 화면에서 빠져(09-10 기획 검토) 전용 칸이 사라진 상태에서 신규 브랜드가 배너에 나올 자리가 히어로뿐이라서. 기획 §15-10 "배너에 신규 포함" 은 **포함으로 결정(09-10)**. 전환·비활성 제외, 신규가 없으면 `top` 으로 돌아가며 응답 `hero_policy` 가 실제 적용값이다. 히어로 상품은 `banners` 와 겹치지 않는다. `items` 는 정책과 무관(순위 불변). 그 외 값은 **422** `INVALID_HERO`. 배너 행이 살아나면 `top` 으로 돌린다 |
 
 > **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
 > 중복을 배제해야** 합니다. 엔드포인트를 나누면 같은 상품이 두 자리에 뜨거나
@@ -1067,12 +1070,16 @@ GET /api/recommend?persona_id={id}&size=10
   ],
 
   "banner_slots": 6, "axes": ["concern", "segment"], "banner_list_id": "banner_row",
+  "hero_policy": "top",
   "hero": {
     "product_id": "P420652",
     "banner_type": "concern",
     "banner_value": "Pores",
-    "trait_source": "session"
+    "trait_source": "session",
+    "hero_policy": "top"
   },
+  // hero=new_brand 이면 hero 에 reserved:true · product_name · brand_name · score · reason · product_source 가 더 실린다
+  // (items 밖 상품이라 프론트가 이름·가격을 items 에서 못 찾는다)
   "banners": [
     { "banner_slot": 1, "banner_type": "concern",   "banner_value": "Pores",
       "product_id": "P310022", "product_name": "…", "brand_name": "…", "score": 0.7112,
@@ -1229,8 +1236,8 @@ r/200 → r/208 로 흔들리고, **그것만으로 트리 모델이 순위를 �
 > | 확정 | 구현 |
 > |---|---|
 > | 전용 칸은 **배너 칸** | `banner_slots=6&reserved=2` → 칸 5·6 `new_brand`(`banner_value: null`, 키 유지). `items` 는 순수 순위(reserved=0 과 동일). `list_id=banner_row` 로 CTR 을 따로 본다 |
-> | `hero.banner_type` **항상** 있음 | `items[0]` 에 사용자 축과 맞는 값, 없으면 상품 자신의 값(concern → ingredient → clean → category → price_bin). 이미지 변형 5종 선택용 |
-> | 성분 축은 **위치가중 ≥ 0.3** | `ingredient` 소속은 전성분 앞 30% 성분만 (`INGREDIENT_MIN_POSITION`). 대시보드 미량 경고와 충돌 안 함 |
+> | `hero.banner_type` **항상** 있음 | `items[0]` 에 사용자 축과 맞는 값, 없으면 상품 자신의 값(concern → ingredient → clean → category → price_bin). 이미지 변형 5종 선택용. **`hero=new_brand`(Jira 237) 면 대상이 items[0] 대신 점수 최고 신규 상품**이고 축 문구 규칙은 같다 |
+> | 성분 축은 **위치가중 ≥ 0.3** | `ingredient` 소속은 전성분 앞 30% 성분만 (`INGREDIENT_MIN_POSITION`), **첫 값은 위치가중 내림차순**(09-10 수정 — 전에는 어휘집 등재 순서라 앞 30% 에 히알루론산이 있으면 그것이 문구가 됐다. 원천 74개 값이 바뀜, 프론트와 동일 규칙). 대시보드 미량 경고와 충돌 안 함 |
 > | `reason` 은 **key 하나** | 아이템·배너 모두 `attribute → content → cf → new_brand → popular` 우선순위로 하나. 문장은 프론트가 다시 쓴다 |
 >
 > **축 값은 어디서 오나 (`trait_source`)** — `session`: 시드 상품(긍정 가중)에서 가장 많은 값(concern·ingredient·clean·category·price_bin) ·
@@ -1275,6 +1282,11 @@ r/200 → r/208 로 흔들리고, **그것만으로 트리 모델이 순위를 �
 
 `items` 와 `banners` 의 `product_id` 는 **서로 겹치지 않습니다.** `hero` 만
 예외입니다 — `items[0]` 에 축 문구를 얹은 것이므로 같은 상품일 수 있습니다.
+`hero=new_brand` 인 히어로는 `banners` 와 겹치지 않게 뺍니다(`items` 와는 겹칠 수 있음).
+
+> **배너 행 상태 (2026-09-10):** 프론트 공유로 배너 행 6칸(전용 칸 5·6)이 09-10 기획 검토에서 화면에서
+> 빠졌다. `banner_slots=6&reserved=2` 규격은 계약·서버에 그대로 남고(살아나면 즉시 쓸 수 있음), 화면은
+> 히어로 하나 + `hero=new_brand` 로 신규 브랜드 노출을 대신한다. 기획 문서 반영은 확인 필요.
 
 ### 전용 칸 (`reserved`) — 신규 브랜드 비율에 따라 바꿉니다
 
@@ -1301,7 +1313,7 @@ CF 를 켜면 이력이 없는 신규 브랜드 상품이 밀려납니다. 점�
 |---|---|
 | 신규 상품 | 지지자 < `CF_MIN_SUPPORT`(3명) **또는** 브랜드가 어휘집 밖. 둘 다 이미 있는 값이라 새 산출물이 없다 |
 | 신규가 모자라면 | 남은 자리를 일반 후보 점수순으로 채운다. **칸이 비지 않는다** |
-| 지금 카탈로그 | 200개 전부 지지자 520명 이상·어휘집 안 → 신규 0개 → **`reserved=2` 와 `0` 이 같은 결과**. 골든·대표 지표(43.95%)가 한 자리도 안 바뀐다 |
+| 지금 카탈로그 | 200개 전부 지지자 520명 이상·어휘집 안 → 신규 0개 → **`reserved=2` 와 `0` 이 같은 결과**. 골든·대표 지표(당시 43.95%)가 한 자리도 안 바뀐다 |
 | 기본값 | 코드 `RESERVED = 0`. API 기본 2 는 서빙 설정에서 준다 |
 | 응답 | 전용 칸 항목에 `reserved: true` (`rank(flags=True)`) |
 | 검증 | `python batch/jobs/eval_persona_feature.py --split holdout_a --reserved 2` — "LTR" 행과 "LTR · 전용 칸" 행이 같아야 한다. 부하 조건(신규 10/30/50%)은 `Research/eval/eval_ltr_new_brand_20260907.py` |

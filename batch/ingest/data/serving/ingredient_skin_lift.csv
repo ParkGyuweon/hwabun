@@ -1,29 +1,29 @@
 skin_type,ingredient,share,n_products
-dry,Hyaluronic Acid,0.13789,16
-dry,Squalane,0.11956,12
-dry,Silicone,0.1067,9
-dry,Shea Butter,0.09198,9
-dry,Panthenol (B5),0.06098,11
-dry,Niacinamide,0.06097,6
-dry,Green Tea,0.04416,7
-dry,Aloe,0.0418,6
-dry,Probiotic / Ferment,0.039,5
-dry,Licorice,0.03241,6
-dry,Allantoin,0.02908,5
-dry,Ceramide,0.02417,5
-normal,Hyaluronic Acid,0.12918,10
-normal,Vitamin C,0.11318,11
-normal,Silicone,0.09239,6
-normal,Niacinamide,0.08473,5
-normal,Aloe,0.06687,5
-normal,Adenosine,0.05046,6
-normal,Peptides,0.04209,5
-oily,Salicylic Acid,0.15632,11
-oily,Hyaluronic Acid,0.10683,13
-oily,Silicone,0.10241,7
-oily,AHA/Glycolic Acid,0.08703,6
-oily,Lactic Acid,0.06518,6
-oily,SPF,0.05495,8
-oily,Aloe,0.05021,5
-oily,Licorice,0.03876,6
-oily,Green Tea,0.02703,5
+dry,Squalane,0.12647,12
+dry,Silicone,0.11286,9
+dry,Hyaluronic Acid,0.11151,16
+dry,Shea Butter,0.0973,9
+dry,Panthenol (B5),0.0645,11
+dry,Niacinamide,0.06449,6
+dry,Green Tea,0.04672,7
+dry,Aloe,0.04421,6
+dry,Probiotic / Ferment,0.04125,5
+dry,Licorice,0.03428,6
+dry,Allantoin,0.03076,5
+dry,Ceramide,0.02556,5
+normal,Hyaluronic Acid,0.11079,10
+normal,Silicone,0.09956,6
+normal,Niacinamide,0.08926,5
+normal,Vitamin C,0.08633,11
+normal,Aloe,0.07205,5
+normal,Adenosine,0.05438,6
+normal,Peptides,0.04535,5
+oily,Salicylic Acid,0.12166,10
+oily,Silicone,0.11269,7
+oily,Hyaluronic Acid,0.1105,13
+oily,AHA/Glycolic Acid,0.07839,6
+oily,Lactic Acid,0.06919,6
+oily,Aloe,0.05525,5
+oily,Licorice,0.04265,6
+oily,SPF,0.03885,8
+oily,Green Tea,0.02974,5
