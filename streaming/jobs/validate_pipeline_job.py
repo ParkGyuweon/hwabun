@@ -31,12 +31,14 @@ DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
 DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
+DEFAULT_BRAND_DAILY_PATH = "data/marts/brand_daily_kpi"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
 DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
+DEFAULT_TIME_ZONE = "Asia/Seoul"
 
 
 @dataclass(frozen=True)
@@ -57,12 +59,14 @@ class ValidatePipelineConfig:
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
+    brand_daily_path: str = DEFAULT_BRAND_DAILY_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
     cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
     baseline_path: str = DEFAULT_BASELINE_PATH
+    time_zone: str = DEFAULT_TIME_ZONE
     report_path: str | None = None
     require_events: bool = False
 
@@ -84,6 +88,7 @@ class ValidatePipelineConfig:
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
+            "brand_daily_path": self.brand_daily_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
             "banner_daily_path": self.banner_daily_path,
@@ -94,6 +99,8 @@ class ValidatePipelineConfig:
         for name, value in paths.items():
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
+        if not isinstance(self.time_zone, str) or not self.time_zone.strip():
+            raise ValueError("time_zone must be a non-empty string")
         if self.report_path is not None and (
             not isinstance(self.report_path, str) or not self.report_path.strip()
         ):
@@ -168,6 +175,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("FUNNEL_DAILY_KPI_PATH", DEFAULT_FUNNEL_DAILY_PATH),
     )
     parser.add_argument(
+        "--brand-daily-path",
+        default=_env("BRAND_DAILY_KPI_PATH", DEFAULT_BRAND_DAILY_PATH),
+    )
+    parser.add_argument(
         "--ingredient-weekly-path",
         default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
     )
@@ -179,6 +190,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
     parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
     parser.add_argument("--baseline-path", default=_env("ANALYTICS_BASELINE_PATH", DEFAULT_BASELINE_PATH))
+    parser.add_argument(
+        "--time-zone",
+        default=_env("ANALYTICS_TIME_ZONE", DEFAULT_TIME_ZONE),
+        help="Build Job과 같은 값이어야 브랜드 KPI 재계산 비교가 성립한다",
+    )
     parser.add_argument(
         "--report-path",
         default=os.getenv("PIPELINE_VALIDATION_REPORT_PATH"),
@@ -211,12 +227,14 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
+        brand_daily_path=args.brand_daily_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
         cross_brand_daily_path=args.cross_brand_daily_path,
         baseline_path=args.baseline_path,
+        time_zone=args.time_zone,
         report_path=args.report_path,
         require_events=args.require_events,
     )
@@ -350,7 +368,11 @@ def _unmatched_banner_click_count(product_fact: Any) -> int:
     return clicks.join(impressions, condition, "left_anti").count()
 
 
-def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dict[str, Any]:
+def validate_frames(
+    frames: dict[str, Any],
+    require_events: bool = False,
+    time_zone: str = DEFAULT_TIME_ZONE,
+) -> dict[str, Any]:
     """Run cross-dataset checks and return a JSON-serializable report."""
 
     from pyspark.sql import functions as F
@@ -371,6 +393,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
     funnel_session = frames["funnel_session"]
     product_daily = frames["product_daily"]
     funnel_daily = frames["funnel_daily"]
+    brand_daily = frames["brand_daily"]
     ingredient_weekly = frames["ingredient_weekly"]
     category_price = frames["category_price"]
     banner_daily = frames["banner_daily"]
@@ -394,6 +417,7 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
         "funnel_session": funnel_session.count(),
         "product_daily": product_daily.count(),
         "funnel_daily": funnel_daily.count(),
+        "brand_daily": brand_daily.count(),
         "ingredient_weekly": ingredient_weekly.count(),
         "category_price": category_price.count(),
         "banner_daily": banner_daily.count(),
@@ -863,6 +887,80 @@ def validate_frames(frames: dict[str, Any], require_events: bool = False) -> dic
             "funnel_daily_kpi grain is unique",
         )
     )
+    brand_grain = [
+        "event_date_kst", "brand_id", "actor_type", "source",
+        "scenario_id", "simulation_run_id",
+    ]
+    checks.append(
+        _check(
+            "brand_daily_grain_is_unique",
+            _duplicate_count(brand_daily, brand_grain) == 0,
+            "brand_daily_kpi configured grain is unique",
+        )
+    )
+    invalid_brand_ids = brand_daily.where(
+        F.col("brand_id").isNull()
+        | (F.length(F.trim(F.col("brand_id"))) == 0)
+    ).count()
+    checks.append(_check(
+        "brand_daily_brand_id_is_valid",
+        invalid_brand_ids == 0,
+        f"invalid_rows={invalid_brand_ids}",
+    ))
+    invalid_brand_counts = brand_daily.where(
+        (F.col("add_to_cart_sessions") > F.col("product_view_sessions"))
+        | (F.col("information_view_sessions") > F.col("product_view_sessions"))
+    ).count()
+    checks.append(_check(
+        "brand_daily_counts_are_bounded",
+        invalid_brand_counts == 0,
+        f"invalid_rows={invalid_brand_counts}",
+    ))
+    rate_columns = [
+        "detail_entry_rate", "information_view_rate", "view_to_cart_rate"
+    ]
+    invalid_brand_rates = brand_daily.where(
+        F.greatest(*[
+            F.when(
+                F.col(column).isNotNull()
+                & ~F.col(column).between(0.0, 1.0),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+            for column in rate_columns
+        ]) == 1
+    ).count()
+    invalid_zero_denominators = brand_daily.where(
+        ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
+        | ((F.col("product_view_sessions") == 0) & (
+            F.col("information_view_rate").isNotNull()
+            | F.col("view_to_cart_rate").isNotNull()
+        ))
+    ).count()
+    checks.append(_check(
+        "brand_daily_rates_follow_contract",
+        invalid_brand_rates == 0 and invalid_zero_denominators == 0,
+        f"out_of_range={invalid_brand_rates}; non_null_zero_denominator={invalid_zero_denominators}",
+    ))
+
+    try:
+        from .build_marts_job import _brand_daily_kpi
+    except ImportError:
+        from build_marts_job import _brand_daily_kpi
+    expected_brand = _brand_daily_kpi(product_fact, funnel_session, time_zone)
+    comparison_columns = [
+        column for column in brand_daily.columns if column != "mart_processed_at"
+    ]
+    brand_difference_count = (
+        expected_brand.select(*comparison_columns)
+        .exceptAll(brand_daily.select(*comparison_columns)).count()
+        + brand_daily.select(*comparison_columns)
+        .exceptAll(expected_brand.select(*comparison_columns)).count()
+    )
+    checks.append(_check(
+        "brand_daily_is_deterministic_from_inputs",
+        brand_difference_count == 0,
+        f"differing_rows={brand_difference_count}; mart_processed_at excluded",
+    ))
     checks.append(
         _check(
             "ingredient_weekly_grain_is_unique",
@@ -1109,6 +1207,7 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "funnel_session": config.funnel_session_path,
         "product_daily": config.product_daily_path,
         "funnel_daily": config.funnel_daily_path,
+        "brand_daily": config.brand_daily_path,
         "ingredient_weekly": config.ingredient_weekly_path,
         "category_price": config.category_price_path,
         "banner_daily": config.banner_daily_path,
@@ -1126,7 +1225,7 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
     except Exception:
         # 기준선을 만들지 않은 실행에서는 경로가 없다. 검증은 그대로 진행한다.
         pass
-    return validate_frames(frames, config.require_events)
+    return validate_frames(frames, config.require_events, config.time_zone)
 
 
 def main(argv: list[str] | None = None) -> None:
