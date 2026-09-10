@@ -1,20 +1,74 @@
 /*
- * 광고 배너 — 올리브영 배너 관행을 따른 레이아웃.
- * 관찰 근거: docs/planning/ssafy-beauty-creative-plan.md §10.
+ * 광고 배너. 올리브영 기획전 배너의 틀 (docs/planning/ssafy-beauty-creative-plan.md §10, 참고 이미지 2026-09-10).
  *
- * 이미지에 글자를 굽지 않는다. 배경 타일 + 제품 컷아웃만 이미지이고, 킥커·헤드라인·가격·CTA 는
- * 전부 이 CSS 로 얹는다. 그래야 같은 상품을 사용자 성향에 따라 다른 배너로 보여줄 수 있다.
+ *   파스텔 단색 배경 · 좌상단 브랜드명 · 왼쪽 큰 헤드라인 두 줄 · 가격·용량 · 오른쪽 단 위의 제품 · 우상단 원형 스티커
+ *
+ * 이미지에 글자를 굽지 않는다. 배경은 색 하나, 제품은 컷아웃 한 장이고 나머지는 전부 CSS 다.
+ * 그래야 같은 상품을 성향에 따라 다른 배너로 보여줄 수 있다.
+ *
+ * 변형(data-variant)마다 색 세 개만 바뀐다:
+ *   --ad-bg   배경        --ad-em  강조 글자·CTA        --ad-podium  단·원판
  */
 
 .ad {
+  --ad-bg: #f1ece2;
+  --ad-em: #23252a;
+  --ad-podium: #e3dccd;
+  --ad-ink: #23252a;
+  --ad-soft: #5c626c;
   position: relative;
-  border-radius: 18px;
+  border-radius: 20px;
   overflow: hidden;
-  background: var(--color-surface, #fff);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 10px 28px rgb(0 0 0 / 0.07);
+  background: var(--ad-bg);
+  color: var(--ad-ink);
+}
+
+/* 변형 색. 계획 §10-5 · 가격=아이보리, 성분=세이지, 고민=고민별 파스텔, 같은 피부=살구, 스토리=리넨 */
+.ad--price {
+  --ad-bg: #f3eee4;
+  --ad-em: #6b5638;
+  --ad-podium: #e6dfd0;
+}
+.ad--ingredient {
+  --ad-bg: #d9e6d6;
+  --ad-em: #3f6b3a;
+  --ad-podium: #c6d8c2;
+}
+.ad--concern {
+  --ad-bg: #e5dff2;
+  --ad-em: #4d3f7a;
+  --ad-podium: #d5cde9;
+}
+.ad--concern[data-concern='Dryness'] {
+  --ad-bg: #d8e8f2;
+  --ad-em: #2f5673;
+  --ad-podium: #c4d9e8;
+}
+.ad--concern[data-concern='Dark spots'],
+.ad--concern[data-concern='Dullness/Uneven Texture'] {
+  --ad-bg: #f7e4dc;
+  --ad-em: #8a4a3a;
+  --ad-podium: #efd2c6;
+}
+.ad--concern[data-concern='Pores'],
+.ad--concern[data-concern='Acne/Blemishes'] {
+  --ad-bg: #dcece5;
+  --ad-em: #2f6653;
+  --ad-podium: #c8e0d5;
+}
+.ad--segment {
+  --ad-bg: #f6e5d5;
+  --ad-em: #8a5a3a;
+  --ad-podium: #efd6c0;
+}
+.ad--story {
+  --ad-bg: #ebe6db;
+  --ad-em: #23252a;
+  --ad-podium: #ddd6c8;
 }
 
 .ad__hit {
+  position: relative;
   display: grid;
   width: 100%;
   padding: 0;
@@ -26,321 +80,252 @@
   cursor: pointer;
 }
 
-.ad__bg {
+/* ---------- 좌상단 브랜드 · 우상단 스티커 ---------- */
+
+.ad__brand {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-}
-
-/* 배경 위에 아주 옅은 흰 막. 파스텔 배경에서도 글자가 읽힌다 */
-.ad__hit::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, rgb(255 255 255 / 0.36) 46%, rgb(255 255 255 / 0.1) 100%);
-}
-
-.ad__top,
-.ad__copy,
-.ad__stage,
-.ad__price,
-.ad__foot,
-.ad__cta {
-  position: relative;
-  z-index: 2;
-}
-
-/* ---------- 상단: 워드마크 + 원형 배지 ---------- */
-
-.ad__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.ad__wordmark {
+  top: 22px;
+  left: 28px;
+  z-index: 3;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #23252a;
+  color: var(--ad-ink);
 }
 
+/* 올리브영식 원형 스티커. 순위·할인은 절대 넣지 않는다. 축 이름만 */
 .ad__badge {
-  display: inline-grid;
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  z-index: 3;
+  display: grid;
   place-items: center;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: #23252a;
-  color: #fff;
-  font-size: 11px;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ad-em);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-align: center;
+  padding: 6px;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.08);
+  transform: rotate(6deg);
 }
 
-.ad--story .ad__badge {
-  background: #a8c96e;
-  color: #23252a;
-}
-.ad--segment .ad__badge {
-  background: #e68fa1;
-}
+/* ---------- 왼쪽 문구 ---------- */
 
-/* ---------- 문구 ---------- */
+.ad__copy {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  min-width: 0;
+}
 
 .ad__kicker {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 13px;
-  font-weight: 500;
-  color: #5c626c;
+  font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--ad-em);
 }
 
 .ad__head {
   margin: 0;
-  font-size: 22px;
+  display: block;
+  max-width: 9em;
+  font-size: 44px;
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.035em;
+  color: var(--ad-ink);
+  word-break: keep-all;
+}
+
+.ad__head-em {
   font-weight: 700;
-  line-height: 1.32;
-  letter-spacing: -0.025em;
-  color: #23252a;
+  color: var(--ad-em);
 }
 
-/* 핵심 낱말만 하이라이트 박스. 올리브영이 검정 박스 + 흰 글씨로 쓰는 방식 */
-.ad__mark {
-  display: inline-block;
-  padding: 2px 9px 3px;
-  margin-right: 2px;
-  border-radius: 7px;
-  background: #23252a;
-  color: #fff;
+.ad__sub {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 10px 0 0;
 }
-
-.ad--ingredient .ad__mark {
-  background: #5d7a2e;
-}
-.ad--concern .ad__mark {
-  background: #23252a;
-}
-.ad--price .ad__mark {
-  background: #8a6a3a;
-}
-.ad--segment .ad__mark {
-  background: #c2637a;
-}
-.ad--story .ad__mark {
-  background: #23252a;
-}
-
-.ad__rest {
-  white-space: pre-wrap;
-}
-
-/* ---------- 제품: 흰 판 위에 ---------- */
-
-.ad__stage {
-  position: relative;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: radial-gradient(120% 90% at 50% 42%, #fff 0%, #fff 58%, rgb(255 255 255 / 0.66) 100%);
-}
-
-.ad__product {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 12px 16px rgb(0 0 0 / 0.1));
-}
-
-.ad__prop {
-  position: absolute;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.12));
-}
-
-/* ---------- 가격 ---------- */
 
 .ad__price {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-}
-
-.ad__price-num {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  color: #23252a;
+  color: var(--ad-ink);
 }
 
-/* 가격 축 배너만 크게. 할인이 아니라 정가를 크게 쓴다 */
-.ad__price-big {
-  font-size: 40px;
+/* 가격 축만 크게. 할인이 아니라 정가를 크게 쓴다 */
+.ad__price--big {
+  font-size: 34px;
   font-weight: 800;
-  line-height: 1;
   letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  color: #23252a;
 }
 
 .ad__size {
-  font-size: 12px;
-  color: #5c626c;
-  font-variant-numeric: tabular-nums;
-}
-
-.ad__name {
-  flex-basis: 100%;
   font-size: 13px;
-  font-weight: 500;
-  color: #23252a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--ad-soft);
+  font-variant-numeric: tabular-nums;
 }
 
 .ad__foot {
   margin: 0;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: #6e6e73;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ad-soft);
 }
 
-/* ---------- 하단 CTA 바 ---------- */
-
+/* CTA 는 작은 알약. 배너 전체가 눌리므로 안내일 뿐이다 */
 .ad__cta {
-  display: flex;
+  justify-self: start;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 13px 14px;
-  background: #23252a;
+  margin-top: 12px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--ad-em);
   color: #fff;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .ad__cta i {
   font-style: normal;
-  font-size: 11px;
+  font-size: 15px;
+  line-height: 1;
   transition: transform 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .ad:hover .ad__cta i {
-  transform: translateY(2px);
+  transform: translateX(3px);
 }
 
-.ad--story .ad__cta {
-  background: #5d7a2e;
+/* ---------- 오른쪽 제품: 단 위에 ---------- */
+
+.ad__stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: end center;
+  min-width: 0;
 }
-.ad--segment .ad__cta {
-  background: #c2637a;
+
+/* 뒤 큰 원판. 참고 배너의 원·달 모양 장식 자리 */
+.ad__disc {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  width: 78%;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ad-podium) 70%, #ffffff 30%);
+}
+
+/* 단. 위는 밝고 옆면은 배경보다 한 톤 짙게 */
+.ad__podium {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 70%;
+  height: 22%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.85) 0%, var(--ad-podium) 38%, var(--ad-podium) 100%);
+}
+
+.ad__product {
+  position: relative;
+  z-index: 2;
+  width: 62%;
+  max-height: 88%;
+  object-fit: contain;
+  object-position: bottom;
+  filter: drop-shadow(0 18px 22px rgb(0 0 0 / 0.16));
+  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* 흰 배경 팩샷은 곱하기로 얹어 흰 상자를 지운다. 파스텔 배경에서만 통하는 방법이다 */
+.ad__product--packshot {
+  mix-blend-mode: multiply;
+  filter: none;
+}
+
+.ad:hover .ad__product {
+  transform: translateY(-4px);
+}
+
+.ad__prop {
+  position: absolute;
+  z-index: 3;
+  right: 8%;
+  bottom: 14%;
+  width: 30%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 12px rgb(0 0 0 / 0.14));
 }
 
 /* ---------- 히어로: 가로 ---------- */
 
 .ad--hero .ad__hit {
-  grid-template-areas:
-    'top    stage'
-    'copy   stage'
-    'price  stage'
-    'foot   stage'
-    'cta    cta';
-  grid-template-columns: minmax(0, 1fr) 42%;
-  grid-template-rows: auto auto auto 1fr auto;
-  column-gap: 18px;
-  padding: 22px 0 0 26px;
+  grid-template-columns: minmax(0, 46%) minmax(0, 54%);
+  grid-template-areas: 'copy stage';
+  min-height: 360px;
 }
 
-.ad--hero .ad__top {
-  grid-area: top;
-  padding-right: 26px;
-  margin-bottom: 14px;
-}
 .ad--hero .ad__copy {
   grid-area: copy;
-  margin-bottom: 16px;
+  padding: 72px 20px 40px 40px;
 }
-.ad--hero .ad__head {
-  font-size: 27px;
-}
-.ad--hero .ad__price {
-  grid-area: price;
-  margin-bottom: 8px;
-}
-.ad--hero .ad__foot {
-  grid-area: foot;
-  padding-bottom: 18px;
-}
+
 .ad--hero .ad__stage {
   grid-area: stage;
-  align-self: stretch;
-  margin: 0 0 0 0;
-  border-radius: 14px 0 0 14px;
-  padding: 14px;
-  min-height: 230px;
-}
-.ad--hero .ad__cta {
-  grid-area: cta;
-  margin-top: 0;
-}
-.ad--hero .ad__prop {
-  width: 34%;
-  right: 6%;
-  bottom: 8%;
+  padding: 56px 24px 0;
 }
 
-/* ---------- 카드: 세로 4:5 ---------- */
+/* ---------- 카드: 세로 ---------- */
 
 .ad--card .ad__hit {
-  grid-template-rows: auto auto 1fr auto auto auto;
-  padding: 16px 16px 0;
-  row-gap: 0;
+  grid-template-areas:
+    'stage'
+    'copy';
+  grid-template-rows: 1fr auto;
+  aspect-ratio: 4 / 5;
 }
 
-.ad--card .ad__top {
-  margin-bottom: 10px;
-}
-.ad--card .ad__copy {
-  margin-bottom: 12px;
-}
-.ad--card .ad__head {
-  font-size: 19px;
-}
 .ad--card .ad__stage {
-  aspect-ratio: 1 / 1;
-  padding: 10px;
-  margin-bottom: 12px;
+  grid-area: stage;
+  padding: 64px 20px 0;
 }
-.ad--card .ad__price {
-  margin-bottom: 4px;
+
+.ad--card .ad__copy {
+  grid-area: copy;
+  padding: 16px 20px 20px;
 }
-.ad--card .ad__price-big {
-  font-size: 32px;
+
+.ad--card .ad__head {
+  font-size: 22px;
 }
-.ad--card .ad__foot {
-  margin-bottom: 12px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.ad--card .ad__cta {
-  margin: 0 -16px;
-}
-.ad--card .ad__prop {
-  width: 42%;
-  right: 2%;
-  bottom: 2%;
+
+.ad--card .ad__badge {
+  width: 56px;
+  height: 56px;
+  font-size: 11px;
 }
 
 /* ---------- 배너 영역 배치 ---------- */
@@ -348,54 +333,43 @@
 .ads {
   display: grid;
   gap: 16px;
-  margin: 0 0 34px;
 }
 
 .ads__hero {
-  min-height: 300px;
-}
-
-.ads__row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  min-height: 360px;
 }
 
 @media (max-width: 760px) {
   .ad--hero .ad__hit {
-    grid-template-areas:
-      'top'
-      'copy'
-      'stage'
-      'price'
-      'foot'
-      'cta';
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto auto auto;
-    padding: 16px 16px 0;
-  }
-  .ad--hero .ad__top {
-    padding-right: 0;
+    grid-template-areas:
+      'stage'
+      'copy';
+    min-height: 0;
   }
   .ad--hero .ad__stage {
     aspect-ratio: 4 / 3;
-    border-radius: 14px;
-    margin-bottom: 12px;
-    min-height: 0;
+    padding: 64px 24px 0;
   }
-  .ad--hero .ad__cta {
-    margin: 0 -16px;
+  .ad--hero .ad__copy {
+    padding: 16px 22px 24px;
   }
-  .ad--hero .ad__head {
-    font-size: 22px;
+  .ad__head {
+    font-size: 26px;
+  }
+  .ad__price--big {
+    font-size: 28px;
+  }
+  .ad__badge {
+    width: 56px;
+    height: 56px;
+    font-size: 11px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ad__cta i {
+  .ad__cta i,
+  .ad__product {
     transition: none;
   }
 }
