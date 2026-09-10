@@ -145,9 +145,17 @@ class CleanEventsConfigTest(unittest.TestCase):
         self.assertIn("banner_impression", PRODUCT_ID_REQUIRED_EVENTS)
         self.assertIn("banner_click", PRODUCT_ID_REQUIRED_EVENTS)
         self.assertEqual(
-            {"page_view", "section_view", "section_dwell"},
+            {
+                "page_view",
+                "section_view",
+                "section_dwell",
+                "scroll_depth",
+                "scroll_pause",
+            },
             set(PRODUCT_DETAIL_SCOPED_EVENTS),
         )
+        self.assertNotIn("scroll_depth", PRODUCT_ID_REQUIRED_EVENTS)
+        self.assertNotIn("scroll_pause", PRODUCT_ID_REQUIRED_EVENTS)
 
     def test_canonical_order_matches_team_contract(self):
         self.assertEqual(

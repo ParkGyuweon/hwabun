@@ -127,7 +127,13 @@ class EventMappingConsistencyTest(unittest.TestCase):
         ]
 
         self.assertEqual(
-            {"page_view", "section_view", "section_dwell"},
+            {
+                "page_view",
+                "section_view",
+                "section_dwell",
+                "scroll_depth",
+                "scroll_pause",
+            },
             {case["event_name"] for case in conditional_cases},
         )
         for case in conditional_cases:

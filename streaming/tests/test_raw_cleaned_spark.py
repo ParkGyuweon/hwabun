@@ -76,6 +76,33 @@ class RawToCleanedSparkTest(unittest.TestCase):
             "properties": properties,
         }
 
+    def _kafka_frame(self, payloads):
+        schema = StructType(
+            [
+                StructField("key", BinaryType(), True),
+                StructField("value", BinaryType(), True),
+                StructField("topic", StringType(), False),
+                StructField("partition", IntegerType(), False),
+                StructField("offset", LongType(), False),
+                StructField("timestamp", TimestampType(), False),
+                StructField("timestampType", IntegerType(), False),
+            ]
+        )
+        now = datetime(2026, 9, 9, 1, 0, tzinfo=timezone.utc)
+        rows = [
+            (
+                b"session-150",
+                json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+                "activity-events",
+                index % 2,
+                index,
+                now,
+                0,
+            )
+            for index, payload in enumerate(payloads)
+        ]
+        return self.spark.createDataFrame(rows, schema)
+
     def test_raw_is_lossless_and_q2_routes_banner_duplicates_and_errors(self):
         first = self._event("banner-duplicate")
         later = self._event(
@@ -123,32 +150,7 @@ class RawToCleanedSparkTest(unittest.TestCase):
             missing_properties,
         ]
         raw_json = [json.dumps(payload, separators=(",", ":")) for payload in payloads]
-        schema = StructType(
-            [
-                StructField("key", BinaryType(), True),
-                StructField("value", BinaryType(), True),
-                StructField("topic", StringType(), False),
-                StructField("partition", IntegerType(), False),
-                StructField("offset", LongType(), False),
-                StructField("timestamp", TimestampType(), False),
-                StructField("timestampType", IntegerType(), False),
-            ]
-        )
-        now = datetime(2026, 9, 9, 1, 0, tzinfo=timezone.utc)
-        kafka_rows = [
-            (
-                b"session-150",
-                value.encode("utf-8"),
-                "activity-events",
-                index % 2,
-                index,
-                now,
-                0,
-            )
-            for index, value in enumerate(raw_json)
-        ]
-
-        kafka = self.spark.createDataFrame(kafka_rows, schema)
+        kafka = self._kafka_frame(payloads)
         raw = build_raw_events_frame(kafka, "test-cluster")
         frames = build_processed_frames(raw, "Asia/Seoul")
 
@@ -176,6 +178,50 @@ class RawToCleanedSparkTest(unittest.TestCase):
         self.assertEqual("banner-duplicate", duplicate["event_id"])
         self.assertEqual(2, duplicate["canonical_rank"])
         self.assertEqual(2, duplicate["candidate_count"])
+
+    def test_scroll_product_scope_depends_on_page_type(self):
+        events = []
+        for event_name, intent in (
+            ("scroll_depth", "exposure"),
+            ("scroll_pause", "interest"),
+        ):
+            platform = self._event(
+                f"{event_name}-platform",
+                event_name=event_name,
+                intent=intent,
+                product_id=None,
+                properties={"depth_percent": 50},
+            )
+            detail = self._event(
+                f"{event_name}-detail",
+                event_name=event_name,
+                intent=intent,
+                product_id=None,
+                properties={"depth_percent": 50},
+            )
+            detail["page_type"] = "product_detail"
+            events.extend((platform, detail))
+
+        raw = build_raw_events_frame(self._kafka_frame(events), "test-cluster")
+        frames = build_processed_frames(raw, "Asia/Seoul")
+
+        self.assertEqual(
+            {"scroll_depth-platform", "scroll_pause-platform"},
+            {
+                row["event_id"]
+                for row in frames["cleaned_events"].select("event_id").collect()
+            },
+        )
+        self.assertEqual(
+            {"scroll_depth-detail", "scroll_pause-detail"},
+            {
+                row["event_id"]
+                for row in frames["bad_events"]
+                .where("error_code = 'missing_product_id'")
+                .select("event_id")
+                .collect()
+            },
+        )
 
 
 if __name__ == "__main__":
