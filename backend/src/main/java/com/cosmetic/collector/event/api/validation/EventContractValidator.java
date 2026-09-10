@@ -13,6 +13,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
 
     private static final Map<String, String> INTENTS = Map.ofEntries(
             Map.entry("session_start", "session"),
+            Map.entry("login", "session"),
             Map.entry("page_view", "session"),
             Map.entry("navigation_click", "session"),
             Map.entry("exit_summary", "session"),
@@ -21,6 +22,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             Map.entry("scroll_depth", "exposure"),
             Map.entry("impression_dwell", "exposure"),
             Map.entry("recommendation_snapshot", "exposure"),
+            Map.entry("banner_impression", "session"),
             Map.entry("product_view", "interest"),
             Map.entry("section_view", "interest"),
             Map.entry("section_dwell", "interest"),
@@ -32,6 +34,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             Map.entry("variant_select", "comparison"),
             Map.entry("product_click", "comparison"),
             Map.entry("recommendation_click", "comparison"),
+            Map.entry("banner_click", "interest"),
             Map.entry("filter_change", "comparison"),
             Map.entry("sort_change", "comparison"),
             Map.entry("accordion_toggle", "validation"),
@@ -76,7 +79,9 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             "scroll_backtrack",
             "text_selection",
             "text_copy",
-            "hover_dwell"
+            "hover_dwell",
+            "banner_impression",
+            "banner_click"
     );
     private static final Set<String> PRODUCT_DETAIL_SCOPED_EVENTS = Set.of(
             "page_view", "section_view", "section_dwell"
@@ -88,6 +93,10 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             "ingredient", "skin_fit", "reviews", "review_same_skin", "price",
             "brand_trust", "texture_finish", "clean_claim", "recommendation", "restock"
     );
+    private static final Set<String> BANNER_TYPES = Set.of(
+            "concern", "ingredient", "clean", "price_bin", "category", "segment", "new_brand"
+    );
+    private static final Set<String> TRAIT_SOURCES = Set.of("session", "profile", "coldstart", "explore");
 
     @Override
     public boolean isValid(ActivityEvent event, ConstraintValidatorContext context) {
@@ -106,6 +115,9 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
 
         if (event.eventName() != null && PURCHASE_EVENTS.contains(event.eventName())) {
             valid &= validatePurchaseProperties(event, properties, context);
+        }
+        if ("banner_impression".equals(event.eventName()) || "banner_click".equals(event.eventName())) {
+            valid &= validateBannerProperties(properties, context);
         }
         return valid;
     }
@@ -147,10 +159,6 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
                 valid = false;
             }
         }
-        if ("0.3.0-draft".equals(event.schemaVersion()) && blank(event.tenantId())) {
-            add(context, "missing_required_property", "tenantId", "0.3.0-draft에는 tenant_id가 필요합니다.");
-            valid = false;
-        }
         return valid;
     }
 
@@ -167,6 +175,41 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
                     & validateReasons(properties, context);
             default -> true;
         };
+    }
+
+    private boolean validateBannerProperties(JsonNode properties, ConstraintValidatorContext context) {
+        JsonNode bannerType = properties.get("banner_type");
+        JsonNode bannerValue = properties.get("banner_value");
+        JsonNode bannerSlot = properties.get("banner_slot");
+        JsonNode traitSource = properties.get("trait_source");
+        boolean valid = true;
+
+        if (!isText(bannerType) || !BANNER_TYPES.contains(bannerType.textValue())) {
+            add(context, "invalid_property_enum", "properties", "banner_type 값이 계약 enum에 없습니다.");
+            valid = false;
+        }
+        if (bannerSlot == null || !bannerSlot.isIntegralNumber() || bannerSlot.longValue() < 1) {
+            add(context, "invalid_property_type", "properties", "banner_slot은 1 이상의 정수여야 합니다.");
+            valid = false;
+        }
+        if (!isText(traitSource) || !TRAIT_SOURCES.contains(traitSource.textValue())) {
+            add(context, "invalid_property_enum", "properties", "trait_source 값이 계약 enum에 없습니다.");
+            valid = false;
+        }
+        if (bannerType != null && "new_brand".equals(bannerType.textValue())) {
+            if (bannerValue == null || !bannerValue.isNull()) {
+                add(context, "invalid_property_type", "properties", "new_brand의 banner_value는 null이어야 합니다.");
+                valid = false;
+            }
+        } else if (!isText(bannerValue)) {
+            add(context, "invalid_property_type", "properties", "banner_value는 비어 있지 않은 문자열이어야 합니다.");
+            valid = false;
+        }
+        if (properties.has("slot")) {
+            add(context, "invalid_property_type", "properties", "slot 대신 banner_slot을 사용해야 합니다.");
+            valid = false;
+        }
+        return valid;
     }
 
     private boolean validateItems(JsonNode properties, ConstraintValidatorContext context) {
