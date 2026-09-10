@@ -8,10 +8,12 @@
       "Treatments",
       "Exfoliators"
     ],
-    "image_url": "/images/ssafy-beauty/SB000001.svg",
+    "image_url": "/images/ssafy-beauty/SB000001-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000001.svg"
+      "/images/ssafy-beauty/SB000001-m1.webp",
+      "/images/ssafy-beauty/SB000001-m2.webp",
+      "/images/ssafy-beauty/SB000001-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -63,10 +65,12 @@
       "Treatments",
       "Face Serums"
     ],
-    "image_url": "/images/ssafy-beauty/SB000002.svg",
+    "image_url": "/images/ssafy-beauty/SB000002-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000002.svg"
+      "/images/ssafy-beauty/SB000002-m1.webp",
+      "/images/ssafy-beauty/SB000002-m2.webp",
+      "/images/ssafy-beauty/SB000002-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -121,10 +125,12 @@
       "Treatments",
       "Face Serums"
     ],
-    "image_url": "/images/ssafy-beauty/SB000003.svg",
+    "image_url": "/images/ssafy-beauty/SB000003-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000003.svg"
+      "/images/ssafy-beauty/SB000003-m1.webp",
+      "/images/ssafy-beauty/SB000003-m2.webp",
+      "/images/ssafy-beauty/SB000003-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -177,10 +183,12 @@
       "Moisturizers",
       "Moisturizers"
     ],
-    "image_url": "/images/ssafy-beauty/SB000004.svg",
+    "image_url": "/images/ssafy-beauty/SB000004-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000004.svg"
+      "/images/ssafy-beauty/SB000004-m1.webp",
+      "/images/ssafy-beauty/SB000004-m2.webp",
+      "/images/ssafy-beauty/SB000004-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -233,10 +241,12 @@
       "Cleansers",
       "Face Wash & Cleansers"
     ],
-    "image_url": "/images/ssafy-beauty/SB000005.svg",
+    "image_url": "/images/ssafy-beauty/SB000005-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000005.svg"
+      "/images/ssafy-beauty/SB000005-m1.webp",
+      "/images/ssafy-beauty/SB000005-m2.webp",
+      "/images/ssafy-beauty/SB000005-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -288,10 +298,12 @@
       "Sunscreen",
       "Face Sunscreen"
     ],
-    "image_url": "/images/ssafy-beauty/SB000006.svg",
+    "image_url": "/images/ssafy-beauty/SB000006-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000006.svg"
+      "/images/ssafy-beauty/SB000006-m1.webp",
+      "/images/ssafy-beauty/SB000006-m2.webp",
+      "/images/ssafy-beauty/SB000006-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -346,10 +358,12 @@
       "Eye Care",
       "Eye Creams & Treatments"
     ],
-    "image_url": "/images/ssafy-beauty/SB000007.svg",
+    "image_url": "/images/ssafy-beauty/SB000007-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000007.svg"
+      "/images/ssafy-beauty/SB000007-m1.webp",
+      "/images/ssafy-beauty/SB000007-m2.webp",
+      "/images/ssafy-beauty/SB000007-m3.webp"
     ],
     "variants": [],
     "description": {
@@ -403,10 +417,12 @@
       "Masks",
       "Face Masks"
     ],
-    "image_url": "/images/ssafy-beauty/SB000008.svg",
+    "image_url": "/images/ssafy-beauty/SB000008-m1.webp",
     "sku_id": null,
     "images": [
-      "/images/ssafy-beauty/SB000008.svg"
+      "/images/ssafy-beauty/SB000008-m1.webp",
+      "/images/ssafy-beauty/SB000008-m2.webp",
+      "/images/ssafy-beauty/SB000008-m3.webp"
     ],
     "variants": [],
     "description": {
