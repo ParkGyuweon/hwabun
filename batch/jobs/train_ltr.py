@@ -84,8 +84,11 @@ def main():
                     default=True, help="순열 중요도 계산을 건너뛴다 (빠름)")
     ap.add_argument("--max-iter", type=int, default=PARAMS["max_iter"],
                     help="트리 수 상한 (조기종료 기준). 2026-09-10 태그 제거 후 300 에 닿아 올려 본 값을 고른다")
+    ap.add_argument("--seed", type=int, default=PARAMS["random_state"],
+                    help="학습 난수(검증 분할·조기종료). 잡음 폭을 볼 때만 바꾼다. 정본은 0")
     a = ap.parse_args()
     PARAMS["max_iter"] = a.max_iter
+    PARAMS["random_state"] = a.seed
 
     from sklearn.ensemble import HistGradientBoostingClassifier
     import joblib

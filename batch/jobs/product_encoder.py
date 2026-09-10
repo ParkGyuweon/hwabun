@@ -14,8 +14,10 @@ REVIEW_CONCERN = os.path.join(ROOT, "batch", "ingest", "data", "concern_from_rev
 REVIEW_CONCERN_TOPK = 2
 
 _PAREN = re.compile(r"\([^)]*\)")
+_AND = re.compile(r"\(\s*and\s*\)", re.I)        # INCI 블렌드 구분자 "(and)"
 _NOISE = re.compile(r"^(water|aqua|eau|정제수|물)$|^\d|^and$|^or$|^may contain")
 _SPLIT = re.compile("[,;" + chr(10) + "]")
+_SPF_NAME = re.compile(r"\bspf\s*\d", re.I)   # 제품명의 자외선차단지수 표기 (Jira 243)
 _POP = re.compile(r"allure|Best of Beauty|Community Favorite|Award|Winner", re.I)
 
 # 블록 순서. brand 는 뒤에 붙여 기존 차원 순서를 흔들지 않는다.
@@ -91,7 +93,11 @@ class Encoder:
         return {"concern": c, "clean": cl, "texture": t}
 
     def parse_ingredients(self, x):
-        txt = _PAREN.sub(" ", " ".join(x["ingredients"]))
+        # INCI 블렌드 표기 "A (and) B" 는 성분 두 개다 — 괄호를 지우기 전에 쉼표로 바꿔 분리한다.
+        # 안 그러면 "dimethyl isosorbide hydroxypinacolone retinoate" 처럼 한 토큰이 45자를 넘어 버려진다
+        # (P393718 Luna Retinoid Oil 의 레티노이드가 이래서 빠졌다, 2026-09-10 Jira 243)
+        txt = _AND.sub(",", " ".join(x["ingredients"]))
+        txt = _PAREN.sub(" ", txt)
         out = []
         for tok in _SPLIT.split(txt):
             # **한글을 남긴다.** 국내 브랜드는 한글 전성분표를 붙여넣는다.
@@ -124,6 +130,11 @@ class Encoder:
                 if any(sy in tok for sy in syns):
                     vals[name] = max(1.0 - pos / n, self.pos_min)
                     break
+        # SPF 는 제품명의 법정 표기("SPF 36", "SPF50+")로도 켠다. 미국 선크림은 자차 활성성분을 Drug Facts 에
+        # 따로 적어 Sephora 전성분 텍스트에 없다(원천 2개: P456392·P456398). 등록 상품 이름도 같은 표기를
+        # 쓰므로 두 집합에 같은 규칙이다. 규제 표기라 1.0 (2026-09-10, Jira 243)
+        if "SPF" in self.ing_syn and "SPF" not in vals and _SPF_NAME.search(str(x.get("product_name") or "")):
+            vals["SPF"] = 1.0
         return vals
 
     # ---------- 블록 인코딩 ----------

@@ -90,6 +90,7 @@ P433520,0,Hyaluronic Acid,0.24,parsed,0.5
 P433520,6,Peptides,0.2,parsed,0.5
 P433520,2,Vitamin C,0.16,parsed,0.5
 P458219,0,Hyaluronic Acid,0.8571,parsed,0.5
+P458219,16,Salicylic Acid,0.7143,parsed,0.5
 P458219,27,Willow Bark,0.6667,parsed,0.5
 P458219,9,Licorice,0.4286,parsed,0.5
 P442563,15,AHA/Glycolic Acid,1.0,parsed,0.5
@@ -132,6 +133,7 @@ P422905,17,Ceramide,0.7593,parsed,0.5
 P422905,26,Centella (Cica),0.7407,parsed,0.5
 P422905,18,Rosehip / Rose,0.5741,parsed,0.5
 P422905,27,Willow Bark,0.4444,parsed,0.5
+P456398,10,SPF,1.0,parsed,0.5
 P456398,1,Silicone,0.9211,parsed,0.5
 P456398,5,Green Tea,0.5526,parsed,0.5
 P430337,14,Jojoba,0.8605,parsed,0.5
@@ -337,7 +339,7 @@ P468351,4,Probiotic / Ferment,0.4419,parsed,0.5
 P468351,2,Vitamin C,0.2326,parsed,0.5
 P476414,1,Silicone,0.9737,parsed,0.5
 P476414,13,Niacinamide,0.8684,parsed,0.5
-P476414,23,Retinol,0.6579,parsed,0.5
+P476414,23,Retinol,0.6842,parsed,0.5
 P476414,26,Centella (Cica),0.6316,parsed,0.5
 P476414,17,Ceramide,0.4474,parsed,0.5
 P453253,3,Squalane,0.9615,parsed,0.5
@@ -483,6 +485,7 @@ P466155,5,Green Tea,0.7297,parsed,0.5
 P466155,0,Hyaluronic Acid,0.6757,parsed,0.5
 P466155,28,Collagen,0.6486,parsed,0.5
 P466155,2,Vitamin C,0.5135,parsed,0.5
+P456392,10,SPF,1.0,parsed,0.5
 P456392,1,Silicone,0.9444,parsed,0.5
 P456392,26,Centella (Cica),0.5,parsed,0.5
 P456392,5,Green Tea,0.3889,parsed,0.5
@@ -586,6 +589,7 @@ P416341,29,Mineral Oil / Petrolatum,0.9756,parsed,0.5
 P416341,24,Zinc,0.561,parsed,0.5
 P416341,12,Panthenol (B5),0.2683,parsed,0.5
 P416341,25,Alcohol Denat,0.1,parsed,0.5
+P393718,23,Retinol,0.7222,parsed,0.5
 P479327,3,Squalane,0.873,parsed,0.5
 P479327,0,Hyaluronic Acid,0.8413,parsed,0.5
 P479327,13,Niacinamide,0.6667,parsed,0.5
@@ -659,6 +663,7 @@ P473267,0,Hyaluronic Acid,0.8627,parsed,0.5
 P473267,3,Squalane,0.8235,parsed,0.5
 P473267,19,Caffeine,0.6667,parsed,0.5
 P473267,6,Peptides,0.6471,parsed,0.5
+P473267,23,Retinol,0.4706,parsed,0.5
 P473267,10,SPF,0.1,parsed,0.5
 P392235,4,Probiotic / Ferment,0.6875,parsed,0.5
 P392235,5,Green Tea,0.625,parsed,0.5
@@ -684,7 +689,7 @@ P421998,14,Jojoba,0.7619,parsed,0.5
 P443842,1,Silicone,0.8621,parsed,0.5
 P443842,3,Squalane,0.7241,parsed,0.5
 P443842,2,Vitamin C,0.5862,parsed,0.5
-P443842,23,Retinol,0.3103,parsed,0.5
+P443842,23,Retinol,0.3448,parsed,0.5
 P443842,4,Probiotic / Ferment,0.2414,parsed,0.5
 P443842,0,Hyaluronic Acid,0.1724,parsed,0.5
 P443842,6,Peptides,0.1034,parsed,0.5
