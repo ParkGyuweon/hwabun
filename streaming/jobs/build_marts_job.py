@@ -31,6 +31,13 @@ DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
 DEFAULT_BRAND_DAILY_PATH = "data/marts/brand_daily_kpi"
+DEFAULT_PRODUCT_REPURCHASE_PATH = "data/marts/product_repurchase_daily"
+DEFAULT_BRAND_REPURCHASE_PATH = "data/marts/brand_repurchase_daily"
+DEFAULT_PURCHASE_REASON_PATH = "data/marts/purchase_reason_daily"
+DEFAULT_PURCHASE_FACT_PATH = "data/processed/purchase_fact"
+DEFAULT_PURCHASE_REASON_FACT_PATH = "data/processed/purchase_reason_fact"
+DEFAULT_REASON_TRAIT_MAP_PATH = "contracts/purchase-reason-trait-map.json"
+DEFAULT_REPURCHASE_WINDOW_DAYS = 90
 DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
 DEFAULT_PRODUCT_INGREDIENT_PATH = "batch/ingest/data/serving/product_ingredient.csv"
 DEFAULT_INGREDIENT_VOCAB_PATH = "batch/ingest/data/serving/ingredient_vocab.csv"
@@ -77,6 +84,13 @@ class BuildMartsConfig:
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
     brand_daily_path: str = DEFAULT_BRAND_DAILY_PATH
+    product_repurchase_path: str = DEFAULT_PRODUCT_REPURCHASE_PATH
+    brand_repurchase_path: str = DEFAULT_BRAND_REPURCHASE_PATH
+    purchase_reason_path: str = DEFAULT_PURCHASE_REASON_PATH
+    purchase_fact_path: str = DEFAULT_PURCHASE_FACT_PATH
+    purchase_reason_fact_path: str = DEFAULT_PURCHASE_REASON_FACT_PATH
+    reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH
+    repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
     product_ingredient_path: str = DEFAULT_PRODUCT_INGREDIENT_PATH
     ingredient_vocab_path: str = DEFAULT_INGREDIENT_VOCAB_PATH
@@ -105,6 +119,12 @@ class BuildMartsConfig:
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
             "brand_daily_path": self.brand_daily_path,
+            "product_repurchase_path": self.product_repurchase_path,
+            "brand_repurchase_path": self.brand_repurchase_path,
+            "purchase_reason_path": self.purchase_reason_path,
+            "purchase_fact_path": self.purchase_fact_path,
+            "purchase_reason_fact_path": self.purchase_reason_fact_path,
+            "reason_trait_map_path": self.reason_trait_map_path,
             "dim_product_path": self.dim_product_path,
             "product_ingredient_path": self.product_ingredient_path,
             "ingredient_vocab_path": self.ingredient_vocab_path,
@@ -127,6 +147,8 @@ class BuildMartsConfig:
             raise ValueError("cleansing_category_weight must be in (0, 1]")
         if self.price_min_sample_size < 1:
             raise ValueError("price_min_sample_size must be at least 1")
+        if self.repurchase_window_days < 1:
+            raise ValueError("repurchase_window_days must be at least 1")
         baseline_values = (
             self.baseline_policy_version,
             self.baseline_start_date,
@@ -192,6 +214,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--brand-daily-path",
         default=_env("BRAND_DAILY_KPI_PATH", DEFAULT_BRAND_DAILY_PATH),
         help="brand_daily_kpi output path",
+    )
+    parser.add_argument(
+        "--product-repurchase-path",
+        default=_env("PRODUCT_REPURCHASE_DAILY_PATH", DEFAULT_PRODUCT_REPURCHASE_PATH),
+    )
+    parser.add_argument(
+        "--brand-repurchase-path",
+        default=_env("BRAND_REPURCHASE_DAILY_PATH", DEFAULT_BRAND_REPURCHASE_PATH),
+    )
+    parser.add_argument(
+        "--purchase-reason-path",
+        default=_env("PURCHASE_REASON_DAILY_PATH", DEFAULT_PURCHASE_REASON_PATH),
+    )
+    parser.add_argument(
+        "--purchase-fact-path",
+        default=_env("PURCHASE_FACT_PATH", DEFAULT_PURCHASE_FACT_PATH),
+    )
+    parser.add_argument(
+        "--purchase-reason-fact-path",
+        default=_env("PURCHASE_REASON_FACT_PATH", DEFAULT_PURCHASE_REASON_FACT_PATH),
+    )
+    parser.add_argument(
+        "--reason-trait-map-path",
+        default=_env("REASON_TRAIT_MAP_PATH", DEFAULT_REASON_TRAIT_MAP_PATH),
+    )
+    parser.add_argument(
+        "--repurchase-window-days",
+        type=int,
+        default=_env_int("REPURCHASE_WINDOW_DAYS", DEFAULT_REPURCHASE_WINDOW_DAYS),
+        help="재구매를 관측하는 창 길이(일)",
     )
     parser.add_argument(
         "--dim-product-path",
@@ -264,6 +316,13 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
         brand_daily_path=args.brand_daily_path,
+        product_repurchase_path=args.product_repurchase_path,
+        brand_repurchase_path=args.brand_repurchase_path,
+        purchase_reason_path=args.purchase_reason_path,
+        purchase_fact_path=args.purchase_fact_path,
+        purchase_reason_fact_path=args.purchase_reason_fact_path,
+        reason_trait_map_path=args.reason_trait_map_path,
+        repurchase_window_days=args.repurchase_window_days,
         dim_product_path=args.dim_product_path,
         product_ingredient_path=args.product_ingredient_path,
         ingredient_vocab_path=args.ingredient_vocab_path,
@@ -703,6 +762,280 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     )
 
 
+EXECUTION_AXES = ("actor_type", "source", "scenario_id", "simulation_run_id")
+
+
+def _valid_brand() -> Any:
+    from pyspark.sql import functions as F
+
+    return F.col("brand_id").isNotNull() & (F.length(F.trim(F.col("brand_id"))) > 0)
+
+
+def _null_safe_join(left: Any, right: Any, columns: list[str]) -> Any:
+    """실행 축의 NULL은 같은 값으로 봐야 한다. 등호 Join이면 그 행이 통째로 빠진다.
+
+    오른쪽 key를 임시 이름으로 바꾼 뒤 붙인다. 같은 이름을 그대로 두면 Join 뒤
+    `drop`이 어느 쪽인지 못 가려 왼쪽 key까지 지우고, 매칭되지 않은 행의 key가
+    NULL로 남는다.
+    """
+
+    renamed = right
+    aliases = {column: f"_join_{column}" for column in columns}
+    for column, alias in aliases.items():
+        renamed = renamed.withColumnRenamed(column, alias)
+    condition = None
+    for column, alias in aliases.items():
+        clause = left[column].eqNullSafe(renamed[alias])
+        condition = clause if condition is None else condition & clause
+    return left.join(renamed, condition, "left").drop(*aliases.values())
+
+
+def _repurchase_orders(purchase_fact_df: Any, window_days: int, key_columns: list[str]) -> Any:
+    """관측 창 안의 구매를 주문 단위로 접는다.
+
+    한 주문에 같은 상품 row가 여러 개 있어도 구매는 한 번이다. `order_id`로 먼저
+    접지 않으면 같은 주문이 재구매로 잡힌다.
+    """
+
+    from pyspark.sql import functions as F
+
+    valid = purchase_fact_df.where(
+        _valid_brand()
+        & F.col("user_id").isNotNull()
+        & (F.length(F.trim(F.col("user_id"))) > 0)
+        & F.col("order_id").isNotNull()
+        & (F.length(F.trim(F.col("order_id"))) > 0)
+    )
+    snapshot = valid.agg(F.max("event_date_kst").alias("snapshot")).first()["snapshot"]
+    if snapshot is None:
+        # 구매가 없는 스냅샷도 스키마는 유지한다.
+        empty = valid.withColumn("snapshot_date_kst", F.col("event_date_kst"))
+        return empty.groupBy(*key_columns, "user_id", "order_id").agg(
+            F.min("event_time").alias("purchased_at")
+        )
+    windowed = valid.where(
+        F.col("event_date_kst")
+        > F.date_sub(F.lit(snapshot).cast("date"), int(window_days))
+    ).withColumn("snapshot_date_kst", F.lit(snapshot).cast("date"))
+    return windowed.groupBy(*key_columns, "user_id", "order_id").agg(
+        F.min("event_time").alias("purchased_at")
+    )
+
+
+def _repurchase_metrics(orders_df: Any, key_columns: list[str], window_days: int) -> Any:
+    """구매자별 주문 수와 평균 간격을 낸 뒤 key 단위로 요약한다."""
+
+    from pyspark.sql import functions as F
+
+    per_buyer = orders_df.groupBy(*key_columns, "user_id").agg(
+        F.countDistinct("order_id").cast("long").alias("buyer_order_count"),
+        F.min("purchased_at").alias("first_purchased_at"),
+        F.max("purchased_at").alias("last_purchased_at"),
+    )
+    # 재구매 간격은 첫 구매와 마지막 구매의 간격을 구매 횟수로 나눈 평균이다.
+    # 1회 구매자는 간격이 없으므로 NULL로 두어 중앙값을 끌어내리지 않는다.
+    per_buyer = per_buyer.withColumn(
+        "days_between_purchases",
+        F.when(
+            F.col("buyer_order_count") > 1,
+            (
+                F.col("last_purchased_at").cast("double")
+                - F.col("first_purchased_at").cast("double")
+            )
+            / F.lit(86400.0)
+            / (F.col("buyer_order_count") - F.lit(1)).cast("double"),
+        ),
+    )
+    result = per_buyer.groupBy(*key_columns).agg(
+        F.countDistinct("user_id").cast("long").alias("buyer_count"),
+        F.countDistinct(
+            F.when(F.col("buyer_order_count") > 1, F.col("user_id"))
+        ).cast("long").alias("repeat_buyer_count"),
+        F.sum("buyer_order_count").cast("long").alias("purchase_order_count"),
+        F.expr("percentile_approx(days_between_purchases, 0.5)")
+        .cast("double")
+        .alias("median_days_between_purchases"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    return (
+        result.withColumn(
+            "repurchase_rate",
+            _safe_ratio(F.col("repeat_buyer_count"), F.col("buyer_count")),
+        )
+        .withColumn("window_days", F.lit(int(window_days)).cast("int"))
+        .withColumn(
+            "window_start_date",
+            F.date_sub(F.col("snapshot_date_kst"), int(window_days) - 1),
+        )
+        .withColumn("window_end_date", F.col("snapshot_date_kst"))
+    )
+
+
+def _product_repurchase_daily(purchase_fact_df: Any, window_days: int) -> Any:
+    """상품 재구매 — 같은 사용자가 같은 상품을 서로 다른 주문으로 다시 산 비율."""
+
+    key_columns = ["snapshot_date_kst", "brand_id", "product_id", *EXECUTION_AXES]
+    orders = _repurchase_orders(purchase_fact_df, window_days, key_columns)
+    return _repurchase_metrics(orders, key_columns, window_days)
+
+
+def _brand_repurchase_daily(
+    purchase_fact_df: Any, purchase_reason_fact_df: Any, window_days: int
+) -> Any:
+    """브랜드 재구매 — 상품이 달라도 같은 브랜드를 다시 산 비율.
+
+    상품 Mart를 합산해서 구할 수 없다. 한 사용자가 같은 브랜드의 다른 상품 두 개를
+    사면 상품 단위로는 1회 구매가 둘이지만 브랜드 단위로는 재구매다.
+
+    `restock`은 재구매의 선언 신호이므로(`event-properties-schema.md` §3.9) 관측
+    재구매와 교차 검증할 수 있도록 같은 행에 보존한다.
+    """
+
+    from pyspark.sql import functions as F
+
+    key_columns = ["snapshot_date_kst", "brand_id", *EXECUTION_AXES]
+    orders = _repurchase_orders(purchase_fact_df, window_days, key_columns)
+    metrics = _repurchase_metrics(orders, key_columns, window_days)
+
+    restock_orders = (
+        purchase_reason_fact_df.where(F.col("reason") == F.lit("restock"))
+        .select("order_id")
+        .distinct()
+    )
+    declared = (
+        orders.select(*key_columns, "order_id")
+        .distinct()
+        .join(restock_orders, ["order_id"], "left_semi")
+        .groupBy(*key_columns)
+        .agg(
+            F.countDistinct("order_id")
+            .cast("long")
+            .alias("declared_restock_order_count")
+        )
+    )
+    return _null_safe_join(metrics, declared, key_columns).withColumn(
+        "declared_restock_order_count",
+        F.coalesce(F.col("declared_restock_order_count"), F.lit(0)).cast("long"),
+    )
+
+
+def _reason_trait_column(reason_trait_map: dict[str, Any]) -> Any:
+    """선언 이유를 관측 성향 축으로 옮긴다. 매핑이 없는 이유는 NULL로 남긴다."""
+
+    from pyspark.sql import functions as F
+
+    mapped = F.lit(None).cast("string")
+    for reason, trait in sorted(reason_trait_map.items()):
+        if trait:
+            mapped = F.when(
+                F.col("reason") == F.lit(reason), F.lit(trait)
+            ).otherwise(mapped)
+    return mapped
+
+
+def _purchase_reason_daily(
+    purchase_reason_fact_df: Any,
+    purchase_fact_df: Any,
+    user_trait_daily_df: Any | None,
+    reason_trait_map: dict[str, Any],
+) -> Any:
+    """구매 이유 분포와 행동 추론 대조.
+
+    `purchase_reason_fact`의 grain은 `order_id + reason`이라 브랜드 축이 없다.
+    이유는 주문 단위 선언이므로 다브랜드 주문에서 어느 브랜드 때문인지 알 수 없다.
+    그래서 한 주문을 그 주문에 든 각 브랜드에 한 번씩만 계상한다. 집계를
+    `countDistinct(order_id)`로 하는 이유도 상품 수만큼 부풀지 않게 하기 위해서다.
+    """
+
+    from pyspark.sql import functions as F
+
+    key_columns = ["event_date_kst", "brand_id", "reason", *EXECUTION_AXES]
+    order_brands = (
+        purchase_fact_df.where(_valid_brand() & F.col("order_id").isNotNull())
+        .select("order_id", "brand_id")
+        .distinct()
+    )
+    reasons = purchase_reason_fact_df.select(
+        "order_id",
+        "reason",
+        "event_date_kst",
+        "user_id",
+        "is_primary",
+        "skipped",
+        *EXECUTION_AXES,
+    ).where(F.col("order_id").isNotNull())
+    attributed = reasons.join(order_brands, ["order_id"], "inner").withColumn(
+        "_mapped_trait", _reason_trait_column(reason_trait_map)
+    )
+
+    if user_trait_daily_df is None:
+        attributed = attributed.withColumn(
+            "_primary_trait", F.lit(None).cast("string")
+        )
+    else:
+        primary_traits = (
+            user_trait_daily_df.where(F.col("is_primary_trait"))
+            .select(
+                F.col("trait_date_kst").alias("_trait_date"),
+                F.col("user_id").alias("_trait_user_id"),
+                F.col("trait").alias("_primary_trait"),
+            )
+            .distinct()
+        )
+        attributed = attributed.join(
+            primary_traits,
+            (F.col("event_date_kst") == F.col("_trait_date"))
+            & (F.col("user_id") == F.col("_trait_user_id")),
+            "left",
+        ).drop("_trait_date", "_trait_user_id")
+
+    compared = F.col("_mapped_trait").isNotNull() & F.col("_primary_trait").isNotNull()
+    result = attributed.groupBy(*key_columns).agg(
+        F.countDistinct("order_id").cast("long").alias("order_count"),
+        F.countDistinct(F.when(F.col("is_primary"), F.col("order_id")))
+        .cast("long")
+        .alias("primary_order_count"),
+        F.countDistinct(F.when(F.col("skipped"), F.col("order_id")))
+        .cast("long")
+        .alias("skipped_order_count"),
+        F.countDistinct(F.when(compared, F.col("order_id")))
+        .cast("long")
+        .alias("trait_compared_order_count"),
+        F.countDistinct(
+            F.when(compared & (F.col("_mapped_trait") == F.col("_primary_trait")), F.col("order_id"))
+        ).cast("long").alias("trait_matched_order_count"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    brand_day = ["event_date_kst", "brand_id", *EXECUTION_AXES]
+    answered_totals = (
+        attributed.where(F.col("reason").isNotNull())
+        .groupBy(*brand_day)
+        .agg(
+            F.countDistinct("order_id")
+            .cast("long")
+            .alias("answered_order_count")
+        )
+    )
+    return (
+        _null_safe_join(result, answered_totals, brand_day)
+        .withColumn(
+            "reason_share",
+            F.when(
+                F.col("reason").isNotNull(),
+                _safe_ratio(F.col("order_count"), F.col("answered_order_count")),
+            ),
+        )
+        .withColumn(
+            "trait_match_rate",
+            _safe_ratio(
+                F.col("trait_matched_order_count"),
+                F.col("trait_compared_order_count"),
+            ),
+        )
+        .drop("answered_order_count")
+    )
+
+
 def _event_weight_column(event_weights: dict[str, float]) -> Any:
     from pyspark.sql import functions as F
 
@@ -949,6 +1282,37 @@ def load_trait_contract(path: str) -> dict[str, Any]:
     if int(contract.get("window_days", 0)) < 1:
         raise ValueError("trait contract window_days must be positive")
     return contract
+
+
+PURCHASE_REASONS = (
+    "ingredient",
+    "skin_fit",
+    "reviews",
+    "review_same_skin",
+    "price",
+    "brand_trust",
+    "texture_finish",
+    "clean_claim",
+    "recommendation",
+    "restock",
+)
+SUPPORTED_TRAITS = ("price", "ingredient", "review", "concern", "participate")
+
+
+def load_reason_trait_map(path: str) -> dict[str, Any]:
+    """선언 이유 -> 관측 성향 매핑. 이유 10종을 빠짐없이 선언해야 한다."""
+
+    with open(path, encoding="utf-8") as stream:
+        contract = json.load(stream)
+    mapping = contract.get("reason_to_trait", {})
+    if set(mapping) != set(PURCHASE_REASONS):
+        raise ValueError("reason contract must map exactly the ten purchase reasons")
+    unknown = {
+        trait for trait in mapping.values() if trait is not None and trait not in SUPPORTED_TRAITS
+    }
+    if unknown:
+        raise ValueError(f"reason contract maps unsupported traits: {sorted(unknown)}")
+    return mapping
 
 
 def load_banner_values(feature_vocab_path: str, affinity_lift_path: str) -> set[str]:
@@ -1264,6 +1628,10 @@ def build_mart_frames(
     baseline_policy_version: str | None = None,
     baseline_start_date: str | None = None,
     baseline_end_date: str | None = None,
+    purchase_fact_df: Any | None = None,
+    purchase_reason_fact_df: Any | None = None,
+    reason_trait_map: dict[str, Any] | None = None,
+    repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -1280,6 +1648,21 @@ def build_mart_frames(
         frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
     if allowed_banner_values is not None:
         frames["banner_daily"] = _banner_daily(product_fact_df, allowed_banner_values)
+    # 구매 이유 대조는 user_trait_daily 를 읽으므로 그 뒤에 둔다.
+    if purchase_fact_df is not None and purchase_reason_fact_df is not None:
+        frames["product_repurchase_daily"] = _product_repurchase_daily(
+            purchase_fact_df, repurchase_window_days
+        )
+        frames["brand_repurchase_daily"] = _brand_repurchase_daily(
+            purchase_fact_df, purchase_reason_fact_df, repurchase_window_days
+        )
+        if reason_trait_map is not None:
+            frames["purchase_reason_daily"] = _purchase_reason_daily(
+                purchase_reason_fact_df,
+                purchase_fact_df,
+                frames.get("user_trait_daily"),
+                reason_trait_map,
+            )
     if (
         event_weights is not None
         and dim_product_df is not None
@@ -1318,6 +1701,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
 
     event_weights = load(config.behavior_weights_path)["event"]
     trait_contract = load_trait_contract(config.trait_weights_path)
+    reason_trait_map = load_reason_trait_map(config.reason_trait_map_path)
     allowed_banner_values = load_banner_values(
         config.feature_vocab_path, config.affinity_lift_path
     )
@@ -1367,6 +1751,12 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         .schema(ingredient_vocab_schema)
         .csv(config.ingredient_vocab_path)
     )
+    purchase_fact = spark.read.option("mergeSchema", "true").parquet(
+        config.purchase_fact_path
+    )
+    purchase_reason_fact = spark.read.option("mergeSchema", "true").parquet(
+        config.purchase_reason_fact_path
+    )
     frames = build_mart_frames(
         sessionized,
         product_fact,
@@ -1382,6 +1772,10 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         config.baseline_policy_version,
         config.baseline_start_date,
         config.baseline_end_date,
+        purchase_fact,
+        purchase_reason_fact,
+        reason_trait_map,
+        config.repurchase_window_days,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -1396,6 +1790,21 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     )
     _write_mart(
         frames["brand_daily_kpi"], config.brand_daily_path, "event_date_kst"
+    )
+    _write_mart(
+        frames["product_repurchase_daily"],
+        config.product_repurchase_path,
+        "snapshot_date_kst",
+    )
+    _write_mart(
+        frames["brand_repurchase_daily"],
+        config.brand_repurchase_path,
+        "snapshot_date_kst",
+    )
+    _write_mart(
+        frames["purchase_reason_daily"],
+        config.purchase_reason_path,
+        "event_date_kst",
     )
     _write_mart(
         frames["ingredient_weekly_interest"],

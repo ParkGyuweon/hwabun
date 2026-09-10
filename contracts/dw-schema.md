@@ -499,6 +499,83 @@ input = product_event_fact, funnel_session_fact
 상품 조회가 확인된 세션에만 귀속한다. 모든 비율은 분모가 0이면 NULL이다. 구매·매출
 지표는 이 Mart의 범위가 아니다.
 
+### 4.15 `product_repurchase_daily`
+
+```text
+key = snapshot_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+input = purchase_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `buyer_count` | bigint | N | 창 안에서 이 상품을 산 고유 사용자 수 |
+| `repeat_buyer_count` | bigint | N | 서로 다른 주문으로 두 번 이상 산 사용자 수 |
+| `purchase_order_count` | bigint | N | 고유 주문 수 |
+| `repurchase_rate` | double | Y | `repeat_buyer_count / buyer_count` |
+| `median_days_between_purchases` | double | Y | 재구매 사용자의 평균 간격의 중앙값 |
+| `window_days`, `window_start_date`, `window_end_date` | int, date, date | N | 관측 창 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품 row가 여러 개 있어도
+구매는 한 번이며, 주문 단위로 먼저 접은 뒤 센다. 재구매 간격은 첫 구매와 마지막 구매의
+간격을 구매 횟수로 나눈 사용자별 평균이고, 1회 구매자는 NULL이라 중앙값에 들어가지 않는다.
+`snapshot_date_kst`는 입력의 최대 `event_date_kst`이며 창은 그 날부터 `window_days`일
+직전까지다. `brand_id`·`user_id`·`order_id`가 비어 있는 row는 제외한다.
+
+### 4.16 `brand_repurchase_daily`
+
+```text
+key = snapshot_date_kst + brand_id + actor_type + source + scenario_id + simulation_run_id
+input = purchase_fact, purchase_reason_fact
+```
+
+컬럼은 §4.15와 같고 `declared_restock_order_count`(bigint, N)가 추가된다.
+
+브랜드 재구매는 상품이 달라도 같은 브랜드를 다시 사면 성립한다. 따라서 §4.15를 합산해서
+구할 수 없다. 한 사용자가 같은 브랜드의 다른 상품 두 개를 사면 상품 단위로는 1회 구매가
+둘이지만 브랜드 단위로는 재구매다.
+
+`declared_restock_order_count`는 `purchase_reason_fact`의 `restock` 선언 주문 수다.
+관측 재구매와 선언 재구매가 갈리는 구간이 행동 추론의 한계를 보여준다
+([`event-properties-schema.md`](./event-properties-schema.md) §3.9). 매칭이 없으면 0이며
+NULL로 두지 않는다.
+
+### 4.17 `purchase_reason_daily`
+
+```text
+key = event_date_kst + brand_id + reason + actor_type + source + scenario_id + simulation_run_id
+input = purchase_reason_fact, purchase_fact, user_trait_daily
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `reason` | string | Y | Grain. 건너뛴 응답은 NULL |
+| `order_count` | bigint | N | 해당 이유가 달린 고유 주문 수 |
+| `primary_order_count` | bigint | N | 대표 이유로 고른 주문 수 |
+| `skipped_order_count` | bigint | N | 설문을 건너뛴 주문 수 |
+| `reason_share` | double | Y | 응답한 주문 중 비중. `reason`이 NULL이면 NULL |
+| `trait_compared_order_count` | bigint | N | 성향 대조가 가능했던 주문 수 |
+| `trait_matched_order_count` | bigint | N | 선언과 관측 성향이 일치한 주문 수 |
+| `trait_match_rate` | double | Y | `matched / compared` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`purchase_reason_fact`의 grain은 `order_id + reason`이라 브랜드 축이 없다. 이유는 주문
+단위 선언이므로 다브랜드 주문에서 어느 브랜드 때문인지 알 수 없다. **한 주문은 그 주문에
+포함된 각 브랜드에 한 번씩만 계상한다.** 집계를 `countDistinct(order_id)`로 하는 이유도
+상품 수만큼 부풀지 않게 하기 위해서다.
+
+`reason_share`의 분모는 **응답한 주문**뿐이다. 건너뛴 주문을 분모에 넣으면 비중이 실제보다
+낮아진다. 건너뛴 주문은 `reason = NULL` 행의 `skipped_order_count`로만 센다.
+
+선언 이유와 관측 성향의 매핑은
+[`purchase-reason-trait-map.json`](./purchase-reason-trait-map.json)을 실행 원본으로
+사용한다. 매핑이 없는 이유(`texture_finish`, `recommendation`, `restock`)는 대조 분모에서
+제외한다. 이 매핑은 `purchase_reason_daily`만 읽는 DATA 계약이며 값이 바뀌면 파일과
+버전을 함께 올린다.
+
+매출·정산 금액은 이 Mart들의 범위가 아니다. §6.4를 따라 Backend의 PAID 주문 상품이
+정본이며 DW는 금액을 복제하지 않는다.
+
 ## 5. 실시간 Mart 후보
 
 ### 5.1 `realtime_event_stats`
