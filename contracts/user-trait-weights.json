@@ -1,37 +1,63 @@
 {
-  "version": "user-trait-v1-proposed",
-  "status": "proposed",
+  "version": "user-trait-v2",
+  "status": "confirmed",
+  "description": "장기 성향 Mart(user_trait_daily)의 행동 가중치. frontend/src/lib/trait.ts 의 traitContribution 과 같은 규칙이어야 한다.",
   "window_days": 30,
+  "dwell": {
+    "min_seconds": 2,
+    "cap_seconds": 60,
+    "note": "2초 미만은 스침이라 0점. 건당 60초 상한 (trait.ts dwell · DWELL_CAP_SECONDS)"
+  },
+  "long_term_blend_weight": 0.5,
+  "notes": {
+    "long_term_blend_weight": "Front 가 세션 점수에 이 Mart 값을 ×0.5 로 섞는다 (trait.ts:274). Mart 점수를 그대로 쓰지 않으므로 스케일 해석에 참고한다. Mart 산출에는 적용하지 않는다.",
+    "skin_type": "concern 의 '페르소나 skin_type 존재 +1.0' 은 Event 가 아니라 프로필 상수라 제외한다. Front 가 점수 합산 뒤 따로 얹는다 (trait.ts:272). Mart 에 넣으면 이중 계상된다.",
+    "participate": "참여 루프 이벤트(feedback_submit 등)는 아직 Event 계약에 없어 제외한다. 등록되면 추가한다.",
+    "decay": "Front 의 세션 감쇠(5분 1.0 → 30분 0.3)는 '방금 무엇을 봤나' 를 잡는 곡선이다. 장기 성향은 세션 점수가 임계 미만일 때 쓰는 폴백이라 안정적이어야 하므로 적용하지 않는다."
+  },
   "traits": {
     "price": [
       {"event_name": "filter_change", "property": "filter_kind", "values": ["price"], "weight": 1.0},
       {"event_name": "sort_change", "property": "sort_key", "values": ["price", "price_asc", "price_desc"], "weight": 1.0},
-      {"event_name": "text_selection", "property": "selection_kind", "values": ["price"], "weight": 1.5},
+      {"event_name": "variant_select", "property": "variant_kind", "values": ["size"], "weight": 0.5},
       {"event_name": "section_dwell", "property": "content_kind", "values": ["price"], "weight_per_second": 0.5},
-      {"event_name": "variant_select", "property": "variant_kind", "values": ["size"], "weight": 0.5}
+      {"event_name": "text_selection", "property": "selection_kind", "values": ["price"], "weight": 1.5},
+      {"event_name": "text_copy", "property": "selection_kind", "values": ["price"], "weight": 2.0},
+      {"event_name": "text_selection", "require_absent": "selection_kind", "property": "content_kind", "values": ["price"], "weight": 1.5},
+      {"event_name": "text_copy", "require_absent": "selection_kind", "property": "content_kind", "values": ["price"], "weight": 2.0},
+      {"event_name": "purchase_reason_select", "array_property": "reasons", "values": ["price"], "weight": 2.0}
     ],
     "ingredient": [
       {"event_name": "ingredient_view_mode_change", "weight": 1.5},
-      {"event_name": "accordion_toggle", "property": "section_id", "values": ["ingredients"], "weight": 1.0},
+      {"event_name": "accordion_toggle", "property": "section_id", "values": ["ingredients"], "excluded_property": "action", "excluded_values": ["collapse"], "weight": 1.0},
+      {"event_name": "section_dwell", "property": "section_id", "values": ["ingredients"], "weight_per_second": 1.0},
+      {"event_name": "review_expand", "property": "target", "values": ["ingredients"], "weight": 0.5},
       {"event_name": "text_selection", "property": "selection_kind", "values": ["ingredient"], "weight": 1.5},
       {"event_name": "text_copy", "property": "selection_kind", "values": ["ingredient"], "weight": 2.0},
-      {"event_name": "section_dwell", "property": "section_id", "values": ["ingredients"], "weight_per_second": 1.0},
-      {"event_name": "review_expand", "property": "target", "values": ["ingredients"], "weight": 0.5}
+      {"event_name": "text_selection", "require_absent": "selection_kind", "property_min_exclusive": {"name": "matched_count", "value": 0}, "weight": 1.5},
+      {"event_name": "text_copy", "require_absent": "selection_kind", "property_min_exclusive": {"name": "matched_count", "value": 0}, "weight": 2.0},
+      {"event_name": "purchase_reason_select", "array_property": "reasons", "values": ["ingredient", "clean_claim"], "weight": 2.0}
     ],
     "review": [
       {"event_name": "review_expand", "property": "target", "values": ["review_text", "jump_to_reviews"], "weight": 1.0},
       {"event_name": "review_filter_apply", "weight": 1.5},
+      {"event_name": "sort_change", "property": "sort_key", "values": ["rating", "reviews"], "weight": 0.5},
       {"event_name": "section_dwell", "property": "section_id", "values": ["reviews"], "weight_per_second": 1.0},
-      {"event_name": "section_dwell", "property": "content_kind", "values": ["review_stats"], "weight_per_second": 0.5}
+      {"event_name": "section_dwell", "property": "content_kind", "values": ["review_stats"], "weight_per_second": 0.5},
+      {"event_name": "purchase_reason_select", "array_property": "reasons", "values": ["reviews", "review_same_skin"], "weight": 2.0}
     ],
     "concern": [
       {"event_name": "filter_change", "property": "filter_kind", "values": ["concern"], "weight": 1.5},
       {"event_name": "section_dwell", "property": "content_kind", "values": ["highlight_badge", "clinical_claim"], "weight_per_second": 0.5},
-      {"event_name": "text_selection", "property": "selection_kind", "values": ["claim"], "weight": 1.0}
+      {"event_name": "text_selection", "property": "selection_kind", "values": ["claim"], "weight": 1.0},
+      {"event_name": "text_copy", "property": "selection_kind", "values": ["claim"], "weight": 1.0},
+      {"event_name": "text_selection", "require_absent": "selection_kind", "property": "content_kind", "values": ["clinical_claim"], "weight": 1.0},
+      {"event_name": "text_copy", "require_absent": "selection_kind", "property": "content_kind", "values": ["clinical_claim"], "weight": 1.0},
+      {"event_name": "purchase_reason_select", "array_property": "reasons", "values": ["skin_fit"], "weight": 2.0}
     ],
     "participate": [
       {"event_name": "section_dwell", "property": "content_kind", "values": ["brand_story"], "weight_per_second": 1.0},
-      {"event_name": "purchase_reason_select", "weight": 2.0}
+      {"event_name": "purchase_reason_select", "array_property": "reasons", "values": ["brand_trust"], "weight": 2.0}
     ]
   }
 }
