@@ -566,7 +566,8 @@ input = purchase_reason_fact, purchase_fact, user_trait_daily
 선언 이유와 관측 성향의 매핑은
 [`purchase-reason-trait-map.json`](./purchase-reason-trait-map.json)을 실행 원본으로
 사용한다. 매핑이 없는 이유(`texture_finish`, `recommendation`, `restock`)는 대조 분모에서
-제외한다. 현재 정책 상태는 `proposed`이며 합의된 값으로 파일을 갱신한 뒤 버전을 올린다.
+제외한다. 이 매핑은 `purchase_reason_daily`만 읽는 DATA 계약이며 값이 바뀌면 파일과
+버전을 함께 올린다.
 
 매출·정산 금액은 이 Mart들의 범위가 아니다. §6.4를 따라 Backend의 PAID 주문 상품이
 정본이며 DW는 금액을 복제하지 않는다.

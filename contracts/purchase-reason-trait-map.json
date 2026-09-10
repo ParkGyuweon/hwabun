@@ -1,6 +1,6 @@
 {
-  "version": "purchase-reason-trait-v1-proposed",
-  "status": "proposed",
+  "version": "purchase-reason-trait-v1",
+  "status": "confirmed",
   "description": "결제 직후 선언한 구매 이유를 user_trait_daily 의 관측 성향 축에 대응시킨다. 대조 결과는 purchase_reason_daily 가 저장한다.",
   "unmapped_reasons_are_excluded_from_denominator": true,
   "reason_to_trait": {
@@ -16,6 +16,8 @@
     "restock": null
   },
   "notes": {
+    "skin_fit": "personalized-banner-plan.md:66 의 concern 정의가 페르소나 skin_type 존재를 신호(+1.0 고정)로 포함한다. :93 콜드스타트도 skin_type 이 있으면 concern 으로 본다",
+    "brand_trust": "5축 중 소거법으로 participate 가 유일한 후보다. 의미가 완전히 겹치지는 않으나, 빼면 participate 성향 사용자가 일치로 잡힐 경로가 사라져 일치율이 구조적으로 낮아진다",
     "texture_finish": "제형·마감은 성향 5종 어디에도 대응하지 않는다. 억지로 붙이면 대조가 왜곡된다",
     "recommendation": "추천 경유는 성향이 아니라 유입 경로다. cross_brand_daily 의 추천 귀속으로 본다",
     "restock": "재구매의 선언 신호다. 성향 대조가 아니라 brand_repurchase_daily 의 관측 재구매와 교차 검증한다 (event-properties-schema.md §3.9)"
