@@ -223,6 +223,51 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             self.assertIn("banner_ctr", restored.columns)
             self.assertIn("event_date_kst", restored.columns)
 
+    def test_trait_rules_match_the_front_implementation(self):
+        """계약이 trait.ts 와 같은 규칙인지 본다. 어긋나면 장기 성향이 프론트와 갈린다."""
+        from streaming.jobs.build_marts_job import load_trait_contract
+
+        contract = load_trait_contract("contracts/user-trait-weights.json")
+        rows = [
+            # 이유별로 갈려야 한다. 예전 계약은 전부 participate 로 보냈다.
+            ("reason", "purchase_reason_select", '{"reasons":["price","skin_fit"]}'),
+            # 접는 동작은 세지 않는다
+            ("open", "accordion_toggle", '{"section_id":"ingredients","action":"expand"}'),
+            ("close", "accordion_toggle", '{"section_id":"ingredients","action":"collapse"}'),
+            # 2초 미만 스침은 0점, 60초 상한
+            ("blink", "section_dwell", '{"section_id":"reviews","dwell_ms":1500}'),
+            ("long", "section_dwell", '{"section_id":"reviews","dwell_ms":120000}'),
+            # selection_kind 가 없으면 폴백으로 본다
+            ("fallback", "text_selection", '{"content_kind":"price"}'),
+            # 리뷰 정렬은 review 신호다 (예전 계약에 없었다)
+            ("sort", "sort_change", '{"sort_key":"rating"}'),
+        ]
+        events = self.spark.createDataFrame(
+            [
+                (event_id, name, date(2026, 9, 8), "U1", "account",
+                 "user", "web", None, None, props)
+                for event_id, name, props in rows
+            ],
+            "event_id string, event_name string, event_date_kst date, user_id string, "
+            "identity_scope string, actor_type string, source string, scenario_id string, "
+            "simulation_run_id string, properties_json string",
+        )
+
+        scores = {
+            row["trait"]: row["trait_score"]
+            for row in _user_trait_daily(events, contract).collect()
+        }
+
+        # price 2.0(이유) + 1.5(폴백 선택) = 3.5
+        self.assertAlmostEqual(3.5, scores["price"], places=3)
+        # concern 2.0(skin_fit 이유). 예전 계약이면 participate 로 갔다
+        self.assertAlmostEqual(2.0, scores["concern"], places=3)
+        self.assertNotIn("participate", scores)
+        # ingredient 1.0(펼침만). 접는 동작은 빠진다
+        self.assertAlmostEqual(1.0, scores["ingredient"], places=3)
+        # review 0.5(정렬) + 60.0(체류 상한). 1.5초 스침은 0점
+        self.assertAlmostEqual(60.5, scores["review"], places=3)
+
     def test_analytics_baseline_keeps_pre_banner_metrics_only(self):
         facts = self.spark.createDataFrame(
             [

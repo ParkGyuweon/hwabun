@@ -430,8 +430,17 @@ input = sessionized_events
 trait은 `price`, `ingredient`, `review`, `concern`, `participate` 5종이다. 최근 30일
 행동의 `trait_score`, `trait_rank`, `is_primary_trait`, `window_start_date`,
 `window_end_date`, `contributing_event_count`, `trait_policy_version`을 저장한다.
-가중치와 기간은 `contracts/user-trait-weights.json`을 실행 원본으로 사용한다. 현재
-정책 상태는 `proposed`이며 합의된 값으로 파일을 갱신한 뒤 버전을 올린다.
+가중치와 기간은 `contracts/user-trait-weights.json`을 실행 원본으로 사용한다. 이 파일은
+Front의 세션 성향 계산기(`frontend/src/lib/trait.ts`)와 같은 규칙이어야 하며, 어긋나면
+같은 사용자가 화면과 Mart에서 다른 성향으로 잡힌다.
+
+체류는 2초 미만이면 0점이고 건당 60초가 상한이다. `accordion_toggle`은 펼칠 때만 센다.
+`selection_kind`가 실리지 않는 화면에서는 `content_kind`와 성분 매칭 수로 대신 본다.
+구매 이유는 선언한 이유별로 해당 trait에 넣는다 — 전부 `participate`로 보내면 가격 때문에
+산 사람도 참여 성향으로 잡힌다.
+
+Front는 세션 점수에 이 Mart 값을 ×0.5로 섞는다. Mart 점수를 그대로 화면 성향으로 읽지
+않는다. 페르소나 `skin_type` 상수와 세션 감쇠는 Event가 아니므로 Mart에 넣지 않는다.
 
 ### 4.12 `cross_brand_daily`
 

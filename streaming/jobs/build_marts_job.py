@@ -1365,6 +1365,12 @@ def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
     )
 
 
+def _non_blank_property(column: Any) -> Any:
+    from pyspark.sql import functions as F
+
+    return column.isNotNull() & (F.length(F.trim(column)) > 0)
+
+
 def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
     from functools import reduce
     from pyspark.sql import Window
@@ -1372,18 +1378,54 @@ def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
 
     signal_frames = []
     properties = F.col("properties_json")
+    dwell_rule = contract.get("dwell", {})
+    dwell_min = float(dwell_rule.get("min_seconds", 0))
+    dwell_cap = float(dwell_rule.get("cap_seconds", 0)) or None
+
+    def prop(name: str) -> Any:
+        return F.get_json_object(properties, f"$.{name}")
+
     for trait, rules in contract["traits"].items():
         for rule in rules:
             condition = F.col("event_name") == F.lit(rule["event_name"])
             property_name = rule.get("property")
             if property_name:
-                condition = condition & F.get_json_object(properties, f"$.{property_name}").isin(*rule["values"])
-            if "weight_per_second" in rule:
-                score = (
-                    F.coalesce(F.get_json_object(properties, "$.dwell_ms").cast("double"), F.lit(0.0))
-                    / F.lit(1000.0)
-                    * F.lit(float(rule["weight_per_second"]))
+                condition = condition & prop(property_name).isin(*rule["values"])
+            # 배열 property 는 원소 포함 여부로 본다 (purchase_reason_select.reasons)
+            array_property = rule.get("array_property")
+            if array_property:
+                values = F.from_json(prop(array_property), "array<string>")
+                matched = reduce(
+                    lambda left, right: left | right,
+                    [F.array_contains(values, F.lit(v)) for v in rule["values"]],
                 )
+                condition = condition & F.coalesce(matched, F.lit(False))
+            # selection_kind 가 안 실리는 화면의 폴백 규칙이다. 값이 있으면 위 규칙이 잡는다.
+            require_absent = rule.get("require_absent")
+            if require_absent:
+                condition = condition & ~_non_blank_property(prop(require_absent))
+            minimum = rule.get("property_min_exclusive")
+            if minimum:
+                condition = condition & (
+                    F.coalesce(prop(minimum["name"]).cast("double"), F.lit(0.0))
+                    > F.lit(float(minimum["value"]))
+                )
+            # 펼침만 센다. 접는 동작까지 세면 한 번 본 것이 두 번이 된다.
+            excluded_property = rule.get("excluded_property")
+            if excluded_property:
+                excluded = prop(excluded_property)
+                condition = condition & (
+                    excluded.isNull() | ~excluded.isin(*rule["excluded_values"])
+                )
+            if "weight_per_second" in rule:
+                seconds = F.coalesce(
+                    prop("dwell_ms").cast("double"), F.lit(0.0)
+                ) / F.lit(1000.0)
+                if dwell_cap:
+                    seconds = F.least(seconds, F.lit(dwell_cap))
+                score = F.when(
+                    seconds < F.lit(dwell_min), F.lit(0.0)
+                ).otherwise(seconds * F.lit(float(rule["weight_per_second"])))
             else:
                 score = F.lit(float(rule["weight"]))
             signal_frames.append(
