@@ -90,6 +90,7 @@ P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Hyaluroni
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Peptides,0.2,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Vitamin C,0.16,parsed
 P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Hyaluronic Acid,0.8571,parsed
+P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Salicylic Acid,0.7143,parsed
 P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Willow Bark,0.6667,parsed
 P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Licorice,0.4286,parsed
 P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,AHA/Glycolic Acid,1.0,parsed
@@ -132,6 +133,7 @@ P422905,Moisturizing Eye Bomb with Squalane,belif,Ceramide,0.7593,parsed
 P422905,Moisturizing Eye Bomb with Squalane,belif,Centella (Cica),0.7407,parsed
 P422905,Moisturizing Eye Bomb with Squalane,belif,Rosehip / Rose,0.5741,parsed
 P422905,Moisturizing Eye Bomb with Squalane,belif,Willow Bark,0.4444,parsed
+P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,SPF,1.0,parsed
 P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,Silicone,0.9211,parsed
 P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,Green Tea,0.5526,parsed
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Jojoba,0.8605,parsed
@@ -337,7 +339,7 @@ P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Prob
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Vitamin C,0.2326,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Silicone,0.9737,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Niacinamide,0.8684,parsed
-P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Retinol,0.6579,parsed
+P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Retinol,0.6842,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Centella (Cica),0.6316,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Ceramide,0.4474,parsed
 P453253,Vegan Milk Moisturizer,MILK MAKEUP,Squalane,0.9615,parsed
@@ -483,6 +485,7 @@ P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Green Tea,0.729
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Hyaluronic Acid,0.6757,parsed
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Collagen,0.6486,parsed
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Vitamin C,0.5135,parsed
+P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,SPF,1.0,parsed
 P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,Silicone,0.9444,parsed
 P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,Centella (Cica),0.5,parsed
 P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,Green Tea,0.3889,parsed
@@ -586,6 +589,7 @@ P416341,Crème de la Mer Moisturizer,La Mer,Mineral Oil / Petrolatum,0.9756,pars
 P416341,Crème de la Mer Moisturizer,La Mer,Zinc,0.561,parsed
 P416341,Crème de la Mer Moisturizer,La Mer,Panthenol (B5),0.2683,parsed
 P416341,Crème de la Mer Moisturizer,La Mer,Alcohol Denat,0.1,parsed
+P393718,Luna Sleeping Retinoid Night Oil,Sunday Riley,Retinol,0.7222,parsed
 P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Squalane,0.873,parsed
 P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Hyaluronic Acid,0.8413,parsed
 P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Niacinamide,0.6667,parsed
@@ -659,6 +663,7 @@ P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Hyaluronic Acid,
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Squalane,0.8235,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Caffeine,0.6667,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Peptides,0.6471,parsed
+P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Retinol,0.4706,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,SPF,0.1,parsed
 P392235,The Camellia Oil 2-in-1 Makeup Remover & Cleanser,Tatcha,Probiotic / Ferment,0.6875,parsed
 P392235,The Camellia Oil 2-in-1 Makeup Remover & Cleanser,Tatcha,Green Tea,0.625,parsed
@@ -684,7 +689,7 @@ P421998,Midnight Recovery Concentrate Moisturizing Face Oil,Kiehl's Since 1851,J
 P443842,Retinol Anti-Aging Serum,The INKEY List,Silicone,0.8621,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Squalane,0.7241,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Vitamin C,0.5862,parsed
-P443842,Retinol Anti-Aging Serum,The INKEY List,Retinol,0.3103,parsed
+P443842,Retinol Anti-Aging Serum,The INKEY List,Retinol,0.3448,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Probiotic / Ferment,0.2414,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Hyaluronic Acid,0.1724,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Peptides,0.1034,parsed

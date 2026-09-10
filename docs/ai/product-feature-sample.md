@@ -69,10 +69,10 @@
 | | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---:|---:|---:|---:|---:|---:|
 | **0** Balancing Force Oil Control To (OLEHENRIKSEN) | 1.000 | 0.061 | 0.005 | 0.173 | 0.001 | 0.694 |
-| **1** Cicapair Tiger Grass Cream (Dr. Jart+) | 0.061 | 1.000 | 0.190 | 0.266 | 0.015 | 0.003 |
-| **2** Lip Sleeping Mask Intense Hydr (LANEIGE) | 0.005 | 0.190 | 1.000 | 0.105 | 0.013 | 0.004 |
+| **1** Cicapair Tiger Grass Cream (Dr. Jart+) | 0.061 | 1.000 | 0.190 | 0.266 | 0.014 | 0.003 |
+| **2** Lip Sleeping Mask Intense Hydr (LANEIGE) | 0.005 | 0.190 | 1.000 | 0.105 | 0.012 | 0.004 |
 | **3** Greek Yoghurt Foaming Cream Cl (KORRES) | 0.173 | 0.266 | 0.105 | 1.000 | 0.002 | 0.066 |
-| **4** Smart Clinical Repair Wrinkle  (CLINIQUE) | 0.001 | 0.015 | 0.013 | 0.002 | 1.000 | 0.051 |
+| **4** Smart Clinical Repair Wrinkle  (CLINIQUE) | 0.001 | 0.014 | 0.012 | 0.002 | 1.000 | 0.051 |
 | **5** Glow2OH Dark Spot Toner (OLEHENRIKSEN) | 0.694 | 0.003 | 0.004 | 0.066 | 0.051 | 1.000 |
 
 **OLEHENRIKSEN 형제 두 개(0·5)가 0.694** 입니다. 같은 상품 0 와 다른 브랜드들의 코사인은 0.001~0.173 입니다.

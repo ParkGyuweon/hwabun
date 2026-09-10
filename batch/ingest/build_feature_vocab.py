@@ -33,8 +33,11 @@ ING_SYNONYMS = {
     "Hyaluronic Acid": ["hyaluronic acid", "sodium hyaluronate", "hyaluronate"],
     "Vitamin C": ["ascorbic acid", "ascorbyl", "ascorbate"],
     "Niacinamide": ["niacinamide"],
-    "Retinol": ["retinol", "retinyl"],
-    "Salicylic Acid": ["salicylic acid"],
+    # retinoate = hydroxypinacolone retinoate(HPR, 레티노이드 에스터). 태그 제거(Jira 237) 뒤 Luna Retinoid Oil 등
+    # 2개가 전성분에 HPR 이 있는데도 빠져서 추가 (2026-09-10, Jira 243). retinal = 레티날데하이드
+    "Retinol": ["retinol", "retinyl", "retinoate", "retinal", "retinaldehyde"],
+    # betaine salicylate = BHA 유도체(국내 각질 제품). butyloctyl/ethylhexyl salicylate 는 자차·에몰리언트라 넣지 않는다
+    "Salicylic Acid": ["salicylic acid", "betaine salicylate"],
     "AHA/Glycolic Acid": ["glycolic acid"],
     "Lactic Acid": ["lactic acid"],
     "Collagen": ["collagen"],
@@ -93,8 +96,8 @@ ING_SYNONYMS_KO = {
     "Hyaluronic Acid": ["히알루론산", "하이알루로닉애씨드", "하이알루로네이트", "소듐하이알루로네이트"],
     "Vitamin C": ["아스코빅애씨드", "아스코빌", "아스코르브산"],
     "Niacinamide": ["나이아신아마이드", "니아신아마이드"],
-    "Retinol": ["레티놀", "레티닐"],
-    "Salicylic Acid": ["살리실릭애씨드", "살리실산"],
+    "Retinol": ["레티놀", "레티닐", "레티노에이트", "레티날"],
+    "Salicylic Acid": ["살리실릭애씨드", "살리실산", "베타인살리실레이트"],
     "AHA/Glycolic Acid": ["글라이콜릭애씨드", "글리콜산"],
     "Lactic Acid": ["락틱애씨드", "젖산"],
     "Collagen": ["콜라겐"],
