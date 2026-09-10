@@ -30,8 +30,13 @@ export default function ProductGallery({ imageUrl, images, productName, productI
   const [failedSrc, setFailedSrc] = useState<Set<string>>(new Set());
   const [activeIndex, setActiveIndex] = useState(0);
 
+  /**
+   * 대표 이미지가 추가 이미지 목록의 첫 장과 같은 상품이 있다 (SSAFY Beauty 마스터 컷).
+   * 그대로 이으면 같은 사진이 썸네일에 두 번 나오고, 장수도 실제보다 한 장 많아 보인다.
+   * 주소가 같으면 한 장으로 본다 — 순서는 대표 이미지가 먼저인 지금 그대로 유지된다.
+   */
   const gallery = useMemo(
-    () => [imageUrl, ...images].filter((src): src is string => Boolean(src)),
+    () => [...new Set([imageUrl, ...images].filter((src): src is string => Boolean(src)))],
     [imageUrl, images],
   );
 
