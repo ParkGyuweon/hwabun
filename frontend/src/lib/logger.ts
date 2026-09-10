@@ -538,6 +538,22 @@ export function flush(useBeacon = false): void {
     return;
   }
 
+  post(body, batch, token);
+}
+
+/**
+ * 실제 전송 한 번.
+ *
+ * `token` 을 실었는데 401 이 오면 **헤더 없이 한 번만 다시 보낸다.**
+ * 비로그인 로그도 수집하기로 했으므로(데이터 파트 합의 2026-09-10) 401 은
+ * "이 토큰이 만료·손상됐다" 는 뜻이지 "이 로그가 필요 없다" 는 뜻이 아니다.
+ * 토큰이 15분이라 조금만 긴 세션이면 반드시 만료되는데, 그때 배치를 통째로
+ * 버리면 그 사람의 로그가 그 시점부터 끊긴다. 익명으로라도 남기는 편이 낫다.
+ *
+ * 재시도는 한 번뿐이다(`retriedAnonymously`). 헤더 없이 보낸 요청이 또 401 이면
+ * 그건 토큰 문제가 아니라 서버가 익명을 막고 있다는 뜻이라, 다시 보내도 같다.
+ */
+function post(body: string, batch: LogEnvelope[], token: string | null, retriedAnonymously = false): void {
   fetch(COLLECT_ENDPOINT, {
     method: 'POST',
     headers: token
@@ -547,6 +563,11 @@ export function flush(useBeacon = false): void {
     keepalive: true,
   })
     .then((response) => {
+      if (response.status === 401 && token && !retriedAnonymously) {
+        post(body, batch, null, true);
+        return;
+      }
+
       if (response.ok) {
         // 413 으로 줄었던 배치 크기를 천천히 되돌린다
         if (sendBatchSize < MAX_BATCH_SIZE) {
