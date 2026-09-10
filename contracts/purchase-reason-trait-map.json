@@ -1,0 +1,23 @@
+{
+  "version": "purchase-reason-trait-v1-proposed",
+  "status": "proposed",
+  "description": "결제 직후 선언한 구매 이유를 user_trait_daily 의 관측 성향 축에 대응시킨다. 대조 결과는 purchase_reason_daily 가 저장한다.",
+  "unmapped_reasons_are_excluded_from_denominator": true,
+  "reason_to_trait": {
+    "ingredient": "ingredient",
+    "clean_claim": "ingredient",
+    "price": "price",
+    "reviews": "review",
+    "review_same_skin": "review",
+    "skin_fit": "concern",
+    "brand_trust": "participate",
+    "texture_finish": null,
+    "recommendation": null,
+    "restock": null
+  },
+  "notes": {
+    "texture_finish": "제형·마감은 성향 5종 어디에도 대응하지 않는다. 억지로 붙이면 대조가 왜곡된다",
+    "recommendation": "추천 경유는 성향이 아니라 유입 경로다. cross_brand_daily 의 추천 귀속으로 본다",
+    "restock": "재구매의 선언 신호다. 성향 대조가 아니라 brand_repurchase_daily 의 관측 재구매와 교차 검증한다 (event-properties-schema.md §3.9)"
+  }
+}
