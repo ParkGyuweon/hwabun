@@ -45,5 +45,12 @@
     "segment": "SB000006-segment.webp",
     "price": "SB000006-price.webp",
     "ingredient": "SB000006-ingredient.webp"
+  },
+  "SB000007": {
+    "story": "SB000007-story.webp",
+    "concern": "SB000007-concern.webp",
+    "segment": "SB000007-segment.webp",
+    "price": "SB000007-price.webp",
+    "ingredient": "SB000007-ingredient.webp"
   }
 }
