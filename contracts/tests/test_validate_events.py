@@ -151,6 +151,39 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assertEqual(result.errors, [])
 
+    def test_scroll_events_are_product_scoped_only_on_product_detail(self) -> None:
+        for event_name, intent in (
+            ("scroll_depth", "exposure"),
+            ("scroll_pause", "interest"),
+        ):
+            for page_type, product_id, should_be_valid in (
+                ("product_list", None, True),
+                ("product_list", "", False),
+                ("product_detail", None, False),
+                ("product_detail", "P342", True),
+            ):
+                event = copy.deepcopy(self.user_event)
+                event.update(
+                    {
+                        "event_name": event_name,
+                        "intent": intent,
+                        "page_type": page_type,
+                        "product_id": product_id,
+                    }
+                )
+
+                result = self.validate_values(event)
+
+                with self.subTest(
+                    event_name=event_name,
+                    page_type=page_type,
+                    product_id=product_id,
+                ):
+                    if should_be_valid:
+                        self.assertEqual([], result.errors)
+                    else:
+                        self.assert_has_error(result.errors, "$.product_id")
+
     def test_product_target_event_requires_product_id(self) -> None:
         event = copy.deepcopy(self.user_event)
         event["product_id"] = None

@@ -92,7 +92,6 @@ PRODUCT_ID_REQUIRED_EVENTS = (
     "recommendation_click",
     "wishlist_toggle",
     "add_to_cart",
-    "scroll_depth",
     "impression_dwell",
     "media_view",
     "quick_look",
@@ -103,7 +102,6 @@ PRODUCT_ID_REQUIRED_EVENTS = (
     "review_filter_apply",
     "review_expand",
     "ingredient_view_mode_change",
-    "scroll_pause",
     "scroll_backtrack",
     "text_selection",
     "text_copy",
@@ -111,7 +109,13 @@ PRODUCT_ID_REQUIRED_EVENTS = (
     "banner_impression",
     "banner_click",
 )
-PRODUCT_DETAIL_SCOPED_EVENTS = ("page_view", "section_view", "section_dwell")
+PRODUCT_DETAIL_SCOPED_EVENTS = (
+    "page_view",
+    "section_view",
+    "section_dwell",
+    "scroll_depth",
+    "scroll_pause",
+)
 
 CANONICAL_ORDER_FIELDS = (
     "received_at",
