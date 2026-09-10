@@ -24,5 +24,6 @@ class WebConfigTest {
         assertThat(response.getHeader("Access-Control-Allow-Origin")).isEqualTo("http://localhost:3000");
         assertThat(response.getHeader("Access-Control-Expose-Headers"))
                 .contains("X-Request-Id", "Retry-After");
+        assertThat(registration.getFilter()).isNotNull();
     }
 }

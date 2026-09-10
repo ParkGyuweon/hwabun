@@ -298,6 +298,7 @@ class EventValidationTest {
     void permitsNewlyActivatedEventsWhenPurchasePropertiesMeetTheCollectorPolicy() {
         List<ActivityEvent> events = List.of(
                 event("navigation_click", "session"),
+                event("login", "session"),
                 event("begin_checkout", "conversion"),
                 event("purchase", "conversion"),
                 event("purchase_reason_select", "validation")
@@ -308,6 +309,29 @@ class EventValidationTest {
                     .as("%s should be accepted by the Collector allow-list", event.eventName())
                     .isEmpty();
         }
+    }
+
+    @Test
+    void validatesBannerPropertiesAndNewBrandNullValue() throws Exception {
+        ActivityEvent newBrand = new ActivityEvent(
+                "0.2.0-draft", "evt-banner", "banner_impression", "session",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "product_list", "SB000004", "user", "local", objectMapper.readTree("""
+                        {"banner_type":"new_brand","banner_value":null,"banner_slot":5,"trait_source":"session"}
+                        """)
+        );
+        ActivityEvent invalidSlot = new ActivityEvent(
+                "0.2.0-draft", "evt-banner-invalid", "banner_click", "interest",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
+                "product_list", "P001", "user", "local", objectMapper.readTree("""
+                        {"banner_type":"concern","banner_value":"Anti-Aging","slot":1,"trait_source":"session"}
+                        """)
+        );
+
+        assertThat(validator.validate(newBrand)).isEmpty();
+        assertThat(validator.validate(invalidSlot))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
     }
 
     private ActivityEvent event(String eventName, String intent) {
