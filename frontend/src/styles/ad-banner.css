@@ -140,7 +140,7 @@
   margin: 0;
   display: block;
   max-width: 9em;
-  font-size: 44px;
+  font-size: 40px;
   font-weight: 500;
   line-height: 1.18;
   letter-spacing: -0.035em;
@@ -157,7 +157,7 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin: 10px 0 0;
+  margin: 6px 0 0;
 }
 
 .ad__price {
@@ -194,8 +194,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 12px;
-  padding: 9px 16px;
+  margin-top: 8px;
+  padding: 8px 15px;
   border-radius: 999px;
   background: var(--ad-em);
   color: #fff;
@@ -260,14 +260,14 @@
 
 .ad--hero .ad__copy {
   grid-area: copy;
-  padding: 60px 20px 30px 40px;
+  padding: 56px 20px 26px 40px;
 }
 
 .ad--hero .ad__stage {
   grid-area: stage;
   align-self: center;
   justify-self: center;
-  width: min(100% - 44px, 256px);
+  width: min(100% - 44px, 240px);
   aspect-ratio: 1;
   margin: 22px 22px 22px 0;
   padding: 16px;
