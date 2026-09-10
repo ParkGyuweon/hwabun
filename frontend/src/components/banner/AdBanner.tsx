@@ -11,8 +11,16 @@ interface AdBannerProps {
   shape: 'hero' | 'card';
   /** 같은 피부 배너에 쓸 손 톤 */
   skinTone?: string;
-  /** 배너 칸 번호. 로그 property `banner_slot` 과 같은 값 */
+  /** 배너 칸 번호. 로그 property `banner_slot` 과 같은 값. 계약상 1 이상이다 */
   slot: number;
+  /**
+   * 이 세션이 20% 탐색군인지(`explore`). 노출 이벤트의 `trait_source` 로 나간다.
+   *
+   * 노출에 이 값이 없으면 탐색군 비중을 셀 분모가 없어진다. 검증 Job 이
+   * 노출 100건 이상에서 explore 비중 10~30% 를 확인하므로, 노출과 클릭에
+   * **같은 값**이 실려야 한다 (데이터 파트 회신 2026-09-10).
+   */
+  traitSource?: string;
   onSelect: (productId: string) => void;
 }
 
@@ -39,6 +47,7 @@ export default function AdBanner({
   shape,
   skinTone,
   slot,
+  traitSource,
   onSelect,
 }: AdBannerProps) {
   const c = creativeFor(product, axis, value, skinTone);
@@ -51,6 +60,7 @@ export default function AdBanner({
       data-concern={c.axis === 'concern' && value ? value : undefined}
       data-product-id={product.product_id}
       data-banner-slot={slot}
+      data-trait-source={traitSource}
       data-banner-type={c.axis}
       data-banner-value={value ?? undefined}
       data-log-content="recommendation_card"

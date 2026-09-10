@@ -63,6 +63,31 @@ permitAll 목록이 `/api/auth/**`, actuator, swagger, `GET /api/products*` 뿐�
 - `docker-compose.mysql.yml:17` 이 마운트하는 `contracts-data-dump.sql` 이 저장소에 없습니다.
   파일을 넣거나 그 줄을 지워 주세요.
 
+## 6. `/api/events` 를 토큰 없이도 받아 주세요 (2026-09-10 추가)
+
+JWT 식별 적용 회신 잘 받았습니다. 프론트는 붙였습니다 (dev `bc8b1b9`).
+로그인(MEMBER)이면 `Authorization: Bearer <token>` 을 얹고, 봉투에 `account_id` 는
+넣지 않습니다. `sendBeacon` 이 헤더를 못 실는 문제도 지적하신 대로
+로그인 상태에서는 `fetch(..., { keepalive: true })` 로 바꿨습니다.
+
+비로그인 수집 여부는 **계속 받는 것으로 정리됐습니다.** 그래서 두 가지 부탁드립니다.
+
+- **토큰 없는 요청에 200** — 지금 명세대로 401 이면 시뮬레이터(PA 100명)가 통째로
+  막힙니다. `simulator/agents/agent_runner.py:1875` 는 `X-Actor-Type`·
+  `X-Simulation-Run-Id` 만 보내고 `Authorization` 이 없으며,
+  `simulator/generator/gen_behavior_logs.py:787` 은 헤더가 아예 없습니다.
+  PA 는 로그인 계정이 없어 붙일 토큰도 없습니다.
+- **만료·손상 토큰도 401 대신 익명으로 강등** — JWT 가 15분이라 조금만 긴 세션이면
+  반드시 만료됩니다. 프론트는 401 을 받으면 헤더 없이 한 번 더 보내도록 해
+  뒀지만(dev `9b526af`), 서버가 익명으로 받아주면 이 왕복이 아예 없어집니다.
+
+### 확인 부탁 — 요청 본문 상한
+
+`fetch` 의 `keepalive` 는 브라우저가 본문을 64KB 로 제한합니다(모든 keepalive 요청
+합산). 프론트는 한 요청에 최대 100건을 보내는데, 이벤트 하나가 평균 600바이트만
+넘어도 걸립니다. 수집 서버의 본문 상한을 알려주시면 배치 건수를 맞추겠습니다.
+지금은 413 을 받으면 배치를 반으로 줄이는 동작이 있어 당장 유실은 없습니다.
+
 ---
 
 ## 참고 — 배포 전 필요

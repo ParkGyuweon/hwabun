@@ -30,6 +30,12 @@ interface UseImpressionOptions {
   algorithm?: string;
   /** 노출과 클릭을 같은 추천 요청으로 묶는 식별자 */
   recommendationId?: string;
+  /**
+   * 목록 전체에 공통으로 얹을 property. 카드마다 다른 값은 `data-*` 로 읽으므로
+   * 여기에는 목록 단위로 같은 것만 둔다 (예: 배너의 `policy_version`).
+   * 값이 undefined 인 키는 싣지 않는다.
+   */
+  extraProps?: Record<string, string | number | null | undefined>;
 }
 
 /**
@@ -55,8 +61,10 @@ export function useImpression({
   holdMs = DEFAULT_HOLD_MS,
   algorithm,
   recommendationId,
+  extraProps,
 }: UseImpressionOptions) {
   const containerRef = useRef<HTMLElement | null>(null);
+  const extraPropsKey = JSON.stringify(extraProps ?? null);
 
   useEffect(() => {
     const root = containerRef.current;
@@ -87,6 +95,9 @@ export function useImpression({
             ...(el.dataset.traitSource ? { trait_source: el.dataset.traitSource } : {}),
           }
         : {}),
+      ...Object.fromEntries(
+        Object.entries(extraProps ?? {}).filter(([, v]) => v !== undefined),
+      ),
     });
 
     const clearTimer = (el: Element) => {
@@ -170,7 +181,9 @@ export function useImpression({
       timers.forEach((id) => window.clearTimeout(id));
       timers.clear();
     };
-  }, [pageViewKey, eventName, listId, holdMs, algorithm, recommendationId]);
+    // extraProps 는 매 렌더 새 객체라 의존성에 그대로 두면 관찰자가 계속 재설치된다.
+    // 값이 바뀌었는지만 본다.
+  }, [pageViewKey, eventName, listId, holdMs, algorithm, recommendationId, extraPropsKey]);
 
   return containerRef;
 }
