@@ -2,9 +2,14 @@
 """합성 로그 생성기 ↔ 추천 서버 연동 (Jira 221).
 
 생성기가 `--recommend-url` 을 받으면 목록 화면마다 **실제 추천 서버**를 불러
-items(메인 10) · hero · banners(6칸, 5·6 은 신규 브랜드) 를 받고, 그 응답의
-recommendation_id · algorithm · banner_slot · banner_type · banner_value · trait_source 를
-이벤트에 **그대로** 싣는다. 프론트 184 가 서버 응답으로 하는 것과 같은 경로라,
+items(메인 10) · hero 를 받고, 그 응답의 recommendation_id · algorithm · banner_slot ·
+banner_type · banner_value · trait_source 를 이벤트에 **그대로** 싣는다.
+
+배너는 **히어로 하나**다 (2026-09-10, Jira 239). 배너 행 6칸(전용 칸 5·6)은 09-10 기획 검토로
+화면에서 빠졌고, 히어로는 `hero=new_brand` 로 신규 상품 중 점수 최고를 받는다(Jira 237).
+그래서 기본값이 banner_slots=1 · reserved=0 · hero=new_brand 이고, 화면과 같게 `hero_from_response`
+가 slot 1 하나를 만든다. 응답의 `banners[]` 는 화면에 없으므로 쓰지 않는다
+(`banners_from_response` 는 배너 행이 살아날 때를 위해 남긴다). 프론트 184 가 서버 응답으로 하는 것과 같은 경로라,
 DATA 의 banner_daily · recommendation 유입 Mart 가 실서비스 형태의 로그로 채워진다.
 
 세션 상태도 서버에 넘긴다 — 사람이 상세를 보고 담을 때마다 `POST /api/events` 로
@@ -29,12 +34,13 @@ STATE_EVENTS = frozenset({
 
 
 class RecommendClient:
-    def __init__(self, base_url, banner_slots=6, reserved=2, timeout=5.0, log=print, opener=None):
+    def __init__(self, base_url, banner_slots=1, reserved=0, hero="new_brand", timeout=5.0, log=print, opener=None):
         # Windows 의 urllib 는 localhost 를 ::1 로 먼저 시도해 실패한 뒤 127.0.0.1 로 가느라
         # 호출마다 약 2초를 잃는다 (실측 2,090ms vs 12ms). 서버는 127.0.0.1 에만 붙어 있다
         self.base = base_url.rstrip("/").replace("://localhost", "://127.0.0.1")
         self.banner_slots = int(banner_slots)
         self.reserved = int(reserved)
+        self.hero = hero                        # top | new_brand (recommendation-io-spec §5 `hero`)
         self.timeout = timeout
         self.log = log
         self.opener = opener or urllib.request.urlopen
@@ -66,7 +72,8 @@ class RecommendClient:
     # ── API ───────────────────────────────────────────────────────────────
     def recommend(self, persona_id, size=10):
         q = urllib.parse.urlencode({"persona_id": persona_id, "size": size,
-                                    "banner_slots": self.banner_slots, "reserved": self.reserved})
+                                    "banner_slots": self.banner_slots, "reserved": self.reserved,
+                                    "hero": self.hero})
         resp = self._call("GET", f"/api/recommend?{q}")
         if not resp:
             return None
@@ -94,8 +101,19 @@ class RecommendClient:
                 f"{'연결됨' if self.available else '연결 끊김 → 폴백'}")
 
 
+def hero_from_response(resp):
+    """서버 hero → 화면의 배너 목록(히어로 하나, slot 1). 프론트 ProductListPage 가 히어로를
+    `banner_slot: 1` 로 기록하는 것과 같다 (계약상 banner_slot 은 1 이상). hero 가 없으면 []"""
+    h = resp.get("hero")
+    if not h:
+        return []
+    return [{"slot": 1, "type": h["banner_type"], "value": h.get("banner_value"),
+             "product_id": h["product_id"], "trait_source": h.get("trait_source", "session"),
+             "reserved": bool(h.get("reserved", h.get("hero_policy") == "new_brand"))}]
+
+
 def banners_from_response(resp):
-    """서버 banners[] → 생성기가 쓰는 배너 dict. 이벤트 property 이름은 DATA 계약대로"""
+    """서버 banners[] → 생성기가 쓰는 배너 dict (배너 행이 있을 때). 이벤트 property 이름은 DATA 계약대로"""
     out = []
     for b in resp.get("banners") or []:
         out.append({"slot": b["banner_slot"], "type": b["banner_type"], "value": b.get("banner_value"),
