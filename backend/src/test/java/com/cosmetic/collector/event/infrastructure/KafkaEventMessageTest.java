@@ -120,4 +120,20 @@ class KafkaEventMessageTest {
 
         assertThat(message.source()).isEqualTo("simulator");
     }
+
+    @Test
+    void addsOnlyTheAuthenticatedAccountIdToTheKafkaEnvelope() {
+        ActivityEvent event = new ActivityEvent(
+                "0.2.0-draft", "evt-001", "product_click", "comparison",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "product_list", "product-001", "user", "local", new ObjectMapper().createObjectNode()
+        );
+
+        KafkaEventMessage message = KafkaEventMessage.from(
+                event, Instant.parse("2026-08-27T14:30:01Z"), "request-001", 0, "123"
+        );
+
+        assertThat(message.accountId()).isEqualTo("123");
+        assertThat(message.properties().has("account_id")).isFalse();
+    }
 }
