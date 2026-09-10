@@ -562,6 +562,8 @@ export interface ActionItem {
   basis?: Array<{ from: string; text: string }>;
   /** 무엇이 얼마나 바뀌면 성공인가 */
   verify?: string;
+  /** 처방 옆 꼬리표. "AI 문장" · "실증자료 필요: …" 처럼 출처와 주의를 짧게 */
+  tags?: string[];
 }
 
 const VERB_KO: Record<ActionItem['verb'], string> = {
@@ -605,6 +607,11 @@ export function Actions({ items }: { items: ActionItem[] }) {
               <p className="act__how">
                 <span className="act__rx-tag">이렇게 하세요</span>
                 {a.how}
+                {a.tags?.map((t) => (
+                  <span key={t} className="act__note-tag">
+                    {t}
+                  </span>
+                ))}
               </p>
               {a.basis && a.basis.length > 0 ? (
                 <details className="act__more">
