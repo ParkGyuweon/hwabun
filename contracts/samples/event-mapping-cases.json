@@ -39,5 +39,6 @@
   {"event_name": "purchase", "intent": "conversion", "product_id_policy": "nullable", "producer": "checkout"},
   {"event_name": "purchase_reason_select", "intent": "validation", "product_id_policy": "nullable", "producer": "checkout"},
   {"event_name": "banner_impression", "intent": "session", "product_id_policy": "required", "producer": "frontend"},
-  {"event_name": "banner_click", "intent": "interest", "product_id_policy": "required", "producer": "frontend"}
+  {"event_name": "banner_click", "intent": "interest", "product_id_policy": "required", "producer": "frontend"},
+  {"event_name": "login", "intent": "session", "product_id_policy": "nullable", "producer": "frontend"}
 ]

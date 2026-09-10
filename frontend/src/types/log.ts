@@ -16,6 +16,8 @@ export const SCHEMA_VERSION = '0.2.0-draft';
 
 /** 우선순위 P0. 추천과 마케팅 분석에 반드시 필요한 이벤트 */
 export type P0EventName =
+  /** 세션 도중 로그인 성공. 이 뒤의 Event 부터 account_id 가 채워진다 */
+  | 'login'
   | 'session_start'
   | 'page_view'
   /**
@@ -219,6 +221,7 @@ export type IntentClass =
 /** 이벤트 → 의미. 로거가 이 표를 보고 envelope 의 intent 를 채운다 */
 export const EVENT_INTENT: Record<EventName, IntentClass> = {
   session_start: 'session',
+  login: 'session',
   page_view: 'session',
   // 상품을 열어본 것 자체가 관심의 시작이다
   product_view: 'interest',
@@ -373,6 +376,7 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
 
   // 메타. 선호도가 아니다
   session_start: 0,
+  login: 0,
   exit_summary: 0,
 
   /**

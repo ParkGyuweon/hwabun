@@ -5,6 +5,7 @@
   "intent": "interest",
   "occurred_at": "2026-09-01T01:15:00.000Z",
   "persona_id": "PA00001",
+  "account_id": null,
   "session_id": "session-synthetic-agent-0001",
   "page_view_id": "page-view-synthetic-agent-0001",
   "sequence_no": 1,
