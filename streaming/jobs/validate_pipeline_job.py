@@ -32,6 +32,9 @@ DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
 DEFAULT_BRAND_DAILY_PATH = "data/marts/brand_daily_kpi"
+DEFAULT_PRODUCT_REPURCHASE_PATH = "data/marts/product_repurchase_daily"
+DEFAULT_BRAND_REPURCHASE_PATH = "data/marts/brand_repurchase_daily"
+DEFAULT_PURCHASE_REASON_PATH = "data/marts/purchase_reason_daily"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -60,6 +63,9 @@ class ValidatePipelineConfig:
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
     brand_daily_path: str = DEFAULT_BRAND_DAILY_PATH
+    product_repurchase_path: str = DEFAULT_PRODUCT_REPURCHASE_PATH
+    brand_repurchase_path: str = DEFAULT_BRAND_REPURCHASE_PATH
+    purchase_reason_path: str = DEFAULT_PURCHASE_REASON_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -89,6 +95,9 @@ class ValidatePipelineConfig:
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
             "brand_daily_path": self.brand_daily_path,
+            "product_repurchase_path": self.product_repurchase_path,
+            "brand_repurchase_path": self.brand_repurchase_path,
+            "purchase_reason_path": self.purchase_reason_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
             "banner_daily_path": self.banner_daily_path,
@@ -179,6 +188,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("BRAND_DAILY_KPI_PATH", DEFAULT_BRAND_DAILY_PATH),
     )
     parser.add_argument(
+        "--product-repurchase-path",
+        default=_env("PRODUCT_REPURCHASE_DAILY_PATH", DEFAULT_PRODUCT_REPURCHASE_PATH),
+    )
+    parser.add_argument(
+        "--brand-repurchase-path",
+        default=_env("BRAND_REPURCHASE_DAILY_PATH", DEFAULT_BRAND_REPURCHASE_PATH),
+    )
+    parser.add_argument(
+        "--purchase-reason-path",
+        default=_env("PURCHASE_REASON_DAILY_PATH", DEFAULT_PURCHASE_REASON_PATH),
+    )
+    parser.add_argument(
         "--ingredient-weekly-path",
         default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
     )
@@ -228,6 +249,9 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
         brand_daily_path=args.brand_daily_path,
+        product_repurchase_path=args.product_repurchase_path,
+        brand_repurchase_path=args.brand_repurchase_path,
+        purchase_reason_path=args.purchase_reason_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
         banner_daily_path=args.banner_daily_path,
@@ -394,6 +418,9 @@ def validate_frames(
     product_daily = frames["product_daily"]
     funnel_daily = frames["funnel_daily"]
     brand_daily = frames["brand_daily"]
+    product_repurchase = frames["product_repurchase"]
+    brand_repurchase = frames["brand_repurchase"]
+    purchase_reason = frames["purchase_reason"]
     ingredient_weekly = frames["ingredient_weekly"]
     category_price = frames["category_price"]
     banner_daily = frames["banner_daily"]
@@ -418,6 +445,9 @@ def validate_frames(
         "product_daily": product_daily.count(),
         "funnel_daily": funnel_daily.count(),
         "brand_daily": brand_daily.count(),
+        "product_repurchase": product_repurchase.count(),
+        "brand_repurchase": brand_repurchase.count(),
+        "purchase_reason": purchase_reason.count(),
         "ingredient_weekly": ingredient_weekly.count(),
         "category_price": category_price.count(),
         "banner_daily": banner_daily.count(),
@@ -961,6 +991,134 @@ def validate_frames(
         brand_difference_count == 0,
         f"differing_rows={brand_difference_count}; mart_processed_at excluded",
     ))
+
+    axes = ["actor_type", "source", "scenario_id", "simulation_run_id"]
+    purchase_grains = {
+        "product_repurchase_daily": (
+            product_repurchase,
+            ["snapshot_date_kst", "brand_id", "product_id", *axes],
+        ),
+        "brand_repurchase_daily": (
+            brand_repurchase,
+            ["snapshot_date_kst", "brand_id", *axes],
+        ),
+        "purchase_reason_daily": (
+            purchase_reason,
+            ["event_date_kst", "brand_id", "reason", *axes],
+        ),
+    }
+    for name, (frame, grain) in purchase_grains.items():
+        checks.append(_check(
+            f"{name}_grain_is_unique",
+            _duplicate_count(frame, grain) == 0,
+            f"{name} configured grain is unique",
+        ))
+        invalid_brands = frame.where(
+            F.col("brand_id").isNull() | (F.length(F.trim(F.col("brand_id"))) == 0)
+        ).count()
+        checks.append(_check(
+            f"{name}_brand_id_is_valid",
+            invalid_brands == 0,
+            f"invalid_rows={invalid_brands}",
+        ))
+
+    for name, frame in (
+        ("product_repurchase_daily", product_repurchase),
+        ("brand_repurchase_daily", brand_repurchase),
+    ):
+        invalid_counts = frame.where(
+            (F.col("repeat_buyer_count") > F.col("buyer_count"))
+            | (F.col("purchase_order_count") < F.col("buyer_count"))
+            | (F.col("buyer_count") < 0)
+            | (
+                (F.col("buyer_count") == 0)
+                & F.col("repurchase_rate").isNotNull()
+            )
+            | (
+                (F.col("buyer_count") > 0)
+                & ~F.col("repurchase_rate").between(0.0, 1.0)
+            )
+            | (F.col("median_days_between_purchases") < 0)
+        ).count()
+        checks.append(_check(
+            f"{name}_counts_and_rate_follow_contract",
+            invalid_counts == 0,
+            f"invalid_rows={invalid_counts}",
+        ))
+
+    invalid_restock = brand_repurchase.where(
+        F.col("declared_restock_order_count").isNull()
+        | (F.col("declared_restock_order_count") < 0)
+        | (F.col("declared_restock_order_count") > F.col("purchase_order_count"))
+    ).count()
+    checks.append(_check(
+        "brand_repurchase_declared_restock_is_bounded",
+        invalid_restock == 0,
+        f"invalid_rows={invalid_restock}",
+    ))
+
+    invalid_reason_counts = purchase_reason.where(
+        (F.col("primary_order_count") > F.col("order_count"))
+        | (F.col("skipped_order_count") > F.col("order_count"))
+        | (F.col("trait_matched_order_count") > F.col("trait_compared_order_count"))
+        | (F.col("trait_compared_order_count") > F.col("order_count"))
+        # 건너뛴 응답은 이유가 없으므로 비중 분모에 들어가면 안 된다.
+        | (F.col("reason").isNull() & F.col("reason_share").isNotNull())
+        | (
+            (F.col("trait_compared_order_count") == 0)
+            & F.col("trait_match_rate").isNotNull()
+        )
+        | (
+            (F.col("trait_compared_order_count") > 0)
+            & ~F.col("trait_match_rate").between(0.0, 1.0)
+        )
+        | (
+            F.col("reason_share").isNotNull()
+            & ~F.col("reason_share").between(0.0, 1.0)
+        )
+    ).count()
+    checks.append(_check(
+        "purchase_reason_daily_counts_and_rates_follow_contract",
+        invalid_reason_counts == 0,
+        f"invalid_rows={invalid_reason_counts}",
+    ))
+
+    try:
+        from .build_marts_job import (
+            _brand_repurchase_daily,
+            _product_repurchase_daily,
+        )
+    except ImportError:
+        from build_marts_job import (
+            _brand_repurchase_daily,
+            _product_repurchase_daily,
+        )
+    window_days = int(
+        product_repurchase.select("window_days").first()["window_days"]
+    ) if product_repurchase.head(1) else 0
+    if window_days > 0:
+        rebuilt = {
+            "product_repurchase_daily": (
+                product_repurchase,
+                _product_repurchase_daily(purchase_fact, window_days),
+            ),
+            "brand_repurchase_daily": (
+                brand_repurchase,
+                _brand_repurchase_daily(purchase_fact, purchase_reason_fact, window_days),
+            ),
+        }
+        for name, (stored, expected) in rebuilt.items():
+            columns = [c for c in stored.columns if c != "mart_processed_at"]
+            difference = (
+                expected.select(*columns).exceptAll(stored.select(*columns)).count()
+                + stored.select(*columns).exceptAll(expected.select(*columns)).count()
+            )
+            checks.append(_check(
+                f"{name}_is_deterministic_from_inputs",
+                difference == 0,
+                f"differing_rows={difference}; mart_processed_at excluded",
+            ))
+
     checks.append(
         _check(
             "ingredient_weekly_grain_is_unique",
@@ -1208,6 +1366,9 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "product_daily": config.product_daily_path,
         "funnel_daily": config.funnel_daily_path,
         "brand_daily": config.brand_daily_path,
+        "product_repurchase": config.product_repurchase_path,
+        "brand_repurchase": config.brand_repurchase_path,
+        "purchase_reason": config.purchase_reason_path,
         "ingredient_weekly": config.ingredient_weekly_path,
         "category_price": config.category_price_path,
         "banner_daily": config.banner_daily_path,
