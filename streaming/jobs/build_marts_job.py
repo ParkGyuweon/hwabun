@@ -9,6 +9,7 @@ Outputs:
 * ``funnel_session_fact``: one row per session and product
 * ``product_daily_kpi``: product/event-date KPI counts and rates
 * ``funnel_daily_kpi``: session-based funnel reach and conversion rates
+* ``brand_daily_kpi``: brand/event-date KPI sessions and rates
 * ``ingredient_weekly_interest``: position-weighted ingredient interest
 * ``category_price_reference``: secondary-category median price reference
 """
@@ -29,6 +30,7 @@ DEFAULT_PRODUCT_FACT_PATH = "data/processed/product_event_fact"
 DEFAULT_FUNNEL_SESSION_PATH = "data/processed/funnel_session_fact"
 DEFAULT_PRODUCT_DAILY_PATH = "data/marts/product_daily_kpi"
 DEFAULT_FUNNEL_DAILY_PATH = "data/marts/funnel_daily_kpi"
+DEFAULT_BRAND_DAILY_PATH = "data/marts/brand_daily_kpi"
 DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
 DEFAULT_PRODUCT_INGREDIENT_PATH = "batch/ingest/data/serving/product_ingredient.csv"
 DEFAULT_INGREDIENT_VOCAB_PATH = "batch/ingest/data/serving/ingredient_vocab.csv"
@@ -74,6 +76,7 @@ class BuildMartsConfig:
     funnel_session_path: str = DEFAULT_FUNNEL_SESSION_PATH
     product_daily_path: str = DEFAULT_PRODUCT_DAILY_PATH
     funnel_daily_path: str = DEFAULT_FUNNEL_DAILY_PATH
+    brand_daily_path: str = DEFAULT_BRAND_DAILY_PATH
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
     product_ingredient_path: str = DEFAULT_PRODUCT_INGREDIENT_PATH
     ingredient_vocab_path: str = DEFAULT_INGREDIENT_VOCAB_PATH
@@ -101,6 +104,7 @@ class BuildMartsConfig:
             "funnel_session_path": self.funnel_session_path,
             "product_daily_path": self.product_daily_path,
             "funnel_daily_path": self.funnel_daily_path,
+            "brand_daily_path": self.brand_daily_path,
             "dim_product_path": self.dim_product_path,
             "product_ingredient_path": self.product_ingredient_path,
             "ingredient_vocab_path": self.ingredient_vocab_path,
@@ -185,6 +189,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="funnel_daily_kpi output path",
     )
     parser.add_argument(
+        "--brand-daily-path",
+        default=_env("BRAND_DAILY_KPI_PATH", DEFAULT_BRAND_DAILY_PATH),
+        help="brand_daily_kpi output path",
+    )
+    parser.add_argument(
         "--dim-product-path",
         default=_env("DIM_PRODUCT_PATH", DEFAULT_DIM_PRODUCT_PATH),
         help="dim_product input path",
@@ -254,6 +263,7 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         funnel_session_path=args.funnel_session_path,
         product_daily_path=args.product_daily_path,
         funnel_daily_path=args.funnel_daily_path,
+        brand_daily_path=args.brand_daily_path,
         dim_product_path=args.dim_product_path,
         product_ingredient_path=args.product_ingredient_path,
         ingredient_vocab_path=args.ingredient_vocab_path,
@@ -611,6 +621,85 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
                 F.lit(1.0) - F.col("purchase_sessions") / F.col("add_to_cart_sessions"),
             ).otherwise(F.lit(None).cast("double")),
         )
+    )
+
+
+def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: str) -> Any:
+    """Aggregate brand KPIs from facts without summing product-grain sessions."""
+
+    from pyspark.sql import functions as F
+
+    axes = ["actor_type", "source", "scenario_id", "simulation_run_id"]
+    key_columns = ["event_date_kst", "brand_id", *axes]
+    valid_brand = F.col("brand_id").isNotNull() & (
+        F.length(F.trim(F.col("brand_id"))) > 0
+    )
+
+    product_events = product_fact_df.where(
+        valid_brand
+        & F.col("event_name").isin(
+            "product_impression", "product_view", "add_to_cart"
+        )
+    ).select(
+        *key_columns,
+        "session_id",
+        "user_id",
+        "product_id",
+        (F.col("event_name") == "product_impression").alias("_impression"),
+        (F.col("event_name") == "product_view").alias("_product_view"),
+        F.lit(False).alias("_information_view"),
+        (F.col("event_name") == "add_to_cart").alias("_add_to_cart"),
+    )
+
+    # Information actions are stored on the product-scoped Funnel fact. Keep
+    # only brand sessions that also reached a product view on the same KST day;
+    # this preserves the information/cart <= view Funnel contract at day grain.
+    view_keys = product_events.where(F.col("_product_view")).select(
+        *key_columns, "session_id"
+    ).distinct()
+    information_events = funnel_session_df.where(
+        valid_brand & F.col("first_information_view_at").isNotNull()
+    ).select(
+        F.to_date(
+            F.from_utc_timestamp(F.col("first_information_view_at"), time_zone)
+        ).alias("event_date_kst"),
+        "brand_id",
+        *axes,
+        "session_id",
+        "user_id",
+        "product_id",
+    )
+    join_condition = [
+        information_events[column].eqNullSafe(view_keys[column])
+        for column in [*key_columns, "session_id"]
+    ]
+    information_events = information_events.join(
+        view_keys, join_condition, "left_semi"
+    ).select(
+        *key_columns,
+        "session_id",
+        "user_id",
+        "product_id",
+        F.lit(False).alias("_impression"),
+        F.lit(False).alias("_product_view"),
+        F.lit(True).alias("_information_view"),
+        F.lit(False).alias("_add_to_cart"),
+    )
+
+    stages = product_events.unionByName(information_events)
+    result = stages.groupBy(*key_columns).agg(
+        F.countDistinct(F.when(F.col("_impression"), F.col("session_id"))).cast("long").alias("impression_sessions"),
+        F.countDistinct(F.when(F.col("_product_view"), F.col("session_id"))).cast("long").alias("product_view_sessions"),
+        F.countDistinct(F.when(F.col("_information_view"), F.col("session_id"))).cast("long").alias("information_view_sessions"),
+        F.countDistinct(F.when(F.col("_add_to_cart"), F.col("session_id"))).cast("long").alias("add_to_cart_sessions"),
+        F.countDistinct("user_id").cast("long").alias("unique_user_count"),
+        F.countDistinct(F.when(F.col("_product_view"), F.col("product_id"))).cast("long").alias("product_count_viewed"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    return (
+        result.withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_sessions"), F.col("impression_sessions")))
+        .withColumn("information_view_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
+        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
     )
 
 
@@ -1174,6 +1263,9 @@ def build_mart_frames(
         "funnel_session_fact": funnel_session,
         "product_daily_kpi": _product_daily_kpi(product_fact_df, event_weights),
         "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
+        "brand_daily_kpi": _brand_daily_kpi(
+            product_fact_df, funnel_session, time_zone
+        ),
         "cross_brand_daily": _cross_brand_daily(sessionized_df),
     }
     if trait_contract is not None:
@@ -1293,6 +1385,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     )
     frames["funnel_daily_kpi"].write.mode("overwrite").parquet(
         config.funnel_daily_path,
+    )
+    _write_mart(
+        frames["brand_daily_kpi"], config.brand_daily_path, "event_date_kst"
     )
     _write_mart(
         frames["ingredient_weekly_interest"],
