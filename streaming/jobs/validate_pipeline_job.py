@@ -1268,14 +1268,22 @@ def validate_frames(
     ))
     impressions = banner_facts.where(F.col("event_name") == "banner_impression")
     impression_count = impressions.count()
-    explore_count = impressions.where(F.col("trait_source") == "explore").count()
-    explore_share = explore_count / impression_count if impression_count else None
+    # trait_source 는 배정 결과가 아니라 그 시점에 무엇으로 축을 골랐는지다.
+    # 성향이 아직 없는 세션은 explore 배정과 무관하게 coldstart 로 빠지므로
+    # (Front 의 성향 계산기), 탐색 조작이 적용된 모집단만 분모로 쓴다.
+    # 히어로 배너가 목록 첫 화면이라 coldstart 노출 비중이 크고, 전체를 분모로
+    # 잡으면 배정이 정상이어도 20% 가 나올 수 없다.
+    assigned = impressions.where(F.col("trait_source") != F.lit("coldstart"))
+    assigned_count = assigned.count()
+    explore_count = assigned.where(F.col("trait_source") == "explore").count()
+    explore_share = explore_count / assigned_count if assigned_count else None
     # Sampling fluctuates at small N; enforce a broad operational guardrail only at N>=100.
-    explore_ok = impression_count < 100 or (explore_share is not None and 0.1 <= explore_share <= 0.3)
+    explore_ok = assigned_count < 100 or (explore_share is not None and 0.1 <= explore_share <= 0.3)
     checks.append(_check(
         "banner_explore_impression_share_is_near_twenty_percent",
         explore_ok,
-        f"impressions={impression_count} explore={explore_count} share={explore_share}",
+        f"impressions={impression_count} assigned={assigned_count} "
+        f"explore={explore_count} share={explore_share}; coldstart 는 분모에서 제외",
     ))
     checks.append(_check(
         "user_trait_daily_grain_is_unique",
