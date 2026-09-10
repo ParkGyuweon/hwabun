@@ -46,6 +46,7 @@ class RawToCleanedSparkTest(unittest.TestCase):
         received_at="2026-09-09T01:00:00Z",
         product_id="P1",
         properties=None,
+        account_id=None,
     ):
         if properties is None:
             properties = {
@@ -64,6 +65,7 @@ class RawToCleanedSparkTest(unittest.TestCase):
             "received_at": received_at,
             "source": "web",
             "persona_id": None,
+            "account_id": account_id,
             "session_id": "session-150",
             "page_view_id": "page-150",
             "sequence_no": 1,
@@ -222,6 +224,73 @@ class RawToCleanedSparkTest(unittest.TestCase):
                 .collect()
             },
         )
+
+    def test_user_id_and_identity_scope_split_three_ways(self):
+        """로그인·비로그인·합성 로그가 각각 다른 식별자 축으로 정리돼야 한다."""
+        member = self._event("member-login", account_id="acc-1")
+        anonymous = self._event("anonymous-visit")
+        synthetic = self._event("synthetic-run")
+        synthetic.update({
+            "actor_type": "synthetic",
+            "source": "simulator",
+            "persona_id": "PC00001",
+        })
+        synthetic["properties"] = dict(
+            synthetic["properties"],
+            scenario_id="K01",
+            simulation_run_id="RUN1",
+            generator_type="python_batch",
+        )
+        # 합성 로그에 계정 식별자가 오면 두 축이 섞이므로 격리한다.
+        contaminated = self._event("synthetic-with-account", account_id="acc-2")
+        contaminated.update({
+            "actor_type": "synthetic",
+            "source": "simulator",
+            "persona_id": "PC00002",
+        })
+        contaminated["properties"] = dict(
+            contaminated["properties"],
+            scenario_id="K01",
+            simulation_run_id="RUN1",
+            generator_type="python_batch",
+        )
+
+        raw = build_raw_events_frame(
+            self._kafka_frame([member, anonymous, synthetic, contaminated]),
+            "test-cluster",
+        )
+        frames = build_processed_frames(raw, "Asia/Seoul")
+        rows = {
+            row["event_id"]: row
+            for row in frames["cleaned_events"]
+            .select("event_id", "user_id", "identity_scope", "account_id")
+            .collect()
+        }
+
+        self.assertEqual({"member-login", "anonymous-visit", "synthetic-run"}, set(rows))
+        self.assertEqual("acc-1", rows["member-login"]["user_id"])
+        self.assertEqual("account", rows["member-login"]["identity_scope"])
+        self.assertIsNone(rows["anonymous-visit"]["user_id"])
+        self.assertEqual("session", rows["anonymous-visit"]["identity_scope"])
+        self.assertEqual("PC00001", rows["synthetic-run"]["user_id"])
+        self.assertEqual("persona", rows["synthetic-run"]["identity_scope"])
+        self.assertEqual(
+            {"synthetic-with-account"},
+            {
+                row["event_id"]
+                for row in frames["bad_events"]
+                .where("error_code = 'invalid_identity_scope'")
+                .select("event_id")
+                .collect()
+            },
+        )
+
+        raw_account = {
+            row["event_id"]: row["account_id"]
+            for row in raw.select("event_id", "account_id").collect()
+        }
+        self.assertEqual("acc-1", raw_account["member-login"])
+        self.assertIsNone(raw_account["anonymous-visit"])
 
 
 if __name__ == "__main__":
