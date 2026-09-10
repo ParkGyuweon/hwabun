@@ -54,6 +54,13 @@ export interface Product {
   /** 파생 필드. 빈 배열인 상품이 절반 가까이 된다 */
   suitable_skin_types: SkinType[];
   skincare_concerns: string[];
+  /**
+   * 어디서 온 상품인가. 백엔드(shop_backend)에서 온 상품만 장바구니·주문·피드백 API 를 탈 수 있다.
+   * 세포라 200개·SSAFY Beauty 시드는 백엔드 DB 에 없어서 목 경로다. 비어 있으면 목이다.
+   */
+  source?: 'backend' | 'brand_registered';
+  /** 백엔드 브랜드 id. 판매자 피드백·대시보드 조회에 쓴다 */
+  backend_brand_id?: string;
 }
 
 export type SkinType = 'combination' | 'dry' | 'normal' | 'oily';
@@ -73,6 +80,8 @@ export interface ProductVariant {
    * 이걸 갤러리에 쓰면 확대돼서 뭉개지므로 자리를 나눠 둔다. 없으면 image_url 로 대신한다.
    */
   swatch_url: string | null;
+  /** 백엔드 옵션 id. 장바구니 API(POST /api/cart/items) 는 이 값으로 담는다. 목 상품은 없다 */
+  variant_id?: string;
 }
 
 /**

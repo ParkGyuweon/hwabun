@@ -50,3 +50,12 @@ export const effectivePrice = (p: Pick<Product, 'price_usd' | 'sale_price_usd'>)
 /** 배지에 쓰는 정수 % */
 export const discountPercent = (p: Pick<Product, 'price_usd' | 'sale_price_usd'>): number =>
   hasDiscount(p) ? Math.round((1 - (p.sale_price_usd as number) / p.price_usd) * 100) : 0;
+
+/**
+ * 고른 옵션의 백엔드 옵션 id. 옵션을 안 고르면 첫 옵션. 목 상품은 없다(undefined).
+ * 장바구니 API 가 variantId 로만 담기 때문에 담을 때 같이 싣는다.
+ */
+export function variantIdOf(p: Product, skuId: string | null): string | undefined {
+  const v = (skuId ? p.variants.find((x) => x.sku_id === skuId) : undefined) ?? p.variants[0];
+  return v?.variant_id;
+}

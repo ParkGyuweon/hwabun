@@ -8,7 +8,7 @@ import {
   KRW_PER_USD,
   fromProduct,
   removeRegistered,
-  saveRegistered,
+  registerProduct,
   setDraft,
   validateForm,
 } from '../../lib/productRegistry';
@@ -70,12 +70,26 @@ export default function RegisterScreen() {
     reader.readAsDataURL(file);
   };
 
-  const save = () => {
-    if (errors.length) return;
-    const item = saveRegistered(form, editingId ?? undefined);
-    setSavedMsg(`${item.product.product_name} 을(를) ${editingId ? '수정' : '등록'}했습니다. 쇼핑몰에 바로 보입니다.`);
-    setForm(EMPTY_FORM);
-    setEditingId(null);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (errors.length || saving) return;
+    setSaving(true);
+    try {
+      const r = await registerProduct(form, editingId ?? undefined);
+      if (r.mode === 'backend') {
+        setSavedMsg(
+          `${r.product.product_name} 을(를) 백엔드에 등록했습니다.${r.activated ? ' 쇼핑몰에 바로 보입니다.' : ' 승인(ACTIVE) 전이라 쇼핑몰에는 아직 안 보입니다.'}`,
+        );
+      } else {
+        setSavedMsg(
+          `${r.product.product_name} 을(를) ${editingId ? '수정' : '등록'}했습니다 (이 브라우저에만 저장). 백엔드 등록은 실패: ${r.reason}`,
+        );
+      }
+      setForm(EMPTY_FORM);
+      setEditingId(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const edit = (id: string) => {

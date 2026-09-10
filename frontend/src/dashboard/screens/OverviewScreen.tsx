@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchSellerPulse } from '../../lib/shopApi';
+import { loadBrandId } from '../../lib/brands';
+import type { SellerPulse } from '../../lib/shopApi';
 import { BarList, Funnel, Kpi, LineChart, Panel } from '../components';
 import { dailySeries, fmt, overview, productMetrics, standardFunnel } from '../lib/metrics';
 import { rankInsights } from '../lib/insight';
@@ -29,8 +32,30 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
 
   const infoRate = (overview.ingredientViewRate + overview.reviewViewRate) / 2;
 
+  /** 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다 */
+  const [pulse, setPulse] = useState<SellerPulse | null>(null);
+  useEffect(() => {
+    const brandId = loadBrandId();
+    if (!brandId) return;
+    let alive = true;
+    void fetchSellerPulse(brandId).then((p) => {
+      if (alive) setPulse(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   return (
     <div className="stack">
+      {pulse ? (
+        <div className="grid grid--kpi">
+          <Kpi label="백엔드 주문" value={fmt.int(pulse.orders)} sub="결제 완료 기준 · shop_backend 실측" source="real" />
+          <Kpi label="백엔드 매출" value={`${Math.round(pulse.revenue).toLocaleString('ko-KR')}원`} sub="결제 완료 합계" source="real" />
+          <Kpi label="백엔드 리뷰" value={fmt.int(pulse.reviews)} sub="구매 고객이 남긴 리뷰" source="real" />
+          <Kpi label="백엔드 피드백" value={fmt.int(pulse.feedbacks)} sub="구매 고객이 남긴 의견" source="real" />
+        </div>
+      ) : null}
       {top ? (
         <section className="verdict">
           <p className="verdict__eyebrow">지금 손봐야 할 것</p>

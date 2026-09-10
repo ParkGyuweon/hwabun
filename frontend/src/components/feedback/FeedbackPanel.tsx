@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { submitFeedbackBackend } from '../../lib/shopApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForProduct, submitFeedback } from '../../lib/feedbackStore';
@@ -51,15 +52,30 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
   const text = drafts[axisId] ?? '';
   const canSubmit = text.trim().length >= MIN_TEXT;
 
-  const submit = () => {
+  const [sendError, setSendError] = useState<string | null>(null);
+  const submit = async () => {
     if (!canSubmit) return;
-    submitFeedback({
-      product_id: product.product_id,
-      brand_name: product.brand_name,
-      user_id: userId,
-      axis_id: axisId,
-      body: text,
-    });
+    setSendError(null);
+    // 백엔드 상품은 서버로. 서버가 이 고객의 결제 완료 주문을 확인하고, 없으면 403 이 정상이다.
+    if (product.source === 'backend') {
+      const r = await submitFeedbackBackend({ productId: product.product_id, axisId, body: text.trim() });
+      if (!r.ok) {
+        setSendError(
+          r.status === 403
+            ? '구매한 상품에만 의견을 남길 수 있습니다. 주문·결제 뒤에 다시 시도해 주세요.'
+            : `보내지 못했습니다. ${r.reason}`,
+        );
+        return;
+      }
+    } else {
+      submitFeedback({
+        product_id: product.product_id,
+        brand_name: product.brand_name,
+        user_id: userId,
+        axis_id: axisId,
+        body: text,
+      });
+    }
     setDrafts((d) => ({ ...d, [axisId]: '' }));
     setSentAxis(axisId);
   };
@@ -139,6 +155,7 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
                 `${text.trim().length}/${MAX_TEXT}`
               )}
             </span>
+            {sendError ? <p className="feedback__error" role="alert">{sendError}</p> : null}
             <button type="button" className="btn btn--primary feedback__submit" disabled={!canSubmit} onClick={submit}>
               사장님께 보내기
             </button>

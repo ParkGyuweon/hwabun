@@ -102,6 +102,8 @@ export interface Feedback {
   /** 사장님이 반영하며 남긴 한 줄. 소비자에게 그대로 보인다 (루프 ④) */
   reply: string | null;
   replied_at: string | null;
+  /** 백엔드(GET /api/seller/feedback)에서 온 행. 없으면 로컬 저장 */
+  source?: 'backend';
 }
 
 /** 고객이 고를 수 있는 축 5개. `other` 는 0.2.0 부터 축이 아니라 "그 축 얘기지만 목록에 없는 불만" 카테고리라 토글에 없다 */

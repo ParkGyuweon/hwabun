@@ -86,7 +86,10 @@ export default function CartPage({
           </p>
           {/* 없는 기능을 있는 것처럼 두지 않는다. 여기서 멈추는 것이 이 쇼핑몰의 경계다 */}
           <p className="done__note">
-            결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않고 실제로 청구되지 않습니다.
+            {order.mode === 'backend'
+              ? '백엔드에 주문이 만들어지고 결제 완료(PAID)로 표시됐습니다. 실제 결제 연동은 없어 청구되지 않습니다.'
+              : '결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않고 실제로 청구되지 않습니다.'}
+            {order.note ? ` ${order.note}` : ''}
           </p>
 
           <PurchaseSurvey onSubmit={onSurveySubmit} onSkip={onSurveySkip} />

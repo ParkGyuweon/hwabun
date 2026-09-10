@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { fetchSellerFeedback } from '../../lib/shopApi';
+import { loadBrandId } from '../../lib/brands';
 import { Panel } from '../components';
 import { feedbackProducts as products } from '../lib/metrics';
 import { FEEDBACK_BRAND } from '../lib/scope';
@@ -48,7 +50,27 @@ const STATUS_KO = { new: '새 의견', read: '읽음', reflected: '반영' } as 
  */
 export default function FeedbackScreen() {
   const all = useFeedback();
-  const mine = useMemo(() => feedbackForBrand(all, FEEDBACK_BRAND), [all]);
+  /**
+   * 백엔드 피드백(GET /api/seller/feedback)을 로컬 저장본과 합친다.
+   * 브랜드 id 는 대시보드 로그인 때 저장된 값. 없거나 백엔드가 없으면 로컬만 보인다.
+   */
+  const [remote, setRemote] = useState<Feedback[]>([]);
+  useEffect(() => {
+    const brandId = loadBrandId();
+    if (!brandId) return;
+    let alive = true;
+    void fetchSellerFeedback(brandId, FEEDBACK_BRAND).then((rows) => {
+      if (alive && rows) setRemote(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const mine = useMemo(() => {
+    const local = feedbackForBrand(all, FEEDBACK_BRAND);
+    const seen = new Set(local.map((f) => f.feedback_id));
+    return [...remote.filter((f) => !seen.has(f.feedback_id)), ...local];
+  }, [all, remote]);
 
   const [axis, setAxis] = useState<AxisFilter>('all');
   const [category, setCategory] = useState<string | null>(null);

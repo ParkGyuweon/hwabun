@@ -39,7 +39,7 @@ export default defineConfig({
        *   collector    (8080)  행동 로그 수집 /api/events                     backend/
        */
       ...Object.fromEntries(
-        ['/api/auth', '/api/brands', '/api/products', '/api/orders', '/api/reviews', '/api/feedback', '/api/seller', '/api/admin'].map(
+        ['/api/auth', '/api/brands', '/api/products', '/api/cart', '/api/orders', '/api/reviews', '/api/feedback', '/api/seller', '/api/settlements', '/api/admin'].map(
           (path) => [path, { target: process.env.SHOP_BACKEND_URL || 'http://localhost:8090', changeOrigin: true }],
         ),
       ),

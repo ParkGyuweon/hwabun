@@ -350,3 +350,36 @@
     transition: none;
   }
 }
+
+/* ---------- 완성형 이미지 배너 ---------- */
+
+.ad--image .ad__hit {
+  display: block;
+  min-height: 0;
+}
+
+/*
+ * 완성형 배너는 글자·가격·버튼이 이미지 안에 구워져 있다. 그래서 자르면 안 된다.
+ * 높이를 300px 로 고정하면 폭 1120px 에서 373px 인 3:1 이미지가 위아래로 깎여
+ * 상단 브랜드명과 하단 상품명·보조 문구가 잘렸다. 원본 비율을 그대로 지킨다.
+ */
+.ad__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 1;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* 조립형 배너용 최소 높이가 이미지 배너 아래에 빈칸을 남기지 않도록 */
+.ads__hero:has(.ad--image) {
+  min-height: 0;
+}
+
+.ad--image:hover .ad__image {
+  transform: scale(1.01);
+}
+
+

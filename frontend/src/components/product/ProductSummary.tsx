@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { variantIdOf } from '../../lib/discount';
 import PriceTag from './PriceTag';
 import { hasDiscount } from '../../lib/discount';
 import StarRating from '../common/StarRating';
@@ -73,6 +74,7 @@ export default function ProductSummary({
       image_url: product.image_url,
       price_usd: product.price_usd,
       sale_price_usd: product.sale_price_usd ?? null,
+      variant_id: variantIdOf(product, selectedSkuId),
       quantity,
     });
   };

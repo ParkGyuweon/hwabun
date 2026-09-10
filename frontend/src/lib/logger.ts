@@ -1,4 +1,5 @@
 import { EVENT_INTENT, SCHEMA_VERSION } from '../types/log';
+import { sessionSnapshot } from './auth';
 import { ingestForTrait } from './trait';
 import type { ActorType, EventName, LogEnvelope, PageType } from '../types/log';
 
@@ -57,6 +58,25 @@ const HISTORY_LIMIT = 200;
  * 자세한 값은 docs/analytics/log-transport-contract.md 참고.
  */
 const COLLECT_ENDPOINT = '/api/events';
+
+/**
+ * 로그인 상태면 수집 요청에 토큰을 얹는다 (백엔드 회신 2026-09-10).
+ *
+ * 백엔드가 JWT 의 `sub` 를 `account_id` 로 뽑아 Kafka 이벤트에 직접 넣는다.
+ * 그래서 봉투에 `account_id` 를 우리가 채우지 않는다 — 두 곳에서 채우면
+ * 어긋났을 때 어느 쪽이 맞는지 알 수 없다.
+ *
+ * 쇼핑몰을 보는 사람은 MEMBER 다. 판매자·관리자 화면은 대시보드라 이 로거를
+ * 타지 않는다. 토큰이 없으면 헤더 없이 보낸다 — 비로그인 방문도 분석 대상이다.
+ */
+function collectToken(): string | null {
+  try {
+    return sessionSnapshot('MEMBER')?.token ?? null;
+  } catch {
+    // 저장소를 못 읽어도 로그는 보내야 한다. 익명으로 나간다
+    return null;
+  }
+}
 
 /**
  * 한 요청에 담는 최대 건수. 수집 서버가 100건으로 막고 있어 거기에 맞춘다.
@@ -493,7 +513,16 @@ export function flush(useBeacon = false): void {
 
   const body = JSON.stringify({ schema_version: SCHEMA_VERSION, events: batch });
 
-  if (useBeacon) {
+  const token = collectToken();
+
+  /**
+   * sendBeacon 은 Authorization 헤더를 붙일 수 없다. 로그인 상태에서 beacon 으로
+   * 보내면 토큰 없이 나가 백엔드가 account_id 를 못 뽑는다 — 그 사람의 마지막
+   * 화면(이탈 직전)이 통째로 익명이 된다. 그래서 토큰이 있으면 이탈 시점에도
+   * fetch keepalive 를 쓴다. keepalive 는 언로드를 건너뛰고 나가며, 비어 있는
+   * 익명 경로는 지금까지처럼 beacon 이 더 확실하므로 그대로 둔다.
+   */
+  if (useBeacon && !token) {
     /**
      * 이탈 시점에는 일반 요청이 취소될 수 있어 sendBeacon 을 쓴다.
      * 반환값 false 는 브라우저 전송 큐에 넣지도 못했다는 뜻이므로 배치를
@@ -511,7 +540,9 @@ export function flush(useBeacon = false): void {
 
   fetch(COLLECT_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: token
+      ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      : { 'Content-Type': 'application/json' },
     body,
     keepalive: true,
   })

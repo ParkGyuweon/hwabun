@@ -9,6 +9,7 @@ import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
 import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
+import { canCheckoutOnBackend, checkoutOnBackend, fetchBackendReviews } from './lib/shopApi';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
@@ -145,6 +146,8 @@ export default function App() {
    * "담고 안 산 사람" 과 "산 사람" 이 같은 무게로 세어진다.
    */
   const [order, setOrder] = useState<PlacedOrder | null>(null);
+  /** 백엔드 상품의 리뷰. 상품이 바뀔 때 받아 온다. 목 상품이면 빈 배열이고 샘플 리뷰를 쓴다 */
+  const [backendReviews, setBackendReviews] = useState<Review[]>([]);
   /**
    * 주문 확인 단계에서 만든 주문 번호. `begin_checkout` 과 `purchase` 가 **같은 값**을
    * 실어야 "확인까지 갔다가 안 한 사람" 을 셀 수 있다.
@@ -187,6 +190,20 @@ export default function App() {
     () => (productId ? reviews.filter((review) => review.product_id === productId) : []),
     [productId],
   );
+
+  useEffect(() => {
+    if (!product || product.source !== 'backend') {
+      setBackendReviews([]);
+      return;
+    }
+    let alive = true;
+    void fetchBackendReviews(product.product_id).then((rows) => {
+      if (alive) setBackendReviews(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [product]);
 
   /**
    * 장바구니에 담긴 상품. 추천 자리에서 뺀다.
@@ -344,11 +361,33 @@ export default function App() {
   /** 확인 화면에서 되돌아감. 이벤트는 남기지 않는다 — 이탈은 begin_checkout 대비로 센다 */
   const cancelCheckout = useCallback(() => {}, []);
 
-  const placeOrder = useCallback(() => {
+  const placeOrder = useCallback(async () => {
     if (cartItems.length === 0) return;
-    const orderId = pendingOrderIdRef.current ?? createOrderId();
+    const localOrderId = pendingOrderIdRef.current ?? createOrderId();
     const items = toOrderItems(cartItems);
     const { count, total, paid } = orderTotals(cartItems);
+
+    /**
+     * 장바구니가 전부 백엔드 상품이고 고객 로그인이 있으면 서버에 담기 → 주문 → 결제(PAID) 까지 한다.
+     * 그래야 피드백 API 의 "구매 이력" 조건이 성립한다. 아니면 지금까지의 테스트 주문이다.
+     * 어느 쪽이든 purchase 이벤트는 같은 모양으로 나간다. order_id 만 서버 번호로 바뀐다.
+     */
+    let orderId = localOrderId;
+    let mode: 'backend' | 'local' = 'local';
+    let note: string | null = null;
+    if (canCheckoutOnBackend(cartItems)) {
+      const r = await checkoutOnBackend(cartItems, localOrderId);
+      if (r.ok) {
+        orderId = r.orderId;
+        mode = 'backend';
+      } else {
+        note = `서버 주문 실패: ${r.reason}. 테스트 주문으로 대신 접수했습니다.`;
+      }
+    } else if (cartItems.some((i) => !i.variant_id)) {
+      note = '세포라·시드 상품은 백엔드에 없어 테스트 주문으로 접수됩니다.';
+    } else {
+      note = '고객 로그인이 없어 테스트 주문으로 접수됩니다.';
+    }
 
     track('purchase', {
       order_id: orderId,
@@ -356,9 +395,10 @@ export default function App() {
       order_value: Number(total.toFixed(2)),
       paid_value: Number(paid.toFixed(2)),
       currency: 'USD',
+      order_channel: mode,
     });
 
-    setOrder({ orderId, items, count, total, paid });
+    setOrder({ orderId, items, count, total, paid, mode, note });
     setCartItems([]);
     // 다음 주문은 새 번호를 받는다
     pendingOrderIdRef.current = null;
@@ -604,7 +644,7 @@ export default function App() {
           <Breadcrumb items={product.category} onHome={goHome} />
           <ProductDetailPage
             product={product}
-            reviews={productReviews}
+            reviews={product?.source === 'backend' ? backendReviews : productReviews}
             allReviews={reviews}
             similar={similar}
             persona={persona}

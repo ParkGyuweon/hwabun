@@ -14,6 +14,7 @@
  * 흰 부분을 조금 깎아서, 제품은 **흰 판 위에** 얹어 쓴다 (`ad__stage` 가 그 흰 판이다).
  */
 import { labelKo } from './formLabels';
+import bannerImages from '../mocks/banner-images.json';
 import type { Product } from '../types/product';
 
 /** 추천 API `banner_type` (계약 `recommendation-io-spec.md` §5-1) */
@@ -303,4 +304,16 @@ export function pickBannerProducts(
     });
   }
   return out;
+}
+
+/**
+ * 완성형 배너 이미지. 디자이너(팀)가 글자까지 넣어 만든 한 장이 있으면 CSS 조립 대신 그 이미지를 쓴다.
+ * 어떤 상품·변형에 이미지가 있는지는 mocks/banner-images.json 이 말한다 (파일 존재 여부를 브라우저가
+ * 미리 알 수 없어서다). 파일은 public/images/ssafy-beauty/banners/{product_id}-{variant}.png.
+ */
+const BANNER_IMAGES = bannerImages as unknown as Record<string, Partial<Record<Variant, string>>>;
+
+export function bannerImage(productId: string, variant: Variant): string | null {
+  const file = BANNER_IMAGES[productId]?.[variant];
+  return file ? `${IMG}/banners/${file}` : null;
 }

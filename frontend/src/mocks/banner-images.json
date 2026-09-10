@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "note": "완성형 배너 이미지 목록. 키 = product_id, 값 = 변형(price·ingredient·concern·segment·story) → 파일명. 파일은 frontend/public/images/ssafy-beauty/banners/ 에 둔다. 목록에 없는 상품·변형은 AdBanner 가 CSS 로 조립한다.",
+    "size": "2000x666 (3:1) · 원본 비율 그대로 보인다. 글자가 구워져 있어 자르지 않는다"
+  },
+  "SB000001": {
+    "story": "SB000001-story.png",
+    "concern": "SB000001-concern.png",
+    "segment": "SB000001-segment.png",
+    "price": "SB000001-price.png",
+    "ingredient": "SB000001-ingredient.png"
+  },
+  "SB000002": {
+    "story": "SB000002-story.png",
+    "concern": "SB000002-concern.png",
+    "segment": "SB000002-segment.png",
+    "price": "SB000002-price.png",
+    "ingredient": "SB000002-ingredient.png"
+  },
+  "SB000003": {
+    "story": "SB000003-story.png",
+    "concern": "SB000003-concern.png",
+    "segment": "SB000003-segment.png",
+    "price": "SB000003-price.png",
+    "ingredient": "SB000003-ingredient.png"
+  }
+}
