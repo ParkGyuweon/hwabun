@@ -309,7 +309,7 @@ export function pickBannerProducts(
 /**
  * 완성형 배너 이미지. 디자이너(팀)가 글자까지 넣어 만든 한 장이 있으면 CSS 조립 대신 그 이미지를 쓴다.
  * 어떤 상품·변형에 이미지가 있는지는 mocks/banner-images.json 이 말한다 (파일 존재 여부를 브라우저가
- * 미리 알 수 없어서다). 파일은 public/images/ssafy-beauty/banners/{product_id}-{variant}.png.
+ * 미리 알 수 없어서다). 파일은 public/images/ssafy-beauty/banners/{product_id}-{variant}.webp.
  */
 const BANNER_IMAGES = bannerImages as unknown as Record<string, Partial<Record<Variant, string>>>;
 
