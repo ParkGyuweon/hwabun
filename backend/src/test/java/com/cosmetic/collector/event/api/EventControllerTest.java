@@ -352,8 +352,8 @@ class EventControllerTest {
     }
 
     @Test
-    void prioritizesMissingTenantOverAnInvalidPropertiesType() throws Exception {
-        MvcResult asyncResult = mockMvc.perform(post("/api/events")
+    void rejectsWithdrawnTenantSchemaVersion() throws Exception {
+        mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -368,14 +368,7 @@ class EventControllerTest {
                                   }]
                                 }
                                 """))
-                .andExpect(request().asyncStarted())
-                .andReturn();
-
-        mockMvc.perform(asyncDispatch(asyncResult))
-                .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.accepted").value(0))
-                .andExpect(jsonPath("$.rejected").value(1))
-                .andExpect(jsonPath("$.rejections[0].code").value("missing_required_property"));
+                .andExpect(status().isBadRequest());
 
         verifyNoInteractions(publisher);
     }
