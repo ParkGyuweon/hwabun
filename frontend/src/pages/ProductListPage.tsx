@@ -4,7 +4,7 @@ import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
-import { BANNER_RESERVED, BANNER_SLOTS, MAIN_SLOTS } from '../lib/bannerConfig';
+import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, MAIN_SLOTS } from '../lib/bannerConfig';
 import { buildRecommendation } from '../lib/recommendMock';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
@@ -329,8 +329,9 @@ export default function ProductListPage({
     listId: 'list_grid',
   });
   /**
-   * 배너 노출. `banner_impression` 은 계약 enum 등록 전이라 (lib/bannerConfig)
-   * `recommendation_impression` 에 배너 property 를 얹어 보낸다. 노출은 분모일 뿐이다.
+   * 배너 노출. `banner_impression` 은 계약 enum 에는 등록됐지만 수집기가 아직이라
+   * (lib/bannerConfig) `recommendation_impression` 에 배너 property 를 얹어 보낸다.
+   * 노출은 분모일 뿐이다.
    */
   const heroRef = useImpression({
     pageViewKey: `hero:${persona?.persona_id ?? 'anonymous'}:${trait.trait_source}`,
@@ -338,6 +339,8 @@ export default function ProductListPage({
     listId: 'hero_banner',
     algorithm: bannerAlgorithm,
     recommendationId: promoRecommendationId,
+    // 배너 축·값·칸·탐색군은 AdBanner 의 data-* 에서 읽는다. 정책 버전만 목록 공통이다
+    extraProps: { policy_version: BANNER_POLICY_VERSION },
   });
 
   /** 배너·히어로 클릭. 추천 클릭 + 상품 클릭. entry_source 는 계약 enum 안의 promo_pick 을 쓴다 */
@@ -345,7 +348,10 @@ export default function ProductListPage({
     const banner =
       listId === 'hero_banner'
         ? recommendation.hero && recommendation.hero.product_id === productId
-          ? { ...recommendation.hero, slot: 0 }
+          ? /* 계약상 banner_slot 은 1 이상이다 (event-properties-schema §3.12). 0 을 보내면
+               켠 뒤 격리된다. 화면의 히어로 AdBanner 도 slot={1} 이라 노출과 값이 같아야
+               칸별 CTR 조인이 성립한다 */
+            { ...recommendation.hero, slot: 1 }
           : null
         : (recommendation.banners.find((b) => b.product_id === productId) ?? null);
 
@@ -361,6 +367,8 @@ export default function ProductListPage({
             ...(banner.banner_value !== null ? { banner_value: banner.banner_value } : {}),
             banner_slot: banner.slot,
             trait_source: trait.trait_source,
+            // 정책 배포 전후를 banner_daily 에서 바로 잘라 보기 위한 귀속 키 (계약 §3.13)
+            policy_version: BANNER_POLICY_VERSION,
           }
         : {}),
     });
@@ -484,6 +492,7 @@ export default function ProductListPage({
               shape="hero"
               skinTone={persona?.skin_tone}
               slot={1}
+              traitSource={trait.trait_source}
               onSelect={selectFromBanner('hero_banner')}
             />
           </div>

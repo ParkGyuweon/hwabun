@@ -15,9 +15,26 @@ export const MAIN_SLOTS = 10;
 /**
  * `banner_impression` / `banner_click` 발행 스위치.
  *
- * 두 이벤트는 `log.ts` 에는 있지만 `contracts/event-schema.json` enum 에 아직 없다.
- * 등록 전에 보내면 검증기가 격리한다. 그동안은 `recommendation_impression` /
- * `recommendation_click` 에 배너 property 를 얹어 보낸다 — properties 는 열린 객체라
- * 계약에 무해하고, 마트가 `banner_type` 으로 걸러 쓸 수 있다.
+ * 막고 있는 것이 바뀌었다 (데이터 파트 회신 2026-09-10).
+ *   계약 enum  — **등록됨.** `contracts/event-schema.json` event_name enum 41종에 둘 다 있다 (198)
+ *   수집기      — 아직. EventContractValidator 에 없어 지금 켜면 unregistered_event 400 이 난다
+ *
+ * 그래서 스위치는 계속 false 다. 수집기 등록 회신이 오면 true 한 줄로 끝난다.
+ * 그동안은 `recommendation_impression` / `recommendation_click` 에 배너 property 를
+ * 얹어 보낸다 — properties 는 열린 객체라 계약에 무해하다.
+ *
+ * 켜기 전까지의 손해는 알고 있다. `banner_daily` 마트가 `event_name` 으로 거르므로
+ * 그 기간은 0행이고 나중에 켜도 소급되지 않는다 (축별 CTR·탐색군 비중 포함).
+ * `algorithm` 에 `/banner` 접미사를 붙여 둔 덕에 추천 CTR 기준선은 오염되지 않는다.
  */
 export const BANNER_EVENTS_ENABLED = false;
+
+/**
+ * 배너·정렬 정책의 배포 버전. 배너 이벤트에 실으면 `banner_daily` 까지 내려가서
+ * 정책 배포 전후를 같은 마트 안에서 잘라 볼 수 있다
+ * (계약 event-properties-schema.md §3.13, dw-schema.md §400).
+ *
+ * 배너 뽑는 규칙(`bannerCreative`·`BANNER_RESERVED`·축 선택)을 바꾸면 이 값을 올린다.
+ * 올리지 않으면 전후 비교가 한 덩어리로 뭉개진다.
+ */
+export const BANNER_POLICY_VERSION = 'banner-2026-09-10';
