@@ -47,6 +47,11 @@ export interface BuildInput {
   /** 원본에 피부 타입 표기가 없는 상품의 리뷰어 분포 */
   reviewSkinTypes: Map<string, SkinType[]>;
   axes: BannerType[];
+  /**
+   * 세션 성향을 알아냈나 (`useTrait().trait_source !== 'cold_start'`).
+   * 모르면 신규 브랜드 히어로를 `new_brand`(story) 로 말한다.
+   */
+  traitKnown?: boolean;
   k: number;
   bannerSlots: number;
   reserved: number;
@@ -148,6 +153,7 @@ function popularityScale(products: Product[]): (p: Product) => number {
 
 export function buildRecommendation(input: BuildInput): RecommendResponse {
   const { products, persona, excluded, reviewSkinTypes, k, bannerSlots, reserved } = input;
+  const traitKnown = input.traitKnown ?? false;
   const axes = input.axes.length ? input.axes : DEFAULT_AXES;
 
   const candidates = products.filter((p) => !excluded.has(p.product_id));
@@ -168,12 +174,36 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
   const items = ranked.slice(0, k).map((p, i) => ({ product_id: p.product_id, score: score(p), rank: i + 1 }));
   const used = new Set(items.map((i) => i.product_id));
 
-  // 히어로: items[0] 에 축 문구를 얹는다. 첫 축으로 말할 수 없으면 말할 수 있는 축을 찾는다
-  const top = ranked[0] ?? null;
+  /*
+   * 히어로 — **화면에 그려지는 유일한 배너 칸이다.** 배너 행 6칸은 2026-09-10 기획
+   * 검토로 빠졌고, 그래서 신규 브랜드 전용 칸(reserved 2)도 화면에서 사라졌다.
+   *
+   * 그 상태에서 히어로를 `ranked[0]` 로 두면 **신규 브랜드는 배너 노출이 0 이다.**
+   * 점수로는 이길 수 없다 — 리뷰도 loves 도 없어 품질 항이 0 이라 최대 2.0 인데
+   * 원천 상품은 3.9 까지 간다. 전용 칸이 없어진 만큼 히어로가 그 몫을 받는다.
+   *
+   * 신규 브랜드 상품 중 **그 사람 점수가 가장 높은 것**을 올린다. 없으면 예전처럼
+   * `ranked[0]` 이다. 상품은 점수가 고르고 문구(축)는 세션 성향이 고른다 —
+   * personalized-banner-plan.md §2 의 분업 그대로다.
+   */
+  const top = ranked.find(isNewBrandProduct) ?? ranked[0] ?? null;
   let hero: RecommendResponse['hero'] = null;
   if (top) {
-    const axis = axes.find((a) => axisValue(top, a, persona, reviewSkinTypes) !== null) ?? axes[0];
-    hero = { product_id: top.product_id, banner_type: axis, banner_value: axisValue(top, axis, persona, reviewSkinTypes) };
+    /*
+     * 성향을 모르는 세션은 신규 브랜드를 `new_brand`(→ story) 로 말한다.
+     * "새로 들어온 브랜드의 첫 세럼" 이 처음 보는 사람에게 할 말이고, 이 축이 없으면
+     * story 변형이 영영 안 뜬다(축 목록에 new_brand 가 없어서다).
+     * 성향을 알면 그 축으로 말한다.
+     */
+    const preferStory = !traitKnown && isNewBrandProduct(top);
+    const axis = preferStory
+      ? 'new_brand'
+      : (axes.find((a) => axisValue(top, a, persona, reviewSkinTypes) !== null) ?? axes[0]);
+    hero = {
+      product_id: top.product_id,
+      banner_type: axis,
+      banner_value: axis === 'new_brand' ? null : axisValue(top, axis, persona, reviewSkinTypes),
+    };
   }
 
   const banners: RecommendBanner[] = [];

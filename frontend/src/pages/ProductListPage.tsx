@@ -187,11 +187,13 @@ export default function ProductListPage({
         excluded: cartProductIds,
         reviewSkinTypes,
         axes: trait.axes,
+        // 성향을 모르는 세션(coldstart)은 신규 브랜드 히어로를 story 로 말한다
+        traitKnown: trait.trait_source !== 'coldstart',
         k: PROMO_SIZE,
         bannerSlots: BANNER_SLOTS,
         reserved: BANNER_RESERVED,
       }),
-    [products, persona, reviewSkinTypes, cartProductIds, trait.axes],
+    [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source],
   );
 
   const productsById = useMemo(() => new Map(products.map((p) => [p.product_id, p])), [products]);
