@@ -9,5 +9,12 @@
     "segment": "SB000001-segment.png",
     "price": "SB000001-price.png",
     "ingredient": "SB000001-ingredient.png"
+  },
+  "SB000002": {
+    "story": "SB000002-story.png",
+    "concern": "SB000002-concern.png",
+    "segment": "SB000002-segment.png",
+    "price": "SB000002-price.png",
+    "ingredient": "SB000002-ingredient.png"
   }
 }
