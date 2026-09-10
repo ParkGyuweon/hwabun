@@ -15,7 +15,11 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $kafkaCompose = Join-Path $repoRoot 'infra\kafka\docker-compose.yml'
 $sparkCompose = Join-Path $repoRoot 'infra\spark\docker-compose.yml'
 $sparkEnv = Join-Path $repoRoot 'infra\spark\.env'
-$dataRoot = '/opt/project/data'
+$dataRoot = if ($env:PIPELINE_DATA_ROOT) {
+    $env:PIPELINE_DATA_ROOT.TrimEnd('/')
+} else {
+    '/opt/project/data'
+}
 
 $composeBaseArgs = @()
 if (Test-Path $sparkEnv) {
@@ -58,7 +62,7 @@ function Invoke-BatchPipeline {
         '--bad-path', "$dataRoot/processed/bad_events",
         '--duplicate-path', "$dataRoot/processed/duplicate_events"
     )
-    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/derive_facts_job.py' -JobArguments @(
+    $deriveArguments = @(
         '--input-path', "$dataRoot/processed/cleaned_events",
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",
@@ -70,8 +74,15 @@ function Invoke-BatchPipeline {
         '--dim-product-path', "$dataRoot/processed/dim_product",
         '--dim-brand-path', "$dataRoot/processed/dim_brand",
         '--product-catalog-path', '/opt/project/batch/ingest/data/products_200.json',
+        '--registered-product-path', '/opt/project/batch/ingest/data/serving/registered_products.jsonl',
         '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
     )
+    if ($env:REGISTERED_PRODUCT_BRAND_PATH) {
+        $deriveArguments += @(
+            '--registered-product-brand-path', $env:REGISTERED_PRODUCT_BRAND_PATH
+        )
+    }
+    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/derive_facts_job.py' -JobArguments $deriveArguments
     $martArguments = @(
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",

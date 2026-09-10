@@ -4,7 +4,7 @@ set -euo pipefail
 action="${1:-status}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/../.." && pwd)"
-data_root="/opt/project/data"
+data_root="${PIPELINE_DATA_ROOT:-/opt/project/data}"
 kafka_compose="$repo_root/infra/kafka/docker-compose.yml"
 spark_compose="$repo_root/infra/spark/docker-compose.yml"
 
@@ -66,19 +66,27 @@ run_batch_pipeline() {
     --bad-path "$data_root/processed/bad_events" \
     --duplicate-path "$data_root/processed/duplicate_events"
 
-  submit_job /opt/project/streaming/jobs/derive_facts_job.py \
-    --input-path "$data_root/processed/cleaned_events" \
-    --sessionized-path "$data_root/processed/sessionized_events" \
-    --product-fact-path "$data_root/processed/product_event_fact" \
-    --purchase-fact-path "$data_root/processed/purchase_fact" \
-    --purchase-reason-fact-path "$data_root/processed/purchase_reason_fact" \
-    --review-event-fact-path "$data_root/processed/review_event_fact" \
-    --section-dwell-path "$data_root/processed/section_dwell_agg" \
-    --content-interest-path "$data_root/processed/content_interest_fact" \
-    --dim-product-path "$data_root/processed/dim_product" \
-    --dim-brand-path "$data_root/processed/dim_brand" \
-    --product-catalog-path /opt/project/batch/ingest/data/products_200.json \
+  local derive_args=(
+    --input-path "$data_root/processed/cleaned_events"
+    --sessionized-path "$data_root/processed/sessionized_events"
+    --product-fact-path "$data_root/processed/product_event_fact"
+    --purchase-fact-path "$data_root/processed/purchase_fact"
+    --purchase-reason-fact-path "$data_root/processed/purchase_reason_fact"
+    --review-event-fact-path "$data_root/processed/review_event_fact"
+    --section-dwell-path "$data_root/processed/section_dwell_agg"
+    --content-interest-path "$data_root/processed/content_interest_fact"
+    --dim-product-path "$data_root/processed/dim_product"
+    --dim-brand-path "$data_root/processed/dim_brand"
+    --product-catalog-path /opt/project/batch/ingest/data/products_200.json
+    --registered-product-path /opt/project/batch/ingest/data/serving/registered_products.jsonl
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
+  )
+  if [[ -n "${REGISTERED_PRODUCT_BRAND_PATH:-}" ]]; then
+    derive_args+=(
+      --registered-product-brand-path "$REGISTERED_PRODUCT_BRAND_PATH"
+    )
+  fi
+  submit_job /opt/project/streaming/jobs/derive_facts_job.py "${derive_args[@]}"
 
   local mart_args=(
     --sessionized-path "$data_root/processed/sessionized_events"

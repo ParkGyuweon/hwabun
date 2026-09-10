@@ -13,6 +13,7 @@ typed columns.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -30,6 +31,9 @@ DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
 DEFAULT_DIM_PRODUCT_PATH = "data/processed/dim_product"
 DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
 DEFAULT_PRODUCT_CATALOG_PATH = "batch/ingest/data/products_200.json"
+DEFAULT_REGISTERED_PRODUCT_PATH = (
+    "batch/ingest/data/serving/registered_products.jsonl"
+)
 DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 
 PRODUCT_EVENT_NAMES = (
@@ -82,6 +86,8 @@ class DeriveFactsConfig:
     dim_product_path: str = DEFAULT_DIM_PRODUCT_PATH
     dim_brand_path: str = DEFAULT_DIM_BRAND_PATH
     product_catalog_path: str = DEFAULT_PRODUCT_CATALOG_PATH
+    registered_product_path: str = DEFAULT_REGISTERED_PRODUCT_PATH
+    registered_product_brand_path: str | None = None
     behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     time_zone: str = DEFAULT_TIME_ZONE
 
@@ -98,6 +104,7 @@ class DeriveFactsConfig:
             "dim_product_path": self.dim_product_path,
             "dim_brand_path": self.dim_brand_path,
             "product_catalog_path": self.product_catalog_path,
+            "registered_product_path": self.registered_product_path,
             "behavior_weights_path": self.behavior_weights_path,
             "time_zone": self.time_zone,
         }
@@ -171,6 +178,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seed product catalog JSON used to build dim_product",
     )
     parser.add_argument(
+        "--registered-product-path",
+        default=_env("REGISTERED_PRODUCT_PATH", DEFAULT_REGISTERED_PRODUCT_PATH),
+        help="Append-only registered product JSONL used to extend dim_product",
+    )
+    parser.add_argument(
+        "--registered-product-brand-path",
+        default=os.getenv("REGISTERED_PRODUCT_BRAND_PATH"),
+        help=(
+            "Optional ACTIVE shop product export (JSONL with product_id and brand_id); "
+            "its authoritative brand_id overrides the registered product value"
+        ),
+    )
+    parser.add_argument(
         "--behavior-weights-path",
         default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
         help="Execution source for EVENT_WEIGHT and SECTION_DWELL_WEIGHT",
@@ -197,6 +217,8 @@ def parse_args(argv: list[str] | None = None) -> DeriveFactsConfig:
         dim_product_path=args.dim_product_path,
         dim_brand_path=args.dim_brand_path,
         product_catalog_path=args.product_catalog_path,
+        registered_product_path=args.registered_product_path,
+        registered_product_brand_path=args.registered_product_brand_path,
         behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
     )
@@ -670,6 +692,140 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
     )
 
 
+def _active_registered_product_records(path: str) -> list[dict[str, Any]]:
+    """Return the last active record for each product in an append-only registry.
+
+    The recommendation registry uses a final ``_op=deactivate`` row as a tombstone.
+    Reading it line by line keeps this control input bounded and preserves its
+    last-write-wins semantics without relying on Spark input partition ordering.
+    """
+
+    latest: dict[str, dict[str, Any]] = {}
+    with open(path, encoding="utf-8") as source:
+        for line_number, line in enumerate(source, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"invalid registered product JSON at {path}:{line_number}: {exc}"
+                ) from exc
+            product_id = record.get("product_id")
+            if not isinstance(product_id, str) or not product_id.strip():
+                raise ValueError(
+                    f"missing product_id in registered product at {path}:{line_number}"
+                )
+            latest[product_id.strip()] = record
+    return [
+        record
+        for record in latest.values()
+        if record.get("_op") != "deactivate"
+    ]
+
+
+def _build_registered_dim_product(
+    registered_df: Any, product_brand_df: Any | None = None
+) -> Any:
+    """Project ACTIVE registered products using authoritative brand IDs only."""
+
+    from pyspark.sql import functions as F
+
+    registered = registered_df.alias("registered")
+    if product_brand_df is not None:
+        product_brand = (
+            product_brand_df.select(
+                F.trim(F.col("product_id").cast("string")).alias(
+                    "_mapped_product_id"
+                ),
+                F.trim(F.col("brand_id").cast("string")).alias("_mapped_brand_id"),
+            )
+            .where(
+                F.col("_mapped_product_id").isNotNull()
+                & (F.length(F.col("_mapped_product_id")) > 0)
+                & F.col("_mapped_brand_id").isNotNull()
+                & (F.length(F.col("_mapped_brand_id")) > 0)
+            )
+            .groupBy("_mapped_product_id")
+            .agg(
+                F.when(
+                    F.countDistinct("_mapped_brand_id") == 1,
+                    F.min("_mapped_brand_id"),
+                ).alias("_mapped_brand_id")
+            )
+        )
+        registered = registered.join(
+            product_brand,
+            F.trim(F.col("registered.product_id").cast("string"))
+            == F.col("_mapped_product_id"),
+            "left",
+        )
+        mapped_brand_id = F.col("_mapped_brand_id")
+    else:
+        mapped_brand_id = F.lit(None).cast("string")
+
+    product_id = F.trim(F.col("registered.product_id").cast("string"))
+    source_brand_id = F.trim(F.col("registered.brand_id").cast("string"))
+    brand_id = F.coalesce(
+        mapped_brand_id, F.when(F.length(source_brand_id) > 0, source_brand_id)
+    )
+    return (
+        registered.select(
+            product_id.alias("product_id"),
+            F.col("registered.product_name").cast("string").alias("product_name"),
+            F.lit("brand_registered").alias("product_source"),
+            brand_id.alias("brand_id"),
+            F.trim(F.col("registered.brand_name").cast("string")).alias("brand_name"),
+            F.lit(None).cast("string").alias("primary_category"),
+            F.col("registered.secondary_category")
+            .cast("string")
+            .alias("secondary_category"),
+            F.col("registered.tertiary_category")
+            .cast("string")
+            .alias("tertiary_category"),
+            F.lit(None).cast("string").alias("category_id"),
+            F.array(
+                F.lit(None).cast("string"),
+                F.col("registered.secondary_category").cast("string"),
+                F.col("registered.tertiary_category").cast("string"),
+            ).alias("category_path"),
+            F.col("registered.price_usd").cast("decimal(18,2)").alias("base_price"),
+            F.lit("USD").alias("currency"),
+            F.array().cast("array<string>").alias("skin_type_tags"),
+            F.array().cast("array<string>").alias("concern_tags"),
+            F.array().cast("array<string>").alias("ingredient_ids"),
+            F.lit(0).cast("int").alias("caution_ingredient_count"),
+            F.col("registered.rating").cast("double").alias("rating"),
+            F.col("registered.rating_source").cast("string").alias("rating_source"),
+            F.col("registered.loves_count").cast("long").alias("loves_count"),
+            F.to_timestamp(F.col("registered.registered_at")).alias("registered_at"),
+            F.current_timestamp().alias("updated_at"),
+        )
+        .where(F.col("product_id").isNotNull() & (F.length(F.col("product_id")) > 0))
+        .dropDuplicates(["product_id"])
+    )
+
+
+def _merge_dim_products(seed_df: Any, registered_df: Any) -> Any:
+    """Union product sources, preferring a registered snapshot on ID collision."""
+
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    combined = seed_df.unionByName(registered_df).withColumn(
+        "_source_priority",
+        F.when(F.col("product_source") == "brand_registered", F.lit(1)).otherwise(
+            F.lit(0)
+        ),
+    )
+    window = Window.partitionBy("product_id").orderBy(F.col("_source_priority").desc())
+    return (
+        combined.withColumn("_source_rank", F.row_number().over(window))
+        .where(F.col("_source_rank") == 1)
+        .drop("_source_priority", "_source_rank")
+    )
+
+
 def _build_dim_brand(dim_product_df: Any) -> Any:
     """Build the analytics brand dimension at grain ``brand_id``.
 
@@ -1037,7 +1193,26 @@ def run(spark: Any, config: DeriveFactsConfig) -> None:
     catalog_df = spark.read.option("multiLine", "true").json(
         config.product_catalog_path
     )
-    dim_product = _build_seed_dim_product(catalog_df)
+    seed_dim_product = _build_seed_dim_product(catalog_df)
+    registered_records = _active_registered_product_records(
+        config.registered_product_path
+    )
+    registered_json = [
+        json.dumps(record, ensure_ascii=False) for record in registered_records
+    ]
+    if registered_json:
+        registered_catalog = spark.read.json(
+            spark.sparkContext.parallelize(registered_json)
+        )
+        product_brand = None
+        if config.registered_product_brand_path:
+            product_brand = spark.read.json(config.registered_product_brand_path)
+        registered_dim_product = _build_registered_dim_product(
+            registered_catalog, product_brand
+        )
+    else:
+        registered_dim_product = seed_dim_product.limit(0)
+    dim_product = _merge_dim_products(seed_dim_product, registered_dim_product)
     dim_brand = _build_dim_brand(dim_product)
     weights = _load_behavior_weights(config.behavior_weights_path)
     frames = build_derived_frames(
