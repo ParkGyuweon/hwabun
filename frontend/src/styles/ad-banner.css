@@ -255,19 +255,19 @@
 .ad--hero .ad__hit {
   grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
   grid-template-areas: 'copy stage';
-  min-height: 344px;
+  min-height: 300px;
 }
 
 .ad--hero .ad__copy {
   grid-area: copy;
-  padding: 72px 20px 40px 40px;
+  padding: 60px 20px 30px 40px;
 }
 
 .ad--hero .ad__stage {
   grid-area: stage;
   align-self: center;
   justify-self: center;
-  width: min(100% - 44px, 300px);
+  width: min(100% - 44px, 256px);
   aspect-ratio: 1;
   margin: 22px 22px 22px 0;
   padding: 16px;
@@ -312,7 +312,7 @@
 }
 
 .ads__hero {
-  min-height: 360px;
+  min-height: 300px;
 }
 
 @media (max-width: 760px) {
