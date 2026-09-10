@@ -107,6 +107,7 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 funnel_session_path=supporting_path,
                 product_daily_path=supporting_path,
                 funnel_daily_path=supporting_path,
+                brand_daily_path=supporting_path,
                 ingredient_weekly_path=supporting_path,
                 category_price_path=supporting_path,
                 banner_daily_path=supporting_path,
@@ -115,8 +116,9 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 baseline_path=supporting_path,
             )
 
-            def verify_loaded_frames(frames, require_events):
+            def verify_loaded_frames(frames, require_events, time_zone):
                 self.assertFalse(require_events)
+                self.assertEqual("Asia/Seoul", time_zone)
                 for name in derived_paths:
                     self.assertEqual(0, frames[name].count())
                     self.assertEqual(empty.schema, frames[name].schema)
