@@ -50,7 +50,7 @@ PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.js
 
 NEG = 30
 AUG_FRAC = 0.25
-PARAMS = dict(max_iter=300, learning_rate=0.08, max_leaf_nodes=31,
+PARAMS = dict(max_iter=800, learning_rate=0.08, max_leaf_nodes=31,   # 300 → 800 (2026-09-10): 태그 제거 후 300 에 닿아 조기종료가 안 됐다. 800 이면 383 에서 멈춘다
               l2_regularization=1.0, early_stopping=True,
               validation_fraction=0.1, random_state=0)
 
@@ -82,7 +82,10 @@ def main():
     ap.add_argument("--out", default=SERVING)
     ap.add_argument("--no-importance", dest="importance", action="store_false",
                     default=True, help="순열 중요도 계산을 건너뛴다 (빠름)")
+    ap.add_argument("--max-iter", type=int, default=PARAMS["max_iter"],
+                    help="트리 수 상한 (조기종료 기준). 2026-09-10 태그 제거 후 300 에 닿아 올려 본 값을 고른다")
     a = ap.parse_args()
+    PARAMS["max_iter"] = a.max_iter
 
     from sklearn.ensemble import HistGradientBoostingClassifier
     import joblib

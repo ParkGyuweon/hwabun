@@ -1,16 +1,16 @@
 product_id,product_name,brand_name,ingredient,position_weight,source
-P420652,Lip Sleeping Mask Intense Hydration with Vitamin C,LANEIGE,Vitamin C,1.0,tag
 P420652,Lip Sleeping Mask Intense Hydration with Vitamin C,LANEIGE,Shea Butter,0.8621,parsed
 P420652,Lip Sleeping Mask Intense Hydration with Vitamin C,LANEIGE,SPF,0.6207,parsed
+P420652,Lip Sleeping Mask Intense Hydration with Vitamin C,LANEIGE,Vitamin C,0.2759,parsed
 P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,Probiotic / Ferment,0.875,parsed
 P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,Peptides,0.8393,parsed
 P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,Hyaluronic Acid,0.4464,parsed
 P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,Lactic Acid,0.1964,parsed
 P427421,Protini Polypeptide Firming Refillable Moisturizer,Drunk Elephant,AHA/Glycolic Acid,0.1964,parsed
 P417238,Green Clean Makeup Removing Cleansing Balm,Farmacy,Urea,0.8438,parsed
-P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,AHA/Glycolic Acid,1.0,tag
-P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,Salicylic Acid,1.0,tag
 P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,Alcohol Denat,0.9808,parsed
+P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,AHA/Glycolic Acid,0.9615,parsed
+P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,Salicylic Acid,0.9038,parsed
 P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,Lactic Acid,0.8654,parsed
 P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,Willow Bark,0.7885,parsed
 P269122,Alpha Beta Extra Strength Daily Peel Pads,Dr. Dennis Gross Skincare,Green Tea,0.7692,parsed
@@ -25,27 +25,27 @@ P394639,The True Cream Aqua Bomb,belif,Ceramide,0.5294,parsed
 P394639,The True Cream Aqua Bomb,belif,Shea Butter,0.4902,parsed
 P394639,The True Cream Aqua Bomb,belif,Panthenol (B5),0.4314,parsed
 P394639,The True Cream Aqua Bomb,belif,Squalane,0.4118,parsed
-P427417,Niacinamide 10% + Zinc 1% Oil Control Serum,The Ordinary,Niacinamide,1.0,tag
+P427417,Niacinamide 10% + Zinc 1% Oil Control Serum,The Ordinary,Niacinamide,1.0,parsed
 P427417,Niacinamide 10% + Zinc 1% Oil Control Serum,The Ordinary,Zinc,0.8,parsed
 P411387,Superfood Antioxidant Cleanser,Youth To The People,Aloe,0.8286,parsed
 P411387,Superfood Antioxidant Cleanser,Youth To The People,Green Tea,0.7429,parsed
 P411387,Superfood Antioxidant Cleanser,Youth To The People,Vitamin C,0.6571,parsed
 P411387,Superfood Antioxidant Cleanser,Youth To The People,Panthenol (B5),0.6,parsed
-P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,SPF,1.0,tag
 P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,Centella (Cica),1.0,parsed
 P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,Silicone,0.9701,parsed
 P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,Niacinamide,0.8358,parsed
+P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,SPF,0.1,parsed
 P411540,Cicapair Tiger Grass Color Correcting Treatment SPF 30,Dr. Jart+,Zinc,0.1,parsed
-P423688,Daily Microfoliant Exfoliator,Dermalogica,Salicylic Acid,1.0,tag
 P423688,Daily Microfoliant Exfoliator,Dermalogica,Allantoin,0.6786,parsed
+P423688,Daily Microfoliant Exfoliator,Dermalogica,Salicylic Acid,0.6071,parsed
 P423688,Daily Microfoliant Exfoliator,Dermalogica,Green Tea,0.5357,parsed
 P423688,Daily Microfoliant Exfoliator,Dermalogica,Licorice,0.5,parsed
-P421275,Salicylic Acid Acne Healing Dots,Peace Out,Salicylic Acid,1.0,tag
+P421275,Salicylic Acid Acne Healing Dots,Peace Out,Salicylic Acid,1.0,parsed
 P421275,Salicylic Acid Acne Healing Dots,Peace Out,Aloe,0.75,parsed
 P421275,Salicylic Acid Acne Healing Dots,Peace Out,Retinol,0.5,parsed
-P429952,Jet Lag Mask,Summer Fridays,Hyaluronic Acid,1.0,tag
-P429952,Jet Lag Mask,Summer Fridays,Niacinamide,1.0,tag
 P429952,Jet Lag Mask,Summer Fridays,Shea Butter,0.9062,parsed
+P429952,Jet Lag Mask,Summer Fridays,Niacinamide,0.8438,parsed
+P429952,Jet Lag Mask,Summer Fridays,Hyaluronic Acid,0.6875,parsed
 P429952,Jet Lag Mask,Summer Fridays,Ceramide,0.6562,parsed
 P429952,Jet Lag Mask,Summer Fridays,Vitamin C,0.5625,parsed
 P429952,Jet Lag Mask,Summer Fridays,Allantoin,0.5312,parsed
@@ -56,18 +56,18 @@ P456412,Greek Yoghurt Foaming Cream Cleanser,KORRES,SPF,0.1538,parsed
 P418218,The Water Cream Oil-Free Pore Minimizing Moisturizer,Tatcha,Silicone,1.0,parsed
 P418218,The Water Cream Oil-Free Pore Minimizing Moisturizer,Tatcha,Hyaluronic Acid,0.6154,parsed
 P418218,The Water Cream Oil-Free Pore Minimizing Moisturizer,Tatcha,SPF,0.2308,parsed
-P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,Niacinamide,1.0,tag
+P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,Niacinamide,0.9756,parsed
 P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,Vitamin C,0.9512,parsed
 P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,Squalane,0.878,parsed
 P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,Peptides,0.7317,parsed
 P460779,Skinlongevity Long Life Herb Anti-Aging Face Serum,bareMinerals,Silicone,0.6341,parsed
-P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Lactic Acid,1.0,tag
 P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Aloe,0.8125,parsed
 P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Probiotic / Ferment,0.75,parsed
 P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Squalane,0.6875,parsed
+P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Lactic Acid,0.6562,parsed
 P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Silicone,0.5,parsed
 P309308,Good Genes All-In-One AHA Lactic Acid Treatment,Sunday Riley,Licorice,0.25,parsed
-P427419,Hyaluronic Acid 2% + B5 Hydrating Serum,The Ordinary,Hyaluronic Acid,1.0,tag
+P427419,Hyaluronic Acid 2% + B5 Hydrating Serum,The Ordinary,Hyaluronic Acid,1.0,parsed
 P427419,Hyaluronic Acid 2% + B5 Hydrating Serum,The Ordinary,Panthenol (B5),0.7333,parsed
 P394624,The True Cream Moisturizing Bomb,belif,Alcohol Denat,0.9412,parsed
 P394624,The True Cream Moisturizing Bomb,belif,Silicone,0.9216,parsed
@@ -81,30 +81,29 @@ P7880,Soy Hydrating Gentle Face Cleanser,fresh,Urea,0.7857,parsed
 P7880,Soy Hydrating Gentle Face Cleanser,fresh,Rosehip / Rose,0.6071,parsed
 P7880,Soy Hydrating Gentle Face Cleanser,fresh,Aloe,0.5357,parsed
 P7880,Soy Hydrating Gentle Face Cleanser,fresh,Jojoba,0.2857,parsed
-P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Hyaluronic Acid,1.0,tag
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Silicone,0.82,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Shea Butter,0.72,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Allantoin,0.52,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Aloe,0.5,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Rosehip / Rose,0.42,parsed
+P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Hyaluronic Acid,0.24,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Peptides,0.2,parsed
 P433520,Magic Cream Moisturizer with Hyaluronic Acid,Charlotte Tilbury,Vitamin C,0.16,parsed
-P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Hyaluronic Acid,1.0,tag
-P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Salicylic Acid,1.0,tag
+P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Hyaluronic Acid,0.8571,parsed
 P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Willow Bark,0.6667,parsed
 P458219,Watermelon Glow PHA + BHA Pore-Tight Toner,Glow Recipe,Licorice,0.4286,parsed
-P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,AHA/Glycolic Acid,1.0,tag
+P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,AHA/Glycolic Acid,1.0,parsed
 P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,Aloe,0.9565,parsed
 P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,Salicylic Acid,0.7391,parsed
 P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,Lactic Acid,0.6522,parsed
 P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,Panthenol (B5),0.5217,parsed
 P442563,AHA 30% + BHA 2% Exfoliating Peeling Solution,The Ordinary,Hyaluronic Acid,0.4783,parsed
-P480612,Santorini Grape Poreless Skin Cream,KORRES,Hyaluronic Acid,1.0,tag
-P480612,Santorini Grape Poreless Skin Cream,KORRES,Salicylic Acid,1.0,tag
 P480612,Santorini Grape Poreless Skin Cream,KORRES,Vitamin C,0.7179,parsed
 P480612,Santorini Grape Poreless Skin Cream,KORRES,Lactic Acid,0.4872,parsed
 P480612,Santorini Grape Poreless Skin Cream,KORRES,Panthenol (B5),0.4359,parsed
-P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,SPF,1.0,tag
+P480612,Santorini Grape Poreless Skin Cream,KORRES,Hyaluronic Acid,0.2821,parsed
+P480612,Santorini Grape Poreless Skin Cream,KORRES,Salicylic Acid,0.1,parsed
+P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,SPF,1.0,parsed
 P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,Silicone,0.8077,parsed
 P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,Shea Butter,0.3846,parsed
 P454380,Unseen Sunscreen SPF 40 PA+++,Supergoop!,Jojoba,0.3462,parsed
@@ -116,13 +115,13 @@ P456207,Greek Yoghurt Nourishing Probiotic Gel-Cream,KORRES,Probiotic / Ferment,
 P456207,Greek Yoghurt Nourishing Probiotic Gel-Cream,KORRES,Panthenol (B5),0.4444,parsed
 P456207,Greek Yoghurt Nourishing Probiotic Gel-Cream,KORRES,Urea,0.1587,parsed
 P456207,Greek Yoghurt Nourishing Probiotic Gel-Cream,KORRES,Salicylic Acid,0.1,parsed
-P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,Hyaluronic Acid,1.0,tag
 P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,Probiotic / Ferment,0.9783,parsed
 P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,Silicone,0.913,parsed
 P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,Squalane,0.8913,parsed
 P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,Green Tea,0.6739,parsed
+P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,Hyaluronic Acid,0.4783,parsed
 P441101,The Dewy Skin Cream Plumping & Hydrating Moisturizer,Tatcha,SPF,0.1,parsed
-P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,AHA/Glycolic Acid,1.0,tag
+P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,AHA/Glycolic Acid,1.0,parsed
 P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,Lactic Acid,0.9048,parsed
 P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,Licorice,0.4286,parsed
 P439061,Glow2OH Dark Spot Toner,OLEHENRIKSEN,Probiotic / Ferment,0.2381,parsed
@@ -133,44 +132,43 @@ P422905,Moisturizing Eye Bomb with Squalane,belif,Ceramide,0.7593,parsed
 P422905,Moisturizing Eye Bomb with Squalane,belif,Centella (Cica),0.7407,parsed
 P422905,Moisturizing Eye Bomb with Squalane,belif,Rosehip / Rose,0.5741,parsed
 P422905,Moisturizing Eye Bomb with Squalane,belif,Willow Bark,0.4444,parsed
-P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,SPF,1.0,tag
 P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,Silicone,0.9211,parsed
 P456398,Ultimate Sun Protector Lotion SPF 50+ Sunscreen,Shiseido,Green Tea,0.5526,parsed
-P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Vitamin C,1.0,tag
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Jojoba,0.8605,parsed
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Panthenol (B5),0.7674,parsed
+P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Vitamin C,0.7209,parsed
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Rosehip / Rose,0.4419,parsed
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Probiotic / Ferment,0.3953,parsed
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Hyaluronic Acid,0.3023,parsed
 P430337,C-Rush Vitamin C Gel Moisturizer,OLEHENRIKSEN,Collagen,0.2093,parsed
-P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,AHA/Glycolic Acid,1.0,tag
+P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,AHA/Glycolic Acid,1.0,parsed
 P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,Rosehip / Rose,0.975,parsed
 P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,Urea,0.95,parsed
 P427406,Glycolic Acid 7% Exfoliating Toning Solution,The Ordinary,Aloe,0.925,parsed
-P431180,Self Tanning Bronzing Face Drops,Isle of Paradise,Vitamin C,1.0,tag
 P431180,Self Tanning Bronzing Face Drops,Isle of Paradise,Alcohol Denat,0.963,parsed
 P431180,Self Tanning Bronzing Face Drops,Isle of Paradise,Aloe,0.6667,parsed
+P431180,Self Tanning Bronzing Face Drops,Isle of Paradise,Vitamin C,0.2963,parsed
 P455364,Oat Cleansing Balm,The INKEY List,Vitamin C,0.2353,parsed
 P426836,Beste No. 9 Jelly Cleanser,Drunk Elephant,Aloe,0.6818,parsed
 P426836,Beste No. 9 Jelly Cleanser,Drunk Elephant,Licorice,0.3636,parsed
-P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Hyaluronic Acid,1.0,tag
 P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Silicone,0.9821,parsed
+P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Hyaluronic Acid,0.8214,parsed
 P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Peptides,0.8036,parsed
 P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Squalane,0.6964,parsed
 P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Caffeine,0.5,parsed
 P479839,Revitalizing Supreme+ Youth Power Creme Moisturizer,Estée Lauder,Vitamin C,0.3571,parsed
-P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Hyaluronic Acid,1.0,tag
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Niacinamide,0.9474,parsed
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Squalane,0.8947,parsed
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Silicone,0.8158,parsed
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Shea Butter,0.7895,parsed
+P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Hyaluronic Acid,0.4737,parsed
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Ceramide,0.4474,parsed
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Adenosine,0.4211,parsed
 P411403,Confidence in a Cream Anti-Aging Hydrating Moisturizer,IT Cosmetics,Peptides,0.1,parsed
 P421996,Ultra Facial Moisturizing Cream with Squalane,Kiehl's Since 1851,Silicone,0.92,parsed
 P421996,Ultra Facial Moisturizing Cream with Squalane,Kiehl's Since 1851,Squalane,0.88,parsed
 P421996,Ultra Facial Moisturizing Cream with Squalane,Kiehl's Since 1851,Salicylic Acid,0.1,parsed
-P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,AHA/Glycolic Acid,1.0,tag
+P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,AHA/Glycolic Acid,0.9706,parsed
 P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,Lactic Acid,0.8529,parsed
 P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,Salicylic Acid,0.8235,parsed
 P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,Aloe,0.7353,parsed
@@ -178,39 +176,35 @@ P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,Green Te
 P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,Hyaluronic Acid,0.5,parsed
 P392246,T.L.C. Framboos Glycolic Resurfacing Night Serum,Drunk Elephant,Allantoin,0.4706,parsed
 P375849,Facial Treatment Essence (Pitera Essence),SK-II,Probiotic / Ferment,1.0,parsed
-P375849,Facial Treatment Essence (Pitera Essence),SK-II,Lactic Acid,1.0,tag
-P375849,Facial Treatment Essence (Pitera Essence),SK-II,AHA/Glycolic Acid,1.0,tag
-P375849,Facial Treatment Essence (Pitera Essence),SK-II,Salicylic Acid,1.0,tag
-P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Hyaluronic Acid,1.0,tag
 P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Probiotic / Ferment,0.9767,parsed
 P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Peptides,0.7674,parsed
+P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Hyaluronic Acid,0.7442,parsed
 P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Caffeine,0.5814,parsed
 P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Squalane,0.4884,parsed
 P461159,Estee Lauder Advanced Night Repair Synchronized Multi-Recovery Complex Serum,Estée Lauder,Jojoba,0.3023,parsed
-P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Hyaluronic Acid,1.0,tag
-P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Vitamin C,1.0,tag
 P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Silicone,0.9706,parsed
 P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Shea Butter,0.7941,parsed
 P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Squalane,0.7647,parsed
+P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Hyaluronic Acid,0.5882,parsed
 P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Panthenol (B5),0.2353,parsed
-P461537,The Rice Wash Skin-Softening Cleanser,Tatcha,Hyaluronic Acid,1.0,tag
+P270594,Vitamin Enriched Face Base Priming Moisturizer,Bobbi Brown,Vitamin C,0.2059,parsed
+P461537,The Rice Wash Skin-Softening Cleanser,Tatcha,Hyaluronic Acid,0.5,parsed
 P415771,The Essence Skincare Boosting Treatment,Tatcha,Probiotic / Ferment,1.0,parsed
-P415771,The Essence Skincare Boosting Treatment,Tatcha,Lactic Acid,1.0,tag
 P415771,The Essence Skincare Boosting Treatment,Tatcha,Green Tea,0.6667,parsed
-P428819,Watermelon Pink Juice Oil-Free Moisturizer,Glow Recipe,Hyaluronic Acid,1.0,tag
+P428819,Watermelon Pink Juice Oil-Free Moisturizer,Glow Recipe,Hyaluronic Acid,0.625,parsed
 P428819,Watermelon Pink Juice Oil-Free Moisturizer,Glow Recipe,Licorice,0.2917,parsed
-P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Hyaluronic Acid,1.0,tag
 P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Shea Butter,0.9348,parsed
 P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Jojoba,0.8043,parsed
 P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Squalane,0.6522,parsed
 P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Aloe,0.3478,parsed
+P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Hyaluronic Acid,0.1522,parsed
 P442840,Barrier+ Triple Lipid-Peptide Face Cream,Skinfix,Ceramide,0.1304,parsed
-P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,Vitamin C,1.0,tag
+P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,Vitamin C,0.75,parsed
 P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,Squalane,0.4688,parsed
 P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,Hyaluronic Acid,0.4062,parsed
 P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,Allantoin,0.375,parsed
 P440307,Superberry Hydrate + Glow Dream Night Mask with Vitamin C,Youth To The People,Panthenol (B5),0.3438,parsed
-P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,AHA/Glycolic Acid,1.0,tag
+P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,AHA/Glycolic Acid,1.0,parsed
 P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,Salicylic Acid,0.9167,parsed
 P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,Aloe,0.8889,parsed
 P415777,T.L.C. Sukari Babyfacial AHA + BHA Mask,Drunk Elephant,Probiotic / Ferment,0.8333,parsed
@@ -239,9 +233,9 @@ P406712,B-Hydra Intensive Hydration Serum with Hyaluronic Acid,Drunk Elephant,Pa
 P406712,B-Hydra Intensive Hydration Serum with Hyaluronic Acid,Drunk Elephant,Hyaluronic Acid,0.4815,parsed
 P406712,B-Hydra Intensive Hydration Serum with Hyaluronic Acid,Drunk Elephant,Licorice,0.4444,parsed
 P406712,B-Hydra Intensive Hydration Serum with Hyaluronic Acid,Drunk Elephant,Niacinamide,0.4074,parsed
-P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,Vitamin C,1.0,tag
-P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,AHA/Glycolic Acid,1.0,tag
+P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,AHA/Glycolic Acid,0.925,parsed
 P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,Squalane,0.85,parsed
+P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,Vitamin C,0.675,parsed
 P456213,GOOPGLOW Microderm Instant Glow Exfoliator,goop,Shea Butter,0.375,parsed
 P427414,Natural Moisturizing Factors + HA,The Ordinary,Hyaluronic Acid,0.8889,parsed
 P427414,Natural Moisturizing Factors + HA,The Ordinary,Urea,0.4667,parsed
@@ -253,11 +247,11 @@ P248407,Ultra Repair Cream Intense Hydration,First Aid Beauty,Allantoin,0.3636,p
 P248407,Ultra Repair Cream Intense Hydration,First Aid Beauty,Green Tea,0.1818,parsed
 P248407,Ultra Repair Cream Intense Hydration,First Aid Beauty,Licorice,0.1364,parsed
 P248407,Ultra Repair Cream Intense Hydration,First Aid Beauty,Ceramide,0.1,parsed
-P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,Hyaluronic Acid,1.0,tag
 P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,Squalane,1.0,parsed
 P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,Shea Butter,0.84,parsed
 P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,Ceramide,0.72,parsed
 P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,Jojoba,0.68,parsed
+P433887,Squalane + Omega Repair Deep Hydration Moisturizer,Biossance,Hyaluronic Acid,0.64,parsed
 P421235,Double Serum Firming & Smoothing Anti-Aging Concentrate,Clarins,Squalane,0.6078,parsed
 P421235,Double Serum Firming & Smoothing Anti-Aging Concentrate,Clarins,Vitamin C,0.1,parsed
 P427416,Caffeine 5% + EGCG Depuffing Eye Serum,The Ordinary,Caffeine,1.0,parsed
@@ -270,12 +264,12 @@ P432829,Adaptogen Deep Moisturizing Cream with Ashwagandha + Reishi,Youth To The
 P432829,Adaptogen Deep Moisturizing Cream with Ashwagandha + Reishi,Youth To The People,Shea Butter,0.4839,parsed
 P432829,Adaptogen Deep Moisturizing Cream with Ashwagandha + Reishi,Youth To The People,Panthenol (B5),0.2258,parsed
 P432829,Adaptogen Deep Moisturizing Cream with Ashwagandha + Reishi,Youth To The People,Allantoin,0.1,parsed
-P466123,Watermelon Glow Niacinamide Dew Drops,Glow Recipe,Niacinamide,1.0,tag
+P466123,Watermelon Glow Niacinamide Dew Drops,Glow Recipe,Niacinamide,0.8095,parsed
 P466123,Watermelon Glow Niacinamide Dew Drops,Glow Recipe,Hyaluronic Acid,0.6667,parsed
 P432668,D-Bronzi Anti-Pollution Bronzing Drops with Peptides,Drunk Elephant,Peptides,0.7059,parsed
 P432668,D-Bronzi Anti-Pollution Bronzing Drops with Peptides,Drunk Elephant,Green Tea,0.5882,parsed
 P432668,D-Bronzi Anti-Pollution Bronzing Drops with Peptides,Drunk Elephant,Hyaluronic Acid,0.5294,parsed
-P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,SPF,1.0,tag
+P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,SPF,1.0,parsed
 P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,Niacinamide,0.7949,parsed
 P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,Hyaluronic Acid,0.3077,parsed
 P456218,Glowscreen Sunscreen SPF 40 PA+++ with Hyaluronic Acid + Niacinamide,Supergoop!,Probiotic / Ferment,0.1538,parsed
@@ -285,17 +279,17 @@ P475908,Aqua Bomb Overnight Lip Mask,belif,Shea Butter,0.913,parsed
 P475908,Aqua Bomb Overnight Lip Mask,belif,Centella (Cica),0.7826,parsed
 P446938,Lala Retro Whipped Refillable Moisturizer with Ceramides,Drunk Elephant,Ceramide,0.5,parsed
 P446938,Lala Retro Whipped Refillable Moisturizer with Ceramides,Drunk Elephant,Hyaluronic Acid,0.4412,parsed
-P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,AHA/Glycolic Acid,1.0,tag
 P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,Lactic Acid,0.9804,parsed
 P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,Jojoba,0.9412,parsed
+P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,AHA/Glycolic Acid,0.9216,parsed
 P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,Willow Bark,0.8824,parsed
 P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,Urea,0.7647,parsed
 P434548,Honeymoon Glow AHA Resurfacing Night Serum,Farmacy,Hyaluronic Acid,0.7059,parsed
-P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,Hyaluronic Acid,1.0,tag
+P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,Hyaluronic Acid,0.7941,parsed
 P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,Peptides,0.6765,parsed
 P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,Panthenol (B5),0.6471,parsed
 P462699,Plum Plump Hyaluronic Acid Serum,Glow Recipe,Probiotic / Ferment,0.2941,parsed
-P443845,Hyaluronic Acid Hydrating Serum,The INKEY List,Hyaluronic Acid,1.0,tag
+P443845,Hyaluronic Acid Hydrating Serum,The INKEY List,Hyaluronic Acid,0.9231,parsed
 P443845,Hyaluronic Acid Hydrating Serum,The INKEY List,Probiotic / Ferment,0.5385,parsed
 P443845,Hyaluronic Acid Hydrating Serum,The INKEY List,Peptides,0.1538,parsed
 P248404,Pure Skin Face Cleanser,First Aid Beauty,Allantoin,0.7407,parsed
@@ -303,28 +297,28 @@ P248404,Pure Skin Face Cleanser,First Aid Beauty,Green Tea,0.6667,parsed
 P248404,Pure Skin Face Cleanser,First Aid Beauty,Licorice,0.6296,parsed
 P248404,Pure Skin Face Cleanser,First Aid Beauty,Aloe,0.5926,parsed
 P446930,Cream Skin Toner & Moisturizer,LANEIGE,Green Tea,0.1538,parsed
-P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Retinol,1.0,tag
 P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Shea Butter,0.8571,parsed
 P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Squalane,0.7857,parsed
 P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Niacinamide,0.7679,parsed
 P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Aloe,0.6786,parsed
 P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Hyaluronic Acid,0.6429,parsed
-P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Hyaluronic Acid,1.0,tag
-P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Niacinamide,1.0,tag
+P447791,Avocado Fine Line Eye Cream with Retinol,Glow Recipe,Retinol,0.5893,parsed
+P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Niacinamide,0.8529,parsed
 P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Green Tea,0.7059,parsed
+P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Hyaluronic Acid,0.6471,parsed
 P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Ceramide,0.6176,parsed
 P500633,Tea Elixir Niacinamide & Hyaluronic Acid Anti-Aging Serum,fresh,Adenosine,0.3235,parsed
 P440312,Lotus Anti-Aging Night Moisturizer,fresh,Shea Butter,0.7838,parsed
-P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Hyaluronic Acid,1.0,tag
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Silicone,0.9811,parsed
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Probiotic / Ferment,0.9434,parsed
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Mineral Oil / Petrolatum,0.8868,parsed
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Peptides,0.7925,parsed
+P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Hyaluronic Acid,0.7358,parsed
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Caffeine,0.6226,parsed
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Squalane,0.6038,parsed
 P500701,Advanced Night Repair Eye Gel-Cream,Estée Lauder,Jojoba,0.4151,parsed
-P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,Hyaluronic Acid,1.0,tag
 P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,Rosehip / Rose,0.7619,parsed
+P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,Hyaluronic Acid,0.619,parsed
 P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,Silicone,0.5476,parsed
 P471237,Rose & Hyaluronic Acid Deep Hydration Moisturizer,fresh,Squalane,0.4762,parsed
 P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,Hyaluronic Acid,0.3902,parsed
@@ -332,19 +326,18 @@ P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,Niacinamide,0.3659,parsed
 P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,Panthenol (B5),0.3415,parsed
 P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,Licorice,0.2683,parsed
 P448207,PHAT Glow Facial Mask,OLEHENRIKSEN,Probiotic / Ferment,0.1463,parsed
-P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Hyaluronic Acid,1.0,tag
-P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Vitamin C,1.0,tag
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Silicone,0.9767,parsed
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Urea,0.814,parsed
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Green Tea,0.7907,parsed
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Aloe,0.6977,parsed
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Caffeine,0.6279,parsed
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Peptides,0.5814,parsed
+P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Hyaluronic Acid,0.5581,parsed
 P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Probiotic / Ferment,0.4419,parsed
-P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Niacinamide,1.0,tag
-P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Retinol,1.0,tag
-P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Collagen,1.0,tag
+P468351,Moisture Surge 100H Auto-Replenishing Hydrator Moisturizer,CLINIQUE,Vitamin C,0.2326,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Silicone,0.9737,parsed
+P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Niacinamide,0.8684,parsed
+P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Retinol,0.6579,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Centella (Cica),0.6316,parsed
 P476414,5 Stars Retinol + Niacinamide Eye Serum,Sunday Riley,Ceramide,0.4474,parsed
 P453253,Vegan Milk Moisturizer,MILK MAKEUP,Squalane,0.9615,parsed
@@ -356,7 +349,7 @@ P403818,Lippe Balm,Drunk Elephant,Shea Butter,0.931,parsed
 P403818,Lippe Balm,Drunk Elephant,Licorice,0.4138,parsed
 P403818,Lippe Balm,Drunk Elephant,Peptides,0.3793,parsed
 P403818,Lippe Balm,Drunk Elephant,Vitamin C,0.3448,parsed
-P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,Vitamin C,1.0,tag
+P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,Vitamin C,1.0,parsed
 P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,Licorice,0.4815,parsed
 P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,Hyaluronic Acid,0.2963,parsed
 P439058,Violet-C Brightening Serum 20% Vitamin C + 10% AHA,Tatcha,Lactic Acid,0.2593,parsed
@@ -384,11 +377,11 @@ P424948,Auto Correct Brightening + Depuffing Eye Cream for Dark Circles,Sunday R
 P424948,Auto Correct Brightening + Depuffing Eye Cream for Dark Circles,Sunday Riley,Caffeine,0.5,parsed
 P424948,Auto Correct Brightening + Depuffing Eye Cream for Dark Circles,Sunday Riley,AHA/Glycolic Acid,0.2105,parsed
 P424948,Auto Correct Brightening + Depuffing Eye Cream for Dark Circles,Sunday Riley,SPF,0.1053,parsed
-P429242,Clear Sunscreen Stick SPF 50+,Shiseido,SPF,1.0,tag
+P429242,Clear Sunscreen Stick SPF 50+,Shiseido,SPF,1.0,parsed
 P429242,Clear Sunscreen Stick SPF 50+,Shiseido,Mineral Oil / Petrolatum,0.8077,parsed
 P429242,Clear Sunscreen Stick SPF 50+,Shiseido,Licorice,0.3462,parsed
-P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,Lactic Acid,1.0,tag
-P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,Salicylic Acid,1.0,tag
+P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,Lactic Acid,0.8333,parsed
+P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,Salicylic Acid,0.6,parsed
 P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,Urea,0.3333,parsed
 P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,Green Tea,0.1333,parsed
 P431848,Cold Plunge Pore Mask,OLEHENRIKSEN,SPF,0.1,parsed
@@ -399,11 +392,11 @@ P453825,Hydra Zen Glow Liquid Lightweight Moisturizer with Hyaluronic Acid,Lanc�
 P453825,Hydra Zen Glow Liquid Lightweight Moisturizer with Hyaluronic Acid,Lancôme,Hyaluronic Acid,0.5814,parsed
 P453825,Hydra Zen Glow Liquid Lightweight Moisturizer with Hyaluronic Acid,Lancôme,Peptides,0.4186,parsed
 P453825,Hydra Zen Glow Liquid Lightweight Moisturizer with Hyaluronic Acid,Lancôme,Aloe,0.3488,parsed
-P443833,Salicylic Acid Acne + Pore Cleanser,The INKEY List,Salicylic Acid,1.0,tag
+P443833,Salicylic Acid Acne + Pore Cleanser,The INKEY List,Salicylic Acid,0.8,parsed
 P443833,Salicylic Acid Acne + Pore Cleanser,The INKEY List,Zinc,0.64,parsed
 P443833,Salicylic Acid Acne + Pore Cleanser,The INKEY List,Allantoin,0.52,parsed
-P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,AHA/Glycolic Acid,1.0,tag
-P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Salicylic Acid,1.0,tag
+P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Salicylic Acid,0.8704,parsed
+P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,AHA/Glycolic Acid,0.8333,parsed
 P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Lactic Acid,0.8148,parsed
 P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Willow Bark,0.7407,parsed
 P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Green Tea,0.6296,parsed
@@ -412,21 +405,21 @@ P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Pa
 P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Urea,0.5,parsed
 P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Jojoba,0.4815,parsed
 P447592,Alpha Beta Pore Perfecting & Refining Serum,Dr. Dennis Gross Skincare,Retinol,0.4444,parsed
-P469502,Skin Perfecting 2% BHA Liquid Exfoliant,Paula's Choice,Salicylic Acid,1.0,tag
-P410400,U.F.O. Salicylic Acid BHA Acne Treatment Face Oil,Sunday Riley,Salicylic Acid,1.0,tag
+P469502,Skin Perfecting 2% BHA Liquid Exfoliant,Paula's Choice,Salicylic Acid,0.7143,parsed
 P410400,U.F.O. Salicylic Acid BHA Acne Treatment Face Oil,Sunday Riley,Licorice,0.6857,parsed
+P410400,U.F.O. Salicylic Acid BHA Acne Treatment Face Oil,Sunday Riley,Salicylic Acid,0.6571,parsed
 P410400,U.F.O. Salicylic Acid BHA Acne Treatment Face Oil,Sunday Riley,Aloe,0.2571,parsed
-P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Hyaluronic Acid,1.0,tag
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Shea Butter,0.8806,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Green Tea,0.7761,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Peptides,0.7313,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Probiotic / Ferment,0.6567,parsed
+P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Hyaluronic Acid,0.6418,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Caffeine,0.5821,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Vitamin C,0.5672,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Licorice,0.5224,parsed
 P479734,Smart Clinical Repair Wrinkle Correcting Eye Cream,CLINIQUE,Jojoba,0.4925,parsed
-P417936,Rose & Hyaluronic Acid Deep Hydration Toner,fresh,Hyaluronic Acid,1.0,tag
 P417936,Rose & Hyaluronic Acid Deep Hydration Toner,fresh,Rosehip / Rose,0.8421,parsed
+P417936,Rose & Hyaluronic Acid Deep Hydration Toner,fresh,Hyaluronic Acid,0.6316,parsed
 P429515,C-Tango Vitamin C Eye Cream,Drunk Elephant,Vitamin C,0.9459,parsed
 P429515,C-Tango Vitamin C Eye Cream,Drunk Elephant,Peptides,0.7973,parsed
 P429515,C-Tango Vitamin C Eye Cream,Drunk Elephant,Ceramide,0.7432,parsed
@@ -442,78 +435,75 @@ P399623,Luminous Dewy Skin Mist,Tatcha,Probiotic / Ferment,0.7778,parsed
 P399623,Luminous Dewy Skin Mist,Tatcha,Green Tea,0.75,parsed
 P399623,Luminous Dewy Skin Mist,Tatcha,Hyaluronic Acid,0.6667,parsed
 P399623,Luminous Dewy Skin Mist,Tatcha,Licorice,0.6111,parsed
-P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,Hyaluronic Acid,1.0,tag
 P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,Panthenol (B5),0.8108,parsed
+P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,Hyaluronic Acid,0.7838,parsed
 P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,Vitamin C,0.7027,parsed
 P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,Green Tea,0.6216,parsed
 P411388,Superfood Air-Whip Lightweight Moisturizer with Hyaluronic Acid,Youth To The People,Aloe,0.4324,parsed
-P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,AHA/Glycolic Acid,1.0,tag
 P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,Aloe,0.973,parsed
+P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,AHA/Glycolic Acid,0.8919,parsed
 P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,Lactic Acid,0.8378,parsed
 P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,Licorice,0.5676,parsed
 P473322,Dewtopia 20% Acid Night Treatment,OLEHENRIKSEN,Probiotic / Ferment,0.3784,parsed
 P415619,Dreamskin Skin Perfector,Dior,Silicone,1.0,parsed
-P415619,Dreamskin Skin Perfector,Dior,Niacinamide,1.0,tag
 P415619,Dreamskin Skin Perfector,Dior,Shea Butter,0.9333,parsed
+P415619,Dreamskin Skin Perfector,Dior,Niacinamide,0.9111,parsed
 P415619,Dreamskin Skin Perfector,Dior,Vitamin C,0.4889,parsed
 P415619,Dreamskin Skin Perfector,Dior,Adenosine,0.3778,parsed
-P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,Salicylic Acid,1.0,tag
 P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,Aloe,0.9545,parsed
 P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,Probiotic / Ferment,0.7273,parsed
 P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,Willow Bark,0.6818,parsed
 P400207,Blue Tansy BHA and Enzyme Pore Refining Mask,Herbivore,Hyaluronic Acid,0.6364,parsed
-P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,Vitamin C,1.0,tag
+P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,Vitamin C,0.9583,parsed
 P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,Squalane,0.9167,parsed
 P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,Jojoba,0.4583,parsed
 P418346,C.E.O. 15% Vitamin C Brightening Serum,Sunday Riley,AHA/Glycolic Acid,0.4167,parsed
-P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Hyaluronic Acid,1.0,tag
 P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Mineral Oil / Petrolatum,0.9636,parsed
 P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Squalane,0.8727,parsed
 P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Caffeine,0.5273,parsed
 P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Green Tea,0.2727,parsed
+P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Hyaluronic Acid,0.2545,parsed
 P448203,Benefiance Wrinkle Smoothing Eye Cream,Shiseido,Peptides,0.1,parsed
-P416563,Squalane + Vitamin C Rose Firming Oil,Biossance,Vitamin C,1.0,tag
 P416563,Squalane + Vitamin C Rose Firming Oil,Biossance,Squalane,1.0,parsed
+P416563,Squalane + Vitamin C Rose Firming Oil,Biossance,Vitamin C,0.8571,parsed
 P416563,Squalane + Vitamin C Rose Firming Oil,Biossance,Rosehip / Rose,0.4286,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Silicone,1.0,parsed
-P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,SPF,1.0,tag
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Adenosine,0.5102,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Niacinamide,0.449,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Collagen,0.4082,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Green Tea,0.3265,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Peptides,0.1837,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Hyaluronic Acid,0.1633,parsed
+P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,SPF,0.1,parsed
 P433435,CC+ Cream Oil-Free Matte with SPF 40,IT Cosmetics,Zinc,0.1,parsed
-P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Hyaluronic Acid,1.0,tag
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Probiotic / Ferment,1.0,parsed
-P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Lactic Acid,1.0,tag
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Squalane,0.8919,parsed
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Silicone,0.7838,parsed
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Green Tea,0.7297,parsed
+P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Hyaluronic Acid,0.6757,parsed
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Collagen,0.6486,parsed
 P466155,The Dewy Serum Resurfacing and Plumping Treatment,Tatcha,Vitamin C,0.5135,parsed
-P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,SPF,1.0,tag
 P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,Silicone,0.9444,parsed
 P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,Centella (Cica),0.5,parsed
 P456392,Daily UV Defense Invisible Broad Spectrum SPF 36 Sunscreen,innisfree,Green Tea,0.3889,parsed
-P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Hyaluronic Acid,1.0,tag
 P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Silicone,1.0,parsed
-P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,SPF,1.0,tag
+P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,SPF,0.9348,parsed
 P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Zinc,0.9348,parsed
 P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Vitamin C,0.7174,parsed
 P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Licorice,0.6739,parsed
+P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Hyaluronic Acid,0.6087,parsed
 P482739,Urban Environment Oil-Free Sunscreen Broad-Spectrum SPF 42,Shiseido,Green Tea,0.5652,parsed
-P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,Salicylic Acid,1.0,tag
 P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,Rosehip / Rose,0.9565,parsed
 P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,Niacinamide,0.8696,parsed
+P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,Salicylic Acid,0.6957,parsed
 P474938,Vinopure Natural Salicylic Acid Pore Minimizing Serum,Caudalie,Hyaluronic Acid,0.6522,parsed
-P454018,The Serum Stick: Treatment & Touch Up Balm,Tatcha,Hyaluronic Acid,1.0,tag
 P454018,The Serum Stick: Treatment & Touch Up Balm,Tatcha,Squalane,1.0,parsed
-P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,Hyaluronic Acid,1.0,tag
-P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,AHA/Glycolic Acid,1.0,tag
+P454018,The Serum Stick: Treatment & Touch Up Balm,Tatcha,Hyaluronic Acid,0.6154,parsed
+P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,Hyaluronic Acid,0.8947,parsed
+P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,AHA/Glycolic Acid,0.7368,parsed
 P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,Lactic Acid,0.6842,parsed
 P436359,Blueberry Bounce Gentle Cleanser,Glow Recipe,Licorice,0.2105,parsed
-P458209,Daily Greens Oil-Free Gel Moisturizer with Moringa and Papaya,Farmacy,Niacinamide,1.0,tag
+P458209,Daily Greens Oil-Free Gel Moisturizer with Moringa and Papaya,Farmacy,Niacinamide,0.913,parsed
 P458209,Daily Greens Oil-Free Gel Moisturizer with Moringa and Papaya,Farmacy,Hyaluronic Acid,0.7391,parsed
 P458209,Daily Greens Oil-Free Gel Moisturizer with Moringa and Papaya,Farmacy,Allantoin,0.5652,parsed
 P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,Jojoba,0.9688,parsed
@@ -523,27 +513,27 @@ P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,Allantoin
 P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,Peptides,0.7188,parsed
 P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,Green Tea,0.3906,parsed
 P470529,Avocado Soothing Skin Barrier Serum with Ceramides,Glow Recipe,Vitamin C,0.25,parsed
-P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,Hyaluronic Acid,1.0,tag
 P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,Silicone,0.9545,parsed
+P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,Hyaluronic Acid,0.8409,parsed
 P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,Ceramide,0.8182,parsed
 P415701,Water Drench Hyaluronic Acid Moisturizer,Peter Thomas Roth,Vitamin C,0.6136,parsed
-P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,Collagen,1.0,tag
+P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,Collagen,1.0,parsed
 P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,Silicone,0.8537,parsed
 P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,Ceramide,0.6341,parsed
 P439055,GENIUS Sleeping Collagen Moisturizer,Algenist,Probiotic / Ferment,0.2439,parsed
-P439926,A-Passioni Retinol Cream,Drunk Elephant,Retinol,1.0,tag
 P439926,A-Passioni Retinol Cream,Drunk Elephant,Niacinamide,0.9048,parsed
+P439926,A-Passioni Retinol Cream,Drunk Elephant,Retinol,0.8254,parsed
 P439926,A-Passioni Retinol Cream,Drunk Elephant,Peptides,0.746,parsed
 P439926,A-Passioni Retinol Cream,Drunk Elephant,Vitamin C,0.6825,parsed
 P439926,A-Passioni Retinol Cream,Drunk Elephant,Ceramide,0.6032,parsed
 P439926,A-Passioni Retinol Cream,Drunk Elephant,Jojoba,0.5397,parsed
 P439926,A-Passioni Retinol Cream,Drunk Elephant,Hyaluronic Acid,0.381,parsed
-P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,AHA/Glycolic Acid,1.0,tag
+P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,AHA/Glycolic Acid,0.9444,parsed
 P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,Lactic Acid,0.8056,parsed
 P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,Licorice,0.5556,parsed
 P466142,Lemonade Smoothing Scrub,OLEHENRIKSEN,Probiotic / Ferment,0.4167,parsed
-P54509,Tonique Confort Re-Hydrating Comforting Toner with Acacia Honey,Lancôme,Hyaluronic Acid,1.0,tag
 P54509,Tonique Confort Re-Hydrating Comforting Toner with Acacia Honey,Lancôme,Silicone,0.8636,parsed
+P54509,Tonique Confort Re-Hydrating Comforting Toner with Acacia Honey,Lancôme,Hyaluronic Acid,0.3182,parsed
 P462336,Aqua Bomb Cleansing Balm,belif,Aloe,0.4615,parsed
 P419222,Umbra Sheer Physical Daily Defense SPF 30,Drunk Elephant,SPF,1.0,parsed
 P419222,Umbra Sheer Physical Daily Defense SPF 30,Drunk Elephant,Zinc,1.0,parsed
@@ -553,30 +543,30 @@ P446421,Clear Improvement Pore Clearing Moisturizer with Salicylic Acid,Origins,
 P446421,Clear Improvement Pore Clearing Moisturizer with Salicylic Acid,Origins,Caffeine,0.3171,parsed
 P446421,Clear Improvement Pore Clearing Moisturizer with Salicylic Acid,Origins,Hyaluronic Acid,0.2683,parsed
 P446421,Clear Improvement Pore Clearing Moisturizer with Salicylic Acid,Origins,Zinc,0.1463,parsed
-P427413,Lactic Acid 10% + HA 2% Exfoliating Serum,The Ordinary,Lactic Acid,1.0,tag
+P427413,Lactic Acid 10% + HA 2% Exfoliating Serum,The Ordinary,Lactic Acid,1.0,parsed
 P427413,Lactic Acid 10% + HA 2% Exfoliating Serum,The Ordinary,Hyaluronic Acid,0.6154,parsed
-P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Hyaluronic Acid,1.0,tag
-P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,SPF,1.0,tag
-P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Niacinamide,1.0,tag
+P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,SPF,1.0,parsed
 P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Zinc,0.9333,parsed
 P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Silicone,0.6889,parsed
 P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Lactic Acid,0.4444,parsed
+P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Niacinamide,0.3556,parsed
 P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Aloe,0.2444,parsed
-P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,Salicylic Acid,1.0,tag
+P481989,Watermelon Glow Niacinamide Sunscreen SPF 50,Glow Recipe,Hyaluronic Acid,0.1111,parsed
 P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,Alcohol Denat,0.9032,parsed
 P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,Centella (Cica),0.7742,parsed
+P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,Salicylic Acid,0.5806,parsed
 P422430,Hydra Zen Gel-Cream Oil-Free Moisturizer with Salicylic Acid,Lancôme,Silicone,0.5484,parsed
 P467038,Retinol Eye Stick,Peace Out,Squalane,1.0,parsed
-P467038,Retinol Eye Stick,Peace Out,Retinol,1.0,tag
+P467038,Retinol Eye Stick,Peace Out,Retinol,0.6667,parsed
 P467038,Retinol Eye Stick,Peace Out,Hyaluronic Acid,0.6,parsed
 P467038,Retinol Eye Stick,Peace Out,Peptides,0.5667,parsed
-P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Hyaluronic Acid,1.0,tag
 P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Silicone,0.8537,parsed
 P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Peptides,0.8049,parsed
 P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Vitamin C,0.7561,parsed
+P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Hyaluronic Acid,0.6829,parsed
 P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Caffeine,0.5854,parsed
 P500718,Smart Clinical Repair Wrinkle Correcting Cream,CLINIQUE,Mineral Oil / Petrolatum,0.439,parsed
-P302103,Sugar Advanced Lip Balm Intense Hydration Treatment,fresh,Hyaluronic Acid,1.0,tag
+P302103,Sugar Advanced Lip Balm Intense Hydration Treatment,fresh,Hyaluronic Acid,0.4483,parsed
 P302103,Sugar Advanced Lip Balm Intense Hydration Treatment,fresh,Licorice,0.3448,parsed
 P302103,Sugar Advanced Lip Balm Intense Hydration Treatment,fresh,Vitamin C,0.2759,parsed
 P434545,Glow Cycle Retin-ALT Power Serum,OLEHENRIKSEN,Squalane,0.9512,parsed
@@ -596,36 +586,35 @@ P416341,Crème de la Mer Moisturizer,La Mer,Mineral Oil / Petrolatum,0.9756,pars
 P416341,Crème de la Mer Moisturizer,La Mer,Zinc,0.561,parsed
 P416341,Crème de la Mer Moisturizer,La Mer,Panthenol (B5),0.2683,parsed
 P416341,Crème de la Mer Moisturizer,La Mer,Alcohol Denat,0.1,parsed
-P393718,Luna Sleeping Retinoid Night Oil,Sunday Riley,Retinol,1.0,tag
-P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Hyaluronic Acid,1.0,tag
 P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Squalane,0.873,parsed
+P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Hyaluronic Acid,0.8413,parsed
 P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Niacinamide,0.6667,parsed
 P479327,Plum Plump Hyaluronic Acid Moisturizer,Glow Recipe,Aloe,0.1746,parsed
 P415237,Hello FAB Coconut Skin Smoothie Priming Moisturizer,First Aid Beauty,Silicone,0.9048,parsed
 P415237,Hello FAB Coconut Skin Smoothie Priming Moisturizer,First Aid Beauty,Licorice,0.4762,parsed
 P415237,Hello FAB Coconut Skin Smoothie Priming Moisturizer,First Aid Beauty,Green Tea,0.4286,parsed
 P415237,Hello FAB Coconut Skin Smoothie Priming Moisturizer,First Aid Beauty,Probiotic / Ferment,0.381,parsed
-P428095,Ready Steady Glow Daily AHA Tonic,REN Clean Skincare,Lactic Acid,1.0,tag
+P428095,Ready Steady Glow Daily AHA Tonic,REN Clean Skincare,Lactic Acid,0.9333,parsed
 P428095,Ready Steady Glow Daily AHA Tonic,REN Clean Skincare,Willow Bark,0.6,parsed
-P442858,Rose Deep Hydration Sleeping Mask,fresh,Hyaluronic Acid,1.0,tag
 P442858,Rose Deep Hydration Sleeping Mask,fresh,Rosehip / Rose,0.9815,parsed
+P442858,Rose Deep Hydration Sleeping Mask,fresh,Hyaluronic Acid,0.8519,parsed
 P442858,Rose Deep Hydration Sleeping Mask,fresh,Silicone,0.5556,parsed
 P442858,Rose Deep Hydration Sleeping Mask,fresh,Squalane,0.4259,parsed
 P442858,Rose Deep Hydration Sleeping Mask,fresh,Urea,0.3333,parsed
 P474953,Abeille Royale Advanced Youth Watery Oil,GUERLAIN,Adenosine,0.4412,parsed
-P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,Hyaluronic Acid,1.0,tag
-P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,AHA/Glycolic Acid,1.0,tag
+P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,AHA/Glycolic Acid,1.0,parsed
 P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,Alcohol Denat,0.963,parsed
+P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,Hyaluronic Acid,0.5185,parsed
 P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,Vitamin C,0.4815,parsed
 P456208,GOOPGLOW 15% Glycolic Acid Overnight Glow Peel,goop,Licorice,0.4444,parsed
 P427397,Hydro Biotic Recovery Sleeping Mask,Dr. Brandt Skincare,Silicone,0.9697,parsed
 P427397,Hydro Biotic Recovery Sleeping Mask,Dr. Brandt Skincare,Rosehip / Rose,0.2727,parsed
 P427397,Hydro Biotic Recovery Sleeping Mask,Dr. Brandt Skincare,Green Tea,0.2424,parsed
 P427397,Hydro Biotic Recovery Sleeping Mask,Dr. Brandt Skincare,Peptides,0.1,parsed
-P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,Hyaluronic Acid,1.0,tag
-P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,SPF,1.0,tag
+P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,SPF,1.0,parsed
 P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,Vitamin C,0.5854,parsed
 P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,Licorice,0.561,parsed
+P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,Hyaluronic Acid,0.5366,parsed
 P482742,Urban Environment Fresh-Moisture Sunscreen Broad-Spectrum SPF 42,Shiseido,Green Tea,0.4878,parsed
 P453225,The Kissu Lip Mask,Tatcha,Squalane,0.9355,parsed
 P453225,The Kissu Lip Mask,Tatcha,Rosehip / Rose,0.6452,parsed
@@ -637,37 +626,36 @@ P411539,Cicapair Tiger Grass Cream,Dr. Jart+,Silicone,0.8387,parsed
 P411539,Cicapair Tiger Grass Cream,Dr. Jart+,Centella (Cica),0.6613,parsed
 P411539,Cicapair Tiger Grass Cream,Dr. Jart+,Adenosine,0.3548,parsed
 P411539,Cicapair Tiger Grass Cream,Dr. Jart+,Panthenol (B5),0.2258,parsed
-P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Hyaluronic Acid,1.0,tag
 P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Squalane,0.9615,parsed
 P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Ceramide,0.8269,parsed
+P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Hyaluronic Acid,0.7692,parsed
 P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Shea Butter,0.6154,parsed
 P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Rosehip / Rose,0.4808,parsed
 P448937,ICE Ceramide Moisturizer with Vitamin F,Sunday Riley,Zinc,0.1346,parsed
 P463036,Honey Halo Ultra-Hydrating Ceramide Moisturizer,Farmacy,Shea Butter,0.9487,parsed
 P463036,Honey Halo Ultra-Hydrating Ceramide Moisturizer,Farmacy,Panthenol (B5),0.6923,parsed
 P463036,Honey Halo Ultra-Hydrating Ceramide Moisturizer,Farmacy,Ceramide,0.6154,parsed
-P442594,Ultra Glow Serum: Glow + Strengthen Vitamin C Serum,SEPHORA COLLECTION,Vitamin C,1.0,tag
 P442594,Ultra Glow Serum: Glow + Strengthen Vitamin C Serum,SEPHORA COLLECTION,Panthenol (B5),0.3636,parsed
-P468658,Volcanic AHA Pore Clearing Clay Mask,innisfree,AHA/Glycolic Acid,1.0,tag
+P442594,Ultra Glow Serum: Glow + Strengthen Vitamin C Serum,SEPHORA COLLECTION,Vitamin C,0.1818,parsed
 P468658,Volcanic AHA Pore Clearing Clay Mask,innisfree,SPF,0.975,parsed
 P468658,Volcanic AHA Pore Clearing Clay Mask,innisfree,Lactic Acid,0.3,parsed
+P468658,Volcanic AHA Pore Clearing Clay Mask,innisfree,AHA/Glycolic Acid,0.3,parsed
 P278317,Facial Radiance Pads,First Aid Beauty,Aloe,0.9545,parsed
 P278317,Facial Radiance Pads,First Aid Beauty,Lactic Acid,0.8182,parsed
 P278317,Facial Radiance Pads,First Aid Beauty,AHA/Glycolic Acid,0.7727,parsed
 P278317,Facial Radiance Pads,First Aid Beauty,Green Tea,0.5455,parsed
 P278317,Facial Radiance Pads,First Aid Beauty,Licorice,0.4091,parsed
 P278317,Facial Radiance Pads,First Aid Beauty,Hyaluronic Acid,0.1818,parsed
-P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Hyaluronic Acid,1.0,tag
-P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Vitamin C,1.0,tag
 P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Probiotic / Ferment,1.0,parsed
 P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Alcohol Denat,0.9091,parsed
 P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Silicone,0.8636,parsed
+P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Vitamin C,0.7727,parsed
+P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Hyaluronic Acid,0.7273,parsed
 P379510,Advanced Génifique Radiance Boosting Face Serum,Lancôme,Adenosine,0.5455,parsed
 P415747,Brazilian Kiss Cupuaçu Lip Butter,Sol de Janeiro,Aloe,0.1,parsed
-P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Hyaluronic Acid,1.0,tag
-P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Retinol,1.0,tag
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Silicone,0.9804,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Vitamin C,0.8824,parsed
+P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Hyaluronic Acid,0.8627,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Squalane,0.8235,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Caffeine,0.6667,parsed
 P473267,Smart Clinical Repair Wrinkle Correcting Serum,CLINIQUE,Peptides,0.6471,parsed
@@ -686,17 +674,17 @@ P467602,Triple Algae Eye Renewal Balm Eye Cream,Algenist,Probiotic / Ferment,0.5
 P467602,Triple Algae Eye Renewal Balm Eye Cream,Algenist,Green Tea,0.4833,parsed
 P467602,Triple Algae Eye Renewal Balm Eye Cream,Algenist,Panthenol (B5),0.4333,parsed
 P467602,Triple Algae Eye Renewal Balm Eye Cream,Algenist,Lactic Acid,0.2,parsed
-P479841,Floral Recovery Overnight Mask with Squalane,fresh,Vitamin C,1.0,tag
 P479841,Floral Recovery Overnight Mask with Squalane,fresh,Squalane,0.9643,parsed
+P479841,Floral Recovery Overnight Mask with Squalane,fresh,Vitamin C,0.8214,parsed
 P479841,Floral Recovery Overnight Mask with Squalane,fresh,Urea,0.75,parsed
 P479841,Floral Recovery Overnight Mask with Squalane,fresh,Hyaluronic Acid,0.1786,parsed
 P421998,Midnight Recovery Concentrate Moisturizing Face Oil,Kiehl's Since 1851,Squalane,0.9048,parsed
 P421998,Midnight Recovery Concentrate Moisturizing Face Oil,Kiehl's Since 1851,Rosehip / Rose,0.8571,parsed
 P421998,Midnight Recovery Concentrate Moisturizing Face Oil,Kiehl's Since 1851,Jojoba,0.7619,parsed
-P443842,Retinol Anti-Aging Serum,The INKEY List,Retinol,1.0,tag
 P443842,Retinol Anti-Aging Serum,The INKEY List,Silicone,0.8621,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Squalane,0.7241,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Vitamin C,0.5862,parsed
+P443842,Retinol Anti-Aging Serum,The INKEY List,Retinol,0.3103,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Probiotic / Ferment,0.2414,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Hyaluronic Acid,0.1724,parsed
 P443842,Retinol Anti-Aging Serum,The INKEY List,Peptides,0.1034,parsed
@@ -704,11 +692,10 @@ P472454,Vinosource-Hydra Moisturizing Sorbet,Caudalie,Shea Butter,0.8947,parsed
 P472454,Vinosource-Hydra Moisturizing Sorbet,Caudalie,Hyaluronic Acid,0.2105,parsed
 P472454,Vinosource-Hydra Moisturizing Sorbet,Caudalie,Peptides,0.1,parsed
 P448802,Brighten-i Eye Cream,The INKEY List,Silicone,1.0,parsed
-P448802,Brighten-i Eye Cream,The INKEY List,Niacinamide,1.0,tag
 P448802,Brighten-i Eye Cream,The INKEY List,Hyaluronic Acid,0.1071,parsed
-P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,AHA/Glycolic Acid,1.0,tag
-P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,Salicylic Acid,1.0,tag
+P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,AHA/Glycolic Acid,0.84,parsed
 P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,Lactic Acid,0.8,parsed
+P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,Salicylic Acid,0.72,parsed
 P416816,Balancing Force Oil Control Toner,OLEHENRIKSEN,Green Tea,0.28,parsed
 P454120,F-Balm Electrolyte Waterfacial Mask,Drunk Elephant,Squalane,0.9825,parsed
 P454120,F-Balm Electrolyte Waterfacial Mask,Drunk Elephant,Niacinamide,0.9474,parsed
@@ -719,10 +706,10 @@ P454120,F-Balm Electrolyte Waterfacial Mask,Drunk Elephant,Vitamin C,0.2456,pars
 P431181,Self-Tanning Water,Isle of Paradise,Aloe,0.7419,parsed
 P431181,Self-Tanning Water,Isle of Paradise,Panthenol (B5),0.4194,parsed
 P431181,Self-Tanning Water,Isle of Paradise,Vitamin C,0.3871,parsed
-P405599,SEA drink of H2O hydrating boost moisturizer,tarte,Hyaluronic Acid,1.0,tag
 P405599,SEA drink of H2O hydrating boost moisturizer,tarte,Silicone,0.9697,parsed
 P405599,SEA drink of H2O hydrating boost moisturizer,tarte,Squalane,0.9091,parsed
-P427410,Vitamin C Suspension 23% + HA Spheres 2%,The Ordinary,Vitamin C,1.0,tag
+P405599,SEA drink of H2O hydrating boost moisturizer,tarte,Hyaluronic Acid,0.4545,parsed
+P427410,Vitamin C Suspension 23% + HA Spheres 2%,The Ordinary,Vitamin C,1.0,parsed
 P427410,Vitamin C Suspension 23% + HA Spheres 2%,The Ordinary,Squalane,0.9333,parsed
 P427410,Vitamin C Suspension 23% + HA Spheres 2%,The Ordinary,Hyaluronic Acid,0.4667,parsed
 P472028,Capture Totale Super Potent Eye Serum,Dior,Niacinamide,0.9487,parsed
@@ -732,17 +719,17 @@ P472028,Capture Totale Super Potent Eye Serum,Dior,Hyaluronic Acid,0.2308,parsed
 P397890,Original Skin Retexturizing Mask with Rose Clay,Origins,Jojoba,0.8947,parsed
 P397890,Original Skin Retexturizing Mask with Rose Clay,Origins,Hyaluronic Acid,0.2368,parsed
 P397890,Original Skin Retexturizing Mask with Rose Clay,Origins,SPF,0.1,parsed
-P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,Hyaluronic Acid,1.0,tag
 P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,Silicone,0.9714,parsed
 P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,Ceramide,0.6286,parsed
+P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,Hyaluronic Acid,0.5429,parsed
 P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,Probiotic / Ferment,0.3429,parsed
 P474377,Indigo Overnight Repair Serum in Cream Treatment,Tatcha,SPF,0.1,parsed
 P433444,Clear Improvement Charcoal Honey Mask to Purify and Nourish,Origins,Jojoba,0.8409,parsed
 P433444,Clear Improvement Charcoal Honey Mask to Purify and Nourish,Origins,Caffeine,0.4091,parsed
 P433444,Clear Improvement Charcoal Honey Mask to Purify and Nourish,Origins,Hyaluronic Acid,0.3864,parsed
 P433444,Clear Improvement Charcoal Honey Mask to Purify and Nourish,Origins,SPF,0.1,parsed
-P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Hyaluronic Acid,1.0,tag
-P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Retinol,1.0,tag
+P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Hyaluronic Acid,1.0,parsed
+P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Retinol,0.6842,parsed
 P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Peptides,0.6316,parsed
 P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Vitamin C,0.3684,parsed
 P500757,Microneedling Anti-Wrinkle Retinol Patches,Peace Out,Adenosine,0.3158,parsed
@@ -758,12 +745,12 @@ P423259,Cicapair Tiger Grass Serum,Dr. Jart+,Niacinamide,0.8333,parsed
 P423259,Cicapair Tiger Grass Serum,Dr. Jart+,Panthenol (B5),0.7222,parsed
 P423259,Cicapair Tiger Grass Serum,Dr. Jart+,Centella (Cica),0.5556,parsed
 P423259,Cicapair Tiger Grass Serum,Dr. Jart+,Adenosine,0.4444,parsed
-P454378,Lotus Anti- Aging Daily Moisturizer,fresh,Hyaluronic Acid,1.0,tag
 P454378,Lotus Anti- Aging Daily Moisturizer,fresh,Silicone,0.5405,parsed
+P454378,Lotus Anti- Aging Daily Moisturizer,fresh,Hyaluronic Acid,0.3243,parsed
 P454378,Lotus Anti- Aging Daily Moisturizer,fresh,Adenosine,0.2432,parsed
 P500777,Sugar Lip Balm Hydrating Treatment,fresh,Vitamin C,0.3704,parsed
 P500777,Sugar Lip Balm Hydrating Treatment,fresh,Licorice,0.2593,parsed
-P421277,GENIUS Liquid Collagen Serum,Algenist,Collagen,1.0,tag
+P421277,GENIUS Liquid Collagen Serum,Algenist,Collagen,1.0,parsed
 P421277,GENIUS Liquid Collagen Serum,Algenist,Niacinamide,0.6389,parsed
 P421277,GENIUS Liquid Collagen Serum,Algenist,Peptides,0.5833,parsed
 P421277,GENIUS Liquid Collagen Serum,Algenist,Adenosine,0.5278,parsed
@@ -778,37 +765,37 @@ P426707,Hello FAB Coconut Water Cream,First Aid Beauty,Hyaluronic Acid,0.8148,pa
 P426707,Hello FAB Coconut Water Cream,First Aid Beauty,Probiotic / Ferment,0.7778,parsed
 P426707,Hello FAB Coconut Water Cream,First Aid Beauty,Licorice,0.5556,parsed
 P426707,Hello FAB Coconut Water Cream,First Aid Beauty,Green Tea,0.4815,parsed
-P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,Vitamin C,1.0,tag
+P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,Vitamin C,0.9375,parsed
 P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,Probiotic / Ferment,0.8125,parsed
 P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,Licorice,0.75,parsed
 P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,Green Tea,0.5938,parsed
 P400259,C-Firma Fresh Vitamin-C Day Serum,Drunk Elephant,Hyaluronic Acid,0.5,parsed
 P430146,Superberry Hydrate + Glow Dream Oil,Youth To The People,Squalane,0.88,parsed
 P430146,Superberry Hydrate + Glow Dream Oil,Youth To The People,Rosehip / Rose,0.4,parsed
-P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Hyaluronic Acid,1.0,tag
-P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Vitamin C,1.0,tag
 P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Silicone,0.9583,parsed
+P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Vitamin C,0.875,parsed
 P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,SPF,0.5417,parsed
 P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Adenosine,0.5,parsed
+P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Hyaluronic Acid,0.4583,parsed
 P454838,Powerful-Strength Dark Circle Reducing Vitamin C Eye Serum,Kiehl's Since 1851,Peptides,0.2083,parsed
-P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Hyaluronic Acid,1.0,tag
-P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Vitamin C,1.0,tag
 P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Panthenol (B5),0.7209,parsed
+P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Hyaluronic Acid,0.4419,parsed
 P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Licorice,0.3721,parsed
 P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Rosehip / Rose,0.2791,parsed
+P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Vitamin C,0.2326,parsed
 P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,Probiotic / Ferment,0.1628,parsed
 P456566,Banana Bright 15% Vitamin C Serum,OLEHENRIKSEN,SPF,0.1,parsed
-P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,Salicylic Acid,1.0,tag
+P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,Salicylic Acid,0.7714,parsed
 P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,Silicone,0.7143,parsed
 P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,Licorice,0.4286,parsed
 P472050,Cold Plunge Pore Remedy Moisturizer with BHA/LHA,OLEHENRIKSEN,Green Tea,0.2857,parsed
 P460515,E-Rase Milki Micellar Water,Drunk Elephant,Ceramide,0.4444,parsed
-P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Vitamin C,1.0,tag
-P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Niacinamide,1.0,tag
 P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Silicone,0.9483,parsed
 P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Caffeine,0.8276,parsed
+P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Vitamin C,0.7931,parsed
 P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Shea Butter,0.6034,parsed
 P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Hyaluronic Acid,0.569,parsed
+P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Niacinamide,0.5517,parsed
 P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,Jojoba,0.3103,parsed
 P475589,Ginzing Vitamin C Eye Cream to Brighten and Depuff,Origins,SPF,0.1,parsed
 P421276,ExfoliKate Glow Moisturizer,Kate Somerville,Silicone,0.9302,parsed
@@ -816,16 +803,15 @@ P421276,ExfoliKate Glow Moisturizer,Kate Somerville,Squalane,0.907,parsed
 P421276,ExfoliKate Glow Moisturizer,Kate Somerville,Lactic Acid,0.8837,parsed
 P421276,ExfoliKate Glow Moisturizer,Kate Somerville,AHA/Glycolic Acid,0.7907,parsed
 P421276,ExfoliKate Glow Moisturizer,Kate Somerville,Probiotic / Ferment,0.6977,parsed
-P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Retinol,1.0,tag
 P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Lactic Acid,0.9318,parsed
 P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Probiotic / Ferment,0.9091,parsed
+P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Retinol,0.8636,parsed
 P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Green Tea,0.75,parsed
 P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Aloe,0.7273,parsed
 P455926,Retinol Reform Treatment Serum,Shani Darden Skin Care,Niacinamide,0.6818,parsed
 P455936,Lip Butter Balm,Summer Fridays,Shea Butter,0.7333,parsed
 P455936,Lip Butter Balm,Summer Fridays,Hyaluronic Acid,0.1,parsed
-P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Vitamin C,1.0,tag
-P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Niacinamide,1.0,tag
+P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Niacinamide,0.9846,parsed
 P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Shea Butter,0.8154,parsed
 P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Hyaluronic Acid,0.6,parsed
 P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Urea,0.5538,parsed
@@ -834,14 +820,15 @@ P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Zinc,0.4462,p
 P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Rosehip / Rose,0.4308,parsed
 P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Lactic Acid,0.2615,parsed
 P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Peptides,0.1538,parsed
+P458755,Charlotte’s Magic Serum with Vitamin C,Charlotte Tilbury,Vitamin C,0.1077,parsed
 P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,Squalane,0.9474,parsed
 P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,Jojoba,0.7368,parsed
 P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,Panthenol (B5),0.6316,parsed
 P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,Peptides,0.4737,parsed
 P447210,Squalane + Marine Algae Firming & Lifting Eye Cream,Biossance,Hyaluronic Acid,0.2632,parsed
-P411365,Retinol Youth Renewal Serum,Murad,Retinol,1.0,tag
 P411365,Retinol Youth Renewal Serum,Murad,Silicone,0.9811,parsed
 P411365,Retinol Youth Renewal Serum,Murad,Shea Butter,0.8302,parsed
+P411365,Retinol Youth Renewal Serum,Murad,Retinol,0.8113,parsed
 P411365,Retinol Youth Renewal Serum,Murad,Ceramide,0.7736,parsed
 P411365,Retinol Youth Renewal Serum,Murad,Hyaluronic Acid,0.7547,parsed
 P411365,Retinol Youth Renewal Serum,Murad,Squalane,0.6981,parsed

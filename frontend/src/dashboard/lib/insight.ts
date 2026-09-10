@@ -5,24 +5,16 @@
  * 지표마다 0~1 로 정규화한 값이다. 표본이 작으면 편차가 커도 뒤로 간다.
  * 규칙 (ai-insight-rules §4-3):
  *   - n < 200 은 후보에서 뺀다
- *   - 결론에는 뷰티 명사(성분·피부타입·고민·콘텍츠)가 있어야 한다. 퍼널처럼 명사가 없는
+ *   - 결론에는 뷰티 명사(성분·피부타입·고민·콘텐츠)가 있어야 한다. 퍼널처럼 명사가 없는
  *     후보는 뷰티 후보가 하나도 없을 때만 올라온다
  *   - 인과를 단정하지 않는다. "~일 가능성"
  *   - 막힌 기록는 상품 선호로 읽지 않는다 (여기 후보에 넣지 않는다. 막히는 곳 화면 몫)
  *
- * 지금 입력은 metrics.ts 의 모의 집계다. 마트가 붙으면 입력만 바뀐다.
+ * 입력은 행동 지표 묶음(BehaviorMetrics)이다. 모의든 마트든 같은 모양이라 규칙은 하나다.
  */
-import {
-  SKIN_TYPE_KO,
-  contentAttention,
-  fmt,
-  ingredientGap,
-  leakVerdict,
-  segmentMatrix,
-  segmentTopContent,
-  standardFunnel,
-} from './metrics';
 import { labelKo } from '../../lib/formLabels';
+import type { BehaviorMetrics, FunnelStep } from './behavior';
+import { SKIN_TYPE_KO, fmt } from './metrics';
 
 export interface Insight {
   id: string;
@@ -47,8 +39,46 @@ function conf(n: number, signals: number): Insight['confidence'] {
   return '낮음';
 }
 
-export function rankInsights(): Insight[] {
+export interface Verdict {
+  headline: string;
+  reason: string;
+  action: string;
+  sampleSize: number;
+}
+
+/**
+ * 가장 크게 새는 구간을 찾아 한 문장으로 만든다.
+ *
+ * 경영진은 5초 안에 핵심을 파악해야 하고, 브랜드가 분석 도구에 갖는 최대 불만이
+ * "수집은 되는데 행동으로 안 이어진다" 다. 그래서 화면 맨 위에 지표가 아니라 **문장**을 둔다.
+ */
+export function leakVerdict(steps: FunnelStep[]): Verdict {
+  const drops = steps.slice(1).map((step, index) => {
+    const before = steps[index];
+    const kept = before.value === 0 ? 0 : step.value / before.value;
+    return { from: before.label, to: step.label, kept, lost: before.value - step.value };
+  });
+  const worst = drops.reduce((a, b) => (a.kept <= b.kept ? a : b));
+
+  const ACTION: Record<string, string> = {
+    상품클릭: '목록 카드의 이미지와 제목을 손보세요. 노출은 되는데 눌리지 않습니다.',
+    상세조회: '클릭 후 이탈이 많습니다. 첫 화면 로딩과 히어로 영역을 확인하세요.',
+    정보확인: '상세까지 왔는데 성분·리뷰를 안 봅니다. 정보 위치를 위로 올리세요.',
+    장바구니: '정보까지 봤는데 담지 않습니다. 가격·용량·담기 버튼을 점검하세요.',
+  };
+  const key = worst.to.replace(/\s/g, '');
+
+  return {
+    headline: `${worst.from} → ${worst.to} 구간에서 가장 많이 이탈합니다`,
+    reason: `${fmt.int(worst.lost)}명이 이 구간에서 빠졌습니다 (유지율 ${fmt.pct(worst.kept)}).`,
+    action: ACTION[key] ?? '이 구간의 화면 구성을 점검하세요.',
+    sampleSize: steps[0]?.value ?? 0,
+  };
+}
+
+export function rankInsights(m: BehaviorMetrics): Insight[] {
   const out: Insight[] = [];
+  const { contentAttention, segmentMatrix, segmentTopContent, ingredientGap, standardFunnel } = m;
 
   // ① 콘텐츠: 오래 보지만 안 산다 (lift ≤ 0.8 & 체류 상위 절반)
   const byDwell = [...contentAttention].sort((a, b) => b.avgDwellMs - a.avgDwellMs);
@@ -132,7 +162,7 @@ export function rankInsights(): Insight[] {
   // ④ 성분 갭: 관심 상위 10 & 미보유
   const gaps = ingredientGap.filter((g) => g.gap).slice(0, 2);
   if (gaps.length > 0) {
-    const n = gaps.reduce((s, g) => s + g.scrapeCount, 0) * 10; // 드래그 수 → 세션 근사 (모의)
+    const n = gaps.reduce((s, g) => s + g.scrapeCount, 0) * 10; // 드래그 수 → 세션 근사
     out.push({
       id: 'ingredient-gap',
       screen: 'ingredients',
@@ -148,19 +178,21 @@ export function rankInsights(): Insight[] {
   }
 
   // ⑤ 퍼널 누수 (뷰티 명사 없음 → 다른 후보가 없을 때만)
-  const leak = leakVerdict();
-  out.push({
-    id: 'funnel-leak',
-    screen: 'products',
-    headline: leak.headline,
-    reasons: [leak.reason],
-    action: leak.action,
-    unit: '상세페이지',
-    n: standardFunnel[0].value,
-    confidence: '보통',
-    score: 0.3 * Math.log(Math.max(2, standardFunnel[0].value)),
-    beautyNoun: false,
-  });
+  if (standardFunnel.length >= 2) {
+    const leak = leakVerdict(standardFunnel);
+    out.push({
+      id: 'funnel-leak',
+      screen: 'products',
+      headline: leak.headline,
+      reasons: [leak.reason],
+      action: leak.action,
+      unit: '상세페이지',
+      n: standardFunnel[0].value,
+      confidence: '보통',
+      score: 0.3 * Math.log(Math.max(2, standardFunnel[0].value)),
+      beautyNoun: false,
+    });
+  }
 
   const beauty = out.filter((i) => i.beautyNoun && i.n >= 200).sort((a, b) => b.score - a.score);
   const rest = out.filter((i) => !beauty.includes(i)).sort((a, b) => b.score - a.score);

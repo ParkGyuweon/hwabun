@@ -55,27 +55,27 @@
 | `secondary_category` | 0.06 | `Cleansers` 0.06 |
 | `tertiary_category` | 0.11 | `Toners` 0.11 |
 | `concern` | 0.42 | `Pores` 0.173, `Acne/Blemishes` 0.3692, `Redness` 0.1009 |
-| `ingredient` | 0.27 | `Green Tea` 0.0364, `Lactic Acid` 0.1143, `AHA/Glycolic Acid` 0.171, `Salicylic Acid` 0.171 |
+| `ingredient` | 0.27 | `Green Tea` 0.0438, `Lactic Acid` 0.1378, `AHA/Glycolic Acid` 0.1731, `Salicylic Acid` 0.1484 |
 | `clean` | 0.06 | `Vegan` 0.035, `Without Parabens` 0.0487 |
 | `texture` | 0.02 | (없음) |
 | `price_bin` | 0.04 | `35-50` 0.04 |
 | `rating` | 0.02 | `rating` 0.02 |
 | `brand` | 0.6 | `OLEHENRIKSEN` 0.6 |
 
-성분은 하이라이트 태그와 전성분 문자열에서 뽑아 위치 가중을 줍니다 (전성분 25개 파싱): `AHA/Glycolic Acid` 1.0, `Salicylic Acid` 1.0, `Lactic Acid` 0.8, `Green Tea` 0.28.
+성분은 하이라이트 태그와 전성분 문자열에서 뽑아 위치 가중을 줍니다 (전성분 25개 파싱): `AHA/Glycolic Acid` 0.84, `Lactic Acid` 0.8, `Salicylic Acid` 0.72, `Green Tea` 0.28.
 
 ## 4. 샘플 간 코사인 — `brand` 블록이 하는 일
 
 | | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---:|---:|---:|---:|---:|---:|
-| **0** Balancing Force Oil Control To (OLEHENRIKSEN) | 1.000 | 0.061 | 0.005 | 0.165 | 0.001 | 0.687 |
-| **1** Cicapair Tiger Grass Cream (Dr. Jart+) | 0.061 | 1.000 | 0.183 | 0.266 | 0.011 | 0.003 |
-| **2** Lip Sleeping Mask Intense Hydr (LANEIGE) | 0.005 | 0.183 | 1.000 | 0.102 | 0.022 | 0.004 |
-| **3** Greek Yoghurt Foaming Cream Cl (KORRES) | 0.165 | 0.266 | 0.102 | 1.000 | 0.002 | 0.066 |
-| **4** Smart Clinical Repair Wrinkle  (CLINIQUE) | 0.001 | 0.011 | 0.022 | 0.002 | 1.000 | 0.051 |
-| **5** Glow2OH Dark Spot Toner (OLEHENRIKSEN) | 0.687 | 0.003 | 0.004 | 0.066 | 0.051 | 1.000 |
+| **0** Balancing Force Oil Control To (OLEHENRIKSEN) | 1.000 | 0.061 | 0.005 | 0.173 | 0.001 | 0.694 |
+| **1** Cicapair Tiger Grass Cream (Dr. Jart+) | 0.061 | 1.000 | 0.190 | 0.266 | 0.015 | 0.003 |
+| **2** Lip Sleeping Mask Intense Hydr (LANEIGE) | 0.005 | 0.190 | 1.000 | 0.105 | 0.013 | 0.004 |
+| **3** Greek Yoghurt Foaming Cream Cl (KORRES) | 0.173 | 0.266 | 0.105 | 1.000 | 0.002 | 0.066 |
+| **4** Smart Clinical Repair Wrinkle  (CLINIQUE) | 0.001 | 0.015 | 0.013 | 0.002 | 1.000 | 0.051 |
+| **5** Glow2OH Dark Spot Toner (OLEHENRIKSEN) | 0.694 | 0.003 | 0.004 | 0.066 | 0.051 | 1.000 |
 
-**OLEHENRIKSEN 형제 두 개(0·5)가 0.687** 입니다. 같은 상품 0 와 다른 브랜드들의 코사인은 0.001~0.165 입니다.
+**OLEHENRIKSEN 형제 두 개(0·5)가 0.694** 입니다. 같은 상품 0 와 다른 브랜드들의 코사인은 0.001~0.173 입니다.
 
 브랜드가 같으면 55차원 원핫이 정확히 겹치고 그 축의 가중치가 0.60 이라, 카테고리나 성분이 달라도 코사인이 크게 올라갑니다. 브랜드 재구매를 잡아내는 힘이 여기서 나오고, 새 브랜드 추천이 어려운 이유도 같습니다 — 원핫이라 시드와 직교하면 그 축의 기여가 0 입니다.
 

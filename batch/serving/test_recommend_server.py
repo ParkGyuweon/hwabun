@@ -256,8 +256,10 @@ class TestDeactivate(unittest.TestCase):
         after = self._ids()
         self.assertNotIn(victim, after)
         self.assertEqual(len(after), 10)
-        # 나머지 순서는 그대로 (벡터·행을 지운 게 아니라 후보에서만 뺐다)
-        self.assertEqual([g for g in before if g != victim], after[:9])
+        # 나머지 9개는 그대로 남는다 (벡터·행을 지운 게 아니라 후보에서만 뺐다).
+        # 순서까지 같다고는 못 한다 — MMR 의 다양성 감점은 이미 고른 집합에 따라 달라져
+        # 1등이 빠지면 뒤쪽 두 개가 자리를 바꿀 수 있다 (2026-09-10 LTR 재학습에서 실제로 5·6위가 바뀜)
+        self.assertEqual(set(g for g in before if g != victim), set(after[:9]))
         self.assertFalse(client.get(f"/api/products/{victim}").json()["active"])
         self.assertGreaterEqual(client.get("/health").json()["inactive_products"], 1)
         with open(rs.get_engine().registry.path, encoding="utf-8") as f:

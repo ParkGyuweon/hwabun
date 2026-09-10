@@ -43,10 +43,22 @@ ING_SYNONYMS = {
     # 이게 없으면 등록된 선크림은 SPF 축이 영구히 0 이 된다
     "SPF": ["spf", "titanium dioxide", "zinc oxide", "octocrylene", "avobenzone",
             "homosalate", "octisalate",
+            # 유기자차(INCI 영문). 국내 선크림 영문 전성분은 위 미국식 상용명이 아니라 이 이름으로
+            # 적힌다 — 없으면 SSAFY 선 세럼(SB000006)처럼 SPF 축이 안 열린다 (2026-09-10)
+            "ethylhexyl methoxycinnamate", "ethylhexyl salicylate", "ethylhexyl triazone",
+            "butyl methoxydibenzoylmethane", "diethylamino hydroxybenzoyl hexyl benzoate",
+            "bis-ethylhexyloxyphenol methoxyphenyl triazine", "methylene bis-benzotriazolyl",
+            "phenylbenzimidazole sulfonic acid", "drometrizole trisiloxane",
+            "terephthalylidene dicamphor sulfonic acid", "tris-biphenyl triazine",
+            "polysilicone-15", "isoamyl p-methoxycinnamate", "diethylhexyl butamido triazone",
             # 국내 선크림은 한글 전성분표에 이 이름으로 적힌다
             "자외선차단", "티타늄디옥사이드", "티타늄옥사이드", "징크옥사이드",
             "산화아연", "옥토크릴렌", "아보벤존", "호모살레이트", "옥티살레이트",
-            "에칠헥실메톡시신나메이트", "비스에칠헥실옥시페놀메톡시페닐트리아진"],
+            "에칠헥실메톡시신나메이트", "비스에칠헥실옥시페놀메톡시페닐트리아진",
+            "에칠헥실살리실레이트", "에칠헥실트리아존", "부틸메톡시디벤조일메탄",
+            "디에칠아미노하이드록시벤조일헥실벤조에이트", "메칠렌비스-벤조트리아졸릴테트라메칠부틸페놀",
+            "페닐벤즈이미다졸설포닉애씨드", "드로메트리졸트리실록산", "테레프탈릴리덴디캠퍼설포닉애씨드",
+            "트리스-비페닐트리아진", "폴리실리콘-15", "이소아밀p-메톡시신나메이트", "디에칠헥실부타미도트리아존"],
     "Silicone": ["dimethicone", "cyclopentasiloxane"],
     "Squalane": ["squalane", "squalene"],
     "Probiotic / Ferment": ["ferment filtrate", "lactobacillus", "bifida"],

@@ -99,6 +99,10 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 브랜드 상세 진입률 | `product_view_sessions / impression_sessions` | `brand_daily_kpi` |
 | 브랜드 정보 확인률 | `information_view_sessions / product_view_sessions` | `brand_daily_kpi` |
 | 브랜드 조회→담기 | `add_to_cart_sessions / product_view_sessions` | `brand_daily_kpi` |
+| 상품 재구매율 | `repeat_buyer_count / buyer_count` (상품 단위) | `product_repurchase_daily` |
+| 브랜드 재구매율 | 상품이 달라도 같은 브랜드를 다시 산 비율 | `brand_repurchase_daily` |
+| 구매 이유 분포 | 응답 주문 중 이유별 비중 | `purchase_reason_daily` |
+| 선언·행동 일치율 | 선언한 구매 이유와 관측 성향이 일치한 주문 비율 | `purchase_reason_daily` |
 | 적용 전 기준선 | 배너·정렬 배포 전 추천 CTR과 교차 유입률의 분자·분모 | `analytics_baseline` |
 
 Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기능 판단 시
@@ -120,6 +124,9 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 | 성분·가격 기준 Mart | `ingredient_weekly_interest`, `category_price_reference` Parquet 구현. 성분 없는 상품 제외·세정 가중치 설정·가격 표본 fallback 반영 | 운영 Delta/MySQL projection |
 | 배너·성향·교차 브랜드 Mart | `banner_daily`, `user_trait_daily`, `cross_brand_daily`, `analytics_baseline` Parquet 구현. 배너 Event 계약과 `trait_source` 포함 | 배너 Event를 실제로 발행하는 FE·Collector 연결 후 값 검증 |
 | 브랜드 KPI Mart | `brand_daily_kpi`를 Fact 기반 브랜드·세션 중복 제거 방식으로 Parquet 구현. grain·상한·비율·재실행 결정성 검증 포함 | 운영 Delta/MySQL projection |
+| 구매 행동 Mart | `product_repurchase_daily`, `brand_repurchase_daily`, `purchase_reason_daily` Parquet 구현. 주문 단위 중복 제거와 다브랜드 이유 귀속 규칙 포함 | 시뮬레이터가 `purchase` Event를 발행한 뒤 실데이터 검증 |
+| 매출·정산 | DW 범위 밖. Backend PAID 주문이 정본이며 금액을 복제하지 않는다 | — |
+| 구매 이유·성향 매핑 | `contracts/purchase-reason-trait-map.json`으로 분리·확정. `purchase_reason_daily`만 읽는다 | 값 변경 시 파일과 버전을 함께 상향 |
 | trait 가중치 | `contracts/user-trait-weights.json`으로 분리. 현재 `status=proposed` | 팀 합의 후 값 확정하고 정책 버전 상향 |
 | 배너·정렬 기준선 | `BASELINE_POLICY_VERSION`·시작·종료일을 준 실행에서만 `analytics_baseline` 생성 | 기준선 기간과 정책 배포 시각 확정 |
 | 그 외 Dashboard Mart·KPI | 저장 가능한 후보 Schema 작성 | 추천·AI 담당과 지표 우선순위·최종 grain 합의 후 확정 |

@@ -79,7 +79,10 @@ class BannerPlanner:
         """상품 하나의 축 값들 — hero 문구와 소속에 같이 쓴다"""
         e = self.enc
         tg = e.split_tags(p)
-        ing = [k for k, w in e.ingredient_values(p).items() if w >= INGREDIENT_MIN_POSITION]
+        # 위치가중 내림차순 — 전성분 앞에 있는 성분이 첫 값. 어휘집 등재 순서로 두면
+        # 앞 30% 안에 히알루론산이 있는 상품은 전부 히알루론산이 문구가 됐다 (프론트 지적 2026-09-10)
+        ing = [k for k, w in sorted(e.ingredient_values(p).items(), key=lambda kv: -kv[1])
+               if w >= INGREDIENT_MIN_POSITION]
         pl = e.blk["price_bin"]["vocab"]
         price = p.get("price_usd")
         pb = [pl[int(np.digitize(float(price), e.edges[1:], right=False))]] if price is not None else []

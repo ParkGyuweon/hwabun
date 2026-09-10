@@ -50,6 +50,10 @@ validate_pipeline() {
     --product-daily-path "$data_root/marts/product_daily_kpi" \
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi" \
     --brand-daily-path "$data_root/marts/brand_daily_kpi" \
+    --product-repurchase-path "$data_root/marts/product_repurchase_daily" \
+    --brand-repurchase-path "$data_root/marts/brand_repurchase_daily" \
+    --purchase-reason-path "$data_root/marts/purchase_reason_daily" \
+    --reason-trait-map-path /opt/project/contracts/purchase-reason-trait-map.json \
     --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest" \
     --category-price-path "$data_root/marts/category_price_reference" \
     --banner-daily-path "$data_root/marts/banner_daily" \
@@ -99,6 +103,9 @@ run_batch_pipeline() {
     --product-daily-path "$data_root/marts/product_daily_kpi"
     --funnel-daily-path "$data_root/marts/funnel_daily_kpi"
     --brand-daily-path "$data_root/marts/brand_daily_kpi"
+    --product-repurchase-path "$data_root/marts/product_repurchase_daily"
+    --brand-repurchase-path "$data_root/marts/brand_repurchase_daily"
+    --purchase-reason-path "$data_root/marts/purchase_reason_daily"
     --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest"
     --category-price-path "$data_root/marts/category_price_reference"
     --banner-daily-path "$data_root/marts/banner_daily"

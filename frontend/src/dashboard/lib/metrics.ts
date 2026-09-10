@@ -231,55 +231,7 @@ export const standardFunnel = [
   { label: '장바구니', value: totals.addToCart },
 ];
 
-/**
- * 가장 크게 새는 구간을 찾아 한 문장으로 만든다.
- *
- * 조사에서 나온 두 가지에 대한 답이다.
- *   - 경영진은 5초 안에 핵심을 파악해야 한다. 5초 테스트는 "무엇을 봤고 다음에
- *     무엇을 할지" 를 묻는데, 지표만 늘어놓은 화면은 그 답을 못 준다.
- *   - 브랜드가 분석 도구에 갖는 최대 불만이 "수집은 되는데 행동으로 안 이어진다" 다.
- *
- * 그래서 화면 맨 위에 지표가 아니라 **문장**을 둔다. 숫자는 그 아래서 근거를 댄다.
- */
-export interface Verdict {
-  /** 어디가 문제인가 */
-  headline: string;
-  /** 왜 그렇게 판단했나 */
-  reason: string;
-  /** 무엇을 하면 되나 */
-  action: string;
-  /** 이 판단이 몇 건을 보고 나온 것인가 */
-  sampleSize: number;
-}
-
-export function leakVerdict(): Verdict {
-  const steps = standardFunnel;
-
-  // 단계 사이 유지율. 가장 많이 빠지는 구간이 손볼 곳이다
-  const drops = steps.slice(1).map((step, index) => {
-    const before = steps[index];
-    const kept = before.value === 0 ? 0 : step.value / before.value;
-    return { from: before.label, to: step.label, kept, lost: before.value - step.value };
-  });
-
-  const worst = drops.reduce((a, b) => (a.kept <= b.kept ? a : b));
-
-  const ACTION: Record<string, string> = {
-    상품클릭: "목록 카드의 이미지와 제목을 손보세요. 노출은 되는데 눌리지 않습니다.",
-    상세조회: "클릭 후 이탈이 많습니다. 첫 화면 로딩과 히어로 영역을 확인하세요.",
-    정보확인: "상세까지 왔는데 성분·리뷰를 안 봅니다. 정보 위치를 위로 올리세요.",
-    장바구니: "정보까지 봤는데 담지 않습니다. 가격·용량·담기 버튼을 점검하세요.",
-  };
-
-  const key = worst.to.replace(/\s/g, '');
-
-  return {
-    headline: `${worst.from} → ${worst.to} 구간에서 가장 많이 이탈합니다`,
-    reason: `${fmt.int(worst.lost)}명이 이 구간에서 빠졌습니다 (유지율 ${fmt.pct(worst.kept)}).`,
-    action: ACTION[key] ?? "이 구간의 화면 구성을 점검하세요.",
-    sampleSize: steps[0].value,
-  };
-}
+/** 퍼널 누수 판정(leakVerdict)은 lib/insight.ts 로 옮겼다. 입력이 모의·마트 어느 쪽이든 같은 규칙이라야 해서다 */
 
 /**
  * intent 퍼널 · 이 대시보드의 차별점.

@@ -5,6 +5,7 @@
   "intent": "conversion",
   "occurred_at": "2026-08-31T05:10:00.000Z",
   "persona_id": null,
+  "account_id": null,
   "session_id": "session-user-0001",
   "page_view_id": "page-view-user-0001",
   "sequence_no": 12,

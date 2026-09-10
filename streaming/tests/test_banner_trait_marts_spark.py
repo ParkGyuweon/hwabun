@@ -58,6 +58,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             "processed_at": now,
             "event_date_kst": date(2026, 9, 8),
             "user_id": "U1",
+            "identity_scope": "persona",
             "persona_id": None,
             "scenario_id": None,
             "simulation_run_id": None,
@@ -137,10 +138,17 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
                     "filter_change",
                     date(2026, 9, 8),
                     "U1",
+                    "account",
+                    "user",
+                    "web",
+                    None,
+                    None,
                     '{"filter_kind":"price"}',
                 )
             ],
-            ["event_id", "event_name", "event_date_kst", "user_id", "properties_json"],
+            "event_id string, event_name string, event_date_kst date, user_id string, "
+            "identity_scope string, actor_type string, source string, scenario_id string, "
+            "simulation_run_id string, properties_json string",
         )
         contract = {
             "version": "test-v1",

@@ -75,6 +75,7 @@ Event.product_id
 | event_name | intent | 의미 | 주요 활용 |
 | --- | --- | --- | --- |
 | `session_start` | `session` | 새 쇼핑 세션 시작 | 방문 수, 세션당 행동 수 |
+| `login` | `session` | 세션 도중 로그인 성공 | 익명→계정 전환 시점 |
 | `page_view` | `session` | 페이지·라우트 진입 | 페이지 방문, 이탈 분석 |
 | `navigation_click` | `session` | 상품과 무관한 화면 이동 클릭 | 이동·이탈 경로 |
 | `product_view` | `interest` | 상품 상세 진입 완료 | 상세 조회, Funnel 분모 |
@@ -266,6 +267,7 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | event_name | required properties | optional properties |
 | --- | --- | --- |
 | `session_start` | 없음 | `entry_page: string`, `referrer: string`, `utm_source: string`, `utm_medium: string`, `utm_campaign: string` |
+| `login` | 없음 | 없음 |
 | `page_view` | 없음 | `referrer: string`, `route: string`, `navigation_source: string` |
 | `navigation_click` | `target: string`, `entry_source: string` | 없음 |
 | `product_view` | `navigation_source: string` | `list_id: string`, `position: integer`, `recommendation_id: string`, `context_product_id: string` |

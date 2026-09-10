@@ -52,9 +52,9 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
   한 글자 차이로 매칭이 통째로 실패하는데 **화면에는 아무 표시도 안 난다**
 - `block_offset`·`concern_rank` 는 **MySQL 8 예약어(`offset`·`rank`)를 피한 이름**이다.
   CSV 헤더와 DDL 이 같으므로 그대로 적재된다
-- **`position_weight` 는 함량이 아니다.** 태그로 표시된 성분이 1.0, 전성분에서 찾은
+- **`position_weight` 는 함량이 아니다.** 전성분 맨 앞 성분이 1.0 (highlights 성분 태그는 2026-09-10 부터 쓰지 않음, 계약 §3.1), 전성분에서 찾은
   것은 배합 순서 기반 감쇠다. "앞쪽에 적혀 있다" 이지 "몇 % 들었다" 가 아니다
-  (`source` 열이 `tag` / `parsed` 로 구분한다)
+  (`source` 열은 호환을 위해 남겼고 지금은 전부 `parsed` 다)
 - **`ingredient_skin_affinity` 는 곱이라 인과가 아니다.** "지성이 반응한 상품에
   이 성분이 많더라" 이지 "이 성분이 지성에 좋다" 가 아니다. `n_products` 가 작은
   행은 근거가 얇다

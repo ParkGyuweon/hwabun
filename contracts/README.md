@@ -39,6 +39,7 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | Recommendation 입출력과 행동 집계 | `recommendation-io-spec.md` |
 | 고객 피드백 분류 입출력·축·카테고리 어휘 | `feedback-classification.md`, `feedback-category-vocab.json` |
 | 고객 피드백 금지어 목록 (기본 숨김 표시) | `feedback-banned-terms.json` |
+| 브랜드 대시보드 마트 조회 API (백엔드↔프론트, 마트 컬럼 → HTTP) · **초안** | `dashboard-mart-api-spec.md` |
 
 `product-form-labels-ko.json`은 `batch/ingest/build_form_labels.py`가 어휘집에서
 생성한다. 직접 편집하지 않는다.

@@ -145,11 +145,15 @@ received_at ASC
 
 Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하고, 그 다음
 `event_id` 기준 정본을 고른다. 같은 `event_id`의 나머지 후보는
-`duplicate_events`에 보존한다. JSON 파싱·공통 필드·41종 Event 등록 여부와
+`duplicate_events`에 보존한다. JSON 파싱·공통 필드·42종 Event 등록 여부와
 Event-intent 조합·sequence/event index·actor-source 조합·상품 대상 Event의
 `product_id`·synthetic 필수 properties 검증에 실패한 row는 원문과 좌표를
 `bad_events`에 남긴다. `banner_impression`과 `banner_click`은 배너 타입·값·slot·
 성향 출처와 각 intent까지 추가로 검사한다.
+
+`user_id`는 `identity_scope`에 따라 정해진다 — 합성 로그는 `persona_id`, 로그인 사용자는
+Collector가 JWT에서 뽑은 `account_id`, 비로그인 사용자는 NULL이며 `session_id`로만 본다.
+합성 로그에 `account_id`가 실려 오면 `invalid_identity_scope`로 격리한다.
 
 파이프라인 검증 Job은 synthetic 세션의 Persona 혼합, 세션 내
 `sequence_no` 충돌, `simulation_run_id`별 `scenario_id`·`generator_type` 불일치를
@@ -238,6 +242,9 @@ spark-submit streaming/jobs/build_marts_job.py \
   --product-daily-path data/marts/product_daily_kpi \
   --funnel-daily-path data/marts/funnel_daily_kpi \
   --brand-daily-path data/marts/brand_daily_kpi \
+  --product-repurchase-path data/marts/product_repurchase_daily \
+  --brand-repurchase-path data/marts/brand_repurchase_daily \
+  --purchase-reason-path data/marts/purchase_reason_daily \
   --ingredient-weekly-path data/marts/ingredient_weekly_interest \
   --category-price-path data/marts/category_price_reference \
   --banner-daily-path data/marts/banner_daily \
@@ -253,12 +260,23 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `product_daily_kpi` | `event_date_kst + product_id + actor/source/run 축` | 상품 Event 수, 세션 수, CTR, 상세 진입률, 매출 |
 | `funnel_daily_kpi` | `funnel_date_kst + product_id + actor/source/run 축` | 세션 기반 Funnel 전환·이탈률 |
 | `brand_daily_kpi` | `event_date_kst + brand_id + actor/source/run 축` | 브랜드별 중복 제거 세션, 사용자·조회 상품 수, 상세·정보·담기 전환율 |
+| `product_repurchase_daily` | `snapshot_date_kst + brand_id + product_id + actor/source/run 축` | 상품 재구매율과 재구매 간격 |
+| `brand_repurchase_daily` | `snapshot_date_kst + brand_id + actor/source/run 축` | 브랜드 재구매율과 선언 restock 교차 검증 |
+| `purchase_reason_daily` | `event_date_kst + brand_id + reason + actor/source/run 축` | 구매 이유 분포와 행동 추론 대조 |
 | `ingredient_weekly_interest` | `interest_week_kst + ingredient + actor/source/run 축` | 위치가중 성분 관심도와 주간 비중 |
 | `category_price_reference` | `secondary_category + currency` | 카테고리 가격 중앙값과 표본 부족 fallback |
 | `banner_daily` | 일자 + 브랜드/상품 + 배너 축/값/slot/성향 출처 + 정책 버전 + 실행 축 | 배너 노출·클릭·CTR과 어휘 유효성 |
 | `user_trait_daily` | `trait_date_kst + user_id + trait` | 버전 가중치 기반 최근 30일 장기 성향 |
 | `cross_brand_daily` | 일자 + 도착 브랜드 + 실행 축 | 실제 상품 조회 순서 기반 교차 브랜드 유입률 |
 | `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
+
+재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품이 여러 개 있어도 구매는
+한 번이며, 브랜드 재구매는 상품이 달라도 성립하므로 상품 Mart를 합산해서 구할 수 없다.
+구매 이유는 주문 단위 선언이라 다브랜드 주문에서는 각 브랜드에 한 번씩만 계상하고,
+비중의 분모는 건너뛴 주문을 뺀 **응답한 주문**뿐이다.
+
+매출·정산 금액은 이 Mart들의 범위가 아니다. Backend의 PAID 주문 상품이 정본이며
+DW는 금액을 복제하지 않는다.
 
 `banner_daily`는 `policy_version`을 key에 둬서 배너·정렬 정책 배포 전후를 같은 Mart에서
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고
