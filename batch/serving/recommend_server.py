@@ -42,7 +42,9 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     → items 10 (순수 순위) + hero (items[0] 에 축 문구, banner_type 항상 있음)
       + banners 6: 칸 1~4 축 순환(기본 concern,segment), 칸 5·6 new_brand(전용). items 와 겹치지 않음
     reason 은 아이템·배너 모두 key 하나 (attribute → content → cf → new_brand → popular)
-    성분 축은 위치가중 ≥ 0.3 인 성분만. banner_slots=0 이면 예전과 같고 reserved 는 메인 안
+    성분 축은 위치가중 ≥ 0.3 인 성분만(위치 내림차순). banner_slots=0 이면 예전과 같고 reserved 는 메인 안
+    hero=new_brand (Jira 237, 2026-09-10) — 배너 행이 화면에서 빠져 전용 칸이 없을 때. 신규 상품 중 점수 최고를
+      히어로로 준다(응답 hero.hero_policy·reserved·product_name·score 포함). 신규가 없으면 top 으로. 기본 top.
 
 상품 등록 (Jira 216) — 실서비스 형태
     POST /api/products  body = 계약 입력 필드 1건 또는 배열
@@ -104,6 +106,10 @@ import catalog_sync                                                     # noqa: 
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
 import validate_product_registration as vpr                    # noqa: E402
+
+# 히어로 정책 (2026-09-10, Jira 237). top = items[0] (계약 원안) · new_brand = 신규 상품 중 점수 최고.
+HERO_POLICIES = ("top", "new_brand")
+HERO_DEFAULT = "top"
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
 META_DIR = os.path.join(ROOT, "batch", "ingest", "data")
@@ -222,6 +228,17 @@ class Engine:
         self.inactive.add(product_id)
         self.registry.deactivate(product_id)
 
+    def _hero_row(self, hero_policy, scores, is_new):
+        """new_brand 정책일 때 히어로 상품 행. 점수가 유효한(-inf 아님: 전환·비활성 제외) 신규 상품 중
+        최고점. 없으면 None → 호출부가 top(items[0]) 으로 돌아간다."""
+        if hero_policy != "new_brand":
+            return None
+        s = np.asarray(scores, float)
+        cand = np.where(np.asarray(is_new, bool) & np.isfinite(s))[0]
+        if len(cand) == 0:
+            return None
+        return int(cand[np.argmax(s[cand])])
+
     def _mask_inactive(self, scores):
         if not self.inactive:
             return scores
@@ -308,14 +325,20 @@ class Engine:
 
     # ── 추천 ──────────────────────────────────────────────────────────────
     def recommend(self, persona_id=None, size=10, reserved=RESERVED, seed_from_reviews=False,
-                  banner_slots=0, axes=DEFAULT_AXES):
+                  banner_slots=0, axes=DEFAULT_AXES, hero_policy=HERO_DEFAULT):
         """persona_id 가 없거나(익명) 페르소나 표에 없어도(실회원 accountId) 동작한다.
         속성 친화도는 빠지고 행동 상태 + 인기 prior 로 순위를 매긴다 — 요청서 C 안 (Jira 214).
         상태는 persona_id 가 있으면 그 키로 쌓이므로, 미등록 회원도 행동이 오면 개인화된다.
 
         banner_slots > 0 이면 hero 와 banners[] 를 함께 낸다 (§5-1, Jira 218). 그때 전용 칸
         `reserved` 는 **배너 칸**(뒤 reserved 개)에 두고 메인 items 는 순수 순위다 — 프론트 확정.
-        banner_slots = 0 이면 예전처럼 reserved 가 메인 안에 든다."""
+        banner_slots = 0 이면 예전처럼 reserved 가 메인 안에 든다.
+
+        hero_policy (2026-09-10): 'top' 이면 items[0] 에 축 문구 (기존). 'new_brand' 이면 신규
+        상품(new_mask: 지지자 <3 또는 어휘집 밖 브랜드) 중 이 사용자 점수가 가장 높은 것을 히어로로
+        준다 — 배너 행이 화면에서 빠져 전용 칸이 사라진 뒤 신규 브랜드가 배너에 나올 자리가
+        히어로뿐이라서다(기획 §15-10, 09-10 포함으로 결정). 전환 상품·비활성 제외, 신규가 없으면 'top'.
+        히어로 상품은 banners 와 겹치지 않게 뺀다. items 와는 겹칠 수 있다(계약 §중복 배제 그대로)."""
         persona = self.personas.get(persona_id) if persona_id else None
         if persona_id:
             st, source = self.state_of(persona_id, seed_from_reviews)
@@ -348,6 +371,10 @@ class Engine:
                 if i is not None:
                     s_b[i] = -np.inf
             exclude = {it["product_id"] for it in items} | set(st.converted)
+            # 히어로를 배너보다 먼저 정한다 — new_brand 히어로는 배너 칸과 겹치지 않게 뺀다
+            hero_row = self._hero_row(hero_policy, s_b, is_new)
+            if hero_row is not None:
+                exclude.add(self.products[hero_row]["product_id"])
             banners, traits = self.planner.plan(s_b, rows_seed, persona, tuple(axes),
                                                 banner_slots, reserved, exclude, is_new)
             b_reasons = self.reasons(persona, st, rows_seed,
@@ -355,8 +382,18 @@ class Engine:
             for b, r in zip(banners, b_reasons):
                 b["reason"] = pick_reason(r)
                 b["product_source"] = self.products[b.pop("_row")].get("product_source", "seed_catalog")
-            if items:
+            if hero_row is not None:
+                hp = self.products[hero_row]
+                hero = self.planner.hero_for(hp["product_id"], traits)
+                hr = self.reasons(persona, st, rows_seed, [(hero_row, True)], is_new)[0]
+                hero.update({"hero_policy": "new_brand", "reserved": True,
+                             "product_name": hp.get("product_name"), "brand_name": hp.get("brand_name"),
+                             "score": round(float(s_b[hero_row]), 4), "reason": pick_reason(hr),
+                             "product_source": hp.get("product_source", "seed_catalog")})
+            elif items:
                 hero = self.planner.hero_for(items[0]["product_id"], traits)
+                # 'new_brand' 를 요청했는데 신규 상품이 없으면 top 으로 돌아간 것 — 응답에 그대로 적는다
+                hero["hero_policy"] = "top"
         ms = (time.perf_counter() - t0) * 1000
 
         n_products = len(st.converted | st.viewed)
@@ -375,7 +412,8 @@ class Engine:
                 "items": items, "latency_ms": round(ms, 2)}
         if banners is not None:
             body.update({"banner_slots": int(banner_slots), "axes": list(axes),
-                         "banner_list_id": "banner_row", "hero": hero, "banners": banners})
+                         "banner_list_id": "banner_row", "hero": hero, "banners": banners,
+                         "hero_policy": hero_policy})
         if self.scorer == "linear":
             w1, w2, w3 = schedule_for(len(pos))
             body["weights"] = {"cosine": w1, "attr": w2, "prior": w3}
@@ -486,14 +524,17 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
               reserved: int = Query(RESERVED, ge=0, le=10),
               seed: Optional[str] = Query(None, description="'review' 면 리뷰 시드를 상태로 쓴다 (시연용)"),
               banner_slots: int = Query(0, ge=0, le=12, description="배너 칸 수. 0 이면 hero·banners 를 안 내린다 (§5-1)"),
-              axes: str = Query(",".join(DEFAULT_AXES), description="축 배너 순환 순서. concern,ingredient,clean,price_bin,category,segment 중 쉼표 구분")):
+              axes: str = Query(",".join(DEFAULT_AXES), description="축 배너 순환 순서. concern,ingredient,clean,price_bin,category,segment 중 쉼표 구분"),
+              hero: str = Query(HERO_DEFAULT, description="히어로 정책. top = items[0] · new_brand = 신규 상품 중 점수 최고 (배너 행이 없을 때, Jira 237)")):
     e = get_engine()
     ax = tuple(a.strip() for a in axes.split(",") if a.strip()) or DEFAULT_AXES
     bad = [a for a in ax if a not in AXES]
     if bad:
         raise HTTPException(422, {"code": "INVALID_AXES", "bad": bad, "allowed": list(AXES)})
+    if hero not in HERO_POLICIES:
+        raise HTTPException(422, {"code": "INVALID_HERO", "bad": hero, "allowed": list(HERO_POLICIES)})
     return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"),
-                       banner_slots=banner_slots, axes=ax)
+                       banner_slots=banner_slots, axes=ax, hero_policy=hero)
 
 
 class ProductRegistration(BaseModel):

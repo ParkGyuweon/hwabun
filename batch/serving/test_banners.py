@@ -154,3 +154,61 @@ class TestHeroBanners(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHeroPolicy(unittest.TestCase):
+    """hero=top|new_brand (Jira 237). 배너 행이 빠져 전용 칸이 없을 때 신규 브랜드가 배너에 나올 자리는 히어로뿐."""
+
+    def test_default_is_top_and_equals_items0(self):
+        b = client.get("/api/recommend", params=Q).json()
+        self.assertEqual(b["hero_policy"], "top")
+        self.assertEqual(b["hero"]["hero_policy"], "top")
+        self.assertEqual(b["hero"]["product_id"], b["items"][0]["product_id"])
+
+    def test_new_brand_hero_is_new_product_outside_items_and_banners(self):
+        b = client.get("/api/recommend", params={**Q, "banner_slots": 1, "reserved": 0, "hero": "new_brand"}).json()
+        h = b["hero"]
+        self.assertEqual(b["hero_policy"], "new_brand")
+        self.assertEqual(h["hero_policy"], "new_brand")
+        self.assertTrue(h["reserved"])
+        self.assertIn(h["banner_type"], bn.AXES)                       # 이미지 변형 선택용 — 항상 있어야 한다
+        for k in ("product_name", "brand_name", "score", "reason", "product_source"):
+            self.assertIn(k, h, k)
+        self.assertEqual(h["product_source"], "brand_registered")       # 시연 카탈로그의 신규 = SSAFY Beauty 8개
+        self.assertNotIn(h["product_id"], {x["product_id"] for x in b["items"]})
+        self.assertNotIn(h["product_id"], {x["product_id"] for x in b["banners"]})
+        self.assertEqual(len(b["banners"]), 1)                          # 배너 칸 수는 정책과 무관
+
+    def test_new_brand_hero_is_best_scored_new_product(self):
+        # 같은 요청을 reserved 배너로 받으면 첫 new_brand 칸이 점수 최고 신규 상품 — 히어로가 그것과 같아야 한다
+        ref = client.get("/api/recommend", params={**Q, "banner_slots": 2, "reserved": 2}).json()
+        first_new = [x for x in ref["banners"] if x["reserved"]][0]["product_id"]
+        b = client.get("/api/recommend", params={**Q, "banner_slots": 1, "reserved": 0, "hero": "new_brand"}).json()
+        self.assertEqual(b["hero"]["product_id"], first_new)
+
+    def test_items_unchanged_by_hero_policy(self):
+        a = client.get("/api/recommend", params=Q).json()
+        b = client.get("/api/recommend", params={**Q, "hero": "new_brand"}).json()
+        self.assertEqual([x["product_id"] for x in a["items"]], [x["product_id"] for x in b["items"]])
+
+    def test_invalid_hero_422(self):
+        r = client.get("/api/recommend", params={**Q, "hero": "random"})
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(r.json()["detail"]["code"], "INVALID_HERO")
+
+
+class TestIngredientAxisOrder(unittest.TestCase):
+    """성분 축 첫 값은 전성분 앞쪽 성분 — 어휘집 등재 순서가 아니다 (프론트 지적 2026-09-10)."""
+
+    def test_axis_sorted_by_position_weight(self):
+        e = rs.get_engine()
+        checked = 0
+        for p, ax in zip(e.products, e.planner.attrs_of):
+            ing = ax.get("ingredient") or []
+            if len(ing) < 2:
+                continue
+            w = e.enc.ingredient_values(p)
+            self.assertEqual(ing, sorted(ing, key=lambda k: -w[k]), p["product_id"])
+            self.assertTrue(all(w[k] >= bn.INGREDIENT_MIN_POSITION for k in ing))
+            checked += 1
+        self.assertGreater(checked, 50)

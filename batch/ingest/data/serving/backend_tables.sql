@@ -41,7 +41,7 @@ CREATE TABLE product_ingredient (
   ingredient_id   INT          NOT NULL,
   ingredient      VARCHAR(64)  NOT NULL,
   position_weight DECIMAL(6,4) NOT NULL,  -- 0~1. 함량이 아니라 배합 순서 기반
-  source          VARCHAR(8)   NOT NULL,  -- 'tag' = 원본 태그, 'parsed' = 전성분에서 복원
+  source          VARCHAR(8)   NOT NULL,  -- 'parsed' = 전성분에서 복원. 'tag'(원본 태그) 는 2026-09-10 부터 안 나온다(계약 §3.1), 열은 호환용
   vocab_version   VARCHAR(8)   NOT NULL,
   PRIMARY KEY (vocab_version, product_id, ingredient_id),
   KEY ix_ingredient (vocab_version, ingredient_id)

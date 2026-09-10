@@ -43,7 +43,6 @@ class Encoder:
         self.N = len(self.products)
         self.ing_syn = self.V["ingredient_source"]["synonyms"]
         self.pos_min = self.V["ingredient_source"]["position_min"]
-        self.tag_ing = set(self.blk["ingredient"]["vocab"])
         self.clean_set = set(self.blk["clean"]["vocab"])
         self.tex_set = set(self.blk["texture"]["vocab"])
         self.review_concern = self._load_review_concern(review_concern_path)
@@ -107,15 +106,17 @@ class Encoder:
         return out
 
     def ingredient_values(self, x):
-        """태그로 표시된 성분은 1.0, 전성분에서만 찾은 성분은 위치 기반 감쇠"""
-        tagged = {h for h in x["highlights"] if h in self.tag_ing}
+        """성분 값은 **전성분 텍스트에서만** — 위치 기반 감쇠 (앞쪽 1.0 → 끝 pos_min).
+
+        highlights 의 성분 태그(원천 200개 중 110개가 가짐)는 쓰지 않는다 — 계약
+        product-registration-spec §3.1. 등록 상품은 폼이 성분 태그를 받지 않으므로 두 집합이
+        같은 규칙을 써야 하고, 태그를 1.0 으로 두면 함량 순서가 무시된다. 2026-09-10 까지는
+        코드가 태그를 1.0 으로 쓰고 있어 계약과 어긋나 있었다(측정: 부록 참조, 차이 없음).
+        """
         lst = self.parse_ingredients(x)
         n = max(len(lst), 1)
         vals = {}
         for name in self.blk["ingredient"]["vocab"]:
-            if name in tagged:
-                vals[name] = 1.0
-                continue
             syns = self.ing_syn.get(name)
             if not syns:
                 continue
