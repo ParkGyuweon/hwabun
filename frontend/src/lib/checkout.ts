@@ -43,6 +43,10 @@ export interface PlacedOrder {
   total: number;
   /** 할인 적용 합계. 화면 표시용 */
   paid: number;
+  /** 서버 주문(PAID)인지, 로컬 테스트 주문인지. 화면에 그대로 밝힌다 */
+  mode: 'backend' | 'local';
+  /** 로컬로 물러난 이유. 서버 주문이면 null */
+  note: string | null;
 }
 
 /**

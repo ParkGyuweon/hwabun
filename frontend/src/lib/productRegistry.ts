@@ -14,6 +14,9 @@
  * 폼과 소비자 화면이 같은 컴포넌트를 쓰니 미리보기와 실제가 한 픽셀도 다르지 않다.
  */
 import { DEMO_BRAND, sampleProducts, seedProducts } from '../mocks/products';
+import { KRW_PER_USD as KRW_PER_USD_DISPLAY } from './localize';
+import { listBackendProducts, registerProductBackend } from './shopApi';
+import type { RegisterResult } from './shopApi';
 import { CONCERN_VALUES, HIGHLIGHT_VALUES, SECONDARY_CATEGORIES, TERTIARY_CATEGORIES } from './formLabels';
 import type { Product } from '../types/product';
 
@@ -26,7 +29,11 @@ export const DRAFT_PRODUCT_ID = 'DRAFT';
  * 등록 시점 고정 환율 `[추정]`. 계약 §4.1 — 가격 구간(USD 0/20/35/50/80)이 넓어
  * 환율이 조금 달라져도 구간이 바뀌지 않으므로 실시간 환율을 쓰지 않는다.
  */
-export const KRW_PER_USD = 1400;
+/**
+ * 원화 → 달러. 표시(lib/localize toKrw)와 같은 환율이어야 사장님이 입력한 원화가 화면에 그대로 나온다.
+ * 예전 1400 을 쓰면 29,500원을 넣고 28,300원이 떠서 등록 폼과 쇼핑몰 가격이 어긋났다 (2026-09-10 수정).
+ */
+export const KRW_PER_USD = KRW_PER_USD_DISPLAY;
 
 export interface RegistrationForm {
   product_name: string;
@@ -294,10 +301,62 @@ export function subscribeCatalog(listener: () => void): () => void {
  * `resolveProduct(DRAFT)` 로 미리보기 주소에서만 연다.
  * 버전이 같으면 같은 배열을 돌려준다 (`useSyncExternalStore`).
  */
+/* ---------- 백엔드 카탈로그 ----------
+ * 첫 스냅샷 요청 때 한 번 받아 온다. 오면 bump 로 화면을 다시 그린다.
+ * 백엔드가 없으면 빈 배열이고, 그러면 지금까지처럼 로컬 등록 + 시드 + 세포라만 보인다.
+ */
+let backend: Product[] = [];
+let backendState: 'idle' | 'loading' | 'ready' | 'unavailable' = 'idle';
+
+export function backendCatalogState(): typeof backendState {
+  return backendState;
+}
+
+export async function refreshBackendCatalog(): Promise<void> {
+  backendState = 'loading';
+  const rows = await listBackendProducts();
+  if (rows === null) {
+    backendState = 'unavailable';
+  } else {
+    backend = rows;
+    backendState = 'ready';
+  }
+  bump();
+}
+
+/**
+ * 상품 등록. **백엔드 먼저, 안 되면 로컬.**
+ * 백엔드에 들어간 상품은 카탈로그를 다시 받아 오면 보이고, 로컬 사본은 만들지 않는다.
+ * 백엔드가 거절하면(지금은 category 시드가 없어 항상) 로컬에 저장하고 이유를 돌려준다.
+ */
+export async function registerProduct(
+  form: RegistrationForm,
+  existingId?: string,
+): Promise<{ mode: 'backend'; product: Product; activated: boolean } | { mode: 'local'; product: Product; reason: string }> {
+  if (!existingId) {
+    const r: RegisterResult = await registerProductBackend(form);
+    if (r.ok) {
+      await refreshBackendCatalog();
+      return { mode: 'backend', product: r.product, activated: r.activated };
+    }
+    const item = saveRegistered(form);
+    return { mode: 'local', product: item.product, reason: r.reason };
+  }
+  // 수정은 로컬 상품에만 있다. 백엔드 상품 수정(PUT /api/products/{id})은 다음 단계
+  const item = saveRegistered(form, existingId);
+  return { mode: 'local', product: item.product, reason: '수정은 로컬 저장본에만 적용됩니다' };
+}
+
 export function catalogSnapshot(): Product[] {
+  if (backendState === 'idle' && typeof window !== 'undefined') {
+    backendState = 'loading';
+    void refreshBackendCatalog();
+  }
   if (snapshotVersion !== version) {
+    const seen = new Set(backend.map((p) => p.product_id));
     snapshot = [
-      ...registeredProducts().map((r) => r.product),
+      ...backend,
+      ...registeredProducts().map((r) => r.product).filter((p) => !seen.has(p.product_id)),
       ...seedProducts,
       ...sampleProducts,
     ];

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { variantIdOf } from '../../lib/discount';
 import PriceTag from './PriceTag';
 import { hasDiscount } from '../../lib/discount';
 import StarRating from '../common/StarRating';
@@ -120,6 +121,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
       image_url: imageUrl,
       price_usd: product.price_usd,
       sale_price_usd: product.sale_price_usd ?? null,
+      variant_id: variantIdOf(product, skuId),
       quantity,
     });
   };

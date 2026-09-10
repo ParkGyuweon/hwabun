@@ -17,5 +17,7 @@ export interface CartItem {
   price_usd: number;
   /** 담을 때의 할인가. 없으면 정가로 계산한다 (lib/discount.ts effectivePrice) */
   sale_price_usd?: number | null;
+  /** 백엔드 옵션 id. 있으면 서버 장바구니를 탈 수 있다 */
+  variant_id?: string | null;
   quantity: number;
 }

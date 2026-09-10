@@ -210,7 +210,15 @@ export async function authFetch(role: AccountRole, input: string, init: RequestI
   headers.set('Authorization', `Bearer ${s.token}`);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
   const res = await fetch(input, { ...init, headers });
-  if (res.status === 401) write(role, null);
+  /**
+   * 401 이면 세션을 지운다. 단, **인증 확인용 호출(GET /api/brands)에서만.**
+   * shop_backend 는 /error 가 permitAll 이 아니라서 어떤 4xx 도 401 {"error":"unauthorized"} 로
+   * 바뀐다 (2026-09-10 실측). 상품 등록 400 한 번에 판매자가 로그아웃되는 걸 막기 위해, 다른
+   * 경로의 401 은 세션을 건드리지 않고 호출부가 실패로 처리한다. 토큰이 정말 만료됐으면
+   * 대시보드가 첫 화면에서 부르는 /api/brands 가 401 을 돌려 그때 지워진다.
+   */
+  const probe = input.startsWith('/api/brands') && (init.method ?? 'GET').toUpperCase() === 'GET';
+  if (res.status === 401 && probe) write(role, null);
   return res;
 }
 

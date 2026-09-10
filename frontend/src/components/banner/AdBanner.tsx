@@ -1,4 +1,4 @@
-import { creativeFor, packshot } from '../../lib/bannerCreative';
+import { bannerImage, creativeFor, packshot } from '../../lib/bannerCreative';
 import PriceTag from '../product/PriceTag';
 import type { BannerAxis } from '../../lib/bannerCreative';
 import type { Product } from '../../types/product';
@@ -42,10 +42,11 @@ export default function AdBanner({
   onSelect,
 }: AdBannerProps) {
   const c = creativeFor(product, axis, value, skinTone);
+  const image = bannerImage(product.product_id, c.variant);
 
   return (
     <article
-      className={`ad ad--${shape} ad--${c.variant}`}
+      className={`ad ad--${shape} ad--${c.variant}${image ? ' ad--image' : ''}`}
       data-variant={c.variant}
       data-concern={c.axis === 'concern' && value ? value : undefined}
       data-product-id={product.product_id}
@@ -56,6 +57,16 @@ export default function AdBanner({
       data-log-ref={product.product_id}
     >
       <button type="button" className="ad__hit" onClick={() => onSelect(product.product_id)}>
+        {image ? (
+          /* 완성형 한 장. 글자·가격·배지가 이미지 안에 있다. 접근성 문구만 따로 */
+          <img
+            className="ad__image"
+            src={image}
+            alt={`${product.brand_name} ${product.product_name} · ${c.kicker} ${c.head.mark}${c.head.rest}`}
+          />
+        ) : null}
+        {image ? null : (
+        <>
         <span className="ad__brand">{product.brand_name}</span>
         <span className="ad__badge">{c.badge}</span>
 
@@ -85,6 +96,8 @@ export default function AdBanner({
           {c.prop ? <img className="ad__prop" src={c.prop} alt="" loading="lazy" /> : null}
         </div>
         <span className="sr-only">{product.product_name}</span>
+        </>
+        )}
       </button>
     </article>
   );
