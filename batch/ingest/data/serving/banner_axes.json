@@ -8,7 +8,7 @@
   "category": [
    {
     "banner_value": "BB & CC Creams",
-    "label_ko": "BB·CC 크림",
+    "label_ko": "BB·CC크림",
     "n_products": 2,
     "too_thin": true,
     "product_ids": [
@@ -18,7 +18,7 @@
    },
    {
     "banner_value": "Blemish & Acne Treatments",
-    "label_ko": "여드름·트러블 케어",
+    "label_ko": "트러블 케어",
     "n_products": 2,
     "too_thin": true,
     "product_ids": [
@@ -28,7 +28,7 @@
    },
    {
     "banner_value": "Cleansers",
-    "label_ko": "클렌저",
+    "label_ko": "클렌징",
     "n_products": 35,
     "too_thin": false,
     "product_ids": [
@@ -56,7 +56,7 @@
    },
    {
     "banner_value": "Exfoliators",
-    "label_ko": "각질 제거",
+    "label_ko": "필링·스크럽",
     "n_products": 6,
     "too_thin": false,
     "product_ids": [
@@ -70,7 +70,7 @@
    },
    {
     "banner_value": "Eye Care",
-    "label_ko": "아이케어",
+    "label_ko": "아이 케어",
     "n_products": 18,
     "too_thin": false,
     "product_ids": [
@@ -96,7 +96,7 @@
    },
    {
     "banner_value": "Eye Creams & Treatments",
-    "label_ko": "아이크림",
+    "label_ko": "아이크림·아이 케어",
     "n_products": 17,
     "too_thin": false,
     "product_ids": [
@@ -121,7 +121,7 @@
    },
    {
     "banner_value": "Eye Masks",
-    "label_ko": "아이패치·아이마스크",
+    "label_ko": "아이 패치",
     "n_products": 1,
     "too_thin": true,
     "product_ids": [
@@ -130,7 +130,7 @@
    },
    {
     "banner_value": "Face Masks",
-    "label_ko": "페이스 마스크·팩",
+    "label_ko": "마스크팩",
     "n_products": 14,
     "too_thin": false,
     "product_ids": [
@@ -167,7 +167,7 @@
    },
    {
     "banner_value": "Face Serums",
-    "label_ko": "세럼·앰플",
+    "label_ko": "에센스·세럼·앰플",
     "n_products": 42,
     "too_thin": false,
     "product_ids": [
@@ -195,7 +195,7 @@
    },
    {
     "banner_value": "Face Sunscreen",
-    "label_ko": "얼굴용 선크림",
+    "label_ko": "페이스 선케어",
     "n_products": 9,
     "too_thin": false,
     "product_ids": [
@@ -212,7 +212,7 @@
    },
    {
     "banner_value": "Face Wash & Cleansers",
-    "label_ko": "클렌징 폼·워시",
+    "label_ko": "클렌징폼·젤",
     "n_products": 18,
     "too_thin": false,
     "product_ids": [
@@ -238,7 +238,7 @@
    },
    {
     "banner_value": "Face Wipes",
-    "label_ko": "클렌징 티슈",
+    "label_ko": "클렌징 티슈·패드",
     "n_products": 1,
     "too_thin": true,
     "product_ids": [
@@ -247,7 +247,7 @@
    },
    {
     "banner_value": "Facial Peels",
-    "label_ko": "필링",
+    "label_ko": "필링 케어",
     "n_products": 5,
     "too_thin": false,
     "product_ids": [
@@ -260,7 +260,7 @@
    },
    {
     "banner_value": "For Face",
-    "label_ko": "얼굴용 (기타)",
+    "label_ko": "페이스용",
     "n_products": 2,
     "too_thin": true,
     "product_ids": [
@@ -270,7 +270,7 @@
    },
    {
     "banner_value": "Lip Balms & Treatments",
-    "label_ko": "립밤·립케어",
+    "label_ko": "립 케어",
     "n_products": 10,
     "too_thin": false,
     "product_ids": [
@@ -298,7 +298,7 @@
    },
    {
     "banner_value": "Masks",
-    "label_ko": "마스크·팩",
+    "label_ko": "마스크팩",
     "n_products": 14,
     "too_thin": false,
     "product_ids": [
@@ -331,7 +331,7 @@
    },
    {
     "banner_value": "Moisturizers",
-    "label_ko": "수분크림·로션",
+    "label_ko": "크림·로션",
     "n_products": 63,
     "too_thin": false,
     "product_ids": [
@@ -359,7 +359,7 @@
    },
    {
     "banner_value": "Night Creams",
-    "label_ko": "나이트 크림",
+    "label_ko": "나이트 케어",
     "n_products": 2,
     "too_thin": true,
     "product_ids": [
@@ -396,7 +396,7 @@
    },
    {
     "banner_value": "Toners",
-    "label_ko": "토너·스킨",
+    "label_ko": "스킨·토너",
     "n_products": 8,
     "too_thin": false,
     "product_ids": [
@@ -412,7 +412,7 @@
    },
    {
     "banner_value": "Treatments",
-    "label_ko": "집중 케어(트리트먼트)",
+    "label_ko": "집중 케어",
     "n_products": 49,
     "too_thin": false,
     "product_ids": [
@@ -457,7 +457,7 @@
    },
    {
     "banner_value": "Clean + Planet Positive",
-    "label_ko": "친환경 클린",
+    "label_ko": "클린·친환경 뷰티",
     "n_products": 27,
     "too_thin": false,
     "product_ids": [
@@ -485,7 +485,7 @@
    },
    {
     "banner_value": "Clean at Sephora",
-    "label_ko": "클린 뷰티 인증",
+    "label_ko": "세포라 클린",
     "n_products": 81,
     "too_thin": false,
     "product_ids": [
@@ -513,7 +513,7 @@
    },
    {
     "banner_value": "Cruelty-Free",
-    "label_ko": "동물실험 반대",
+    "label_ko": "크루얼티 프리",
     "n_products": 40,
     "too_thin": false,
     "product_ids": [
@@ -541,7 +541,7 @@
    },
    {
     "banner_value": "Fragrance Free",
-    "label_ko": "무향",
+    "label_ko": "무향료",
     "n_products": 25,
     "too_thin": false,
     "product_ids": [
@@ -582,7 +582,7 @@
    },
    {
     "banner_value": "Hypoallergenic",
-    "label_ko": "저자극",
+    "label_ko": "저자극 포뮬러",
     "n_products": 4,
     "too_thin": true,
     "product_ids": [
@@ -774,7 +774,7 @@
   "concern": [
    {
     "banner_value": "Acne/Blemishes",
-    "label_ko": "여드름·트러블",
+    "label_ko": "트러블·여드름",
     "n_products": 47,
     "too_thin": false,
     "product_ids": [
@@ -802,7 +802,7 @@
    },
    {
     "banner_value": "Anti-Aging",
-    "label_ko": "주름·안티에이징",
+    "label_ko": "안티에이징",
     "n_products": 66,
     "too_thin": false,
     "product_ids": [
@@ -858,7 +858,7 @@
    },
    {
     "banner_value": "Dark spots",
-    "label_ko": "색소침착·잡티",
+    "label_ko": "기미·잡티",
     "n_products": 37,
     "too_thin": false,
     "product_ids": [
@@ -914,7 +914,7 @@
    },
    {
     "banner_value": "Dullness/Uneven Texture",
-    "label_ko": "칙칙함·피부결",
+    "label_ko": "칙칙함·거친 피부결",
     "n_products": 88,
     "too_thin": false,
     "product_ids": [
@@ -998,7 +998,7 @@
    },
    {
     "banner_value": "Redness",
-    "label_ko": "홍조",
+    "label_ko": "붉은 기",
     "n_products": 49,
     "too_thin": false,
     "product_ids": [
@@ -1028,8 +1028,8 @@
   "ingredient": [
    {
     "banner_value": "AHA/Glycolic Acid",
-    "label_ko": "AHA·글리콜산",
-    "n_products": 23,
+    "label_ko": "AHA·글라이콜릭애씨드",
+    "n_products": 22,
     "too_thin": false,
     "product_ids": [
      "P427406",
@@ -1041,7 +1041,6 @@
      "P439061",
      "P434548",
      "P278317",
-     "P375849",
      "P468658",
      "P416816",
      "P418346",
@@ -1051,7 +1050,8 @@
      "P434545",
      "P466142",
      "P473322",
-     "P447592"
+     "P447592",
+     "P456213"
     ]
    },
    {
@@ -1220,14 +1220,13 @@
    {
     "banner_value": "Collagen",
     "label_ko": "콜라겐",
-    "n_products": 6,
+    "n_products": 5,
     "too_thin": false,
     "product_ids": [
      "P430337",
      "P433435",
      "P466155",
      "P421277",
-     "P476414",
      "P439055"
     ]
    },
@@ -1317,8 +1316,8 @@
    },
    {
     "banner_value": "Lactic Acid",
-    "label_ko": "락틱애시드",
-    "n_products": 33,
+    "label_ko": "락틱애씨드",
+    "n_products": 30,
     "too_thin": false,
     "product_ids": [
      "P442563",
@@ -1333,14 +1332,14 @@
      "P434548",
      "P439058",
      "P278317",
-     "P415771",
-     "P375849",
      "P468658",
      "P431848",
      "P416816",
-     "P466155",
      "P428095",
-     "P436359"
+     "P436359",
+     "P481989",
+     "P455926",
+     "P455676"
     ]
    },
    {
@@ -1387,7 +1386,7 @@
    {
     "banner_value": "Niacinamide",
     "label_ko": "나이아신아마이드",
-    "n_products": 30,
+    "n_products": 29,
     "too_thin": false,
     "product_ids": [
      "P427417",
@@ -1402,14 +1401,14 @@
      "P479327",
      "P470529",
      "P433435",
-     "P448802",
      "P411539",
      "P423259",
      "P458209",
      "P454120",
      "P421277",
      "P481989",
-     "P455926"
+     "P455926",
+     "P411403"
     ]
    },
    {
@@ -1499,7 +1498,7 @@
    {
     "banner_value": "Retinol",
     "label_ko": "레티놀",
-    "n_products": 14,
+    "n_products": 12,
     "too_thin": false,
     "product_ids": [
      "P421275",
@@ -1507,15 +1506,13 @@
      "P439926",
      "P443842",
      "P447791",
-     "P393718",
      "P467038",
      "P428250",
      "P455926",
      "P411365",
      "P476414",
      "P447592",
-     "P500757",
-     "P473267"
+     "P500757"
     ]
    },
    {
@@ -1547,8 +1544,8 @@
    },
    {
     "banner_value": "SPF",
-    "label_ko": "자외선 차단",
-    "n_products": 32,
+    "label_ko": "SPF 자외선 차단",
+    "n_products": 30,
     "too_thin": false,
     "product_ids": [
      "P420652",
@@ -1558,7 +1555,6 @@
      "P415777",
      "P456218",
      "P411540",
-     "P456392",
      "P429515",
      "P468658",
      "P474377",
@@ -1570,13 +1566,14 @@
      "P429242",
      "P421277",
      "P481989",
-     "P422536"
+     "P422536",
+     "P424948"
     ]
    },
    {
     "banner_value": "Salicylic Acid",
-    "label_ko": "살리실산(BHA)",
-    "n_products": 23,
+    "label_ko": "살리실산",
+    "n_products": 20,
     "too_thin": false,
     "product_ids": [
      "P442563",
@@ -1584,13 +1581,10 @@
      "P392246",
      "P469502",
      "P415777",
-     "P458219",
      "P269122",
      "P421996",
      "P443833",
-     "P400207",
      "P410400",
-     "P375849",
      "P431848",
      "P416816",
      "P423688",
@@ -1598,7 +1592,10 @@
      "P422536",
      "P474938",
      "P447592",
-     "P472050"
+     "P472050",
+     "P422430",
+     "P456207",
+     "P480612"
     ]
    },
    {
@@ -1711,7 +1708,7 @@
    },
    {
     "banner_value": "Vitamin C",
-    "label_ko": "비타민C",
+    "label_ko": "비타민 C",
     "n_products": 55,
     "too_thin": false,
     "product_ids": [
