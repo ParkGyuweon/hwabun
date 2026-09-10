@@ -1,3 +1,5 @@
+import type { BannerType } from '../types/log';
+
 /**
  * 추천 배너 영역 설정. 코드에 박지 않고 여기 한 곳에 둔다.
  *
@@ -46,3 +48,17 @@ export const BANNER_POLICY_VERSION = 'banner-2026-09-10.2';
  *                        히어로가 받는다. 성향 없는 세션은 new_brand(story) 로 말한다.
  *                        → 이 판부터 `banner_type: new_brand` 노출이 크게 는다
  */
+
+/**
+ * 기본 히어로 배너 — 아무 단서가 없는 첫 방문(익명 · 세션 성향 없음)에 띄운다.
+ *
+ * 추천이 고를 근거가 하나도 없을 때 무엇을 보여줄지는 알고리즘이 아니라 **브랜드가
+ * 정하는 것**이다. 그 자리를 여기 한 줄로 둬서 화면·추천 코드를 건드리지 않고 바꾼다.
+ *
+ * 페르소나가 있거나 세션 성향이 잡히면 이 값은 쓰이지 않는다 — 그때부터는 피부 타입이
+ * 상품을, 행동이 문구(변형)를 고른다.
+ */
+export const DEFAULT_HERO: { product_id: string; banner_type: BannerType } = {
+  product_id: 'SB000008',
+  banner_type: 'concern',
+};

@@ -12,6 +12,7 @@
  * "이유를 말해 주는 것" 과 "신규 브랜드에 자리를 주는 것" 이다.
  */
 import vocab from '../../../contracts/product-feature-vocab.json';
+import { DEFAULT_HERO } from './bannerConfig';
 import { CLEAN_VALUES } from './vocabLabels';
 import type { BannerType } from '../types/log';
 import type { PersonaProfile } from '../types/persona';
@@ -172,6 +173,45 @@ function popularityScale(products: Product[]): (p: Product) => number {
   };
 }
 
+/**
+ * 히어로에 올릴 신규 브랜드 상품.
+ *
+ * **동점을 사람마다 다르게 깬다.** 신규 상품은 평점도 loves 도 없어서 점수가
+ * `피부 타입 일치 2 또는 0` 뿐이다. 그래서 같은 피부 타입이면 전부 동점이고, 그냥
+ * 정렬 순서를 쓰면 목록 앞의 한둘만 영원히 뜬다 — 실제로 8종 중 SB000001·SB000002
+ * 둘만 나와서 완성형 배너 40장 중 10장만 도달했다.
+ *
+ * 페르소나 id 로 자리를 정한다. 같은 사람은 늘 같은 상품을 보고(새로고침마다 배너가
+ * 흔들리면 안 된다 — `trait.ts` 의 explore 를 세션에 고정한 것과 같은 이유다),
+ * 사람이 달라지면 다른 상품이 뜬다. 페르소나 100명이면 8종이 고루 노출된다.
+ *
+ * 익명이고 성향도 없으면 `DEFAULT_HERO` 를 띄운다 (§기본 배너).
+ */
+function pickHero(
+  ranked: Product[],
+  score: (p: Product) => number,
+  persona: PersonaProfile | null,
+  traitKnown: boolean,
+): Product | null {
+  const fresh = ranked.filter(isNewBrandProduct);
+  if (fresh.length === 0) return null;
+
+  // 익명 + 성향 없음 = 아무 단서가 없는 첫 방문. 브랜드가 정한 기본 배너를 띄운다
+  if (!persona && !traitKnown) {
+    const preset = fresh.find((p) => p.product_id === DEFAULT_HERO.product_id);
+    if (preset) return preset;
+  }
+
+  const best = score(fresh[0]);
+  const tied = fresh.filter((p) => score(p) === best);
+  if (tied.length <= 1) return tied[0] ?? fresh[0];
+
+  if (!persona) return tied[0];
+  let seed = 7;
+  for (const ch of persona.persona_id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  return tied[seed % tied.length];
+}
+
 export function buildRecommendation(input: BuildInput): RecommendResponse {
   const { products, persona, excluded, reviewSkinTypes, k, bannerSlots, reserved } = input;
   const traitKnown = input.traitKnown ?? false;
@@ -207,7 +247,7 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
    * `ranked[0]` 이다. 상품은 점수가 고르고 문구(축)는 세션 성향이 고른다 —
    * personalized-banner-plan.md §2 의 분업 그대로다.
    */
-  const top = ranked.find(isNewBrandProduct) ?? ranked[0] ?? null;
+  const top = pickHero(ranked, score, persona, traitKnown) ?? ranked[0] ?? null;
   let hero: RecommendResponse['hero'] = null;
   if (top) {
     /*
@@ -216,10 +256,13 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
      * story 변형이 영영 안 뜬다(축 목록에 new_brand 가 없어서다).
      * 성향을 알면 그 축으로 말한다.
      */
-    const preferStory = !traitKnown && isNewBrandProduct(top);
-    const axis = preferStory
-      ? 'new_brand'
-      : (axes.find((a) => axisValue(top, a, persona, reviewSkinTypes) !== null) ?? axes[0]);
+    const isPreset = !persona && !traitKnown && top.product_id === DEFAULT_HERO.product_id;
+    const preferStory = !isPreset && !traitKnown && isNewBrandProduct(top);
+    const axis: BannerType = isPreset
+      ? DEFAULT_HERO.banner_type
+      : preferStory
+        ? 'new_brand'
+        : (axes.find((a) => axisValue(top, a, persona, reviewSkinTypes) !== null) ?? axes[0]);
     hero = {
       product_id: top.product_id,
       banner_type: axis,
