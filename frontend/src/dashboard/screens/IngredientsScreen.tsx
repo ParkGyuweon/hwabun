@@ -1,15 +1,7 @@
 import { useMemo } from 'react';
 import { Panel } from '../components';
-import {
-  MINOR_WEIGHT,
-  catalogProducts,
-  cautionPrevalence,
-  fmt,
-  ingredientGap,
-  ingredientStats,
-  ingredientWeights,
-  products,
-} from '../lib/metrics';
+import { MINOR_WEIGHT, catalogProducts, cautionPrevalence, fmt, ingredientStats, ingredientWeights, products } from '../lib/metrics';
+import { useBehavior } from '../lib/useBehavior';
 import { labelKo } from '../../lib/formLabels';
 
 const ko = (name: string) => {
@@ -19,7 +11,9 @@ const ko = (name: string) => {
 
 /**
  * 성분. 결론(갭) → 갭 표(I1) → 내 상품 성분 띠(I2) → 주의 성분(I3) 순.
- * 관심(긁기·체류)은 수집 연결 전 모의, 보유·위치가중은 전성분 실측.
+ * 관심(긁기·체류)은 마트(ingredient_weekly_interest)가 있으면 실측, 없으면 모의. 보유·위치가중은 전성분 실측.
+ *
+ * 마트의 관심 셋째 열은 체류 ms 가 아니라 "상품 귀속 점수" 다 (계약 E5). 열 제목과 단위가 그에 따라 바뀐다.
  */
 export default function IngredientsScreen({
   productId,
@@ -28,6 +22,7 @@ export default function IngredientsScreen({
   productId: string | null;
   onProductChange: (id: string | null) => void;
 }) {
+  const { ingredientGap, ingredientInterestKind, source } = useBehavior();
   const product = products.find((p) => p.product_id === productId) ?? products[0];
   const stats = ingredientStats(product);
   const weights = useMemo(() => ingredientWeights(product), [product]);
@@ -40,6 +35,9 @@ export default function IngredientsScreen({
     .map(([name, weight]) => ({ name, weight, tagged: weight === 1 }))
     .sort((a, b) => b.weight - a.weight);
   const minorTagged = band.filter((b) => !b.tagged && b.weight <= MINOR_WEIGHT);
+
+  const thirdCol = ingredientInterestKind === 'score' ? '상품 귀속' : '체류';
+  const third = (v: number) => (ingredientInterestKind === 'score' ? fmt.int(Math.round(v)) : `${(v / 1000).toFixed(1)}초`);
 
   return (
     <div className="stack">
@@ -54,16 +52,16 @@ export default function IngredientsScreen({
                 .join(' · ')}
         </h2>
         <p className="verdict__reason">
-          관심 상위 10 중 보유 {ownedTop} · 미보유 {10 - ownedTop}
+          관심 상위 10 중 보유 {ownedTop} · 미보유 {Math.max(0, Math.min(10, top10.length) - ownedTop)}
           {gaps.length > 3 ? ` · 그 외 ${gaps.length - 3}종` : ''}
         </p>
         {gaps.length > 0 ? (
           <p className="verdict__action">제품·처방: {ko(gaps[0].name)} 라인 검토 · 상세페이지: 대체 성분 설명</p>
         ) : null}
-        <p className="verdict__sample">관심은 모의 · 보유는 전성분 실측</p>
+        <p className="verdict__sample">{source.ingredients === 'real' ? '관심은 마트 실측 (플랫폼 전체) · 보유는 전성분 실측' : '관심은 모의 · 보유는 전성분 실측'}</p>
       </section>
 
-      <Panel title="성분 갭 표" source="mock" aside="관심 순 30종 · 갭 행 위">
+      <Panel title="성분 갭 표" source={source.ingredients} aside={`관심 순 ${ingredientGap.length}종 · 갭 행 위`}>
         <div className="table-wrap">
           <table className="fbx-table gap-table">
             <thead>
@@ -71,7 +69,7 @@ export default function IngredientsScreen({
                 <th className="is-num">관심</th>
                 <th>성분</th>
                 <th className="is-num">긁기</th>
-                <th className="is-num">체류</th>
+                <th className="is-num">{thirdCol}</th>
                 <th>내 라인</th>
                 <th style={{ width: '18%' }}>함량 위치</th>
               </tr>
@@ -85,7 +83,7 @@ export default function IngredientsScreen({
                     {ko(r.name) !== r.name ? <span className="fbx-table__desc">{r.name}</span> : null}
                   </td>
                   <td className="is-num">{fmt.int(r.scrapeCount)}</td>
-                  <td className="is-num">{(r.dwellMs / 1000).toFixed(1)}초</td>
+                  <td className="is-num">{third(r.dwellMs)}</td>
                   <td>
                     {r.gap ? (
                       <span className="gap-flag gap-flag--gap">갭</span>
@@ -115,6 +113,12 @@ export default function IngredientsScreen({
             </tbody>
           </table>
         </div>
+        {ingredientInterestKind === 'score' ? (
+          <p className="note">
+            긁기 = 고객이 성분 이름을 직접 드래그·복사한 점수(direct_match_score). 상품 귀속 = 그 성분이 든 상품에서 한
+            행동을 성분으로 나눈 점수. 둘 다 플랫폼 전체 기준이고, 내 라인 보유만 내 상품에서 셉니다.
+          </p>
+        ) : null}
       </Panel>
 
       <div className="grid grid--2">
@@ -157,7 +161,7 @@ export default function IngredientsScreen({
             </ul>
           )}
           {minorTagged.length > 0 ? (
-            <p className="note">미량: {minorTagged.map((m) => ko(m.name)).join(' · ')} · 강조 문구에 쓰면 실증 부담</p>
+            <p className="note">미량: {minorTagged.map((mt) => ko(mt.name)).join(' · ')} · 강조 문구에 쓰면 실증 부담</p>
           ) : null}
         </Panel>
 

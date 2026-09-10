@@ -30,8 +30,8 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
  POST /api/catalog/sync 쇼핑몰 백엔드 ACTIVE 상품 동기화 (승인 훅 없어도 카탈로그 일치)
         ▲                                                                              │
         │ 모델·산출물 (오프라인 배치 batch/jobs/)                                        ▼
- Sephora 리뷰 844,865건 · 상품 200개                                       [ 소비 ]  브랜드 대시보드 (지금은 mocks/ 표본,
-   → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              Mart 연결은 데이터·백엔드 협의 중)
+ Sephora 리뷰 844,865건 · 상품 200개                                       [ 소비 ]  브랜드 대시보드 (마트 API 계약 초안 contracts/dashboard-mart-api-spec.md,
+   → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              프론트 연결 완료 · MySQL projection·shop_backend 6 엔드포인트 대기)
    → CF 동시발생 · LTR 278 트리 → batch/ingest/data/serving/
 
 [ 운영 · deploy/ec2-1 ]  docker compose — backend(8080) · recommend(8300) · nginx(443 → /api/ → backend) · Prometheus · Grafana
@@ -102,10 +102,11 @@ S15P21A306/
 │   ├── user-trait-weights.json          사용자 성향 가중치 30일 창 (`user-trait-v1-proposed`)
 │   ├── prescription-api-spec.md         대시보드 처방 문장 API (AI↔프론트) — 요청·응답 봉투·거부 코드 11 (Jira 220·225)
 │   ├── cosmetic-claim-banned-terms.json  화장품 표시광고 금지 표현 계약 — banned·needs_evidence·functional_only·allow (프론트 작성, MR !171)
-│   └── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·LTR·§5 API·§5-1 배너
+│   ├── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·LTR·§5 API·§5-1 배너
 │                                        규칙 5-1: 정독한 미전환 상품은 약한 긍정 (2026-09-03 개정)
 │                                        §5 persona_id 선택(익명 cold_start)·reserved_filled (2026-09-09, Jira 214)
 │
+│   └── dashboard-mart-api-spec.md       ★ 브랜드 대시보드 마트 조회 API 초안 (백엔드↔프론트↔데이터) — 6 엔드포인트·projection 범위·신규 마트 5건
 ├── docs/
 │   ├── system-architecture*.png         시스템 구성도 3장
 │   ├── dashboard/                   대시보드·기획 문서 — 재설계 명세 · AI 인사이트 규칙 · 성향 배너 플랜 · 포지셔닝 근거 · 한국 브랜드 시드 · Jira 재정렬

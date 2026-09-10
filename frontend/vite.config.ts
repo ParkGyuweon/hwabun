@@ -33,11 +33,18 @@ export default defineConfig({
     port: Number(process.env.PORT) || undefined,
     proxy: {
       /*
-       * 백엔드가 둘이다. 구체적인 경로를 먼저 적어야 '/api' 가 삼키지 않는다.
+       * 백엔드가 셋이다. 구체적인 경로를 먼저 적어야 '/api' 가 삼키지 않는다.
        *
-       *   shop_backend (8090)  로그인·브랜드·상품·주문·리뷰·피드백·대시보드   feat/shop-backend
+       *   recommend    (8300)  추천·처방 문장·카탈로그 동기화                 batch/serving/
+       *   shop_backend (8090)  로그인·브랜드·상품·주문·리뷰·피드백·대시보드   shop_backend/
        *   collector    (8080)  행동 로그 수집 /api/events                     backend/
        */
+      ...Object.fromEntries(
+        ['/api/recommend', '/api/prescription', '/api/catalog'].map((path) => [
+          path,
+          { target: process.env.RECOMMEND_URL || 'http://localhost:8300', changeOrigin: true },
+        ]),
+      ),
       ...Object.fromEntries(
         ['/api/auth', '/api/brands', '/api/products', '/api/cart', '/api/orders', '/api/reviews', '/api/feedback', '/api/seller', '/api/settlements', '/api/admin'].map(
           (path) => [path, { target: process.env.SHOP_BACKEND_URL || 'http://localhost:8090', changeOrigin: true }],

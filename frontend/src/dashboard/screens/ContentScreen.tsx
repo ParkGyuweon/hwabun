@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { Actions, BarList, Kpi, Panel, Scatter } from '../components';
-import { contentAttention, fmt, scrapedIngredients, validationBehaviors } from '../lib/metrics';
-import { prescriptionFor } from '../lib/prescription';
+import { fmt } from '../lib/metrics';
+import { useBehavior } from '../lib/useBehavior';
+import { usePrescriptions } from '../lib/prescriptionApi';
 import { labelKo } from '../../lib/formLabels';
 import type { ActionItem } from '../components';
 
@@ -37,26 +39,41 @@ function verbOf(lift: number, viewRate: number): Verb {
 const VERB_PILL: Record<Verb, string> = { up: '위로 올리기', fix: '손보기', keep: '그대로' };
 const ORDER: Record<Verb, number> = { up: 0, fix: 1, keep: 2 };
 
-export default function ContentScreen() {
-  const rows = contentAttention.map((c) => ({ ...c, verb: verbOf(c.conversionLift, c.viewRate) }));
+export default function ContentScreen({ brandName }: { brandName: string }) {
+  const m = useBehavior();
+  const { contentAttention, scrapedIngredients, validationBehaviors, source } = m;
+  const rows = useMemo(() => contentAttention.map((c) => ({ ...c, verb: verbOf(c.conversionLift, c.viewRate) })), [contentAttention]);
 
   // 할 일은 올릴 것부터. 그 안에서는 담기 배수가 큰 순서, 손볼 것은 오래 읽힌 순서
-  const todo = rows
-    .filter((r) => r.verb !== 'keep')
-    .sort(
-      (a, b) =>
-        ORDER[a.verb] - ORDER[b.verb] ||
-        (a.verb === 'up' ? b.conversionLift - a.conversionLift : b.avgDwellMs - a.avgDwellMs),
-    );
+  const todo = useMemo(
+    () =>
+      rows
+        .filter((r) => r.verb !== 'keep')
+        .sort(
+          (a, b) =>
+            ORDER[a.verb] - ORDER[b.verb] ||
+            (a.verb === 'up' ? b.conversionLift - a.conversionLift : b.avgDwellMs - a.avgDwellMs),
+        ),
+    [rows],
+  );
 
   const firstUp = todo.find((r) => r.verb === 'up');
   const firstFix = todo.find((r) => r.verb === 'fix');
   const best = [...rows].sort((a, b) => b.conversionLift - a.conversionLift)[0];
 
-  // 처방(무엇을 어떻게)은 이 화면 숫자만으로 못 쓴다. 다른 화면의 근거까지 모아
-  // lib/prescription.ts 가 만든다. 규칙에 없는 콘텐츠는 지시 없이 판정만 보여준다.
+  // 처방(무엇을 어떻게)은 이 화면 숫자만으로 못 쓴다. 다른 화면의 근거까지 모아 만든다.
+  // 먼저 규칙 표(lib/prescription.ts)로 그리고, AI 서버(POST /api/prescription)가 답하면 그 문장으로 바꾼다.
+  const targets = useMemo(() => todo.map((r) => ({ row: r, verb: r.verb as 'up' | 'fix' })), [todo]);
+  const brand = useMemo(() => ({ name: brandName, productCount: m.productMetrics.length }), [brandName, m.productMetrics.length]);
+  const rxs = usePrescriptions(m, targets, brand);
+  const llmCount = Object.values(rxs).filter((r) => r.origin === 'llm').length;
+  const ruleCount = Object.values(rxs).filter((r) => r.origin === 'rule').length;
+
   const actions: ActionItem[] = todo.map((r) => {
-    const rx = prescriptionFor(r.kind);
+    const rx = rxs[r.kind];
+    const tags: string[] = [];
+    if (rx?.origin === 'llm') tags.push('AI 문장');
+    if (rx?.needsEvidence.length) tags.push(`실증자료 필요: ${rx.needsEvidence.join('·')}`);
     return {
       verb: r.verb,
       what: r.ko,
@@ -66,11 +83,15 @@ export default function ContentScreen() {
           : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 본 사람이 평균보다 덜 담았습니다. 읽고도 마음이 안 움직인 글입니다.`,
       num: `${r.conversionLift.toFixed(1)}배`,
       unit: '본 사람의 담기율',
-      how: rx?.how,
-      basis: rx?.basis,
-      verify: rx?.verify,
+      how: rx?.rx?.how,
+      basis: rx?.rx?.basis,
+      verify: rx?.rx?.verify,
+      tags: tags.length ? tags : undefined,
     };
   });
+
+  const topScrape = scrapedIngredients[0];
+  const expand = validationBehaviors.find((v) => v.event === 'ingredient_view_mode_change') ?? validationBehaviors[0];
 
   return (
     <div className="stack">
@@ -84,49 +105,52 @@ export default function ContentScreen() {
           <li>
             상세페이지 안에서 읽는 글 {rows.length}종을 <b>본 사람이 더 담았는지</b>로 줄 세운 결과입니다.
           </li>
-          <li>
-            가장 잘 먹히는 것은 {best.ko}입니다. 본 사람이 평균보다 {best.conversionLift.toFixed(1)}배 더 담았습니다.
-          </li>
+          {best ? (
+            <li>
+              가장 잘 먹히는 것은 {best.ko}입니다. 본 사람이 평균보다 {best.conversionLift.toFixed(1)}배 더 담았습니다.
+            </li>
+          ) : null}
         </ul>
       </section>
 
-      <Panel title="지금 할 일" source="mock" aside="본 사람의 담기율이 기준">
+      <Panel title="지금 할 일" source={source.contentLift} aside="본 사람의 담기율이 기준">
         <Actions items={actions} />
         <p className="note">
           담기율 1.0배는 내 브랜드 전체 평균과 같다는 뜻입니다. 1.0배 미만은 손볼 것, 1.5배 이상인데 절반도 못 본 것은 위로
           올릴 것으로 골랐습니다. 지시 문장은 이 화면 숫자만으로 쓰지 않고, 고객군·성분·막히는 곳 화면에서 모은 근거까지
           모아 만듭니다. 근거는 각 줄을 펼치면 나옵니다.
+          {llmCount > 0 ? ` 처방 문장 ${llmCount}건은 AI 서버가 썼고, ${ruleCount}건은 규칙 표입니다.` : ' 처방 문장은 규칙 표입니다. AI 서버가 연결되면 그 문장으로 바뀝니다.'}
         </p>
       </Panel>
 
       <div className="grid grid--kpi">
         <Kpi
           label="가장 잘 먹히는 콘텐츠"
-          value={best.ko}
-          sub={`본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다`}
-          source="mock"
+          value={best?.ko ?? '-'}
+          sub={best ? `본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다` : ''}
+          source={source.contentLift}
         />
         <Kpi
           label="손봐야 할 콘텐츠"
           value={firstFix ? firstFix.ko : '없음'}
           sub={firstFix ? '오래 읽는데 담기는 평균보다 적습니다' : '평균보다 낮은 콘텐츠가 없습니다'}
-          source="mock"
+          source={source.contentLift}
         />
         <Kpi
           label="고객이 가장 많이 드래그한 성분"
-          value={labelKo(scrapedIngredients[0].name)}
-          sub={`${fmt.int(scrapedIngredients[0].count)}회 · 관심이 가장 큰 성분`}
-          source="mock"
+          value={topScrape ? labelKo(topScrape.name) : '-'}
+          sub={topScrape ? `${fmt.int(topScrape.count)}회 · 관심이 가장 큰 성분` : ''}
+          source={source.scraped}
         />
         <Kpi
           label="전성분을 펼쳐 본 방문"
-          value={fmt.pct(validationBehaviors[0].doneRate)}
+          value={expand ? fmt.pct(expand.doneRate) : '-'}
           sub="상세페이지를 연 방문 중"
-          source="mock"
+          source={source.behaviors}
         />
       </div>
 
-      <Panel title="콘텐츠 10종 전부" source="mock" aside="내 브랜드 상품의 상세페이지 안만">
+      <Panel title="콘텐츠 10종 전부" source={source.content} aside="내 브랜드 상품의 상세페이지 안만">
         <p className="panel__lead">
           목록·장바구니 요소는 상세페이지에서 살지 말지 정하는 것과 무관해 빼고, <b>상세페이지 안에서 읽는 글 10종</b>만
           셌습니다.
@@ -164,6 +188,9 @@ export default function ContentScreen() {
         <p className="note">
           흐린 행은 본 방문이 500건 미만이라 아직 판단하기에 표본이 얇습니다. 작은 회색 글씨는 데이터 파트와 맞춘 이벤트
           이름이라 그대로 두었습니다.
+          {source.content === 'real' && source.contentLift === 'mock'
+            ? ' 열람·체류·표본은 마트 실측이고, 담기율 배수만 아직 모의입니다 (content_conversion_daily 요청 중).'
+            : ''}
         </p>
 
         <details className="fold">
@@ -210,21 +237,21 @@ export default function ContentScreen() {
             <dd>그 콘텐츠가 한 번이라도 보인 세션 수. 500 미만은 흐리게, 50 미만은 그리지 않습니다.</dd>
             <dt>지금 상태</dt>
             <dd>
-              체류·표본은 계약에 정의가 있고(<code>content_daily_kpi</code>),{' '}
-              <b>담기율 배수와 콘텐츠 선정 목록은 아직 계약에 없습니다</b>. 지금 화면 값은 모의 집계이고, 데이터 파트에
-              마트를 요청해 둔 상태입니다.
+              체류·표본은 계약에 정의가 있고(<code>content_daily_kpi</code>), 담기율 배수는{' '}
+              <code>contracts/dashboard-mart-api-spec.md</code> §6-2 로 데이터 파트에 요청한 마트에서 옵니다. 마트 응답이
+              오면 배지가 "실측" 으로 바뀝니다.
             </dd>
           </dl>
         </details>
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="고객이 드래그한 성분 TOP 10" source="mock" aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)">
+        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)">
           <BarList
             items={scrapedIngredients.map((i) => ({
               label: labelKo(i.name),
               value: i.count,
-              hint: `복사 ${i.copyCount}`,
+              hint: i.copyCount === null ? undefined : `복사 ${i.copyCount}`,
             }))}
           />
           <p className="note">
@@ -233,7 +260,7 @@ export default function ContentScreen() {
           </p>
         </Panel>
 
-        <Panel title="이 행동을 한 사람은 더 담나" source="mock" aside="한 방문 vs 안 한 방문">
+        <Panel title="이 행동을 한 사람은 더 담나" source={source.behaviors} aside="한 방문 vs 안 한 방문">
           <table className="table">
             <thead>
               <tr>

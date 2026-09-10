@@ -16,6 +16,7 @@ import { useAuth } from '../hooks/useAuth';
 import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
+import { BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
 
 type ScreenKey =
   | 'overview'
@@ -104,6 +105,11 @@ export default function DashboardApp() {
   const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
 
   return (
+    /*
+     * 행동 지표는 여기서 한 번 받는다 (마트 API 6개 병렬 · contracts/dashboard-mart-api-spec.md).
+     * 서버 브랜드가 없으면 부르지 않고 모의 집계다. 화면은 useBehavior() 로 같은 모양을 읽는다.
+     */
+    <BehaviorProvider brandId={brand?.id ?? null} brandName={brand?.name ?? null} days={days}>
     <div className="console">
       <aside className="sidebar">
         <div className="sidebar__brand">
@@ -191,11 +197,7 @@ export default function DashboardApp() {
               </button>
             </div>
           ) : null}
-          <p>
-            v0.2 · 이벤트 36종 기준
-            <br />
-            행동 지표는 수집 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.
-          </p>
+          <MartNote />
         </div>
       </aside>
 
@@ -227,7 +229,7 @@ export default function DashboardApp() {
 
         {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen /> : null}
-        {screen === 'content' ? <ContentScreen /> : null}
+        {screen === 'content' ? <ContentScreen brandName={brand?.name || SCOPE_LABEL.behavior.brand} /> : null}
         {screen === 'segments' ? <SegmentsScreen /> : null}
         {screen === 'behavior' ? <BehaviorScreen /> : null}
         {screen === 'reviews' ? (
@@ -240,5 +242,26 @@ export default function DashboardApp() {
         {screen === 'feedback' ? <FeedbackScreen /> : null}
       </main>
     </div>
+    </BehaviorProvider>
+  );
+}
+
+/** 사이드바 하단. 행동 지표가 어디서 왔는지 한 줄 (계약 §7) */
+function MartNote() {
+  const state = useMartState();
+  const { anyReal, martProcessedAt } = useBehavior();
+  let line: string;
+  if (state === 'loading') line = '마트 지표를 받는 중 · 그동안은 모의 집계';
+  else if (anyReal) line = `마트 연결됨${martProcessedAt ? ` · 갱신 ${martProcessedAt.slice(0, 16).replace('T', ' ')}` : ''} · 배지가 화면별 출처`;
+  else if (state === 'ready') line = '마트 응답은 왔지만 이 브랜드 행이 없음 · 행동 지표는 모의 집계';
+  else line = '행동 지표는 마트 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.';
+  return (
+    <p>
+      <span className="sidebar__mart">
+        v0.3 · 이벤트 36종 기준
+      </span>
+      <br />
+      {line}
+    </p>
   );
 }

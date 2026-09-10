@@ -88,6 +88,22 @@ JWT 식별 적용 회신 잘 받았습니다. 프론트는 붙였습니다 (dev 
 넘어도 걸립니다. 수집 서버의 본문 상한을 알려주시면 배치 건수를 맞추겠습니다.
 지금은 413 을 받으면 배치를 반으로 줄이는 동작이 있어 당장 유실은 없습니다.
 
+## 7. 브랜드 대시보드 마트 조회 API 6개 (2026-09-10 추가 · 계약 초안)
+
+`contracts/dashboard-mart-api-spec.md` 초안 0.1 을 올렸습니다. 대시보드 행동 지표(개요 KPI·상세 콘텐츠·
+고객군·성분 관심·상품 진단·막히는 곳)가 지금 전부 프론트 모의값인데, 데이터 파트의 Spark 마트를 MySQL `dw`
+로 옮긴 뒤 shop_backend 가 읽어 주면 실측으로 바뀝니다.
+
+- 경로 `GET /api/seller/dashboard/{overview|products|content|segments|ingredients|friction}?brandId=&from=&to=&actorType=`
+- 인증·소유 확인은 기존 `GET /api/seller/dashboard` 와 같게. 응답 필드는 마트 컬럼 이름 그대로(snake_case).
+- 마트 테이블이 없으면 503 `{"error":"mart_unavailable"}`, 브랜드 행이 0건이면 200 + `coverage: none`.
+- 프론트는 붙여 뒀습니다 (`frontend/src/dashboard/lib/martApi.ts`). 응답이 없으면 지금처럼 모의로 돌고, 오는
+  블록만 "실측" 배지로 바뀝니다. 그래서 여섯 개 중 `overview` 하나만 먼저 열어도 화면에 바로 보입니다.
+- 데이터 파트에 걸린 것: MySQL projection (계약 §5) 과 신규 마트 5건 (계약 §6). 그중 §6-2 (콘텐츠별 담기율)가
+  상세 콘텐츠 화면의 핵심 열이라 우선입니다.
+- 세포라 카탈로그 브랜드(행동 로그가 있는 55개)는 `brand` 테이블에 행이 없어 시연 판매자 계정으로 조회할 수
+  없습니다. 5번 시드에 `seed_catalog` 상품의 브랜드 행을 함께 넣어 주셔야 행동 화면이 실측으로 뜹니다.
+
 ---
 
 ## 참고 — 배포 전 필요
