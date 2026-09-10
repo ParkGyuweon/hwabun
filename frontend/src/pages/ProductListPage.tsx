@@ -13,7 +13,7 @@ import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
 import type { FilterKind } from '../types/log';
-import { categoryKo, concernKo } from '../lib/localize';
+import { categoryKo, concernKo, toKrw } from '../lib/localize';
 import AdBanner from '../components/banner/AdBanner';
 import type { BannerAxis } from '../lib/bannerCreative';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
@@ -59,12 +59,17 @@ const SORT_LABEL: Record<SortKey, string> = {
 };
 
 /** 가격 구간. 데이터 분포(최저 $3 ~ 최고 $300)를 보고 잡았다 */
+/**
+ * 가격대는 원화 기준으로 자른다. 표시 가격이 원화라 칩도 원화여야 한다.
+ * 경계는 표시 가격(toKrw)으로 판정해 칩과 카드 가격이 어긋나지 않는다.
+ * 키는 로그 filter_value 로 나간다. 계약상 자유 문자열이라 원화 키로 바꿨다.
+ */
 const PRICE_BANDS = [
   { key: 'all', label: '전체', test: () => true },
-  { key: 'under20', label: '$20 이하', test: (p: Product) => p.price_usd <= 20 },
-  { key: '20to50', label: '$20~50', test: (p: Product) => p.price_usd > 20 && p.price_usd <= 50 },
-  { key: '50to100', label: '$50~100', test: (p: Product) => p.price_usd > 50 && p.price_usd <= 100 },
-  { key: 'over100', label: '$100 이상', test: (p: Product) => p.price_usd > 100 },
+  { key: 'under30k', label: '3만원 이하', test: (p: Product) => toKrw(p.price_usd) <= 30_000 },
+  { key: '30k-70k', label: '3~7만원', test: (p: Product) => toKrw(p.price_usd) > 30_000 && toKrw(p.price_usd) <= 70_000 },
+  { key: '70k-130k', label: '7~13만원', test: (p: Product) => toKrw(p.price_usd) > 70_000 && toKrw(p.price_usd) <= 130_000 },
+  { key: 'over130k', label: '13만원 이상', test: (p: Product) => toKrw(p.price_usd) > 130_000 },
 ] as const;
 
 type PriceKey = (typeof PRICE_BANDS)[number]['key'];
