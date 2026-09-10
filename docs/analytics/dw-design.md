@@ -64,7 +64,7 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 
 | 화면 | 주요 질문 | Mart / Dimension |
 | --- | --- | --- |
-| Overview | 방문·조회·장바구니·구매 추이, 수집 상태 | `product_daily_kpi`, `funnel_daily_kpi`, `realtime_event_stats`, `realtime_bad_event_stats` |
+| Overview | 브랜드 방문·조회·정보 확인·장바구니 추이, 수집 상태 | `brand_daily_kpi`, `product_daily_kpi`, `funnel_daily_kpi`, `realtime_event_stats`, `realtime_bad_event_stats` |
 | 상품 분석 | 상품별 관심과 전환 | `product_daily_kpi`, `recommendation_daily_kpi`, `dim_product` |
 | 사용자 행동 | 단계별 도달과 이탈 | `funnel_daily_kpi` |
 | 리뷰·성분 | 콘텐츠 열람·체류·관심 | `content_daily_kpi`, `dim_product` |
@@ -96,6 +96,9 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 배너 CTR | `click_count / impression_count`, 분모 0이면 NULL | `banner_daily` |
 | 사용자 장기 성향 | 최근 30일 행동을 trait별 가중치로 합산한 `trait_score`와 순위 | `user_trait_daily` |
 | 교차 브랜드 유입률 | `cross_brand_entry_sessions / brand_view_sessions` | `cross_brand_daily` |
+| 브랜드 상세 진입률 | `product_view_sessions / impression_sessions` | `brand_daily_kpi` |
+| 브랜드 정보 확인률 | `information_view_sessions / product_view_sessions` | `brand_daily_kpi` |
+| 브랜드 조회→담기 | `add_to_cart_sessions / product_view_sessions` | `brand_daily_kpi` |
 | 적용 전 기준선 | 배너·정렬 배포 전 추천 CTR과 교차 유입률의 분자·분모 | `analytics_baseline` |
 
 Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기능 판단 시
@@ -116,6 +119,7 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |
 | 성분·가격 기준 Mart | `ingredient_weekly_interest`, `category_price_reference` Parquet 구현. 성분 없는 상품 제외·세정 가중치 설정·가격 표본 fallback 반영 | 운영 Delta/MySQL projection |
 | 배너·성향·교차 브랜드 Mart | `banner_daily`, `user_trait_daily`, `cross_brand_daily`, `analytics_baseline` Parquet 구현. 배너 Event 계약과 `trait_source` 포함 | 배너 Event를 실제로 발행하는 FE·Collector 연결 후 값 검증 |
+| 브랜드 KPI Mart | `brand_daily_kpi`를 Fact 기반 브랜드·세션 중복 제거 방식으로 Parquet 구현. grain·상한·비율·재실행 결정성 검증 포함 | 운영 Delta/MySQL projection |
 | trait 가중치 | `contracts/user-trait-weights.json`으로 분리. 현재 `status=proposed` | 팀 합의 후 값 확정하고 정책 버전 상향 |
 | 배너·정렬 기준선 | `BASELINE_POLICY_VERSION`·시작·종료일을 준 실행에서만 `analytics_baseline` 생성 | 기준선 기간과 정책 배포 시각 확정 |
 | 그 외 Dashboard Mart·KPI | 저장 가능한 후보 Schema 작성 | 추천·AI 담당과 지표 우선순위·최종 grain 합의 후 확정 |

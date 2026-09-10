@@ -237,6 +237,7 @@ spark-submit streaming/jobs/build_marts_job.py \
   --funnel-session-path data/processed/funnel_session_fact \
   --product-daily-path data/marts/product_daily_kpi \
   --funnel-daily-path data/marts/funnel_daily_kpi \
+  --brand-daily-path data/marts/brand_daily_kpi \
   --ingredient-weekly-path data/marts/ingredient_weekly_interest \
   --category-price-path data/marts/category_price_reference \
   --banner-daily-path data/marts/banner_daily \
@@ -251,6 +252,7 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `funnel_session_fact` | `session_id + product_id` | 노출 → 클릭 → 상세 → 정보 확인 → 장바구니 → Checkout → 구매 도달 시각 |
 | `product_daily_kpi` | `event_date_kst + product_id + actor/source/run 축` | 상품 Event 수, 세션 수, CTR, 상세 진입률, 매출 |
 | `funnel_daily_kpi` | `funnel_date_kst + product_id + actor/source/run 축` | 세션 기반 Funnel 전환·이탈률 |
+| `brand_daily_kpi` | `event_date_kst + brand_id + actor/source/run 축` | 브랜드별 중복 제거 세션, 사용자·조회 상품 수, 상세·정보·담기 전환율 |
 | `ingredient_weekly_interest` | `interest_week_kst + ingredient + actor/source/run 축` | 위치가중 성분 관심도와 주간 비중 |
 | `category_price_reference` | `secondary_category + currency` | 카테고리 가격 중앙값과 표본 부족 fallback |
 | `banner_daily` | 일자 + 브랜드/상품 + 배너 축/값/slot/성향 출처 + 정책 버전 + 실행 축 | 배너 노출·클릭·CTR과 어휘 유효성 |

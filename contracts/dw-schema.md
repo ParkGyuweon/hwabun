@@ -470,6 +470,31 @@ input = product_event_fact, cross_brand_daily
 배너 지표를 넣으면 검증이 실패한다. 사전 기준선은 기존 추천 CTR과 브랜드별 교차 유입률
 두 가지로만 남긴다.
 
+### 4.14 `brand_daily_kpi`
+
+```text
+key = event_date_kst + brand_id + actor_type + source + scenario_id + simulation_run_id
+input = product_event_fact, funnel_session_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통 계약 | scenario/run만 Y | 브랜드·일자·실행 분리 축 |
+| `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
+| `unique_user_count` | bigint | N | 브랜드 KPI에 기여한 고유 사용자 수 |
+| `product_count_viewed` | bigint | N | 조회된 고유 상품 수 |
+| `detail_entry_rate` | double | Y | 조회 세션 / 노출 세션 |
+| `information_view_rate` | double | Y | 정보 확인 세션 / 조회 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 조회 세션 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+상품 grain Mart의 세션 수를 합산하지 않고 Fact에서 `session_id`를 브랜드별로 직접
+중복 제거한다. 따라서 한 세션이 같은 브랜드 상품 여러 개를 보더라도 각 단계 세션은
+한 번만 집계된다. `brand_id`가 NULL이거나 빈 문자열인 Event는 제외한다. 정보 확인은
+`funnel_session_fact.first_information_view_at`의 KST 일자를 사용하며, 같은 일자·브랜드의
+상품 조회가 확인된 세션에만 귀속한다. 모든 비율은 분모가 0이면 NULL이다. 구매·매출
+지표는 이 Mart의 범위가 아니다.
+
 ## 5. 실시간 Mart 후보
 
 ### 5.1 `realtime_event_stats`
