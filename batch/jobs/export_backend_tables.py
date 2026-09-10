@@ -112,12 +112,13 @@ def export_product_ingredient(enc, vocab, path):
     rows = []
     for p in enc.products:
         vals = enc.ingredient_values(p)
-        tagged = {h for h in p["highlights"] if h in enc.tag_ing}
+        # source 는 전부 "parsed" — 인코더가 highlights 성분 태그를 더 쓰지 않는다(계약 §3.1, 2026-09-10).
+        # 열은 백엔드 DDL 호환을 위해 남긴다
         for name, v in sorted(vals.items(), key=lambda kv: -kv[1]):
             if name not in idx:
                 continue          # 어휘집 밖 성분은 벡터에 안 들어간다
             rows.append([p["product_id"], idx[name], name, round(float(v), 4),
-                         "tag" if name in tagged else "parsed", vocab["version"]])
+                         "parsed", vocab["version"]])
     return write_csv(path, ["product_id", "ingredient_id", "ingredient",
                             "position_weight", "source", "vocab_version"], rows)
 
@@ -226,7 +227,7 @@ CREATE TABLE product_ingredient (
   ingredient_id   INT          NOT NULL,
   ingredient      VARCHAR(64)  NOT NULL,
   position_weight DECIMAL(6,4) NOT NULL,  -- 0~1. 함량이 아니라 배합 순서 기반
-  source          VARCHAR(8)   NOT NULL,  -- 'tag' = 원본 태그, 'parsed' = 전성분에서 복원
+  source          VARCHAR(8)   NOT NULL,  -- 'parsed' = 전성분에서 복원. 'tag'(원본 태그) 는 2026-09-10 부터 안 나온다(계약 §3.1), 열은 호환용
   vocab_version   VARCHAR(8)   NOT NULL,
   PRIMARY KEY (vocab_version, product_id, ingredient_id),
   KEY ix_ingredient (vocab_version, ingredient_id)
