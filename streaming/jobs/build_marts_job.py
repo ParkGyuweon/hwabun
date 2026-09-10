@@ -1392,7 +1392,8 @@ def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
                     & F.col("user_id").isNotNull()
                     & (F.length(F.trim(F.col("user_id"))) > 0)
                 ).select(
-                    "event_id", "event_date_kst", "user_id",
+                    "event_id", "event_date_kst", "user_id", "identity_scope",
+                    "actor_type", "source", "scenario_id", "simulation_run_id",
                     F.lit(trait).alias("trait"), score.alias("event_trait_score"),
                 )
             )
@@ -1401,7 +1402,9 @@ def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
     if maximum_date is None:
         # Preserve a stable schema for empty snapshots.
         return signals.select(
-            F.col("event_date_kst").alias("trait_date_kst"), "user_id", "trait",
+            F.col("event_date_kst").alias("trait_date_kst"), "user_id",
+            "identity_scope", "actor_type", "source", "scenario_id",
+            "simulation_run_id", "trait",
             F.lit(None).cast("double").alias("trait_score"),
             F.lit(None).cast("int").alias("trait_rank"),
             F.lit(False).alias("is_primary_trait"),
@@ -1419,11 +1422,16 @@ def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
             F.least(F.date_add(F.col("event_date_kst"), window_days - 1), F.lit(maximum_date).cast("date")),
         )),
     )
-    scores = expanded.groupBy("trait_date_kst", "user_id", "trait").agg(
+    # 페르소나와 실계정이 같은 user_id 공간을 쓰지 않도록 식별 축을 grain 에 둔다.
+    key_columns = [
+        "trait_date_kst", "user_id", "identity_scope",
+        "actor_type", "source", "scenario_id", "simulation_run_id",
+    ]
+    scores = expanded.groupBy(*key_columns, "trait").agg(
         F.sum("event_trait_score").cast("double").alias("trait_score"),
         F.countDistinct("event_id").cast("long").alias("contributing_event_count"),
     )
-    rank_window = Window.partitionBy("trait_date_kst", "user_id").orderBy(
+    rank_window = Window.partitionBy(*key_columns).orderBy(
         F.col("trait_score").desc(), F.col("trait").asc()
     )
     return (

@@ -219,7 +219,8 @@ public class KafkaEventPublisher implements EventPublisher {
                         indexedEvent.event(),
                         receivedAt,
                         requestId,
-                        indexedEvent.eventIndex()
+                        indexedEvent.eventIndex(),
+                        indexedEvent.accountId()
                 ))
                 .toArray(CompletableFuture[]::new);
     }
@@ -228,10 +229,11 @@ public class KafkaEventPublisher implements EventPublisher {
             ActivityEvent event,
             Instant receivedAt,
             String requestId,
-            int eventIndex
+            int eventIndex,
+            String accountId
     ) {
         try {
-            KafkaEventMessage message = KafkaEventMessage.from(event, receivedAt, requestId, eventIndex);
+            KafkaEventMessage message = KafkaEventMessage.from(event, receivedAt, requestId, eventIndex, accountId);
             String payload = objectMapper.writeValueAsString(message);
             return kafkaTemplate.send(topic, event.sessionId(), payload);
         } catch (Exception exception) {

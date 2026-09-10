@@ -145,11 +145,15 @@ received_at ASC
 
 Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하고, 그 다음
 `event_id` 기준 정본을 고른다. 같은 `event_id`의 나머지 후보는
-`duplicate_events`에 보존한다. JSON 파싱·공통 필드·41종 Event 등록 여부와
+`duplicate_events`에 보존한다. JSON 파싱·공통 필드·42종 Event 등록 여부와
 Event-intent 조합·sequence/event index·actor-source 조합·상품 대상 Event의
 `product_id`·synthetic 필수 properties 검증에 실패한 row는 원문과 좌표를
 `bad_events`에 남긴다. `banner_impression`과 `banner_click`은 배너 타입·값·slot·
 성향 출처와 각 intent까지 추가로 검사한다.
+
+`user_id`는 `identity_scope`에 따라 정해진다 — 합성 로그는 `persona_id`, 로그인 사용자는
+Collector가 JWT에서 뽑은 `account_id`, 비로그인 사용자는 NULL이며 `session_id`로만 본다.
+합성 로그에 `account_id`가 실려 오면 `invalid_identity_scope`로 격리한다.
 
 파이프라인 검증 Job은 synthetic 세션의 Persona 혼합, 세션 내
 `sequence_no` 충돌, `simulation_run_id`별 `scenario_id`·`generator_type` 불일치를

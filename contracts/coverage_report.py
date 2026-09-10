@@ -96,11 +96,11 @@ def load_events(path):
     return out
 
 
-SERVER_FIELDS = ("received_at", "source", "request_id", "event_index")
+SERVER_FIELDS = ("received_at", "source", "request_id", "event_index", "account_id")
 
 
 def enrich(events):
-    """Collector 가 붙이는 4필드를 채운다.
+    """Collector 가 붙이는 서버 필드를 채운다.
 
     source 규칙은 백엔드와 같다 (KafkaEventMessage.sourceOf).
     이미 있는 값은 건드리지 않는다.
@@ -116,6 +116,8 @@ def enrich(events):
         ev.setdefault("received_at", now)
         ev.setdefault("request_id", rid)
         ev.setdefault("event_index", i)
+        # 로그인 사용자만 값이 있다. Collector 가 JWT sub 에서 뽑는다
+        ev.setdefault("account_id", None)
         n += 1
     return n
 

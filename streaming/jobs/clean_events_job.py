@@ -41,6 +41,7 @@ SUPPORTED_SCHEMA_VERSIONS = ("0.2.0-draft",)
 # fails when the JSON contract changes without this projection being updated.
 EVENT_INTENTS = {
     "session_start": "session",
+    "login": "session",
     "page_view": "session",
     "navigation_click": "session",
     "exit_summary": "session",
@@ -233,6 +234,8 @@ def _ensure_raw_projection(raw_df: Any) -> Any:
 
     from pyspark.sql import functions as F
 
+    if "account_id" not in raw_df.columns:
+        raw_df = raw_df.withColumn("account_id", F.lit(None).cast("string"))
     if "source" not in raw_df.columns:
         raw_df = raw_df.withColumn("source", F.lit(None).cast("string"))
     return raw_df
@@ -308,6 +311,11 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         (~product_id_required) | product_id_present
     )
 
+    # 합성 로그는 페르소나로 식별한다. 계정 식별자가 오면 두 축이 섞인다.
+    identity_scope_ok = (c("actor_type") != F.lit("synthetic")) | ~_non_blank(
+        c("account_id")
+    )
+
     synthetic_properties_ok = (
         (c("actor_type") != F.lit("synthetic"))
         | (
@@ -369,6 +377,7 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         "product_scope_ok": product_scope_ok,
         "banner_contract_ok": banner_contract_ok,
         "synthetic_properties_ok": synthetic_properties_ok,
+        "identity_scope_ok": identity_scope_ok,
     }
 
 
@@ -390,6 +399,7 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         .when(~expressions["product_scope_ok"], F.lit("missing_product_id"))
         .when(~expressions["banner_contract_ok"], F.lit("invalid_banner_properties"))
         .when(~expressions["synthetic_properties_ok"], F.lit("invalid_properties"))
+        .when(~expressions["identity_scope_ok"], F.lit("invalid_identity_scope"))
         .otherwise(F.lit("invalid_record"))
     )
 
@@ -444,6 +454,19 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
 
     raw_source = F.when(_non_blank(F.col("source")), F.trim(F.col("source")))
     is_synthetic = F.col("actor_type") == F.lit("synthetic")
+    has_account = _non_blank(F.col("account_id"))
+    # 분석 식별자는 세 갈래다. 합성 로그는 페르소나, 로그인 사용자는 계정,
+    # 비로그인 사용자는 식별자 없이 session_id 로만 본다.
+    user_id = (
+        F.when(is_synthetic, F.col("persona_id"))
+        .when(has_account, F.col("account_id"))
+        .otherwise(F.lit(None).cast("string"))
+    )
+    identity_scope = (
+        F.when(is_synthetic, F.lit("persona"))
+        .when(has_account, F.lit("account"))
+        .otherwise(F.lit("session"))
+    )
     resolved_source = F.coalesce(
         raw_source,
         F.when(is_synthetic, F.lit("simulator")).otherwise(F.lit("web")),
@@ -517,9 +540,9 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         resolved_source.alias("source"),
         "actor_type",
         is_synthetic.alias("is_synthetic"),
-        F.when(is_synthetic, F.col("persona_id"))
-        .otherwise(F.lit(None).cast("string"))
-        .alias("user_id"),
+        user_id.alias("user_id"),
+        identity_scope.alias("identity_scope"),
+        "account_id",
         "persona_id",
         "session_id",
         "page_view_id",
