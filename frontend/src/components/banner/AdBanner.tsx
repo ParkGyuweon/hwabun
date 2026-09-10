@@ -43,9 +43,6 @@ export default function AdBanner({
   onSelect,
 }: AdBannerProps) {
   const c = creativeFor(product, axis, value, skinTone);
-  // 세포라 상품 사진은 흰 배경 팩샷이다. 파스텔 위에서 흰 상자가 보이지 않게 곱하기 블렌딩을 건다.
-  // SSAFY Beauty 컷아웃(투명 webp)은 그대로 둔다.
-  const cutout = /^SB\d+$/.test(product.product_id);
 
   return (
     <article
@@ -82,16 +79,12 @@ export default function AdBanner({
           </span>
         </div>
 
-        {/* 단 위에 올린 제품. 단은 CSS 로 그린다. 그림자와 단이 있어야 배경에 "놓인" 느낌이 난다 */}
+        {/*
+          흰 판 위의 제품. 상품 사진은 전부 흰 배경 팩샷이라(세포라 원본·SSAFY Beauty 마스터 컷)
+          누끼를 따지 않고 흰 판에 그대로 올린다. 누끼는 제품의 흰 부분까지 뜯어내 구멍이 났다 (2026-09-10).
+        */}
         <div className="ad__stage" aria-hidden="true">
-          <span className="ad__disc" />
-          <span className="ad__podium" />
-          <img
-            className={`ad__product${cutout ? '' : ' ad__product--packshot'}`}
-            src={packshot(product)}
-            alt=""
-            loading="lazy"
-          />
+          <img className="ad__product" src={packshot(product)} alt="" loading="lazy" />
           {c.prop ? <img className="ad__prop" src={c.prop} alt="" loading="lazy" /> : null}
         </div>
         <span className="sr-only">{product.product_name}</span>

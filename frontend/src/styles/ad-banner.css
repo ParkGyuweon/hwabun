@@ -215,59 +215,29 @@
   transform: translateX(3px);
 }
 
-/* ---------- 오른쪽 제품: 단 위에 ---------- */
+/* ---------- 오른쪽 제품: 흰 판 위에 ---------- */
 
 .ad__stage {
   position: relative;
   z-index: 1;
   display: grid;
-  place-items: end center;
+  place-items: center;
   min-width: 0;
-}
-
-/* 뒤 큰 원판. 참고 배너의 원·달 모양 장식 자리 */
-.ad__disc {
-  position: absolute;
-  left: 50%;
-  top: 12%;
-  width: 78%;
-  aspect-ratio: 1;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--ad-podium) 70%, #ffffff 30%);
-}
-
-/* 단. 위는 밝고 옆면은 배경보다 한 톤 짙게 */
-.ad__podium {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 70%;
-  height: 22%;
-  transform: translateX(-50%);
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.85) 0%, var(--ad-podium) 38%, var(--ad-podium) 100%);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.08);
+  overflow: hidden;
 }
 
 .ad__product {
-  position: relative;
-  z-index: 2;
-  width: 62%;
-  max-height: 88%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  object-position: bottom;
-  filter: drop-shadow(0 18px 22px rgb(0 0 0 / 0.16));
   transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-/* 흰 배경 팩샷은 곱하기로 얹어 흰 상자를 지운다. 파스텔 배경에서만 통하는 방법이다 */
-.ad__product--packshot {
-  mix-blend-mode: multiply;
-  filter: none;
-}
-
 .ad:hover .ad__product {
-  transform: translateY(-4px);
+  transform: scale(1.03);
 }
 
 .ad__prop {
@@ -283,9 +253,9 @@
 /* ---------- 히어로: 가로 ---------- */
 
 .ad--hero .ad__hit {
-  grid-template-columns: minmax(0, 46%) minmax(0, 54%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
   grid-template-areas: 'copy stage';
-  min-height: 360px;
+  min-height: 344px;
 }
 
 .ad--hero .ad__copy {
@@ -295,7 +265,12 @@
 
 .ad--hero .ad__stage {
   grid-area: stage;
-  padding: 56px 24px 0;
+  align-self: center;
+  justify-self: center;
+  width: min(100% - 44px, 300px);
+  aspect-ratio: 1;
+  margin: 22px 22px 22px 0;
+  padding: 16px;
 }
 
 /* ---------- 카드: 세로 ---------- */
@@ -310,7 +285,8 @@
 
 .ad--card .ad__stage {
   grid-area: stage;
-  padding: 64px 20px 0;
+  margin: 64px 16px 0;
+  padding: 12px;
 }
 
 .ad--card .ad__copy {
@@ -349,7 +325,8 @@
   }
   .ad--hero .ad__stage {
     aspect-ratio: 4 / 3;
-    padding: 64px 24px 0;
+    margin: 64px 16px 0;
+    padding: 12px;
   }
   .ad--hero .ad__copy {
     padding: 16px 22px 24px;

@@ -319,15 +319,20 @@ body {
   transform: translateY(-3px);
 }
 
+/*
+ * 상품 사진은 전부 흰 배경 팩샷이다(세포라 원본·SSAFY Beauty 마스터 컷 모두). 회색 판에 여백을
+ * 두고 담으면 두꺼운 테두리가 생겨 스톡 사진처럼 보인다 (2026-09-10 지적). 흰 바탕에 그대로 두고
+ * 모서리만 둥글린다. 사진 배경과 카드 배경이 같은 흰색이라 경계가 사라진다.
+ */
 .card__thumb {
   margin-bottom: 14px;
-  padding: 10%;
+  padding: 0;
   border-radius: var(--radius-md);
-  background: var(--color-surface-soft);
+  background: #ffffff;
 }
 
 .card__thumb img {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .card__brand {
