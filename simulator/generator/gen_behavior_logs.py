@@ -67,12 +67,17 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 PERSONA_DIR = os.path.join(ROOT, "simulator", "personas", "data")
 PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
 FRONTEND_PRODUCTS = os.path.join(ROOT, "frontend", "src", "mocks", "products.sample.json")
+# 등록 상품(SSAFY Beauty 8개, Jira 216) — 사이트에 있고 추천 서버가 히어로로 내주므로 생성기 카탈로그에도
+# 있어야 한다. 없으면 히어로 클릭 경로에서 KeyError (2026-09-10, Jira 239). 리뷰 0 이라 popular 꼴찌 = 폴백 new_brand 후보
+REGISTERED_PRODUCTS = os.environ.get("REGISTERED_PRODUCTS_PATH") or os.path.join(
+    ROOT, "batch", "ingest", "data", "serving", "registered_products.jsonl")
+FRONTEND_REGISTERED = os.path.join(ROOT, "frontend", "src", "mocks", "products.ssafy-beauty.json")
 PROPERTIES_CONTRACT = os.path.join(ROOT, "contracts", "event-properties-schema.md")
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 import behavior_weights as BW
 sys.path.insert(0, BD)                     # 패키지로 import 될 때(테스트)도 옆 모듈이 보이게
-from recommend_client import RecommendClient, banners_from_response   # noqa: E402  (Jira 221)
+from recommend_client import RecommendClient, hero_from_response      # noqa: E402  (Jira 221·239)
 
 # ── 행동을 무엇이 정하는가 ──────────────────────────────────────────────────
 # 기본(rule) 모드는 **평가 정답(target)을 알고 그 상품에 반드시 전환**한다.
@@ -319,19 +324,23 @@ LIST_LAYOUT = [("promo_row", "product_card"), ("list_controls", None),
                ("product_grid", "product_card")]
 
 # ── 배너 (Jira 212, DATA E2E 검증용) ────────────────────────────────────
-# 값은 frontend/src/lib/bannerConfig.ts 와 같다 — BANNER_SLOTS 6 · reserved 2.
-# 칸 1~4 는 축 배너(banner_type ∈ BANNER_AXES, banner_value 는 어휘집 원문),
-# 칸 5~6 은 new_brand (banner_value 는 null 로 싣는다). property 이름은 DATA 계약 그대로
-# `banner_slot` 이다 — `slot` 은 스키마·클렌징 양쪽에서 거부된다 (2026-09-08 확정).
-# 추천 API 응답 banners[].banner_slot 도 같은 이름 (recommendation-io-spec §5).
-# 이벤트 이름 2종은 event-schema.json enum 에 아직 없다 — 검증기(check_properties)는
-# 규칙 없는 이벤트를 건너뛰므로 생성은 되고, DATA 가 enum 을 올리면 그대로 통과한다.
+# 화면은 **히어로 배너 하나**다 (2026-09-10, Jira 239). 배너 행 6칸(축 4 + new_brand 2)은 09-10
+# 기획 검토로 빠졌고, 히어로는 추천 서버 `hero=new_brand` 로 신규 상품 중 점수 최고를 받는다.
+# 값은 frontend/src/pages/ProductListPage.tsx 의 히어로 기록과 같다 — list_id `hero_banner`,
+# `banner_slot` 1 (계약상 1 이상), `policy_version` 동봉(event-properties-schema §3.13).
+# property 이름은 DATA 계약 그대로 `banner_slot` 이다 — `slot` 은 스키마·클렌징 양쪽에서 거부된다.
+# 서버가 없을 때(폴백)는 리뷰가 가장 적은 상품을 new_brand 히어로로 세운다 — 자리와 이벤트 형태
+# 검증용이지 신규 브랜드 노출 실측이 아니다. 배너 행이 살아나면 SLOTS/RESERVED 와 list_id 만 되돌린다.
 BANNER_EVENTS = True
-BANNER_SLOTS = 6
-BANNER_RESERVED = 2
+BANNER_SLOTS = 1
+BANNER_RESERVED = 1
+BANNER_HERO = "new_brand"        # 추천 서버 `hero` 파라미터 (top | new_brand)
 BANNER_AXES = ("concern", "segment", "price_bin")
 BANNER_ALGO = "banner_axes_v0"
-BANNER_LIST_ID = "banner_row"
+BANNER_LIST_ID = "hero_banner"
+# 프론트 bannerConfig.BANNER_POLICY_VERSION 과 같은 값을 싣는다 — banner_daily 에서 정책 전후를 자르는 키.
+# 프론트가 올리면 여기도 올린다 (09-10 프론트 공유: banner-2026-09-10.2 = 히어로 신규 우선 + 성분 축 위치순)
+BANNER_POLICY_VERSION = "banner-2026-09-10.2"
 MAIN_LIST_ID = "main"            # 추천 서버 응답의 list_id (recommendation-io-spec §5)
 # 추천 서버 클라이언트 (Jira 221). main() 이 --recommend-url 로 만든다. None 이면 예전 방식
 RECO = None
@@ -359,20 +368,27 @@ def banner_value(kind, persona, item):
 
 
 def make_banners(persona, catalog, pool, popular, rng, force=None, exclude=()):
-    """이 화면의 배너 6칸. `force` 를 주면 그 상품을 축 칸 하나에 넣는다 —
+    """이 화면의 배너 BANNER_SLOTS 칸 (지금은 히어로 1칸). `force` 를 주면 그 상품을 배너에 넣는다 —
     그래야 banner_click 이 항상 노출된 배너에서 나온다 (CTR 성립).
 
-    new_brand 칸은 카탈로그에 신규 브랜드 표식이 없어 **리뷰가 가장 적은 상품**으로
-    채운다 — 자리와 이벤트 형태를 검증하는 용도지 신규 브랜드 노출 실측이 아니다.
+    앞 (BANNER_SLOTS - BANNER_RESERVED) 칸은 축 배너, 뒤 BANNER_RESERVED 칸은 new_brand.
+    new_brand 칸은 카탈로그에 신규 브랜드 표식이 없어 **리뷰가 가장 적은 상품**으로 채운다 —
+    자리와 이벤트 형태를 검증하는 용도지 신규 브랜드 노출 실측이 아니다.
+    축 칸이 0 개인데 force 가 있으면(히어로 단독 화면) force 가 new_brand 히어로 자리를 차지한다.
     """
     n_axis = BANNER_SLOTS - BANNER_RESERVED
     cand = [g for g in pool if g not in exclude and g != force]
     axis_items = list(rng.choice(cand, size=min(n_axis, len(cand)), replace=False)) if cand else []
+    forced_reserved = False
     if force is not None:
-        axis_items = axis_items[:n_axis - 1]
-        axis_items.insert(int(rng.integers(0, len(axis_items) + 1)), force)
-    used = set(axis_items) | set(exclude)
-    fresh = [g for g in reversed(popular) if g not in used][:BANNER_RESERVED]
+        if n_axis >= 1:
+            axis_items = axis_items[:n_axis - 1]
+            axis_items.insert(int(rng.integers(0, len(axis_items) + 1)), force)
+        else:
+            forced_reserved = True
+    used = set(axis_items) | set(exclude) | ({force} if force is not None else set())
+    n_fresh = BANNER_RESERVED - (1 if forced_reserved else 0)
+    fresh = ([force] if forced_reserved else []) + [g for g in reversed(popular) if g not in used][:n_fresh]
     out = []
     for slot, g in enumerate(axis_items, 1):
         # 축 칸의 banner_value 는 계약상 string 필수 — 이 상품에 값이 있는 축만 고른다
@@ -702,6 +718,7 @@ def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
                    recommendation_id=batch, list_id=BANNER_LIST_ID, algorithm=algo,
                    position=b["slot"], banner_type=b["type"], banner_value=b["value"],
                    banner_slot=b["slot"], trait_source=source or b.get("trait_source"),
+                   policy_version=BANNER_POLICY_VERSION,
                    hold_ms=LIST_IMPRESSION_HOLD_MS, visible_ratio=IMPRESSION_VISIBLE_RATIO)
     # Quick Look — 카드 호버 후 버튼을 눌러 요약 창을 연다.
     # 창은 목록 위에 뜨므로 page_type / page_view_id 는 그대로다.
@@ -1099,7 +1116,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 sync_from = len(sink)
                 reco = RECO.recommend(p["persona_id"])
             if reco:
-                banners = banners_from_response(reco) if BANNER_EVENTS else None
+                banners = hero_from_response(reco) if BANNER_EVENTS else None   # 화면 = 히어로 하나
                 shown_b = [b["product_id"] for b in (banners or [])
                            if b["product_id"] not in seq and b["product_id"] not in visited]
                 shown_m = [it["product_id"] for it in reco.get("items") or []
@@ -1132,9 +1149,10 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                                  algorithm=algo, position=b["slot"],
                                  banner_type=b["type"], banner_value=b["value"],
                                  banner_slot=b["slot"],
-                                 trait_source=source or b.get("trait_source"))
-                # entry_source enum(§3.3) 에 배너 값이 없어 promo_pick 을 쓴다 — 배너 행은
-                # 맞춤 기획전 자리다. list_id 로 배너인지 가른다
+                                 trait_source=source or b.get("trait_source"),
+                                 policy_version=BANNER_POLICY_VERSION)
+                # entry_source enum(§3.3) 에 배너 값이 없어 promo_pick 을 쓴다 — 히어로는
+                # 맞춤 기획전 자리다(프론트도 promo_pick). list_id 로 배너인지 가른다
                 e.tick(); e.emit("product_click", g, entry_source="promo_pick",
                                  list_id=BANNER_LIST_ID, position=b["slot"])
                 rec_meta = {"recommendation_id": batch, "list_id": BANNER_LIST_ID,
@@ -1245,15 +1263,16 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
          scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
          generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
          pref_profile="default", pref_seed=0, exposure=EXPOSURE_POPULAR,
-         recommend_url=None, banner_slots=BANNER_SLOTS, reserved=BANNER_RESERVED):
+         recommend_url=None, banner_slots=BANNER_SLOTS, reserved=0, hero=BANNER_HERO):
     global RECO
     RECO = None
     if recommend_url:
-        RECO = RecommendClient(recommend_url, banner_slots=banner_slots, reserved=reserved, log=log)
+        RECO = RecommendClient(recommend_url, banner_slots=banner_slots, reserved=reserved, hero=hero, log=log)
         h = RECO._call("GET", "/health")
         if h:
             log(f"추천 서버 연동: {recommend_url} — 상품 {h.get('products')}개 · {h.get('scorer')} · "
-                f"배너 {banner_slots}칸(전용 {reserved}). 메인·배너 식별자는 서버 응답 그대로 (Jira 221)")
+                f"히어로 정책 {hero} (banner_slots {banner_slots}, reserved {reserved}). "
+                f"메인·히어로 식별자는 서버 응답 그대로 (Jira 221·239)")
         else:
             log(f"추천 서버 {recommend_url} 에 붙지 못했다 — 예전 방식({BANNER_ALGO})으로 돈다")
     context = SimulationContext(
@@ -1271,6 +1290,18 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         product["product_id"]: product
         for product in json.load(open(FRONTEND_PRODUCTS, encoding="utf-8"))
     }
+    if os.path.exists(REGISTERED_PRODUCTS):
+        reg = [json.loads(ln) for ln in open(REGISTERED_PRODUCTS, encoding="utf-8") if ln.strip()]
+        reg = [r for r in reg if r.get("product_id") not in {p["product_id"] for p in prods}]
+        for r in reg:                      # 스키마 맞춤: 생성기가 읽는 키만 채운다
+            r.setdefault("_review_stats", {}).setdefault("review_count", 0)
+        prods = prods + reg
+        if os.path.exists(FRONTEND_REGISTERED):
+            for product in json.load(open(FRONTEND_REGISTERED, encoding="utf-8")):
+                frontend_products.setdefault(product["product_id"], product)
+        for r in reg:
+            frontend_products.setdefault(r["product_id"], {"sku_id": None, "variants": []})
+        log(f"등록 상품 {len(reg)}개를 카탈로그에 포함 (리뷰 0 → 인기순 꼴찌, 히어로 new_brand 후보)")
     catalog = {
         p["product_id"]: {
             "cat": p["secondary_category"],
@@ -1458,9 +1489,11 @@ if __name__ == "__main__":
                          "실제 추천(items·banners)을 받아 그 식별자로 이벤트를 만들고 행동을 서버 상태에 넘긴다. "
                          "서버가 없으면 경고 뒤 예전 방식")
     ap.add_argument("--banner-slots", type=int, default=BANNER_SLOTS,
-                    help="추천 서버에 요청할 배너 칸 수 (기본 6)")
-    ap.add_argument("--reserved", type=int, default=BANNER_RESERVED,
-                    help="추천 서버에 요청할 신규 브랜드 전용 칸 수 (기본 2)")
+                    help="추천 서버에 요청할 배너 칸 수 (기본 1 = 히어로만. 응답 banners[] 는 화면에 없어 쓰지 않는다)")
+    ap.add_argument("--reserved", type=int, default=0,
+                    help="추천 서버에 요청할 신규 브랜드 전용 배너 칸 수 (기본 0 — 전용 칸은 히어로 정책으로 대신한다)")
+    ap.add_argument("--hero", choices=("top", "new_brand"), default=BANNER_HERO,
+                    help="추천 서버 히어로 정책 (Jira 237). 기본 new_brand = 화면과 같음")
     a = ap.parse_args()
     BANNER_EVENTS = not a.no_banner_events      # 모듈 전역 (if __name__ 블록)
     if not a.out and not a.post:
@@ -1483,4 +1516,5 @@ if __name__ == "__main__":
         recommend_url=a.recommend_url,
         banner_slots=a.banner_slots,
         reserved=a.reserved,
+        hero=a.hero,
     )

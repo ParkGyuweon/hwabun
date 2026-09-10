@@ -96,7 +96,7 @@ python simulator/generator/gen_behavior_logs.py --post http://localhost:8080 --r
 | `--show N` | 첫 페르소나의 이벤트 N건을 출력 | 0 |
 | `--exposure {popular_v0,cbf_v1}` | **무엇이 화면에 노출되는가** (아래) | `popular_v0` |
 | `--recommend-url URL` | **추천 서버 연동** (Jira 221, 아래 절). 목록마다 실제 추천을 받아 그 식별자로 이벤트를 만든다 | 없음 |
-| `--banner-slots N` · `--reserved N` | 추천 서버에 요청할 배너 칸 수 · 신규 브랜드 전용 칸 수 | 6 · 2 |
+| `--banner-slots N` · `--reserved N` · `--hero top\|new_brand` | 추천 서버에 요청할 배너 칸 수 · 전용 배너 칸 수 · 히어로 정책 (Jira 237). 화면이 히어로 하나라 기본이 1 · 0 · new_brand (Jira 239) | 1 · 0 · new_brand |
 
 `--post` 와 `--out` 은 같이 쓸 수 있다. 전송하면서 파일로도 남는다.
 
@@ -112,7 +112,7 @@ python simulator/generator/gen_behavior_logs.py --recommend-url http://localhost
 | 화면 | 없을 때 | 있을 때 |
 |---|---|---|
 | 목록의 맞춤 기획전 행 | 인기순 10개, 노출 이벤트 없음 | 서버 `items` 10개. `recommendation_snapshot`(list_id `main`) 1건 + 칸마다 `recommendation_impression`. 식별자·`algorithm`(`ltr-278t-…`)은 응답 그대로 |
-| 배너 행 6칸 | 축 3종 + new_brand 2칸, `banner_axes_v0` | 서버 `banners[]` 그대로 — `banner_slot`·`banner_type`·`banner_value`(new_brand 는 null 키 유지)·칸별 `trait_source`(session/profile/coldstart). 칸 5·6 은 등록 브랜드(SSAFY Beauty) |
+| 히어로 배너 1칸 (2026-09-10, Jira 239 — 배너 행 6칸은 기획 검토로 화면에서 빠짐) | 리뷰가 가장 적은 상품을 new_brand 히어로로, `banner_axes_v0` | 서버 `hero` 그대로(`hero=new_brand`: 신규 상품 중 점수 최고) — `banner_slot` 1·`list_id` `hero_banner`·`banner_type`·`banner_value`(null 키 유지)·`trait_source`·`policy_version`(프론트 bannerConfig 와 같은 값). 응답 `banners[]` 는 화면에 없어 쓰지 않는다 |
 | 클릭 | 이번 상품을 배너에 끼워 넣고 누른다 | **서버가 실제로 노출한 상품** 중에서 고른다 — 배너(`p_banner_click`) 또는 메인 카드(`p_rec_click`). 노출과 같은 `recommendation_id`·칸 번호 |
 | 세션 상태 | — | 목록을 열기 전에 그동안의 행동을 `POST /api/events` 로 서버에 넘긴다 → 다음 추천이 그 행동을 반영(`state_source=events`) |
 

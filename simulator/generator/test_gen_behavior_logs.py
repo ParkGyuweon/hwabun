@@ -13,6 +13,7 @@ if np is not None:
         Emitter,
         SimulationContext,
         browse_list,
+        BANNER_POLICY_VERSION,
         make_banners,
         default_simulation_run_id,
         seed_session_id,
@@ -129,33 +130,37 @@ class SyntheticEventMetadataTest(unittest.TestCase):
         self.assertNotIn("recommendation_id", pv2["properties"])
 
     def test_banner_events_use_banner_slot_and_share_ids_with_impression(self):
-        """배너 이벤트(Jira 212). property 이름은 DATA 계약대로 `banner_slot` — `slot` 은 거부된다.
-        칸 1~4 는 축(banner_type·banner_value), 5~6 은 new_brand(banner_value 없음).
-        force 한 상품은 축 칸에 들어가야 클릭이 노출된 배너에서 나온다."""
+        """배너 이벤트(Jira 212·239). property 이름은 DATA 계약대로 `banner_slot` — `slot` 은 거부된다.
+        화면은 히어로 하나(slot 1, list_id hero_banner, policy_version 동봉). 폴백 히어로는 new_brand 이고,
+        force 한 상품은 그 자리를 차지해야 클릭이 노출된 배너에서 나온다."""
         rng = np.random.default_rng(3)
         catalog = {f"P{i}": {"cat": "Moisturizers", "price": 10.0 * i, "concern": "Dryness",
                              "variants": [], "n": i} for i in range(1, 13)}
         popular = sorted(catalog, key=lambda g: -catalog[g]["n"])
         persona = {"persona_id": "PC00001", "skin_type": "oily"}
         banners = make_banners(persona, catalog, popular[:8], popular, rng, force="P3", exclude={"P12"})
-        self.assertEqual([b["slot"] for b in banners], [1, 2, 3, 4, 5, 6])
-        self.assertIn("P3", [b["product_id"] for b in banners if b["type"] != "new_brand"])
-        self.assertTrue(all(b["type"] == "new_brand" and b["value"] is None for b in banners[4:]))
-        self.assertTrue(all(b["type"] in ("concern", "segment", "price_bin") and b["value"]
-                            for b in banners[:4]))
-        self.assertNotIn("P12", [b["product_id"] for b in banners])
+        self.assertEqual([b["slot"] for b in banners], [1])
+        self.assertEqual(banners[0]["product_id"], "P3")
+        self.assertEqual(banners[0]["type"], "new_brand")
+        self.assertIsNone(banners[0]["value"])
+        free = make_banners(persona, catalog, popular[:8], popular, rng, exclude={"P12"})
+        self.assertEqual([b["slot"] for b in free], [1])
+        self.assertEqual(free[0]["product_id"], "P1")          # 리뷰가 가장 적은 상품 (P12 는 제외)
+        self.assertEqual(free[0]["type"], "new_brand")
         events = []
         emitter = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0), rng, self.context)
         browse_list(emitter, popular[:2], popular[:5], catalog, rng, dwell_ms=3000, first=True,
                     banners=banners)
         imps = [e for e in events if e["event_name"] == "banner_impression"]
-        self.assertEqual(len(imps), 6)
+        self.assertEqual(len(imps), 1)
         for e in imps:
             pr = e["properties"]
             self.assertNotIn("slot", pr)
-            self.assertIn(pr["banner_slot"], range(1, 7))
+            self.assertEqual(pr["banner_slot"], 1)
             self.assertEqual(pr["position"], pr["banner_slot"])
-            self.assertEqual(pr["list_id"], "banner_row")
+            self.assertEqual(pr["list_id"], "hero_banner")
+            self.assertEqual(pr["policy_version"], BANNER_POLICY_VERSION)
+            self.assertIn("banner_value", pr)
             self.assertIn(pr["trait_source"], ("coldstart", "profile", "session", "explore"))
         self.assertEqual(len({e["properties"]["recommendation_id"] for e in imps}), 1)
         batch, shown, source, algo = emitter.last_banner

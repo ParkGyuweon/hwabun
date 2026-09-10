@@ -24,13 +24,17 @@ except ModuleNotFoundError:
 BD = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BD)
 
-from recommend_client import STATE_EVENTS, RecommendClient, banners_from_response  # noqa: E402
+from recommend_client import STATE_EVENTS, RecommendClient, banners_from_response, hero_from_response  # noqa: E402
 
 RESP = {
     "persona_id": "PC00001", "recommendation_id": "abc123", "list_id": "main",
     "algorithm": "ltr-278t-2026-09-07", "banner_slots": 6, "banner_list_id": "banner_row",
     "items": [{"product_id": f"P{i}", "position": i, "score": 1.0 / i} for i in range(1, 11)],
-    "hero": {"product_id": "P1", "banner_type": "concern", "banner_value": "Dryness", "trait_source": "session"},
+    "hero_policy": "new_brand",
+    "hero": {"product_id": "SB000003", "banner_type": "concern", "banner_value": "Loss of firmness",
+             "trait_source": "session", "hero_policy": "new_brand", "reserved": True,
+             "product_name": "PDRN 핑크 펩타이드 세럼", "brand_name": "SSAFY Beauty", "score": 0.41,
+             "reason": {"new_brand": "새로 입점한 브랜드의 상품"}, "product_source": "brand_registered"},
     "banners": [
         {"banner_slot": 1, "banner_type": "concern", "banner_value": "Pores", "product_id": "P21", "reserved": False, "trait_source": "session"},
         {"banner_slot": 2, "banner_type": "segment", "banner_value": "oily", "product_id": "P22", "reserved": False, "trait_source": "profile"},
@@ -73,13 +77,24 @@ class TestClient(unittest.TestCase):
 
     def test_recommend_passes_slots_and_returns_response(self):
         op = FakeOpener({"api/recommend": RESP})
-        c = RecommendClient("http://x:1", banner_slots=6, reserved=2, opener=op)
+        c = RecommendClient("http://x:1", banner_slots=6, reserved=2, hero="top", opener=op)
         r = c.recommend("PC00001")
         self.assertEqual(r["recommendation_id"], "abc123")
         self.assertIn("banner_slots=6", op.calls[0][1])
         self.assertIn("reserved=2", op.calls[0][1])
+        self.assertIn("hero=top", op.calls[0][1])
         self.assertIn("persona_id=PC00001", op.calls[0][1])
         self.assertEqual(c.stats["recommend"], 1)
+
+    def test_defaults_match_hero_only_screen(self):
+        """화면 = 히어로 하나 (Jira 239). 기본값은 banner_slots=1 · reserved=0 · hero=new_brand"""
+        op = FakeOpener({"api/recommend": RESP})
+        c = RecommendClient("http://x:1", opener=op)
+        c.recommend("PC00001")
+        q = op.calls[0][1]
+        self.assertIn("banner_slots=1", q)
+        self.assertIn("reserved=0", q)
+        self.assertIn("hero=new_brand", q)
 
     def test_observe_filters_non_state_events(self):
         op = FakeOpener()
@@ -109,6 +124,20 @@ class TestClient(unittest.TestCase):
         self.assertIsNone(c.recommend("PC00001"))
         self.assertTrue(c.available)
 
+    def test_hero_from_response_is_slot_1_with_contract_names(self):
+        h = hero_from_response(RESP)
+        self.assertEqual(len(h), 1)
+        self.assertEqual(h[0]["slot"], 1)
+        self.assertEqual(h[0]["product_id"], "SB000003")
+        self.assertEqual(h[0]["type"], "concern")
+        self.assertEqual(h[0]["value"], "Loss of firmness")
+        self.assertEqual(h[0]["trait_source"], "session")
+        self.assertTrue(h[0]["reserved"])
+        self.assertEqual(hero_from_response({"items": []}), [])
+        top = hero_from_response({"hero": {"product_id": "P1", "banner_type": "concern", "banner_value": "Pores",
+                                           "trait_source": "session", "hero_policy": "top"}})
+        self.assertFalse(top[0]["reserved"])
+
     def test_banners_from_response_keeps_contract_names(self):
         b = banners_from_response(RESP)
         self.assertEqual([x["slot"] for x in b], [1, 2, 3, 4, 5, 6])
@@ -131,7 +160,7 @@ class TestGeneratorWithServer(unittest.TestCase):
                              "variants": [], "n": i} for i in range(1, 30)}
         events = []
         e = gen.Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0), rng, ctx)
-        banners = banners_from_response(RESP)
+        banners = hero_from_response(RESP)                     # 화면 = 히어로 하나 (Jira 239)
         promo = [it["product_id"] for it in RESP["items"]]
         gen.browse_list(e, promo, ["P25", "P26", "P27"], catalog, rng, dwell_ms=3000, first=True,
                         banners=banners, reco=RESP)
@@ -146,16 +175,17 @@ class TestGeneratorWithServer(unittest.TestCase):
         self.assertTrue(all(x["properties"]["recommendation_id"] == "abc123" and x["properties"]["list_id"] == "main"
                             for x in imps))
         bi = [x for x in events if x["event_name"] == "banner_impression"]
-        self.assertEqual(len(bi), 6)
-        for x, b in zip(bi, RESP["banners"]):
-            pr = x["properties"]
-            self.assertEqual(pr["recommendation_id"], "abc123")
-            self.assertEqual(pr["algorithm"], RESP["algorithm"])
-            self.assertEqual(pr["banner_slot"], b["banner_slot"])
-            self.assertEqual(pr["banner_type"], b["banner_type"])
-            self.assertEqual(pr["trait_source"], b["trait_source"])
-            self.assertIn("banner_value", pr)
-            self.assertEqual(pr["banner_value"], b["banner_value"])
+        self.assertEqual(len(bi), 1)
+        pr = bi[0]["properties"]; h = RESP["hero"]
+        self.assertEqual(bi[0]["product_id"], h["product_id"])
+        self.assertEqual(pr["recommendation_id"], "abc123")
+        self.assertEqual(pr["algorithm"], RESP["algorithm"])
+        self.assertEqual(pr["banner_slot"], 1)
+        self.assertEqual(pr["list_id"], "hero_banner")
+        self.assertEqual(pr["banner_type"], h["banner_type"])
+        self.assertEqual(pr["banner_value"], h["banner_value"])
+        self.assertEqual(pr["trait_source"], h["trait_source"])
+        self.assertEqual(pr["policy_version"], gen.BANNER_POLICY_VERSION)
         rid, algo, ids = e.last_main
         self.assertEqual((rid, algo, ids), ("abc123", RESP["algorithm"], promo))
         batch, shown, source, algo_b = e.last_banner
