@@ -22,8 +22,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
     compileOnly 'org.projectlombok:lombok:1.18.46'
     annotationProcessor 'org.projectlombok:lombok:1.18.46'

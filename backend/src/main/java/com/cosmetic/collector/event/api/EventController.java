@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -70,7 +71,8 @@ public class EventController {
             )
     })
     public CompletableFuture<ResponseEntity<EventAcceptedResponse>> collect(
-            @RequestBody EventBatchRequest request
+            @RequestBody EventBatchRequest request,
+            HttpServletRequest httpRequest
     ) {
         String requestId = UUID.randomUUID().toString();
         int receivedCount = request.events() == null ? 0 : request.events().size();
@@ -100,7 +102,12 @@ public class EventController {
             );
         }
 
-        return eventPublisher.publish(requestId, validation.acceptedEvents())
+        String accountId = (String) httpRequest.getAttribute("collector.account_id");
+        List<com.cosmetic.collector.event.application.IndexedActivityEvent> acceptedEvents = validation.acceptedEvents().stream()
+                .map(indexed -> new com.cosmetic.collector.event.application.IndexedActivityEvent(
+                        indexed.event(), indexed.eventIndex(), accountId))
+                .toList();
+        return eventPublisher.publish(requestId, acceptedEvents)
                 .thenApply(summary -> accepted(requestId, summary, validation.rejectedEvents()));
     }
 

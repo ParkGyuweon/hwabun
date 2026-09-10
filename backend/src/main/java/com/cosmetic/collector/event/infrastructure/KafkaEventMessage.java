@@ -27,13 +27,23 @@ public record KafkaEventMessage(
         String requestId,
         int eventIndex,
         JsonNode properties,
-        String tenantId
+        String accountId
 ) {
     static KafkaEventMessage from(
             ActivityEvent event,
             Instant receivedAt,
             String requestId,
             int eventIndex
+    ) {
+        return from(event, receivedAt, requestId, eventIndex, null);
+    }
+
+    static KafkaEventMessage from(
+            ActivityEvent event,
+            Instant receivedAt,
+            String requestId,
+            int eventIndex,
+            String accountId
     ) {
         return new KafkaEventMessage(
                 event.schemaVersion(),
@@ -54,7 +64,7 @@ public record KafkaEventMessage(
                 requestId,
                 eventIndex,
                 event.properties(),
-                event.tenantId()
+                accountId
         );
     }
 
