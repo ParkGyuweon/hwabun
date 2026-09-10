@@ -843,6 +843,25 @@ def validate_frames(
             f"{sorted((name, columns) for name, columns in owner_columns.items() if columns)}",
         )
     )
+    invalid_identity_scope = cleaned.where(
+        ~F.col("identity_scope").isin("persona", "account", "session")
+        | ((F.col("identity_scope") == "persona") & (F.col("actor_type") != "synthetic"))
+        | (
+            (F.col("identity_scope") == "account")
+            & (
+                ~F.col("user_id").eqNullSafe(F.col("account_id"))
+                | (F.length(F.trim(F.coalesce(F.col("account_id"), F.lit("")))) == 0)
+            )
+        )
+        | ((F.col("identity_scope") == "session") & F.col("user_id").isNotNull())
+        # 합성 로그와 계정 식별자는 같은 row 에 오면 안 된다.
+        | ((F.col("actor_type") == "synthetic") & F.col("account_id").isNotNull())
+    ).count()
+    checks.append(_check(
+        "cleaned_identity_scope_matches_user_id",
+        invalid_identity_scope == 0,
+        f"invalid_rows={invalid_identity_scope}; persona|account|session",
+    ))
     checks.append(
         _check(
             "funnel_session_grain_is_unique",
@@ -1078,8 +1097,11 @@ def validate_frames(
     ))
     checks.append(_check(
         "user_trait_daily_grain_is_unique",
-        _duplicate_count(user_trait_daily, ["trait_date_kst", "user_id", "trait"]) == 0,
-        "user_trait_daily grain=trait_date_kst+user_id+trait",
+        _duplicate_count(user_trait_daily, [
+            "trait_date_kst", "user_id", "identity_scope", "actor_type",
+            "source", "scenario_id", "simulation_run_id", "trait",
+        ]) == 0,
+        "user_trait_daily grain=trait_date_kst+user_id+identity/실행 축+trait",
     ))
     invalid_traits = user_trait_daily.where(
         ~F.col("trait").isin("price", "ingredient", "review", "concern", "participate")

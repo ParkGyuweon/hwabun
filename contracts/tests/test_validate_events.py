@@ -293,6 +293,40 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assertEqual(len(mutations), len(result.errors))
 
+    def test_account_id_accepts_string_or_null_but_not_other_types(self) -> None:
+        logged_in = copy.deepcopy(self.user_event)
+        logged_in["account_id"] = "acc-1"
+        anonymous = copy.deepcopy(self.user_event)
+        anonymous["account_id"] = None
+
+        self.assertEqual([], self.validate_values([logged_in, anonymous]).errors)
+
+        wrong_type = copy.deepcopy(self.user_event)
+        wrong_type["account_id"] = 123
+        missing = copy.deepcopy(self.user_event)
+        missing.pop("account_id")
+
+        self.assert_has_error(
+            self.validate_values([wrong_type]).errors, "[type] $.account_id"
+        )
+        self.assert_has_error(
+            self.validate_values([missing]).errors, "[required] $"
+        )
+
+    def test_login_event_requires_session_intent(self) -> None:
+        login = copy.deepcopy(self.user_event)
+        login.update({"event_name": "login", "intent": "session", "product_id": None})
+        login["properties"] = {}
+
+        self.assertEqual([], self.validate_values([login]).errors)
+
+        wrong_intent = copy.deepcopy(login)
+        wrong_intent["intent"] = "conversion"
+
+        self.assert_has_error(
+            self.validate_values([wrong_intent]).errors, "[const] $.intent"
+        )
+
     def test_actor_type_and_source_must_match(self) -> None:
         event = copy.deepcopy(self.user_event)
         event["source"] = "simulator"

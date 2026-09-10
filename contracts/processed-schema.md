@@ -165,7 +165,9 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `source` | string | N | Raw payload 우선, 누락 시 fallback |
 | `actor_type` | string | N | `user`, `synthetic` |
 | `is_synthetic` | boolean | N | synthetic 판정 결과 |
-| `user_id` | string | Y | synthetic이면 `persona_id`; Web 정책 확정 전 NULL |
+| `user_id` | string | Y | 분석 식별자. `identity_scope`에 따라 `persona_id` 또는 `account_id` |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
+| `account_id` | string | Y | Collector가 JWT `sub`에서 뽑은 값. 비로그인·synthetic은 NULL |
 | `persona_id` | string | Y | synthetic 필수, Web NULL 허용 |
 | `scenario_id` | string | Y | synthetic 필수 |
 | `simulation_run_id` | string | Y | synthetic 필수 |
@@ -193,6 +195,25 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `raw_ingested_at` | timestamp | N | 선택된 Raw 적재 시각 |
 | `raw_value` | string | Y | 선택된 Kafka Value 원문 |
 
+### 6.1 분석 식별자
+
+`user_id`는 세 갈래 중 하나에서 온다. 어느 축에서 왔는지는 `identity_scope`가 말한다.
+
+| `identity_scope` | 조건 | `user_id` |
+| --- | --- | --- |
+| `persona` | `actor_type=synthetic` | `persona_id` |
+| `account` | `account_id`가 비어 있지 않음 | `account_id` |
+| `session` | 그 외 | NULL. `session_id`로만 분석한다 |
+
+`account_id`는 Front가 아니라 Collector가 JWT `sub`에서 뽑아 넣는다. 두 곳에서 채우면
+어긋났을 때 어느 쪽이 맞는지 알 수 없기 때문이다.
+
+합성 로그에 `account_id`가 실려 오면 페르소나 축과 계정 축이 한 row에서 섞이므로
+`invalid_identity_scope`로 격리한다.
+
+브랜드 담당자·운영자 트래픽은 Front가 회원 토큰만 실어 원천에서 제외한다. Event에
+계정 롤을 두지 않으므로 DATA는 이를 사후에 가려낼 수 없다.
+
 ## 7. `sessionized_events`
 
 입력은 `cleaned_events`다. grain과 unique key는 `event_id`다.
@@ -204,6 +225,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `session_id` | string | N | 세션 ID |
 | `page_view_id` | string | N | 페이지 방문 ID |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -250,6 +272,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `event_name` | string | N | Event 이름 |
 | `intent` | string | N | Event 의미 |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -305,6 +328,7 @@ unique key는 `order_id + product_id`다.
 | `event_time` | timestamp | N | 주문 완료 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -346,6 +370,7 @@ unique key는 `order_id + product_id`다.
 | `event_time` | timestamp | N | 응답 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -410,6 +435,7 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `event_time` | timestamp | N | 검색 시각 |
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -436,6 +462,7 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -466,6 +493,7 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 | `content_kind` | string | Y | Grain |
 | `content_ref` | string | Y | Grain |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -525,6 +553,7 @@ content_interest_score
 | `session_id` | string | N | Unique key |
 | `product_id` | string | N | Unique key |
 | `user_id` | string | Y | 분석 사용자 ID |
+| `identity_scope` | string | N | `persona`, `account`, `session` |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |

@@ -51,7 +51,7 @@ class EventMappingConsistencyTest(unittest.TestCase):
         schema_events = self.schema["properties"]["event_name"]["enum"]
         fixture_events = [case["event_name"] for case in self.cases]
 
-        self.assertEqual(41, len(fixture_events))
+        self.assertEqual(42, len(fixture_events))
         self.assertEqual(len(fixture_events), len(set(fixture_events)))
         self.assertEqual(set(schema_events), set(fixture_events))
 

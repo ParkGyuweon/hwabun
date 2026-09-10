@@ -419,9 +419,13 @@ NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`�
 ### 4.11 `user_trait_daily`
 
 ```text
-key = trait_date_kst + user_id + trait
+key = trait_date_kst + user_id + identity_scope
+      + actor_type + source + scenario_id + simulation_run_id + trait
 input = sessionized_events
 ```
+
+합성 로그의 페르소나와 실사용자 계정이 같은 `user_id` 공간을 쓰지 않도록 `identity_scope`와
+실행 축을 key에 둔다. 축이 없으면 두 축의 사용자가 한 행으로 합쳐진다.
 
 trait은 `price`, `ingredient`, `review`, `concern`, `participate` 5종이다. 최근 30일
 행동의 `trait_score`, `trait_rank`, `is_primary_trait`, `window_start_date`,
