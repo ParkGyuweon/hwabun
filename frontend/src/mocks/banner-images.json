@@ -16,5 +16,12 @@
     "segment": "SB000002-segment.png",
     "price": "SB000002-price.png",
     "ingredient": "SB000002-ingredient.png"
+  },
+  "SB000003": {
+    "story": "SB000003-story.png",
+    "concern": "SB000003-concern.png",
+    "segment": "SB000003-segment.png",
+    "price": "SB000003-price.png",
+    "ingredient": "SB000003-ingredient.png"
   }
 }
