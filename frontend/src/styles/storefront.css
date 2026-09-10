@@ -253,12 +253,23 @@
    .list 를 이름 붙인 grid 로 만든다. 자식은 grid-area 만 받고, 트리는 그대로다.
    ========================================================================== */
 
+/*
+ * 배너는 항상 맨 위. 기획전(promo)을 어디에 두든 광고 배너가 첫 화면이다.
+ * 이름 없는 섹션은 그리드가 맨 아래 자동 행으로 밀어낸다. 배너에 칸 이름을 주지 않아
+ * 배너가 목록 밑에 붙어 있었다 (2026-09-10 수정).
+ */
 .list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
+    'ads'
     'promo'
     'catalog';
+}
+
+.list > .ads {
+  grid-area: ads;
+  min-width: 0;
 }
 
 .list__promo {
@@ -274,6 +285,7 @@
 /* 맨 아래: 상품을 다 훑은 사람에게 마지막으로 권한다 */
 :root[data-promo='bottom'] .list {
   grid-template-areas:
+    'ads'
     'catalog'
     'promo';
 }
@@ -292,7 +304,9 @@
  * 빈 0px 행과 그 아래 64px 행 간격이 화면 맨 위에 구멍으로 보인다.
  */
 :root[data-promo='off'] .list {
-  grid-template-areas: 'catalog';
+  grid-template-areas:
+    'ads'
+    'catalog';
 }
 
 /*
@@ -304,7 +318,9 @@
   :root[data-promo='side'] .list {
     max-width: 1320px;
     grid-template-columns: minmax(0, 1fr) var(--sf-rail);
-    grid-template-areas: 'catalog promo';
+    grid-template-areas:
+      'ads ads'
+      'catalog promo';
     column-gap: 44px;
     align-items: start;
   }

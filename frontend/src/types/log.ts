@@ -160,7 +160,7 @@ export type FilterKind =
   | 'category'
   /** 고민 셀렉트. 값은 'all' 또는 skincare_concerns 의 값 */
   | 'concern'
-  /** 가격대 버튼. 값은 all · under20 · 20to50 · 50to100 · over100 */
+  /** 가격대 버튼. 값은 all · under30k · 30k-70k · 70k-130k · over130k (원화 기준, 2026-09-10) */
   | 'price';
 
 export type LogContentKind =
