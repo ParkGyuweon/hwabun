@@ -68,7 +68,7 @@ Join 시점 스냅샷으로 보존한다.
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
 | `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
 | `dim_brand` | Dimension | `brand_id` | 없음 | seed 상품 기준 projection 구현 |
-| `dim_product` | Dimension | `product_id` | 없음 | seed 원천 projection 구현, 입점 브랜드 등록 상품 union 대기 |
+| `dim_product` | Dimension | `product_id` | 없음 | seed 원천과 ACTIVE 등록 상품 union 구현. 등록 상품 `brand_id`는 쇼핑몰 상품 export로 보강 |
 
 `section_dwell_agg`와 `content_interest_fact`의 grain은 다음 컬럼 조합이다.
 

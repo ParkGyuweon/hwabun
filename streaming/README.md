@@ -185,6 +185,8 @@ spark-submit streaming/jobs/derive_facts_job.py \
   --purchase-fact-path data/processed/purchase_fact \
   --purchase-reason-fact-path data/processed/purchase_reason_fact \
   --review-event-fact-path data/processed/review_event_fact \
+  --registered-product-path batch/ingest/data/serving/registered_products.jsonl \
+  --registered-product-brand-path data/reference/shop-product-brand.jsonl \
   --dim-product-path data/processed/dim_product \
   --dim-brand-path data/processed/dim_brand
 ```
@@ -211,6 +213,15 @@ event_id` 순으로 `event_order`를 만들고 앞뒤 Event 이름과 sequence g
 join으로 보강한다. `dim_brand` grain은 `brand_id`, `dim_product` grain은
 `product_id`다. 매칭되지 않는 상품과 `product_id=NULL`인 플랫폼 Event는 row를
 버리거나 세션의 다른 상품을 참조하지 않고 `brand_id=NULL`로 유지한다.
+
+등록 상품은 append-only `registered_products.jsonl`에서 상품별 마지막 행을 읽고,
+마지막 행이 `_op=deactivate`인 상품은 제외한다.
+`--registered-product-brand-path`로 전달한 ACTIVE 쇼핑몰 상품 export의
+`product_id → brand_id`를 권위 값으로 우선 사용하고, 매핑이 없는 상품만 등록 원문의
+비어 있지 않은 `brand_id`를 사용한다. 브랜드 이름을 Join key나 ID로 대신 쓰지 않고
+임의 ID도 만들지 않는다. 매핑 파일은 JSONL이며 각 행은
+`{"product_id":"SB000001","brand_id":"쇼핑몰 DB 실제 UUID"}` 형식이다.
+매핑이 없으면 NULL을 유지하고 통합 검증의 `dim_product_has_valid_brand_id`가 실패한다.
 
 ## Q4 Funnel·DW Mart
 
@@ -325,3 +336,48 @@ K01~K16 시나리오에서 예상 Event ID·Kafka 좌표·정본 ID를 먼저 �
 `monitoring/` Prometheus/Grafana 구성 및 Kafka 관리 명령으로 별도 확인한다.
 현재 저장소에는 Spark progress를 Prometheus로 변환하는 Exporter가 없으므로
 Spark 지표를 수집했다고 주장하지 않는다.
+
+## gzip 행동 로그 재생
+
+`streaming/tools/replay_collector.py`는 `.jsonl.gz`를 한 줄씩 읽어 Collector 상한인
+100건 이하로 전송한다. 429/502/503과 전송 오류는 지수 백오프로 재시도하며,
+최종 보고서의 `accepted + rejected + abandoned = total`을 검사한다. 202 부분 수락은
+건수와 거부 코드로 따로 기록한다. 503은 일부 Kafka ACK 뒤에도 발생할 수 있으므로
+전체 배치를 재시도하고, Q2의 `event_id` 중복 제거를 최종 멱등성 경계로 둔다.
+
+전송 전 파일 검증:
+
+```bash
+python -m streaming.tools.replay_collector behavior_logs_recommend_1000.jsonl.gz \
+  --inspect-only \
+  --expected-sha256 A8BA04CBDA5B66ED2333160406453C7D7A5F66BF5D8E1E3BBAE3B5EA20E0CF6C \
+  --report-path data/validation/recommend-log-inspection.json
+```
+
+Collector 재생:
+
+```bash
+python -m streaming.tools.replay_collector behavior_logs_recommend_1000.jsonl.gz \
+  --url http://localhost:8080/api/events --batch-size 100 \
+  --report-path data/validation/recommend-log-replay.json
+```
+
+기존 적재 결과와 섞지 않고 검증하려면 Q1 시작 전에 Raw와 checkpoint, Q2~Q5의
+공통 루트를 함께 분리한다. `run-pipeline.ps1`과 `run-pipeline.sh`는
+`PIPELINE_DATA_ROOT`를 Q2~Q5 공통 루트로 사용한다. Q1은 같은 하위 경로를
+`RAW_EVENTS_PATH`, `RAW_EVENTS_CHECKPOINT_PATH`에 지정한다.
+
+```powershell
+$env:PIPELINE_DATA_ROOT='/opt/project/data/recommend-validation'
+$env:RAW_EVENTS_PATH='/opt/project/data/recommend-validation/raw_events'
+$env:RAW_EVENTS_CHECKPOINT_PATH='/opt/project/data/recommend-validation/checkpoints/raw-events'
+$env:REGISTERED_PRODUCT_BRAND_PATH='/opt/project/data/reference/shop-product-brand.jsonl'
+./infra/spark/run-pipeline.ps1 start-q1
+```
+
+검증·재생 보고서는 `.gitignore`의 `data/` 아래에 생성되므로 로컬/Jira 증빙으로만
+사용하고 저장소에는 커밋하지 않는다.
+
+이번 파일은 배너 24,441건 모두 `policy_version`이 없다. NULL 그룹으로
+`banner_daily`를 생성하는 것은 허용하되 정책 전후 비교에는 사용하지 않는다.
+추천 응답의 `algorithm`은 원문 그대로 보존하며 `policy_version`으로 복사하지 않는다.
