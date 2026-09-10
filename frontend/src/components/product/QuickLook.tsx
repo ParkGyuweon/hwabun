@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import PriceTag from './PriceTag';
+import { hasDiscount } from '../../lib/discount';
 import StarRating from '../common/StarRating';
 import VariantPicker from './VariantPicker';
 import { IMAGE_WIDTH_MAIN, sizedImage } from '../../lib/image';
-import { formatCount, formatPrice } from '../../lib/format';
+import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
 import type { Product, ProductVariant } from '../../types/product';
 import type { CartItem } from '../../types/cart';
@@ -106,6 +108,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
       sku_id: skuId,
       quantity,
       price_usd: product.price_usd,
+      ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
       entry_source: 'quick_look',
     });
     onAddToCart({
@@ -116,6 +119,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
       product_name: product.product_name,
       image_url: imageUrl,
       price_usd: product.price_usd,
+      sale_price_usd: product.sale_price_usd ?? null,
       quantity,
     });
   };
@@ -207,7 +211,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
           />
 
           <div className="qlook__buy">
-            <strong className="qlook__price">{formatPrice(product.price_usd)}</strong>
+            <PriceTag product={product} size="md" className="qlook__price" />
 
             <div className="qlook__actions">
               <label className="qlook__qty">

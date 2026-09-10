@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import PriceTag from './PriceTag';
+import { hasDiscount } from '../../lib/discount';
 import StarRating from '../common/StarRating';
 import VariantPicker from './VariantPicker';
-import { formatCount, formatPrice } from '../../lib/format';
+import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
 import type { Product, ProductVariant } from '../../types/product';
 import type { CartItem } from '../../types/cart';
@@ -58,6 +60,8 @@ export default function ProductSummary({
       sku_id: selectedSkuId,
       quantity,
       price_usd: product.price_usd,
+      // 할인은 열린 속성으로 덧붙인다. price_usd 의 뜻(정가)은 그대로다
+      ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
     });
     onAddToCart({
       product_id: product.product_id,
@@ -68,6 +72,7 @@ export default function ProductSummary({
       product_name: product.product_name,
       image_url: product.image_url,
       price_usd: product.price_usd,
+      sale_price_usd: product.sale_price_usd ?? null,
       quantity,
     });
   };
@@ -95,7 +100,7 @@ export default function ProductSummary({
       )}
 
       <div className="summary__price" data-log-content="price">
-        <strong>{formatPrice(product.price_usd)}</strong>
+        <PriceTag product={product} size="md" showLabel />
         {/* size 는 자유 텍스트라 파싱하지 않고 그대로 노출한다 */}
         {product.size ? <span className="summary__size">{product.size}</span> : null}
       </div>

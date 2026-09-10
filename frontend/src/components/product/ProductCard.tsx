@@ -1,7 +1,8 @@
 import StarRating from '../common/StarRating';
+import PriceTag from './PriceTag';
 import { badgeKo } from '../../lib/localize';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
-import { formatCount, formatPrice } from '../../lib/format';
+import { formatCount } from '../../lib/format';
 import type { Product } from '../../types/product';
 import type { LogContentKind } from '../../types/log';
 
@@ -67,7 +68,7 @@ export default function ProductCard({
 
         <span className="card__brand">{product.brand_name}</span>
         <span className="card__name">{product.product_name}</span>
-        <span className="card__price">{formatPrice(product.price_usd)}</span>
+        <PriceTag product={product} size="sm" className="card__price" />
 
         {product.rating !== null ? (
           <span className="card__rating">

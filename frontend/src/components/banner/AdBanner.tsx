@@ -1,5 +1,5 @@
 import { creativeFor, packshot } from '../../lib/bannerCreative';
-import { formatPrice } from '../../lib/format';
+import PriceTag from '../product/PriceTag';
 import type { BannerAxis } from '../../lib/bannerCreative';
 import type { Product } from '../../types/product';
 
@@ -26,9 +26,8 @@ interface AdBannerProps {
  * 배경에 사진 타일을 깔지 않는다. 글자 뒤가 차분해야 큰 헤드라인이 읽히고, 제품 컷이
  * 배경과 싸우지 않는다. 변형마다 색 하나만 바꾼다 (`data-variant` → CSS 변수).
  *
- * 우리가 **하지 않는 것**: 할인율·취소선 가격(할인 데이터 없음), 순위·1위·수상 배지(순위 데이터
- * 없음), 효능 단정 문구(화장품법 표시·광고 금지 표현). 참고 배너의 "1등", "55% 할인" 자리는
- * 비워 둔다. 배너는 유료 광고가 아니라 추천 결과를 강조하는 자리라 "광고" 라는 말도 쓰지 않는다.
+ * 할인은 PriceTag 가 그린다 (할인율·할인가·취소선 정가, 결정 2026-09-10). 순위·1위·수상 배지는
+ * 데이터가 없어 만들지 않고, 효능 단정 문구는 화장품법 표시·광고 금지 표현이라 쓰지 않는다. 배너는 유료 광고가 아니라 추천 결과를 강조하는 자리라 "광고" 라는 말도 쓰지 않는다.
  *
  * 문구는 이미지에 굽지 않고 여기서 얹는다. 같은 상품이 성향에 따라 다른 배너가 되어야
  * 하므로, 이미지를 다시 만들지 않고 문구·색·소품만 바꾼다.
@@ -67,9 +66,7 @@ export default function AdBanner({
             <span className="ad__head-rest">{c.head.rest}</span>
           </h3>
           <p className="ad__sub">
-            <strong className={c.bigPrice ? 'ad__price ad__price--big' : 'ad__price'}>
-              {formatPrice(product.price_usd)}
-            </strong>
+            <PriceTag product={product} size={c.bigPrice ? 'lg' : 'md'} showLabel={c.bigPrice} />
             {product.size ? <span className="ad__size">{product.size}</span> : null}
           </p>
           {c.foot && c.foot !== product.size ? <p className="ad__foot">{c.foot}</p> : null}

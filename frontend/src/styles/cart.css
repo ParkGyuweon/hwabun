@@ -446,3 +446,16 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* 할인. 정가는 옆에 작게 취소선, 요약에는 할인 줄 하나 */
+.cart__was {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-ink-faint);
+  text-decoration: line-through;
+}
+
+.cart__discount dd {
+  color: #c2637a;
+}

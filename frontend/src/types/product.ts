@@ -21,6 +21,15 @@ export interface Product {
   /** 원본 상세 설명. 데이터셋에 없어 세포라에서 별도 수집했다 */
   description: ProductDescription | null;
   price_usd: number;
+  /**
+   * 할인가 (표시 전용). 이벤트·추천은 정가 `price_usd` 를 본다 (결정 2026-09-10, lib/discount.ts).
+   * 단일 출처는 mocks/discounts.json. 백엔드 카탈로그가 붙으면 옵션 salePriceKrw 에서 온다.
+   */
+  sale_price_usd?: number | null;
+  /** 0~1. 배지의 % 는 여기서 계산하지 않고 discountPercent() 로 낸다 */
+  discount_rate?: number;
+  /** "입점 기념" 처럼 할인 이유 한 마디 */
+  discount_label?: string;
   /** 자유 텍스트. 파싱하지 말고 그대로 표시 */
   size: string | null;
   rating: number | null;
@@ -31,7 +40,7 @@ export interface Product {
   loves_count?: number | null;
   /**
    * 화면 배지. 원본 플래그를 그대로 옮긴 값이다.
-   * 할인율 배지는 만들지 않는다 — `sale_price_usd` 가 200개 중 198개 비어 있다.
+   * 할인율은 여기 없다. 가격 옆에 PriceTag 가 `sale_price_usd` 로 그린다.
    */
   badges?: ProductBadge[];
   highlights: string[];

@@ -1,4 +1,5 @@
 import type { CartItem } from '../types/cart';
+import { effectivePrice } from './discount';
 
 /**
  * 테스트 주문.
@@ -40,6 +41,8 @@ export interface PlacedOrder {
   /** 상품 종류가 아니라 수량 합 */
   count: number;
   total: number;
+  /** 할인 적용 합계. 화면 표시용 */
+  paid: number;
 }
 
 /**
@@ -64,10 +67,15 @@ export function toOrderItems(items: CartItem[]): OrderItem[] {
   }));
 }
 
-export function orderTotals(items: CartItem[]): { count: number; total: number } {
+/**
+ * `total` 은 정가 합계다. 이벤트의 cart_value·order_value 가 이 값을 쓰고, 그 뜻은 바뀌지 않는다.
+ * `paid` 는 할인 적용 합계로 화면에 보여주고 이벤트에는 paid_value 로 덧붙인다 (lib/discount.ts 원칙).
+ */
+export function orderTotals(items: CartItem[]): { count: number; total: number; paid: number } {
   return {
     count: items.reduce((sum, item) => sum + item.quantity, 0),
     total: items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0),
+    paid: items.reduce((sum, item) => sum + effectivePrice(item) * item.quantity, 0),
   };
 }
 

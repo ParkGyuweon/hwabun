@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { effectivePrice, hasDiscount } from '../lib/discount';
 import EmptyState from '../components/common/EmptyState';
 import PurchaseSurvey from '../components/cart/PurchaseSurvey';
 import { IMAGE_WIDTH_SWATCH, sizedImage } from '../lib/image';
@@ -67,7 +68,10 @@ export default function CartPage({
   useInteractionSignals('cart');
   useExitSummary('cart');
 
-  const subtotal = items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0);
+  // 화면은 할인가 합계. 정가 합계는 이벤트만 쓴다 (lib/checkout.ts orderTotals)
+  const subtotal = items.reduce((sum, item) => sum + effectivePrice(item) * item.quantity, 0);
+  const listTotal = items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0);
+  const saved = listTotal - subtotal;
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
 
   if (order) {
@@ -78,7 +82,7 @@ export default function CartPage({
           <h1 className="done__title">주문이 접수되었습니다</h1>
           <p className="done__meta">
             주문번호 {order.orderId.slice(0, 8)} · 상품 {order.count}개 ·{' '}
-            {formatPrice(order.total)}
+            {formatPrice(order.paid)}
           </p>
           {/* 없는 기능을 있는 것처럼 두지 않는다. 여기서 멈추는 것이 이 쇼핑몰의 경계다 */}
           <p className="done__note">
@@ -161,7 +165,8 @@ export default function CartPage({
                   </label>
 
                   <strong className="cart__price">
-                    {formatPrice(item.price_usd * item.quantity)}
+                    {formatPrice(effectivePrice(item) * item.quantity)}
+                    {hasDiscount(item) ? <s className="cart__was">{formatPrice(item.price_usd * item.quantity)}</s> : null}
                   </strong>
 
                   <button
@@ -182,8 +187,14 @@ export default function CartPage({
             <dl>
               <div>
                 <dt>상품 {count}개</dt>
-                <dd>{formatPrice(subtotal)}</dd>
+                <dd>{formatPrice(listTotal)}</dd>
               </div>
+              {saved > 0 ? (
+                <div className="cart__discount">
+                  <dt>할인</dt>
+                  <dd>-{formatPrice(saved)}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>배송</dt>
                 <dd>무료</dd>

@@ -16,16 +16,17 @@
 import sampleData from './products.sample.json';
 import seedData from './products.ssafy-beauty.json';
 import { localizeProduct } from '../lib/localize';
+import { applyDiscount } from '../lib/discount';
 import type { Product } from '../types/product';
 
 /** 시연용 브랜드. 브랜드 대시보드의 "내 브랜드" 기본값이다 */
 export const DEMO_BRAND = 'SSAFY Beauty';
 
-export const seedProducts = seedData as unknown as Product[];
+export const seedProducts = (seedData as unknown as Product[]).map(applyDiscount);
 /**
  * 세포라 200개는 표시 필드(상품명·용량·설명·한국어 전성분)만 한국어로 바꿔 끼운다.
  * 분석이 읽는 값은 그대로다 (lib/localize.ts 원칙). 시드 8종은 처음부터 한국어라 대상이 아니다.
  */
-export const sampleProducts = (sampleData as unknown as Product[]).map(localizeProduct);
+export const sampleProducts = (sampleData as unknown as Product[]).map(localizeProduct).map(applyDiscount);
 
 export const products: Product[] = [...seedProducts, ...sampleProducts];

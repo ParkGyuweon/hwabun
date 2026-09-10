@@ -1,0 +1,71 @@
+/*
+ * 가격 표기 (components/product/PriceTag.tsx).
+ * 할인율 · 할인가 · 취소선 정가. 할인율 색은 브랜드 액센트(로즈) 하나만 쓴다. 빨강은 쓰지 않는다.
+ */
+
+.price {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.price__now {
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.price__rate {
+  font-style: normal;
+  font-weight: 800;
+  color: #c2637a;
+}
+
+.price__was {
+  font-weight: 400;
+  color: var(--color-ink-faint);
+  text-decoration: line-through;
+}
+
+.price__label {
+  flex-basis: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c2637a;
+}
+
+/* 카드 */
+.price--sm .price__now {
+  font-size: 15px;
+}
+.price--sm .price__rate {
+  font-size: 14px;
+}
+.price--sm .price__was {
+  font-size: 12px;
+}
+
+/* 요약·퀵룩 */
+.price--md .price__now {
+  font-size: 22px;
+}
+.price--md .price__rate {
+  font-size: 20px;
+}
+.price--md .price__was {
+  font-size: 14px;
+}
+
+/* 배너 가격 축 */
+.price--lg .price__now {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.price--lg .price__rate {
+  font-size: 28px;
+}
+.price--lg .price__was {
+  font-size: 15px;
+}

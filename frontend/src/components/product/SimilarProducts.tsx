@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
+import PriceTag from './PriceTag';
 import { useImpression } from '../../hooks/useImpression';
 import StarRating from '../common/StarRating';
-import { formatCount, formatPrice } from '../../lib/format';
+import { formatCount } from '../../lib/format';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
 import { setNextProductViewEntry, track } from '../../lib/logger';
 import type { Product } from '../../types/product';
@@ -123,7 +124,7 @@ export default function SimilarProducts({
                   ) : null}
                 </span>
               ) : null}
-              <span className="similar__price">{formatPrice(product.price_usd)}</span>
+              <PriceTag product={product} size="sm" className="similar__price" />
             </button>
           </li>
         ))}

@@ -328,13 +328,15 @@ export default function App() {
     const orderId = pendingOrderIdRef.current ?? createOrderId();
     pendingOrderIdRef.current = orderId;
 
-    const { total } = orderTotals(cartItems);
+    const { total, paid } = orderTotals(cartItems);
     track('begin_checkout', {
       // 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다.
       // 이게 없으면 "확인까지 갔다가 안 산 사람" 을 purchase 와 이어 셀 수 없다
       order_id: orderId,
       items: toOrderItems(cartItems),
       cart_value: Number(total.toFixed(2)),
+      // 할인 적용 합계. cart_value(정가)의 뜻은 그대로 두고 덧붙인다
+      paid_value: Number(paid.toFixed(2)),
       currency: 'USD',
     });
   }, [cartItems]);
@@ -346,16 +348,17 @@ export default function App() {
     if (cartItems.length === 0) return;
     const orderId = pendingOrderIdRef.current ?? createOrderId();
     const items = toOrderItems(cartItems);
-    const { count, total } = orderTotals(cartItems);
+    const { count, total, paid } = orderTotals(cartItems);
 
     track('purchase', {
       order_id: orderId,
       items,
       order_value: Number(total.toFixed(2)),
+      paid_value: Number(paid.toFixed(2)),
       currency: 'USD',
     });
 
-    setOrder({ orderId, items, count, total });
+    setOrder({ orderId, items, count, total, paid });
     setCartItems([]);
     // 다음 주문은 새 번호를 받는다
     pendingOrderIdRef.current = null;

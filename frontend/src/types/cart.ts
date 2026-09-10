@@ -15,5 +15,7 @@ export interface CartItem {
   product_name: string;
   image_url: string | null;
   price_usd: number;
+  /** 담을 때의 할인가. 없으면 정가로 계산한다 (lib/discount.ts effectivePrice) */
+  sale_price_usd?: number | null;
   quantity: number;
 }
