@@ -194,7 +194,15 @@
   grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
   /* 세로를 가로의 두 배 이상 띄운다. 행 사이가 좁으면 밀린 재고 진열대처럼 보인다 */
   gap: var(--space-8) var(--space-6);
-  margin: 0;
+  /*
+   * 필터 줄과 첫 행 사이 간격. 0 이면 두 가지가 겹쳐 보인다.
+   *   - 카드의 `신상품` 배지가 `position: absolute; top: 8px` 이라 필터 알약 바로
+   *     밑에 붙어서, 카드가 아니라 필터 줄에 달린 배지처럼 읽힌다.
+   *   - 카드에 마우스를 올리면 `box-shadow: 0 6px 20px` 이 위로 14px 쯤 번져
+   *     필터 줄을 덮는다.
+   * 행 사이(--space-8)보다는 좁고 배지·그림자가 걸리지 않을 만큼은 띄운다.
+   */
+  margin: var(--space-6) 0 0;
   padding: 0;
   list-style: none;
 }

@@ -12,6 +12,7 @@
  * "이유를 말해 주는 것" 과 "신규 브랜드에 자리를 주는 것" 이다.
  */
 import vocab from '../../../contracts/product-feature-vocab.json';
+import { DEFAULT_HERO } from './bannerConfig';
 import { CLEAN_VALUES } from './vocabLabels';
 import type { BannerType } from '../types/log';
 import type { PersonaProfile } from '../types/persona';
@@ -23,6 +24,19 @@ const PRICE_EDGES = vocab.price_bin_edges as number[];
 const PRICE_BINS = ['~20', '20-35', '35-50', '50-80', '80+'];
 
 export const MOCK_MODEL_VERSION = 'mock-fe-0.1';
+
+/**
+ * 응답 한 번을 가리키는 귀속 키. 서버는 uuid4 hex 를 준다 (`recommend_server.py`).
+ * `crypto.randomUUID` 는 보안 컨텍스트(https·localhost)에서만 있어서 폴백을 둔다 —
+ * 사내 IP 로 열어 본 화면에서 추천 로그가 통째로 빠지면 안 된다.
+ */
+function newRecommendationId(): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+  return uuid.replace(/-/g, '');
+}
 /** AI 기본 축. 성향이 없을 때 */
 export const DEFAULT_AXES: BannerType[] = ['concern', 'segment', 'price_bin', 'ingredient'];
 
@@ -34,6 +48,11 @@ export interface BuildInput {
   /** 원본에 피부 타입 표기가 없는 상품의 리뷰어 분포 */
   reviewSkinTypes: Map<string, SkinType[]>;
   axes: BannerType[];
+  /**
+   * 세션 성향을 알아냈나 (`useTrait().trait_source !== 'cold_start'`).
+   * 모르면 신규 브랜드 히어로를 `new_brand`(story) 로 말한다.
+   */
+  traitKnown?: boolean;
   k: number;
   bannerSlots: number;
   reserved: number;
@@ -46,11 +65,32 @@ function priceBin(usd: number): string {
   return PRICE_BINS[PRICE_BINS.length - 1];
 }
 
+/**
+ * 이 상품에서 알아본 성분을 **전성분에 나온 순서대로** 돌려준다.
+ *
+ * 전에는 어휘집(`product-feature-vocab.json`) 등재 순서로 돌려줬다. 그래서 배너 문구가
+ * "{성분}이 앞에 있는 {카테고리}" 인데 실제로 앞에 있는 성분이 아니었다 — SSAFY Beauty
+ * 8종 중 7종이 전성분과 무관하게 `Hyaluronic Acid` 로 나왔다(제로 포어 토닝 패드는
+ * Lactic Acid 가 4번째인데도).
+ *
+ * 문구가 위치를 말하므로 순서도 위치여야 한다. `bannerCreative.leadIngredients`
+ * ("전성분 앞 30% 안에 있는 성분만 앞에 있다고 말한다", 계획 §3 · 명세 I2) 와 같은
+ * 규칙이다. 두 곳이 다른 답을 내고 있었다.
+ */
 function ingredientsOf(p: Product): string[] {
   const haystack = p.ingredients.join(' ').toLowerCase();
-  return Object.entries(INGREDIENT_SYNONYMS)
-    .filter(([, aliases]) => aliases.some((a) => haystack.includes(a)))
-    .map(([name]) => name);
+  const hits: Array<{ name: string; at: number }> = [];
+
+  for (const [name, aliases] of Object.entries(INGREDIENT_SYNONYMS)) {
+    let at = -1;
+    for (const alias of aliases) {
+      const i = haystack.indexOf(alias);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+    if (at >= 0) hits.push({ name, at });
+  }
+
+  return hits.sort((a, b) => a.at - b.at).map((h) => h.name);
 }
 
 function skinTypesOf(p: Product, reviewSkinTypes: Map<string, SkinType[]>): SkinType[] {
@@ -101,11 +141,84 @@ export function isNewBrandProduct(p: Product): boolean {
   return (p.review_count ?? 0) === 0 || p.rank === undefined;
 }
 
+/**
+ * 인기도 항 — `loves_count` 를 log1p 후 min-max 로 편 0~1 값.
+ *
+ * 전에는 `min(1, log10(review_count + 1) / 5)` 였다. 리뷰를 상품마다 100건으로
+ * 맞추면(AI 파트 요청 2026-09-10 §1-3) `review_count` 가 전 상품 100 이 되어
+ * **이 항이 상수 0.4 로 죽는다.** PA 에이전트 클릭의 대부분이 이 목이 만드는
+ * 기획전 레일 안에서 일어나므로 그대로 두면 노출층이 통째로 바뀐다.
+ *
+ * 정의를 추천 서버의 인기 prior 와 같게 맞췄다 (`build_feature_sample.py`:228
+ * "prior 는 loves_count 를 log1p 후 min-max 로 편 값"). 나중에 이 레일을
+ * `/api/recommend` 로 바꿔도 전후가 이어진다.
+ *
+ * 등록 상품(loves 0)은 정규화 범위에서 빼고 0 을 준다 — 원천 200개의 눈금을
+ * 신규 상품이 흔들면 안 된다 (`recommend_server.py`:198 과 같은 처리).
+ */
+function popularityScale(products: Product[]): (p: Product) => number {
+  const loved = products.map((p) => p.loves_count ?? 0).filter((n) => n > 0);
+  if (loved.length === 0) return () => 0;
+
+  const lo = Math.log1p(Math.min(...loved));
+  const hi = Math.log1p(Math.max(...loved));
+  const span = hi - lo;
+
+  return (p: Product): number => {
+    const loves = p.loves_count ?? 0;
+    if (loves <= 0) return 0;
+    if (span <= 0) return 1;
+    const v = (Math.log1p(loves) - lo) / span;
+    return Math.min(1, Math.max(0, v));
+  };
+}
+
+/**
+ * 히어로에 올릴 신규 브랜드 상품.
+ *
+ * **동점을 사람마다 다르게 깬다.** 신규 상품은 평점도 loves 도 없어서 점수가
+ * `피부 타입 일치 2 또는 0` 뿐이다. 그래서 같은 피부 타입이면 전부 동점이고, 그냥
+ * 정렬 순서를 쓰면 목록 앞의 한둘만 영원히 뜬다 — 실제로 8종 중 SB000001·SB000002
+ * 둘만 나와서 완성형 배너 40장 중 10장만 도달했다.
+ *
+ * 페르소나 id 로 자리를 정한다. 같은 사람은 늘 같은 상품을 보고(새로고침마다 배너가
+ * 흔들리면 안 된다 — `trait.ts` 의 explore 를 세션에 고정한 것과 같은 이유다),
+ * 사람이 달라지면 다른 상품이 뜬다. 페르소나 100명이면 8종이 고루 노출된다.
+ *
+ * 익명이고 성향도 없으면 `DEFAULT_HERO` 를 띄운다 (§기본 배너).
+ */
+function pickHero(
+  ranked: Product[],
+  score: (p: Product) => number,
+  persona: PersonaProfile | null,
+  traitKnown: boolean,
+): Product | null {
+  const fresh = ranked.filter(isNewBrandProduct);
+  if (fresh.length === 0) return null;
+
+  // 익명 + 성향 없음 = 아무 단서가 없는 첫 방문. 브랜드가 정한 기본 배너를 띄운다
+  if (!persona && !traitKnown) {
+    const preset = fresh.find((p) => p.product_id === DEFAULT_HERO.product_id);
+    if (preset) return preset;
+  }
+
+  const best = score(fresh[0]);
+  const tied = fresh.filter((p) => score(p) === best);
+  if (tied.length <= 1) return tied[0] ?? fresh[0];
+
+  if (!persona) return tied[0];
+  let seed = 7;
+  for (const ch of persona.persona_id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  return tied[seed % tied.length];
+}
+
 export function buildRecommendation(input: BuildInput): RecommendResponse {
   const { products, persona, excluded, reviewSkinTypes, k, bannerSlots, reserved } = input;
+  const traitKnown = input.traitKnown ?? false;
   const axes = input.axes.length ? input.axes : DEFAULT_AXES;
 
   const candidates = products.filter((p) => !excluded.has(p.product_id));
+  const popularity = popularityScale(products);
 
   const score = (p: Product): number => {
     if (!persona) {
@@ -114,7 +227,7 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
       return badge * 2 + 1 / ((p.rank ?? 999) + 1);
     }
     const match = skinTypesOf(p, reviewSkinTypes).includes(persona.skin_type) ? 2 : 0;
-    const quality = (p.rating ?? 0) / 5 + Math.min(1, Math.log10((p.review_count ?? 0) + 1) / 5);
+    const quality = (p.rating ?? 0) / 5 + popularity(p);
     return match + quality;
   };
 
@@ -122,12 +235,39 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
   const items = ranked.slice(0, k).map((p, i) => ({ product_id: p.product_id, score: score(p), rank: i + 1 }));
   const used = new Set(items.map((i) => i.product_id));
 
-  // 히어로: items[0] 에 축 문구를 얹는다. 첫 축으로 말할 수 없으면 말할 수 있는 축을 찾는다
-  const top = ranked[0] ?? null;
+  /*
+   * 히어로 — **화면에 그려지는 유일한 배너 칸이다.** 배너 행 6칸은 2026-09-10 기획
+   * 검토로 빠졌고, 그래서 신규 브랜드 전용 칸(reserved 2)도 화면에서 사라졌다.
+   *
+   * 그 상태에서 히어로를 `ranked[0]` 로 두면 **신규 브랜드는 배너 노출이 0 이다.**
+   * 점수로는 이길 수 없다 — 리뷰도 loves 도 없어 품질 항이 0 이라 최대 2.0 인데
+   * 원천 상품은 3.9 까지 간다. 전용 칸이 없어진 만큼 히어로가 그 몫을 받는다.
+   *
+   * 신규 브랜드 상품 중 **그 사람 점수가 가장 높은 것**을 올린다. 없으면 예전처럼
+   * `ranked[0]` 이다. 상품은 점수가 고르고 문구(축)는 세션 성향이 고른다 —
+   * personalized-banner-plan.md §2 의 분업 그대로다.
+   */
+  const top = pickHero(ranked, score, persona, traitKnown) ?? ranked[0] ?? null;
   let hero: RecommendResponse['hero'] = null;
   if (top) {
-    const axis = axes.find((a) => axisValue(top, a, persona, reviewSkinTypes) !== null) ?? axes[0];
-    hero = { product_id: top.product_id, banner_type: axis, banner_value: axisValue(top, axis, persona, reviewSkinTypes) };
+    /*
+     * 성향을 모르는 세션은 신규 브랜드를 `new_brand`(→ story) 로 말한다.
+     * "새로 들어온 브랜드의 첫 세럼" 이 처음 보는 사람에게 할 말이고, 이 축이 없으면
+     * story 변형이 영영 안 뜬다(축 목록에 new_brand 가 없어서다).
+     * 성향을 알면 그 축으로 말한다.
+     */
+    const isPreset = !persona && !traitKnown && top.product_id === DEFAULT_HERO.product_id;
+    const preferStory = !isPreset && !traitKnown && isNewBrandProduct(top);
+    const axis: BannerType = isPreset
+      ? DEFAULT_HERO.banner_type
+      : preferStory
+        ? 'new_brand'
+        : (axes.find((a) => axisValue(top, a, persona, reviewSkinTypes) !== null) ?? axes[0]);
+    hero = {
+      product_id: top.product_id,
+      banner_type: axis,
+      banner_value: axis === 'new_brand' ? null : axisValue(top, axis, persona, reviewSkinTypes),
+    };
   }
 
   const banners: RecommendBanner[] = [];
@@ -174,6 +314,11 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
     user_id: persona?.persona_id ?? 'anonymous',
     generated_at: new Date().toISOString(),
     model_version: MOCK_MODEL_VERSION,
+    // 응답마다 새로 발급한다. 서버(`recommend_server.py`)가 uuid4 를 주는 자리라
+    // 목도 같은 성질을 가져야 노출-클릭 귀속이 지금부터 제대로 쌓인다
+    recommendation_id: newRecommendationId(),
+    list_id: 'main',
+    banner_list_id: 'banner_row',
     items,
     hero,
     banners,

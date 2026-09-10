@@ -48,12 +48,19 @@ function pagerItems(current: number, count: number): Array<number | null> {
 /** 한 페이지 상품 수. 열 수에 맞춰 마지막 줄을 채우도록 아래에서 다시 자른다 */
 const PAGE_SIZE = 24;
 
-type SortKey = 'popular' | 'rating' | 'reviews' | 'price_asc' | 'price_desc';
+type SortKey = 'popular' | 'rating' | 'price_asc' | 'price_desc';
 
+/*
+ * '리뷰 많은순' 을 뺐다 (AI 파트 요청 2026-09-10 §1-5, 팀 합의).
+ * 상품마다 리뷰를 100건으로 맞추면 review_count 가 전부 같아져 전 상품 동점이 된다.
+ * 정렬로서 아무 일도 안 하는데 선택지로 남아 있으면 고른 사람을 속인다.
+ * 사용 실적도 0 이다 — PA 러너 행동 목록에 정렬이 없고 실행 로그에 sort_change 가
+ * 한 건도 없다. '평점 높은순'(rating) 과 '인기순'(rank) 은 원값이라 그대로 둔다.
+ * 계약 event-properties-schema §4.2 의 sort_key 는 자유 문자열이라 enum 영향 없다.
+ */
 const SORT_LABEL: Record<SortKey, string> = {
   popular: '인기순',
   rating: '평점 높은순',
-  reviews: '리뷰 많은순',
   price_asc: '가격 낮은순',
   price_desc: '가격 높은순',
 };
@@ -180,11 +187,13 @@ export default function ProductListPage({
         excluded: cartProductIds,
         reviewSkinTypes,
         axes: trait.axes,
+        // 성향을 모르는 세션(coldstart)은 신규 브랜드 히어로를 story 로 말한다
+        traitKnown: trait.trait_source !== 'coldstart',
         k: PROMO_SIZE,
         bannerSlots: BANNER_SLOTS,
         reserved: BANNER_RESERVED,
       }),
-    [products, persona, reviewSkinTypes, cartProductIds, trait.axes],
+    [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source],
   );
 
   const productsById = useMemo(() => new Map(products.map((p) => [p.product_id, p])), [products]);
@@ -230,9 +239,16 @@ export default function ProductListPage({
     return slots;
   }, [recommendation, productsById]);
 
-  /** 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름 */
+  /**
+   * 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름.
+   *
+   * 식별자는 **응답이 준 것을 그대로 쓴다.** 화면이 지어내면 안 된다
+   * (`recommendation-io-spec.md` §5 · 추천 서버 주석). 전에는 `rec-promo-{persona_id}`
+   * 를 만들어 썼는데 페르소나당 한 값이라 요청이 바뀌어도 같았고, 그래서 노출-클릭
+   * 귀속이 세션 단위로 뭉개져 추천 CTR 을 응답 단위로 못 잘랐다.
+   */
   const promoAlgorithm = recommendation.model_version;
-  const promoRecommendationId = persona ? `rec-promo-${persona.persona_id}` : undefined;
+  const promoRecommendationId = recommendation.recommendation_id;
   /** 배너·히어로는 별도 목록으로 센다. 같은 응답이라 식별자는 공유한다 */
   const bannerAlgorithm = `${recommendation.model_version}/banner`;
 
@@ -249,9 +265,6 @@ export default function ProductListPage({
     switch (sort) {
       case 'rating':
         sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-        break;
-      case 'reviews':
-        sorted.sort((a, b) => (b.review_count ?? 0) - (a.review_count ?? 0));
         break;
       case 'price_asc':
         sorted.sort((a, b) => a.price_usd - b.price_usd);

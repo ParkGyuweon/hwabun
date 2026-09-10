@@ -304,3 +304,53 @@
 .auth__hint--alt .auth__link {
   text-decoration: underline;
 }
+
+/* ---------- 비밀번호 보기 토글 ---------- */
+
+/*
+ * 눈 버튼을 입력 안쪽 오른쪽에 얹는다. 입력의 오른쪽 padding 을 버튼 폭만큼 비워
+ * 긴 비밀번호가 아이콘 밑으로 들어가지 않게 한다.
+ */
+.auth__password {
+  position: relative;
+  display: grid;
+}
+
+.auth__password input {
+  padding-right: 44px;
+}
+
+.auth__peek {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--a-ink-soft);
+  cursor: pointer;
+}
+
+.auth__peek:hover {
+  color: var(--a-ink);
+  background: var(--a-surface-soft, rgba(0, 0, 0, 0.04));
+}
+
+.auth__peek:focus-visible {
+  outline: 2px solid var(--a-brand-deep);
+  outline-offset: 1px;
+}
+
+/* 역할이 달라 막힌 것인지 알려주는 둘째 줄 */
+.auth__error-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.85;
+}

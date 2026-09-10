@@ -60,15 +60,66 @@ GRIDS = {
 
 
 def product_box(tile):
-    """제품이 실제로 차지하는 사각형. 흰 배경만 걷어낸다."""
+    """제품이 실제로 차지하는 사각형. 흰 배경만 걷어낸다.
+
+    단순 `getbbox()` 로는 부족하다. 그리드에서 이웃 칸 제품이 4등분 경계를 넘어오면
+    그 조각까지 경계에 들어간다 (SB000002-m3 에 옆 칸 토닝 패드 조각이 딸려왔다).
+    그렇다고 "가장 큰 덩어리만" 남기면 안 된다 — 토닝 패드 컷은 뚜껑·용기·패드가
+    **따로 떨어진 세 덩어리**이고 셋 다 제품이다.
+
+    구분선은 **칸 경계에 잘렸는가** 다. 넘어온 조각은 칸 가장자리에서 끊겨 있고,
+    제 소품은 칸 안에 온전히 들어 있다. 그래서 가장자리에 닿은 덩어리는 버리되,
+    가장 큰 덩어리는 남긴다 (제품 본체가 가장자리에 닿는 컷도 있다).
+    """
     gray = tile.convert("L")
     # 밝은 곳을 0, 제품을 255 로 뒤집어야 getbbox() 가 제품을 잡는다
     mask = gray.point(lambda v: 0 if v >= WHITE_CUTOFF else 255)
+
+    box = _box_without_bleed(mask)
+    if box is not None:
+        return box
+
     box = mask.getbbox()
     if box is None:
         # 칸이 통째로 비었다. 자르지 말고 그대로 넘긴다
         return (0, 0, tile.width, tile.height)
     return box
+
+
+def _box_without_bleed(mask):
+    """넘어온 조각을 뺀 경계. 라벨링을 못 하면 None 을 돌려 호출부가 폴백한다."""
+    try:
+        import numpy as np
+        from scipy import ndimage
+    except ImportError:
+        # scipy 가 없으면 조각을 못 가린다. 예전처럼 통째 경계로 간다
+        return None
+
+    arr = np.array(mask) > 0
+    labels, count = ndimage.label(arr)
+    if count == 0:
+        return None
+
+    sizes = ndimage.sum(arr, labels, range(1, count + 1))
+    biggest = int(sizes.argmax()) + 1
+    h, w = arr.shape
+
+    keep = np.zeros_like(arr)
+    for lab in range(1, count + 1):
+        blob = labels == lab
+        if lab != biggest:
+            ys, xs = blob.nonzero()
+            touches_edge = (
+                ys.min() == 0 or xs.min() == 0 or ys.max() == h - 1 or xs.max() == w - 1
+            )
+            if touches_edge:
+                continue
+        keep |= blob
+
+    ys, xs = keep.nonzero()
+    if len(ys) == 0:
+        return None
+    return (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
 
 
 def place(tile):

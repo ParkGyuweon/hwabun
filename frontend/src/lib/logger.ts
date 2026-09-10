@@ -48,6 +48,25 @@ type Listener = (event: LogEnvelope) => void;
 
 const BATCH_SIZE = 20;
 const FLUSH_INTERVAL_MS = 5000;
+
+/**
+ * 배치를 기다리지 않고 바로 보내는 이벤트 (계약 `recommendation-io-spec.md` §2-1).
+ *
+ * 수집 API 는 Kafka 로 보내면서 **Redis 사용자 벡터도 같이 갱신**한다. 그래서
+ * 전환 이벤트가 배치 버퍼(최대 5초)에 묶여 있으면 담자마자 새로고침한 다음 추천에
+ * 그 행동이 안 들어간다. 특히 `remove_from_cart` 는 부정 축이 늦게 반영돼서
+ * **뺀 상품이 계속 추천에 뜨는** 것으로 보인다.
+ *
+ * 전환은 세션당 몇 건이라 즉시 보내도 트래픽에 영향이 없다. 스크롤·체류·노출은
+ * 건수가 많고 서빙 상태를 바꾸지 않으므로 지금처럼 배치로 둔다.
+ */
+const IMMEDIATE_EVENTS: ReadonlySet<string> = new Set([
+  'add_to_cart',
+  'remove_from_cart',
+  'quantity_change',
+  'purchase',
+  'wishlist_toggle',
+]);
 /** 개발용 패널에서 되돌아볼 최근 이벤트 보관 개수. 전송량과는 무관하다 */
 const HISTORY_LIMIT = 200;
 
@@ -413,7 +432,10 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   // 개발 중 확인용. 화면에서는 LogPanel 이 같은 내용을 보여준다
   if (import.meta.env.DEV) console.info(`[log] ${eventName}`, event);
 
-  if (queue.length >= BATCH_SIZE && Date.now() >= backoffUntil) {
+  // 전환은 배치를 기다리지 않는다 (§2-1). 백오프 중이면 그대로 예약으로 떨어진다 —
+  // 수집 서버가 죽어 있을 때 전환마다 요청을 쏘면 폭주 방지가 무너진다
+  const immediate = IMMEDIATE_EVENTS.has(eventName);
+  if ((immediate || queue.length >= BATCH_SIZE) && Date.now() >= backoffUntil) {
     flush();
   } else {
     scheduleFlush();

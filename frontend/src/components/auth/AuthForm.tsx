@@ -5,6 +5,36 @@ import type { AccountRole, AccountSession } from '../../lib/auth';
 
 type Mode = 'login' | 'register';
 
+/* 눈 아이콘. 아이콘 라이브러리를 넣지 않으려고 인라인 SVG 로 둔다 */
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M1.5 10S4.6 4.5 10 4.5 18.5 10 18.5 10 15.4 15.5 10 15.5 1.5 10 1.5 10Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <circle cx="10" cy="10" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M1.5 10S4.6 4.5 10 4.5c1.2 0 2.3.3 3.2.7M18.5 10s-1.4 2.5-4 4.1c-1.3.8-2.8 1.4-4.5 1.4-1.1 0-2.1-.2-3-.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path d="M3 3l14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 interface AuthFormProps {
   role: AccountRole;
   onSuccess: (session: AccountSession) => void;
@@ -30,6 +60,8 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
+  /** 비밀번호를 눈으로 확인하는 토글. 오타를 입력 단계에서 잡는다 */
+  const [showPassword, setShowPassword] = useState(false);
 
   const nameLabel = role === 'MEMBER' ? '닉네임' : '담당자 이름';
   const valid =
@@ -105,16 +137,33 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
 
       <label className="auth__field">
         <span>비밀번호</span>
-        <input
-          type="password"
-          name="password"
-          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="8자 이상"
-          minLength={8}
-          required
-        />
+        <div className="auth__password">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="password"
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="8자 이상"
+            minLength={8}
+            required
+          />
+          {/*
+            토글은 `button` 이고 label 안에 있다. label 을 누르면 입력으로 포커스가
+            가야 하므로 이 버튼만 클릭을 삼킨다(onMouseDown preventDefault) — 안 그러면
+            누를 때 포커스가 튀어 커서 위치가 사라진다.
+          */}
+          <button
+            type="button"
+            className="auth__peek"
+            aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+            aria-pressed={showPassword}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setShowPassword((v) => !v)}
+          >
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
+        </div>
       </label>
 
       {mode === 'register' && canRegister ? (
@@ -135,6 +184,16 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
       {error ? (
         <p className={`auth__error auth__error--${error.kind}`} role="alert">
           {error.message}
+          {/*
+            백엔드는 역할별로 계정을 따로 조회하고 401 하나만 돌려준다. 그래서 브랜드
+            담당자 계정으로 고객 로그인을 시도해도 "비밀번호가 틀렸다" 로만 보인다.
+            실제로 그렇게 막힌 적이 있어서 갈 곳을 같이 알려준다.
+          */}
+          {role === 'MEMBER' && error.kind === 'credentials' ? (
+            <span className="auth__error-hint">
+              브랜드 담당자 계정은 여기서 로그인되지 않습니다. 아래 대시보드 로그인을 써 주세요.
+            </span>
+          ) : null}
         </p>
       ) : null}
 

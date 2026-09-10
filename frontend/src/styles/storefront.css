@@ -507,6 +507,12 @@
 :root[data-storefront='catalog'] .list__grid {
   grid-column: 2;
   grid-row: 2;
+  /*
+   * 기본값의 위 여백은 필터 줄이 그리드 **바로 위**에 있을 때를 위한 것이다.
+   * 카탈로그는 필터가 왼쪽 열이고 그리드 위에는 개수 줄(margin-bottom 16px)만
+   * 있어서, 그대로 두면 개수와 첫 행 사이가 48px 로 벌어진다.
+   */
+  margin-top: 0;
 }
 
 :root[data-storefront='catalog'] .list__more,

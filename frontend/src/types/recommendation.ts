@@ -36,6 +36,22 @@ export interface RecommendResponse {
   generated_at: string;
   /** 배치·모델 판. 프론트 목은 `mock-fe-*` */
   model_version: string;
+  /**
+   * 이 응답 한 번을 가리키는 귀속 키. **응답마다 새로 발급된다.**
+   *
+   * 프론트가 지어내면 안 되는 값이다 (`recommendation-io-spec.md` §5, 추천 서버
+   * `recommend_server.py` 주석: "FE 는 recommendation_click · product_view 에
+   * recommendation_id / list_id / position / algorithm 을 그대로 싣는다").
+   * 전에는 화면이 `rec-promo-{persona_id}` 를 만들어 썼는데, 그러면 같은 사람의
+   * 모든 요청이 한 값으로 묶여 노출-클릭 귀속이 세션 단위로 뭉개진다.
+   *
+   * 서버가 붙으면 이 필드에 서버 값이 그대로 들어온다.
+   */
+  recommendation_id: string;
+  /** 메인 목록(`items`) 의 목록 식별자. 서버는 `"main"` 을 준다 */
+  list_id: string;
+  /** 히어로·배너 줄의 목록 식별자. 서버는 `"banner_row"` 를 준다 */
+  banner_list_id: string;
   items: RecommendItem[];
   hero: RecommendHero | null;
   banners: RecommendBanner[];

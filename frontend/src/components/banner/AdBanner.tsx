@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { bannerImage, creativeFor, packshot } from '../../lib/bannerCreative';
 import PriceTag from '../product/PriceTag';
 import type { BannerAxis } from '../../lib/bannerCreative';
@@ -51,7 +52,19 @@ export default function AdBanner({
   onSelect,
 }: AdBannerProps) {
   const c = creativeFor(product, axis, value, skinTone);
-  const image = bannerImage(product.product_id, c.variant);
+
+  /**
+   * 완성형 배너가 등록돼 있어도 파일이 없을 수 있다. `banner-images.json` 은 목록일 뿐
+   * 파일 존재를 보장하지 않는다 (브라우저가 미리 알 수 없어서 목록을 두는 것이다).
+   * 실제로 SB000001·SB000002 는 목록에 올라간 채 파일이 없었고, 폴백이 없어서
+   * 그 자리에 깨진 이미지 한 칸이 떴다.
+   *
+   * 404 를 받으면 그 주소만 기억해 두고 CSS 조립 배너로 돌아간다. 주소로 기억하므로
+   * 다음 배너가 다른 상품·변형이면 다시 시도한다.
+   */
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const registered = bannerImage(product.product_id, c.variant);
+  const image = registered !== null && registered !== failedSrc ? registered : null;
 
   return (
     <article
@@ -73,6 +86,7 @@ export default function AdBanner({
             className="ad__image"
             src={image}
             alt={`${product.brand_name} ${product.product_name} · ${c.kicker} ${c.head.mark}${c.head.rest}`}
+            onError={() => setFailedSrc(image)}
           />
         ) : null}
         {image ? null : (
