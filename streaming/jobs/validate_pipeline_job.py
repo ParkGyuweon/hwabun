@@ -35,6 +35,7 @@ DEFAULT_BRAND_DAILY_PATH = "data/marts/brand_daily_kpi"
 DEFAULT_PRODUCT_REPURCHASE_PATH = "data/marts/product_repurchase_daily"
 DEFAULT_BRAND_REPURCHASE_PATH = "data/marts/brand_repurchase_daily"
 DEFAULT_PURCHASE_REASON_PATH = "data/marts/purchase_reason_daily"
+DEFAULT_REASON_TRAIT_MAP_PATH = "contracts/purchase-reason-trait-map.json"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -66,6 +67,7 @@ class ValidatePipelineConfig:
     product_repurchase_path: str = DEFAULT_PRODUCT_REPURCHASE_PATH
     brand_repurchase_path: str = DEFAULT_BRAND_REPURCHASE_PATH
     purchase_reason_path: str = DEFAULT_PURCHASE_REASON_PATH
+    reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -98,6 +100,7 @@ class ValidatePipelineConfig:
             "product_repurchase_path": self.product_repurchase_path,
             "brand_repurchase_path": self.brand_repurchase_path,
             "purchase_reason_path": self.purchase_reason_path,
+            "reason_trait_map_path": self.reason_trait_map_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
             "banner_daily_path": self.banner_daily_path,
@@ -200,6 +203,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("PURCHASE_REASON_DAILY_PATH", DEFAULT_PURCHASE_REASON_PATH),
     )
     parser.add_argument(
+        "--reason-trait-map-path",
+        default=_env("REASON_TRAIT_MAP_PATH", DEFAULT_REASON_TRAIT_MAP_PATH),
+        help="Build Job과 같은 매핑이어야 구매 이유 Mart 재계산 비교가 성립한다",
+    )
+    parser.add_argument(
         "--ingredient-weekly-path",
         default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
     )
@@ -252,6 +260,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         product_repurchase_path=args.product_repurchase_path,
         brand_repurchase_path=args.brand_repurchase_path,
         purchase_reason_path=args.purchase_reason_path,
+        reason_trait_map_path=args.reason_trait_map_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
         banner_daily_path=args.banner_daily_path,
@@ -396,6 +405,7 @@ def validate_frames(
     frames: dict[str, Any],
     require_events: bool = False,
     time_zone: str = DEFAULT_TIME_ZONE,
+    reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH,
 ) -> dict[str, Any]:
     """Run cross-dataset checks and return a JSON-serializable report."""
 
@@ -1087,11 +1097,15 @@ def validate_frames(
         from .build_marts_job import (
             _brand_repurchase_daily,
             _product_repurchase_daily,
+            _purchase_reason_daily,
+            load_reason_trait_map,
         )
     except ImportError:
         from build_marts_job import (
             _brand_repurchase_daily,
             _product_repurchase_daily,
+            _purchase_reason_daily,
+            load_reason_trait_map,
         )
     window_days = int(
         product_repurchase.select("window_days").first()["window_days"]
@@ -1107,6 +1121,16 @@ def validate_frames(
                 _brand_repurchase_daily(purchase_fact, purchase_reason_fact, window_days),
             ),
         }
+        # 매핑이 빌드 때와 다르면 재계산이 어긋난다. Build Job 과 같은 파일을 읽는다.
+        rebuilt["purchase_reason_daily"] = (
+            purchase_reason,
+            _purchase_reason_daily(
+                purchase_reason_fact,
+                purchase_fact,
+                user_trait_daily,
+                load_reason_trait_map(reason_trait_map_path),
+            ),
+        )
         for name, (stored, expected) in rebuilt.items():
             columns = [c for c in stored.columns if c != "mart_processed_at"]
             difference = (
@@ -1386,7 +1410,9 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
     except Exception:
         # 기준선을 만들지 않은 실행에서는 경로가 없다. 검증은 그대로 진행한다.
         pass
-    return validate_frames(frames, config.require_events, config.time_zone)
+    return validate_frames(
+        frames, config.require_events, config.time_zone, config.reason_trait_map_path
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
