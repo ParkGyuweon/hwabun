@@ -230,9 +230,16 @@ export default function ProductListPage({
     return slots;
   }, [recommendation, productsById]);
 
-  /** 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름 */
+  /**
+   * 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름.
+   *
+   * 식별자는 **응답이 준 것을 그대로 쓴다.** 화면이 지어내면 안 된다
+   * (`recommendation-io-spec.md` §5 · 추천 서버 주석). 전에는 `rec-promo-{persona_id}`
+   * 를 만들어 썼는데 페르소나당 한 값이라 요청이 바뀌어도 같았고, 그래서 노출-클릭
+   * 귀속이 세션 단위로 뭉개져 추천 CTR 을 응답 단위로 못 잘랐다.
+   */
   const promoAlgorithm = recommendation.model_version;
-  const promoRecommendationId = persona ? `rec-promo-${persona.persona_id}` : undefined;
+  const promoRecommendationId = recommendation.recommendation_id;
   /** 배너·히어로는 별도 목록으로 센다. 같은 응답이라 식별자는 공유한다 */
   const bannerAlgorithm = `${recommendation.model_version}/banner`;
 

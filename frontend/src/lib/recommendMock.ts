@@ -23,6 +23,19 @@ const PRICE_EDGES = vocab.price_bin_edges as number[];
 const PRICE_BINS = ['~20', '20-35', '35-50', '50-80', '80+'];
 
 export const MOCK_MODEL_VERSION = 'mock-fe-0.1';
+
+/**
+ * 응답 한 번을 가리키는 귀속 키. 서버는 uuid4 hex 를 준다 (`recommend_server.py`).
+ * `crypto.randomUUID` 는 보안 컨텍스트(https·localhost)에서만 있어서 폴백을 둔다 —
+ * 사내 IP 로 열어 본 화면에서 추천 로그가 통째로 빠지면 안 된다.
+ */
+function newRecommendationId(): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+  return uuid.replace(/-/g, '');
+}
 /** AI 기본 축. 성향이 없을 때 */
 export const DEFAULT_AXES: BannerType[] = ['concern', 'segment', 'price_bin', 'ingredient'];
 
@@ -174,6 +187,11 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
     user_id: persona?.persona_id ?? 'anonymous',
     generated_at: new Date().toISOString(),
     model_version: MOCK_MODEL_VERSION,
+    // 응답마다 새로 발급한다. 서버(`recommend_server.py`)가 uuid4 를 주는 자리라
+    // 목도 같은 성질을 가져야 노출-클릭 귀속이 지금부터 제대로 쌓인다
+    recommendation_id: newRecommendationId(),
+    list_id: 'main',
+    banner_list_id: 'banner_row',
     items,
     hero,
     banners,
