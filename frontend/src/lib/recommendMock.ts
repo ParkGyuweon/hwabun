@@ -114,11 +114,44 @@ export function isNewBrandProduct(p: Product): boolean {
   return (p.review_count ?? 0) === 0 || p.rank === undefined;
 }
 
+/**
+ * 인기도 항 — `loves_count` 를 log1p 후 min-max 로 편 0~1 값.
+ *
+ * 전에는 `min(1, log10(review_count + 1) / 5)` 였다. 리뷰를 상품마다 100건으로
+ * 맞추면(AI 파트 요청 2026-09-10 §1-3) `review_count` 가 전 상품 100 이 되어
+ * **이 항이 상수 0.4 로 죽는다.** PA 에이전트 클릭의 대부분이 이 목이 만드는
+ * 기획전 레일 안에서 일어나므로 그대로 두면 노출층이 통째로 바뀐다.
+ *
+ * 정의를 추천 서버의 인기 prior 와 같게 맞췄다 (`build_feature_sample.py`:228
+ * "prior 는 loves_count 를 log1p 후 min-max 로 편 값"). 나중에 이 레일을
+ * `/api/recommend` 로 바꿔도 전후가 이어진다.
+ *
+ * 등록 상품(loves 0)은 정규화 범위에서 빼고 0 을 준다 — 원천 200개의 눈금을
+ * 신규 상품이 흔들면 안 된다 (`recommend_server.py`:198 과 같은 처리).
+ */
+function popularityScale(products: Product[]): (p: Product) => number {
+  const loved = products.map((p) => p.loves_count ?? 0).filter((n) => n > 0);
+  if (loved.length === 0) return () => 0;
+
+  const lo = Math.log1p(Math.min(...loved));
+  const hi = Math.log1p(Math.max(...loved));
+  const span = hi - lo;
+
+  return (p: Product): number => {
+    const loves = p.loves_count ?? 0;
+    if (loves <= 0) return 0;
+    if (span <= 0) return 1;
+    const v = (Math.log1p(loves) - lo) / span;
+    return Math.min(1, Math.max(0, v));
+  };
+}
+
 export function buildRecommendation(input: BuildInput): RecommendResponse {
   const { products, persona, excluded, reviewSkinTypes, k, bannerSlots, reserved } = input;
   const axes = input.axes.length ? input.axes : DEFAULT_AXES;
 
   const candidates = products.filter((p) => !excluded.has(p.product_id));
+  const popularity = popularityScale(products);
 
   const score = (p: Product): number => {
     if (!persona) {
@@ -127,7 +160,7 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
       return badge * 2 + 1 / ((p.rank ?? 999) + 1);
     }
     const match = skinTypesOf(p, reviewSkinTypes).includes(persona.skin_type) ? 2 : 0;
-    const quality = (p.rating ?? 0) / 5 + Math.min(1, Math.log10((p.review_count ?? 0) + 1) / 5);
+    const quality = (p.rating ?? 0) / 5 + popularity(p);
     return match + quality;
   };
 

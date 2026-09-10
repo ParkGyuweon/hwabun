@@ -48,12 +48,19 @@ function pagerItems(current: number, count: number): Array<number | null> {
 /** 한 페이지 상품 수. 열 수에 맞춰 마지막 줄을 채우도록 아래에서 다시 자른다 */
 const PAGE_SIZE = 24;
 
-type SortKey = 'popular' | 'rating' | 'reviews' | 'price_asc' | 'price_desc';
+type SortKey = 'popular' | 'rating' | 'price_asc' | 'price_desc';
 
+/*
+ * '리뷰 많은순' 을 뺐다 (AI 파트 요청 2026-09-10 §1-5, 팀 합의).
+ * 상품마다 리뷰를 100건으로 맞추면 review_count 가 전부 같아져 전 상품 동점이 된다.
+ * 정렬로서 아무 일도 안 하는데 선택지로 남아 있으면 고른 사람을 속인다.
+ * 사용 실적도 0 이다 — PA 러너 행동 목록에 정렬이 없고 실행 로그에 sort_change 가
+ * 한 건도 없다. '평점 높은순'(rating) 과 '인기순'(rank) 은 원값이라 그대로 둔다.
+ * 계약 event-properties-schema §4.2 의 sort_key 는 자유 문자열이라 enum 영향 없다.
+ */
 const SORT_LABEL: Record<SortKey, string> = {
   popular: '인기순',
   rating: '평점 높은순',
-  reviews: '리뷰 많은순',
   price_asc: '가격 낮은순',
   price_desc: '가격 높은순',
 };
@@ -256,9 +263,6 @@ export default function ProductListPage({
     switch (sort) {
       case 'rating':
         sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-        break;
-      case 'reviews':
-        sorted.sort((a, b) => (b.review_count ?? 0) - (a.review_count ?? 0));
         break;
       case 'price_asc':
         sorted.sort((a, b) => a.price_usd - b.price_usd);
