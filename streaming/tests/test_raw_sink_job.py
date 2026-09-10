@@ -36,6 +36,11 @@ from streaming.jobs.derive_facts_job import (
 )
 from streaming.jobs.build_marts_job import (
     DEFAULT_BRAND_DAILY_PATH,
+    DEFAULT_BRAND_REPURCHASE_PATH,
+    DEFAULT_PRODUCT_REPURCHASE_PATH,
+    DEFAULT_PURCHASE_REASON_PATH,
+    DEFAULT_REASON_TRAIT_MAP_PATH,
+    DEFAULT_REPURCHASE_WINDOW_DAYS,
     DEFAULT_CATEGORY_PRICE_PATH,
     DEFAULT_CLEANSING_CATEGORY_WEIGHT,
     DEFAULT_FUNNEL_DAILY_PATH,
@@ -51,6 +56,9 @@ from streaming.jobs.build_marts_job import (
 )
 from streaming.jobs.validate_pipeline_job import (
     DEFAULT_BRAND_DAILY_PATH as DEFAULT_VALIDATE_BRAND_DAILY_PATH,
+    DEFAULT_BRAND_REPURCHASE_PATH as DEFAULT_VALIDATE_BRAND_REPURCHASE_PATH,
+    DEFAULT_PRODUCT_REPURCHASE_PATH as DEFAULT_VALIDATE_PRODUCT_REPURCHASE_PATH,
+    DEFAULT_PURCHASE_REASON_PATH as DEFAULT_VALIDATE_PURCHASE_REASON_PATH,
     DEFAULT_CATEGORY_PRICE_PATH as DEFAULT_VALIDATE_CATEGORY_PRICE_PATH,
     DEFAULT_CONTENT_INTEREST_PATH as DEFAULT_VALIDATE_CONTENT_INTEREST_PATH,
     DEFAULT_DIM_PRODUCT_PATH as DEFAULT_VALIDATE_DIM_PRODUCT_PATH,
@@ -278,6 +286,11 @@ class BuildMartsConfigTest(unittest.TestCase):
         self.assertEqual(DEFAULT_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_FUNNEL_DAILY_PATH, config.funnel_daily_path)
         self.assertEqual(DEFAULT_BRAND_DAILY_PATH, config.brand_daily_path)
+        self.assertEqual(DEFAULT_PRODUCT_REPURCHASE_PATH, config.product_repurchase_path)
+        self.assertEqual(DEFAULT_BRAND_REPURCHASE_PATH, config.brand_repurchase_path)
+        self.assertEqual(DEFAULT_PURCHASE_REASON_PATH, config.purchase_reason_path)
+        self.assertEqual(DEFAULT_REASON_TRAIT_MAP_PATH, config.reason_trait_map_path)
+        self.assertEqual(DEFAULT_REPURCHASE_WINDOW_DAYS, config.repurchase_window_days)
         self.assertEqual(DEFAULT_PRODUCT_INGREDIENT_PATH, config.product_ingredient_path)
         self.assertEqual(DEFAULT_INGREDIENT_VOCAB_PATH, config.ingredient_vocab_path)
         self.assertEqual(DEFAULT_INGREDIENT_WEEKLY_PATH, config.ingredient_weekly_path)
@@ -324,6 +337,9 @@ class ValidatePipelineConfigTest(unittest.TestCase):
         self.assertEqual(DEFAULT_VALIDATE_PRODUCT_DAILY_PATH, config.product_daily_path)
         self.assertEqual(DEFAULT_VALIDATE_FUNNEL_DAILY_PATH, config.funnel_daily_path)
         self.assertEqual(DEFAULT_VALIDATE_BRAND_DAILY_PATH, config.brand_daily_path)
+        self.assertEqual(DEFAULT_VALIDATE_PRODUCT_REPURCHASE_PATH, config.product_repurchase_path)
+        self.assertEqual(DEFAULT_VALIDATE_BRAND_REPURCHASE_PATH, config.brand_repurchase_path)
+        self.assertEqual(DEFAULT_VALIDATE_PURCHASE_REASON_PATH, config.purchase_reason_path)
         self.assertEqual(
             DEFAULT_VALIDATE_INGREDIENT_WEEKLY_PATH, config.ingredient_weekly_path
         )
