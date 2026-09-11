@@ -279,6 +279,51 @@ def _duplicate_count(df: Any, columns: list[str]) -> int:
     return df.groupBy(*columns).count().where(F.col("count") > 1).count()
 
 
+EXPLORE_MIN_SAMPLE_SIZE = 100
+EXPLORE_SHARE_RANGE = (0.1, 0.3)
+
+
+def _banner_explore_share(impressions: Any) -> dict[str, Any]:
+    """실사용자 배너 노출에서 탐색 배정 비중을 잰다.
+
+    탐색 배정은 화면이 한다. 추천 서버는 `explore` 를 아예 내보내지 않고
+    (`batch/serving/banners.py` 의 trait_source 계약 — "프론트 플랜의 무작위 탐색은
+    서버가 아니라 화면 몫"), 합성 로그의 `explore` 는 생성기가 정한 값이라 검증
+    대상이 아니다. 그래서 `actor_type='user'` 노출만 모집단으로 쓴다. 합성 로그만
+    있는 실행에서는 표본이 0 이라 이 검사가 자연히 면제된다.
+
+    `trait_source` 는 배정 결과가 아니라 그 시점에 무엇으로 축을 골랐는지다.
+    성향이 아직 없는 세션은 탐색 배정과 무관하게 `coldstart` 로 빠지므로 분모에서 뺀다.
+    히어로 배너가 목록 첫 화면이라 coldstart 노출 비중이 커서, 전체를 분모로 잡으면
+    배정이 정상이어도 20% 가 나올 수 없다.
+    """
+
+    from pyspark.sql import functions as F
+
+    user_impressions = impressions.where(F.col("actor_type") == F.lit("user"))
+    user_count = user_impressions.count()
+    assigned = user_impressions.where(F.col("trait_source") != F.lit("coldstart"))
+    assigned_count = assigned.count()
+    explore_count = assigned.where(F.col("trait_source") == F.lit("explore")).count()
+    share = explore_count / assigned_count if assigned_count else None
+
+    low, high = EXPLORE_SHARE_RANGE
+    # 표본이 작으면 비중이 크게 흔들린다. 운영 가드레일은 N>=100 에서만 건다.
+    exempt = assigned_count < EXPLORE_MIN_SAMPLE_SIZE
+    passed = exempt or (share is not None and low <= share <= high)
+    note = "실사용자 노출만 평가하고 coldstart 는 분모에서 제외"
+    if exempt:
+        note += f"; 실사용자 표본이 {EXPLORE_MIN_SAMPLE_SIZE} 미만이라 면제"
+    return {
+        "user_impressions": user_count,
+        "assigned": assigned_count,
+        "explore": explore_count,
+        "share": share,
+        "passed": passed,
+        "note": note,
+    }
+
+
 def _synthetic_session_persona_conflict_count(cleaned: Any) -> int:
     """Count synthetic sessions that contain more than one Persona."""
 
@@ -1268,22 +1313,13 @@ def validate_frames(
     ))
     impressions = banner_facts.where(F.col("event_name") == "banner_impression")
     impression_count = impressions.count()
-    # trait_source 는 배정 결과가 아니라 그 시점에 무엇으로 축을 골랐는지다.
-    # 성향이 아직 없는 세션은 explore 배정과 무관하게 coldstart 로 빠지므로
-    # (Front 의 성향 계산기), 탐색 조작이 적용된 모집단만 분모로 쓴다.
-    # 히어로 배너가 목록 첫 화면이라 coldstart 노출 비중이 크고, 전체를 분모로
-    # 잡으면 배정이 정상이어도 20% 가 나올 수 없다.
-    assigned = impressions.where(F.col("trait_source") != F.lit("coldstart"))
-    assigned_count = assigned.count()
-    explore_count = assigned.where(F.col("trait_source") == "explore").count()
-    explore_share = explore_count / assigned_count if assigned_count else None
-    # Sampling fluctuates at small N; enforce a broad operational guardrail only at N>=100.
-    explore_ok = assigned_count < 100 or (explore_share is not None and 0.1 <= explore_share <= 0.3)
+    explore = _banner_explore_share(impressions)
     checks.append(_check(
         "banner_explore_impression_share_is_near_twenty_percent",
-        explore_ok,
-        f"impressions={impression_count} assigned={assigned_count} "
-        f"explore={explore_count} share={explore_share}; coldstart 는 분모에서 제외",
+        explore["passed"],
+        f"impressions={impression_count} user_impressions={explore['user_impressions']} "
+        f"assigned={explore['assigned']} explore={explore['explore']} "
+        f"share={explore['share']}; {explore['note']}",
     ))
     checks.append(_check(
         "user_trait_daily_grain_is_unique",
