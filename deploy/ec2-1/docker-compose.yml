@@ -34,6 +34,8 @@ services:
       GMS_KEY: ${GMS_KEY:-}                      # 처방 문장 생성 (없으면 /api/prescription 만 503)
       SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222). 비우면 안 함
       CATALOG_SYNC_INTERVAL_SEC: ${CATALOG_SYNC_INTERVAL_SEC:-300}
+      NEW_BRAND_DAYS: ${NEW_BRAND_DAYS:-14}                 # 신규 브랜드 = 등록 후 N일 (Jira 247-b, 2026-09-11 결정)
+      NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-}   # 기간 무관 신규로 둘 product_id 접두(예: SB, 시연용) — 팀 합의 뒤 설정
     volumes:
       - recommend-data:/data
     expose:

@@ -36,6 +36,7 @@ Product Feature 벡터의 블록 구성·가중치·인코딩 방식은
 | `highlights` | Y(선택) | 다중 선택 | **30종** — concern 9 · clean 16 · texture 5 |
 | `ingredients` | N(필수) | 자유 텍스트 | 없음. 파서가 어휘집으로 매칭 |
 | `price_krw` | N(필수) | 숫자 | 없음 |
+| `registered_at` | Y(선택) | ISO-8601 시각 | 없음. 백엔드 승인 훅·카탈로그 동기화는 `createdAt` 을 넣는다. 없으면 편입 시각. **신규 브랜드 14일 규칙의 기준** (Jira 247-b, 2026-09-11) |
 
 어휘 목록은 이 문서에 복제하지 않는다. [`product-form-labels-ko.json`](./product-form-labels-ko.json)이
 어휘집에서 생성되는 단일 출처이며 한국어 표시 문구를 함께 담는다. 화면은 `ko`를 보여주고

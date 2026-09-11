@@ -44,7 +44,8 @@ KRW_PER_USD = 1400.0
 
 INPUT_FIELDS = ("product_id", "product_name", "brand_name", "brand_id",
                 "secondary_category", "tertiary_category", "highlights",
-                "ingredients", "price_krw", "price_usd", "image_url")
+                "ingredients", "price_krw", "price_usd", "image_url",
+                "registered_at")          # 등록 시각 — 신규 브랜드 14일 규칙 (Jira 247-b)
 
 
 class RegistrationError(ValueError):

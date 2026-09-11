@@ -53,6 +53,8 @@ def to_registration(summary: dict, ingredients: str | None) -> dict:
         "price_krw": summary.get("priceKrw"),
         "image_url": summary.get("primaryImageUrl"),
         "review_count": 0,
+        # 백엔드 등록 시각(요청서 6-2). 없으면 registry 가 동기화 시각을 넣는다 — 그만큼 신규 기간이 늦게 시작된다
+        "registered_at": summary.get("createdAt"),
     }
 
 
