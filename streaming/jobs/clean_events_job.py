@@ -604,21 +604,37 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
     }
 
 
+def _write_processed_dataset(
+    frame: Any,
+    path: str,
+    partition_column: str | None = None,
+) -> None:
+    """빈 결과에 partitionBy를 걸면 데이터 파일이 없어 스키마를 다시 읽을 수 없다.
+
+    거부도 중복도 없는 실행에서는 `bad_events`와 `duplicate_events`가 정상적으로
+    0행이다. 그때 파티션 쓰기를 하면 `_SUCCESS`만 남아 Q5의 읽기가
+    UNABLE_TO_INFER_SCHEMA로 실패한다. 0행이면 파티션 없이 써서 스키마를 남긴다.
+    """
+
+    writer = frame.write.mode("overwrite")
+    if partition_column is not None and not frame.isEmpty():
+        writer.parquet(path, partitionBy=partition_column)
+    else:
+        writer.parquet(path)
+
+
 def run(spark: Any, config: CleanEventsConfig) -> None:
     spark.conf.set("spark.sql.session.timeZone", "UTC")
     raw_df = spark.read.option("mergeSchema", "true").parquet(config.input_path)
     frames = build_processed_frames(raw_df, config.time_zone)
-    frames["cleaned_events"].write.mode("overwrite").parquet(
-        config.cleaned_path,
-        partitionBy="event_date_kst",
+    _write_processed_dataset(
+        frames["cleaned_events"], config.cleaned_path, "event_date_kst"
     )
-    frames["bad_events"].write.mode("overwrite").parquet(
-        config.bad_path,
-        partitionBy="bad_recorded_date",
+    _write_processed_dataset(
+        frames["bad_events"], config.bad_path, "bad_recorded_date"
     )
-    frames["duplicate_events"].write.mode("overwrite").parquet(
-        config.duplicate_path,
-        partitionBy="event_date_kst",
+    _write_processed_dataset(
+        frames["duplicate_events"], config.duplicate_path, "event_date_kst"
     )
 
 
