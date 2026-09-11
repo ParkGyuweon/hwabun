@@ -238,7 +238,7 @@ source = event-properties-schema.md
 ### 4.1 `product_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_product
 ```
 
@@ -306,7 +306,7 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 ### 4.5 `funnel_daily_kpi`
 
 ```text
-key = funnel_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = funnel_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = funnel_session_fact, dim_product
 ```
 
@@ -358,7 +358,7 @@ input = cleaned_events, product_event_fact, funnel_session_fact, content_interes
 ### 4.8 `ingredient_weekly_interest`
 
 ```text
-key = interest_week_kst + ingredient_id + actor_type + source + scenario_id + simulation_run_id
+key = interest_week_kst + ingredient_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = sessionized_events, dim_product, product_ingredient.csv, ingredient_vocab.csv
 ```
 
@@ -510,7 +510,7 @@ input = product_event_fact, cross_brand_daily
 ### 4.14 `brand_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact, funnel_session_fact
 ```
 
@@ -543,7 +543,7 @@ input = product_event_fact, funnel_session_fact
 ### 4.15 `product_repurchase_daily`
 
 ```text
-key = snapshot_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = snapshot_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = purchase_fact
 ```
 
@@ -566,7 +566,7 @@ input = purchase_fact
 ### 4.16 `brand_repurchase_daily`
 
 ```text
-key = snapshot_date_kst + brand_id + actor_type + source + scenario_id + simulation_run_id
+key = snapshot_date_kst + brand_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = purchase_fact, purchase_reason_fact
 ```
 
@@ -584,7 +584,7 @@ NULL로 두지 않는다.
 ### 4.17 `purchase_reason_daily`
 
 ```text
-key = event_date_kst + brand_id + reason + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + reason + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = purchase_reason_fact, purchase_fact, user_trait_daily
 ```
 
