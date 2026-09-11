@@ -19,10 +19,11 @@ import type {
   MartEnvelope,
   OverviewPayload,
   ProductsPayload,
+  PurchasePayload,
   SegmentsPayload,
 } from './martApi';
 import { hasRows } from './martApi';
-import type { BehaviorMetrics, BehaviorSource, Overview, SegmentTop } from './behavior';
+import type { BehaviorMetrics, BehaviorSource, Overview, Repurchase, SegmentTop } from './behavior';
 import { buildIngredientGap, canonicalIngredient } from './behavior';
 import type { ContentAttention, ProductMetrics } from './metrics';
 import { SKIN_TONE_ORDER, catalogProducts, hashString, rng } from './metrics';
@@ -310,6 +311,26 @@ function toFriction(p: FrictionPayload, mock: BehaviorMetrics) {
   };
 }
 
+function toRepurchase(p: PurchasePayload): Repurchase | null {
+  const hasAny = p.brand !== null || p.products.length > 0 || p.reasons.length > 0;
+  if (!hasAny) return null;
+  return {
+    brand: p.brand
+      ? {
+          buyerCount: p.brand.buyer_count,
+          repeatBuyerCount: p.brand.repeat_buyer_count,
+          orderCount: p.brand.purchase_order_count,
+          rate: p.brand.repurchase_rate,
+          medianDays: p.brand.median_days_between_purchases,
+          declaredRestockOrders: p.brand.declared_restock_order_count,
+          windowDays: p.brand.window_days,
+        }
+      : null,
+    products: new Map(p.products.map((r) => [r.product_id, { buyerCount: r.buyer_count, repeatBuyerCount: r.repeat_buyer_count, rate: r.repurchase_rate }])),
+    reasons: p.reasons.map((r) => ({ reason: r.reason, orderCount: r.order_count, share: r.reason_share })),
+  };
+}
+
 /* ---------- 합치기 ---------- */
 
 /**
@@ -326,6 +347,7 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
   const sg = hasRows(bundle.segments) ? bundle.segments : null;
   const ig = hasRows(bundle.ingredients) ? bundle.ingredients : null;
   const fr = hasRows(bundle.friction) ? bundle.friction : null;
+  const pu = hasRows(bundle.purchase) ? bundle.purchase : null;
 
   // E2 먼저. 개요의 퀵룩 합계와 성분 보유 판정에 상품이 필요하다
   let quickLooks = mock.overview.quickLooks;
@@ -443,11 +465,20 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
     src.ingredients = 'real';
   }
 
+  // E7 재구매. 모의가 없으니 마트가 있을 때만 값이 생긴다
+  if (pu) {
+    const rp = toRepurchase(pu);
+    if (rp) {
+      out = { ...out, repurchase: rp };
+      src.purchase = 'real';
+    }
+  }
+
   const anyReal = Object.values(src).some((v) => v === 'real');
   return {
     ...out,
     source: src,
-    martProcessedAt: oldestProcessedAt([ov, pr, ct, sg, ig, fr]),
+    martProcessedAt: oldestProcessedAt([ov, pr, ct, sg, ig, fr, pu]),
     anyReal,
   };
 }
