@@ -20,7 +20,7 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 | `product_feature.jsonl` | 상품 200개 · 148차원 벡터 · prior · 카테고리/가격대/평점 | `product_feature` |
 | `attribute_affinity.csv` | 4,000행 = 200상품 x 20세그먼트 | `attribute_affinity` |
 | `item_cooc.npz` | 200x200 동시발생 + 상품별 지지자 수 | (서빙 전용) |
-| `ltr_model.pkl` | 학습 결합 모델 (부스팅 트리 278개, 약 1.0MB) | (서빙 전용) |
+| `ltr_model.pkl` | 학습 결합 모델 (부스팅 트리 369개, 2026-09-10 · 약 1.4MB · 정본은 `ltr_model_meta.json`) | (서빙 전용) |
 | `ltr_model_meta.json` | 피처 이름 19개 · 학습 조건 · 순열 중요도 · sklearn 버전 | (서빙 전용) |
 | `ranking_golden.json` | 페르소나 20명의 기대 상위 10개와 점수 | (대조용, 적재 대상 아님) |
 
@@ -34,7 +34,7 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 | `feature_block.csv` | 9 | 벡터 148차원을 블록으로 자르는 법 (`block_offset`·`dim`·가중치) |
 | `ingredient_vocab.csv` | 30 | 성분 마스터 — `ingredient_id`·원문·한국어·보유 상품 수 |
 | `concern_vocab.csv` | 9 | 피부 고민 마스터 |
-| `product_ingredient.csv` | 850 | 상품 x 성분 (`position_weight`·`source`) |
+| `product_ingredient.csv` | 842 | 상품 x 성분 (`position_weight`·`source`) |
 | `product_concern.csv` | 363 | 상품 x 고민 상위 2축 |
 | `ingredient_skin_affinity.csv` | 76 | 피부타입 x 성분 |
 | `registered_products.jsonl` | 8 | **등록 상품** (Jira 216) — `POST /api/products` 가 §4 파생값까지 채워 append. 서버 재시작 시 원천 200개 뒤에 다시 붙는다. 지금은 시연 브랜드 SSAFY Beauty 8개. 오프라인 평가는 읽지 않는다 |
@@ -73,7 +73,11 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 - `w1/w2/w3` 는 상호작용 고유 상품 수에 따른 스케줄을 따른다 (`recommender.SCHEDULE`).
   **학습 결합을 쓰면 이 스케줄을 타지 않는다** — 시드 개수는 피처 `n_seed` 로 들어간다.
 - **이 산출물을 읽어 점수를 내는 파이썬 서버가 있다** — `batch/serving/recommend_server.py`
-  (계약 §5, Jira 206). 백엔드는 이것을 프록시하면 된다.
+  (계약 §5, Jira 206). 백엔드는 이것을 프록시하면 된다. 2026-09-11 EC2-1 에 컨테이너로 배포됨(`deploy/ec2-1`).
+  실시간 행동은 Kafka `activity-events` 구독(Jira 226·232)으로 들어온다.
+- 표에 없는 산출물: `banner_axes.json`(배너 축 값, Jira 218) · `product_concern_top2.csv` · `ingredient_skin_lift.csv`(대시보드).
+  `session_events.jsonl`·`prescriptions.jsonl`·`registered_products.jsonl` 은 서버가 **런타임에 쓰는** 파일이라 산출물이 아니다
+  (운영은 `/data` 볼륨, 로컬 실행 시 env 없이 돌리면 이 폴더에 생긴다 — `.gitignore` 의 `data/` 패턴에 걸려 커밋되지 않는다).
 - **`ltr_model.pkl` 은 파이썬 pickle 이라 자바가 못 읽는다.** ONNX 로 내보내거나
   파이썬 추론 서버를 띄워야 한다. AI 파트 권고는 후자다 — 피처 19개를 자바로 다시
   구현하면 **에러 없이 순위만 틀린다.** 계약 §4-2 참조.

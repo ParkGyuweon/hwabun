@@ -4,6 +4,8 @@ import { loadBrandId } from '../../lib/brands';
 import type { SellerPulse } from '../../lib/shopApi';
 import { BarList, Funnel, Kpi, LineChart, Panel } from '../components';
 import { fmt } from '../lib/metrics';
+import type { ProductMetrics } from '../lib/metrics';
+import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { useBehavior } from '../lib/useBehavior';
 import { FEEDBACK_BRAND } from '../lib/scope';
@@ -19,9 +21,18 @@ import { categoryLabel, labelsOf } from '../../types/feedback';
  *
  * 숫자는 useBehavior() 가 준다. 마트가 붙어 있으면 실측, 아니면 모의. 배지가 그 차이를 적는다.
  */
+/** 구매 고객 10명 이상인 상품 중 재구매율 최고. 표본이 얇은 상품이 1위에 오르는 것을 막는다 */
+function bestRepurchaseName(rp: Repurchase, products: ProductMetrics[]): string {
+  const best = [...rp.products.entries()]
+    .filter(([, r]) => r.rate !== null && r.buyerCount >= 10)
+    .sort((a, b) => (b[1].rate ?? 0) - (a[1].rate ?? 0))[0];
+  if (!best) return '-';
+  return products.find((x) => x.product.product_id === best[0])?.product.product_name ?? best[0];
+}
+
 export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (screen: string) => void }) {
   const m = useBehavior();
-  const { overview, previous, daily: series, standardFunnel, productMetrics, source } = m;
+  const { overview, previous, daily: series, standardFunnel, productMetrics, repurchase, source } = m;
   const insights = useMemo(() => rankInsights(m), [m]);
   const top = insights[0];
   const rest = insights.slice(1, 4);
@@ -64,6 +75,38 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
           <Kpi label="백엔드 매출" value={`${Math.round(pulse.revenue).toLocaleString('ko-KR')}원`} sub="결제 완료 합계" source="real" />
           <Kpi label="백엔드 리뷰" value={fmt.int(pulse.reviews)} sub="구매 고객이 남긴 리뷰" source="real" />
           <Kpi label="백엔드 피드백" value={fmt.int(pulse.feedbacks)} sub="구매 고객이 남긴 의견" source="real" />
+        </div>
+      ) : null}
+      {/*
+        재구매 배지 · 단위 = 브랜드 (ai-insight-rules §2-1, 2026-09-10 확정). 상품이 달라도 같은 브랜드를 다시 사면 재구매다.
+        마트(brand_repurchase_daily)가 있을 때만 그린다. 모의값을 두지 않는다 — 재구매를 흉내 내면 사장님이 진짜로 읽는다.
+      */}
+      {repurchase?.brand ? (
+        <div className="grid grid--kpi">
+          <Kpi
+            label="브랜드 재구매율"
+            value={repurchase.brand.rate === null ? '-' : fmt.pct(repurchase.brand.rate)}
+            sub={`구매 고객 ${fmt.int(repurchase.brand.buyerCount)}명 중 ${fmt.int(repurchase.brand.repeatBuyerCount)}명이 다시 샀습니다 · 최근 ${repurchase.brand.windowDays}일`}
+            source="real"
+          />
+          <Kpi
+            label="재구매 간격"
+            value={repurchase.brand.medianDays === null ? '-' : `${Math.round(repurchase.brand.medianDays)}일`}
+            sub="다시 산 고객의 구매 사이 간격 중앙값"
+            source="real"
+          />
+          <Kpi
+            label="다시 사려고 산 주문"
+            value={fmt.int(repurchase.brand.declaredRestockOrders)}
+            sub={`설문에서 "다시 사려고" 를 고른 주문 · 관측 재구매 ${fmt.int(repurchase.brand.repeatBuyerCount)}명과 갈리는 만큼이 행동 추론의 한계`}
+            source="real"
+          />
+          <Kpi
+            label="상품 재구매 최고"
+            value={bestRepurchaseName(repurchase, productMetrics)}
+            sub="구매 고객 10명 이상인 상품 중"
+            source="real"
+          />
         </div>
       ) : null}
       {top ? (

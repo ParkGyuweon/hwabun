@@ -43,12 +43,20 @@ export function humanizeAttribute(value: string): string {
 }
 
 /**
+ * 전성분 구분자. 쉼표 뒤에 **숫자가 바로 오면 성분 이름 안의 위치 번호**다 (`1,2-Hexanediol` · `1,3-Butylene Glycol` ·
+ * `2,3-Butanediol`). 목록 구분 쉼표는 뒤에 공백이나 글자가 온다. 그래서 "쉼표 뒤가 숫자가 아닐 때만" 자른다.
+ * `Ceramide 3, Cholesterol` 처럼 쉼표 **앞**이 숫자인 경우는 정상 구분이라 그대로 잘린다.
+ */
+export const INGREDIENT_SEPARATOR = /,(?!\d)/;
+
+/**
  * ingredients 는 형식만 배열이고 원소 하나에 전 성분이 쉼표로 이어붙어 있다.
- * 칩으로 뿌리기 위해 쉼표로 분리한다. 데이터 담당자가 정규화해서 주기 전까지의 임시 처리.
+ * 칩으로 뿌리기 위해 분리한다. 데이터 담당자가 정규화해서 주기 전까지의 임시 처리.
+ * 성분 수 세기·함량 위치가중(dashboard/lib/metrics)도 이 함수를 써야 화면과 지표의 성분 개수가 같다.
  */
 export function splitIngredients(ingredients: string[]): string[] {
   return ingredients
-    .flatMap((block) => block.split(','))
+    .flatMap((block) => block.split(INGREDIENT_SEPARATOR))
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
 }

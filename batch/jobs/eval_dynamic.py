@@ -46,7 +46,7 @@ from hidden_preference import (PROFILES, TEXT_EMBEDDING,      # noqa: E402
                                TEXT_LEXICAL, HiddenPreference)
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
-from product_encoder import Encoder                          # noqa: E402
+from product_encoder import Encoder, brand_key               # noqa: E402
 from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for,
                          load_cooc, cf_bonus, CF_BETA)
@@ -306,7 +306,7 @@ def main():
     prior = np.asarray(encoder.prior(), dtype=np.float32)
     affinity = load_affinity(index)
     recommender = Recommender(M, index, prior, affinity=affinity,
-                              brands=[p["brand_name"] for p in encoder.products],
+                              brands=[brand_key(p) for p in encoder.products],
                               known_brands=set(encoder.blk["brand"]["vocab"]))
     hp = HiddenPreference(products=encoder.products, noise_seed=a.noise_seed,
                           weights=PROFILES[a.pref_profile],
@@ -315,7 +315,7 @@ def main():
     meta = [{"product_id": p["product_id"],
              "tertiary_category": p.get("tertiary_category")}
             for p in encoder.products]
-    brands = [p["brand_name"] for p in encoder.products]
+    brands = [brand_key(p) for p in encoder.products]
     known = set(encoder.blk["brand"]["vocab"])
     cooc, supporters = load_cooc() if a.cf else (None, None)
     if a.cf and cooc is None:

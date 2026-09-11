@@ -118,9 +118,9 @@ python batch/ingest/build_feature_vocab.py
 `products_200.json` 이 바뀌면 반드시 어휘집을 다시 만들어야 합니다.
 
 `affinity_lift.csv` 와 `concern_from_reviews.npz` 생성기는 각각
-개인 폴더의 `build_affinity_lift.py`, `batch/jobs/concern_from_reviews.py` 입니다.
+`batch/ingest/build_affinity_lift.py`(2026-09 레포로 이관), `batch/jobs/concern_from_reviews.py` 입니다.
 
-### 재현 검증 (2026-08-31)
+### 재현 검증 (2026-08-31, 어휘집 0.4 시점 — 현재 어휘집은 0.5: 09-10 성분 태그 제거·SPF 동의어·retinoate/betaine salicylate)
 
 원본 CSV 에서 처음부터 다시 돌려 `products_200.json` · `excluded_products.json` ·
 `contracts/product-feature-vocab.json` 이 **바이트 단위로 동일**함을 확인했습니다.

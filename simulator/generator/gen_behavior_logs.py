@@ -881,7 +881,7 @@ class CbfExposure:
 
     def __init__(self, catalog):
         sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
-        from product_encoder import Encoder
+        from product_encoder import Encoder, brand_key
         from persona_feature import load as load_affinity
         from recommender import Recommender, load_cooc
         from user_vector import UserVector
@@ -897,7 +897,7 @@ class CbfExposure:
                   file=sys.stderr)
         self.rec = Recommender(self.M, self.index, self.prior,
                                affinity=load_affinity(self.index),
-                               brands=[x["brand_name"] for x in enc.products],
+                               brands=[brand_key(x) for x in enc.products],
                                known_brands=set(enc.blk["brand"]["vocab"]),
                                cooc=cooc, supporters=supporters)
         self.ids = [None] * len(self.index)

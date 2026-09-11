@@ -349,3 +349,47 @@ class TestMemberAttributes(unittest.TestCase):
         keys = {next(iter(i["reason"])) for i in b["items"]}     # reason 은 key 하나짜리 dict
         self.assertTrue(keys)   # attribute 가 뜨는지는 점수 분포에 달려 단정하지 않는다
         self.assertEqual(b["state_source"], "cold_start")        # 이력 0 이어도 속성으로 순위가 갈린다
+
+
+class TestNewBrandAge(unittest.TestCase):
+    """Jira 247-b — 신규 브랜드 = 등록 후 NEW_BRAND_DAYS(14) 일 이내. 원천 200개는 신규가 아니다."""
+
+    def tearDown(self):
+        # 다른 테스트의 전용 칸 검사(전부 SSAFY Beauty)에 섞이지 않게 판매 중단으로 후보에서 뺀다
+        for pid in ("SB0AGE01", "SB0AGE02"):
+            client.delete(f"/api/products/{pid}")
+
+    def _payload(self, pid, registered_at):
+        return {"product_id": pid, "product_name": "나이 테스트", "brand_name": "Age Test Brand", "brand_id": "brand-age-test",
+                "secondary_category": "Moisturizers", "tertiary_category": "Moisturizers",
+                "highlights": [], "ingredients": "Water, Glycerin", "price_krw": 25000, "registered_at": registered_at}
+
+    def test_recent_registration_is_new(self):
+        import datetime
+        recent = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3)).isoformat()
+        r = client.post("/api/products", json=self._payload("SB0AGE01", recent))
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertTrue(r.json()["registered"][0]["reserved_candidate"])
+        g = client.get("/api/products/SB0AGE01").json()
+        self.assertTrue(g["reserved_candidate"]); self.assertIsNotNone(g["new_until"]); self.assertEqual(g["registered_at"], recent)
+
+    def test_old_registration_graduates(self):
+        import datetime
+        old = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=rs.NEW_BRAND_DAYS + 1)).isoformat()
+        r = client.post("/api/products", json=self._payload("SB0AGE02", old))
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertFalse(r.json()["registered"][0]["reserved_candidate"])
+        self.assertFalse(client.get("/api/products/SB0AGE02").json()["reserved_candidate"])
+        # 히어로 new_brand 후보에서도 빠진다
+        e = rs.get_engine()
+        self.assertFalse(e.new_mask()[e.index["SB0AGE02"]])
+
+    def test_seed_catalog_is_never_new(self):
+        e = rs.get_engine()
+        m = e.new_mask()
+        self.assertFalse(m[:e.n_seed].any())
+
+    def test_health_exposes_rule(self):
+        h = client.get("/health").json()
+        self.assertEqual(h["new_brand_rule"]["days"], rs.NEW_BRAND_DAYS)
+        self.assertIn("new_now", h["new_brand_rule"])

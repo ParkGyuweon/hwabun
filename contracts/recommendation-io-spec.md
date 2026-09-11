@@ -932,8 +932,10 @@ prior(i) = (log1p(loves_count) - log_min) / (log_max - log_min)
 
 ```
 GET /api/recommend?persona_id={id}&size=10
-                  &banner_slots=6&reserved=2&axes=concern,segment
+                  &banner_slots=1&reserved=0&hero=new_brand&axes=concern,segment
+                  [&skin_type=&skin_tone=&hair_color=&eye_color=]      ← 실회원 가입 속성 (Jira 245)
 ```
+> 09-09 원안은 `banner_slots=6&reserved=2`(배너 행 6칸, 칸 5·6 전용) 였다. 배너 행이 2026-09-10 화면에서 빠져 현행 화면은 위의 히어로 1칸 호출이다. 6칸 조립 능력은 서버에 남아 있다.
 
 | 파라미터 | 기본 | 뜻 |
 |---|---:|---|
@@ -942,7 +944,7 @@ GET /api/recommend?persona_id={id}&size=10
 | `banner_slots` | 0 | 배너 칸 수 (최대 12). 0 이면 `hero`·`banners` 를 안 내린다. **> 0 이면 `reserved` 전용 칸이 배너 뒤 칸으로 가고 `items` 는 순수 순위** (프론트 확정 2026-09-09, Jira 218) |
 | `reserved` | 2 | **신규·저노출 브랜드 전용** 칸 수 (§5-1). **자리 확정 (2026-09-09): `banner_slots > 0` 이면 배너 뒤 칸, 아니면 메인 안.** 이전 메모 — 구현·측정은 메인 `size` 칸 **안**에 두는 형태(`Recommender.rank(reserved=)`, 부록 U)이고, 배너 칸에 두는 형태는 재지 않았다. 확정 전까지 메인 안으로 읽는다. 신규 상품(지지자 <3 또는 어휘집 밖 브랜드)이 카탈로그에 **없으면 칸은 일반 순위로 채워지고** 응답 `reserved_filled` 가 0 이다 — 원천 200개는 그 상태. **등록 상품**(§5-2, Jira 216)이 들어오면 채워진다. 시연용 자사 브랜드 **SSAFY Beauty 8개**는 시작 시 이미 편입돼 있어 `reserved=2` 면 칸 9·10 이 SSAFY 상품이다 |
 | `axes` | `concern,segment` | 축 배너 순환 순서. `concern · ingredient · clean · price_bin · category · segment` 중 쉼표 구분, 그 외 값은 **422** `INVALID_AXES`. 축 칸(`banner_slots − reserved`)을 이 순서로 돌며 채운다 |
-| `hero` | `top` | **히어로 정책 (2026-09-10, Jira 237).** `top` = `items[0]` 에 축 문구(원안). `new_brand` = 신규 상품(지지자 <3 또는 어휘집 밖 브랜드) 중 이 사용자 점수가 가장 높은 것을 히어로로 — 배너 행이 화면에서 빠져(09-10 기획 검토) 전용 칸이 사라진 상태에서 신규 브랜드가 배너에 나올 자리가 히어로뿐이라서. 기획 §15-10 "배너에 신규 포함" 은 **포함으로 결정(09-10)**. 전환·비활성 제외, 신규가 없으면 `top` 으로 돌아가며 응답 `hero_policy` 가 실제 적용값이다. 히어로 상품은 `banners` 와 겹치지 않는다. `items` 는 정책과 무관(순위 불변). 그 외 값은 **422** `INVALID_HERO`. 배너 행이 살아나면 `top` 으로 돌린다 |
+| `hero` | `top` | **히어로 정책 (2026-09-10, Jira 237).** `top` = `items[0]` 에 축 문구(원안). `new_brand` = 신규 상품(지지자 <3 또는 어휘집 밖 브랜드 — **브랜드는 `brand_id` 로 판정, 2026-09-11 Jira 247**: 쇼핑몰은 (판매자, 이름)만 유일해 같은 이름이 여러 판매자에게 있을 수 있어 이름으로 묶지 않는다) 중 이 사용자 점수가 가장 높은 것을 히어로로 — 배너 행이 화면에서 빠져(09-10 기획 검토) 전용 칸이 사라진 상태에서 신규 브랜드가 배너에 나올 자리가 히어로뿐이라서. 기획 §15-10 "배너에 신규 포함" 은 **포함으로 결정(09-10)**. 전환·비활성 제외, 신규가 없으면 `top` 으로 돌아가며 응답 `hero_policy` 가 실제 적용값이다. 히어로 상품은 `banners` 와 겹치지 않는다. `items` 는 정책과 무관(순위 불변). 그 외 값은 **422** `INVALID_HERO`. 배너 행이 살아나면 `top` 으로 돌린다 |
 | `skin_type` · `skin_tone` · `hair_color` · `eye_color` | — | **실회원 가입 속성 (2026-09-11, Jira 245).** `persona_id` 가 페르소나 표에 **없는** 실회원(`accountId`)일 때 이 4개로 속성 친화도(LTR 피처 #1)·`attribute` 근거 문구·배너 콜드스타트를 살린다. 값은 `persona-schema.md` §3 enum (`skin_type` combination·dry·normal·oily / `skin_tone` fair·light·medium·tan·deep / `hair_color` auburn·black·blonde·brown·gray·red / `eye_color` blue·brown·gray·green·hazel). 원본 표기(`lightMedium`·`brunette`·`Grey`)도 받아 버킷으로 정규화. **"선택 안 함" 은 키를 생략**(빈 값은 무시). 일부만 와도 되고 없는 속성은 중립 0.5. 그 외 값은 **422** `INVALID_ATTRIBUTE`. 페르소나 표에 있는 id 면 표가 우선이고 쿼리는 무시된다. **프론트가 직접 싣고 백엔드 프록시는 쿼리스트링을 그대로 넘긴다** (프론트·AI 합의 09-11) |
 
 > **한 응답에 같이 싣는 이유** — 메인·히어로·배너가 **같은 점수에서 나오고 서로
@@ -964,7 +966,11 @@ GET /api/recommend?persona_id={id}&size=10
 6. MMR 다양성 보정 (λ_mmr = 0.8, 후보 풀 상위 30개 — λ_mmr 은 점수 쪽 계수라 클수록 약하게 걸리고 1.0 이면 끈 것과 같음)
    → **(size − reserved) 개**를 고른다
 6-1. **신규 상품 전용 칸** (§5-1, 2026-09-08 구현) — 신규 상품 중 점수순으로 `reserved` 개를
-   뒤에 붙인다. 신규 = 지지자 < 3명 **또는** 어휘집 밖 브랜드. 신규가 모자라면 남은 자리를
+   뒤에 붙인다. **신규 = 등록 후 14일 이내인 등록 상품** (2026-09-11 결정, Jira 247-b; 서버 `NEW_BRAND_DAYS`, 기본 14).
+   원천 카탈로그 200개는 등록 시각이 없어 신규가 아니다. 등록 시각은 등록 입력 `registered_at`(백엔드 `createdAt`), 없으면
+   편입 시각. 시연용 예외는 `NEW_BRAND_ALWAYS_PREFIX`(예: `SB`) — **팀 합의 뒤 값 결정**. 상품별 종료 시각은 `GET /api/products/{id}` 의 `new_until`.
+   (09-08~09-10 규칙 "지지자 < 3명 또는 어휘집 밖 브랜드" 는 운영 중 갱신되는 값이 없어 한 번 신규면 영영 신규였다 — 오프라인 평가
+   스크립트는 등록 시각이 없어 여전히 그 규칙으로 잰다.) 신규가 모자라면 남은 자리를
    일반 후보 점수순으로 채운다 (칸이 비지 않는다). `Recommender.pick()`
 7. 상위 size개 반환 — 전용 칸으로 들어온 항목은 `reserved: true`
 ```
@@ -984,7 +990,7 @@ GET /api/recommend?persona_id={id}&size=10
 > | **유입 추적 식별자** (2026-09-08, Jira 209) | 응답마다 `recommendation_id`(uuid) · `list_id`(`"main"`) · `algorithm`(예 `ltr-278t-2026-09-07`, 모델이 바뀌면 문자열이 바뀐다). **FE 는 이 값을 `recommendation_impression` · `recommendation_click` · `product_view` 에 그대로 싣는다** (`event-properties-schema.md` 의 `recommendation_id` · `list_id` · `position` · `algorithm`). 이게 있어야 추천 CTR(`recommendation_daily_kpi`)과 **교차 브랜드 유입의 "추천 경유"** 를 닫을 수 있다 (마트는 데이터 파트, 요청서 별도 전달) |
 > | **`reason`** | `breakdown` 대체. 항별 기여가 아니라 **그 상품에 실제로 있던 신호**만 문장으로: `cf` "회원님이 담은 상품을 고른 사람들이 함께 고른 상품" · `content` "본 상품과 성분·고민 구성이 비슷" (cos ≥ 0.5) · `attribute` "{skin_type} 피부 사용자 사이에서 반응이 좋은" (친화도 상위 20%) · `new_brand` (전용 칸) · 아무것도 없으면 `popular`. **프론트 확정 대기** — §7 |
 > | **응답 시간 (실측)** | holdout_a 300명 · seed=review · reserved=2 · LTR: **점수 계산 p50 7.0ms / p95 8.9ms**, **HTTP 왕복+reason p50 12.3ms / p95 15.2ms** (파이썬 단일 프로세스, 워밍업 후). `batch/serving/bench_recommend.py` |
-> | 안 한 것 | `banner_slots` / `axes` (배너, §5-1) — 전용 칸 자리 확정 뒤. Redis 연결. 인증 |
+> | 안 한 것 (09-08 시점) | ~~`banner_slots` / `axes`~~ (09-09 Jira 218 구현). 남은 것: Redis 연결 · 인증 (프록시가 담당) |
 > | 테스트 | `python -m unittest batch/serving/test_recommend_server.py` — 계약 필드·전환 제외·콜드 스타트·404·reserved 상한 |
 
 > **4단계만 바뀌었습니다.** 1·2·3·5·6·7 단계와 Redis 스키마·실시간 증분 갱신
@@ -1045,7 +1051,7 @@ GET /api/recommend?persona_id={id}&size=10
   "n_products": 3,
   "recommendation_id": "3f9c1e2a7b4d4c0e9a1b2c3d4e5f6071",
   "list_id": "main",
-  "algorithm": "ltr-278t-2026-09-07",
+  "algorithm": "ltr-369t-2026-09-10",
   "state_source": "events",
   "reserved_filled": 0,
   "weights": { "cosine": 0.60, "attr": 0.35, "prior": 0.05 },

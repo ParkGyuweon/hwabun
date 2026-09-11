@@ -1,0 +1,338 @@
+[
+ {
+  "brandId": "6018",
+  "name": "Algenist",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6018
+ },
+ {
+  "brandId": "6195",
+  "name": "Biossance",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6195
+ },
+ {
+  "brandId": "5644",
+  "name": "Bobbi Brown",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5644
+ },
+ {
+  "brandId": "1254",
+  "name": "CLINIQUE",
+  "source": "seed_catalog",
+  "sephoraBrandId": 1254
+ },
+ {
+  "brandId": "4171",
+  "name": "Caudalie",
+  "source": "seed_catalog",
+  "sephoraBrandId": 4171
+ },
+ {
+  "brandId": "6236",
+  "name": "Charlotte Tilbury",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6236
+ },
+ {
+  "brandId": "2082",
+  "name": "Clarins",
+  "source": "seed_catalog",
+  "sephoraBrandId": 2082
+ },
+ {
+  "brandId": "6219",
+  "name": "Dermalogica",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6219
+ },
+ {
+  "brandId": "1073",
+  "name": "Dior",
+  "source": "seed_catalog",
+  "sephoraBrandId": 1073
+ },
+ {
+  "brandId": "4372",
+  "name": "Dr. Brandt Skincare",
+  "source": "seed_catalog",
+  "sephoraBrandId": 4372
+ },
+ {
+  "brandId": "5668",
+  "name": "Dr. Dennis Gross Skincare",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5668
+ },
+ {
+  "brandId": "6014",
+  "name": "Dr. Jart+",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6014
+ },
+ {
+  "brandId": "7083",
+  "name": "Drunk Elephant",
+  "source": "seed_catalog",
+  "sephoraBrandId": 7083
+ },
+ {
+  "brandId": "6089",
+  "name": "Estée Lauder",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6089
+ },
+ {
+  "brandId": "8001",
+  "name": "Farmacy",
+  "source": "seed_catalog",
+  "sephoraBrandId": 8001
+ },
+ {
+  "brandId": "5972",
+  "name": "First Aid Beauty",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5972
+ },
+ {
+  "brandId": "1132",
+  "name": "GUERLAIN",
+  "source": "seed_catalog",
+  "sephoraBrandId": 1132
+ },
+ {
+  "brandId": "6189",
+  "name": "Glow Recipe",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6189
+ },
+ {
+  "brandId": "6117",
+  "name": "Herbivore",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6117
+ },
+ {
+  "brandId": "6175",
+  "name": "IT Cosmetics",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6175
+ },
+ {
+  "brandId": "8008",
+  "name": "Isle of Paradise",
+  "source": "seed_catalog",
+  "sephoraBrandId": 8008
+ },
+ {
+  "brandId": "5715",
+  "name": "KORRES",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5715
+ },
+ {
+  "brandId": "5946",
+  "name": "Kate Somerville",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5946
+ },
+ {
+  "brandId": "6218",
+  "name": "Kiehl's Since 1851",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6218
+ },
+ {
+  "brandId": "6125",
+  "name": "LANEIGE",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6125
+ },
+ {
+  "brandId": "6201",
+  "name": "La Mer",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6201
+ },
+ {
+  "brandId": "1741",
+  "name": "Lancôme",
+  "source": "seed_catalog",
+  "sephoraBrandId": 1741
+ },
+ {
+  "brandId": "6134",
+  "name": "MILK MAKEUP",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6134
+ },
+ {
+  "brandId": "4164",
+  "name": "Murad",
+  "source": "seed_catalog",
+  "sephoraBrandId": 4164
+ },
+ {
+  "brandId": "5674",
+  "name": "OLEHENRIKSEN",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5674
+ },
+ {
+  "brandId": "3733",
+  "name": "Origins",
+  "source": "seed_catalog",
+  "sephoraBrandId": 3733
+ },
+ {
+  "brandId": "6341",
+  "name": "Paula's Choice",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6341
+ },
+ {
+  "brandId": "6209",
+  "name": "Peace Out",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6209
+ },
+ {
+  "brandId": "3728",
+  "name": "Peter Thomas Roth",
+  "source": "seed_catalog",
+  "sephoraBrandId": 3728
+ },
+ {
+  "brandId": "5857",
+  "name": "REN Clean Skincare",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5857
+ },
+ {
+  "brandId": "3902",
+  "name": "SEPHORA COLLECTION",
+  "source": "seed_catalog",
+  "sephoraBrandId": 3902
+ },
+ {
+  "brandId": "6084",
+  "name": "SK-II",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6084
+ },
+ {
+  "brandId": "ssafy-beauty",
+  "name": "SSAFY Beauty",
+  "source": "brand_registered",
+  "sephoraBrandId": null
+ },
+ {
+  "brandId": "6314",
+  "name": "Shani Darden Skin Care",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6314
+ },
+ {
+  "brandId": "5337",
+  "name": "Shiseido",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5337
+ },
+ {
+  "brandId": "6289",
+  "name": "Skinfix",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6289
+ },
+ {
+  "brandId": "6145",
+  "name": "Sol de Janeiro",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6145
+ },
+ {
+  "brandId": "6247",
+  "name": "Summer Fridays",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6247
+ },
+ {
+  "brandId": "6073",
+  "name": "Sunday Riley",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6073
+ },
+ {
+  "brandId": "5987",
+  "name": "Supergoop!",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5987
+ },
+ {
+  "brandId": "6041",
+  "name": "Tatcha",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6041
+ },
+ {
+  "brandId": "6285",
+  "name": "The INKEY List",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6285
+ },
+ {
+  "brandId": "6234",
+  "name": "The Ordinary",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6234
+ },
+ {
+  "brandId": "6316",
+  "name": "Wishful",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6316
+ },
+ {
+  "brandId": "6169",
+  "name": "Youth To The People",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6169
+ },
+ {
+  "brandId": "5737",
+  "name": "bareMinerals",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5737
+ },
+ {
+  "brandId": "7075",
+  "name": "belif",
+  "source": "seed_catalog",
+  "sephoraBrandId": 7075
+ },
+ {
+  "brandId": "4348",
+  "name": "fresh",
+  "source": "seed_catalog",
+  "sephoraBrandId": 4348
+ },
+ {
+  "brandId": "6309",
+  "name": "goop",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6309
+ },
+ {
+  "brandId": "6295",
+  "name": "innisfree",
+  "source": "seed_catalog",
+  "sephoraBrandId": 6295
+ },
+ {
+  "brandId": "5648",
+  "name": "tarte",
+  "source": "seed_catalog",
+  "sephoraBrandId": 5648
+ }
+]

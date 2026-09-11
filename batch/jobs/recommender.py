@@ -293,6 +293,9 @@ class Recommender:
                     제한하고 **인기도를 그 안에서 다시 편다**
            brands: 행 번호 -> brand_name. 주면 brand 관계 항이 켜진다"""
         self.brands = list(brands) if brands is not None else None
+        # 서버가 '등록 후 N일' 로 계산한 신규 플래그 (Jira 247-b). None 이면 아래 규칙(지지자·어휘집)을 쓴다 —
+        # 오프라인 평가는 등록 시각이 없어 옛 규칙 그대로다
+        self.new_override = None
         # 어휘집에 있는 브랜드. 여기 있는 것은 원핫이 처리하므로 폴백을 안 건다
         self.known_brands = set(known_brands) if known_brands is not None else set()
         self.M = matrix
@@ -415,7 +418,9 @@ class Recommender:
         return picked
 
     def new_mask(self):
-        """전용 칸 후보 — 지지자 미달 또는 어휘집 밖 브랜드 (모듈 주석 참조)"""
+        """전용 칸 후보. 서버가 new_override(등록 후 N일, Jira 247-b) 를 주면 그것, 아니면 지지자 미달 또는 어휘집 밖 브랜드"""
+        if self.new_override is not None:
+            return np.asarray(self.new_override, bool)
         return new_product_mask(len(self.M), self.supporters, self.brands,
                                 self.known_brands if self.brands is not None else None)
 

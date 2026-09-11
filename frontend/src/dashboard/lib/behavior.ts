@@ -125,6 +125,27 @@ export interface EntryConversion {
   cartRate: number;
 }
 
+/**
+ * 재구매 (계약 0.2 E7). **모의값이 없다.** 구매는 실사용자만 만들고(생성기는 안 만든다) 재구매를 흉내 내면
+ * 사장님이 진짜로 읽는다. 마트가 없으면 null 이고 화면은 그 자리를 비운다 (5초 규칙: 빈 카드 금지).
+ */
+export interface Repurchase {
+  brand: {
+    buyerCount: number;
+    repeatBuyerCount: number;
+    orderCount: number;
+    /** repeat_buyer_count / buyer_count. 분모 0 이면 null */
+    rate: number | null;
+    medianDays: number | null;
+    /** 설문에서 "다시 사려고" 를 고른 주문 수 (선언 재구매) */
+    declaredRestockOrders: number;
+    windowDays: number;
+  } | null;
+  /** product_id → 상품 재구매 */
+  products: Map<string, { buyerCount: number; repeatBuyerCount: number; rate: number | null }>;
+  reasons: Array<{ reason: string | null; orderCount: number; share: number | null }>;
+}
+
 /** 블록별 출처. 화면 배지가 이 값을 그대로 쓴다 */
 export interface BehaviorSource {
   overview: Src;
@@ -145,6 +166,8 @@ export interface BehaviorSource {
   friction: Src;
   entry: Src;
   ingredients: Src;
+  /** 재구매 (E7). 모의가 없어 'mock' 이면 화면에 자리 자체가 없다 */
+  purchase: Src;
 }
 
 export interface BehaviorMetrics {
@@ -170,6 +193,8 @@ export interface BehaviorMetrics {
   ingredientGap: IngredientGapRow[];
   /** 성분 갭 표의 셋째 열이 체류(ms)인지 상품 귀속 점수인지 */
   ingredientInterestKind: 'dwell' | 'score';
+  /** 재구매. 마트 없으면 null (모의 없음) */
+  repurchase: Repurchase | null;
   source: BehaviorSource;
   /** 응답에 쓰인 마트 중 가장 오래된 갱신 시각. 모의면 null */
   martProcessedAt: string | null;
@@ -192,6 +217,7 @@ export const ALL_MOCK: BehaviorSource = {
   friction: 'mock',
   entry: 'mock',
   ingredients: 'mock',
+  purchase: 'mock',
 };
 
 /** 모의 집계를 화면 모양으로 묶는다. 값은 metrics.ts 그대로 */
@@ -221,6 +247,7 @@ export function mockBehavior(days: number): BehaviorMetrics {
     quickExitRate: mockQuickExit,
     ingredientGap: mockGap,
     ingredientInterestKind: 'dwell',
+    repurchase: null,
     source: ALL_MOCK,
     martProcessedAt: null,
     anyReal: false,

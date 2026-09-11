@@ -38,9 +38,9 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
 원천 200개는 신규가 0 이다. **등록 상품**(Jira 216)이 들어오면 그때부터 채워진다.
 
 히어로 + 배너 (Jira 218, §5-1) — 프론트 확정 2026-09-09
-    curl "http://localhost:8300/api/recommend?persona_id=PC00001&size=10&banner_slots=6&reserved=2&seed=review"
-    → items 10 (순수 순위) + hero (items[0] 에 축 문구, banner_type 항상 있음)
-      + banners 6: 칸 1~4 축 순환(기본 concern,segment), 칸 5·6 new_brand(전용). items 와 겹치지 않음
+    curl "http://127.0.0.1:8300/api/recommend?persona_id=PC00001&size=10&banner_slots=1&reserved=0&hero=new_brand&seed=review"
+    → items 10 (순수 순위) + hero (new_brand 정책: 신규 상품 중 점수 최고, 없으면 items[0]) — 현행 화면(2026-09-10 이후)
+    (09-09 원안 `banner_slots=6&reserved=2`: 칸 1~4 축 순환, 칸 5·6 new_brand 전용 — 배너 행이 화면에서 빠져 지금은 안 쓴다. 능력은 남아 있다)
     reason 은 아이템·배너 모두 key 하나 (attribute → content → cf → new_brand → popular)
     성분 축은 위치가중 ≥ 0.3 인 성분만(위치 내림차순). banner_slots=0 이면 예전과 같고 reserved 는 메인 안
     hero=new_brand (Jira 237, 2026-09-10) — 배너 행이 화면에서 빠져 전용 칸이 없을 때. 신규 상품 중 점수 최고를
@@ -75,6 +75,7 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     등록 상품은 /data 볼륨. WORKERS=1 — 상태가 프로세스 메모리라 워커를 늘리면 답이 갈린다.
 """
 import glob
+import datetime
 import json
 import os
 import sys
@@ -95,7 +96,7 @@ sys.path.insert(0, BD)                      # catalog_registry (같은 폴더) �
 from ltr_features import LtrFeatures, load_ltr                 # noqa: E402
 from persona_feature import load as load_affinity              # noqa: E402
 import persona_feature as pf                                   # noqa: E402  (속성 별칭표, Jira 245)
-from product_encoder import Encoder                            # noqa: E402
+from product_encoder import Encoder, brand_key                 # noqa: E402  (brand_key: Jira 247)
 from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
                          Recommender, load_cooc, schedule_for)
 from user_vector import UserVector                             # noqa: E402
@@ -110,6 +111,24 @@ import validate_product_registration as vpr                    # noqa: E402
 
 # 히어로 정책 (2026-09-10, Jira 237). top = items[0] (계약 원안) · new_brand = 신규 상품 중 점수 최고.
 HERO_POLICIES = ("top", "new_brand")
+
+# 신규 브랜드 판정 (2026-09-11 결정, Jira 247-b): **등록 후 NEW_BRAND_DAYS 일 이내** 인 등록 상품만 신규다.
+# 원천 카탈로그(세포라 200개)는 등록 시각이 없어 신규가 아니다. 이전 규칙(지지자 <3 또는 어휘집 밖 브랜드)은
+# 운영 중 갱신되는 값이 없어 한 번 신규면 영영 신규였다 — 오프라인 평가 스크립트는 여전히 그 규칙을 쓴다.
+# NEW_BRAND_ALWAYS_PREFIX 에 걸리는 product_id(예: 시연용 "SB") 는 기간과 무관하게 신규로 둔다 — 팀 합의 뒤 값을 정한다.
+NEW_BRAND_DAYS = float(os.environ.get("NEW_BRAND_DAYS", "14"))
+NEW_BRAND_ALWAYS_PREFIX = tuple(p for p in os.environ.get("NEW_BRAND_ALWAYS_PREFIX", "").split(",") if p.strip())
+
+
+def _parse_ts(v):
+    """registered_at / createdAt (ISO-8601, 'Z' 허용) → aware datetime. 못 읽으면 None"""
+    if not v:
+        return None
+    try:
+        t = datetime.datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)
 # 실회원 가입 속성 (Jira 245). 값은 contracts/persona-schema.md §3 enum + persona_feature 의 원본 표기 별칭.
 # 검증은 여기서 하고, 정규화(lightMedium→light, brunette→brown, Grey→gray)는 persona_feature.normalize 가 한다
 ATTR_PARAMS = ("skin_type", "skin_tone", "hair_color", "eye_color")
@@ -138,7 +157,7 @@ class Engine:
         lg = np.log1p(np.array([p["loves_count"] for p in self.products], float))
         self.prior = ((lg - lg.min()) / (lg.max() - lg.min())).astype(np.float32)
         self.affinity = load_affinity(self.index)
-        self.brands = [p["brand_name"] for p in self.products]
+        self.brands = [brand_key(p) for p in self.products]         # 브랜드 키 = brand_id (Jira 247)
         self.known = set(e.blk["brand"]["vocab"])
         self.cooc, self.supporters = load_cooc()
         ltr = load_ltr()
@@ -204,7 +223,7 @@ class Engine:
                 i = self.index[gid]
                 self.V[i] = v
                 self.products[i] = x
-                self.brands[i] = x.get("brand_name")
+                self.brands[i] = brand_key(x)
                 replaced.append(gid)
             else:
                 new_rows.append((x, v))
@@ -218,7 +237,7 @@ class Engine:
             for x, _ in new_rows:
                 self.index[x["product_id"]] = len(self.products)
                 self.products.append(x)
-                self.brands.append(x.get("brand_name"))
+                self.brands.append(brand_key(x))
             self.affinity.grow([x["product_id"] for x, _ in new_rows])
             # LtrFeatures 가 enc.products 를 읽는다 — 같은 리스트 객체를 유지한다
             self.enc.products = self.products
@@ -237,6 +256,35 @@ class Engine:
             raise KeyError(product_id)
         self.inactive.add(product_id)
         self.registry.deactivate(product_id)
+
+    def new_flags(self, now=None):
+        """(상품수,) bool — 등록 후 NEW_BRAND_DAYS 일 이내인 등록 상품 (Jira 247-b). 원천 200개는 False.
+        NEW_BRAND_ALWAYS_PREFIX 에 걸리는 id 는 항상 True. 매 요청 다시 계산한다 — 208개라 수십 µs."""
+        now = now or datetime.datetime.now(datetime.timezone.utc)
+        out = np.zeros(len(self.products), bool)
+        for i, p in enumerate(self.products):
+            if p.get("product_source", "seed_catalog") != "brand_registered":
+                continue
+            if NEW_BRAND_ALWAYS_PREFIX and str(p.get("product_id", "")).startswith(NEW_BRAND_ALWAYS_PREFIX):
+                out[i] = True
+                continue
+            t = _parse_ts(p.get("registered_at"))
+            out[i] = t is not None and (now - t).total_seconds() < NEW_BRAND_DAYS * 86400
+        return out
+
+    def new_until(self, p):
+        """이 상품이 신규에서 빠지는 시각(ISO). 신규 대상이 아니면 None"""
+        if p.get("product_source", "seed_catalog") != "brand_registered":
+            return None
+        if NEW_BRAND_ALWAYS_PREFIX and str(p.get("product_id", "")).startswith(NEW_BRAND_ALWAYS_PREFIX):
+            return "always"
+        t = _parse_ts(p.get("registered_at"))
+        return (t + datetime.timedelta(days=NEW_BRAND_DAYS)).isoformat() if t else None
+
+    def new_mask(self):
+        """서버 경로의 신규 마스크 — 등록 후 N일 규칙을 Recommender 에 얹어 돌려준다"""
+        self.rec.new_override = self.new_flags()
+        return self.rec.new_mask()
 
     def _hero_row(self, hero_policy, scores, is_new):
         """new_brand 정책일 때 히어로 상품 행. 점수가 유효한(-inf 아님: 전환·비활성 제외) 신규 상품 중
@@ -267,14 +315,14 @@ class Engine:
         added, replaced = self._append(derived)
         for x in derived:
             self.inactive.discard(x["product_id"])          # 다시 등록하면 재활성
-        is_new = self.rec.new_mask()
+        is_new = self.new_mask()
         out = []
         for x in derived:
             i = self.index[x["product_id"]]
             out.append({"product_id": x["product_id"], "brand_name": x["brand_name"],
                         "position_in_catalog": i, "price_usd": x["price_usd"],
                         "rating": x["rating"], "rating_source": x["rating_source"],
-                        "brand_in_vocab": x["brand_name"] in self.known,
+                        "brand_in_vocab": brand_key(x) in self.known,
                         "reserved_candidate": bool(is_new[i]),
                         "action": "replaced" if x["product_id"] in replaced else "added",
                         "warnings": warnings[x["product_id"]]})
@@ -376,7 +424,7 @@ class Engine:
         rows_seed = [self.index[g] for g in pos if g in self.index] or \
                     [self.index[g] for g in st.converted if g in self.index]
         picks = [(self.index[g], f) for g, _, f in ranked]
-        is_new = self.rec.new_mask()
+        is_new = self.new_mask()
         rs = self.reasons(persona, st, rows_seed, picks, is_new)
         items = []
         for pos_, ((g, s, f), r) in enumerate(zip(ranked, rs), 1):
@@ -531,6 +579,8 @@ def health():
     e = get_engine()
     return {"ok": True, "scorer": e.scorer, "products": len(e.products),
             "seed_products": e.n_seed, "registered_products": len(e.products) - e.n_seed,
+            "new_brand_rule": {"days": NEW_BRAND_DAYS, "always_prefix": list(NEW_BRAND_ALWAYS_PREFIX),
+                               "new_now": int(e.new_flags().sum())},
             "inactive_products": len(e.inactive),
             "sessions": {"personas_in_memory": len(e.states), "replayed": e.session_replayed,
                          "appended_events": e.session_log.appended},
@@ -588,6 +638,7 @@ class ProductRegistration(BaseModel):
     rating: Optional[float] = None
     image_url: Optional[str] = None
     review_count: Optional[int] = 0
+    registered_at: Optional[str] = None     # 등록 시각 (백엔드 createdAt) — 신규 브랜드 14일 규칙 (Jira 247-b)
 
 
 @app.post("/api/products", status_code=201)
@@ -615,7 +666,9 @@ def get_product(product_id: str):
             "product_source": p.get("product_source", "seed_catalog"),
             "active": product_id not in e.inactive,
             "supporters": int(e.supporters[i]) if e.supporters is not None else None,
-            "reserved_candidate": bool(e.rec.new_mask()[i])}
+            "reserved_candidate": bool(e.new_mask()[i]),
+            "registered_at": p.get("registered_at"), "new_until": e.new_until(p),
+            "new_rule": f"registered within {NEW_BRAND_DAYS:g} days"}
 
 
 @app.post("/api/sessions/compact")

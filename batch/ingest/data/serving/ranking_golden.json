@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-09-10T08:13:38.753880+00:00",
-  "vocab_version": "0.5",
+  "generated_at": "2026-09-11T02:02:45.625547+00:00",
+  "vocab_version": "0.6",
   "scorer": "ltr",
   "ltr_model": {
     "n_trees": 369,
-    "trained_at": "2026-09-10T17:13:35",
+    "trained_at": "2026-09-11T11:02:42",
     "feature_names": [
       "cos_all",
       "affinity",

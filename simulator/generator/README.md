@@ -111,7 +111,7 @@ python simulator/generator/gen_behavior_logs.py --recommend-url http://localhost
 
 | 화면 | 없을 때 | 있을 때 |
 |---|---|---|
-| 목록의 맞춤 기획전 행 | 인기순 10개, 노출 이벤트 없음 | 서버 `items` 10개. `recommendation_snapshot`(list_id `main`) 1건 + 칸마다 `recommendation_impression`. 식별자·`algorithm`(`ltr-278t-…`)은 응답 그대로 |
+| 목록의 맞춤 기획전 행 | 인기순 10개, 노출 이벤트 없음 | 서버 `items` 10개. `recommendation_snapshot`(list_id `main`) 1건 + 칸마다 `recommendation_impression`. 식별자·`algorithm`(`ltr-369t-…`)은 응답 그대로 |
 | 히어로 배너 1칸 (2026-09-10, Jira 239 — 배너 행 6칸은 기획 검토로 화면에서 빠짐) | 리뷰가 가장 적은 상품을 new_brand 히어로로, `banner_axes_v0` | 서버 `hero` 그대로(`hero=new_brand`: 신규 상품 중 점수 최고) — `banner_slot` 1·`list_id` `hero_banner`·`banner_type`·`banner_value`(null 키 유지)·`trait_source`·`policy_version`(프론트 bannerConfig 와 같은 값). 응답 `banners[]` 는 화면에 없어 쓰지 않는다 |
 | 클릭 | 이번 상품을 배너에 끼워 넣고 누른다 | **서버가 실제로 노출한 상품** 중에서 고른다 — 배너(`p_banner_click`) 또는 메인 카드(`p_rec_click`). 노출과 같은 `recommendation_id`·칸 번호 |
 | 세션 상태 | — | 목록을 열기 전에 그동안의 행동을 `POST /api/events` 로 서버에 넘긴다 → 다음 추천이 그 행동을 반영(`state_source=events`) |
@@ -126,7 +126,7 @@ python simulator/generator/gen_behavior_logs.py --recommend-url http://localhost
 |---|---:|---:|---:|---:|
 | 맛보기 | 50 | 약 2만 | 1초 미만 | 10MB |
 | 중간 | 1,000 | 약 59만 | 5초 | 300MB |
-| 전원 | 10,000 | 약 590만 | 50초 | 3GB |
+| 전원 (`--include-agents`) | 10,000 | 약 590만 | 50초 | 3GB |
 
 전송은 100건씩 배치로 나간다(백엔드 `EventBatchRequest` 의 `@Size(max = 100)`).
 **전원을 제한 없이 보내면 59,000회 요청**이 나가므로, 처음에는 `--limit` 과 `--rps` 로

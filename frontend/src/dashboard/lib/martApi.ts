@@ -194,6 +194,26 @@ export interface FrictionPayload extends MartEnvelope {
   event_volumes: Array<{ event_name: string; event_count: number }> | null;
 }
 
+/* ---------- E7 purchase (계약 0.2 · brand_repurchase_daily · product_repurchase_daily · purchase_reason_daily) ---------- */
+
+export interface RepurchaseRow {
+  buyer_count: number;
+  repeat_buyer_count: number;
+  purchase_order_count: number;
+  repurchase_rate: number | null;
+  median_days_between_purchases: number | null;
+  window_days: number;
+  window_start_date: string;
+  window_end_date: string;
+}
+
+export interface PurchasePayload extends MartEnvelope {
+  /** brand_repurchase_daily 최신 스냅샷 한 행. 행이 없으면 null */
+  brand: (RepurchaseRow & { declared_restock_order_count: number }) | null;
+  products: Array<RepurchaseRow & { product_id: string }>;
+  reasons: Array<{ reason: string | null; order_count: number; primary_order_count: number; reason_share: number | null }>;
+}
+
 /* ---------- 호출 ---------- */
 
 export interface MartQuery {
@@ -240,6 +260,7 @@ export const fetchContent = (q: MartQuery) => getMart<ContentPayload>('content',
 export const fetchSegments = (q: MartQuery) => getMart<SegmentsPayload>('segments', q);
 export const fetchIngredients = (q: MartQuery) => getMart<IngredientsPayload>('ingredients', q);
 export const fetchFriction = (q: MartQuery) => getMart<FrictionPayload>('friction', q);
+export const fetchPurchase = (q: MartQuery) => getMart<PurchasePayload>('purchase', q);
 
 export interface MartBundle {
   overview: OverviewPayload | null;
@@ -248,19 +269,21 @@ export interface MartBundle {
   segments: SegmentsPayload | null;
   ingredients: IngredientsPayload | null;
   friction: FrictionPayload | null;
+  purchase: PurchasePayload | null;
 }
 
-/** 여섯 개를 병렬로 한 번. 하나가 실패해도 나머지는 쓴다 */
+/** 일곱 개를 병렬로 한 번. 하나가 실패해도 나머지는 쓴다 */
 export async function fetchMartBundle(q: MartQuery): Promise<MartBundle> {
-  const [overview, products, content, segments, ingredients, friction] = await Promise.all([
+  const [overview, products, content, segments, ingredients, friction, purchase] = await Promise.all([
     fetchOverview(q),
     fetchProducts(q),
     fetchContent(q),
     fetchSegments(q),
     fetchIngredients(q),
     fetchFriction(q),
+    fetchPurchase(q),
   ]);
-  return { overview, products, content, segments, ingredients, friction };
+  return { overview, products, content, segments, ingredients, friction, purchase };
 }
 
 /** `coverage: none` 은 "마트는 있는데 이 브랜드 행이 0건". 화면은 모의로 그린다 (계약 §1-3) */

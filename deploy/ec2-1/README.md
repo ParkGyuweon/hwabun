@@ -77,7 +77,11 @@ sudo certbot renew --dry-run
 sudo docker compose exec -T nginx nginx -s reload
 ```
 
-## 추천 추론 서버 (AI, Jira 219)
+## 추천 추론 서버 (AI, Jira 219 · 2026-09-11 EC2-1 최초 배포)
+
+> 2026-09-11 기준 EC2-1 에는 이 `recommend` 컨테이너만 떠 있다. 백엔드·nginx 는 백엔드 파트가 올린다.
+> EC2 레포에 GitLab 자격증명이 없어 `git pull` 이 안 된다 — deploy token 을 넣기 전까지는 로컬에서
+> `git bundle create x.bundle <old>..origin/dev` → scp → `git pull --ff-only /tmp/x.bundle refs/remotes/origin/dev` 로 옮긴다.
 
 `recommend` 서비스는 파이썬 FastAPI 추천 서버다 (`deploy/recommend.Dockerfile`, 계약
 `contracts/recommendation-io-spec.md` §5). 모델·페르소나·산출물이 이미지 안에 들어가고,
@@ -98,8 +102,9 @@ docker compose exec recommend python -c "import urllib.request;print(urllib.requ
 | 워커 | **1**. 사용자 상태·등록 상품이 프로세스 메모리라 늘리면 답이 갈린다. 확장은 Redis 도입 뒤 |
 | 등록 상품 | `POST /api/products` 가 `/data/registered_products.jsonl` 에 append. 첫 기동에 이미지 시드(SSAFY Beauty 8개) 복사. 볼륨을 지우면 시드로 돌아간다 |
 | 모델 교체 | `batch/ingest/data/serving/ltr_model.pkl` 을 바꾸고 이미지를 다시 빌드. `requirements.txt` 의 scikit-learn 버전이 학습 버전과 같아야 한다 |
-| 행동 유입 | `KAFKA_BOOTSTRAP_SERVERS`(백엔드와 같은 값)가 있으면 `activity-events` 를 group `recommend-state-v1` 로 구독해 세션 상태를 초 단위로 갱신 (Jira 226). Spark 와 별도 group. `/health.kafka_state` 의 `connected`·`lag`·`last_processed_at` 확인. 비우면 `POST /api/events` 만 |
+| 행동 유입 | `KAFKA_BOOTSTRAP_SERVERS`(백엔드와 같은 값)가 있으면 `activity-events` 를 group `recommend-state-v1` 로 구독해 세션 상태를 초 단위로 갱신 (Jira 226). Spark 와 별도 group. `/health.kafka_state` 의 `connected`·`lag`·`last_processed_at` 확인 (Jira 232: `connected` 가 브로커 다운 중에도 true 로 남던 버그 수정, 로컬 실측 소비 약 35,000건/초). 비우면 `POST /api/events` 만 |
 
-nginx 는 `/api/` 를 백엔드 8080 으로만 보낸다. 추천 경로는 백엔드가 프록시하는 형태로 확정되기 전까지
-nginx 에 따로 열지 않는다. 임시로 직접 열어야 하면 `location /api/recommend { proxy_pass http://recommend:8300; }`
+nginx 는 `/api/` 를 `backend`(수집기) 8080 으로만 보낸다. 추천 경로는 쇼핑몰 백엔드(shop_backend)가 프록시하는 형태로
+확정됐고(요청서 §5, 프록시 브랜치 `feat/recommendation-proxy-mvp` 는 2026-09-11 기준 dev 미머지) nginx 에는 따로 열지 않는다.
+로컬 개발은 Vite 프록시(`frontend/vite.config.ts`)가 8300 으로 직결한다. 임시로 직접 열어야 하면 `location /api/recommend { proxy_pass http://recommend:8300; }`
 를 `/api/` 앞에 두면 된다.
