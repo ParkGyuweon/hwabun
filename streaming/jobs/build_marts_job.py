@@ -562,14 +562,7 @@ def _product_daily_kpi(
 ) -> Any:
     from pyspark.sql import functions as F
 
-    group_columns = [
-        "event_date_kst",
-        "product_id",
-        "actor_type",
-        "source",
-        "scenario_id",
-        "simulation_run_id",
-    ]
+    group_columns = ["event_date_kst", "product_id", *EXECUTION_AXES]
 
     def count_events(event_name: str) -> Any:
         return F.sum(
@@ -648,14 +641,7 @@ def _product_daily_kpi(
 def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     from pyspark.sql import functions as F
 
-    group_columns = [
-        "funnel_date_kst",
-        "product_id",
-        "actor_type",
-        "source",
-        "scenario_id",
-        "simulation_run_id",
-    ]
+    group_columns = ["funnel_date_kst", "product_id", *EXECUTION_AXES]
     result = funnel_session_df.groupBy(*group_columns).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
@@ -709,7 +695,7 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
 
     from pyspark.sql import functions as F
 
-    axes = ["actor_type", "source", "scenario_id", "simulation_run_id"]
+    axes = list(EXECUTION_AXES)
     key_columns = ["event_date_kst", "brand_id", *axes]
     valid_brand = F.col("brand_id").isNotNull() & (
         F.length(F.trim(F.col("brand_id"))) > 0
@@ -793,7 +779,16 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     )
 
 
-EXECUTION_AXES = ("actor_type", "source", "scenario_id", "simulation_run_id")
+# 실행 축. `generator_type`이 있어야 PC(python_batch)와 PA(agent_llm)를 가른다.
+# PA 로그는 정성 축이라 정량 지표에 섞으면 안 되는데 `actor_type`은 둘 다
+# `synthetic`이라 구분이 안 된다 (persona-schema.md §9, dw-schema.md §2).
+EXECUTION_AXES = (
+    "actor_type",
+    "source",
+    "generator_type",
+    "scenario_id",
+    "simulation_run_id",
+)
 
 
 def _observed_events(frame: Any | None) -> Any | None:
@@ -1119,10 +1114,7 @@ def _ingredient_weekly_interest(
 
     dimensions = [
         "interest_week_kst",
-        "actor_type",
-        "source",
-        "scenario_id",
-        "simulation_run_id",
+        *EXECUTION_AXES,
     ]
     events = (
         sessionized_df.withColumn(
