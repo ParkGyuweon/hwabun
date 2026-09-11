@@ -1,0 +1,530 @@
+{
+ "secondary_category": [
+  {
+   "code": "Cleansers",
+   "labelKo": "클렌징"
+  },
+  {
+   "code": "Eye Care",
+   "labelKo": "아이 케어"
+  },
+  {
+   "code": "Lip Balms & Treatments",
+   "labelKo": "립 케어"
+  },
+  {
+   "code": "Masks",
+   "labelKo": "마스크팩"
+  },
+  {
+   "code": "Moisturizers",
+   "labelKo": "크림·로션"
+  },
+  {
+   "code": "Self Tanners",
+   "labelKo": "셀프 태닝"
+  },
+  {
+   "code": "Sunscreen",
+   "labelKo": "선케어"
+  },
+  {
+   "code": "Treatments",
+   "labelKo": "집중 케어"
+  }
+ ],
+ "tertiary_category": [
+  {
+   "code": "BB & CC Creams",
+   "labelKo": "BB·CC크림"
+  },
+  {
+   "code": "Blemish & Acne Treatments",
+   "labelKo": "트러블 케어"
+  },
+  {
+   "code": "Exfoliators",
+   "labelKo": "필링·스크럽"
+  },
+  {
+   "code": "Eye Creams & Treatments",
+   "labelKo": "아이크림·아이 케어"
+  },
+  {
+   "code": "Eye Masks",
+   "labelKo": "아이 패치"
+  },
+  {
+   "code": "Face Masks",
+   "labelKo": "마스크팩"
+  },
+  {
+   "code": "Face Oils",
+   "labelKo": "페이스 오일"
+  },
+  {
+   "code": "Face Serums",
+   "labelKo": "에센스·세럼·앰플"
+  },
+  {
+   "code": "Face Sunscreen",
+   "labelKo": "페이스 선케어"
+  },
+  {
+   "code": "Face Wash & Cleansers",
+   "labelKo": "클렌징폼·젤"
+  },
+  {
+   "code": "Face Wipes",
+   "labelKo": "클렌징 티슈·패드"
+  },
+  {
+   "code": "Facial Peels",
+   "labelKo": "필링 케어"
+  },
+  {
+   "code": "For Face",
+   "labelKo": "페이스용"
+  },
+  {
+   "code": "Lip Balms & Treatments",
+   "labelKo": "립 케어"
+  },
+  {
+   "code": "Makeup Removers",
+   "labelKo": "메이크업 리무버"
+  },
+  {
+   "code": "Mists & Essences",
+   "labelKo": "미스트·에센스"
+  },
+  {
+   "code": "Moisturizers",
+   "labelKo": "크림·로션"
+  },
+  {
+   "code": "Night Creams",
+   "labelKo": "나이트 케어"
+  },
+  {
+   "code": "Toners",
+   "labelKo": "스킨·토너"
+  }
+ ],
+ "price_bin": [
+  {
+   "code": "~20",
+   "labelKo": "2만원대 이하"
+  },
+  {
+   "code": "20-35",
+   "labelKo": "2~4만원대"
+  },
+  {
+   "code": "35-50",
+   "labelKo": "4~6만원대"
+  },
+  {
+   "code": "50-80",
+   "labelKo": "6~10만원대"
+  },
+  {
+   "code": "80+",
+   "labelKo": "10만원대 이상"
+  }
+ ],
+ "concern": [
+  {
+   "code": "Dullness/Uneven Texture",
+   "labelKo": "칙칙함·거친 피부결"
+  },
+  {
+   "code": "Dryness",
+   "labelKo": "건조함"
+  },
+  {
+   "code": "Anti-Aging",
+   "labelKo": "안티에이징"
+  },
+  {
+   "code": "Pores",
+   "labelKo": "모공"
+  },
+  {
+   "code": "Loss of firmness",
+   "labelKo": "탄력 저하"
+  },
+  {
+   "code": "Dark Circles",
+   "labelKo": "다크서클"
+  },
+  {
+   "code": "Acne/Blemishes",
+   "labelKo": "트러블·여드름"
+  },
+  {
+   "code": "Redness",
+   "labelKo": "붉은 기"
+  },
+  {
+   "code": "Dark spots",
+   "labelKo": "기미·잡티"
+  }
+ ],
+ "clean": [
+  {
+   "code": "Clean at Sephora",
+   "labelKo": "세포라 클린"
+  },
+  {
+   "code": "Vegan",
+   "labelKo": "비건"
+  },
+  {
+   "code": "Without Parabens",
+   "labelKo": "파라벤 무첨가"
+  },
+  {
+   "code": "Cruelty-Free",
+   "labelKo": "크루얼티 프리"
+  },
+  {
+   "code": "Clean + Planet Positive",
+   "labelKo": "클린·친환경 뷰티"
+  },
+  {
+   "code": "Fragrance Free",
+   "labelKo": "무향료"
+  },
+  {
+   "code": "Oil Free",
+   "labelKo": "오일 프리"
+  },
+  {
+   "code": "Without Sulfates SLS & SLES",
+   "labelKo": "설페이트(SLS·SLES) 무첨가"
+  },
+  {
+   "code": "Without Silicones",
+   "labelKo": "실리콘 무첨가"
+  },
+  {
+   "code": "Refill Available",
+   "labelKo": "리필 가능"
+  },
+  {
+   "code": "Without Phthalates",
+   "labelKo": "프탈레이트 무첨가"
+  },
+  {
+   "code": "Alcohol Free",
+   "labelKo": "알코올 무첨가"
+  },
+  {
+   "code": "Without Mineral Oil",
+   "labelKo": "미네랄 오일 무첨가"
+  },
+  {
+   "code": "Gluten Free",
+   "labelKo": "글루텐 프리"
+  },
+  {
+   "code": "Hypoallergenic",
+   "labelKo": "저자극 포뮬러"
+  },
+  {
+   "code": "Without Oxybenzone",
+   "labelKo": "옥시벤존 무첨가"
+  }
+ ],
+ "texture": [
+  {
+   "code": "Hydrating",
+   "labelKo": "수분·보습"
+  },
+  {
+   "code": "Plumping",
+   "labelKo": "플럼핑 케어"
+  },
+  {
+   "code": "Radiant Finish",
+   "labelKo": "광채 피니시"
+  },
+  {
+   "code": "Natural Finish",
+   "labelKo": "내추럴 피니시"
+  },
+  {
+   "code": "High Shine Finish",
+   "labelKo": "글로시 피니시"
+  }
+ ],
+ "ingredient": [
+  {
+   "code": "Hyaluronic Acid",
+   "labelKo": "히알루론산"
+  },
+  {
+   "code": "Silicone",
+   "labelKo": "실리콘"
+  },
+  {
+   "code": "Vitamin C",
+   "labelKo": "비타민 C"
+  },
+  {
+   "code": "Squalane",
+   "labelKo": "스쿠알란"
+  },
+  {
+   "code": "Probiotic / Ferment",
+   "labelKo": "발효·프로바이오틱"
+  },
+  {
+   "code": "Green Tea",
+   "labelKo": "녹차"
+  },
+  {
+   "code": "Peptides",
+   "labelKo": "펩타이드"
+  },
+  {
+   "code": "Aloe",
+   "labelKo": "알로에"
+  },
+  {
+   "code": "Lactic Acid",
+   "labelKo": "락틱애씨드"
+  },
+  {
+   "code": "Licorice",
+   "labelKo": "감초"
+  },
+  {
+   "code": "SPF",
+   "labelKo": "SPF 자외선 차단"
+  },
+  {
+   "code": "Shea Butter",
+   "labelKo": "시어버터"
+  },
+  {
+   "code": "Panthenol (B5)",
+   "labelKo": "판테놀(B5)"
+  },
+  {
+   "code": "Niacinamide",
+   "labelKo": "나이아신아마이드"
+  },
+  {
+   "code": "Jojoba",
+   "labelKo": "호호바"
+  },
+  {
+   "code": "AHA/Glycolic Acid",
+   "labelKo": "AHA·글라이콜릭애씨드"
+  },
+  {
+   "code": "Salicylic Acid",
+   "labelKo": "살리실산"
+  },
+  {
+   "code": "Ceramide",
+   "labelKo": "세라마이드"
+  },
+  {
+   "code": "Rosehip / Rose",
+   "labelKo": "로즈힙·장미"
+  },
+  {
+   "code": "Caffeine",
+   "labelKo": "카페인"
+  },
+  {
+   "code": "Urea",
+   "labelKo": "요소(우레아)"
+  },
+  {
+   "code": "Adenosine",
+   "labelKo": "아데노신"
+  },
+  {
+   "code": "Allantoin",
+   "labelKo": "알란토인"
+  },
+  {
+   "code": "Retinol",
+   "labelKo": "레티놀"
+  },
+  {
+   "code": "Zinc",
+   "labelKo": "아연"
+  },
+  {
+   "code": "Alcohol Denat",
+   "labelKo": "변성알코올"
+  },
+  {
+   "code": "Centella (Cica)",
+   "labelKo": "센텔라(시카)"
+  },
+  {
+   "code": "Willow Bark",
+   "labelKo": "버드나무 껍질"
+  },
+  {
+   "code": "Collagen",
+   "labelKo": "콜라겐"
+  },
+  {
+   "code": "Mineral Oil / Petrolatum",
+   "labelKo": "미네랄오일·바셀린"
+  }
+ ],
+ "skin_type": [
+  {
+   "code": "combination",
+   "labelKo": "복합성 피부"
+  },
+  {
+   "code": "dry",
+   "labelKo": "건성 피부"
+  },
+  {
+   "code": "normal",
+   "labelKo": "중성 피부"
+  },
+  {
+   "code": "oily",
+   "labelKo": "지성 피부"
+  }
+ ],
+ "skin_tone": [
+  {
+   "code": "fair",
+   "labelKo": "밝은 톤"
+  },
+  {
+   "code": "light",
+   "labelKo": "라이트 톤"
+  },
+  {
+   "code": "medium",
+   "labelKo": "미디엄 톤"
+  },
+  {
+   "code": "tan",
+   "labelKo": "탠 톤"
+  },
+  {
+   "code": "deep",
+   "labelKo": "딥 톤"
+  }
+ ],
+ "hair_color": [
+  {
+   "code": "black",
+   "labelKo": "검은 모발"
+  },
+  {
+   "code": "brown",
+   "labelKo": "갈색 모발"
+  },
+  {
+   "code": "blonde",
+   "labelKo": "금발"
+  },
+  {
+   "code": "auburn",
+   "labelKo": "적갈색 모발"
+  },
+  {
+   "code": "red",
+   "labelKo": "붉은 모발"
+  },
+  {
+   "code": "gray",
+   "labelKo": "회색 모발"
+  }
+ ],
+ "eye_color": [
+  {
+   "code": "blue",
+   "labelKo": "푸른 눈"
+  },
+  {
+   "code": "brown",
+   "labelKo": "갈색 눈"
+  },
+  {
+   "code": "green",
+   "labelKo": "녹색 눈"
+  },
+  {
+   "code": "gray",
+   "labelKo": "회색 눈"
+  },
+  {
+   "code": "hazel",
+   "labelKo": "헤이즐 눈"
+  }
+ ],
+ "category": [
+  {
+   "categoryId": "Cleansers",
+   "code": "Cleansers",
+   "name": "클렌징",
+   "depth": 1,
+   "sortOrder": 0
+  },
+  {
+   "categoryId": "Eye Care",
+   "code": "Eye Care",
+   "name": "아이 케어",
+   "depth": 1,
+   "sortOrder": 1
+  },
+  {
+   "categoryId": "Lip Balms & Treatments",
+   "code": "Lip Balms & Treatments",
+   "name": "립 케어",
+   "depth": 1,
+   "sortOrder": 2
+  },
+  {
+   "categoryId": "Masks",
+   "code": "Masks",
+   "name": "마스크팩",
+   "depth": 1,
+   "sortOrder": 3
+  },
+  {
+   "categoryId": "Moisturizers",
+   "code": "Moisturizers",
+   "name": "크림·로션",
+   "depth": 1,
+   "sortOrder": 4
+  },
+  {
+   "categoryId": "Self Tanners",
+   "code": "Self Tanners",
+   "name": "셀프 태닝",
+   "depth": 1,
+   "sortOrder": 5
+  },
+  {
+   "categoryId": "Sunscreen",
+   "code": "Sunscreen",
+   "name": "선케어",
+   "depth": 1,
+   "sortOrder": 6
+  },
+  {
+   "categoryId": "Treatments",
+   "code": "Treatments",
+   "name": "집중 케어",
+   "depth": 1,
+   "sortOrder": 7
+  }
+ ]
+}
