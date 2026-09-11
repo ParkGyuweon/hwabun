@@ -2,6 +2,16 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { AuthError, ROLE_LABEL, login, register } from '../../lib/auth';
 import type { AccountRole, AccountSession } from '../../lib/auth';
+import {
+  EMPTY_PROFILE,
+  PROFILE_FIELDS,
+  PROFILE_FIELD_KO,
+  PROFILE_OPTIONS,
+  PROFILE_RECOMMENDED,
+  profileToApi,
+  saveMemberProfile,
+} from '../../lib/memberProfile';
+import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
 
 type Mode = 'login' | 'register';
 
@@ -62,6 +72,11 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
   const [error, setError] = useState<AuthError | null>(null);
   /** 비밀번호를 눈으로 확인하는 토글. 오타를 입력 단계에서 잡는다 */
   const [showPassword, setShowPassword] = useState(false);
+  /**
+   * 고객 가입에서 받는 피부 프로필 4개. 페르소나 표와 같은 값 체계라 페르소나를 회원으로
+   * 옮길 때도 그대로 들어간다. 전부 "선택 안 함"(null) 가능 — 억지로 채우게 하지 않는다 (AI 요청 §1.2).
+   */
+  const [profile, setProfile] = useState<MemberProfile>(EMPTY_PROFILE);
 
   const nameLabel = role === 'MEMBER' ? '닉네임' : '담당자 이름';
   const valid =
@@ -76,7 +91,9 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
       const session =
         mode === 'login' || role === 'ADMIN'
           ? await login(role, email, password)
-          : await register(role, email, password, name);
+          : await register(role, email, password, name, role === 'MEMBER' ? profileToApi(profile) : {});
+      // 백엔드 프로필 API 가 열리기 전까지 이 브라우저가 프로필을 든다. 리뷰 필터·"내 피부 타입" 칩이 바로 켜진다
+      if (mode === 'register' && role === 'MEMBER') saveMemberProfile(session.id, profile);
       onSuccess(session);
     } catch (err) {
       setError(err instanceof AuthError ? err : new AuthError('알 수 없는 오류가 났습니다.', 'unknown'));
@@ -179,6 +196,39 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
             required
           />
         </label>
+      ) : null}
+
+      {mode === 'register' && role === 'MEMBER' ? (
+        <fieldset className="auth__profile">
+          <legend>
+            피부 정보 <span className="auth__optional">선택</span>
+          </legend>
+          <p className="auth__profile-lead">
+            피부 타입과 톤을 알려 주시면 비슷한 피부 사용자의 반응을 추천에 반영합니다. 나중에 내 정보에서 바꿀 수 있습니다.
+          </p>
+          <div className="auth__profile-grid">
+            {PROFILE_FIELDS.map((field: ProfileField) => (
+              <label key={field} className="auth__field">
+                <span>
+                  {PROFILE_FIELD_KO[field]}
+                  {PROFILE_RECOMMENDED.includes(field) ? <em className="auth__recommended">권장</em> : null}
+                </span>
+                <select
+                  name={field}
+                  value={profile[field] ?? ''}
+                  onChange={(e) => setProfile((p) => ({ ...p, [field]: e.target.value === '' ? null : e.target.value }))}
+                >
+                  <option value="">선택 안 함</option>
+                  {PROFILE_OPTIONS[field].map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.ko}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       ) : null}
 
       {error ? (
