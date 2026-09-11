@@ -219,6 +219,22 @@ source = event-properties-schema.md
 사용하고, `scenario_id`, `simulation_run_id`가 NULL인 Web 행도 같은 grain 규칙으로
 집계한다.
 
+### 4.0 시드 Event 제외 범위
+
+`is_seed=true`인 Event는 생성기가 Persona의 사전 선호를 주입한 표식이라 관측된
+행동이 아니다(`processed-schema.md`, `event-properties-schema.md` §3.14·§7-8). 아래가
+제외 여부의 정본이다.
+
+| Mart | 시드 | 근거 |
+| --- | --- | --- |
+| `funnel_session_fact`, `product_daily_kpi`, `funnel_daily_kpi`, `brand_daily_kpi`, `cross_brand_daily` | 제외 | 전환 퍼널. 긍정 시드는 조회 없는 담기를, 부정 시드는 담기 없는 조회를 내서 분자·분모를 양방향으로 왜곡한다 |
+| `product_repurchase_daily`, `brand_repurchase_daily`, `purchase_reason_daily` | 제외 | 구매 행동. 같은 원칙 |
+| `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
+| `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
+| `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
+| `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 뺄지는 미결 |
+| `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
+
 ### 4.1 `product_daily_kpi`
 
 ```text
