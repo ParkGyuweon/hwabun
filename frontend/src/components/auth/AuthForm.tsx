@@ -12,6 +12,7 @@ import {
   saveMemberProfile,
 } from '../../lib/memberProfile';
 import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
+import { track } from '../../lib/logger';
 
 type Mode = 'login' | 'register';
 
@@ -94,6 +95,12 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
           : await register(role, email, password, name, role === 'MEMBER' ? profileToApi(profile) : {});
       // 백엔드 프로필 API 가 열리기 전까지 이 브라우저가 프로필을 든다. 리뷰 필터·"내 피부 타입" 칩이 바로 켜진다
       if (mode === 'register' && role === 'MEMBER') saveMemberProfile(session.id, profile);
+      /**
+       * `login` 이벤트 (계약 event-properties-schema.md :78 · intent session · properties 없음). "익명 → 계정 전환 시점" 이라
+       * 가입 직후도 같은 시점이다. 고객(MEMBER)만 — 판매자·운영자는 로거가 어차피 막는다. 수집기가 JWT 로 account_id 를
+       * 붙이므로 봉투에는 아무것도 더 싣지 않는다.
+       */
+      if (role === 'MEMBER') track('login');
       onSuccess(session);
     } catch (err) {
       setError(err instanceof AuthError ? err : new AuthError('알 수 없는 오류가 났습니다.', 'unknown'));
