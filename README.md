@@ -235,6 +235,8 @@ S15P21A306/
 │   │   ├── build_marts_job.py           Mart 집계
 │   │   ├── validate_pipeline_job.py     품질 검증 리포트
 │   │   └── behavior_weights.py          batch/jobs/behavior_weights.py 를 Spark 에서 재사용하는 어댑터
+│   ├── tools/
+│   │   └── replay_collector.py       gzip 행동 로그를 Collector 로 재생 (SHA-256 · 수락/거부/포기 회계)
 │   ├── tests/                           raw sink · data marts · brand attribution · banner/trait marts (Spark)
 │   └── README.md
 │
