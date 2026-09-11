@@ -14,7 +14,7 @@ from streaming.jobs.build_marts_job import _observed_events, build_mart_frames
 PRODUCT_FACT_DDL = (
     "event_id string, event_date date, event_hour timestamp, event_hour_kst timestamp, "
     "event_time timestamp, processed_at timestamp, event_name string, intent string, "
-    "user_id string, identity_scope string, is_seed boolean, persona_id string, "
+    "user_id string, identity_scope string, is_seeded boolean, persona_id string, "
     "scenario_id string, simulation_run_id string, generator_type string, "
     "session_id string, page_view_id string, item_index int, product_id string, "
     "context_product_id string, sku_id string, list_id string, entry_source string, "
@@ -33,7 +33,7 @@ SESSIONIZED_DDL = (
     "session_id string, user_id string, persona_id string, product_id string, "
     "brand_id string, category_id string, actor_type string, source string, "
     "scenario_id string, simulation_run_id string, generator_type string, "
-    "event_order int, properties_json string, is_seed boolean"
+    "event_order int, properties_json string, is_seeded boolean"
 )
 
 
@@ -68,7 +68,7 @@ class SeedExclusionSparkTest(unittest.TestCase):
         return self.spark.createDataFrame(values, self.product_fact_schema)
 
     @staticmethod
-    def _event(event_id, event_name, session_id, is_seed, minute):
+    def _event(event_id, event_name, session_id, is_seeded, minute):
         moment = datetime(2026, 9, 8, 1, minute, tzinfo=timezone.utc)
         return {
             "event_id": event_id,
@@ -80,7 +80,7 @@ class SeedExclusionSparkTest(unittest.TestCase):
             "intent": "interest",
             "user_id": "PC00001",
             "identity_scope": "persona",
-            "is_seed": is_seed,
+            "is_seeded": is_seeded,
             "persona_id": "PC00001",
             "scenario_id": "K01",
             "simulation_run_id": "RUN1",
@@ -163,6 +163,45 @@ class SeedExclusionSparkTest(unittest.TestCase):
         self.assertEqual(1, brand["detail_view_sessions"])
         self.assertEqual(1, brand["add_to_cart_sessions"])
         self.assertEqual(1.0, brand["view_to_cart_rate"])
+
+    def test_mart_function_filters_seeds_without_the_caller(self):
+        """시드 제외는 Mart 정의의 일부여야 한다.
+
+        호출부(build_mart_frames)에만 두면 Mart 함수를 직접 부르는 경로가 다른 값을
+        낸다. Q5 의 brand_daily_is_deterministic_from_inputs 가 원본 Fact 에서
+        _brand_daily_kpi 를 재계산해 대조하므로, 그 경로가 어긋나면 Mart 는 자기
+        입력으로부터 재현되지 않는다 (Jira 235 실행 검증에서 542행 불일치로 드러남).
+        """
+        from streaming.jobs.build_marts_job import _brand_daily_kpi
+
+        product_fact = self._product_fact(
+            [
+                self._event("i1", "product_impression", "S1", False, 1),
+                self._event("v1", "product_view", "S1", False, 2),
+                self._event("c1", "add_to_cart", "seed:RUN1:PC00001:P1", True, 3),
+            ]
+        )
+        empty_funnel = self.spark.createDataFrame(
+            [],
+            "brand_id string, actor_type string, source string, generator_type string, "
+            "scenario_id string, simulation_run_id string, session_id string, "
+            "user_id string, product_id string, first_information_view_at timestamp",
+        )
+
+        # 호출부를 거치지 않고 Mart 함수를 직접 불러도 같은 결과여야 한다.
+        direct = _brand_daily_kpi(product_fact, empty_funnel, "Asia/Seoul").first()
+        through_frames = build_mart_frames(
+            self._empty_sessionized(), product_fact, "Asia/Seoul"
+        )["brand_daily_kpi"].first()
+
+        self.assertEqual(0, direct["add_to_cart_sessions"])
+        self.assertEqual(
+            through_frames["add_to_cart_sessions"], direct["add_to_cart_sessions"]
+        )
+        self.assertEqual(
+            through_frames["detail_view_sessions"], direct["detail_view_sessions"]
+        )
+        self.assertEqual(through_frames["view_to_cart_rate"], direct["view_to_cart_rate"])
 
     def test_seed_rows_stay_out_of_the_funnel_fact(self):
         product_fact = self._product_fact(
