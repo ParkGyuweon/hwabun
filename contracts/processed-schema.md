@@ -167,6 +167,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `is_synthetic` | boolean | N | synthetic 판정 결과 |
 | `user_id` | string | Y | 분석 식별자. `identity_scope`에 따라 `persona_id` 또는 `account_id` |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seed` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `account_id` | string | Y | Collector가 JWT `sub`에서 뽑은 값. 비로그인·synthetic은 NULL |
 | `persona_id` | string | Y | synthetic 필수, Web NULL 허용 |
 | `scenario_id` | string | Y | synthetic 필수 |
@@ -214,6 +215,19 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 브랜드 담당자·운영자 트래픽은 Front가 회원 토큰만 실어 원천에서 제외한다. Event에
 계정 롤을 두지 않으므로 DATA는 이를 사후에 가려낼 수 없다.
 
+`is_seed`는 `properties.seeded`가 `true`인지로 판정한다
+([`event-properties-schema.md` §3.14](./event-properties-schema.md)). 시드 Event는
+생성기가 Persona의 사전 선호를 추천기에 주입하려고 만든 것이라 관측된 행동이 아니다.
+`cleaned_events`에는 그대로 보존하고 행동 Mart 집계에서 제외한다. 어느 Mart가 제외
+대상인지는 [`dw-schema.md`](./dw-schema.md)가 정본이다.
+
+시드 Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}`
+형식이라 세션 네임스페이스로도 갈라지지만 판정에는 쓰지 않는다. 그쪽은 파생이고
+생성기가 먼저 찍는 표식이 `properties.seeded`다.
+
+`actor_type=user`에 `seeded`가 실려 오면 실사용자 행동에 주입 표식이 섞인 것이므로
+`invalid_seed_scope`로 격리한다.
+
 ## 7. `sessionized_events`
 
 입력은 `cleaned_events`다. grain과 unique key는 `event_id`다.
@@ -226,6 +240,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `page_view_id` | string | N | 페이지 방문 ID |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seed` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -273,6 +288,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `intent` | string | N | Event 의미 |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seed` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -329,6 +345,7 @@ unique key는 `order_id + product_id`다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seed` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -371,6 +388,7 @@ unique key는 `order_id + product_id`다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seed` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
