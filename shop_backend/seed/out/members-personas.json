@@ -1,0 +1,1002 @@
+[
+ {
+  "email": "pa00001@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00001",
+  "skinTypeCode": "combination",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00001"
+ },
+ {
+  "email": "pa00002@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00002",
+  "skinTypeCode": "combination",
+  "skinToneCode": "light",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00002"
+ },
+ {
+  "email": "pa00003@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00003",
+  "skinTypeCode": "combination",
+  "skinToneCode": "light",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "green",
+  "personaId": "PA00003"
+ },
+ {
+  "email": "pa00004@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00004",
+  "skinTypeCode": "combination",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00004"
+ },
+ {
+  "email": "pa00005@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00005",
+  "skinTypeCode": "combination",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00005"
+ },
+ {
+  "email": "pa00006@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00006",
+  "skinTypeCode": "combination",
+  "skinToneCode": "fair",
+  "hairColorCode": "red",
+  "eyeColorCode": "brown",
+  "personaId": "PA00006"
+ },
+ {
+  "email": "pa00007@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00007",
+  "skinTypeCode": "combination",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00007"
+ },
+ {
+  "email": "pa00008@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00008",
+  "skinTypeCode": "combination",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00008"
+ },
+ {
+  "email": "pa00009@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00009",
+  "skinTypeCode": "combination",
+  "skinToneCode": "light",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "blue",
+  "personaId": "PA00009"
+ },
+ {
+  "email": "pa00010@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00010",
+  "skinTypeCode": "dry",
+  "skinToneCode": "light",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00010"
+ },
+ {
+  "email": "pa00011@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00011",
+  "skinTypeCode": "dry",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00011"
+ },
+ {
+  "email": "pa00012@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00012",
+  "skinTypeCode": "dry",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00012"
+ },
+ {
+  "email": "pa00013@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00013",
+  "skinTypeCode": "combination",
+  "skinToneCode": "fair",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00013"
+ },
+ {
+  "email": "pa00014@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00014",
+  "skinTypeCode": "combination",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00014"
+ },
+ {
+  "email": "pa00015@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00015",
+  "skinTypeCode": "combination",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00015"
+ },
+ {
+  "email": "pa00016@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00016",
+  "skinTypeCode": "dry",
+  "skinToneCode": "fair",
+  "hairColorCode": "red",
+  "eyeColorCode": "blue",
+  "personaId": "PA00016"
+ },
+ {
+  "email": "pa00017@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00017",
+  "skinTypeCode": "normal",
+  "skinToneCode": "light",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00017"
+ },
+ {
+  "email": "pa00018@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00018",
+  "skinTypeCode": "normal",
+  "skinToneCode": "light",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "green",
+  "personaId": "PA00018"
+ },
+ {
+  "email": "pa00019@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00019",
+  "skinTypeCode": "dry",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "blue",
+  "personaId": "PA00019"
+ },
+ {
+  "email": "pa00020@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00020",
+  "skinTypeCode": "dry",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00020"
+ },
+ {
+  "email": "pa00021@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00021",
+  "skinTypeCode": "combination",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00021"
+ },
+ {
+  "email": "pa00022@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00022",
+  "skinTypeCode": "combination",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00022"
+ },
+ {
+  "email": "pa00023@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00023",
+  "skinTypeCode": "dry",
+  "skinToneCode": "fair",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00023"
+ },
+ {
+  "email": "pa00024@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00024",
+  "skinTypeCode": "dry",
+  "skinToneCode": "fair",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "blue",
+  "personaId": "PA00024"
+ },
+ {
+  "email": "pa00025@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00025",
+  "skinTypeCode": "dry",
+  "skinToneCode": "fair",
+  "hairColorCode": "black",
+  "eyeColorCode": "blue",
+  "personaId": "PA00025"
+ },
+ {
+  "email": "pa00026@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00026",
+  "skinTypeCode": "normal",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "blue",
+  "personaId": "PA00026"
+ },
+ {
+  "email": "pa00027@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00027",
+  "skinTypeCode": "normal",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00027"
+ },
+ {
+  "email": "pa00028@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00028",
+  "skinTypeCode": "normal",
+  "skinToneCode": "fair",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "green",
+  "personaId": "PA00028"
+ },
+ {
+  "email": "pa00029@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00029",
+  "skinTypeCode": "oily",
+  "skinToneCode": "light",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "green",
+  "personaId": "PA00029"
+ },
+ {
+  "email": "pa00030@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00030",
+  "skinTypeCode": "oily",
+  "skinToneCode": "light",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00030"
+ },
+ {
+  "email": "pa00031@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00031",
+  "skinTypeCode": "oily",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00031"
+ },
+ {
+  "email": "pa00032@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00032",
+  "skinTypeCode": "dry",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "blue",
+  "personaId": "PA00032"
+ },
+ {
+  "email": "pa00033@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00033",
+  "skinTypeCode": "combination",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00033"
+ },
+ {
+  "email": "pa00034@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00034",
+  "skinTypeCode": "normal",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00034"
+ },
+ {
+  "email": "pa00035@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00035",
+  "skinTypeCode": "normal",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "blue",
+  "personaId": "PA00035"
+ },
+ {
+  "email": "pa00036@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00036",
+  "skinTypeCode": "oily",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00036"
+ },
+ {
+  "email": "pa00037@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00037",
+  "skinTypeCode": "oily",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00037"
+ },
+ {
+  "email": "pa00038@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00038",
+  "skinTypeCode": "normal",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00038"
+ },
+ {
+  "email": "pa00039@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00039",
+  "skinTypeCode": "normal",
+  "skinToneCode": "fair",
+  "hairColorCode": "auburn",
+  "eyeColorCode": "brown",
+  "personaId": "PA00039"
+ },
+ {
+  "email": "pa00040@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00040",
+  "skinTypeCode": "dry",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00040"
+ },
+ {
+  "email": "pa00041@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00041",
+  "skinTypeCode": "dry",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00041"
+ },
+ {
+  "email": "pa00042@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00042",
+  "skinTypeCode": "dry",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "blue",
+  "personaId": "PA00042"
+ },
+ {
+  "email": "pa00043@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00043",
+  "skinTypeCode": "oily",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00043"
+ },
+ {
+  "email": "pa00044@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00044",
+  "skinTypeCode": "oily",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00044"
+ },
+ {
+  "email": "pa00045@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00045",
+  "skinTypeCode": "oily",
+  "skinToneCode": "medium",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "brown",
+  "personaId": "PA00045"
+ },
+ {
+  "email": "pa00046@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00046",
+  "skinTypeCode": "normal",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00046"
+ },
+ {
+  "email": "pa00047@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00047",
+  "skinTypeCode": "normal",
+  "skinToneCode": "medium",
+  "hairColorCode": "auburn",
+  "eyeColorCode": "brown",
+  "personaId": "PA00047"
+ },
+ {
+  "email": "pa00048@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00048",
+  "skinTypeCode": "oily",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00048"
+ },
+ {
+  "email": "pa00049@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00049",
+  "skinTypeCode": "oily",
+  "skinToneCode": "fair",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00049"
+ },
+ {
+  "email": "pa00050@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00050",
+  "skinTypeCode": "combination",
+  "skinToneCode": "tan",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00050"
+ },
+ {
+  "email": "pa00051@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00051",
+  "skinTypeCode": "combination",
+  "skinToneCode": "tan",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "brown",
+  "personaId": "PA00051"
+ },
+ {
+  "email": "pa00052@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00052",
+  "skinTypeCode": "combination",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00052"
+ },
+ {
+  "email": "pa00053@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00053",
+  "skinTypeCode": "combination",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00053"
+ },
+ {
+  "email": "pa00054@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00054",
+  "skinTypeCode": "combination",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00054"
+ },
+ {
+  "email": "pa00055@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00055",
+  "skinTypeCode": "combination",
+  "skinToneCode": "deep",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00055"
+ },
+ {
+  "email": "pa00056@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00056",
+  "skinTypeCode": "oily",
+  "skinToneCode": "fair",
+  "hairColorCode": "blonde",
+  "eyeColorCode": "brown",
+  "personaId": "PA00056"
+ },
+ {
+  "email": "pa00057@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00057",
+  "skinTypeCode": "oily",
+  "skinToneCode": "fair",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00057"
+ },
+ {
+  "email": "pa00058@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00058",
+  "skinTypeCode": "dry",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00058"
+ },
+ {
+  "email": "pa00059@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00059",
+  "skinTypeCode": "oily",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00059"
+ },
+ {
+  "email": "pa00060@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00060",
+  "skinTypeCode": "oily",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00060"
+ },
+ {
+  "email": "pa00061@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00061",
+  "skinTypeCode": "normal",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00061"
+ },
+ {
+  "email": "pa00062@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00062",
+  "skinTypeCode": "normal",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "green",
+  "personaId": "PA00062"
+ },
+ {
+  "email": "pa00063@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00063",
+  "skinTypeCode": "normal",
+  "skinToneCode": "medium",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00063"
+ },
+ {
+  "email": "pa00064@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00064",
+  "skinTypeCode": "normal",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00064"
+ },
+ {
+  "email": "pa00065@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00065",
+  "skinTypeCode": "oily",
+  "skinToneCode": "light",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00065"
+ },
+ {
+  "email": "pa00066@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00066",
+  "skinTypeCode": "combination",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00066"
+ },
+ {
+  "email": "pa00067@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00067",
+  "skinTypeCode": "combination",
+  "skinToneCode": "deep",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00067"
+ },
+ {
+  "email": "pa00068@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00068",
+  "skinTypeCode": "combination",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00068"
+ },
+ {
+  "email": "pa00069@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00069",
+  "skinTypeCode": "oily",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00069"
+ },
+ {
+  "email": "pa00070@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00070",
+  "skinTypeCode": "oily",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00070"
+ },
+ {
+  "email": "pa00071@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00071",
+  "skinTypeCode": "oily",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00071"
+ },
+ {
+  "email": "pa00072@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00072",
+  "skinTypeCode": "oily",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00072"
+ },
+ {
+  "email": "pa00073@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00073",
+  "skinTypeCode": "dry",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00073"
+ },
+ {
+  "email": "pa00074@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00074",
+  "skinTypeCode": "oily",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00074"
+ },
+ {
+  "email": "pa00075@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00075",
+  "skinTypeCode": "oily",
+  "skinToneCode": "tan",
+  "hairColorCode": "auburn",
+  "eyeColorCode": "hazel",
+  "personaId": "PA00075"
+ },
+ {
+  "email": "pa00076@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00076",
+  "skinTypeCode": "dry",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00076"
+ },
+ {
+  "email": "pa00077@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00077",
+  "skinTypeCode": "normal",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00077"
+ },
+ {
+  "email": "pa00078@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00078",
+  "skinTypeCode": "normal",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00078"
+ },
+ {
+  "email": "pa00079@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00079",
+  "skinTypeCode": "normal",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00079"
+ },
+ {
+  "email": "pa00080@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00080",
+  "skinTypeCode": "oily",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00080"
+ },
+ {
+  "email": "pa00081@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00081",
+  "skinTypeCode": "oily",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00081"
+ },
+ {
+  "email": "pa00082@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00082",
+  "skinTypeCode": "oily",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00082"
+ },
+ {
+  "email": "pa00083@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00083",
+  "skinTypeCode": "normal",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00083"
+ },
+ {
+  "email": "pa00084@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00084",
+  "skinTypeCode": "normal",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00084"
+ },
+ {
+  "email": "pa00085@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00085",
+  "skinTypeCode": "normal",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00085"
+ },
+ {
+  "email": "pa00086@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00086",
+  "skinTypeCode": "normal",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00086"
+ },
+ {
+  "email": "pa00087@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00087",
+  "skinTypeCode": "dry",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00087"
+ },
+ {
+  "email": "pa00088@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00088",
+  "skinTypeCode": "dry",
+  "skinToneCode": "tan",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00088"
+ },
+ {
+  "email": "pa00089@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00089",
+  "skinTypeCode": "dry",
+  "skinToneCode": "tan",
+  "hairColorCode": "gray",
+  "eyeColorCode": "blue",
+  "personaId": "PA00089"
+ },
+ {
+  "email": "pa00090@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00090",
+  "skinTypeCode": "dry",
+  "skinToneCode": "medium",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00090"
+ },
+ {
+  "email": "pa00091@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00091",
+  "skinTypeCode": "normal",
+  "skinToneCode": "tan",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00091"
+ },
+ {
+  "email": "pa00092@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00092",
+  "skinTypeCode": "dry",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00092"
+ },
+ {
+  "email": "pa00093@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00093",
+  "skinTypeCode": "dry",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00093"
+ },
+ {
+  "email": "pa00094@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00094",
+  "skinTypeCode": "normal",
+  "skinToneCode": "tan",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00094"
+ },
+ {
+  "email": "pa00095@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00095",
+  "skinTypeCode": "dry",
+  "skinToneCode": "deep",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00095"
+ },
+ {
+  "email": "pa00096@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00096",
+  "skinTypeCode": "dry",
+  "skinToneCode": "deep",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00096"
+ },
+ {
+  "email": "pa00097@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00097",
+  "skinTypeCode": "combination",
+  "skinToneCode": "deep",
+  "hairColorCode": "brown",
+  "eyeColorCode": "brown",
+  "personaId": "PA00097"
+ },
+ {
+  "email": "pa00098@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00098",
+  "skinTypeCode": "normal",
+  "skinToneCode": "deep",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00098"
+ },
+ {
+  "email": "pa00099@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00099",
+  "skinTypeCode": "dry",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00099"
+ },
+ {
+  "email": "pa00100@persona.hwabun.local",
+  "password": "hwabun1234",
+  "nickname": "PA00100",
+  "skinTypeCode": "oily",
+  "skinToneCode": "tan",
+  "hairColorCode": "black",
+  "eyeColorCode": "brown",
+  "personaId": "PA00100"
+ }
+]
