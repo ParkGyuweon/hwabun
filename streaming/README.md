@@ -282,6 +282,14 @@ DW는 금액을 복제하지 않는다.
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고
 `analytics_baseline` 기간으로 가른다.
 
+탐색 배정 비중(`banner_explore_impression_share_is_near_twenty_percent`)은 **실사용자
+(`actor_type='user'`) 노출만** 모집단으로 쓴다. `trait_source='explore'`를 만드는 주체가
+화면뿐이기 때문이다 — 추천 서버는 `explore`를 아예 내보내지 않고(`batch/serving/banners.py`의
+trait_source 계약: "프론트 플랜의 무작위 탐색은 서버가 아니라 화면 몫"), 합성 로그의
+`explore`는 생성기가 정한 값이라 검증 대상이 아니다. 합성 로그만 재생한 실행에서는
+실사용자 표본이 0이라 이 검사가 면제되고, 프론트가 탐색 배너를 내보내기 시작하면
+자동으로 다시 평가된다. `coldstart`는 분모에서 빼는 규칙을 그대로 유지한다.
+
 `cross_brand_daily`는 `sessionized_events.event_order`로 정렬한 `product_view`만 사용한다.
 세션 최초 브랜드와 목적 브랜드가 다르면 교차 유입으로 판정하며, 같은 세션·목적 브랜드는
 한 번만 센다. 추천 귀속은 목적 조회의 `recommendation_id`를 우선하고 없으면 같은
