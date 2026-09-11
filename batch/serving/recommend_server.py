@@ -38,9 +38,9 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
 원천 200개는 신규가 0 이다. **등록 상품**(Jira 216)이 들어오면 그때부터 채워진다.
 
 히어로 + 배너 (Jira 218, §5-1) — 프론트 확정 2026-09-09
-    curl "http://localhost:8300/api/recommend?persona_id=PC00001&size=10&banner_slots=6&reserved=2&seed=review"
-    → items 10 (순수 순위) + hero (items[0] 에 축 문구, banner_type 항상 있음)
-      + banners 6: 칸 1~4 축 순환(기본 concern,segment), 칸 5·6 new_brand(전용). items 와 겹치지 않음
+    curl "http://127.0.0.1:8300/api/recommend?persona_id=PC00001&size=10&banner_slots=1&reserved=0&hero=new_brand&seed=review"
+    → items 10 (순수 순위) + hero (new_brand 정책: 신규 상품 중 점수 최고, 없으면 items[0]) — 현행 화면(2026-09-10 이후)
+    (09-09 원안 `banner_slots=6&reserved=2`: 칸 1~4 축 순환, 칸 5·6 new_brand 전용 — 배너 행이 화면에서 빠져 지금은 안 쓴다. 능력은 남아 있다)
     reason 은 아이템·배너 모두 key 하나 (attribute → content → cf → new_brand → popular)
     성분 축은 위치가중 ≥ 0.3 인 성분만(위치 내림차순). banner_slots=0 이면 예전과 같고 reserved 는 메인 안
     hero=new_brand (Jira 237, 2026-09-10) — 배너 행이 화면에서 빠져 전용 칸이 없을 때. 신규 상품 중 점수 최고를

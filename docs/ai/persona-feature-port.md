@@ -2,7 +2,7 @@
 
 - 담당: AI
 - 이슈: S15P21A306-72 · 브랜치 `S15P21A306-72-ai-user-persona-feature`
-- 상태: 결정 완료, 구현 진행 중
+- 상태: **이관·머지 완료** (`batch/ingest/build_affinity_lift.py` · `batch/jobs/persona_feature.py`, LTR 피처 #1 로 서빙 중. 2026-09-11 실회원 속성 쿼리 Jira 245)
 - 관련 계약: `contracts/recommendation-io-spec.md` §속성 친화도 · `docs/ai/recommendation-design.md`
 
 ## 1. 무엇을 하는 작업인가
@@ -25,9 +25,9 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 
 | 대상 | 지금 위치 | 조치 |
 |---|---|---|
-| 속성 친화도 테이블 생성 | `Research/build/build_affinity_lift.py` | **레포로 이관** |
-| 페르소나 → `(200,)` 친화도 벡터 | `Research/eval/eval_weight_schedule.py` 의 `attr()` | **레포로 이관** (`Recommender(affinity=...)` 에 꽂히는 형태) |
-| 속성 정규화 (skin_tone 5버킷, eye_color 표기, brunette→brown) | 위 두 파일에 흩어져 있음 | **한 곳으로 합쳐 이관** |
+| 속성 친화도 테이블 생성 | `Research/build/build_affinity_lift.py` | **이관 완료** → `batch/ingest/build_affinity_lift.py` |
+| 페르소나 → `(200,)` 친화도 벡터 | `Research/eval/eval_weight_schedule.py` 의 `attr()` | **이관 완료** → `batch/jobs/persona_feature.py` `AffinityTable` (`Recommender(affinity=...)`) |
+| 속성 정규화 (skin_tone 5버킷, eye_color 표기, brunette→brown) | 위 두 파일에 흩어져 있음 | **이관 완료** → `persona_feature.normalize` (서버 쿼리 속성 검증도 같은 표를 쓴다) |
 | 행동 → `v_u+` / `v_u-` | `batch/jobs/user_vector.py` | 이미 레포에 있음. 손대지 않음 |
 | 친화도 원본 데이터 | `batch/ingest/data/affinity_lift.csv` | 이미 레포에 있음 |
 | 페르소나 6축 스타일 (`persona_style.json`) | 레포에 데이터만 있음 | **옮기지 않음.** 시뮬레이터 행동 결정 전용이며 추천 점수에 넣으면 우리가 심은 성향으로 우리 추천을 채점하는 순환이 된다 |
