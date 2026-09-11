@@ -267,7 +267,11 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 | property | type | 값 | 설명 |
 | --- | --- | --- | --- |
-| `seeded` | boolean | `true` | 시드 Event에만 존재한다. 관측 Event에는 키 자체가 없다 |
+| `seeded` | boolean | `true` | 시드 Event가 싣는다. 관측 Event는 키를 두지 않으며, `false`가 와도 관측으로 본다 |
+
+타입은 `event-schema.json`이 강제한다. `actor_type='synthetic'` 블록에 `boolean`으로
+선언했고, `actor_type='user'` 블록은 이 키를 금지한다. 문자열 `"true"`처럼 타입이
+흔들리면 Spark의 `is_seed` 판정이 조용히 달라지므로 봉투 검증에서 먼저 막는다.
 
 시드 Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}`
 형식이라 세션 네임스페이스로도 갈라지지만, **판정은 `properties.seeded`를 정본으로
