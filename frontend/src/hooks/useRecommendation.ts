@@ -18,28 +18,32 @@ import { useEffect, useMemo, useState } from 'react';
 import { type BuildInput, buildRecommendation } from '../lib/recommendMock';
 import { fetchRecommendation } from '../lib/recommendApi';
 import type { RecommendResponse } from '../types/recommendation';
+import type { MemberProfile } from '../lib/memberProfile';
 
 export type RecommendationSource = 'server' | 'mock';
 
 export interface UseRecommendationInput extends BuildInput {
   /** 회원 accountId 또는 시뮬레이션 페르소나 id. null 이면 서버를 부르지 않는다 */
   identityId: string | null;
+  /** 실회원 피부 프로필. 쿼리 4개로 실린다 (AI 회신 2026-09-11). 페르소나 표 id 면 null */
+  profile?: MemberProfile | null;
 }
 
 export function useRecommendation(input: UseRecommendationInput): { recommendation: RecommendResponse; source: RecommendationSource } {
-  const { identityId, products, excluded, axes, heroPolicy, k, bannerSlots, reserved } = input;
+  const { identityId, products, excluded, axes, heroPolicy, k, bannerSlots, reserved, profile = null } = input;
 
   const mock = useMemo(() => buildRecommendation(input), [input]);
 
   const axesKey = axes.join(',');
-  const key = identityId ? `${identityId}|${k}|${bannerSlots}|${reserved}|${heroPolicy ?? 'top'}|${axesKey}` : null;
+  const profileKey = profile ? `${profile.skin_type ?? ''}/${profile.skin_tone ?? ''}/${profile.hair_color ?? ''}/${profile.eye_color ?? ''}` : '';
+  const key = identityId ? `${identityId}|${k}|${bannerSlots}|${reserved}|${heroPolicy ?? 'top'}|${axesKey}|${profileKey}` : null;
   const [server, setServer] = useState<{ key: string; response: RecommendResponse } | null>(null);
 
   useEffect(() => {
     if (!key || !identityId) return;
     const controller = new AbortController();
     void fetchRecommendation(
-      { personaId: identityId, size: k, bannerSlots, reserved, axes, hero: heroPolicy ?? 'top' },
+      { personaId: identityId, size: k, bannerSlots, reserved, axes, hero: heroPolicy ?? 'top', profile },
       controller.signal,
     ).then((res) => {
       if (controller.signal.aborted) return;

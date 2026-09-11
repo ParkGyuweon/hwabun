@@ -42,7 +42,8 @@ export default defineConfig({
       ...Object.fromEntries(
         ['/api/recommend', '/api/prescription', '/api/catalog'].map((path) => [
           path,
-          { target: process.env.RECOMMEND_URL || 'http://localhost:8300', changeOrigin: true },
+          // 127.0.0.1: Windows 에서 localhost 는 ::1 을 먼저 시도해 요청마다 2초를 먹는다 (AI 회신 2026-09-11)
+          { target: process.env.RECOMMEND_URL || 'http://127.0.0.1:8300', changeOrigin: true },
         ]),
       ),
       ...Object.fromEntries(

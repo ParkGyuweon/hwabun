@@ -6,6 +6,7 @@ import { useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
 import { useRecommendation } from '../hooks/useRecommendation';
+import type { MemberProfile } from '../lib/memberProfile';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useTextSelection } from '../hooks/useTextSelection';
@@ -93,6 +94,12 @@ interface ProductListPageProps {
   /** 페르소나 맞춤 추천 근거로 쓴다 */
   reviews: Review[];
   persona: PersonaProfile | null;
+  /**
+   * 로그인 회원 id 와 피부 프로필. 추천 쿼리에 속성 4개를 싣는 데 쓴다 (AI 회신 2026-09-11 · 실회원만).
+   * 페르소나 표에 있는 id 는 서버가 표를 우선하므로 스위처 페르소나일 때는 보내지 않는다
+   */
+  memberId?: string | null;
+  memberProfile?: MemberProfile | null;
   onSelectProduct: (productId: string) => void;
   onAddToCart: (item: CartItem) => void;
   /** 장바구니에 담긴 상품. 맞춤 기획전(추천)에서 뺀다 */
@@ -116,6 +123,8 @@ export default function ProductListPage({
   products,
   reviews,
   persona,
+  memberId = null,
+  memberProfile = null,
   onSelectProduct,
   onAddToCart,
   cartProductIds,
@@ -196,8 +205,10 @@ export default function ProductListPage({
       // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
       heroPolicy: HERO_POLICY,
       identityId: persona?.persona_id ?? null,
+      // 실회원(accountId)일 때만 속성 쿼리. 시뮬레이션 페르소나는 서버가 표에서 읽는다
+      profile: memberId && persona?.persona_id === memberId ? memberProfile : null,
     }),
-    [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source],
+    [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source, memberId, memberProfile],
   );
   const { recommendation, source: recommendationSource } = useRecommendation(recommendationInput);
 

@@ -673,6 +673,8 @@ export default function App() {
           products={products}
           reviews={reviews}
           persona={persona}
+          memberId={member?.id ?? null}
+          memberProfile={memberProfile}
           onSelectProduct={openProduct}
           onAddToCart={addToCart}
           cartProductIds={cartProductIds}

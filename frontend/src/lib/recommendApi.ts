@@ -12,6 +12,7 @@
  *   - 실패(네트워크·4xx·5xx·타임아웃)는 null. 호출부가 목으로 물러난다.
  */
 import type { BannerType } from '../types/log';
+import type { MemberProfile } from './memberProfile';
 import type { HeroPolicy, RecommendBanner, RecommendHero, RecommendItem, RecommendResponse } from '../types/recommendation';
 
 /** 서버가 받는 축. 계약 §5 `axes` */
@@ -27,6 +28,12 @@ export interface RecommendQuery {
   reserved: number;
   axes: BannerType[];
   hero: HeroPolicy;
+  /**
+   * 실회원 피부 프로필 (AI 회신 2026-09-11). `skin_type` · `skin_tone` · `hair_color` · `eye_color` 를 계약 enum 값 그대로 쿼리에 싣는다.
+   * "선택 안 함" 은 **키를 생략**한다 (빈 문자열·null 문자 금지). 서버는 있는 속성만으로 가중치를 다시 나눈다.
+   * `persona_id` 가 페르소나 표에 있으면 서버가 표를 우선하고 쿼리는 무시한다 — 그래서 실회원일 때만 넣는다.
+   */
+  profile?: MemberProfile | null;
 }
 
 /* ---------- 서버 응답 (계약 §5 응답 예시 그대로) ---------- */
@@ -137,6 +144,12 @@ export function buildRecommendUrl(q: RecommendQuery): string {
     hero: q.hero,
   });
   if (axes.length > 0) params.set('axes', axes.join(','));
+  if (q.profile) {
+    for (const field of ['skin_type', 'skin_tone', 'hair_color', 'eye_color'] as const) {
+      const v = q.profile[field];
+      if (v) params.set(field, v);
+    }
+  }
   return `/api/recommend?${params.toString()}`;
 }
 
