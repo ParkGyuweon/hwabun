@@ -991,6 +991,41 @@ def validate_frames(
             "funnel_daily_kpi grain is unique",
         )
     )
+    # 단계 도달 세션은 앞 단계를 넘을 수 없다. 담기는 Quick Look 경로가 있어
+    # 분모가 detail_view_sessions 이고, 정보 조회는 상품 상세에서만 일어난다.
+    invalid_funnel_counts = funnel_daily.where(
+        (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+        | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+        | (F.col("information_view_sessions") > F.col("product_view_sessions"))
+        | (F.col("checkout_sessions") > F.col("add_to_cart_sessions"))
+        | (F.col("purchase_sessions") > F.col("checkout_sessions"))
+    ).count()
+    checks.append(_check(
+        "funnel_daily_counts_are_bounded",
+        invalid_funnel_counts == 0,
+        f"invalid_rows={invalid_funnel_counts}",
+    ))
+    funnel_rate_columns = [
+        "impression_to_click_rate", "click_to_view_rate", "view_to_information_rate",
+        "view_to_cart_rate", "cart_to_purchase_rate", "view_to_purchase_rate",
+        "dropoff_after_impression_rate", "dropoff_after_view_rate",
+        "dropoff_after_cart_rate",
+    ]
+    invalid_funnel_rates = funnel_daily.where(
+        F.greatest(*[
+            F.when(
+                F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+            for column in funnel_rate_columns
+        ]) == 1
+    ).count()
+    checks.append(_check(
+        "funnel_daily_rates_are_within_unit_interval",
+        invalid_funnel_rates == 0,
+        f"out_of_range={invalid_funnel_rates}",
+    ))
     brand_grain = [
         "event_date_kst", "brand_id", "actor_type", "source",
         "scenario_id", "simulation_run_id",
@@ -1011,9 +1046,13 @@ def validate_frames(
         invalid_brand_ids == 0,
         f"invalid_rows={invalid_brand_ids}",
     ))
+    # 담기는 Quick Look에서도 일어나므로 분모는 상세를 연 세션이다.
+    # 정보 조회는 상품 상세에서만 일어나 product_view 기준을 유지한다.
     invalid_brand_counts = brand_daily.where(
-        (F.col("add_to_cart_sessions") > F.col("product_view_sessions"))
+        (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
         | (F.col("information_view_sessions") > F.col("product_view_sessions"))
+        | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
     ).count()
     checks.append(_check(
         "brand_daily_counts_are_bounded",
@@ -1035,10 +1074,10 @@ def validate_frames(
     ).count()
     invalid_zero_denominators = brand_daily.where(
         ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
-        | ((F.col("product_view_sessions") == 0) & (
-            F.col("information_view_rate").isNotNull()
-            | F.col("view_to_cart_rate").isNotNull()
-        ))
+        | ((F.col("product_view_sessions") == 0)
+           & F.col("information_view_rate").isNotNull())
+        | ((F.col("detail_view_sessions") == 0)
+           & F.col("view_to_cart_rate").isNotNull())
     ).count()
     checks.append(_check(
         "brand_daily_rates_follow_contract",
