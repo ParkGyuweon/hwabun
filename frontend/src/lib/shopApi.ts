@@ -228,6 +228,11 @@ export async function registerProductBackend(form: RegistrationForm): Promise<Re
     highlights: form.highlights,
     ingredients: form.ingredients.trim(),
     priceKrw: Number(form.price_krw) || 0,
+    /**
+     * 용량. 백엔드 ProductRequest 에 아직 없는 필드다 (docs/shop-backend-requests.md 9번). Jackson 3 기본이
+     * 미등록 필드를 버리므로 지금 보내도 실패하지 않고, 백엔드가 기본 옵션 variant.size 로 받기 시작하면 그대로 붙는다
+     */
+    size: form.size.trim() || null,
     primaryImageUrl: form.image_url.trim() || null,
     description: {
       what_it_is: form.what_it_is.trim() || null,

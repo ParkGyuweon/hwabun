@@ -124,6 +124,24 @@ AI 파트 요청(고객 가입에서 피부 속성 4개를 받아야 추천의 �
 - 페르소나 100명을 회원으로 일괄 가입시키는 스크립트를 두었습니다 (`frontend/scripts/register-personas.ts`).
   이메일은 `{persona_id 소문자}@persona.hwabun.local`, 비밀번호 `hwabun1234`. 위 4개 필드를 함께 보냅니다.
 
+## 9. 프론트가 대조해서 찾은 것 (2026-09-11) · 백엔드만 고칠 수 있는 항목
+
+프론트 호출부 전부와 컨트롤러를 대조했습니다. 프론트에서 우회할 수 있는 것은 우회해 뒀고(orderId ?? id · 라벨 표시명 · size 선행 전송),
+아래는 백엔드 코드가 바뀌어야만 되는 것입니다. 위 1~8번과 겹치는 것은 번호만 적습니다.
+
+| # | 어디 | 무엇 | 영향 | 참고 |
+| --- | --- | --- | --- | --- |
+| 9-1 | `SecurityConfig` | `/error` permitAll | 400·403·404·409 가 전부 401 로 바뀜. 화면의 상태별 문구 무력화 | = 1번 |
+| 9-2 | `mysql-erd.sql` | `category` 시드 (`category_id` = secondary_category 코드) | 상품 등록 항상 실패 | = 2번 |
+| 9-3 | `IdentityController.RegisterMember` · `Member` | `skinTypeCode`·`skinToneCode`·`hairColorCode`·`eyeColorCode` (nullable) 받기 | 지금은 Jackson 이 버려 NULL 저장. 추천 속성 친화도가 빠짐 | = 8번 |
+| 9-4 | `CatalogController.summary()` | 목록 `priceKrw` 가 `min(unitPrice)` = 할인가 ?? 정가. **정가**로 두고 `salePriceKrw` 를 따로 | 할인이 있으면 정가 자리에 할인가가 와 할인 표시가 영영 안 뜸 | 4번 + 의미 분리 |
+| 9-5 | `CatalogController.ProductRequest` | `size` (String, nullable) 받아 기본 옵션 `variant.size` 에 넣기 | 용량이 끝까지 사라짐. 프론트는 이미 `size` 를 보냄 | 신규 |
+| 9-6 | `ProductContract.usd()` | 환율 1,300 → **1,400** (계약 product-registration-spec §4.1 · 추천 서버와 같은 값) | `price_bin` 이 추천 서버와 어긋남 | 신규 |
+| 9-7 | `CommerceController` 주문·결제 응답 | `ShopOrder` 엔티티 대신 `{orderId, status, totalAmount, currency, paidAt, createdAt}` DTO | `requestHash`·`idempotencyKey` 가 응답에 노출됨. 프론트는 `orderId ?? id` 로 이미 우회 | 낮음 · 보안 정리 |
+| 9-8 | `brand` 시드 | 세포라 55개 브랜드를 **`brand_id` = 세포라 번호 문자열(예 `"6125"`), `name` = 브랜드명**으로 넣고 시연 판매자 계정에 연결 | dw 마트 `brand_id` 가 그 값이라 매핑 없이 대시보드가 붙음 (계약 0.2 §8-2) | 5·7번 확장 |
+| 9-9 | 대시보드 API | `GET /api/seller/dashboard/{overview·products·content·segments·ingredients·friction·purchase}` — 계약 0.2 (MR !196). projection 이 끝나면 overview·products·ingredients·purchase 네 개가 먼저 됨 | 행동 6화면이 모의 | = 7번 |
+| 9-10 | 배포 nginx (또는 백엔드 프록시) | `/api/recommend` · `/api/prescription` → recommend(8300) | 지금은 Vite 프록시로만 연결. 배포에서 추천이 목으로 떨어짐 | 인프라 |
+
 ---
 
 ## 참고 — 배포 전 필요
