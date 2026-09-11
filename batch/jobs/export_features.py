@@ -28,7 +28,7 @@ BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from persona_feature import AFFINITY_CSV, ATTRS, load as load_affinity  # noqa: E402
-from product_encoder import Encoder                                     # noqa: E402
+from product_encoder import Encoder, brand_key                          # noqa: E402
 from ltr_features import LtrFeatures, load_ltr                         # noqa: E402
 from recommender import (BRAND_W, CF_BETA, LAMBDA, SCHEDULE,            # noqa: E402
                         cf_bonus, load_cooc,
@@ -97,7 +97,7 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
     행동 로그 없이 리뷰 시드만으로 만든 사용자 벡터를 쓴다. 자바 구현이 이 파일을
     재현하면 벡터·가중치·정규화가 전부 맞다는 뜻이다.
     """
-    brands = [q["brand_name"] for q in e.products]
+    brands = [brand_key(q) for q in e.products]
     known = set(e.blk["brand"]["vocab"])       # 어휘집 밖 브랜드에만 폴백을 건다
     cooc, supporters = load_cooc()
     ltr = load_ltr()

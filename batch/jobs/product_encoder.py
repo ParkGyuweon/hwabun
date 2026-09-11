@@ -30,6 +30,21 @@ ORDER = ["secondary_category", "tertiary_category", "concern",
 RATING_MIN_N = 3
 
 
+
+def brand_key(x):
+    """브랜드 식별 키 — 이름이 아니라 **id** 로 묶는다 (2026-09-11, Jira 247).
+
+    원천 상품은 세포라 `brand_id`(정수, 55개 ↔ 이름 55개 1:1) 를 문자열로, 등록 상품은 쇼핑몰 백엔드의
+    `brand_id`(문자열) 를 그대로 쓴다. id 가 없으면(시연 시드 SSAFY Beauty) `name:` + brand_name.
+    쇼핑몰 `brand` 테이블은 (판매자, 이름) 만 유일해서 **다른 판매자가 같은 이름을 등록할 수 있다** —
+    이름을 키로 쓰면 그 상품이 원천 브랜드의 원핫 벡터와 재구매 효과(lift 6x)를 빌리게 된다.
+    어휘집 brand 블록의 vocab, 서버의 brands/known, LTR same_brand, new_mask 가 전부 이 키를 쓴다."""
+    bid = x.get("brand_id")
+    if bid is None or str(bid).strip() == "":
+        return "name:" + (x.get("brand_name") or "")
+    return str(bid)
+
+
 class Encoder:
     def __init__(self, vocab_path=None, products_path=None, review_concern_path=None):
         vocab_path = vocab_path or VOCAB
@@ -218,7 +233,7 @@ class Encoder:
         # brand — 다음 구매에서 유지되는 속성 중 lift 가 압도적이다 (6.08x).
         # 리뷰 15만 연속쌍에서 재보니 2위 price_bin 이 1.30x 였다.
         # 없던 신호를 넣은 것만으로 Recall@10 이 11.4% -> 23.6% 가 됐다.
-        raw["brand"] = self._onehot(x["brand_name"], "brand")
+        raw["brand"] = self._onehot(brand_key(x), "brand")     # 키는 brand_id (Jira 247)
 
         # concern 보강 — highlights 는 마케팅 문구라 "이 제품이 무엇을 해결하는가" 를
         # 다 담지 못한다. 상품당 평균 2,291건의 리뷰에서 뽑은 상위 2축을 더한다.

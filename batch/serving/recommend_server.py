@@ -95,7 +95,7 @@ sys.path.insert(0, BD)                      # catalog_registry (같은 폴더) �
 from ltr_features import LtrFeatures, load_ltr                 # noqa: E402
 from persona_feature import load as load_affinity              # noqa: E402
 import persona_feature as pf                                   # noqa: E402  (속성 별칭표, Jira 245)
-from product_encoder import Encoder                            # noqa: E402
+from product_encoder import Encoder, brand_key                 # noqa: E402  (brand_key: Jira 247)
 from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
                          Recommender, load_cooc, schedule_for)
 from user_vector import UserVector                             # noqa: E402
@@ -138,7 +138,7 @@ class Engine:
         lg = np.log1p(np.array([p["loves_count"] for p in self.products], float))
         self.prior = ((lg - lg.min()) / (lg.max() - lg.min())).astype(np.float32)
         self.affinity = load_affinity(self.index)
-        self.brands = [p["brand_name"] for p in self.products]
+        self.brands = [brand_key(p) for p in self.products]         # 브랜드 키 = brand_id (Jira 247)
         self.known = set(e.blk["brand"]["vocab"])
         self.cooc, self.supporters = load_cooc()
         ltr = load_ltr()
@@ -204,7 +204,7 @@ class Engine:
                 i = self.index[gid]
                 self.V[i] = v
                 self.products[i] = x
-                self.brands[i] = x.get("brand_name")
+                self.brands[i] = brand_key(x)
                 replaced.append(gid)
             else:
                 new_rows.append((x, v))
@@ -218,7 +218,7 @@ class Engine:
             for x, _ in new_rows:
                 self.index[x["product_id"]] = len(self.products)
                 self.products.append(x)
-                self.brands.append(x.get("brand_name"))
+                self.brands.append(brand_key(x))
             self.affinity.grow([x["product_id"] for x, _ in new_rows])
             # LtrFeatures 가 enc.products 를 읽는다 — 같은 리스트 객체를 유지한다
             self.enc.products = self.products
@@ -274,7 +274,7 @@ class Engine:
             out.append({"product_id": x["product_id"], "brand_name": x["brand_name"],
                         "position_in_catalog": i, "price_usd": x["price_usd"],
                         "rating": x["rating"], "rating_source": x["rating_source"],
-                        "brand_in_vocab": x["brand_name"] in self.known,
+                        "brand_in_vocab": brand_key(x) in self.known,
                         "reserved_candidate": bool(is_new[i]),
                         "action": "replaced" if x["product_id"] in replaced else "added",
                         "warnings": warnings[x["product_id"]]})

@@ -97,7 +97,7 @@
     }
   ],
   "_note": "화면은 ko, 서버로 보내는 값은 value. value 는 어휘집 문자열이라 한 글자도 바꾸면 안 된다. 이 파일은 batch/ingest/build_form_labels.py 가 만든다 — 직접 고치지 말 것",
-  "vocab_version": "0.5",
+  "vocab_version": "0.6",
   "highlights_groups": [
     {
       "group": "concern",

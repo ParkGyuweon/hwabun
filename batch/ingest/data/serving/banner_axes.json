@@ -1,6 +1,6 @@
 {
  "version": "banner-axes-v1",
- "vocab_version": "0.5",
+ "vocab_version": "0.6",
  "top": 20,
  "segment_lift_min": 1.2,
  "note": "banner_value 는 어휘집 원문이다. 한국어는 label_ko 또는 contracts/product-form-labels-ko.json 을 쓴다. product_ids 의 기본 순서는 prior(인기도)이고, segment 축만 lift 순이다. 사용자별 추천 점수가 있으면 그것으로 다시 정렬한다.",
