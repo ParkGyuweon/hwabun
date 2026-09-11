@@ -22,7 +22,17 @@ interface AdBannerProps {
    * **같은 값**이 실려야 한다 (데이터 파트 회신 2026-09-10).
    */
   traitSource?: string;
-  onSelect: (productId: string) => void;
+  /**
+   * 클릭. 두 번째 인자는 **로그에 적을** 축·값이다 — 화면의 축(`axis`)과 다를 수 있다.
+   * 완성형 배너가 실제로 그려졌으면 `new_brand` · null 이고, 조립 배너면 `axis` · `value` 그대로다.
+   */
+  onSelect: (productId: string, logged: BannerLog) => void;
+}
+
+/** 배너 이벤트에 실리는 축·값 */
+export interface BannerLog {
+  banner_type: BannerAxis;
+  banner_value: string | null;
 }
 
 /**
@@ -66,6 +76,16 @@ export default function AdBanner({
   const registered = bannerImage(product.product_id, c.variant);
   const image = registered !== null && registered !== failedSrc ? registered : null;
 
+  /**
+   * 로그에 적는 축 (AI 회신 2026-09-10 · bannerConfig 판 이력 banner-2026-09-11).
+   *
+   * 완성형 배너는 브랜드 크리에이티브라 축 문구 배너가 아니다. 이미지 안의 문구(PDRN 등)는 어휘집 토큰이 아니어서
+   * 어떤 규칙으로도 `banner_value` 가 될 수 없다. 그래서 완성형이 **실제로 그려진** 노출·클릭은
+   * `banner_type=new_brand` · `banner_value` 없음으로 기록하고, 축 값은 조립 배너에만 적는다.
+   * 그러면 로그와 이미지가 어긋나지 않고, 축별 CTR 은 축 문구가 실제로 보인 노출만으로 계산된다.
+   */
+  const logged: BannerLog = image ? { banner_type: 'new_brand', banner_value: null } : { banner_type: c.axis, banner_value: value };
+
   return (
     <article
       className={`ad ad--${shape} ad--${c.variant}${image ? ' ad--image' : ''}`}
@@ -74,12 +94,12 @@ export default function AdBanner({
       data-product-id={product.product_id}
       data-banner-slot={slot}
       data-trait-source={traitSource}
-      data-banner-type={c.axis}
-      data-banner-value={value ?? undefined}
+      data-banner-type={logged.banner_type}
+      data-banner-value={logged.banner_value ?? undefined}
       data-log-content="recommendation_card"
       data-log-ref={product.product_id}
     >
-      <button type="button" className="ad__hit" onClick={() => onSelect(product.product_id)}>
+      <button type="button" className="ad__hit" onClick={() => onSelect(product.product_id, logged)}>
         {image ? (
           /* 완성형 한 장. 글자·가격·배지가 이미지 안에 있다. 접근성 문구만 따로 */
           <img
