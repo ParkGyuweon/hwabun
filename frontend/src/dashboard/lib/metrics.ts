@@ -19,6 +19,7 @@ import { EVENT_WEIGHT } from '../../types/log';
 import type { EventName } from '../../types/log';
 import type { Product } from '../../types/product';
 import type { Review } from '../../types/review';
+import { splitIngredients } from '../../lib/format';
 
 /**
  * 브랜드 대시보드는 **내 브랜드** 상품만 본다.
@@ -380,7 +381,7 @@ export function ingredientStats(product: Product): IngredientStats {
     hit: pattern.test(joined),
   }));
   return {
-    totalCount: joined === '' ? 0 : joined.split(',').length,
+    totalCount: splitIngredients(product.ingredients).length,
     cautions,
     cautionCount: cautions.filter((c) => c.hit).length,
   };
@@ -600,11 +601,8 @@ const POS_MIN = INGREDIENT_SOURCE.position_min ?? 0.1;
 /** 태그 성분이 전성분 앞 30% 안에 없으면 "미량". 명세 I2 */
 export const MINOR_WEIGHT = 0.3;
 
-const splitFull = (p: Product): string[] =>
-  p.ingredients
-    .flatMap((block) => block.split(','))
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
+// 화면(IngredientsSection)과 같은 구분 규칙. `1,2-Hexanediol` 을 둘로 자르면 위치가중의 분모가 늘어 뒤 성분이 전부 밀린다
+const splitFull = (p: Product): string[] => splitIngredients(p.ingredients).map((s) => s.toLowerCase());
 
 /**
  * 성분 30종의 위치가중. 전성분에서 처음 나오는 자리로 `max(1 - 위치/전체, 0.1)` (어휘집 position_formula).
