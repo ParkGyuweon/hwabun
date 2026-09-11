@@ -55,6 +55,17 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        /*
+         * 수집기는 Origin 을 ALLOWED_ORIGINS(기본 localhost:3000·5173)와 대조해 아니면 403 "Invalid CORS request" 를 낸다.
+         * 이 프록시는 같은 출처라 CORS 가 성립하지 않는데 브라우저의 Origin 이 그대로 전달돼, dev 서버가 5173 이 아닌
+         * 포트(autoPort)에 뜨면 모든 이벤트가 403 으로 버려진다 (2026-09-11 리허설에서 실측). 프록시에서 Origin 을 뗀다.
+         * 배포에서는 nginx 가 같은 역할을 하거나 ALLOWED_ORIGINS 에 실제 도메인이 있어야 한다.
+         */
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+          });
+        },
       },
     },
   },
