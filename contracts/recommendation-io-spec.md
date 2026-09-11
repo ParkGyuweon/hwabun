@@ -932,8 +932,10 @@ prior(i) = (log1p(loves_count) - log_min) / (log_max - log_min)
 
 ```
 GET /api/recommend?persona_id={id}&size=10
-                  &banner_slots=6&reserved=2&axes=concern,segment
+                  &banner_slots=1&reserved=0&hero=new_brand&axes=concern,segment
+                  [&skin_type=&skin_tone=&hair_color=&eye_color=]      ← 실회원 가입 속성 (Jira 245)
 ```
+> 09-09 원안은 `banner_slots=6&reserved=2`(배너 행 6칸, 칸 5·6 전용) 였다. 배너 행이 2026-09-10 화면에서 빠져 현행 화면은 위의 히어로 1칸 호출이다. 6칸 조립 능력은 서버에 남아 있다.
 
 | 파라미터 | 기본 | 뜻 |
 |---|---:|---|
@@ -984,7 +986,7 @@ GET /api/recommend?persona_id={id}&size=10
 > | **유입 추적 식별자** (2026-09-08, Jira 209) | 응답마다 `recommendation_id`(uuid) · `list_id`(`"main"`) · `algorithm`(예 `ltr-278t-2026-09-07`, 모델이 바뀌면 문자열이 바뀐다). **FE 는 이 값을 `recommendation_impression` · `recommendation_click` · `product_view` 에 그대로 싣는다** (`event-properties-schema.md` 의 `recommendation_id` · `list_id` · `position` · `algorithm`). 이게 있어야 추천 CTR(`recommendation_daily_kpi`)과 **교차 브랜드 유입의 "추천 경유"** 를 닫을 수 있다 (마트는 데이터 파트, 요청서 별도 전달) |
 > | **`reason`** | `breakdown` 대체. 항별 기여가 아니라 **그 상품에 실제로 있던 신호**만 문장으로: `cf` "회원님이 담은 상품을 고른 사람들이 함께 고른 상품" · `content` "본 상품과 성분·고민 구성이 비슷" (cos ≥ 0.5) · `attribute` "{skin_type} 피부 사용자 사이에서 반응이 좋은" (친화도 상위 20%) · `new_brand` (전용 칸) · 아무것도 없으면 `popular`. **프론트 확정 대기** — §7 |
 > | **응답 시간 (실측)** | holdout_a 300명 · seed=review · reserved=2 · LTR: **점수 계산 p50 7.0ms / p95 8.9ms**, **HTTP 왕복+reason p50 12.3ms / p95 15.2ms** (파이썬 단일 프로세스, 워밍업 후). `batch/serving/bench_recommend.py` |
-> | 안 한 것 | `banner_slots` / `axes` (배너, §5-1) — 전용 칸 자리 확정 뒤. Redis 연결. 인증 |
+> | 안 한 것 (09-08 시점) | ~~`banner_slots` / `axes`~~ (09-09 Jira 218 구현). 남은 것: Redis 연결 · 인증 (프록시가 담당) |
 > | 테스트 | `python -m unittest batch/serving/test_recommend_server.py` — 계약 필드·전환 제외·콜드 스타트·404·reserved 상한 |
 
 > **4단계만 바뀌었습니다.** 1·2·3·5·6·7 단계와 Redis 스키마·실시간 증분 갱신
@@ -1045,7 +1047,7 @@ GET /api/recommend?persona_id={id}&size=10
   "n_products": 3,
   "recommendation_id": "3f9c1e2a7b4d4c0e9a1b2c3d4e5f6071",
   "list_id": "main",
-  "algorithm": "ltr-278t-2026-09-07",
+  "algorithm": "ltr-369t-2026-09-10",
   "state_source": "events",
   "reserved_filled": 0,
   "weights": { "cosine": 0.60, "attr": 0.35, "prior": 0.05 },

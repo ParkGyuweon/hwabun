@@ -2,13 +2,13 @@
 
 HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)과 인사이트 대시보드.
 
-기준일 2026-09-09
+기준일 2026-09-11
 
 ## 1. 시스템 아키텍처
 
 ```
 [ 사용자 ]                          [ 서비스 · frontend/ (React, Vite 5173) ]
- 실제 소비자                          index.html      쇼핑몰 BLOOM — 목록·상세·장바구니·주문, 추천 카드·히어로·배너 행
+ 실제 소비자                          index.html      쇼핑몰 BLOOM — 목록·상세·장바구니·주문, 추천 카드·히어로(신규 브랜드 배너; 배너 행 6칸은 09-10 화면에서 제거)
  simulator/generator  PC 9,900명  ──▶  dashboard.html  브랜드 대시보드 — 개요·행동·상세 콘텐츠·고객군·성분·리뷰·피드백·상품 등록 (9화면)
  simulator/agents     PA 100명        platform.html   HWABUN 플랫폼 운영
  (Playwright + LLM)                   lib/logger.ts   이벤트 36종 조립·버퍼·재시도 (429/502/503 백오프)
@@ -18,11 +18,11 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 [ 쇼핑몰 백엔드 · shop_backend/ (Spring, 8090, MySQL) ]          [ 수집 · backend/ (Spring, 8080) ]
  로그인(JWT)·브랜드·상품·주문·결제·리뷰·피드백·정산·판매자 대시보드     POST /api/events → 검증 → Kafka activity-events
  상품 등록 계약(어휘 검증·unmapped 저장) 구현, dev 머지              key=session_id · 파티션 3 · 백프레셔 429/503
-              │  (예정) /api/recommend 프록시 · 승인 시 POST /api/products
+              │  /api/recommend 프록시(백엔드 브랜치 feat/recommendation-proxy-mvp, dev 미머지) · 승인 훅 대신 5분 주기 카탈로그 동기화
               │  (지금) 프론트가 Vite 프록시로 8300 을 직접 부름 · 없으면 목            │
               ▼                                                                       ▼
 [ 추천 · batch/serving/ (FastAPI, 8300, 내부 전용) ]              [ 처리 · streaming/ (Spark 3.5.6) ]
- GET  /api/recommend    items 10 + hero + banners 6 (전용 칸 5·6 = 신규 브랜드)   Q1 raw_sink → raw_events (Parquet)
+ GET  /api/recommend    items 10 + hero (hero=new_brand · banner_slots=1, Jira 237; 배너 행 6칸은 09-10 제거)   Q1 raw_sink → raw_events (Parquet)
  POST /api/products     등록 즉시 카탈로그 편입 (SSAFY Beauty 8개 편입됨)         Q2 clean_events (스키마 검증·중복 제거)
  DELETE /api/products   판매 중단                                                 Q3 derive_facts → 상품·배너 Fact
  POST /api/events       세션 상태 갱신 (이벤트 로그 영속, 재시작 시 재생)            Q4 build_marts → content/banner/segment daily Mart
@@ -31,9 +31,9 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
  POST /api/catalog/sync 쇼핑몰 백엔드 ACTIVE 상품 동기화 (승인 훅 없어도 카탈로그 일치)
         ▲                                                                              │
         │ 모델·산출물 (오프라인 배치 batch/jobs/)                                        ▼
- Sephora 리뷰 844,865건 · 상품 200개                                       [ 소비 ]  브랜드 대시보드 (마트 API 계약 초안 contracts/dashboard-mart-api-spec.md,
+ Sephora 리뷰 844,865건 · 상품 200개(+등록 8 = 카탈로그 208)                                     [ 소비 ]  브랜드 대시보드 (마트 API 계약 초안 contracts/dashboard-mart-api-spec.md,
    → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              프론트 연결 완료 · MySQL projection·shop_backend 6 엔드포인트 대기)
-   → CF 동시발생 · LTR 278 트리 → batch/ingest/data/serving/
+   → CF 동시발생 · LTR 369 트리 → batch/ingest/data/serving/
 
 [ 운영 · deploy/ec2-1 ]  docker compose — backend(8080) · recommend(8300) · nginx(443 → /api/ → backend) · Prometheus · Grafana
 ```
@@ -51,7 +51,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | | springdoc-openapi | 3.1.0 | Swagger UI |
 | 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id` |
 | 스트리밍 | Spark Structured Streaming | 3.5.6 | `streaming/` Q1~Q5. 출력 Parquet. 로컬은 `infra/spark/` compose |
-| 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 278 트리). sklearn 버전은 모델 pickle 과 고정 |
+| 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 369 트리, 2026-09-10). sklearn 버전은 모델 pickle 과 고정 |
 | | FastAPI · uvicorn · pydantic | 0.141 · 0.52 · 2.13 | **추천 추론 서버** `batch/serving/` (8300, 내부 전용). 추천·배너·상품 등록·처방 문장. `deploy/recommend.Dockerfile` |
 | | OpenAI SDK → GMS | gpt-4.1-mini | 대시보드 처방 문장 (`POST /api/prescription`, 온도 0·JSON 스키마 강제). 키 없으면 이 엔드포인트만 503 |
 | | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 (GPU, 배치 산출물용). 정확도 목적 리뷰 임베딩은 기각 |
@@ -59,7 +59,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | | Playwright (Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | PA 100명이 실제 브라우저를 조작. `--local-model` 로 Qwen2.5 도 가능 |
 | 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`): backend · recommend · nginx(HTTPS) · Prometheus · Grafana |
 | | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 대시보드 2종(backend-overview · collector-validation) 프로비저닝 |
-| 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개 · 페르소나 12,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
+| 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개(+등록 8) · 페르소나 12,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
 | | 시연 브랜드 | — | SSAFY Beauty 8개 상품 (`simulator/feedback/products.ssafy-beauty.json`) — 등록 경로로 추천 카탈로그에 편입 |
 
 ---
@@ -95,7 +95,7 @@ S15P21A306/
 │   ├── feedback-category-vocab.json     피드백 어휘 — 5축 20종 + other (분류기는 여기서만 고른다)
 │   ├── feedback-banned-terms.json       금지어 599개 (MIT) — 걸리면 hidden_by_default, 입력은 안 막음
 │   ├── product-feature-spec.md          상품 벡터 148차원 명세 — 블록 구성·인코딩·가중치
-│   ├── product-feature-vocab.json       인코딩 어휘집 `0.4` — 9개 블록 (brand 포함)
+│   ├── product-feature-vocab.json       인코딩 어휘집 `0.5` — 9개 블록 (brand 포함; 09-10 성분 태그 제거·SPF 동의어)
 │   ├── product-registration-spec.md     브랜드가 상품을 등록할 때의 입력 필드·어휘 제약·파생값
 │   ├── product-form-labels-ko.json      등록 폼 어휘의 한국어 표시 문구 57개 (어휘집에서 생성)
 │   ├── validate_product_registration.py 등록 상품 JSON 을 계약으로 검증하는 CLI
@@ -105,7 +105,7 @@ S15P21A306/
 │   ├── cosmetic-claim-banned-terms.json  화장품 표시광고 금지 표현 계약 — banned·needs_evidence·functional_only·allow (프론트 작성, MR !171)
 │   ├── recommendation-io-spec.md        추천 입출력 계약 (백엔드↔AI) — 점수 식·LTR·§5 API·§5-1 배너
 │                                        규칙 5-1: 정독한 미전환 상품은 약한 긍정 (2026-09-03 개정)
-│                                        §5 persona_id 선택(익명 cold_start)·reserved_filled (2026-09-09, Jira 214)
+│                                        §5 persona_id 선택(익명 cold_start)·reserved_filled (2026-09-09, Jira 214) · 실회원 속성 4개 쿼리·attribute_source (2026-09-11, Jira 245). 추천은 로그인 회원만(09-10 합의)
 │
 │   └── dashboard-mart-api-spec.md       ★ 브랜드 대시보드 마트 조회 API 초안 (백엔드↔프론트↔데이터) — 6 엔드포인트·projection 범위·신규 마트 5건
 ├── docs/
@@ -177,7 +177,7 @@ S15P21A306/
 │   │           ├── attribute_affinity.csv       친화도 4,000행 (계약 열)
 │   │           ├── item_cooc.npz                200×200 동시발생 + 지지자 수 (CF)
 │   │           ├── ltr_model.pkl · ltr_model_meta.json
-│   │           │                                 ★ 학습 결합 모델 (트리 278개)
+│   │           │                                 ★ 학습 결합 모델 (트리 369개, 2026-09-10 · 정본은 ltr_model_meta.json)
 │   │           ├── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
 │   │           ├── banner_axes.json             배너 축 6종의 상품 목록
 │   │           ├── backend_tables.sql           ★ 아래 CSV 6종의 CREATE TABLE
@@ -217,7 +217,7 @@ S15P21A306/
 │       └── test_*.py                    단위 테스트 12개 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
 │   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
 │       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products · POST /api/prescription · POST /api/events · /health
-│       ├── banners.py                   §5-1 hero·배너 6칸 조립 — 축 값(session/profile/coldstart)·전용 칸 5·6·reason 단일 key (Jira 218)
+│       ├── banners.py                   §5-1 hero·배너 조립 — 축 값(session/profile/coldstart)·reason 단일 key (Jira 218). 현행 화면은 히어로 1칸 hero=top|new_brand (Jira 237)
 │       ├── prescription.py              대시보드 처방 문장 POST /api/prescription — 규격 v0.3(insert_after·_text·from 6화면)·JSON 스키마 강제·자동 거부 11·금지어 계약·저장 (Jira 220·225)
 │       ├── catalog_sync.py              쇼핑몰 백엔드(8090) ACTIVE 상품 → 카탈로그 편입·갱신·중단. POST /api/catalog/sync · 주기 실행 (Jira 222)
 │       ├── session_store.py             세션 상태 영속화 — 이벤트 로그 append + 기동 시 재생, compact (Jira 224)
@@ -243,7 +243,7 @@ S15P21A306/
 │   │   ├── gen_feedback.py              페르소나 × 상품 × 축 → 개선 요청 99건 (nano)
 │   │   ├── classify_feedback.py         고른 축 안의 카테고리를 목록에서 전부 고르기, 건당 호출 1회 (사람 정답 50건 F1 94%)
 │   │   ├── banned_terms.py              금지어 대조 — LLM 없음
-│   │   ├── products.ssafy-beauty.json   ★ 시연용 자사 브랜드 SSAFY Beauty 상품 8개 (SB000001~) — 추천 카탈로그엔 아직 미포함
+│   │   ├── products.ssafy-beauty.json   ★ 시연용 자사 브랜드 SSAFY Beauty 상품 8개 (SB000001~) — 등록 경로(POST /api/products)로 편입 완료, 카탈로그 208 (Jira 216)
 │   │   └── data/  feedback_demo.jsonl · feedback_classified.sample30.jsonl
 │   ├── collector_client.py              수집 API 전송 (429/503 백프레셔 대응) — 공용
 │   ├── test_collector_client.py

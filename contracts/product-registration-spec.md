@@ -1,7 +1,7 @@
 # 상품 등록 입력 계약
 
 작성일: 2026-09-03
-상태: Draft. `brand_name` 어휘 제약 미확정
+상태: **운영 중** (Jira 216 등록 즉시 편입 · 219 판매 중단 · 222 카탈로그 동기화, 2026-09-11 기준). `brand_name` 어휘 제약은 미확정(어휘집 밖 브랜드 = 신규 브랜드로 처리)
 어휘 원본: [`product-form-labels-ko.json`](./product-form-labels-ko.json)
 벡터 명세: [`product-feature-spec.md`](./product-feature-spec.md)
 
