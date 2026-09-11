@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
 import LogPanel from './components/devtools/LogPanel';
 import { isDevtoolsOn } from './lib/devtools';
@@ -14,6 +14,9 @@ import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
+import { useAuth } from './hooks/useAuth';
+import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
+import { appendOrder } from './lib/orderHistory';
 import { reviews as reviewsData } from './mocks/reviews';
 import personasData from './mocks/personas.sample.json';
 import type { PersonaProfile } from './types/persona';
@@ -171,10 +174,20 @@ export default function App() {
   /** 목록·상세·장바구니를 구분하는 키. 스크롤 위치 저장에 쓴다 */
   const viewKey = cartOpen ? 'cart' : (productId ?? 'list');
 
-  const persona = useMemo(
-    () => personas.find((item) => item.persona_id === personaId) ?? null,
-    [personaId],
-  );
+  /**
+   * 화면이 쓰는 페르소나. 둘 중 하나다.
+   *   로그인 회원이 피부 정보를 채웠으면 → 그 프로필 (persona_id = accountId, 09-09 합의)
+   *   아니면                              → 스위처가 고른 시뮬레이션 페르소나
+   * 리뷰 필터 "내 피부 타입만" · "내 피부 타입 일치" 칩 · 추천 목의 피부 매칭이 전부 이 값을 본다.
+   * 로그의 persona_id 는 그대로 스위처 값이다 — 회원과 페르소나는 다른 주체라 여기서 섞지 않는다.
+   */
+  const member = useAuth('MEMBER');
+  const getMemberProfile = useCallback(() => loadMemberProfile(member?.id), [member?.id]);
+  const memberProfile = useSyncExternalStore(subscribeMemberProfile, getMemberProfile, getMemberProfile);
+  const persona = useMemo(() => {
+    const mine = member ? profileToPersona(member.id, memberProfile) : null;
+    return mine ?? personas.find((item) => item.persona_id === personaId) ?? null;
+  }, [personaId, member, memberProfile]);
 
   // 피부 타입을 아는 사용자는 concern 축에 고정 가점 (lib/trait.ts)
   useEffect(() => {
@@ -398,11 +411,14 @@ export default function App() {
       order_channel: mode,
     });
 
-    setOrder({ orderId, items, count, total, paid, mode, note });
+    const placed: PlacedOrder = { orderId, items, count, total, paid, mode, note };
+    setOrder(placed);
+    // 마이페이지 주문 내역. 서버 주문 목록 API 가 없어 이 브라우저에 계정별로 쌓는다 (lib/orderHistory)
+    appendOrder(member?.id ?? null, placed);
     setCartItems([]);
     // 다음 주문은 새 번호를 받는다
     pendingOrderIdRef.current = null;
-  }, [cartItems]);
+  }, [cartItems, member?.id]);
 
   const submitPurchaseReasons = useCallback(
     (reasons: string[]) => {

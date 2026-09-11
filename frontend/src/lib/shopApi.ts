@@ -20,7 +20,7 @@
 import { authFetch, sessionSnapshot } from './auth';
 import { loadBrandId } from './brands';
 import { KRW_PER_USD } from './localize';
-import { axisLabel } from '../types/feedback';
+import { axisLabel, categoryLabel } from '../types/feedback';
 import type { CartItem } from '../types/cart';
 import type { Feedback } from '../types/feedback';
 import type { Product, ProductDescription, ProductVariant } from '../types/product';
@@ -362,8 +362,11 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       created_at: r.createdAt,
       axis_id: r.axisId,
       axis: axisLabel(r.axisId),
-      labels: (r.labels ?? []).map((l) => ({ axis_id: l.axisId, category_id: l.categoryId })) as Feedback['labels'],
-      primary: r.primary ? ({ axis_id: r.primary.axisId, category_id: r.primary.categoryId } as Feedback['primary']) : null,
+      // 백엔드는 id 만 준다 (계약 0.2.0). 표시 라벨은 어휘집에서 여기서 붙인다 — 화면이 label.axis·label.category 를 바로 읽는다
+      labels: (r.labels ?? []).map((l) => ({ axis_id: l.axisId, axis: axisLabel(l.axisId), category_id: l.categoryId, category: categoryLabel(l.categoryId) })) as Feedback['labels'],
+      primary: r.primary
+        ? ({ axis_id: r.primary.axisId, axis: axisLabel(r.primary.axisId), category_id: r.primary.categoryId, category: categoryLabel(r.primary.categoryId) } as Feedback['primary'])
+        : null,
       off_axis_hint: r.offAxisHint,
       category_id: r.primary?.categoryId ?? null,
       category: null,

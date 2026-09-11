@@ -4,7 +4,7 @@ import QuickLook from '../components/product/QuickLook';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
-import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, MAIN_SLOTS } from '../lib/bannerConfig';
+import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
 import { buildRecommendation } from '../lib/recommendMock';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
@@ -15,6 +15,7 @@ import { setNextProductViewEntry, track } from '../lib/logger';
 import type { FilterKind } from '../types/log';
 import { categoryKo, concernKo, toKrw } from '../lib/localize';
 import AdBanner from '../components/banner/AdBanner';
+import type { BannerLog } from '../components/banner/AdBanner';
 import type { BannerAxis } from '../lib/bannerCreative';
 import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
@@ -192,6 +193,8 @@ export default function ProductListPage({
         k: PROMO_SIZE,
         bannerSlots: BANNER_SLOTS,
         reserved: BANNER_RESERVED,
+        // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
+        heroPolicy: HERO_POLICY,
       }),
     [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source],
   );
@@ -356,8 +359,12 @@ export default function ProductListPage({
     extraProps: { policy_version: BANNER_POLICY_VERSION },
   });
 
-  /** 배너·히어로 클릭. 추천 클릭 + 상품 클릭. entry_source 는 계약 enum 안의 promo_pick 을 쓴다 */
-  const selectFromBanner = (listId: 'hero_banner') => (productId: string) => {
+  /**
+   * 배너·히어로 클릭. 추천 클릭 + 상품 클릭. entry_source 는 계약 enum 안의 promo_pick 을 쓴다.
+   * 축·값은 AdBanner 가 **실제로 그린 것** 기준으로 넘겨준다 (완성형이면 new_brand · 값 없음). 노출과 같은 값이어야
+   * 칸별·축별 CTR 조인이 성립한다.
+   */
+  const selectFromBanner = (listId: 'hero_banner') => (productId: string, logged: BannerLog) => {
     const banner =
       listId === 'hero_banner'
         ? recommendation.hero && recommendation.hero.product_id === productId
@@ -376,8 +383,8 @@ export default function ProductListPage({
       position: banner ? banner.slot : null,
       ...(banner
         ? {
-            banner_type: banner.banner_type,
-            ...(banner.banner_value !== null ? { banner_value: banner.banner_value } : {}),
+            banner_type: logged.banner_type,
+            ...(logged.banner_value !== null ? { banner_value: logged.banner_value } : {}),
             banner_slot: banner.slot,
             trait_source: trait.trait_source,
             // 정책 배포 전후를 banner_daily 에서 바로 잘라 보기 위한 귀속 키 (계약 §3.13)

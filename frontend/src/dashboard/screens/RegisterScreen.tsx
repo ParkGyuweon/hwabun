@@ -6,6 +6,8 @@ import {
   DRAFT_PRODUCT_ID,
   EMPTY_FORM,
   KRW_PER_USD,
+  KRW_PER_USD_RECOMMEND,
+  recommendPriceBin,
   fromProduct,
   removeRegistered,
   registerProduct,
@@ -121,7 +123,13 @@ export default function RegisterScreen() {
               <div className="reg-field">
                 <label className="reg-label" htmlFor="reg-price">가격 (원) *</label>
                 <input id="reg-price" className="reg-input" type="number" min={0} step={100} value={form.price_krw} onChange={(e) => set('price_krw', e.target.value === '' ? '' : Number(e.target.value))} placeholder="32000" />
-                <p className="reg-hint">고객 화면에는 ${form.price_krw === '' ? '-' : (Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 보입니다 (고정 환율 {KRW_PER_USD}원, 계약 §4.1)</p>
+                <p className="reg-hint">고객 화면에는 ${form.price_krw === '' ? '-' : (Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 보입니다 (표시 환율 {KRW_PER_USD}원)</p>
+                {/* 추천 순위는 추천 서버 환율(1,400)로 자른 가격 구간을 쓴다. 표시 환율과 다르다 (AI 요청 2026-09-10 §2.3) */}
+                {form.price_krw !== '' ? (
+                  <p className="reg-hint">
+                    추천이 읽는 가격 구간: <b>{recommendPriceBin(Number(form.price_krw)).bin}</b> (${recommendPriceBin(Number(form.price_krw)).usd.toFixed(1)} · 환율 {KRW_PER_USD_RECOMMEND.toLocaleString('ko-KR')}원 기준, 계약 §4.1)
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -175,7 +183,7 @@ export default function RegisterScreen() {
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-ing">전성분 *</label>
               <textarea id="reg-ing" className="reg-input reg-textarea" rows={4} value={form.ingredients} onChange={(e) => set('ingredients', e.target.value)} placeholder="정제수, 글리세린, 나이아신아마이드, 병풀추출물 … (한글·영문 모두 됩니다. 함량 순서대로)" />
-              <p className="reg-hint">성분은 태그로 받지 않습니다. 추천은 전성분의 순서에서 성분을 읽습니다 (계약 §3.1).</p>
+              <p className="reg-hint">성분은 태그로 받지 않습니다. 추천은 전성분의 순서에서 성분을 읽습니다 (계약 §3.1). 추천이 읽는 성분은 어휘집 30종이고, 그 밖의 성분은 등록은 되지만 추천 점수에는 들어가지 않습니다.</p>
             </div>
 
             <div className="reg-field">
@@ -185,6 +193,7 @@ export default function RegisterScreen() {
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-hi">앞세울 성분 (줄마다 "성분: 설명")</label>
               <textarea id="reg-hi" className="reg-input reg-textarea" rows={3} value={form.highlighted_ingredients} onChange={(e) => set('highlighted_ingredients', e.target.value)} placeholder={'병풀추출물: 각질 제거 후 진정\n나이아신아마이드: 톤과 결 정돈'} />
+              <p className="reg-hint">상세페이지 표시용입니다. 추천 벡터에는 들어가지 않습니다. 성분은 위 전성분의 순서에서만 읽습니다.</p>
             </div>
             <div className="reg-row">
               <div className="reg-field">

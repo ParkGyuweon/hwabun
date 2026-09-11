@@ -35,6 +35,26 @@ export const DRAFT_PRODUCT_ID = 'DRAFT';
  */
 export const KRW_PER_USD = KRW_PER_USD_DISPLAY;
 
+/**
+ * 추천 서버가 가격 구간을 자를 때 쓰는 환율 (계약 §4.1 · `catalog_registry.py:43`). 표시 환율과 다르다.
+ *
+ * 세 곳이 달랐다 (AI 요청 2026-09-10 §2.3-1): 프론트 표시 1,340.86 · 백엔드 1,300 · 추천 1,400. 순위는 추천 서버 값으로
+ * 정해지므로 **구간 힌트는 이 값**으로 보여준다. 표시 가격은 그대로 1,340.86 이어야 사장님이 넣은 원화가 화면에 그대로 나온다.
+ * 27,000원이면 1,400 기준 $19.3(~20 구간), 1,300 기준 $20.8(20~35 구간)로 구간이 갈린다.
+ */
+export const KRW_PER_USD_RECOMMEND = 1400;
+
+/** 계약 §4.1 가격 구간 경계 (USD). 0~20 · 20~35 · 35~50 · 50~80 · 80~ */
+const PRICE_BIN_EDGES = [20, 35, 50, 80];
+const PRICE_BIN_KO = ['2만원 이하', '2~3만원대', '3만원대 후반~5만원', '5~8만원', '8만원 이상'];
+
+/** 원화 → 추천이 읽는 가격 구간 이름과 달러 값 */
+export function recommendPriceBin(priceKrw: number): { usd: number; bin: string } {
+  const usd = priceKrw / KRW_PER_USD_RECOMMEND;
+  const idx = PRICE_BIN_EDGES.findIndex((edge) => usd < edge);
+  return { usd, bin: PRICE_BIN_KO[idx === -1 ? PRICE_BIN_KO.length - 1 : idx] };
+}
+
 export interface RegistrationForm {
   product_name: string;
   brand_name: string;
@@ -123,7 +143,8 @@ export function validateForm(form: RegistrationForm): ValidationResult {
     warnings.push('피부 고민 태그가 하나도 없습니다. 고민 축은 추천 가중치가 가장 큽니다.');
   }
   if (form.secondary_category === 'Sunscreen' && !form.ingredients.match(/spf|titanium|zinc oxide|triazone|avobenzone|homosalate|octocrylene|methoxyphenyl/i)) {
-    warnings.push('선케어인데 전성분에서 자외선 차단 성분을 찾지 못했습니다.');
+    // 전성분에 차단 성분이 없으면 추천은 제품명의 `SPF nn` 표기로 SPF 축을 켠다 (Jira 243, 계약 §3.1)
+    warnings.push('선케어인데 전성분에서 자외선 차단 성분을 찾지 못했습니다. 제품명에 "SPF 50" 처럼 표기하면 추천이 자외선 차단 상품으로 읽습니다.');
   }
   if (!form.image_url.trim()) warnings.push('대표 이미지가 없어 플레이스홀더로 보입니다.');
 

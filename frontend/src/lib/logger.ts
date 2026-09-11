@@ -88,6 +88,23 @@ const COLLECT_ENDPOINT = '/api/events';
  * 쇼핑몰을 보는 사람은 MEMBER 다. 판매자·관리자 화면은 대시보드라 이 로거를
  * 타지 않는다. 토큰이 없으면 헤더 없이 보낸다 — 비로그인 방문도 분석 대상이다.
  */
+/**
+ * 브랜드 담당자(SELLER)·운영자(ADMIN)가 이 브라우저에 로그인해 있으면 쇼핑몰 행동 로그를 **보내지 않는다**
+ * (결정 2026-09-11). 그 사람은 고객이 아니다. 자기 상품을 점검하려고 상세를 열고 담아 보는 행동이 대시보드
+ * 지표·추천·성향에 섞이면 안 된다. MEMBER 로도 같이 로그인해 있어도 막는다 — 같은 사람이다.
+ *
+ * 로그인 여부는 이벤트가 만들어지는 순간마다 본다. 대시보드에서 로그아웃하면 다음 이벤트부터 다시 나간다.
+ */
+function isStaffSession(): boolean {
+  try {
+    return sessionSnapshot('SELLER') !== null || sessionSnapshot('ADMIN') !== null;
+  } catch {
+    return false;
+  }
+}
+
+let staffNoticeShown = false;
+
 function collectToken(): string | null {
   try {
     return sessionSnapshot('MEMBER')?.token ?? null;
@@ -346,6 +363,15 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
+  // 판매자·운영자의 행동은 고객 행동이 아니다. 만들지도, 쌓지도, 보내지도 않는다
+  if (isStaffSession()) {
+    if (import.meta.env.DEV && !staffNoticeShown) {
+      staffNoticeShown = true;
+      console.info('[log] 판매자·운영자 세션이라 행동 로그를 보내지 않습니다 (로그아웃하면 다시 보냅니다)');
+    }
+    return;
+  }
+  staffNoticeShown = false;
   sequenceNo += 1;
 
   /**

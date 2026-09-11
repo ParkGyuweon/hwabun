@@ -17,7 +17,7 @@ import { CLEAN_VALUES } from './vocabLabels';
 import type { BannerType } from '../types/log';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
-import type { RecommendBanner, RecommendResponse } from '../types/recommendation';
+import type { HeroPolicy, RecommendBanner, RecommendResponse } from '../types/recommendation';
 
 const INGREDIENT_SYNONYMS = vocab.ingredient_source.synonyms as Record<string, string[]>;
 const PRICE_EDGES = vocab.price_bin_edges as number[];
@@ -53,6 +53,8 @@ export interface BuildInput {
    * 모르면 신규 브랜드 히어로를 `new_brand`(story) 로 말한다.
    */
   traitKnown?: boolean;
+  /** 히어로 정책 (bannerConfig HERO_POLICY). 서버 `hero=` 와 같은 값. 기본 top */
+  heroPolicy?: HeroPolicy;
   k: number;
   bannerSlots: number;
   reserved: number;
@@ -247,7 +249,10 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
    * `ranked[0]` 이다. 상품은 점수가 고르고 문구(축)는 세션 성향이 고른다 —
    * personalized-banner-plan.md §2 의 분업 그대로다.
    */
-  const top = pickHero(ranked, score, persona, traitKnown) ?? ranked[0] ?? null;
+  // hero=new_brand 면 신규 상품 우선(없으면 top 으로 돌아감), hero=top 이면 예전 계약대로 items[0] (서버와 같은 규칙)
+  const heroPolicy: HeroPolicy = input.heroPolicy ?? 'top';
+  const top = (heroPolicy === 'new_brand' ? pickHero(ranked, score, persona, traitKnown) : null) ?? ranked[0] ?? null;
+  const heroIsFresh = top !== null && isNewBrandProduct(top);
   let hero: RecommendResponse['hero'] = null;
   if (top) {
     /*
@@ -322,5 +327,7 @@ export function buildRecommendation(input: BuildInput): RecommendResponse {
     items,
     hero,
     banners,
+    // 실제 적용값. new_brand 를 요청했어도 신규 상품이 없어 items[0] 로 돌아갔으면 top (서버와 같은 규칙)
+    hero_policy: heroPolicy === 'new_brand' && heroIsFresh ? 'new_brand' : 'top',
   };
 }

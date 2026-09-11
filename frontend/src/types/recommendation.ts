@@ -18,7 +18,21 @@ export interface RecommendHero {
   banner_type: BannerType;
   /** 어휘집 원문. `new_brand` 는 null */
   banner_value: string | null;
+  /**
+   * `hero=new_brand` 로 뽑힌 히어로는 `items` 밖 상품이라 서버가 이름·점수·근거를 같이 준다
+   * (AI 회신 2026-09-10). `top` 히어로(items[0])에는 없다.
+   */
+  product_name?: string;
+  brand_name?: string;
+  score?: number;
+  reason?: string;
+  product_source?: string;
+  /** 신규 브랜드 몫으로 뽑혔다는 표시. 전용 칸 `reserved` 와 같은 뜻 */
+  reserved?: boolean;
 }
+
+/** 히어로 정책. 요청 `hero=` 와 응답 `hero_policy` 가 같은 값 집합을 쓴다 */
+export type HeroPolicy = 'top' | 'new_brand';
 
 export interface RecommendBanner {
   /** 배너 영역에서 몇 번째 칸인가 (1부터) */
@@ -55,6 +69,11 @@ export interface RecommendResponse {
   items: RecommendItem[];
   hero: RecommendHero | null;
   banners: RecommendBanner[];
+  /**
+   * 실제로 적용된 히어로 정책. `hero=new_brand` 를 요청했어도 신규 상품이 없으면 `top` 으로 온다.
+   * `banner_daily` 에서 `policy_version` 과 함께 자르는 키 (AI 회신 2026-09-10)
+   */
+  hero_policy?: HeroPolicy;
 }
 
 export interface RecommendRequest {
@@ -64,4 +83,6 @@ export interface RecommendRequest {
   reserved: number;
   /** 세션 성향이 고른 축 순서. 없으면 서버 기본값(concern, segment) */
   axes?: BannerType[];
+  /** 히어로 정책. 기본 `top` (예전 호출은 아무것도 안 바뀐다) */
+  hero?: HeroPolicy;
 }

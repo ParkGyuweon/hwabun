@@ -104,6 +104,26 @@ JWT 식별 적용 회신 잘 받았습니다. 프론트는 붙였습니다 (dev 
 - 세포라 카탈로그 브랜드(행동 로그가 있는 55개)는 `brand` 테이블에 행이 없어 시연 판매자 계정으로 조회할 수
   없습니다. 5번 시드에 `seed_catalog` 상품의 브랜드 행을 함께 넣어 주셔야 행동 화면이 실측으로 뜹니다.
 
+## 8. 회원 피부 프로필 4개 · 프로필 조회/수정 · 주문 목록 (2026-09-11 추가)
+
+AI 파트 요청(고객 가입에서 피부 속성 4개를 받아야 추천의 속성 친화도가 산다)에 따라 프론트 가입 폼과
+마이페이지를 붙였습니다. `member` 테이블에 컬럼은 이미 있습니다 (`skin_type_code` · `skin_tone_code` ·
+`hair_color_code` · `eye_color_code`, 전부 NULL 허용). 받는 쪽만 없습니다.
+
+- **`POST /api/auth/members` 본문에 4개 추가** (전부 nullable): `skinTypeCode` · `skinToneCode` · `hairColorCode` · `eyeColorCode`.
+  값은 `skin_type` 등 코드 테이블의 `code` 그대로 (`dry` · `fair` · `black` · `brown` …). 프론트는 지금부터 이 이름으로
+  보내고 있습니다. `IdentityController.RegisterMember` 레코드에 필드 4개를 더하고 `Member` 세터로 넣어 주시면 됩니다.
+  없는 코드가 오면 400 으로 거절해 주세요 (프론트는 어휘 밖 값을 보내지 않습니다).
+- **`GET /api/members/me`** · **`PATCH /api/members/me`** (MEMBER 토큰): `{ memberId, email, nickname, skinTypeCode, skinToneCode,
+  hairColorCode, eyeColorCode }`. PATCH 는 4개 코드만 바꿉니다(null 로 지우기 허용). 프론트 마이페이지가 지금은 이
+  브라우저에만 저장하는데, 이 둘이 생기면 서버 값을 우선으로 바꿉니다.
+- **`GET /api/orders`** (MEMBER 토큰, 내 주문 목록): `[{ orderId, status, totalAmount, paidAmount, createdAt,
+  items: [{ productId, productNameSnapshot, quantity, unitPrice }] }]`, 최신순. 마이페이지 주문 내역이 지금은 이 브라우저에서
+  한 주문만 보입니다.
+- `hair_color` 코드 테이블에 `gray` 가 있는지 확인 부탁드립니다 (`persona-schema.md` §3.1 은 6종, `product-form-labels-ko.json` 에는 5종).
+- 페르소나 100명을 회원으로 일괄 가입시키는 스크립트를 두었습니다 (`frontend/scripts/register-personas.ts`).
+  이메일은 `{persona_id 소문자}@persona.hwabun.local`, 비밀번호 `hwabun1234`. 위 4개 필드를 함께 보냅니다.
+
 ---
 
 ## 참고 — 배포 전 필요

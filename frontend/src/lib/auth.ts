@@ -181,17 +181,23 @@ export async function login(role: AccountRole, email: string, password: string):
   return session;
 }
 
-/** MEMBER 는 nickname, SELLER 는 name. ADMIN 은 가입 API 가 없다 (운영자가 직접 만든다) */
+/**
+ * MEMBER 는 nickname, SELLER 는 name. ADMIN 은 가입 API 가 없다 (운영자가 직접 만든다).
+ *
+ * MEMBER 는 피부 프로필 4개(`skinTypeCode` …)를 같이 싣는다 (AI 요청 2026-09-10 §1). 백엔드 `RegisterMember` 가
+ * 아직 이 필드를 안 받으면 무시될 뿐 가입은 된다. 프론트는 같은 값을 이 브라우저에도 남긴다 (lib/memberProfile).
+ */
 export async function register(
   role: Exclude<AccountRole, 'ADMIN'>,
   email: string,
   password: string,
   name: string,
+  extra: Record<string, string | null> = {},
 ): Promise<AccountSession> {
   const path = role === 'MEMBER' ? '/api/auth/members' : '/api/auth/sellers';
   const body =
     role === 'MEMBER'
-      ? { email: email.trim(), password, nickname: name.trim() }
+      ? { email: email.trim(), password, nickname: name.trim(), ...extra }
       : { email: email.trim(), password, name: name.trim() };
   const res = await post(path, body);
   const session = await toSession(res, role);
