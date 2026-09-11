@@ -5,6 +5,7 @@ from decimal import Decimal
 try:
     from pyspark.sql import SparkSession
     from pyspark.sql.types import (
+        BooleanType,
         DateType,
         StringType,
         StructField,
@@ -47,6 +48,7 @@ class EventFactsSparkTest(unittest.TestCase):
                 StructField("intent", StringType(), False),
                 StructField("user_id", StringType(), True),
                 StructField("identity_scope", StringType(), True),
+                StructField("is_seed", BooleanType(), False),
                 StructField("persona_id", StringType(), True),
                 StructField("scenario_id", StringType(), True),
                 StructField("simulation_run_id", StringType(), True),
@@ -70,6 +72,7 @@ class EventFactsSparkTest(unittest.TestCase):
                 intent,
                 "U1",
                 "persona",
+                False,
                 "PE1",
                 "SC1",
                 "RUN1",

@@ -292,6 +292,79 @@ class RawToCleanedSparkTest(unittest.TestCase):
         self.assertEqual("acc-1", raw_account["member-login"])
         self.assertIsNone(raw_account["anonymous-visit"])
 
+    def test_is_seed_comes_from_the_seeded_property(self):
+        """시드 Event는 주입된 선호 표식이라 한 컬럼으로 걸러낼 수 있어야 한다.
+
+        판정 정본은 `properties.seeded` 다. `session_id` 의 "seed:" 접두는 파생이라
+        쓰지 않는다 (event-properties-schema.md §3.14).
+        """
+
+        def _synthetic(event_id, **overrides):
+            event = self._event(event_id)
+            event.update({
+                "actor_type": "synthetic",
+                "source": "simulator",
+                "persona_id": "PC00001",
+            })
+            event["properties"] = dict(
+                event["properties"],
+                scenario_id="K01",
+                simulation_run_id="RUN1",
+                generator_type="python_batch",
+                **overrides.pop("properties", {}),
+            )
+            event.update(overrides)
+            return event
+
+        seeded = _synthetic(
+            "seed-event",
+            session_id="seed:RUN1:PC00001:P1",
+            properties={"seeded": True},
+        )
+        observed = _synthetic("observed-event")
+        # session_id 만 시드 형식이고 표식이 없으면 관측 행동이다.
+        lookalike = _synthetic("seed-shaped-session", session_id="seed:RUN1:PC00001:P2")
+
+        raw = build_raw_events_frame(
+            self._kafka_frame([seeded, observed, lookalike]),
+            "test-cluster",
+        )
+        frames = build_processed_frames(raw, "Asia/Seoul")
+        rows = {
+            row["event_id"]: row["is_seed"]
+            for row in frames["cleaned_events"].select("event_id", "is_seed").collect()
+        }
+
+        self.assertTrue(rows["seed-event"])
+        self.assertFalse(rows["observed-event"])
+        self.assertFalse(rows["seed-shaped-session"])
+
+    def test_seed_marker_on_real_user_traffic_is_quarantined(self):
+        """실사용자 Event에는 주입 표식이 올 수 없다 (event-properties-schema.md §7-8)."""
+        contaminated = self._event("user-with-seed-marker")
+        contaminated["properties"] = dict(contaminated["properties"], seeded=True)
+
+        raw = build_raw_events_frame(
+            self._kafka_frame([contaminated, self._event("clean-user")]),
+            "test-cluster",
+        )
+        frames = build_processed_frames(raw, "Asia/Seoul")
+
+        self.assertEqual(
+            {"clean-user"},
+            {row["event_id"] for row in frames["cleaned_events"].select("event_id").collect()},
+        )
+        self.assertEqual(
+            {"user-with-seed-marker"},
+            {
+                row["event_id"]
+                for row in frames["bad_events"]
+                .where("error_code = 'invalid_seed_scope'")
+                .select("event_id")
+                .collect()
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
