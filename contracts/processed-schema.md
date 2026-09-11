@@ -589,18 +589,28 @@ content_interest_score
 | `first_checkout_at` | timestamp | Y | 최초 Checkout |
 | `first_purchase_at` | timestamp | Y | 최초 구매 |
 | `reached_impression` | boolean | N | 노출 도달 |
-| `used_quick_look` | boolean | N | Quick Look 사용 |
-| `quick_look_close_reason` | string | Y | 마지막 닫힘 사유 |
-| `quick_look_dwell_ms` | long | Y | Quick Look 체류 합계 |
-| `quick_look_variants_viewed` | int | Y | 선택한 옵션 수 최댓값 |
+| `reached_quick_look` | boolean | N | Quick Look 도달 |
+| `quick_look_close_reason` | string | Y | 마지막 닫힘 사유 (미구현) |
+| `quick_look_dwell_ms` | long | Y | Quick Look 체류 합계 (미구현) |
+| `quick_look_variants_viewed` | int | Y | 선택한 옵션 수 최댓값 (미구현) |
 | `reached_click` | boolean | N | 클릭 도달 |
-| `reached_product_view` | boolean | N | 상세 조회 도달 |
+| `reached_detail_view` | boolean | N | 상세 조회 도달. `reached_product_view` 또는 `reached_quick_look` |
+| `reached_product_view` | boolean | N | 상품 상세 조회 도달 |
 | `reached_information_view` | boolean | N | 정보 확인 도달 |
 | `reached_add_to_cart` | boolean | N | 장바구니 도달 |
 | `reached_checkout` | boolean | N | Checkout 도달 |
 | `reached_purchase` | boolean | N | 구매 도달 |
 | `dropoff_step` | string | Y | 마지막 도달 후 이탈 단계 |
 | `processed_at` | timestamp | N | 처리 시각 |
+
+Quick Look은 목록에서 상세를 여는 화면 동선이라 퍼널 단계로 센다. 거기서 바로
+장바구니에 담을 수 있어서 빼면 담기 세션이 상세 조회 세션보다 많아진다.
+`dropoff_step`은 `purchase → checkout → add_to_cart → information_view →
+product_view → quick_look → click → impression` 순으로 마지막 도달 단계를 고른다.
+
+`quick_look_close_reason`·`quick_look_dwell_ms`·`quick_look_variants_viewed`는 아직
+만들지 않는다. 닫힘 사유와 체류는 `quick_look_close` Event에 있으므로 필요해지면
+같은 Fact에 붙인다.
 
 ## 15. `persona_behavior_feature_delta`
 

@@ -298,9 +298,17 @@ input = funnel_session_fact, dim_product
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | scenario/run만 Y | `funnel_date_kst`는 최초 Funnel 진입일 기준 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
-| `impression_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `click_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
+| `impression_sessions`, `click_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
 | `impression_to_click_rate`, `click_to_view_rate`, `view_to_information_rate`, `view_to_cart_rate`, `cart_to_purchase_rate`, `view_to_purchase_rate`, `dropoff_after_impression_rate`, `dropoff_after_view_rate`, `dropoff_after_cart_rate` | double | Y | 전환·이탈률 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`detail_view_sessions`의 정의와 분모 규칙은 §4.14와 같다. `view_to_cart_rate`,
+`view_to_purchase_rate`, `dropoff_after_view_rate`는 `detail_view_sessions`를 분모로
+쓰고, `view_to_information_rate`는 상품 상세에서만 일어나므로 `product_view_sessions`를
+유지한다. `dropoff_after_view_rate`는 `view_to_cart_rate`의 여집합이라 같은 분모여야 한다.
+
+`quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`는
+0.1에서 열거만 하고 의미를 정의하지 않아 구현하지 않았다. 정의가 정해지면 추가한다.
 
 ### 4.6 `persona_segment_daily_kpi`
 
@@ -493,13 +501,21 @@ input = product_event_fact, funnel_session_fact
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통 계약 | scenario/run만 Y | 브랜드·일자·실행 분리 축 |
-| `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
+| `impression_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
 | `unique_user_count` | bigint | N | 브랜드 KPI에 기여한 고유 사용자 수 |
 | `product_count_viewed` | bigint | N | 조회된 고유 상품 수 |
-| `detail_entry_rate` | double | Y | 조회 세션 / 노출 세션 |
-| `information_view_rate` | double | Y | 정보 확인 세션 / 조회 세션 |
-| `view_to_cart_rate` | double | Y | 장바구니 세션 / 조회 세션 |
+| `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
+| `information_view_rate` | double | Y | 정보 확인 세션 / 상품 상세 조회 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 상세 조회 세션 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`detail_view_sessions`는 상품 상세(`product_view`)와 Quick Look(`quick_look`) 중 하나
+이상을 연 고유 세션이다. 둘 다 연 세션도 한 번만 센다. Quick Look은 목록에서 상세를
+여는 화면 동선이고 거기서 바로 담을 수 있어서, 담기 세션을 `product_view_sessions`로
+나누면 분자와 분모가 다른 모집단을 세어 비율이 1.0을 넘는다. 그래서 담기·전환 분모는
+`detail_view_sessions`를 쓰고, 정보 확인만 상품 상세에서 일어나므로
+`product_view_sessions`를 유지한다. `quick_look_sessions`와 `product_view_sessions`는
+겹칠 수 있어 더해서 `detail_view_sessions`를 만들 수 없다.
 
 상품 grain Mart의 세션 수를 합산하지 않고 Fact에서 `session_id`를 브랜드별로 직접
 중복 제거한다. 따라서 한 세션이 같은 브랜드 상품 여러 개를 보더라도 각 단계 세션은
