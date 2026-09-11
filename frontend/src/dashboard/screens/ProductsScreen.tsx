@@ -16,8 +16,14 @@ type SortKey = 'interest' | 'cartRate' | 'remove' | 'variant';
  * 마트가 붙으면 수량·전환·제거율은 product_daily_kpi·funnel_daily_kpi 실측이고, 진단 3열(이탈 지점·옵션 왕복·
  * 퀵룩→상세)은 별도 마트(계약 §6-3)가 와야 실측이다. 배지가 둘로 갈릴 수 있다.
  */
+function repurchaseCell(r: { buyerCount: number; rate: number | null } | undefined): string {
+  if (!r || r.rate === null) return '-';
+  return `${fmt.pct(r.rate, 0)} (${r.buyerCount}명)`;
+}
+
 export default function ProductsScreen() {
-  const { productMetrics, source } = useBehavior();
+  const { productMetrics, repurchase, source } = useBehavior();
+  const showRepurchase = source.purchase === 'real' && repurchase !== null;
   const [sort, setSort] = useState<SortKey>('interest');
   const eligible = productMetrics.filter((p) => p.detailViews >= 200);
 
@@ -90,6 +96,7 @@ export default function ProductsScreen() {
                 <th>옵션 왕복</th>
                 <th>퀵룩 → 상세</th>
                 <th>담기 후 제거</th>
+                {showRepurchase ? <th>재구매</th> : null}
                 <th>표본</th>
               </tr>
             </thead>
@@ -115,6 +122,7 @@ export default function ProductsScreen() {
                     <td className={p.variantSwitches >= 3 ? 'is-warn' : ''}>{p.variantSwitches.toFixed(1)}회</td>
                     <td className={p.quickLookToDetail < 0.4 ? 'is-warn' : ''}>{fmt.pct(p.quickLookToDetail, 0)}</td>
                     <td className={p.removeRate >= 0.3 ? 'is-warn' : ''}>{fmt.pct(p.removeRate, 0)}</td>
+                    {showRepurchase ? <td>{repurchaseCell(repurchase?.products.get(p.product.product_id))}</td> : null}
                     <td>{fmt.compact(p.detailViews)}</td>
                   </tr>
                 );
