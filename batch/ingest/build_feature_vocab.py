@@ -12,6 +12,8 @@
 실행: python batch/ingest/build_feature_vocab.py
 """
 import json, os, re, sys, collections
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "batch", "jobs"))
+from product_encoder import brand_key   # noqa: E402  브랜드 키 = brand_id (Jira 247)
 import numpy as np
 
 try: sys.stdout.reconfigure(encoding="utf-8")
@@ -226,11 +228,13 @@ BLOCKS = [
     # brand: 다음 구매에서 유지되는 속성 중 lift 가 압도적이다 (6.08x, 2위 price_bin 1.30x).
     # 어휘집에는 카탈로그에 실재하는 브랜드만 담는다 -> 신규 브랜드는 영벡터가 된다.
     ("brand", "one_hot", 0.60,
-     sorted({x["brand_name"] for x in d})),
+     # 키는 brand_id 문자열 (Jira 247). 칸 순서는 예전처럼 **이름순**으로 둔다 — id 순으로 바꾸면 벡터 값은
+     # 같아도 코사인 합산 순서가 달라져 마지막 자리(1e-16)가 흔들리고 LTR 조기종료 시점이 바뀐다(369→276 트리).
+     sorted({brand_key(x) for x in d}, key=lambda k: next(x["brand_name"] for x in d if brand_key(x) == k))),
 ]
 
 for _x in d:
-    counts["brand"][_x["brand_name"]] += 1
+    counts["brand"][brand_key(_x)] += 1
 
 # 블록별 각주 — 왜 이 블록이 있는지 계약서를 읽는 사람이 알 수 있어야 한다
 BLOCK_NOTES = {
@@ -244,7 +248,7 @@ for name, _, _, vocab in BLOCKS:
         df[name] = {t: int(counts[name][t]) for t in vocab}
 
 spec = {
-    "version": "0.5",
+    "version": "0.6",
     "generated_from": "batch/ingest/data/products_200.json",
     "n_products": N,
     "min_tag_freq": MIN_FREQ,
@@ -314,6 +318,12 @@ spec = {
     "price_bin_edges": PRICE_EDGES,
     "total_content_dim": sum(len(v) for _, _, _, v in BLOCKS) + 1,
     "changelog": [
+        {"version": "0.6",
+         "change": "brand 블록 vocab 의 키를 brand_name -> brand_id 문자열로 (labels 에 이름). 55개 1:1 이라 "
+                   "원천 200개 벡터는 값이 한 자리도 안 바뀐다 (2026-09-11, Jira 247)",
+         "evidence": "쇼핑몰 brand 테이블은 (판매자, 이름) 만 유일해 같은 이름의 브랜드가 여러 판매자에게 등록될 수 있다. "
+                     "이름을 키로 쓰면 그 상품이 원천 브랜드의 원핫 벡터·재구매 효과(lift 6x)를 이름만으로 빌린다. "
+                     "재생성 뒤 product_feature.jsonl 이 이전과 동일한지 대조해 확인"},
         {"version": "0.5",
          "change": "성분 동의어에 한국어 표기와 SPF 를 넣고, 어휘집에 없는 브랜드를 "
                    "위한 관계 폴백(brand_unknown_fallback)을 명시한다",
@@ -329,6 +339,13 @@ spec = {
 }
 
 out = os.path.join(ROOT, "contracts", "product-feature-vocab.json")
+for _b in spec["blocks"]:
+    if _b["name"] == "brand":
+        # vocab 은 brand_id 문자열이다. 사람이 읽을 이름은 labels 로 따로 둔다 (2026-09-11, Jira 247).
+        _b["key"] = "brand_id 문자열 (원천은 세포라 brand_id, 등록 상품은 쇼핑몰 brand_id; 없으면 'name:'+brand_name)"
+        _b["labels"] = {brand_key(x): x["brand_name"] for x in d}
+        _b["why_id"] = ("쇼핑몰 brand 테이블은 (판매자, 이름) 만 유일해 같은 이름의 브랜드가 여러 개 등록될 수 있다. "
+                        "이름을 키로 쓰면 원천 브랜드의 벡터·재구매 효과를 이름만으로 빌리게 된다.")
 json.dump(spec, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 print(f"저장: {out}")

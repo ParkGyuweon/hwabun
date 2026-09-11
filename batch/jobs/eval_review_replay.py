@@ -42,7 +42,7 @@ sys.path.insert(0, BD)
 from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
-from product_encoder import Encoder                          # noqa: E402
+from product_encoder import Encoder, brand_key               # noqa: E402
 from ltr_features import LtrFeatures, load_ltr                # noqa: E402
 from recommender import (load_cooc, cf_bonus,
                         BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
@@ -218,7 +218,7 @@ def main():
     else:
         print("학습 결합 끔 — 선형 결합")
     recommender = Recommender(M, index, prior, affinity=affinity,
-                              brands=[p["brand_name"] for p in encoder.products],
+                              brands=[brand_key(p) for p in encoder.products],
                               known_brands=set(encoder.blk["brand"]["vocab"]),
                               cooc=cooc, supporters=supporters,
                               ltr=None if ltr is None else ltr[0],

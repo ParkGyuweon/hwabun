@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 import catalog_registry as cr                      # noqa: E402
 from ltr_features import LtrFeatures, pop_rank_of  # noqa: E402
 from persona_feature import NEUTRAL, load as load_affinity  # noqa: E402
-from product_encoder import Encoder                # noqa: E402
+from product_encoder import Encoder, brand_key     # noqa: E402
 from recommender import load_cooc, new_product_mask  # noqa: E402
 
 SSAFY = os.path.join(ROOT, "simulator", "feedback", "products.ssafy-beauty.json")
@@ -144,7 +144,7 @@ class TestCatalogGrowth(unittest.TestCase):
     def test_registered_products_are_reserved_candidates(self):
         products, V, prior, cooc, sup, index, aff = self._grown()
         known = set(self.enc.blk["brand"]["vocab"])
-        brands = [p.get("brand_name") for p in products]
+        brands = [brand_key(p) for p in products]
         m = new_product_mask(len(products), sup, brands, known)
         self.assertEqual(int(m[:self.n0].sum()), 0, "원천 200개엔 신규가 없어야 한다")
         self.assertTrue(np.all(m[self.n0:]), "등록 상품은 전부 전용 칸 후보")

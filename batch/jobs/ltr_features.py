@@ -30,7 +30,7 @@ import os
 
 import numpy as np
 
-from product_encoder import ORDER
+from product_encoder import ORDER, brand_key
 
 SERVING = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "..", "ingest", "data", "serving")
@@ -103,7 +103,7 @@ class LtrFeatures:
         self.supporters = (np.zeros(self.N, np.float32) if supporters is None
                            else np.asarray(supporters, np.float32))
         P = enc.products
-        self.brand_of = np.array([p.get("brand_name") or "" for p in P])
+        self.brand_of = np.array([brand_key(p) for p in P])          # same_brand 도 brand_id 로 (Jira 247)
         self.price = np.array([float(p.get("price_usd") or 0) for p in P], np.float32)
         self.pop_rank = pop_rank_of(P, self.n_ref)
         self.BM = block_matrices(enc, self.V)

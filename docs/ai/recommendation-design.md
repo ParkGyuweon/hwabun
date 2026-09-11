@@ -683,6 +683,8 @@ attr_affinity(u, i) = w_type  x A[i][u.skin_type]
 
 ### 7-2. 스케줄
 
+> **브랜드 키는 `brand_id`** (2026-09-11, Jira 247). 어휘집 brand 블록 vocab·서버 brands/known·LTR `same_brand`·`new_mask` 가 전부 id 로 비교한다. 쇼핑몰이 (판매자, 이름)만 유일해 같은 이름의 브랜드가 여럿 있을 수 있어서다. 칸 순서는 이름순 그대로라 벡터·모델·골든이 이전과 비트 단위로 같다.
+
 > LTR 채택 뒤 이 스케줄은 **선형 폴백**과 **LTR 콜드스타트(시드 0)** 에만 쓰인다. LTR 시드 0 은
 > `prior×0.70 + 속성 친화도×0.30` (0개 구간과 동일, 2026-09-11 Jira 245 — 이전엔 prior 만 써서 실회원 속성이
 > 첫 화면에 안 먹었다). 실회원 속성은 `GET /api/recommend?skin_type=…` 쿼리로 들어오고 응답 `attribute_source` 로 확인한다.

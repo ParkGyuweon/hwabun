@@ -1,5 +1,5 @@
 {
-  "vocab_version": "0.5",
+  "vocab_version": "0.6",
   "n_dim": 148,
   "blocks": [
     {
@@ -140,7 +140,7 @@
         "brand": {
           "weight": 0.6,
           "values": {
-            "OLEHENRIKSEN": 0.6
+            "5674": 0.6
           }
         }
       },
@@ -515,7 +515,7 @@
         "brand": {
           "weight": 0.6,
           "values": {
-            "Dr. Jart+": 0.6
+            "6014": 0.6
           }
         }
       },
@@ -893,7 +893,7 @@
         "brand": {
           "weight": 0.6,
           "values": {
-            "LANEIGE": 0.6
+            "6125": 0.6
           }
         }
       },
@@ -1267,7 +1267,7 @@
         "brand": {
           "weight": 0.6,
           "values": {
-            "KORRES": 0.6
+            "5715": 0.6
           }
         }
       },
@@ -1656,7 +1656,7 @@
         "brand": {
           "weight": 0.6,
           "values": {
-            "CLINIQUE": 0.6
+            "1254": 0.6
           }
         }
       },
@@ -2038,7 +2038,7 @@
         "brand": {
           "weight": 0.6,
           "values": {
-            "OLEHENRIKSEN": 0.6
+            "5674": 0.6
           }
         }
       },

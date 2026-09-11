@@ -35,7 +35,7 @@ from eval_metadata import load as load_metadata            # noqa: E402
 from ltr_features import LtrFeatures, load_ltr             # noqa: E402
 from persona_feature import load as load_affinity          # noqa: E402
 from persona_split import select as select_split           # noqa: E402
-from product_encoder import Encoder                        # noqa: E402
+from product_encoder import Encoder, brand_key             # noqa: E402
 from recommender import (load_cooc, cf_bonus, CF_BETA,
                         BRAND_W, LAMBDA_MMR, SCHEDULE,    # noqa: E402
                          Recommender, brand_match, schedule_for)
@@ -184,7 +184,7 @@ def main():
     pop_rank[np.argsort(-nrev)] = np.arange(len(V))
 
     affinity = load_affinity(index)
-    brands = [p["brand_name"] for p in e.products]
+    brands = [brand_key(p) for p in e.products]
     known = set(e.blk["brand"]["vocab"])       # 어휘집에 있는 브랜드
     cooc, supporters = load_cooc() if a.cf else (None, None)
     if a.cf and cooc is None:
