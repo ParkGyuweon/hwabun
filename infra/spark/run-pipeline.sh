@@ -96,6 +96,8 @@ run_batch_pipeline() {
   local mart_args=(
     --sessionized-path "$data_root/processed/sessionized_events"
     --product-fact-path "$data_root/processed/product_event_fact"
+    --purchase-fact-path "$data_root/processed/purchase_fact"
+    --purchase-reason-fact-path "$data_root/processed/purchase_reason_fact"
     --dim-product-path "$data_root/processed/dim_product"
     --product-ingredient-path /opt/project/batch/ingest/data/serving/product_ingredient.csv
     --ingredient-vocab-path /opt/project/batch/ingest/data/serving/ingredient_vocab.csv
@@ -106,6 +108,7 @@ run_batch_pipeline() {
     --product-repurchase-path "$data_root/marts/product_repurchase_daily"
     --brand-repurchase-path "$data_root/marts/brand_repurchase_daily"
     --purchase-reason-path "$data_root/marts/purchase_reason_daily"
+    --reason-trait-map-path /opt/project/contracts/purchase-reason-trait-map.json
     --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest"
     --category-price-path "$data_root/marts/category_price_reference"
     --banner-daily-path "$data_root/marts/banner_daily"
