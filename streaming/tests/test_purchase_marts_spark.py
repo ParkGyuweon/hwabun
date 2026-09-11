@@ -17,12 +17,12 @@ from streaming.jobs.build_marts_job import (
 PURCHASE_SCHEMA = (
     "order_id string, product_id string, brand_id string, user_id string, "
     "event_date_kst date, event_time timestamp, actor_type string, source string, "
-    "scenario_id string, simulation_run_id string"
+    "generator_type string, scenario_id string, simulation_run_id string"
 )
 REASON_SCHEMA = (
     "order_id string, reason string, event_date_kst date, user_id string, "
     "is_primary boolean, skipped boolean, actor_type string, source string, "
-    "scenario_id string, simulation_run_id string"
+    "generator_type string, scenario_id string, simulation_run_id string"
 )
 TRAIT_SCHEMA = (
     "trait_date_kst date, user_id string, trait string, is_primary_trait boolean"
@@ -62,9 +62,9 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """U1은 P1을 두 주문에 걸쳐 산다. U2는 한 번만 산다."""
         return self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None),
-                ("O3", "P1", "A", "U2", date(2026, 9, 11), _at(11), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None, None),
+                ("O3", "P1", "A", "U2", date(2026, 9, 11), _at(11), "user", "web", None, None, None),
             ]
         )
 
@@ -82,8 +82,8 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """한 주문 안의 같은 상품 row가 여러 개여도 구매는 한 번이다."""
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1, 2), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1, 2), "user", "web", None, None, None),
             ]
         )
 
@@ -100,8 +100,8 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """상품이 달라도 같은 브랜드를 다시 사면 브랜드 재구매다."""
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P2", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P2", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None, None),
             ]
         )
         reasons = self._reasons([])
@@ -124,8 +124,8 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """관측 창 밖의 첫 구매는 재구매 근거가 되지 않는다."""
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None, None),
             ]
         )
 
@@ -139,10 +139,10 @@ class PurchaseMartsSparkTest(unittest.TestCase):
     def test_null_brand_and_null_user_are_excluded(self):
         purchases = self._purchases(
             [
-                ("O1", "P1", None, "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "   ", "U2", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O3", "P1", "A", None, date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O4", "P1", "A", "U3", date(2026, 9, 1), _at(1), "user", "web", None, None),
+                ("O1", "P1", None, "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "   ", "U2", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O3", "P1", "A", None, date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O4", "P1", "A", "U3", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
             ]
         )
 
@@ -155,14 +155,14 @@ class PurchaseMartsSparkTest(unittest.TestCase):
     def test_declared_restock_is_kept_beside_observed_repurchase(self):
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web", None, None, None),
             ]
         )
         reasons = self._reasons(
             [
-                ("O2", "restock", date(2026, 9, 11), "U1", True, False, "user", "web", None, None),
-                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None),
+                ("O2", "restock", date(2026, 9, 11), "U1", True, False, "user", "web", None, None, None),
+                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None, None),
             ]
         )
 
@@ -175,14 +175,14 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """이유는 주문 단위 선언이라 각 브랜드에 한 번씩만 계상한다."""
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O1", "P2", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O1", "P3", "B", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O1", "P2", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O1", "P3", "B", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
             ]
         )
         reasons = self._reasons(
             [
-                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None),
+                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None, None),
             ]
         )
 
@@ -200,14 +200,14 @@ class PurchaseMartsSparkTest(unittest.TestCase):
     def test_skipped_survey_does_not_pollute_share_denominator(self):
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "A", "U2", date(2026, 9, 1), _at(1), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "A", "U2", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
             ]
         )
         reasons = self._reasons(
             [
-                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None),
-                ("O2", None, date(2026, 9, 1), "U2", False, True, "user", "web", None, None),
+                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None, None),
+                ("O2", None, date(2026, 9, 1), "U2", False, True, "user", "web", None, None, None),
             ]
         )
 
@@ -226,16 +226,16 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """texture_finish 는 성향 축에 대응이 없어 대조 분모에서 빠진다."""
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "A", "U2", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O3", "P1", "A", "U3", date(2026, 9, 1), _at(1), "user", "web", None, None),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "A", "U2", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O3", "P1", "A", "U3", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
             ]
         )
         reasons = self._reasons(
             [
-                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None),
-                ("O2", "ingredient", date(2026, 9, 1), "U2", True, False, "user", "web", None, None),
-                ("O3", "texture_finish", date(2026, 9, 1), "U3", True, False, "user", "web", None, None),
+                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None, None),
+                ("O2", "ingredient", date(2026, 9, 1), "U2", True, False, "user", "web", None, None, None),
+                ("O3", "texture_finish", date(2026, 9, 1), "U3", True, False, "user", "web", None, None, None),
             ]
         )
         traits = self.spark.createDataFrame(
@@ -272,13 +272,13 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         """
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P2", "B", "U2", date(2026, 9, 1), _at(1), "agent", "simulator", "K01", "RUN1"),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P2", "B", "U2", date(2026, 9, 1), _at(1), "agent", "simulator", "agent_llm", "K01", "RUN1"),
             ]
         )
         reasons = self._reasons(
             [
-                ("O1", "restock", date(2026, 9, 1), "U1", True, False, "user", "web", None, None),
+                ("O1", "restock", date(2026, 9, 1), "U1", True, False, "user", "web", None, None, None),
             ]
         )
 
@@ -293,8 +293,8 @@ class PurchaseMartsSparkTest(unittest.TestCase):
     def test_execution_axes_split_rows(self):
         purchases = self._purchases(
             [
-                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None),
-                ("O2", "P1", "A", "U2", date(2026, 9, 1), _at(1), "agent", "simulator", "K01", "RUN1"),
+                ("O1", "P1", "A", "U1", date(2026, 9, 1), _at(1), "user", "web", None, None, None),
+                ("O2", "P1", "A", "U2", date(2026, 9, 1), _at(1), "agent", "simulator", "agent_llm", "K01", "RUN1"),
             ]
         )
 
@@ -308,7 +308,7 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         purchases = self._base_purchases()
         reasons = self._reasons(
             [
-                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None),
+                ("O1", "price", date(2026, 9, 1), "U1", True, False, "user", "web", None, None, None),
             ]
         )
         cases = [
