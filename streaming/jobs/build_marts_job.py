@@ -354,6 +354,10 @@ def _funnel_stage_events(sessionized_df: Any, product_fact_df: Any) -> Any:
 
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    sessionized_df = _observed_events(sessionized_df)
+    product_fact_df = _observed_events(product_fact_df)
+
     product_events = product_fact_df.where(
         F.col("event_name").isin(*FUNNEL_PRODUCT_EVENTS)
     ).select(
@@ -562,6 +566,9 @@ def _product_daily_kpi(
 ) -> Any:
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
     group_columns = ["event_date_kst", "product_id", *EXECUTION_AXES]
 
     def count_events(event_name: str) -> Any:
@@ -695,6 +702,9 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
 
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
     axes = list(EXECUTION_AXES)
     key_columns = ["event_date_kst", "brand_id", *axes]
     valid_brand = F.col("brand_id").isNotNull() & (
@@ -799,14 +809,14 @@ def _observed_events(frame: Any | None) -> Any | None:
     담기 없는 조회를 내서 전환 지표의 분자와 분모를 양방향으로 왜곡한다. 어느 Mart가
     제외 대상인지는 `dw-schema.md`가 정본이다.
 
-    `is_seed`가 없는 입력은 시드 판정 이전에 만들어진 것이라 그대로 통과시킨다.
+    `is_seeded`가 없는 입력은 시드 판정 이전에 만들어진 것이라 그대로 통과시킨다.
     """
 
     from pyspark.sql import functions as F
 
-    if frame is None or "is_seed" not in frame.columns:
+    if frame is None or "is_seeded" not in frame.columns:
         return frame
-    return frame.where(~F.coalesce(F.col("is_seed"), F.lit(False)))
+    return frame.where(~F.coalesce(F.col("is_seeded"), F.lit(False)))
 
 
 def _valid_brand() -> Any:
@@ -918,6 +928,9 @@ def _repurchase_metrics(orders_df: Any, key_columns: list[str], window_days: int
 def _product_repurchase_daily(purchase_fact_df: Any, window_days: int) -> Any:
     """상품 재구매 — 같은 사용자가 같은 상품을 서로 다른 주문으로 다시 산 비율."""
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    purchase_fact_df = _observed_events(purchase_fact_df)
+
     key_columns = ["snapshot_date_kst", "brand_id", "product_id", *EXECUTION_AXES]
     orders = _repurchase_orders(purchase_fact_df, window_days, key_columns)
     return _repurchase_metrics(orders, key_columns, window_days)
@@ -934,6 +947,10 @@ def _brand_repurchase_daily(
     `restock`은 재구매의 선언 신호이므로(`event-properties-schema.md` §3.9) 관측
     재구매와 교차 검증할 수 있도록 같은 행에 보존한다.
     """
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    purchase_fact_df = _observed_events(purchase_fact_df)
+    purchase_reason_fact_df = _observed_events(purchase_reason_fact_df)
 
     from pyspark.sql import functions as F
 
@@ -992,6 +1009,10 @@ def _purchase_reason_daily(
     """
 
     from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    purchase_reason_fact_df = _observed_events(purchase_reason_fact_df)
+    purchase_fact_df = _observed_events(purchase_fact_df)
 
     key_columns = ["event_date_kst", "brand_id", "reason", *EXECUTION_AXES]
     order_brands = (
@@ -1111,6 +1132,9 @@ def _ingredient_weekly_interest(
     from pyspark.sql import functions as F
     from pyspark.sql.types import ArrayType, StringType
     from pyspark.sql.window import Window
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    sessionized_df = _observed_events(sessionized_df)
 
     dimensions = [
         "interest_week_kst",
@@ -1380,6 +1404,9 @@ def load_banner_values(feature_vocab_path: str, affinity_lift_path: str) -> set[
 def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
     group_columns = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
         "banner_slot", "trait_source", "policy_version", "actor_type", "source",
@@ -1531,6 +1558,9 @@ def _cross_brand_daily(sessionized_df: Any) -> Any:
     from pyspark.sql import Window
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    sessionized_df = _observed_events(sessionized_df)
+
     views = sessionized_df.where(
         (F.col("event_name") == "product_view") & F.col("brand_id").isNotNull()
     )
@@ -1649,6 +1679,9 @@ def _analytics_baseline(
 ) -> Any:
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
     period = (F.col("event_date_kst") >= F.lit(start_date).cast("date")) & (
         F.col("event_date_kst") <= F.lit(end_date).cast("date")
     )
@@ -1716,41 +1749,36 @@ def build_mart_frames(
     reason_trait_map: dict[str, Any] | None = None,
     repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS,
 ) -> dict[str, Any]:
-    observed_sessionized = _observed_events(sessionized_df)
-    observed_product_fact = _observed_events(product_fact_df)
-    observed_purchase_fact = _observed_events(purchase_fact_df)
-    observed_purchase_reason_fact = _observed_events(purchase_reason_fact_df)
-
-    stage_events = _funnel_stage_events(observed_sessionized, observed_product_fact)
+    stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
     frames = {
         "funnel_session_fact": funnel_session,
-        "product_daily_kpi": _product_daily_kpi(observed_product_fact, event_weights),
+        "product_daily_kpi": _product_daily_kpi(product_fact_df, event_weights),
         "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
         "brand_daily_kpi": _brand_daily_kpi(
-            observed_product_fact, funnel_session, time_zone
+            product_fact_df, funnel_session, time_zone
         ),
-        "cross_brand_daily": _cross_brand_daily(observed_sessionized),
+        "cross_brand_daily": _cross_brand_daily(sessionized_df),
     }
     if trait_contract is not None:
         # 장기 성향은 주입된 선호도 신호로 본다. 시드를 뺄지는 별도 결정 대기.
         frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
     if allowed_banner_values is not None:
         frames["banner_daily"] = _banner_daily(
-            observed_product_fact, allowed_banner_values
+            product_fact_df, allowed_banner_values
         )
     # 구매 이유 대조는 user_trait_daily 를 읽으므로 그 뒤에 둔다.
     if purchase_fact_df is not None and purchase_reason_fact_df is not None:
         frames["product_repurchase_daily"] = _product_repurchase_daily(
-            observed_purchase_fact, repurchase_window_days
+            purchase_fact_df, repurchase_window_days
         )
         frames["brand_repurchase_daily"] = _brand_repurchase_daily(
-            observed_purchase_fact, observed_purchase_reason_fact, repurchase_window_days
+            purchase_fact_df, purchase_reason_fact_df, repurchase_window_days
         )
         if reason_trait_map is not None:
             frames["purchase_reason_daily"] = _purchase_reason_daily(
-                observed_purchase_reason_fact,
-                observed_purchase_fact,
+                purchase_reason_fact_df,
+                purchase_fact_df,
                 frames.get("user_trait_daily"),
                 reason_trait_map,
             )
@@ -1761,7 +1789,7 @@ def build_mart_frames(
         and ingredient_vocab_df is not None
     ):
         frames["ingredient_weekly_interest"] = _ingredient_weekly_interest(
-            observed_sessionized,
+            sessionized_df,
             dim_product_df,
             product_ingredient_df,
             ingredient_vocab_df,
@@ -1774,7 +1802,7 @@ def build_mart_frames(
         )
     if baseline_policy_version and baseline_start_date and baseline_end_date:
         frames["analytics_baseline"] = _analytics_baseline(
-            observed_product_fact,
+            product_fact_df,
             frames["cross_brand_daily"],
             baseline_policy_version,
             baseline_start_date,
