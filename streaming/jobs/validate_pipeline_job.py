@@ -965,6 +965,7 @@ def validate_frames(
                     "product_id",
                     "actor_type",
                     "source",
+                    "generator_type",
                     "scenario_id",
                     "simulation_run_id",
                 ],
@@ -983,6 +984,7 @@ def validate_frames(
                     "product_id",
                     "actor_type",
                     "source",
+                    "generator_type",
                     "scenario_id",
                     "simulation_run_id",
                 ],
@@ -1028,7 +1030,7 @@ def validate_frames(
     ))
     brand_grain = [
         "event_date_kst", "brand_id", "actor_type", "source",
-        "scenario_id", "simulation_run_id",
+        "generator_type", "scenario_id", "simulation_run_id",
     ]
     checks.append(
         _check(
@@ -1105,7 +1107,7 @@ def validate_frames(
         f"differing_rows={brand_difference_count}; mart_processed_at excluded",
     ))
 
-    axes = ["actor_type", "source", "scenario_id", "simulation_run_id"]
+    axes = ["actor_type", "source", "generator_type", "scenario_id", "simulation_run_id"]
     purchase_grains = {
         "product_repurchase_daily": (
             product_repurchase,
@@ -1256,6 +1258,7 @@ def validate_frames(
                     "ingredient_id",
                     "actor_type",
                     "source",
+                    "generator_type",
                     "scenario_id",
                     "simulation_run_id",
                 ],
