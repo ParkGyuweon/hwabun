@@ -57,9 +57,13 @@ DEFAULT_PRICE_MIN_SAMPLE_SIZE = 3
 
 DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 
+# Quick Look은 목록에서 상세를 여는 경로다. 화면에 있는 정상 동선이고 여기서 바로
+# 장바구니에 담을 수 있어서, 퍼널에서 빼면 담기 세션이 조회 세션보다 많아진다
+# (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
 FUNNEL_PRODUCT_EVENTS = (
     "product_impression",
     "product_click",
+    "quick_look",
     "product_view",
     "add_to_cart",
     "begin_checkout",
@@ -454,6 +458,9 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         F.min(F.when(F.col("event_name") == "product_click", F.col("event_time"))).alias(
             "first_click_at"
         ),
+        F.min(F.when(F.col("event_name") == "quick_look", F.col("event_time"))).alias(
+            "first_quick_look_at"
+        ),
         F.min(F.when(F.col("event_name") == "product_view", F.col("event_time"))).alias(
             "first_product_view_at"
         ),
@@ -475,6 +482,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     first_stage = F.coalesce(
         F.col("first_impression_at"),
         F.col("first_click_at"),
+        F.col("first_quick_look_at"),
         F.col("first_product_view_at"),
         F.col("first_information_view_at"),
         F.col("first_add_to_cart_at"),
@@ -484,18 +492,23 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     reached = {
         "impression": F.col("first_impression_at").isNotNull(),
         "click": F.col("first_click_at").isNotNull(),
+        "quick_look": F.col("first_quick_look_at").isNotNull(),
         "product_view": F.col("first_product_view_at").isNotNull(),
         "information_view": F.col("first_information_view_at").isNotNull(),
         "add_to_cart": F.col("first_add_to_cart_at").isNotNull(),
         "checkout": F.col("first_checkout_at").isNotNull(),
         "purchase": F.col("first_purchase_at").isNotNull(),
     }
+    # 상세를 연 세션은 Quick Look이든 상품 상세든 하나다. 담기율의 분모는 이쪽이라야
+    # 분자(담기)와 같은 모집단을 센다.
+    reached["detail_view"] = reached["product_view"] | reached["quick_look"]
     dropoff_step = (
         F.when(reached["purchase"], F.lit(None).cast("string"))
         .when(reached["checkout"], F.lit("checkout"))
         .when(reached["add_to_cart"], F.lit("add_to_cart"))
         .when(reached["information_view"], F.lit("information_view"))
         .when(reached["product_view"], F.lit("product_view"))
+        .when(reached["quick_look"], F.lit("quick_look"))
         .when(reached["click"], F.lit("click"))
         .when(reached["impression"], F.lit("impression"))
     )
@@ -515,6 +528,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "source",
         "first_impression_at",
         "first_click_at",
+        "first_quick_look_at",
         "first_product_view_at",
         "first_information_view_at",
         "first_add_to_cart_at",
@@ -522,6 +536,8 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "first_purchase_at",
         reached["impression"].alias("reached_impression"),
         reached["click"].alias("reached_click"),
+        reached["quick_look"].alias("reached_quick_look"),
+        reached["detail_view"].alias("reached_detail_view"),
         reached["product_view"].alias("reached_product_view"),
         reached["information_view"].alias("reached_information_view"),
         reached["add_to_cart"].alias("reached_add_to_cart"),
@@ -645,6 +661,8 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.sum(F.col("reached_impression").cast("int")).cast("long").alias("impression_sessions"),
         F.sum(F.col("reached_click").cast("int")).cast("long").alias("click_sessions"),
+        F.sum(F.col("reached_quick_look").cast("int")).cast("long").alias("quick_look_sessions"),
+        F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
         F.sum(F.col("reached_product_view").cast("int")).cast("long").alias("product_view_sessions"),
         F.sum(F.col("reached_information_view").cast("int")).cast("long").alias("information_view_sessions"),
         F.sum(F.col("reached_add_to_cart").cast("int")).cast("long").alias("add_to_cart_sessions"),
@@ -656,9 +674,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         result.withColumn("impression_to_click_rate", _safe_ratio(F.col("click_sessions"), F.col("impression_sessions")))
         .withColumn("click_to_view_rate", _safe_ratio(F.col("product_view_sessions"), F.col("click_sessions")))
         .withColumn("view_to_information_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
-        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
+        # 전환 분모는 상세를 연 세션이다. Quick Look에서 담거나 사는 경로가 있어서
+        # product_view만 분모로 두면 분자와 모집단이 어긋나 비율이 1.0을 넘는다.
+        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
         .withColumn("cart_to_purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("add_to_cart_sessions")))
-        .withColumn("view_to_purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("product_view_sessions")))
+        .withColumn("view_to_purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")))
         .withColumn(
             "dropoff_after_impression_rate",
             F.when(
@@ -667,10 +687,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
             ).otherwise(F.lit(None).cast("double")),
         )
         .withColumn(
+            # view_to_cart_rate 의 여집합이라 같은 분모를 써야 한다.
             "dropoff_after_view_rate",
             F.when(
-                F.col("product_view_sessions") > 0,
-                F.lit(1.0) - F.col("add_to_cart_sessions") / F.col("product_view_sessions"),
+                F.col("detail_view_sessions") > 0,
+                F.lit(1.0) - F.col("add_to_cart_sessions") / F.col("detail_view_sessions"),
             ).otherwise(F.lit(None).cast("double")),
         )
         .withColumn(
@@ -697,7 +718,7 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     product_events = product_fact_df.where(
         valid_brand
         & F.col("event_name").isin(
-            "product_impression", "product_view", "add_to_cart"
+            "product_impression", "product_view", "quick_look", "add_to_cart"
         )
     ).select(
         *key_columns,
@@ -706,6 +727,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "product_id",
         (F.col("event_name") == "product_impression").alias("_impression"),
         (F.col("event_name") == "product_view").alias("_product_view"),
+        (F.col("event_name") == "quick_look").alias("_quick_look"),
+        # 상세를 연 세션은 Quick Look이든 상품 상세든 하나다. 담기율의 분모라서
+        # 분자(담기)와 같은 모집단을 세야 한다.
+        F.col("event_name").isin("product_view", "quick_look").alias("_detail_view"),
         F.lit(False).alias("_information_view"),
         (F.col("event_name") == "add_to_cart").alias("_add_to_cart"),
     )
@@ -741,6 +766,8 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "product_id",
         F.lit(False).alias("_impression"),
         F.lit(False).alias("_product_view"),
+        F.lit(False).alias("_quick_look"),
+        F.lit(False).alias("_detail_view"),
         F.lit(True).alias("_information_view"),
         F.lit(False).alias("_add_to_cart"),
     )
@@ -748,6 +775,8 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     stages = product_events.unionByName(information_events)
     result = stages.groupBy(*key_columns).agg(
         F.countDistinct(F.when(F.col("_impression"), F.col("session_id"))).cast("long").alias("impression_sessions"),
+        F.countDistinct(F.when(F.col("_quick_look"), F.col("session_id"))).cast("long").alias("quick_look_sessions"),
+        F.countDistinct(F.when(F.col("_detail_view"), F.col("session_id"))).cast("long").alias("detail_view_sessions"),
         F.countDistinct(F.when(F.col("_product_view"), F.col("session_id"))).cast("long").alias("product_view_sessions"),
         F.countDistinct(F.when(F.col("_information_view"), F.col("session_id"))).cast("long").alias("information_view_sessions"),
         F.countDistinct(F.when(F.col("_add_to_cart"), F.col("session_id"))).cast("long").alias("add_to_cart_sessions"),
@@ -756,9 +785,11 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         F.current_timestamp().alias("mart_processed_at"),
     )
     return (
-        result.withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_sessions"), F.col("impression_sessions")))
+        result.withColumn("detail_entry_rate", _safe_ratio(F.col("detail_view_sessions"), F.col("impression_sessions")))
         .withColumn("information_view_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
-        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
+        # 담기 분모는 상세를 연 세션이다. Quick Look에서 담는 경로가 있어서
+        # product_view만 분모로 두면 분자와 모집단이 어긋나 비율이 1.0을 넘는다.
+        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
     )
 
 
