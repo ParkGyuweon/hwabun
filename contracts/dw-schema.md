@@ -221,7 +221,7 @@ source = event-properties-schema.md
 
 ### 4.0 시드 Event 제외 범위
 
-`is_seed=true`인 Event는 생성기가 Persona의 사전 선호를 주입한 표식이라 관측된
+`is_seeded=true`인 Event는 생성기가 Persona의 사전 선호를 주입한 표식이라 관측된
 행동이 아니다(`processed-schema.md`, `event-properties-schema.md` §3.14·§7-8). 아래가
 제외 여부의 정본이다.
 

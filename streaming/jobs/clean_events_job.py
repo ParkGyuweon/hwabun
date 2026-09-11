@@ -521,7 +521,7 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
     # (event-properties-schema.md §3.14). 행동 Mart가 한 컬럼으로 거를 수 있어야 해서
     # cleaned_events에서 판정해 아래 Fact까지 실어 나른다. 판정 정본은
     # properties.seeded 이고 session_id 의 "seed:" 접두는 파생이라 쓰지 않는다.
-    is_seed = F.coalesce(
+    is_seeded = F.coalesce(
         _properties_column(canonical, "seeded") == F.lit("true"),
         F.lit(False),
     )
@@ -558,7 +558,7 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         is_synthetic.alias("is_synthetic"),
         user_id.alias("user_id"),
         identity_scope.alias("identity_scope"),
-        is_seed.alias("is_seed"),
+        is_seeded.alias("is_seeded"),
         "account_id",
         "persona_id",
         "session_id",

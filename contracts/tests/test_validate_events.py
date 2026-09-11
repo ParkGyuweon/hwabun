@@ -520,7 +520,7 @@ class EventValidatorTest(unittest.TestCase):
     def test_seeded_marker_must_be_a_boolean_on_synthetic_events(self) -> None:
         """시드 표식은 boolean 이다. 문자열 "true" 는 걸러야 한다.
 
-        Spark 는 properties.seeded 로 is_seed 를 파생하는데, 타입이 흔들리면
+        Spark 는 properties.seeded 로 is_seeded 를 파생하는데, 타입이 흔들리면
         판정이 조용히 달라진다 (event-properties-schema.md §3.14).
         """
         synthetic = json.loads(SYNTHETIC_PC_SAMPLE_PATH.read_text(encoding="utf-8"))

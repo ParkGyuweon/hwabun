@@ -48,7 +48,7 @@ class EventFactsSparkTest(unittest.TestCase):
                 StructField("intent", StringType(), False),
                 StructField("user_id", StringType(), True),
                 StructField("identity_scope", StringType(), True),
-                StructField("is_seed", BooleanType(), False),
+                StructField("is_seeded", BooleanType(), False),
                 StructField("persona_id", StringType(), True),
                 StructField("scenario_id", StringType(), True),
                 StructField("simulation_run_id", StringType(), True),

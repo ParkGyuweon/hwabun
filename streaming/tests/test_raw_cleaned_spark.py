@@ -331,8 +331,8 @@ class RawToCleanedSparkTest(unittest.TestCase):
         )
         frames = build_processed_frames(raw, "Asia/Seoul")
         rows = {
-            row["event_id"]: row["is_seed"]
-            for row in frames["cleaned_events"].select("event_id", "is_seed").collect()
+            row["event_id"]: row["is_seeded"]
+            for row in frames["cleaned_events"].select("event_id", "is_seeded").collect()
         }
 
         self.assertTrue(rows["seed-event"])
