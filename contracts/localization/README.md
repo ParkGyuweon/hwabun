@@ -38,13 +38,18 @@ python batch/ingest/build_ko_catalog.py
 
 `description` 안의 줄바꿈은 원본과 같이 `\n`. `highlighted_ingredients` 는 배열.
 
-### `reviews-ko.json` — 리뷰 2,000건, 키 = `review_id`
+### `reviews-ko.json` — 리뷰 20,000건(상품당 100건), 키 = `review_id`
+
+2026-09-11 확장 (Jira 242). 09-09 의 2,000건(상품당 10)은 그대로 재사용됐고 18,000건이 더해졌다. 상품별
+100건은 `batch/ingest/build_reviews_100.py` 가 원천 45.8만 건에서 별점×피부타입 층화로 뽑은 것(평균 = 화면 별점
+200/200 일치). 번역은 `batch/ingest/merge_reviews_ko.py` 검수 A~G 를 20,000/20,000 통과했다.
+프론트가 실제로 읽는 형태(상품별 `{product_id}.json` 200개, 제목·본문만 한국어)는 `batch/ingest/build_reviews_ko_files.py` 로 만든다.
 
 | 필드 | 뜻 |
 |---|---|
 | `product_id` | 어느 상품의 리뷰인지 (원본과 같음) |
-| `review_title` | 한국어 제목. 원본 제목이 없는 608건은 `null` |
-| `review_text` | 한국어 본문. 원본 본문이 빈 4건은 `""` |
+| `review_title` | 한국어 제목. 원본 제목이 없는 6,186건은 `null` |
+| `review_text` | 한국어 본문. 빈 본문 0건 (100건 추출이 본문 있는 리뷰만 뽑는다) |
 
 별점·작성자 속성·날짜·`is_recommended` 는 원본 그대로 쓰면 된다.
 

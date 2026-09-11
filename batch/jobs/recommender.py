@@ -371,8 +371,14 @@ class Recommender:
             cand[:] = False
             cand[self.catalog] = True
         if not rows:
-            # 시드가 없으면 모델이 볼 것이 없다. 인기도만 남긴다 (스케줄 0개 구간)
-            return np.asarray(self.prior, float) * 0.70
+            # 시드가 없으면 모델이 볼 것이 없다. 스케줄 0개 구간(선형 콜드스타트)과 같게 —
+            # 인기도 0.70 + 속성 친화도 0.30 (2026-09-11, Jira 245). 속성이 없으면 인기도만 남는다.
+            # 실회원이 가입 속성을 보내면 첫 화면부터 "건성 피부 사용자 사이에서 반응 좋은" 상품이 앞으로 온다
+            _, w2, w3 = schedule_for(0)
+            s = np.asarray(self.prior, float) * w3
+            if self.affinity is not None and persona is not None:
+                s = s + w2 * np.asarray(self.affinity(persona), float)
+            return s
         X = self.ltr_feat.make(persona, rows, cand)
         return self.ltr.predict_proba(X)[:, 1]
 
