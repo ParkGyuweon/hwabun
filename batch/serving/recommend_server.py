@@ -293,7 +293,9 @@ class Engine:
         return st or UserVector(), "cold_start"
 
     def observe(self, persona_id, events, persist=True):
-        st = self.states.setdefault(persona_id, UserVector())
+        st = self.states.get(persona_id)
+        if st is None:                                        # setdefault 는 있어도 매번 UserVector() 를 만든다
+            st = self.states[persona_id] = UserVector()
         n = 0
         for ev in events:
             st.observe(ev); n += 1
