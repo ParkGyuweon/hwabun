@@ -796,6 +796,24 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
 EXECUTION_AXES = ("actor_type", "source", "scenario_id", "simulation_run_id")
 
 
+def _observed_events(frame: Any | None) -> Any | None:
+    """시드 Event를 뺀 관측 행동만 남긴다.
+
+    시드는 생성기가 Persona의 사전 선호를 주입하려고 만든 것이라 관측된 행동이 아니다
+    (`event-properties-schema.md` §3.14). 긍정 시드는 조회 없이 담기만, 부정 시드는
+    담기 없는 조회를 내서 전환 지표의 분자와 분모를 양방향으로 왜곡한다. 어느 Mart가
+    제외 대상인지는 `dw-schema.md`가 정본이다.
+
+    `is_seed`가 없는 입력은 시드 판정 이전에 만들어진 것이라 그대로 통과시킨다.
+    """
+
+    from pyspark.sql import functions as F
+
+    if frame is None or "is_seed" not in frame.columns:
+        return frame
+    return frame.where(~F.coalesce(F.col("is_seed"), F.lit(False)))
+
+
 def _valid_brand() -> Any:
     from pyspark.sql import functions as F
 
@@ -1706,33 +1724,41 @@ def build_mart_frames(
     reason_trait_map: dict[str, Any] | None = None,
     repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS,
 ) -> dict[str, Any]:
-    stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
+    observed_sessionized = _observed_events(sessionized_df)
+    observed_product_fact = _observed_events(product_fact_df)
+    observed_purchase_fact = _observed_events(purchase_fact_df)
+    observed_purchase_reason_fact = _observed_events(purchase_reason_fact_df)
+
+    stage_events = _funnel_stage_events(observed_sessionized, observed_product_fact)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
     frames = {
         "funnel_session_fact": funnel_session,
-        "product_daily_kpi": _product_daily_kpi(product_fact_df, event_weights),
+        "product_daily_kpi": _product_daily_kpi(observed_product_fact, event_weights),
         "funnel_daily_kpi": _funnel_daily_kpi(funnel_session),
         "brand_daily_kpi": _brand_daily_kpi(
-            product_fact_df, funnel_session, time_zone
+            observed_product_fact, funnel_session, time_zone
         ),
-        "cross_brand_daily": _cross_brand_daily(sessionized_df),
+        "cross_brand_daily": _cross_brand_daily(observed_sessionized),
     }
     if trait_contract is not None:
+        # 장기 성향은 주입된 선호도 신호로 본다. 시드를 뺄지는 별도 결정 대기.
         frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
     if allowed_banner_values is not None:
-        frames["banner_daily"] = _banner_daily(product_fact_df, allowed_banner_values)
+        frames["banner_daily"] = _banner_daily(
+            observed_product_fact, allowed_banner_values
+        )
     # 구매 이유 대조는 user_trait_daily 를 읽으므로 그 뒤에 둔다.
     if purchase_fact_df is not None and purchase_reason_fact_df is not None:
         frames["product_repurchase_daily"] = _product_repurchase_daily(
-            purchase_fact_df, repurchase_window_days
+            observed_purchase_fact, repurchase_window_days
         )
         frames["brand_repurchase_daily"] = _brand_repurchase_daily(
-            purchase_fact_df, purchase_reason_fact_df, repurchase_window_days
+            observed_purchase_fact, observed_purchase_reason_fact, repurchase_window_days
         )
         if reason_trait_map is not None:
             frames["purchase_reason_daily"] = _purchase_reason_daily(
-                purchase_reason_fact_df,
-                purchase_fact_df,
+                observed_purchase_reason_fact,
+                observed_purchase_fact,
                 frames.get("user_trait_daily"),
                 reason_trait_map,
             )
@@ -1743,7 +1769,7 @@ def build_mart_frames(
         and ingredient_vocab_df is not None
     ):
         frames["ingredient_weekly_interest"] = _ingredient_weekly_interest(
-            sessionized_df,
+            observed_sessionized,
             dim_product_df,
             product_ingredient_df,
             ingredient_vocab_df,
@@ -1756,7 +1782,7 @@ def build_mart_frames(
         )
     if baseline_policy_version and baseline_start_date and baseline_end_date:
         frames["analytics_baseline"] = _analytics_baseline(
-            product_fact_df,
+            observed_product_fact,
             frames["cross_brand_daily"],
             baseline_policy_version,
             baseline_start_date,
