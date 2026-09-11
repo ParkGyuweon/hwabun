@@ -141,6 +141,7 @@ AI 파트 요청(고객 가입에서 피부 속성 4개를 받아야 추천의 �
 | 9-8 | `brand` 시드 | 세포라 55개 브랜드를 **`brand_id` = 세포라 번호 문자열(예 `"6125"`), `name` = 브랜드명**으로 넣고 시연 판매자 계정에 연결 | dw 마트 `brand_id` 가 그 값이라 매핑 없이 대시보드가 붙음 (계약 0.2 §8-2) | 5·7번 확장 |
 | 9-9 | 대시보드 API | `GET /api/seller/dashboard/{overview·products·content·segments·ingredients·friction·purchase}` — 계약 0.2 (MR !196). projection 이 끝나면 overview·products·ingredients·purchase 네 개가 먼저 됨 | 행동 6화면이 모의 | = 7번 |
 | 9-10 | 배포 nginx (또는 백엔드 프록시) | `/api/recommend` · `/api/prescription` → recommend(8300) | 지금은 Vite 프록시로만 연결. 배포에서 추천이 목으로 떨어짐 | 인프라 |
+| 9-11 | `CatalogController.ProductSummary` | **`createdAt`** (ISO-8601, `product.created_at`) 한 칸 추가. 상세 `ProductDetail.product` 도 같은 레코드라 같이 나옴 | AI 파트 결정(2026-09-11, Jira 247-b): **신규 상품 = 등록 후 14일 이내**. 추천 서버 카탈로그 동기화가 이 값을 `registered_at` 으로 읽어 14일을 센다(계약 recommendation-io-spec §5 6-1 · product-registration-spec §3). 없으면 편입 시각이 기준이라 신규 기간이 늦게 시작되고, 프론트 목록의 `new` 배지도 영영 안 꺼짐. 프론트는 `createdAt` 을 이미 읽게 해 뒀다(`shopApi.ts` `mapSummary` → `Product.created_at`, `lib/newBrandRule.ts`) | 신규 · 한 줄 |
 
 ---
 

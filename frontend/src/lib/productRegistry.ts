@@ -15,6 +15,7 @@
  */
 import { DEMO_BRAND, sampleProducts, seedProducts } from '../mocks/products';
 import { KRW_PER_USD as KRW_PER_USD_DISPLAY } from './localize';
+import { isNewRegistered } from './newBrandRule';
 import { listBackendProducts, registerProductBackend } from './shopApi';
 import type { RegisterResult } from './shopApi';
 import { CONCERN_VALUES, HIGHLIGHT_VALUES, SECONDARY_CATEGORIES, TERTIARY_CATEGORIES } from './formLabels';
@@ -153,7 +154,8 @@ export function validateForm(form: RegistrationForm): ValidationResult {
 
 /* ───────────────────────── 폼 → Product (계약 §4) ───────────────────────── */
 
-export function toProduct(form: RegistrationForm, productId: string): Product {
+/** `registeredAt` 은 저장본의 등록 시각. 초안(미리보기)은 없으니 지금 등록한 것처럼 신규로 본다 */
+export function toProduct(form: RegistrationForm, productId: string, registeredAt?: string): Product {
   const concerns = form.highlights.filter((h) => CONCERN_VALUES.has(h));
   const priceKrw = Number(form.price_krw) || 0;
   const highlighted = form.highlighted_ingredients
@@ -192,7 +194,8 @@ export function toProduct(form: RegistrationForm, productId: string): Product {
     rating: null,
     review_count: 0,
     loves_count: 0,
-    badges: ['new'],
+    badges: isNewRegistered(productId, registeredAt) ? ['new'] : [],
+    created_at: registeredAt ?? null,
     highlights: [...form.highlights],
     ingredients: form.ingredients.trim() ? [form.ingredients.trim()] : [],
     suitable_skin_types: [],
@@ -293,10 +296,11 @@ export function saveRegistered(form: RegistrationForm, existingId?: string): Reg
   const list = registeredProducts();
   const id = existingId ?? `BR${Date.now().toString(36).toUpperCase()}`;
   const prev = list.find((r) => r.product.product_id === id);
+  const registeredAt = prev?.registered_at ?? now;
   const item: RegisteredProduct = {
-    product: toProduct(form, id),
+    product: toProduct(form, id, registeredAt),
     product_source: 'brand_registered',
-    registered_at: prev?.registered_at ?? now,
+    registered_at: registeredAt,
     updated_at: now,
   };
   registered = [item, ...list.filter((r) => r.product.product_id !== id)];

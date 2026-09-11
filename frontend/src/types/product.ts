@@ -43,6 +43,11 @@ export interface Product {
    * 할인율은 여기 없다. 가격 옆에 PriceTag 가 `sale_price_usd` 로 그린다.
    */
   badges?: ProductBadge[];
+  /**
+   * 등록 시각 (ISO-8601). 등록 상품만 있고 원천 200개는 없다. 신규 배지·추천 신규 판정의
+   * 기준(등록 후 14일, `lib/newBrandRule.ts`). 백엔드 요약 `createdAt` 이 오면 여기로 (요청서 9-11)
+   */
+  created_at?: string | null;
   highlights: string[];
   /** 원소 1개에 전 성분이 쉼표로 이어붙은 통짜 문자열인 경우가 대부분 */
   ingredients: string[];

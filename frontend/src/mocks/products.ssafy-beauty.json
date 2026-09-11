@@ -1,6 +1,7 @@
 [
   {
     "product_id": "SB000001",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "제로 포어 토닝 패드",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -58,6 +59,7 @@
   },
   {
     "product_id": "SB000002",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "딥 비타C 캡슐 세럼",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -118,6 +120,7 @@
   },
   {
     "product_id": "SB000003",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "PDRN 핑크 펩타이드 세럼",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -176,6 +179,7 @@
   },
   {
     "product_id": "SB000004",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "콜라겐 젤리 크림",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -234,6 +238,7 @@
   },
   {
     "product_id": "SB000005",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "제로 포어 폼 클렌저",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -291,6 +296,7 @@
   },
   {
     "product_id": "SB000006",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "제로 포어 모이스처 선 세럼 SPF50+ PA++++",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -351,6 +357,7 @@
   },
   {
     "product_id": "SB000007",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "PDRN 핑크 펩타이드 아이크림",
     "brand_name": "SSAFY Beauty",
     "category": [
@@ -410,6 +417,7 @@
   },
   {
     "product_id": "SB000008",
+    "created_at": "2026-09-09T00:00:00+09:00",
     "product_name": "PDRN 콜라겐 젤리 겔 마스크",
     "brand_name": "SSAFY Beauty",
     "category": [
