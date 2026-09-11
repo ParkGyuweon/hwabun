@@ -5,7 +5,7 @@ import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
-import { buildRecommendation } from '../lib/recommendMock';
+import { useRecommendation } from '../hooks/useRecommendation';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useTextSelection } from '../hooks/useTextSelection';
@@ -173,31 +173,33 @@ export default function ProductListPage({
   }, [reviews]);
 
   /**
-   * 추천 응답 — 히어로 1 + 배너 6 + 메인 10 이 **한 응답**에서 나온다 (계약 §5-1).
+   * 추천 응답 — 히어로 1 + 메인 10 이 **한 응답**에서 나온다 (계약 §5-1).
    *
-   * 백엔드 서빙이 없어 프론트 목(`lib/recommendMock`)이 같은 형태를 만든다.
-   * 어느 축을 배너에 올릴지는 세션 성향(`useTrait`)이 정해 `axes` 로 넘긴다.
+   * 추천 서버(`GET /api/recommend`, 8300)가 답하면 그것을, 없거나 식별자가 없으면 프론트 목(`lib/recommendMock`)을
+   * 쓴다 (hooks/useRecommendation). 식별자는 회원 accountId 또는 시뮬레이션 페르소나 id — 비로그인은 서버를
+   * 부르지 않는다 (계약 §5 · 09-10 합의). 어느 축을 배너에 올릴지는 세션 성향(`useTrait`)이 정해 `axes` 로 넘긴다.
    * 담은 상품은 후보에서 뺀다. 빼면 다음 순위가 올라와 칸 수는 유지된다.
    */
   const trait = useTrait();
-  const recommendation = useMemo(
-    () =>
-      buildRecommendation({
-        products,
-        persona,
-        excluded: cartProductIds,
-        reviewSkinTypes,
-        axes: trait.axes,
-        // 성향을 모르는 세션(coldstart)은 신규 브랜드 히어로를 story 로 말한다
-        traitKnown: trait.trait_source !== 'coldstart',
-        k: PROMO_SIZE,
-        bannerSlots: BANNER_SLOTS,
-        reserved: BANNER_RESERVED,
-        // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
-        heroPolicy: HERO_POLICY,
-      }),
+  const recommendationInput = useMemo(
+    () => ({
+      products,
+      persona,
+      excluded: cartProductIds,
+      reviewSkinTypes,
+      axes: trait.axes,
+      // 성향을 모르는 세션(coldstart)은 신규 브랜드 히어로를 story 로 말한다
+      traitKnown: trait.trait_source !== 'coldstart',
+      k: PROMO_SIZE,
+      bannerSlots: BANNER_SLOTS,
+      reserved: BANNER_RESERVED,
+      // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
+      heroPolicy: HERO_POLICY,
+      identityId: persona?.persona_id ?? null,
+    }),
     [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source],
   );
+  const { recommendation, source: recommendationSource } = useRecommendation(recommendationInput);
 
   const productsById = useMemo(() => new Map(products.map((p) => [p.product_id, p])), [products]);
 
@@ -519,7 +521,7 @@ export default function ProductListPage({
         </section>
       ) : null}
 
-      <section className="list__promo" data-log-section="promo_row">
+      <section className="list__promo" data-log-section="promo_row" data-recommend-source={recommendationSource}>
         <header className="list__promo-head">
           <h2>지금 주목할 상품</h2>
           <p>

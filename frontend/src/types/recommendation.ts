@@ -10,7 +10,10 @@ import type { BannerType } from './log';
 export interface RecommendItem {
   product_id: string;
   score: number;
+  /** 서버 `position`. 노출·클릭 로그의 position 과 같아야 한다 */
   rank: number;
+  /** 전용 칸으로 들어온 항목 (서버가 준다) */
+  reserved?: boolean;
 }
 
 export interface RecommendHero {

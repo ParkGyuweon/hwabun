@@ -2,7 +2,8 @@
  * 추천 API 목 — 계약 §5-1 응답을 **프론트에서** 만든다.
  *
  * 백엔드 `RankingService` 가 아직 없다. 형태를 먼저 확정해 화면을 붙이고, 서빙이 생기면
- * 이 파일의 `buildRecommendation` 호출을 `fetch('/api/recommend?…')` 로 바꾼다.
+ * 서버 연결은 hooks/useRecommendation + lib/recommendApi 가 한다 (2026-09-11). 이 목은 서버가 없거나
+ * 식별자가 없을 때(비로그인)의 대체이고, 서버 응답과 같은 모양을 유지해야 한다.
  * 화면·로그·타입은 그대로다.
  *
  * 점수는 설명 가능한 두 축만 쓴다 (기존 `skin_match_v0` 와 같다):

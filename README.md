@@ -18,7 +18,8 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 [ 쇼핑몰 백엔드 · shop_backend/ (Spring, 8090, MySQL) ]          [ 수집 · backend/ (Spring, 8080) ]
  로그인(JWT)·브랜드·상품·주문·결제·리뷰·피드백·정산·판매자 대시보드     POST /api/events → 검증 → Kafka activity-events
  상품 등록 계약(어휘 검증·unmapped 저장) 구현, dev 머지              key=session_id · 파티션 3 · 백프레셔 429/503
-              │  (예정) /api/recommend 프록시 · 승인 시 POST /api/products            │
+              │  (예정) /api/recommend 프록시 · 승인 시 POST /api/products
+              │  (지금) 프론트가 Vite 프록시로 8300 을 직접 부름 · 없으면 목            │
               ▼                                                                       ▼
 [ 추천 · batch/serving/ (FastAPI, 8300, 내부 전용) ]              [ 처리 · streaming/ (Spark 3.5.6) ]
  GET  /api/recommend    items 10 + hero + banners 6 (전용 칸 5·6 = 신규 브랜드)   Q1 raw_sink → raw_events (Parquet)
