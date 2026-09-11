@@ -94,6 +94,7 @@ sys.path.insert(0, BD)                      # catalog_registry (같은 폴더) �
 
 from ltr_features import LtrFeatures, load_ltr                 # noqa: E402
 from persona_feature import load as load_affinity              # noqa: E402
+import persona_feature as pf                                   # noqa: E402  (속성 별칭표, Jira 245)
 from product_encoder import Encoder                            # noqa: E402
 from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
                          Recommender, load_cooc, schedule_for)
@@ -109,6 +110,15 @@ import validate_product_registration as vpr                    # noqa: E402
 
 # 히어로 정책 (2026-09-10, Jira 237). top = items[0] (계약 원안) · new_brand = 신규 상품 중 점수 최고.
 HERO_POLICIES = ("top", "new_brand")
+# 실회원 가입 속성 (Jira 245). 값은 contracts/persona-schema.md §3 enum + persona_feature 의 원본 표기 별칭.
+# 검증은 여기서 하고, 정규화(lightMedium→light, brunette→brown, Grey→gray)는 persona_feature.normalize 가 한다
+ATTR_PARAMS = ("skin_type", "skin_tone", "hair_color", "eye_color")
+ATTR_ALLOWED = {
+    "skin_type": {"combination", "dry", "normal", "oily"},
+    "skin_tone": {"fair", "light", "medium", "tan", "deep"} | set(pf.TONE_BUCKET),
+    "hair_color": {"auburn", "black", "blonde", "brown", "gray", "red"} | set(pf.HAIR_ALIAS),
+    "eye_color": {"blue", "brown", "gray", "green", "hazel"} | set(pf.EYE_ALIAS),
+}
 HERO_DEFAULT = "top"
 
 PDIR = os.path.join(ROOT, "simulator", "personas", "data")
@@ -325,7 +335,7 @@ class Engine:
 
     # ── 추천 ──────────────────────────────────────────────────────────────
     def recommend(self, persona_id=None, size=10, reserved=RESERVED, seed_from_reviews=False,
-                  banner_slots=0, axes=DEFAULT_AXES, hero_policy=HERO_DEFAULT):
+                  banner_slots=0, axes=DEFAULT_AXES, hero_policy=HERO_DEFAULT, attrs=None):
         """persona_id 가 없거나(익명) 페르소나 표에 없어도(실회원 accountId) 동작한다.
         속성 친화도는 빠지고 행동 상태 + 인기 prior 로 순위를 매긴다 — 요청서 C 안 (Jira 214).
         상태는 persona_id 가 있으면 그 키로 쌓이므로, 미등록 회원도 행동이 오면 개인화된다.
@@ -338,8 +348,19 @@ class Engine:
         상품(new_mask: 지지자 <3 또는 어휘집 밖 브랜드) 중 이 사용자 점수가 가장 높은 것을 히어로로
         준다 — 배너 행이 화면에서 빠져 전용 칸이 사라진 뒤 신규 브랜드가 배너에 나올 자리가
         히어로뿐이라서다(기획 §15-10, 09-10 포함으로 결정). 전환 상품·비활성 제외, 신규가 없으면 'top'.
-        히어로 상품은 banners 와 겹치지 않게 뺀다. items 와는 겹칠 수 있다(계약 §중복 배제 그대로)."""
+        히어로 상품은 banners 와 겹치지 않게 뺀다. items 와는 겹칠 수 있다(계약 §중복 배제 그대로).
+
+        attrs (2026-09-11, Jira 245): 실회원(accountId)은 페르소나 표에 없어 속성 친화도(LTR 피처 #1)가
+        전부 중립 0.5 로 죽는다. 프론트가 가입 때 받은 skin_type·skin_tone·hair_color·eye_color 를
+        쿼리로 보내면 그 값으로 persona 를 만들어 친화도·`attribute` 근거 문구·배너 콜드스타트에 쓴다.
+        페르소나 표에 있는 id 면 표가 우선이고 쿼리는 무시한다(시뮬레이터·PA 경로 불변).
+        일부만 와도 된다 — 없는 속성은 AffinityTable 이 중립으로 채운다."""
         persona = self.personas.get(persona_id) if persona_id else None
+        attribute_source = "persona_table" if persona is not None else None
+        attrs = {k: v for k, v in (attrs or {}).items() if v}
+        if persona is None and attrs:
+            persona = {"persona_id": persona_id, **attrs}
+            attribute_source = "query"
         if persona_id:
             st, source = self.state_of(persona_id, seed_from_reviews)
         else:
@@ -399,7 +420,11 @@ class Engine:
         n_products = len(st.converted | st.viewed)
         # 유입 추적 식별자 (교차 브랜드 유입 · 추천 CTR). FE 는 recommendation_click ·
         # product_view 에 recommendation_id / list_id / position / algorithm 을 그대로 싣는다.
-        body = {"persona_id": persona_id, "persona_known": persona is not None,
+        body = {"persona_id": persona_id, "persona_known": attribute_source == "persona_table",
+                # 속성 친화도의 출처 — persona_table(페르소나 표) · query(가입 속성 쿼리, Jira 245) · null(없음)
+                "attribute_source": attribute_source,
+                "attributes": ({k: persona.get(k) for k in ATTR_PARAMS if persona.get(k)}
+                               if persona is not None else {}),
                 "n_products": n_products,
                 "recommendation_id": uuid.uuid4().hex, "list_id": "main",
                 "algorithm": self.algorithm,
@@ -525,8 +550,17 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
               seed: Optional[str] = Query(None, description="'review' 면 리뷰 시드를 상태로 쓴다 (시연용)"),
               banner_slots: int = Query(0, ge=0, le=12, description="배너 칸 수. 0 이면 hero·banners 를 안 내린다 (§5-1)"),
               axes: str = Query(",".join(DEFAULT_AXES), description="축 배너 순환 순서. concern,ingredient,clean,price_bin,category,segment 중 쉼표 구분"),
-              hero: str = Query(HERO_DEFAULT, description="히어로 정책. top = items[0] · new_brand = 신규 상품 중 점수 최고 (배너 행이 없을 때, Jira 237)")):
+              hero: str = Query(HERO_DEFAULT, description="히어로 정책. top = items[0] · new_brand = 신규 상품 중 점수 최고 (배너 행이 없을 때, Jira 237)"),
+              skin_type: Optional[str] = Query(None, description="실회원 가입 속성 (Jira 245). combination·dry·normal·oily. 페르소나 표에 있는 id 면 무시"),
+              skin_tone: Optional[str] = Query(None, description="fair·light·medium·tan·deep (원본 표기 porcelain·lightMedium 등도 버킷으로 받음)"),
+              hair_color: Optional[str] = Query(None, description="auburn·black·blonde·brown·gray·red"),
+              eye_color: Optional[str] = Query(None, description="blue·brown·gray·green·hazel")):
     e = get_engine()
+    attrs = {"skin_type": skin_type, "skin_tone": skin_tone, "hair_color": hair_color, "eye_color": eye_color}
+    bad_attrs = {k: v for k, v in attrs.items() if v and v not in ATTR_ALLOWED[k]}
+    if bad_attrs:
+        raise HTTPException(422, {"code": "INVALID_ATTRIBUTE", "bad": bad_attrs,
+                                  "allowed": {k: sorted(v) for k, v in ATTR_ALLOWED.items()}})
     ax = tuple(a.strip() for a in axes.split(",") if a.strip()) or DEFAULT_AXES
     bad = [a for a in ax if a not in AXES]
     if bad:
@@ -534,7 +568,7 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
     if hero not in HERO_POLICIES:
         raise HTTPException(422, {"code": "INVALID_HERO", "bad": hero, "allowed": list(HERO_POLICIES)})
     return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"),
-                       banner_slots=banner_slots, axes=ax, hero_policy=hero)
+                       banner_slots=banner_slots, axes=ax, hero_policy=hero, attrs=attrs)
 
 
 class ProductRegistration(BaseModel):

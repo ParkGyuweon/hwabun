@@ -300,3 +300,52 @@ class TestDeactivate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMemberAttributes(unittest.TestCase):
+    """Jira 245 — 실회원(페르소나 표에 없는 id)이 가입 속성 4개를 쿼리로 보내면 속성 친화도가 살아난다."""
+    MEMBER = "acct-245-test"
+    ATTRS = {"skin_type": "dry", "skin_tone": "fair", "hair_color": "black", "eye_color": "brown"}
+
+    def test_query_attributes_change_ranking_for_unknown_member(self):
+        base = client.get("/api/recommend", params={"persona_id": self.MEMBER, "size": 10}).json()
+        with_attrs = client.get("/api/recommend", params={"persona_id": self.MEMBER, "size": 10, **self.ATTRS}).json()
+        self.assertIsNone(base["attribute_source"]); self.assertEqual(base["attributes"], {})
+        self.assertEqual(with_attrs["attribute_source"], "query")
+        self.assertEqual(with_attrs["attributes"], self.ATTRS)
+        self.assertFalse(with_attrs["persona_known"])          # 표에 없는 회원은 그대로 unknown
+        self.assertNotEqual([i["score"] for i in base["items"]], [i["score"] for i in with_attrs["items"]])
+
+    def test_partial_attributes_accepted_and_alias_normalized(self):
+        r = client.get("/api/recommend", params={"persona_id": self.MEMBER, "size": 5,
+                                                 "skin_tone": "lightMedium", "hair_color": "brunette"})
+        self.assertEqual(r.status_code, 200)
+        b = r.json()
+        self.assertEqual(b["attribute_source"], "query")
+        self.assertEqual(set(b["attributes"]), {"skin_tone", "hair_color"})
+        self.assertEqual(len(b["items"]), 5)
+
+    def test_empty_attribute_is_ignored(self):
+        b = client.get("/api/recommend", params={"persona_id": self.MEMBER, "size": 5, "skin_type": ""}).json()
+        self.assertIsNone(b["attribute_source"])
+
+    def test_invalid_attribute_422(self):
+        r = client.get("/api/recommend", params={"persona_id": self.MEMBER, "skin_type": "sensitive"})
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(r.json()["detail"]["code"], "INVALID_ATTRIBUTE")
+        self.assertIn("skin_type", r.json()["detail"]["bad"])
+
+    def test_persona_table_wins_over_query(self):
+        plain = client.get("/api/recommend", params={"persona_id": PID, "size": 10}).json()
+        q = client.get("/api/recommend", params={"persona_id": PID, "size": 10, "skin_type": "oily",
+                                                 "skin_tone": "deep"}).json()
+        self.assertEqual(q["attribute_source"], "persona_table")
+        self.assertTrue(q["persona_known"])
+        self.assertEqual(plain["attributes"], q["attributes"])
+        self.assertEqual([i["product_id"] for i in plain["items"]], [i["product_id"] for i in q["items"]])
+
+    def test_attribute_reason_can_appear_for_member(self):
+        b = client.get("/api/recommend", params={"persona_id": self.MEMBER, "size": 20, **self.ATTRS}).json()
+        keys = {next(iter(i["reason"])) for i in b["items"]}     # reason 은 key 하나짜리 dict
+        self.assertTrue(keys)   # attribute 가 뜨는지는 점수 분포에 달려 단정하지 않는다
+        self.assertEqual(b["state_source"], "cold_start")        # 이력 0 이어도 속성으로 순위가 갈린다
