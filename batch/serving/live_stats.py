@@ -152,7 +152,7 @@ li{border-bottom:1px solid var(--line)}
 .ok{color:var(--acc-deep);font-weight:600}.off{color:var(--pink);font-weight:600}
 </style></head><body>
 <h1>HWABUN 추천 서버 — 실시간 처리 현황</h1>
-<div class="sub">행동 이벤트가 추천 상태에 반영되는 마지막 층. 1초마다 갱신 · <span id="kafka"></span></div>
+<div class="sub">1초마다 갱신 · <span id="kafka"></span></div>
 <div class="grid">
   <div class="card"><div class="k">초당 반영 이벤트</div><div class="v" id="eps">0<small>/s</small></div><div class="k" id="eps10"></div></div>
   <div class="card"><div class="k">누적 반영 이벤트</div><div class="v" id="total">0</div><div class="k" id="src"></div></div>
