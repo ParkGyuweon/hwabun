@@ -141,6 +141,15 @@ Event.product_id
 | `rage_click` | `friction` | 같은 지점 반복 클릭 | UI 마찰 |
 | `dead_click` | `friction` | 클릭 불가 영역 클릭 | 기대 기능 부재 |
 
+`payment_failed`의 intent가 `friction`이 아니라 `conversion`인 이유는, `friction`이
+`rage_click`·`dead_click` 같은 **UI 마찰**을 가리키고 이쪽은 **전환 단계에서의 이탈**이기
+때문이다. 주문 단위 Event라 top-level `product_id`는 없다.
+
+이 Event는 현재 `cleaned_events`까지만 내려간다. `product_event_fact`는 상품 단위라
+주문 단위 Event를 담지 않고, `funnel_session_fact`의 grain도 `session_id + product_id`라
+그대로 넣을 수 없다. 결제 실패를 이탈 단계로 세려면 주문 단위 grain 설계가 필요하므로
+실데이터가 쌓인 뒤에 다룬다.
+
 ## 3. Property Enum
 
 ### 3.1 `section_id`
