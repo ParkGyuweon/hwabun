@@ -148,3 +148,14 @@ class TestSync(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IngredientsField(unittest.TestCase):
+    """2026-09-14 백엔드 상세 모양 변화 — ingredientsText 로 옮겨도, 이름 목록이어도 전성분을 읽는다"""
+
+    def test_text_field_first(self):
+        from catalog_sync import _ingredients_of
+        self.assertEqual(_ingredients_of({"ingredients": "", "ingredientsText": "Water, Glycerin"}), "Water, Glycerin")
+        self.assertEqual(_ingredients_of({"ingredients": "Water, Kaolin"}), "Water, Kaolin")
+        self.assertEqual(_ingredients_of({"ingredients": [{"name": "Water"}, {"name": "Glycerin"}]}), "Water, Glycerin")
+        self.assertIsNone(_ingredients_of({"ingredients": "", "ingredientsText": None}))
