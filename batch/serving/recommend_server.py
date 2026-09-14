@@ -104,6 +104,7 @@ from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive, 
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
+from live_stats import LiveStats, LIVE_HTML                            # noqa: E402  (Jira 295 실시간 현황)
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
@@ -341,7 +342,7 @@ class Engine:
             return st, "review_seed"
         return st or UserVector(), "cold_start"
 
-    def observe(self, persona_id, events, persist=True):
+    def observe(self, persona_id, events, persist=True, source="http", partition=None):
         st = self.states.get(persona_id)
         if st is None:                                        # setdefault 는 있어도 매번 UserVector() 를 만든다
             st = self.states[persona_id] = UserVector()
@@ -350,6 +351,8 @@ class Engine:
             st.observe(ev); n += 1
         if persist and n:
             self.session_log.append(persona_id, events)          # 상태에 영향 있는 이벤트만 남는다
+        if n:
+            LIVE.record_events(persona_id, events, source=source, partition=partition)   # /live (Jira 295)
         return n
 
     # ── 근거 문구 ─────────────────────────────────────────────────────────
@@ -509,6 +512,7 @@ class EventBatch(BaseModel):
 
 app = FastAPI(title="HWABUN recommend", version="0.1.0")
 engine: Optional[Engine] = None
+LIVE = LiveStats()                      # 실시간 처리 현황 (Jira 295) — 프로세스 전역, 스레드 안전
 
 
 def get_engine():
@@ -575,6 +579,24 @@ def _startup():
     get_engine()
 
 
+@app.get("/live/stats")
+def live_stats():
+    """실시간 처리 현황 숫자 (Jira 295). /live 페이지가 1초마다 읽는다"""
+    e = get_engine()
+    snap = LIVE.snapshot()
+    snap["sessions_in_memory"] = len(e.states)
+    snap["kafka"] = (_kafka.health() if _kafka is not None else None)
+    return snap
+
+
+@app.get("/live", include_in_schema=False)
+def live_page():
+    """시연용 한 페이지 — 이벤트가 추천 상태에 반영되는 것을 초 단위로 보인다 (Jira 295).
+    인증 없음: 추천 서버는 내부 네트워크 전용이고, 이 페이지는 nginx 에서 열어 줄 때만 밖에 보인다"""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(LIVE_HTML)
+
+
 @app.get("/health")
 def health():
     e = get_engine()
@@ -620,8 +642,10 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
         raise HTTPException(422, {"code": "INVALID_AXES", "bad": bad, "allowed": list(AXES)})
     if hero not in HERO_POLICIES:
         raise HTTPException(422, {"code": "INVALID_HERO", "bad": hero, "allowed": list(HERO_POLICIES)})
-    return e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"),
+    body = e.recommend(persona_id or None, size, reserved, seed_from_reviews=(seed == "review"),
                        banner_slots=banner_slots, axes=ax, hero_policy=hero, attrs=attrs)
+    LIVE.record_recommend(persona_id, body.get("latency_ms", 0))
+    return body
 
 
 class ProductRegistration(BaseModel):
