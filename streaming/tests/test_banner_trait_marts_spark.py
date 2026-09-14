@@ -200,6 +200,26 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
         self.assertEqual(1, row["cross_brand_entry_sessions"])
         self.assertEqual(0, row["recommendation_cross_brand_entry_sessions"])
 
+    def test_recommendation_click_without_id_is_not_attributed(self):
+        """추천 귀속은 recommendation_id 가 있을 때만 센다.
+
+        Front 가 이 Event 를 내는 세 지점(promo_pick · 히어로 배너 · 유사 상품)이 모두
+        값을 채우므로 누락이 없다 (프론트 확인 2026-09-14, dw-schema §4.12).
+        조건이 조용히 풀리면 출처를 모르는 클릭까지 추천 성과로 잡히므로 고정한다.
+
+        교차 유입 자체는 그대로 잡히고 추천 귀속만 빠진다.
+        """
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            ("rec", "S1", 2, "recommendation_click", "P-B", "B", "{}"),
+            ("b1", "S1", 3, "product_view", "P-B", "B", "{}"),
+        ])
+
+        row = _cross_brand_daily(events).where("destination_brand_id = 'B'").first()
+
+        self.assertEqual(1, row["cross_brand_entry_sessions"])
+        self.assertEqual(0, row["recommendation_cross_brand_entry_sessions"])
+
     def test_null_brand_view_is_not_attributed_to_any_brand(self):
         """브랜드를 모르는 조회는 어느 브랜드에도 귀속하지 않는다.
 
