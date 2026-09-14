@@ -26,7 +26,8 @@ import type { CartItem } from '../types/cart';
 interface ProductDetailPageProps {
   product: Product;
   reviews: Review[];
-  allReviews: Review[];
+  /** 작성자별 리뷰 수 (전체 샘플 기준). "이 리뷰어의 다른 리뷰" 노출 판단에 쓴다 */
+  authorReviewCounts: Map<string, number>;
   similar: Product[];
   persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
@@ -36,7 +37,7 @@ interface ProductDetailPageProps {
 export default function ProductDetailPage({
   product,
   reviews,
-  allReviews,
+  authorReviewCounts,
   similar,
   persona,
   onSelectProduct,
@@ -66,15 +67,6 @@ export default function ProductDetailPage({
   /** 옵션을 고르면 그 옵션 이미지가 대표 이미지 자리를 대신한다 */
   const heroImageUrl = selectedVariant?.image_url ?? product.image_url;
   const selectedSkuId = selectedVariant?.sku_id ?? product.sku_id;
-
-  /** 샘플 전체 기준 작성자별 리뷰 수. "이 리뷰어의 다른 리뷰" 노출 판단에 쓴다 */
-  const authorReviewCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const review of allReviews) {
-      counts.set(review.author_id, (counts.get(review.author_id) ?? 0) + 1);
-    }
-    return counts;
-  }, [allReviews]);
 
   const visibleReviews = useMemo(() => {
     const filtered = reviews.filter((review) => {
