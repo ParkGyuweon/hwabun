@@ -314,7 +314,7 @@ input = funnel_session_fact, dim_product
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | scenario/run만 Y | `funnel_date_kst`는 최초 Funnel 진입일 기준 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
-| `impression_sessions`, `click_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
+| `impression_sessions`, `click_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
 | `impression_to_click_rate`, `click_to_view_rate`, `view_to_information_rate`, `view_to_cart_rate`, `cart_to_purchase_rate`, `view_to_purchase_rate`, `dropoff_after_impression_rate`, `dropoff_after_view_rate`, `dropoff_after_cart_rate` | double | Y | 전환·이탈률 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
@@ -323,8 +323,28 @@ input = funnel_session_fact, dim_product
 쓰고, `view_to_information_rate`는 상품 상세에서만 일어나므로 `product_view_sessions`를
 유지한다. `dropoff_after_view_rate`는 `view_to_cart_rate`의 여집합이라 같은 분모여야 한다.
 
-`quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`는
-0.1에서 열거만 하고 의미를 정의하지 않아 구현하지 않았다. 정의가 정해지면 추가한다.
+퀵룩 계열과 직접 클릭 계열은 **성격이 다르다.**
+
+| 컬럼 | 성격 | 정의 |
+| --- | --- | --- |
+| `quick_look_sessions` | 비배타 | Quick Look을 쓴 세션. 상품 상세도 열었든 아니든 센다 |
+| `quick_look_cart_sessions` | 비배타 | 그중 `add_to_cart`까지 간 세션 |
+| `direct_click_sessions` | **배타** | Quick Look 없이 상품 상세로 직행한 세션. 둘 다 열었으면 **먼저 일어난 쪽**으로 귀속한다 |
+| `direct_click_cart_sessions` | **배타** | 그중 `add_to_cart`까지 간 세션 |
+
+`quick_look_sessions`를 배타로 바꾸면 안 된다. `product_daily_kpi.quick_look_sessions`와
+같은 뜻이어야 하고, 대시보드의 "퀵룩 후 상세를 연 비율" 분모가 이 값이다.
+
+그래서 **`quick_look_sessions + direct_click_sessions ≠ detail_view_sessions`다.**
+둘 다 연 세션이 양쪽에 잡히기 때문이다. 배타 검산은 진입 경로로 한다.
+
+```text
+Quick Look 선진입 세션 + direct_click_sessions = detail_view_sessions
+```
+
+진입 경로는 `funnel_session_fact.detail_entry_path`(`quick_look` · `direct_click` · NULL)에
+있다. Quick Look 선진입 세션 수는 소비자가 없어 Mart 컬럼으로 두지 않고 검증 Job이
+그 Fact에서 직접 세어 위 등식을 확인한다.
 
 ### 4.6 `persona_segment_daily_kpi`
 
