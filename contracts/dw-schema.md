@@ -508,6 +508,12 @@ input = sessionized_events
 같은 세션·상품의 선행 `recommendation_click`을 사용한다. 배너 귀속은 같은 세션·상품의
 선행 `banner_click`을 사용하며 직전 Event만으로 제한하지 않는다.
 
+선행 `recommendation_click`은 **`recommendation_id`가 비어 있지 않을 때만** 추천 귀속으로
+센다. Front가 이 Event를 내는 세 지점(목록 맞춤 기획전 `promo_pick`, 히어로 배너, 상세
+유사 상품)이 모두 값을 채우므로 누락이 없다. 형식은 서버 응답의 uuid hex 또는 Front가
+만든 `rec-{product_id}-{persona}` 두 가지이며 둘 다 비어 있지 않다(프론트 확인
+2026-09-14). 유사 상품이 추천 API로 넘어가면 형식만 uuid로 바뀌고 조건은 그대로다.
+
 `brand_view_sessions`를 공통 분모로 `cross_brand_entry_rate`,
 `recommendation_cross_brand_entry_rate`, `banner_cross_brand_entry_rate`를 저장한다. 또한
 전체 교차 유입 세션을 분모로 `recommendation_share_of_cross_brand_entries`,
