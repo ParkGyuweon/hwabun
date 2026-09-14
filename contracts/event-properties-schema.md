@@ -293,6 +293,35 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 `actor_type='user'` Event에는 이 키가 올 수 없다.
 
+### 3.15 `payment_method`
+
+`kakaopay`, `card`, `test`
+
+| 값 | 뜻 |
+| --- | --- |
+| `kakaopay` | PortOne 경유 카카오페이 결제 |
+| `card` | 카드 결제 |
+| `test` | 결제 PG를 타지 않은 시연용 주문 |
+
+`purchase`와 `payment_failed`가 같은 값을 쓴다. 실패 Event에서는 선택 키다 — 결제수단을
+고르기 전에 창을 닫으면 값이 없다.
+
+`test`는 결제수단 분포에서 실제 수단과 함께 세지 않는다. 시연 주문을 섞으면
+결제수단 선호가 시연 횟수에 따라 흔들린다.
+
+### 3.16 `order_channel`
+
+`backend`, `local`
+
+| 값 | 뜻 |
+| --- | --- |
+| `backend` | Backend 주문 API를 거쳐 생성된 주문 |
+| `local` | 브라우저에서만 만든 주문. Backend에 주문 row가 없다 |
+
+`local`은 화면 시연 경로다. Backend 주문과 대사(對査)할 수 없으므로 매출성 집계에서
+제외한다 ([`dw-schema.md`](./dw-schema.md) §6). 이 축이 없으면 시연 주문과 실제 주문이
+한 덩어리가 되어 전환 지표가 시연 횟수만큼 부풀어 오른다.
+
 ## 4. Event별 Required Properties
 
 ### 4.1 Session / Page
@@ -357,7 +386,7 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
 | `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
-| `purchase` | `order_id: string`, `items: object[]` | `order_value: number`, `currency: string` |
+| `purchase` | `order_id: string`, `items: object[]`, `payment_method: string`, `paid_value: number`, `order_channel: string` | `order_value: number`, `currency: string`, `pg_provider: string`, `payment_id: string`, `paid_at: string` |
 | `payment_failed` | `order_id: string` | `reason_code: string`, `payment_method: string` |
 | `purchase_reason_select` | `order_id: string`, `reasons: string[]` | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 | `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
@@ -383,6 +412,19 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 `purchase.order_value`는 주문 전체 금액이다. `items[]`를 상품 row로 explode한 뒤
 행동 Event가 아니라 Backend의 PAID 주문 상품 Fact에서만 합산한다
 ([`dw-schema.md`](./dw-schema.md) §6).
+
+`paid_value`는 할인을 적용한 **실결제액**이고 `order_value`는 할인 전 주문 금액이다.
+둘은 다를 수 있고, 다른 것이 정상이다. 전환의 금액 축은 `paid_value`를 쓴다 —
+`order_value`로 보면 쿠폰·프로모션이 붙은 주문이 실제보다 크게 잡힌다. 다만 둘 다
+행동 로그가 운반하는 값이라 매출·정산의 정본은 아니다(§4 앞 단락과 같은 이유).
+
+`pg_provider` · `payment_id` · `paid_at`은 **키를 생략한다.** `null`을 싣지 않는다.
+셋 다 결제 confirm 을 거쳐야 생기는 값인데, 시연 경로의 주문은 confirm 을 건너뛴다.
+필수로 두면 그 purchase 가 전부 봉투 검증에서 거절된다. `null`을 허용하면 "confirm 을
+안 거쳤다"와 "값이 유실됐다"가 구분되지 않으므로, 없으면 키 자체를 두지 않는다.
+
+`payment_failed`는 주문 단위라 `product_id`를 갖지 않는다. `cleaned_events`까지만
+내려가고 상품 grain 의 Fact 로는 파생하지 않는다 — 실패에는 상품 축이 없다.
 
 `purchase_reason_select`는 주문 하나당 한 번만 발생한다. `reasons` 키는 항상
 존재해야 하며, 사용자가 설문을 건너뛰면 `skipped=true`와 함께 빈 배열을 보낸다.
@@ -459,9 +501,11 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
    `rejections`와 Collector 구조화 로그·메트릭으로만 기록한다. Kafka에 발행된 Event를
    Spark가 추가 검증하다 위반을 발견한 경우에만 `bad_events`에 격리한다. 한 Event에 여러
    위반이 있으면 원인을 모두 기록하되 대표 `error_code`는 표의 우선순위를 따른다.
-7. Collector는 `begin_checkout`, `purchase`, `purchase_reason_select`의 required key,
-   타입, 양수 수량·가격, `reasons` 길이 및 enum을 동기 검증한다. 이 밖의 Event별
-   properties는 Spark가 방어적으로 검사한다.
+7. Collector는 `begin_checkout`, `purchase`, `payment_failed`,
+   `purchase_reason_select`의 required key, 타입, 양수 수량·가격, `reasons` 길이 및
+   enum을 동기 검증한다. `purchase`의 `payment_method`·`order_channel` enum과
+   `paid_value` 부호도 여기에 포함된다. 이 밖의 Event별 properties는 Spark가
+   방어적으로 검사한다.
 8. `properties.seeded=true`(§3.14)인 Event는 주입된 선호 표식이라 관측 행동이 아니다.
    Spark는 `cleaned_events`에 그대로 보존하되 행동 Mart 집계에서 제외한다. 어느 Mart가
    제외 대상인지는 `dw-schema.md`가 정본이다. `actor_type='user'`에 이 키가 오면
