@@ -141,8 +141,8 @@ h1{font-size:22px;margin:0 0 4px;font-weight:700;color:var(--brown)}.sub{color:v
 .v small{font-size:13px;color:var(--mute);font-weight:400;margin-left:4px}
 .main{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px;align-items:stretch}.right{display:flex;flex-direction:column;gap:12px}.left{display:flex;flex-direction:column;min-height:0}.left ul{flex:1 1 0;min-height:0;height:0;max-height:none;overflow:auto}@media(max-width:1000px){.main{grid-template-columns:1fr}}
 canvas{width:100%;height:170px;display:block}
-.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:320px;gap:40px;padding:8px 40px 0;max-width:1000px;margin:0 auto}.bars.big .bar span{font-size:28px;font-weight:700}.bars.big .bar em{font-size:15px}.bars.big .bar b{font-size:15px}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc-deep);font-weight:600}.bars.big .bar b{font-size:14px}
-.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:330px;overflow:hidden;gap:40px;padding:8px 40px 0;max-width:1000px;margin:0 auto}.bars.big .bar span{font-size:28px;font-weight:700}.bars.big .bar em{font-size:15px}.bars.big .bar b{font-size:15px}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc-deep);font-weight:600}.bars.big .bar b{font-size:14px}
+.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-variant-numeric:tabular-nums;min-height:0}.bar span,.bar em,.bar b{line-height:1.25;white-space:nowrap}
 .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--acc-light),var(--acc));border-radius:8px 8px 3px 3px;min-height:3px;transition:height .35s ease-out;box-shadow:0 0 0 1px rgba(122,91,67,.12) inset}
 .bar b{font-size:12px;color:var(--brown);font-weight:600}
 ul{list-style:none;margin:6px 0 0;padding:0;max-height:560px;overflow:auto}
@@ -151,9 +151,13 @@ li .t{color:var(--mute)}li .e{color:var(--mute);font-size:12px}
 li{border-bottom:1px solid var(--line)}
 .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:var(--acc-light);color:var(--brown);margin-left:6px}
 .ok{color:var(--acc-deep);font-weight:600}.off{color:var(--pink);font-weight:600}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:14px}.top .sub{margin:0}.ctl{display:flex;align-items:center;gap:10px}.ctl label{color:var(--mute);font-size:13px}.ctl select{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--fg)}
+.btn{font:inherit;font-weight:700;font-size:15px;padding:9px 18px;border:0;border-radius:999px;background:var(--acc);color:#fff;cursor:pointer;box-shadow:0 2px 6px rgba(168,201,110,.35)}.btn:hover{background:var(--acc-deep)}.btn.stop{background:var(--pink)}.btn:disabled{opacity:.5;cursor:default}
 </style></head><body>
 <h1>HWABUN 추천 서버 — 실시간 처리 현황</h1>
-<div class="sub">1초마다 갱신 · <span id="kafka"></span></div>
+<div class="top"><div class="sub">1초마다 갱신 · <span id="kafka"></span></div>
+<div class="ctl" id="ctl"><label>초당 <select id="rate"><option>1000</option><option>2000</option><option selected>3000</option><option>5000</option><option>8000</option></select>건</label>
+<button id="start" class="btn">▶ 페르소나 9,900명 시작</button><button id="stop" class="btn stop" hidden>■ 정지</button><span class="k" id="demo"></span></div></div>
 <div class="grid">
   <div class="card"><div class="k">초당 반영 이벤트</div><div class="v" id="eps">0<small>/s</small></div><div class="k" id="eps10"></div></div>
   <div class="card"><div class="k">누적 반영 이벤트</div><div class="v" id="total">0</div><div class="k" id="src"></div></div>
@@ -180,15 +184,20 @@ async function tick(){try{const r=await fetch('/live/stats',{cache:'no-store'});
  $('personas').innerHTML=fmt(d.personas_touched)+'<small>명</small>';$('mem').textContent=fmt(d.sessions_in_memory);
  $('p50').innerHTML=(d.recommend.p50_ms==null?'-':d.recommend.p50_ms)+'<small>ms p50</small>';
  $('rec').textContent='p95 '+(d.recommend.p95_ms==null?'-':d.recommend.p95_ms+'ms')+' · '+d.recommend.per_sec_10s_avg+' 요청/s · 누적 '+fmt(d.recommend.total);
- draw(d.events.series_60s);
+ draw(d.events.series_60s); showDemo(d);
  const k=d.kafka;$('kafka').innerHTML=k?('Kafka '+(k.connected?'<span class="ok">연결</span>':'<span class="off">미연결</span>')+' · 토픽 '+k.topic+' · lag '+(k.lag==null?'-':k.lag)):'Kafka 구독 없음(직접 수신만)';
  const parts=d.partitions||{};const rates=d.partitions_rate||{};const keys=Object.keys(parts);const bars=$('bars');
  if(keys.length){const r10=x=>(rates[x]||{}).per_sec_10s_avg||0;const mx=Math.max(1,...keys.map(r10));
-  bars.innerHTML=keys.map(x=>'<div class="bar"><span>'+fmt(parts[x])+'</span><em>+'+fmt(Math.round(r10(x)))+'/s</em><i style="height:'+Math.max(3,Math.round(r10(x)/mx*232))+'px"></i><b>파티션 P'+x+'</b></div>').join('');
+  bars.innerHTML=keys.map(x=>'<div class="bar"><span>'+fmt(parts[x])+'</span><em>+'+fmt(Math.round(r10(x)))+'/s</em><i style="height:'+Math.max(3,Math.round(r10(x)/mx*196))+'px"></i><b>파티션 P'+x+'</b></div>').join('');
   const tot=keys.reduce((a,x)=>a+parts[x],0);$('barnote').textContent='파티션 '+keys.length+'개 · 누적 '+fmt(tot)+' · 가장 많이 받은 파티션 '+Math.round(Math.max(...keys.map(x=>parts[x]))/Math.max(1,tot)*100)+'%';}
  else{bars.innerHTML='';$('barnote').textContent=k?'아직 Kafka 로 들어온 이벤트가 없다':'Kafka 구독이 꺼져 있어 파티션 정보가 없다 (KAFKA_BOOTSTRAP_SERVERS)';}
  $('recent').innerHTML=(d.recent||[]).map(r=>'<li><span class="t">'+r.age_sec+'s 전</span><span>'+r.persona_id+'<span class="pill">'+(r.source==='kafka'?'P'+(r.partition==null?'?':r.partition):'직접')+'</span></span><span class="e">'+(r.events||[]).join(' · ')+'</span></li>').join('');
 }catch(e){$('kafka').innerHTML='<span class="off">서버 응답 없음</span>'}}
+function showDemo(d){const st=d&&d.demo;if(!st)return;const on=!!st.running;$('start').hidden=on;$('stop').hidden=!on;$('rate').disabled=on;
+ if(!st.available){$('start').disabled=true;$('demo').textContent='이 서버엔 시연 스크립트가 없다 (로컬 체크아웃에서만)';return;}
+ $('demo').textContent=on?('실행 중 · '+(st.last_line||'').replace('[demo] ','')):(st.exit_code==null?'':'끝남 · '+(st.last_line||'').replace('[demo] ',''));}
+$('start').onclick=async()=>{$('start').disabled=true;try{await fetch('/live/demo/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rate:+$('rate').value})});}finally{$('start').disabled=false;}tick();};
+$('stop').onclick=async()=>{await fetch('/live/demo/stop',{method:'POST'});tick();};
 tick();setInterval(tick,1000);
 </script></body></html>
 """
