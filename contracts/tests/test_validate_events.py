@@ -517,6 +517,40 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "[type] $.schema_version")
 
+    def test_payment_failed_is_a_conversion_event_without_product(self) -> None:
+        """결제창 실패·취소는 주문 단위라 product_id 를 갖지 않는다.
+
+        intent 는 conversion 이다. 마찰이지만 friction 은 UI 마찰(rage_click 등)을
+        가리키고 이쪽은 전환 단계에서의 이탈이다.
+        """
+        event = copy.deepcopy(self.user_event)
+        event.update({
+            "event_name": "payment_failed",
+            "intent": "conversion",
+            "product_id": None,
+        })
+        event["properties"] = {
+            "order_id": "O1",
+            "reason_code": "USER_CANCEL",
+            "payment_method": "kakaopay",
+        }
+
+        self.assertEqual([], self.validate_values([event]).errors)
+
+    def test_payment_failed_rejects_a_wrong_intent(self) -> None:
+        """intent 가 어긋나면 거부한다. 계약이 풀리면 마찰 지표가 엉뚱한 축에 잡힌다."""
+        event = copy.deepcopy(self.user_event)
+        event.update({
+            "event_name": "payment_failed",
+            "intent": "friction",
+            "product_id": None,
+        })
+        event["properties"] = {"order_id": "O1"}
+
+        result = self.validate_values([event])
+
+        self.assert_has_error(result.errors, "$.intent")
+
     def test_seeded_marker_must_be_a_boolean_on_synthetic_events(self) -> None:
         """시드 표식은 boolean 이다. 문자열 "true" 는 걸러야 한다.
 
