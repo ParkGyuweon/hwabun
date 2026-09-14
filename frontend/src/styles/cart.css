@@ -459,3 +459,11 @@
 .cart__discount dd {
   color: #c2637a;
 }
+
+/* 결제 실패·취소 이유. 확인 단계 버튼 아래, 장바구니는 그대로라 다시 시도할 수 있다 */
+.cart__pay-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-danger, #b3261e);
+}

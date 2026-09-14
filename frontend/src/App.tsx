@@ -9,7 +9,18 @@ import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
 import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
-import { canCheckoutOnBackend, checkoutOnBackend, fetchBackendReviews } from './lib/shopApi';
+import { canCheckoutOnBackend, checkoutOnBackend, confirmBackendOrder, createBackendOrder, fetchBackendReviews } from './lib/shopApi';
+import {
+  PAYMENT_FAILED_EVENT_ENABLED,
+  PAYMENT_PROVIDER,
+  clearPendingPayment,
+  isPaymentEnabled,
+  parsePaymentReturn,
+  requestKakaoPay,
+  savePendingPayment,
+  takePendingPayment,
+} from './lib/payment';
+import type { PaymentMethod } from './lib/payment';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
 import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
@@ -148,6 +159,10 @@ export default function App() {
    * "담고 안 산 사람" 과 "산 사람" 이 같은 무게로 세어진다.
    */
   const [order, setOrder] = useState<PlacedOrder | null>(null);
+  /** 결제창까지 갔다가 실패·취소한 이유. 장바구니는 그대로 두고 다시 시도할 수 있게 한다 */
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  /** 결제창이 떠 있거나 서버 확인 중. 버튼 연타 방지 */
+  const [paying, setPaying] = useState(false);
   /** 백엔드 상품의 리뷰. 상품이 바뀔 때 받아 온다. 목 상품이면 빈 배열이고 샘플 리뷰를 쓴다 */
   const [backendReviews, setBackendReviews] = useState<Review[]>([]);
   /**
@@ -381,51 +396,173 @@ export default function App() {
   /** 확인 화면에서 되돌아감. 이벤트는 남기지 않는다 — 이탈은 begin_checkout 대비로 센다 */
   const cancelCheckout = useCallback(() => {}, []);
 
+  /**
+   * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다 — begin_checkout 과 같은 order_id.
+   * 결제 정보(payment_method · pg_provider · payment_id · paid_at)는 properties 에 덧붙인다. 계약 §6 필드 추가는 데이터 파트가
+   * 넣기로 했고(2026-09-14), properties 는 열린 객체라 먼저 실어도 거절되지 않는다.
+   */
+  const finishOrder = useCallback(
+    (placed: PlacedOrder) => {
+      track('purchase', {
+        order_id: placed.orderId,
+        items: placed.items,
+        order_value: Number(placed.total.toFixed(2)),
+        paid_value: Number(placed.paid.toFixed(2)),
+        currency: 'USD',
+        order_channel: placed.mode,
+        payment_method: placed.payment_method ?? 'test',
+        pg_provider: placed.payment_method === 'kakaopay' ? PAYMENT_PROVIDER : null,
+        payment_id: placed.payment_id ?? null,
+        paid_at: placed.paid_at ?? null,
+      });
+      setPaymentError(null);
+      setOrder(placed);
+      // 마이페이지 주문 내역. 서버 주문 목록 API 가 없어 이 브라우저에 계정별로 쌓는다 (lib/orderHistory)
+      appendOrder(member?.id ?? null, placed);
+      setCartItems([]);
+      // 다음 주문은 새 번호를 받는다
+      pendingOrderIdRef.current = null;
+    },
+    [member?.id],
+  );
+
+  /** 결제 실패·취소. 장바구니는 그대로, 화면에 이유를 적고 이벤트는 계약 등록 뒤에만 */
+  const failPayment = useCallback((orderId: string, code: string, message: string, method: PaymentMethod) => {
+    setPaymentError(message);
+    if (PAYMENT_FAILED_EVENT_ENABLED) {
+      track('payment_failed', { order_id: orderId, reason_code: code, payment_method: method });
+    }
+  }, []);
+
   const placeOrder = useCallback(async () => {
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0 || paying) return;
     const localOrderId = pendingOrderIdRef.current ?? createOrderId();
     const items = toOrderItems(cartItems);
     const { count, total, paid } = orderTotals(cartItems);
+    setPaymentError(null);
 
     /**
-     * 장바구니가 전부 백엔드 상품이고 고객 로그인이 있으면 서버에 담기 → 주문 → 결제(PAID) 까지 한다.
-     * 그래야 피드백 API 의 "구매 이력" 조건이 성립한다. 아니면 지금까지의 테스트 주문이다.
-     * 어느 쪽이든 purchase 이벤트는 같은 모양으로 나간다. order_id 만 서버 번호로 바뀐다.
+     * 장바구니가 전부 백엔드 상품이고 고객 로그인이 있으면 서버 주문이다. 결제 키가 있으면 카카오페이(포트원) 결제창 →
+     * 서버 confirm, 없으면 예전처럼 /pay 로 PAID 표시. 그래야 피드백 API 의 "구매 이력" 조건이 성립한다.
+     * 아니면 지금까지의 테스트 주문이다. 어느 쪽이든 purchase 이벤트는 같은 모양이고 order_id 만 서버 번호로 바뀐다.
      */
-    let orderId = localOrderId;
-    let mode: 'backend' | 'local' = 'local';
-    let note: string | null = null;
     if (canCheckoutOnBackend(cartItems)) {
+      if (isPaymentEnabled()) {
+        setPaying(true);
+        try {
+          const created = await createBackendOrder(cartItems, localOrderId);
+          if (!created.ok) {
+            failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay');
+            return;
+          }
+          if (created.totalAmountKrw === null) {
+            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay');
+            return;
+          }
+          // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
+          savePendingPayment({ orderId: created.orderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
+          const pay = await requestKakaoPay({
+            orderId: created.orderId,
+            totalAmountKrw: created.totalAmountKrw,
+            orderName: `BLOOM 주문 ${count}건`,
+            // 포트원 SDK 가 email 형식을 검증한다 — 개발용 세션(dev-…@local)처럼 형식이 아니면 빼고 보낸다
+            customer: member
+              ? { fullName: member.name, ...(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email) ? { email: member.email } : {}) }
+              : undefined,
+          });
+          if (!pay.ok) {
+            clearPendingPayment();
+            failPayment(created.orderId, pay.code, pay.message, 'kakaopay');
+            return;
+          }
+          const confirmed = await confirmBackendOrder(created.orderId, pay.paymentId);
+          clearPendingPayment();
+          if (!confirmed.ok) {
+            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay');
+            return;
+          }
+          finishOrder({
+            orderId: created.orderId,
+            items,
+            count,
+            total,
+            paid,
+            mode: 'backend',
+            note: null,
+            payment_method: 'kakaopay',
+            payment_id: pay.paymentId,
+            paid_at: confirmed.paidAt ?? new Date().toISOString(),
+          });
+        } finally {
+          setPaying(false);
+        }
+        return;
+      }
+
       const r = await checkoutOnBackend(cartItems, localOrderId);
       if (r.ok) {
-        orderId = r.orderId;
-        mode = 'backend';
-      } else {
-        note = `서버 주문 실패: ${r.reason}. 테스트 주문으로 대신 접수했습니다.`;
+        finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' });
+        return;
       }
-    } else if (cartItems.some((i) => !i.variant_id)) {
-      note = '세포라·시드 상품은 백엔드에 없어 테스트 주문으로 접수됩니다.';
-    } else {
-      note = '고객 로그인이 없어 테스트 주문으로 접수됩니다.';
+      finishOrder({
+        orderId: localOrderId,
+        items,
+        count,
+        total,
+        paid,
+        mode: 'local',
+        note: `서버 주문 실패: ${r.reason}. 테스트 주문으로 대신 접수했습니다.`,
+        payment_method: 'test',
+      });
+      return;
     }
 
-    track('purchase', {
-      order_id: orderId,
-      items,
-      order_value: Number(total.toFixed(2)),
-      paid_value: Number(paid.toFixed(2)),
-      currency: 'USD',
-      order_channel: mode,
-    });
+    const note = cartItems.some((i) => !i.variant_id)
+      ? '세포라·시드 상품은 백엔드에 없어 테스트 주문으로 접수됩니다.'
+      : '고객 로그인이 없어 테스트 주문으로 접수됩니다.';
+    finishOrder({ orderId: localOrderId, items, count, total, paid, mode: 'local', note, payment_method: 'test' });
+  }, [cartItems, paying, member, finishOrder, failPayment]);
 
-    const placed: PlacedOrder = { orderId, items, count, total, paid, mode, note };
-    setOrder(placed);
-    // 마이페이지 주문 내역. 서버 주문 목록 API 가 없어 이 브라우저에 계정별로 쌓는다 (lib/orderHistory)
-    appendOrder(member?.id ?? null, placed);
-    setCartItems([]);
-    // 다음 주문은 새 번호를 받는다
-    pendingOrderIdRef.current = null;
-  }, [cartItems, member?.id]);
+  /**
+   * 모바일 결제창(REDIRECTION)에서 돌아온 경우 — `/?order=…&pay=return`. 결제창을 열기 전에 둔 주문을 꺼내
+   * confirm 을 부르고 완료 화면으로 간다. PC 위젯 경로는 여기 오지 않는다.
+   */
+  useEffect(() => {
+    const ret = parsePaymentReturn();
+    if (!ret) return;
+    const pending = takePendingPayment(ret.orderId);
+    window.history.replaceState({ productId: null, cart: true }, '', '?cart=1');
+    setCartOpen(true);
+    if (ret.code || !ret.paymentId) {
+      failPayment(ret.orderId, ret.code ?? 'no_payment_id', ret.message ?? '결제가 완료되지 않았습니다.', 'kakaopay');
+      return;
+    }
+    if (!pending) {
+      setPaymentError('결제는 됐지만 이 탭의 주문 정보를 찾지 못했습니다. 주문 내역에서 확인해 주세요.');
+      return;
+    }
+    const paymentId = ret.paymentId;
+    void confirmBackendOrder(pending.orderId, paymentId).then((confirmed) => {
+      if (!confirmed.ok) {
+        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay');
+        return;
+      }
+      finishOrder({
+        orderId: pending.orderId,
+        items: pending.items,
+        count: pending.count,
+        total: pending.total,
+        paid: pending.paid,
+        mode: 'backend',
+        note: null,
+        payment_method: 'kakaopay',
+        payment_id: paymentId,
+        paid_at: confirmed.paidAt ?? new Date().toISOString(),
+      });
+    });
+    // 첫 진입 한 번만. finishOrder/failPayment 는 안정적이다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submitPurchaseReasons = useCallback(
     (reasons: string[]) => {
@@ -662,6 +799,9 @@ export default function App() {
           onCancelCheckout={cancelCheckout}
           onPlaceOrder={placeOrder}
           order={order}
+          paymentEnabled={isPaymentEnabled() && canCheckoutOnBackend(cartItems)}
+          paymentError={paymentError}
+          paying={paying}
           onSurveySubmit={submitPurchaseReasons}
           onSurveySkip={skipPurchaseReasons}
         />
