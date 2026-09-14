@@ -115,7 +115,8 @@ HERO_POLICIES = ("top", "new_brand")
 # 신규 브랜드 판정 (2026-09-11 결정, Jira 247-b): **등록 후 NEW_BRAND_DAYS 일 이내** 인 등록 상품만 신규다.
 # 원천 카탈로그(세포라 200개)는 등록 시각이 없어 신규가 아니다. 이전 규칙(지지자 <3 또는 어휘집 밖 브랜드)은
 # 운영 중 갱신되는 값이 없어 한 번 신규면 영영 신규였다 — 오프라인 평가 스크립트는 여전히 그 규칙을 쓴다.
-# NEW_BRAND_ALWAYS_PREFIX 에 걸리는 product_id(예: 시연용 "SB") 는 기간과 무관하게 신규로 둔다 — 팀 합의 뒤 값을 정한다.
+# NEW_BRAND_ALWAYS_PREFIX 에 걸리는 product_id 는 기간과 무관하게 신규로 둔다. 배포는 "SB"(시연 브랜드 SSAFY Beauty 8개,
+# 2026-09-14 결정, Jira 249) — 09-23 에 14일이 지나도 히어로 new_brand 후보에서 빠지지 않게. 오프라인 평가는 비움.
 NEW_BRAND_DAYS = float(os.environ.get("NEW_BRAND_DAYS", "14"))
 NEW_BRAND_ALWAYS_PREFIX = tuple(p for p in os.environ.get("NEW_BRAND_ALWAYS_PREFIX", "").split(",") if p.strip())
 
