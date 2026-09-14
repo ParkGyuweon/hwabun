@@ -292,6 +292,37 @@ class RawToCleanedSparkTest(unittest.TestCase):
         self.assertEqual("acc-1", raw_account["member-login"])
         self.assertIsNone(raw_account["anonymous-visit"])
 
+    def test_payment_failed_survives_cleansing_without_a_product(self):
+        """결제창 실패는 주문 단위라 product_id 가 없다. 그대로 정제를 통과해야 한다.
+
+        product_id 를 요구하는 Event 목록에 들어가면 전량 bad_events 로 빠진다
+        (event-properties-schema.md §2.5 · clean_events_job EVENT_INTENTS).
+        """
+        failed = self._event(
+            "pay-failed",
+            event_name="payment_failed",
+            intent="conversion",
+            product_id=None,
+            properties={
+                "order_id": "O1",
+                "reason_code": "USER_CANCEL",
+                "payment_method": "kakaopay",
+            },
+        )
+
+        raw = build_raw_events_frame(self._kafka_frame([failed]), "test-cluster")
+        frames = build_processed_frames(raw, "Asia/Seoul")
+        row = frames["cleaned_events"].select(
+            "event_id", "event_name", "intent", "product_id", "properties_json"
+        ).first()
+
+        self.assertEqual("pay-failed", row["event_id"])
+        self.assertEqual("payment_failed", row["event_name"])
+        self.assertEqual("conversion", row["intent"])
+        self.assertIsNone(row["product_id"])
+        self.assertIn("USER_CANCEL", row["properties_json"])
+        self.assertEqual(0, frames["bad_events"].count())
+
     def test_is_seed_comes_from_the_seeded_property(self):
         """시드 Event는 주입된 선호 표식이라 한 컬럼으로 걸러낼 수 있어야 한다.
 
