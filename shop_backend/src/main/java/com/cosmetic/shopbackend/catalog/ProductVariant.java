@@ -22,6 +22,12 @@ public class ProductVariant {
 
   private String size;
 
+  @Column(name = "image_url")
+  private String imageUrl;
+
+  @Column(name = "swatch_url")
+  private String swatchUrl;
+
   @Column(name = "price_krw", nullable = false)
   private BigDecimal price;
 
@@ -72,6 +78,13 @@ public class ProductVariant {
   public String getSize() {
     return size;
   }
+
+  public void setSize(String size) {
+    this.size = size;
+  }
+
+  public String getImageUrl() { return imageUrl; }
+  public String getSwatchUrl() { return swatchUrl; }
 
   public BigDecimal getPrice() {
     return price;

@@ -143,6 +143,27 @@ AI 파트 요청(고객 가입에서 피부 속성 4개를 받아야 추천의 �
 | 9-10 | 배포 nginx (또는 백엔드 프록시) | `/api/recommend` · `/api/prescription` → recommend(8300) | 지금은 Vite 프록시로만 연결. 배포에서 추천이 목으로 떨어짐 | 인프라 |
 | 9-11 | `CatalogController.ProductSummary` | **`createdAt`** (ISO-8601, `product.created_at`) 한 칸 추가. 상세 `ProductDetail.product` 도 같은 레코드라 같이 나옴 | AI 파트 결정(2026-09-11, Jira 247-b): **신규 상품 = 등록 후 14일 이내**. 추천 서버 카탈로그 동기화가 이 값을 `registered_at` 으로 읽어 14일을 센다(계약 recommendation-io-spec §5 6-1 · product-registration-spec §3). 없으면 편입 시각이 기준이라 신규 기간이 늦게 시작되고, 프론트 목록의 `new` 배지도 영영 안 꺼짐. 프론트는 `createdAt` 을 이미 읽게 해 뒀다(`shopApi.ts` `mapSummary` → `Product.created_at`, `lib/newBrandRule.ts`) | 신규 · 한 줄 |
 
+## 10. 결제 연동 — 포트원 V2 + 카카오페이 테스트 채널 (2026-09-14 추가 · AI 파트 정리, 백엔드 확정 필요)
+
+프론트는 붙여 뒀습니다 (`frontend/src/lib/payment.ts` · `App.placeOrder`). `VITE_PORTONE_STORE_ID` · `VITE_PORTONE_CHANNEL_KEY` 가 있으면
+카카오페이 결제창이 열리고, 없으면 지금의 `/pay` 테스트 주문입니다. 서버 쪽 세 가지가 필요합니다.
+
+```
+프론트 POST /api/orders {idempotencyKey}            → 주문 생성. 응답 totalAmount(KRW 정수) 가 결제 금액 정본  (지금 있음)
+프론트 PortOne.requestPayment(paymentId=`hwabun-{orderId}`, totalAmount, EASY_PAY, KRW)
+프론트 POST /api/orders/{id}/confirm {paymentId}     → 서버가 GET https://api.portone.io/payments/{paymentId}
+                                                       (Authorization: PortOne {PORTONE_API_SECRET})
+                                                       status == "PAID" && amount.total == 주문 totalAmount → 주문 PAID
+```
+
+- **10-1 `POST /api/orders/{id}/confirm { paymentId }`** (MEMBER 토큰). 응답 `{ orderId, status, paidAt }`.
+  금액 불일치·미결제면 4xx 와 이유. 프론트는 이 응답 뒤에만 `purchase` 이벤트를 남깁니다.
+- **10-2 `/pay` 는 `PAYMENT_MODE=test` 일 때만 허용.** 프론트는 결제 키가 없을 때만 `/pay` 를 부릅니다 (시연 모드 스위치).
+- **10-3 주문 생성 응답에 `orderId` 필드.** 지금은 `id` 라 `orderId ?? id` 로 읽고 있습니다 (9-7 과 같이 DTO 정리).
+- 서버 env: `PORTONE_API_SECRET` (콘솔 > API Keys). 프론트에는 절대 넣지 않습니다.
+- 웹훅은 시연 범위에서 생략 가능. 배포 공개 URL 이 생기면 `POST /api/payments/webhook` 로 붙일 수 있습니다.
+- 전제: 배포 compose 에 shop_backend + MySQL, nginx `/api/auth|brands|products|cart|orders|reviews|feedback|seller|settlements|admin|members` → 8090 라우팅.
+
 ---
 
 ## 참고 — 배포 전 필요

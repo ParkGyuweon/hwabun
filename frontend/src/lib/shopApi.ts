@@ -287,6 +287,8 @@ export async function registerProductBackend(form: RegistrationForm): Promise<Re
 /* ------------------------------------------------------------------ 장바구니·주문·결제 (고객) */
 
 export type CheckoutResult = { ok: true; orderId: string; status: string } | ApiFailure;
+export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null } | ApiFailure;
+export type ConfirmResult = { ok: true; orderId: string; status: string; paidAt: string | null } | ApiFailure;
 
 /** 장바구니 전부가 백엔드 상품(옵션 id 있음)이고 고객 로그인이 있을 때만 API 를 탈 수 있다 */
 export function canCheckoutOnBackend(items: CartItem[]): boolean {
@@ -294,10 +296,10 @@ export function canCheckoutOnBackend(items: CartItem[]): boolean {
 }
 
 /**
- * 서버 장바구니에 담고 → 주문 만들고 → 결제까지. 셋을 한 번에 한다.
- * 결제 연동은 없고 백엔드가 PAID 로 표시만 한다. 그래야 피드백·리뷰 API 의 "구매 이력" 조건이 성립한다.
+ * 서버 장바구니에 담고 → 주문 생성. 응답의 `totalAmount`(KRW) 가 결제 금액의 정본이다 (AI 정리 2026-09-14 §4).
+ * 주문 번호 필드가 `id` 라 `orderId ?? id` 로 읽는다 (요청서 9-7).
  */
-export async function checkoutOnBackend(items: CartItem[], idempotencyKey: string): Promise<CheckoutResult> {
+export async function createBackendOrder(items: CartItem[], idempotencyKey: string): Promise<CreateOrderResult> {
   try {
     for (const item of items) {
       const r = await authFetch('MEMBER', '/api/cart/items', {
@@ -316,13 +318,53 @@ export async function checkoutOnBackend(items: CartItem[], idempotencyKey: strin
     const order = (await created.json()) as Record<string, unknown>;
     const orderId = String(order.orderId ?? order.id ?? order.order_id ?? '');
     if (!orderId) return { ok: false, status: created.status, reason: '주문 응답에 주문 번호가 없습니다' };
-    const paid = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/pay`, { method: 'POST' });
-    if (!paid.ok) return fail(paid);
-    const paidBody = (await paid.json()) as Record<string, unknown>;
-    return { ok: true, orderId, status: String(paidBody.status ?? 'PAID') };
+    const amt = Number(order.totalAmount ?? order.total_amount);
+    return { ok: true, orderId, totalAmountKrw: Number.isFinite(amt) && amt > 0 ? Math.round(amt) : null };
   } catch {
     return offline();
   }
+}
+
+/** `POST /api/orders/{id}/pay` — 결제 연동 없이 PAID 표시 (테스트 주문). 백엔드가 PAYMENT_MODE=test 일 때만 허용할 예정 */
+export async function payBackendOrder(orderId: string): Promise<CheckoutResult> {
+  try {
+    const paid = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/pay`, { method: 'POST' });
+    if (!paid.ok) return fail(paid);
+    const body = (await paid.json()) as Record<string, unknown>;
+    return { ok: true, orderId, status: String(body.status ?? 'PAID') };
+  } catch {
+    return offline();
+  }
+}
+
+/**
+ * `POST /api/orders/{id}/confirm { paymentId }` — 서버가 포트원 `GET /payments/{paymentId}` 로 조회해
+ * status==PAID · amount.total==주문 totalAmount 를 대조하고 PAID 로 바꾼다 (요청서 10번). **이 응답이 결제의 정본**이다.
+ */
+export async function confirmBackendOrder(orderId: string, paymentId: string): Promise<ConfirmResult> {
+  try {
+    const res = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentId }),
+    });
+    if (!res.ok) return fail(res);
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const paidAt = typeof body.paidAt === 'string' ? body.paidAt : typeof body.paid_at === 'string' ? body.paid_at : null;
+    return { ok: true, orderId, status: String(body.status ?? 'PAID'), paidAt };
+  } catch {
+    return offline();
+  }
+}
+
+/**
+ * 결제 연동이 꺼져 있을 때의 서버 주문: 담기 → 주문 → /pay. 예전 흐름 그대로다.
+ * 그래야 피드백·리뷰 API 의 "구매 이력" 조건이 성립한다.
+ */
+export async function checkoutOnBackend(items: CartItem[], idempotencyKey: string): Promise<CheckoutResult> {
+  const created = await createBackendOrder(items, idempotencyKey);
+  if (!created.ok) return created;
+  return payBackendOrder(created.orderId);
 }
 
 /* ------------------------------------------------------------------ 피드백 */

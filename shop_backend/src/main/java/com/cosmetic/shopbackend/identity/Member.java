@@ -26,6 +26,15 @@ public class Member {
   @Column(nullable = false, length = 100)
   private String nickname;
 
+  @Column(name = "skin_type_code", length = 64)
+  private String skinTypeCode;
+  @Column(name = "skin_tone_code", length = 64)
+  private String skinToneCode;
+  @Column(name = "hair_color_code", length = 64)
+  private String hairColorCode;
+  @Column(name = "eye_color_code", length = 64)
+  private String eyeColorCode;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private AccountStatus status = AccountStatus.ACTIVE;

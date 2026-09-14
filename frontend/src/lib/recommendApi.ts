@@ -12,6 +12,7 @@
  *   - 실패(네트워크·4xx·5xx·타임아웃)는 null. 호출부가 목으로 물러난다.
  */
 import type { BannerType } from '../types/log';
+import { authFetch } from './auth';
 import type { MemberProfile } from './memberProfile';
 import type { HeroPolicy, RecommendBanner, RecommendHero, RecommendItem, RecommendResponse } from '../types/recommendation';
 
@@ -160,7 +161,7 @@ export async function fetchRecommendation(q: RecommendQuery, signal?: AbortSigna
   const onOuterAbort = () => controller.abort();
   signal?.addEventListener('abort', onOuterAbort);
   try {
-    const res = await fetch(buildRecommendUrl(q), { headers: { Accept: 'application/json' }, signal: controller.signal });
+    const res = await authFetch('MEMBER', buildRecommendUrl(q), { signal: controller.signal });
     if (!res.ok) {
       if (import.meta.env.DEV) console.info(`[recommend] ${res.status} · 목으로 물러남`);
       return null;
