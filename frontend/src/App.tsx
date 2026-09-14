@@ -12,7 +12,7 @@ import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
 import { canCheckoutOnBackend, checkoutOnBackend, fetchBackendReviews } from './lib/shopApi';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
-import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
+import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
@@ -204,6 +204,11 @@ export default function App() {
     [productId],
   );
 
+  // 백엔드에만 있는 상품은 상세를 열 때 그 한 건만 받는다. 목록은 요약으로 그린다 (N+1 제거, 2026-09-14)
+  useEffect(() => {
+    ensureBackendDetail(productId);
+  }, [productId, products]);
+
   useEffect(() => {
     if (!product || product.source !== 'backend') {
       setBackendReviews([]);
@@ -216,7 +221,9 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [product]);
+    // 상세가 늦게 도착하면 product 객체만 바뀌고 id 는 같다 — 그때 리뷰를 다시 부르지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.product_id, product?.source]);
 
   /**
    * 장바구니에 담긴 상품. 추천 자리에서 뺀다.
