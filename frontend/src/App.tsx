@@ -12,12 +12,12 @@ import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
 import { canCheckoutOnBackend, checkoutOnBackend, fetchBackendReviews } from './lib/shopApi';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
-import { catalogSnapshot, resolveProduct } from './lib/productRegistry';
+import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
 import { appendOrder } from './lib/orderHistory';
-import { reviews as reviewsData } from './mocks/reviews';
+import { useAuthorCounts, useProductReviews, useReviewSkinTypes } from './lib/reviewStore';
 import personasData from './mocks/personas.sample.json';
 import type { PersonaProfile } from './types/persona';
 import type { Review } from './types/review';
@@ -31,7 +31,6 @@ import './styles/apple.css';
 import './styles/storefront.css';
 
 // 상품은 등록 저장소(초안 + 등록 + 시드 + 세포라)가 준다. 렌더 안에서는 useCatalog() 를 쓴다
-const reviews = reviewsData as unknown as Review[];
 /**
  * 데이터 파트가 만든 PA 대역 100명을 그대로 쓴다.
  * 리뷰에서 파생시키던 예전 방식은 persona_id 가 author_id 라 페르소나 표와
@@ -199,10 +198,15 @@ export default function App() {
     [productId, products, draft],
   );
 
-  const productReviews = useMemo(
-    () => (productId ? reviews.filter((review) => review.product_id === productId) : []),
-    [productId],
-  );
+  // 샘플 리뷰는 상품별 조각으로 연 상품 것만 받는다 (lib/reviewStore). 백엔드 상품이면 안 받는다
+  const { reviews: productReviews } = useProductReviews(product && product.source !== 'backend' ? product.product_id : null);
+  const authorReviewCounts = useAuthorCounts();
+  const reviewSkinTypes = useReviewSkinTypes();
+
+  // 백엔드에만 있는 상품은 상세를 열 때 그 한 건만 받는다. 목록은 요약으로 그린다 (N+1 제거, 2026-09-14)
+  useEffect(() => {
+    ensureBackendDetail(productId);
+  }, [productId, products]);
 
   useEffect(() => {
     if (!product || product.source !== 'backend') {
@@ -216,7 +220,9 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [product]);
+    // 상세가 늦게 도착하면 product 객체만 바뀌고 id 는 같다 — 그때 리뷰를 다시 부르지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.product_id, product?.source]);
 
   /**
    * 장바구니에 담긴 상품. 추천 자리에서 뺀다.
@@ -661,7 +667,7 @@ export default function App() {
           <ProductDetailPage
             product={product}
             reviews={product?.source === 'backend' ? backendReviews : productReviews}
-            allReviews={reviews}
+            authorReviewCounts={authorReviewCounts}
             similar={similar}
             persona={persona}
             onSelectProduct={openProduct}
@@ -671,7 +677,7 @@ export default function App() {
       ) : (
         <ProductListPage
           products={products}
-          reviews={reviews}
+          reviewSkinTypes={reviewSkinTypes}
           persona={persona}
           memberId={member?.id ?? null}
           memberProfile={memberProfile}

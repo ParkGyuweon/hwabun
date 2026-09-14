@@ -18,10 +18,9 @@ import { categoryKo, concernKo, toKrw } from '../lib/localize';
 import AdBanner from '../components/banner/AdBanner';
 import type { BannerLog } from '../components/banner/AdBanner';
 import type { BannerAxis } from '../lib/bannerCreative';
-import { deriveSkinTypesFromReviews, skinTypeLabel } from '../lib/format';
+import { skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
-import type { Review } from '../types/review';
 import type { CartItem } from '../types/cart';
 
 /** 기획전(메인 칸)에 올리는 상품 수. 계약 §5 `k` */
@@ -91,8 +90,11 @@ function popularKey(p: Product): number {
 
 interface ProductListPageProps {
   products: Product[];
-  /** 페르소나 맞춤 추천 근거로 쓴다 */
-  reviews: Review[];
+  /**
+   * 상품별 리뷰어 피부 타입. 원본 표기(suitable_skin_types)가 없는 132개 상품의 페르소나 매칭 근거다
+   * (AboutProduct 의 파생 표시와 같은 규칙, lib/skinTypes). 전체 리뷰 대신 이 표만 받는다 (lib/reviewStore)
+   */
+  reviewSkinTypes: Map<string, SkinType[]>;
   persona: PersonaProfile | null;
   /**
    * 로그인 회원 id 와 피부 프로필. 추천 쿼리에 속성 4개를 싣는 데 쓴다 (AI 회신 2026-09-11 · 실회원만).
@@ -121,7 +123,7 @@ interface ProductListPageProps {
  */
 export default function ProductListPage({
   products,
-  reviews,
+  reviewSkinTypes,
   persona,
   memberId = null,
   memberProfile = null,
@@ -164,22 +166,6 @@ export default function ProductListPage({
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [products]);
-
-  /**
-   * 상품별 리뷰어 피부 타입. 원본 표기(suitable_skin_types)가 없는 132개 상품의
-   * 매칭 근거로 쓴다 (AboutProduct 의 파생 표시와 같은 계산이다).
-   */
-  const reviewSkinTypes = useMemo(() => {
-    const byProduct = new Map<string, Review[]>();
-    for (const review of reviews) {
-      const bucket = byProduct.get(review.product_id) ?? [];
-      bucket.push(review);
-      byProduct.set(review.product_id, bucket);
-    }
-    const result = new Map<string, SkinType[]>();
-    for (const [pid, list] of byProduct) result.set(pid, deriveSkinTypesFromReviews(list).types);
-    return result;
-  }, [reviews]);
 
   /**
    * 추천 응답 — 히어로 1 + 메인 10 이 **한 응답**에서 나온다 (계약 §5-1).

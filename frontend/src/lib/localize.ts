@@ -16,10 +16,8 @@
  *     데이터 팀과 단위 합의 전이라 그대로다 (README 원칙)
  */
 import productsKo from '../../../contracts/localization/products-ko.json';
-import reviewsKo from '../../../contracts/localization/reviews-ko.json';
 import labelsKo from '../../../contracts/localization/labels-ko.json';
 import type { Product, ProductDescription } from '../types/product';
-import type { Review } from '../types/review';
 
 interface ProductKo {
   product_name: string;
@@ -29,15 +27,9 @@ interface ProductKo {
   description: ProductDescription | null;
   ingredients: string[];
 }
-interface ReviewKo {
-  product_id: string;
-  review_title: string | null;
-  review_text: string;
-}
 type LabelGroup = 'category' | 'highlights' | 'skincare_concerns' | 'suitable_skin_types' | 'badges' | 'variant_labels';
 
 const PRODUCTS = productsKo as unknown as Record<string, ProductKo | Record<string, unknown>>;
-const REVIEWS = reviewsKo as unknown as Record<string, ReviewKo | Record<string, unknown>>;
 const LABELS = labelsKo as unknown as Record<LabelGroup, Record<string, string>> & { _meta?: unknown };
 
 /** 빌더가 쓴 고정 환율. products-ko 의 price_krw 와 같은 식이어야 표시 가격이 어긋나지 않는다 */
@@ -51,8 +43,6 @@ export function toKrw(usd: number): number {
 
 const isProductKo = (v: unknown): v is ProductKo =>
   typeof v === 'object' && v !== null && 'product_name' in (v as Record<string, unknown>);
-const isReviewKo = (v: unknown): v is ReviewKo =>
-  typeof v === 'object' && v !== null && 'review_text' in (v as Record<string, unknown>);
 
 /**
  * 상품 하나를 표시용으로 바꾼다. 번역이 없는 상품(SSAFY Beauty 시드·브랜드 등록 상품)은 그대로.
@@ -71,15 +61,10 @@ export function localizeProduct(p: Product): Product {
   };
 }
 
-export function localizeReview(r: Review): Review {
-  const ko = REVIEWS[r.review_id];
-  if (!isReviewKo(ko)) return r;
-  return {
-    ...r,
-    review_title: ko.review_title,
-    review_text: ko.review_text || r.review_text,
-  };
-}
+/*
+ * 리뷰 번역(reviews-ko.json, 9MB)은 여기서 import 하지 않는다. 쇼핑몰 번들이 통째로 들고 있던 것을
+ * dev 서버·빌드가 상품별 조각으로 나눠 준다 — plugins/review-chunks.ts · lib/reviewStore.ts.
+ */
 
 /** 라벨 조회. 없는 키는 영문 그대로 (README: 원본 200개가 쓰는 키는 전부 있다) */
 function label(group: LabelGroup, value: string): string {
