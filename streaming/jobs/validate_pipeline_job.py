@@ -44,6 +44,15 @@ DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
 DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 
+# Mart 실행 축. build_marts_job.EXECUTION_AXES 와 같아야 한다.
+EXECUTION_AXES = (
+    "actor_type",
+    "source",
+    "generator_type",
+    "scenario_id",
+    "simulation_run_id",
+)
+
 
 @dataclass(frozen=True)
 class ValidatePipelineConfig:
@@ -1008,6 +1017,35 @@ def validate_frames(
         invalid_funnel_counts == 0,
         f"invalid_rows={invalid_funnel_counts}",
     ))
+    # 두 진입 경로는 배타라야 한다. 각각은 상한 안에 있으면서 합만 넘칠 수 있어서
+    # (한 세션이 양쪽에 계상되는 경우) 상한 검사로는 안 잡힌다.
+    # 퀵룩 선진입은 Mart 컬럼으로 두지 않고 여기서 funnel_session_fact 로 직접 센다 —
+    # 소비자가 없는 값을 공개 Mart 에 늘리지 않는다.
+    entry_paths = (
+        funnel_session.groupBy(
+            F.col("funnel_date_kst"), F.col("product_id"),
+            *[F.col(axis) for axis in EXECUTION_AXES],
+        )
+        .agg(
+            F.sum(
+                (F.col("detail_entry_path") == F.lit("quick_look")).cast("int")
+            ).cast("long").alias("_quick_look_entry_sessions"),
+            F.sum(
+                (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+            ).cast("long").alias("_direct_click_sessions"),
+            F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("_detail_view_sessions"),
+        )
+    )
+    unbalanced_entry_paths = entry_paths.where(
+        F.col("_quick_look_entry_sessions") + F.col("_direct_click_sessions")
+        != F.col("_detail_view_sessions")
+    ).count()
+    checks.append(_check(
+        "funnel_detail_entry_paths_are_exclusive",
+        unbalanced_entry_paths == 0,
+        f"unbalanced_rows={unbalanced_entry_paths}; "
+        "quick_look 선진입 + direct_click = detail_view",
+    ))
     funnel_rate_columns = [
         "impression_to_click_rate", "click_to_view_rate", "view_to_information_rate",
         "view_to_cart_rate", "cart_to_purchase_rate", "view_to_purchase_rate",
@@ -1107,7 +1145,7 @@ def validate_frames(
         f"differing_rows={brand_difference_count}; mart_processed_at excluded",
     ))
 
-    axes = ["actor_type", "source", "generator_type", "scenario_id", "simulation_run_id"]
+    axes = list(EXECUTION_AXES)
     purchase_grains = {
         "product_repurchase_daily": (
             product_repurchase,
