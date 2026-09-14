@@ -6,6 +6,7 @@ import StarRating from '../common/StarRating';
 import VariantPicker from './VariantPicker';
 import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
+import { setWished, useWished } from '../../lib/wishlist';
 import type { Product, ProductVariant } from '../../types/product';
 import type { CartItem } from '../../types/cart';
 
@@ -33,7 +34,8 @@ export default function ProductSummary({
   onReviewLinkClick,
 }: ProductSummaryProps) {
   const [quantity, setQuantity] = useState(1);
-  const [loved, setLoved] = useState(false);
+  // 세션 동안 기억한다 — 찜 뒤 뒤로 갔다 와도 하트가 켜져 있어야 한다 (lib/wishlist)
+  const loved = useWished(product.product_id);
   const [addedAt, setAddedAt] = useState<number | null>(null);
 
   const changeQuantity = (next: number) => {
@@ -48,7 +50,7 @@ export default function ProductSummary({
 
   const toggleWishlist = () => {
     const next = !loved;
-    setLoved(next);
+    setWished(product.product_id, next);
     setWishNotice(next ? 'add' : 'remove');
     track('wishlist_toggle', { product_id: product.product_id, action: next ? 'add' : 'remove' });
   };

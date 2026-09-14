@@ -179,7 +179,8 @@ export default function App() {
    *   로그인 회원이 피부 정보를 채웠으면 → 그 프로필 (persona_id = accountId, 09-09 합의)
    *   아니면                              → 스위처가 고른 시뮬레이션 페르소나
    * 리뷰 필터 "내 피부 타입만" · "내 피부 타입 일치" 칩 · 추천 목의 피부 매칭이 전부 이 값을 본다.
-   * 로그의 persona_id 는 그대로 스위처 값이다 — 회원과 페르소나는 다른 주체라 여기서 섞지 않는다.
+   * 로그의 persona_id 도 로그인 중에는 회원 id 다 — 추천 요청과 행동 로그가 같은 식별자를 써야 추천 서버의
+   * 세션 상태(좋아요 → 목록 반영)가 이어진다 (계약 recommendation-io-spec §5 · AI 파트 요청 2026-09-14 §1).
    */
   const member = useAuth('MEMBER');
   const getMemberProfile = useCallback(() => loadMemberProfile(member?.id), [member?.id]);
@@ -603,17 +604,20 @@ export default function App() {
   }, [product]);
 
   /**
-   * 페르소나가 바뀌면 새 방문으로 본다.
+   * 식별자가 바뀌면 새 방문으로 본다.
+   * 로그인 회원이면 회원 id, 아니면 스위처 페르소나 id — 추천 요청(`persona.persona_id`)과 같은 값이어야
+   * `wishlist_toggle` 이 추천 서버의 그 사람 상태에 쌓인다. 로그인·로그아웃이 곧 세션 경계다 (`login` 이벤트 시점).
    * 세션의 첫 page_view 가 session_start 와 page_view_id 를 공유해야 해서
-   * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 페르소나면
+   * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 식별자면
    * 아무것도 하지 않으므로 productId 변경으로 다시 실행돼도 무해하다.
    */
+  const logIdentity = member?.id ?? (personaId || null);
   useEffect(() => {
     setLoggerContext({
       pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',
     });
-    startSession(personaId || null, cartOpen ? null : productId);
-  }, [personaId, productId, cartOpen]);
+    startSession(logIdentity, cartOpen ? null : productId);
+  }, [logIdentity, productId, cartOpen]);
 
   // 목록과 상세는 다른 page_type 이다. 화면이 바뀔 때마다 새 페이지 조회로 남긴다
   useEffect(() => {
