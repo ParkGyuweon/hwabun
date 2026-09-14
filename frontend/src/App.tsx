@@ -400,11 +400,24 @@ export default function App() {
 
   /**
    * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다 — begin_checkout 과 같은 order_id.
-   * 결제 정보(payment_method · pg_provider · payment_id · paid_at)는 properties 에 덧붙인다. 계약 §6 필드 추가는 데이터 파트가
-   * 넣기로 했고(2026-09-14), properties 는 열린 객체라 먼저 실어도 거절되지 않는다.
+   *
+   * 결제 속성 (계약 §6 등록은 데이터 파트, Jira 299 · 2026-09-14 회신):
+   *   payment_method  항상. kakaopay · card · test
+   *   order_channel   항상. backend(서버 주문) · local(백엔드 없을 때의 로컬 테스트 주문 — 마트에서 걸러낼 수 있게)
+   *   paid_value      항상. 할인 적용 실결제액. order_value 는 정가 합계라 둘을 같이 둔다
+   *   pg_provider · payment_id · paid_at  PG 결제(kakaopay)일 때만 **키 자체를 싣는다**. 테스트 주문은 키가 없다 —
+   *                   optional string 이지 string|null 이 아니다. null 을 실으면 계약 타입이 갈라진다.
    */
   const finishOrder = useCallback(
     (placed: PlacedOrder) => {
+      const pg =
+        placed.payment_method === 'kakaopay'
+          ? {
+              pg_provider: PAYMENT_PROVIDER,
+              ...(placed.payment_id ? { payment_id: placed.payment_id } : {}),
+              ...(placed.paid_at ? { paid_at: placed.paid_at } : {}),
+            }
+          : {};
       track('purchase', {
         order_id: placed.orderId,
         items: placed.items,
@@ -413,9 +426,7 @@ export default function App() {
         currency: 'USD',
         order_channel: placed.mode,
         payment_method: placed.payment_method ?? 'test',
-        pg_provider: placed.payment_method === 'kakaopay' ? PAYMENT_PROVIDER : null,
-        payment_id: placed.payment_id ?? null,
-        paid_at: placed.paid_at ?? null,
+        ...pg,
       });
       setPaymentError(null);
       setOrder(placed);
