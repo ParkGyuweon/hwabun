@@ -20,6 +20,7 @@
 import { authFetch, sessionSnapshot } from './auth';
 import { loadBrandId } from './brands';
 import { KRW_PER_USD } from './localize';
+import { isNewRegistered } from './newBrandRule';
 import { axisLabel, categoryLabel } from '../types/feedback';
 import type { CartItem } from '../types/cart';
 import type { Feedback } from '../types/feedback';
@@ -87,6 +88,8 @@ interface ProductSummaryDto {
   lovesCount: number | null;
   primaryImageUrl: string | null;
   highlights: string[] | null;
+  /** 요청서 9-11 — 백엔드가 아직 안 내려준다. 오면 14일 신규 판정에 쓴다 */
+  createdAt?: string | null;
 }
 interface VariantDto {
   variantId: string;
@@ -120,7 +123,8 @@ function mapSummary(s: ProductSummaryDto): Product {
     rating: s.rating ?? null,
     review_count: null,
     loves_count: s.lovesCount ?? 0,
-    badges: ['new'],
+    badges: isNewRegistered(s.productId, s.createdAt) ? ['new'] : [],
+    created_at: s.createdAt ?? null,
     highlights: s.highlights ?? [],
     ingredients: [],
     suitable_skin_types: [],

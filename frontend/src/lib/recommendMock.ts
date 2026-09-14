@@ -14,6 +14,7 @@
  */
 import vocab from '../../../contracts/product-feature-vocab.json';
 import { DEFAULT_HERO } from './bannerConfig';
+import { isNewRegistered } from './newBrandRule';
 import { CLEAN_VALUES } from './vocabLabels';
 import type { BannerType } from '../types/log';
 import type { PersonaProfile } from '../types/persona';
@@ -139,9 +140,14 @@ export function axisValue(
   }
 }
 
-/** 신규·저노출: 리뷰가 없거나 인기 순위가 없는 상품. 시드 브랜드가 여기 든다 */
+/**
+ * 신규 상품 — 계약 §5 6-1 (2026-09-11, Jira 247-b): **등록 후 14일 이내인 등록 상품**.
+ * 등록 시각(`created_at`)이 있으면 그것으로 재고, 없는 등록 상품(백엔드 요약이 아직 `createdAt` 을
+ * 안 줌)은 신규로 본다. 원천 카탈로그는 `rank` 가 있어 신규가 아니다 — 서버와 같은 판정.
+ */
 export function isNewBrandProduct(p: Product): boolean {
-  return (p.review_count ?? 0) === 0 || p.rank === undefined;
+  if (p.rank !== undefined && !p.created_at) return false;
+  return isNewRegistered(p.product_id, p.created_at);
 }
 
 /**
