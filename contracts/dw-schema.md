@@ -219,10 +219,26 @@ source = event-properties-schema.md
 사용하고, `scenario_id`, `simulation_run_id`가 NULL인 Web 행도 같은 grain 규칙으로
 집계한다.
 
+### 4.0 시드 Event 제외 범위
+
+`is_seeded=true`인 Event는 생성기가 Persona의 사전 선호를 주입한 표식이라 관측된
+행동이 아니다(`processed-schema.md`, `event-properties-schema.md` §3.14·§7-8). 아래가
+제외 여부의 정본이다.
+
+| Mart | 시드 | 근거 |
+| --- | --- | --- |
+| `funnel_session_fact`, `product_daily_kpi`, `funnel_daily_kpi`, `brand_daily_kpi`, `cross_brand_daily` | 제외 | 전환 퍼널. 긍정 시드는 조회 없는 담기를, 부정 시드는 담기 없는 조회를 내서 분자·분모를 양방향으로 왜곡한다 |
+| `product_repurchase_daily`, `brand_repurchase_daily`, `purchase_reason_daily` | 제외 | 구매 행동. 같은 원칙 |
+| `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
+| `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
+| `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
+| `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 뺄지는 미결 |
+| `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
+
 ### 4.1 `product_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_product
 ```
 
@@ -290,7 +306,7 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 ### 4.5 `funnel_daily_kpi`
 
 ```text
-key = funnel_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = funnel_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = funnel_session_fact, dim_product
 ```
 
@@ -298,9 +314,37 @@ input = funnel_session_fact, dim_product
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | scenario/run만 Y | `funnel_date_kst`는 최초 Funnel 진입일 기준 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
-| `impression_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `click_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
+| `impression_sessions`, `click_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
 | `impression_to_click_rate`, `click_to_view_rate`, `view_to_information_rate`, `view_to_cart_rate`, `cart_to_purchase_rate`, `view_to_purchase_rate`, `dropoff_after_impression_rate`, `dropoff_after_view_rate`, `dropoff_after_cart_rate` | double | Y | 전환·이탈률 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`detail_view_sessions`의 정의와 분모 규칙은 §4.14와 같다. `view_to_cart_rate`,
+`view_to_purchase_rate`, `dropoff_after_view_rate`는 `detail_view_sessions`를 분모로
+쓰고, `view_to_information_rate`는 상품 상세에서만 일어나므로 `product_view_sessions`를
+유지한다. `dropoff_after_view_rate`는 `view_to_cart_rate`의 여집합이라 같은 분모여야 한다.
+
+퀵룩 계열과 직접 클릭 계열은 **성격이 다르다.**
+
+| 컬럼 | 성격 | 정의 |
+| --- | --- | --- |
+| `quick_look_sessions` | 비배타 | Quick Look을 쓴 세션. 상품 상세도 열었든 아니든 센다 |
+| `quick_look_cart_sessions` | 비배타 | 그중 `add_to_cart`까지 간 세션 |
+| `direct_click_sessions` | **배타** | Quick Look 없이 상품 상세로 직행한 세션. 둘 다 열었으면 **먼저 일어난 쪽**으로 귀속한다 |
+| `direct_click_cart_sessions` | **배타** | 그중 `add_to_cart`까지 간 세션 |
+
+`quick_look_sessions`를 배타로 바꾸면 안 된다. `product_daily_kpi.quick_look_sessions`와
+같은 뜻이어야 하고, 대시보드의 "퀵룩 후 상세를 연 비율" 분모가 이 값이다.
+
+그래서 **`quick_look_sessions + direct_click_sessions ≠ detail_view_sessions`다.**
+둘 다 연 세션이 양쪽에 잡히기 때문이다. 배타 검산은 진입 경로로 한다.
+
+```text
+Quick Look 선진입 세션 + direct_click_sessions = detail_view_sessions
+```
+
+진입 경로는 `funnel_session_fact.detail_entry_path`(`quick_look` · `direct_click` · NULL)에
+있다. Quick Look 선진입 세션 수는 소비자가 없어 Mart 컬럼으로 두지 않고 검증 Job이
+그 Fact에서 직접 세어 위 등식을 확인한다.
 
 ### 4.6 `persona_segment_daily_kpi`
 
@@ -334,7 +378,7 @@ input = cleaned_events, product_event_fact, funnel_session_fact, content_interes
 ### 4.8 `ingredient_weekly_interest`
 
 ```text
-key = interest_week_kst + ingredient_id + actor_type + source + scenario_id + simulation_run_id
+key = interest_week_kst + ingredient_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = sessionized_events, dim_product, product_ingredient.csv, ingredient_vocab.csv
 ```
 
@@ -486,20 +530,28 @@ input = product_event_fact, cross_brand_daily
 ### 4.14 `brand_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact, funnel_session_fact
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통 계약 | scenario/run만 Y | 브랜드·일자·실행 분리 축 |
-| `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
+| `impression_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
 | `unique_user_count` | bigint | N | 브랜드 KPI에 기여한 고유 사용자 수 |
 | `product_count_viewed` | bigint | N | 조회된 고유 상품 수 |
-| `detail_entry_rate` | double | Y | 조회 세션 / 노출 세션 |
-| `information_view_rate` | double | Y | 정보 확인 세션 / 조회 세션 |
-| `view_to_cart_rate` | double | Y | 장바구니 세션 / 조회 세션 |
+| `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
+| `information_view_rate` | double | Y | 정보 확인 세션 / 상품 상세 조회 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 상세 조회 세션 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`detail_view_sessions`는 상품 상세(`product_view`)와 Quick Look(`quick_look`) 중 하나
+이상을 연 고유 세션이다. 둘 다 연 세션도 한 번만 센다. Quick Look은 목록에서 상세를
+여는 화면 동선이고 거기서 바로 담을 수 있어서, 담기 세션을 `product_view_sessions`로
+나누면 분자와 분모가 다른 모집단을 세어 비율이 1.0을 넘는다. 그래서 담기·전환 분모는
+`detail_view_sessions`를 쓰고, 정보 확인만 상품 상세에서 일어나므로
+`product_view_sessions`를 유지한다. `quick_look_sessions`와 `product_view_sessions`는
+겹칠 수 있어 더해서 `detail_view_sessions`를 만들 수 없다.
 
 상품 grain Mart의 세션 수를 합산하지 않고 Fact에서 `session_id`를 브랜드별로 직접
 중복 제거한다. 따라서 한 세션이 같은 브랜드 상품 여러 개를 보더라도 각 단계 세션은
@@ -511,7 +563,7 @@ input = product_event_fact, funnel_session_fact
 ### 4.15 `product_repurchase_daily`
 
 ```text
-key = snapshot_date_kst + brand_id + product_id + actor_type + source + scenario_id + simulation_run_id
+key = snapshot_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = purchase_fact
 ```
 
@@ -534,7 +586,7 @@ input = purchase_fact
 ### 4.16 `brand_repurchase_daily`
 
 ```text
-key = snapshot_date_kst + brand_id + actor_type + source + scenario_id + simulation_run_id
+key = snapshot_date_kst + brand_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = purchase_fact, purchase_reason_fact
 ```
 
@@ -552,7 +604,7 @@ NULL로 두지 않는다.
 ### 4.17 `purchase_reason_daily`
 
 ```text
-key = event_date_kst + brand_id + reason + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + reason + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = purchase_reason_fact, purchase_fact, user_trait_daily
 ```
 

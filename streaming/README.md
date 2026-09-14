@@ -282,6 +282,14 @@ DW는 금액을 복제하지 않는다.
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고
 `analytics_baseline` 기간으로 가른다.
 
+탐색 배정 비중(`banner_explore_impression_share_is_near_twenty_percent`)은 **실사용자
+(`actor_type='user'`) 노출만** 모집단으로 쓴다. `trait_source='explore'`를 만드는 주체가
+화면뿐이기 때문이다 — 추천 서버는 `explore`를 아예 내보내지 않고(`batch/serving/banners.py`의
+trait_source 계약: "프론트 플랜의 무작위 탐색은 서버가 아니라 화면 몫"), 합성 로그의
+`explore`는 생성기가 정한 값이라 검증 대상이 아니다. 합성 로그만 재생한 실행에서는
+실사용자 표본이 0이라 이 검사가 면제되고, 프론트가 탐색 배너를 내보내기 시작하면
+자동으로 다시 평가된다. `coldstart`는 분모에서 빼는 규칙을 그대로 유지한다.
+
 `cross_brand_daily`는 `sessionized_events.event_order`로 정렬한 `product_view`만 사용한다.
 세션 최초 브랜드와 목적 브랜드가 다르면 교차 유입으로 판정하며, 같은 세션·목적 브랜드는
 한 번만 센다. 추천 귀속은 목적 조회의 `recommendation_id`를 우선하고 없으면 같은
@@ -387,13 +395,45 @@ python -m streaming.tools.replay_collector behavior_logs_recommend_1000.jsonl.gz
 `PIPELINE_DATA_ROOT`를 Q2~Q5 공통 루트로 사용한다. Q1은 같은 하위 경로를
 `RAW_EVENTS_PATH`, `RAW_EVENTS_CHECKPOINT_PATH`에 지정한다.
 
+경로만 나누면 충분하지 않다. Q1은 Kafka Topic을 처음부터 다시 읽으므로
+**공용 `activity-events`에 남아 있던 Event가 그대로 섞인다.** 검증 실행에는
+Topic도 따로 만들고 Collector와 Q1에 같은 이름을 준다.
+
 ```powershell
 $env:PIPELINE_DATA_ROOT='/opt/project/data/recommend-validation'
 $env:RAW_EVENTS_PATH='/opt/project/data/recommend-validation/raw_events'
 $env:RAW_EVENTS_CHECKPOINT_PATH='/opt/project/data/recommend-validation/checkpoints/raw-events'
 $env:REGISTERED_PRODUCT_BRAND_PATH='/opt/project/data/reference/shop-product-brand.jsonl'
+$env:ACTIVITY_EVENTS_TOPIC='activity-events-validation'
 ./infra/spark/run-pipeline.ps1 start-q1
 ```
+
+### 실행 순서
+
+Collector는 compose에 없다. Host에서 따로 띄우고, Q1과 **같은 Topic**을 준다.
+`SHOP_BACKEND_JWT_SECRET`이 없으면 Collector가 기동 자체를 못 한다(32자 이상).
+재생은 토큰 없이 보내므로 `account_id`는 NULL이고 합성 로그는 `identity_scope=persona`가 된다.
+
+```powershell
+$env:SHOP_BACKEND_JWT_SECRET='<32자 이상>'
+$env:ACTIVITY_EVENTS_TOPIC='activity-events-validation'
+cd backend; ./gradlew.bat bootRun
+```
+
+1. `run-pipeline.ps1 up` — Kafka·Spark
+2. Topic 생성 (위 이름으로)
+3. `run-pipeline.ps1 start-q1`
+4. Collector 기동
+5. `replay_collector.py`로 재생
+6. Q1이 빈 배치에 도달하면 `run-pipeline.ps1 stop-q1`
+7. `run-pipeline.ps1 run-batch` — Q2~Q5
+
+> **Windows에서는 `run-pipeline.ps1`을 쓴다.** Git Bash로 `run-pipeline.sh`를 돌리면
+> 컨테이너 안 경로(`/opt/spark/bin/spark-submit`)를 Windows 경로로 바꿔 버려 실패하고,
+> `MSYS_NO_PATHCONV=1`로 끄면 이번에는 Host쪽 compose 파일 경로가 깨진다.
+> 그리고 `run-batch`에 `*>&1`이나 `2>&1`을 붙이면 안 된다. PowerShell 5.1이 네이티브
+> 명령의 stderr를 ErrorRecord로 감싸서 Spark의 첫 INFO 로그에 스크립트가 멈춘다.
+> Q2만 돌고 Q3~Q5가 조용히 빠진다.
 
 검증·재생 보고서는 `.gitignore`의 `data/` 아래에 생성되므로 로컬/Jira 증빙으로만
 사용하고 저장소에는 커밋하지 않는다.

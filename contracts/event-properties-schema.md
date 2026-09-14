@@ -260,6 +260,29 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 `policy_version`은 배너·정렬 정책의 배포 버전이다. 사전/사후 비교의 귀속 키이므로
 배너 Event에 실으면 `banner_daily`까지 그대로 내려간다.
 
+### 3.14 시뮬레이션 시드 표식 `seeded`
+
+생성기가 Persona의 사전 선호를 추천기에 주입하려고 만드는 Event에 `seeded: true`를
+싣는다 (`persona-schema.md` §9). 관측된 행동이 아니라 **주입된 선호 표식**이다.
+
+| property | type | 값 | 설명 |
+| --- | --- | --- | --- |
+| `seeded` | boolean | `true` | 시드 Event가 싣는다. 관측 Event는 키를 두지 않으며, `false`가 와도 관측으로 본다 |
+
+타입은 `event-schema.json`이 강제한다. `actor_type='synthetic'` 블록에 `boolean`으로
+선언했고, `actor_type='user'` 블록은 이 키를 금지한다. 문자열 `"true"`처럼 타입이
+흔들리면 Spark의 `is_seeded` 판정이 조용히 달라지므로 봉투 검증에서 먼저 막는다.
+
+시드 Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}`
+형식이라 세션 네임스페이스로도 갈라지지만, **판정은 `properties.seeded`를 정본으로
+한다.** `session_id` 규칙은 파생이고 생성기가 먼저 찍는 표식이 이 키다.
+
+긍정 시드는 조회 없이 `add_to_cart`만, 부정 시드는 장바구니 없는 `product_view`와
+`scroll_backtrack`·`rage_click`을 낸다. 그래서 퍼널 전환 지표에 그대로 섞이면 분자와
+분모를 **양방향으로** 왜곡한다. 행동 Mart에서의 처리는 §7-8과 `dw-schema.md`를 따른다.
+
+`actor_type='user'` Event에는 이 키가 올 수 없다.
+
 ## 4. Event별 Required Properties
 
 ### 4.1 Session / Page
@@ -428,6 +451,10 @@ Processed에서 합산한다. `quick_look_close.dwell_ms`는 `variants_viewed`,
 7. Collector는 `begin_checkout`, `purchase`, `purchase_reason_select`의 required key,
    타입, 양수 수량·가격, `reasons` 길이 및 enum을 동기 검증한다. 이 밖의 Event별
    properties는 Spark가 방어적으로 검사한다.
+8. `properties.seeded=true`(§3.14)인 Event는 주입된 선호 표식이라 관측 행동이 아니다.
+   Spark는 `cleaned_events`에 그대로 보존하되 행동 Mart 집계에서 제외한다. 어느 Mart가
+   제외 대상인지는 `dw-schema.md`가 정본이다. `actor_type='user'`에 이 키가 오면
+   위반으로 보고 분석에 쓰지 않는다.
 
 | 우선순위 | error_code | 판정 기준 |
 | --- | --- | --- |

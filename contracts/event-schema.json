@@ -290,6 +290,9 @@
                   "python_batch",
                   "agent_llm"
                 ]
+              },
+              "seeded": {
+                "type": "boolean"
               }
             }
           }
@@ -311,6 +314,13 @@
         "properties": {
           "source": {
             "const": "web"
+          },
+          "properties": {
+            "not": {
+              "required": [
+                "seeded"
+              ]
+            }
           }
         }
       }

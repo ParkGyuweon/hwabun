@@ -59,6 +59,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             "event_date_kst": date(2026, 9, 8),
             "user_id": "U1",
             "identity_scope": "persona",
+            "is_seeded": False,
             "persona_id": None,
             "scenario_id": None,
             "simulation_run_id": None,

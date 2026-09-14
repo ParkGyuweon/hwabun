@@ -517,6 +517,34 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "[type] $.schema_version")
 
+    def test_seeded_marker_must_be_a_boolean_on_synthetic_events(self) -> None:
+        """시드 표식은 boolean 이다. 문자열 "true" 는 걸러야 한다.
+
+        Spark 는 properties.seeded 로 is_seeded 를 파생하는데, 타입이 흔들리면
+        판정이 조용히 달라진다 (event-properties-schema.md §3.14).
+        """
+        synthetic = json.loads(SYNTHETIC_PC_SAMPLE_PATH.read_text(encoding="utf-8"))
+
+        valid = copy.deepcopy(synthetic)
+        valid["properties"]["seeded"] = True
+        self.assertEqual([], self.validate_values([valid]).errors)
+
+        for bad_value in ("true", 1):
+            with self.subTest(value=bad_value):
+                event = copy.deepcopy(synthetic)
+                event["properties"]["seeded"] = bad_value
+                result = self.validate_values([event])
+                self.assert_has_error(result.errors, "$.properties.seeded")
+
+    def test_seeded_marker_is_rejected_on_real_user_events(self) -> None:
+        """주입 표식이 실사용자 행동에 섞이면 안 된다 (event-properties-schema.md §7-8)."""
+        event = copy.deepcopy(self.user_event)
+        event["properties"]["seeded"] = True
+
+        result = self.validate_values([event])
+
+        self.assert_has_error(result.errors, "$.properties")
+
     def test_withdrawn_api_batch_schema_version_is_rejected(self) -> None:
         result = self.validate_values(
             {"schema_version": "0.3.0-draft", "events": [self.user_event]}

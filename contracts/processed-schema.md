@@ -167,6 +167,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `is_synthetic` | boolean | N | synthetic 판정 결과 |
 | `user_id` | string | Y | 분석 식별자. `identity_scope`에 따라 `persona_id` 또는 `account_id` |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seeded` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `account_id` | string | Y | Collector가 JWT `sub`에서 뽑은 값. 비로그인·synthetic은 NULL |
 | `persona_id` | string | Y | synthetic 필수, Web NULL 허용 |
 | `scenario_id` | string | Y | synthetic 필수 |
@@ -214,6 +215,19 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 브랜드 담당자·운영자 트래픽은 Front가 회원 토큰만 실어 원천에서 제외한다. Event에
 계정 롤을 두지 않으므로 DATA는 이를 사후에 가려낼 수 없다.
 
+`is_seeded`는 `properties.seeded`가 `true`인지로 판정한다
+([`event-properties-schema.md` §3.14](./event-properties-schema.md)). 시드 Event는
+생성기가 Persona의 사전 선호를 추천기에 주입하려고 만든 것이라 관측된 행동이 아니다.
+`cleaned_events`에는 그대로 보존하고 행동 Mart 집계에서 제외한다. 어느 Mart가 제외
+대상인지는 [`dw-schema.md`](./dw-schema.md)가 정본이다.
+
+시드 Event의 `session_id`는 `seed:{simulation_run_id}:{persona_id}:{product_id}`
+형식이라 세션 네임스페이스로도 갈라지지만 판정에는 쓰지 않는다. 그쪽은 파생이고
+생성기가 먼저 찍는 표식이 `properties.seeded`다.
+
+`actor_type=user`에 `seeded`가 실려 오면 실사용자 행동에 주입 표식이 섞인 것이므로
+`invalid_seed_scope`로 격리한다.
+
 ## 7. `sessionized_events`
 
 입력은 `cleaned_events`다. grain과 unique key는 `event_id`다.
@@ -226,6 +240,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `page_view_id` | string | N | 페이지 방문 ID |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seeded` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -273,6 +288,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `intent` | string | N | Event 의미 |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seeded` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -329,6 +345,7 @@ unique key는 `order_id + product_id`다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seeded` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -371,6 +388,7 @@ unique key는 `order_id + product_id`다.
 | `processed_at` | timestamp | N | 처리 시각 |
 | `user_id` | string | Y | 분석 사용자 ID |
 | `identity_scope` | string | N | `persona`, `account`, `session` |
+| `is_seeded` | boolean | N | 생성기가 주입한 시드 Event면 `true` (event-properties-schema.md §3.14). 행동 Mart 집계에서 제외한다 |
 | `persona_id` | string | Y | Persona ID |
 | `scenario_id` | string | Y | synthetic 실행 축 |
 | `simulation_run_id` | string | Y | synthetic 실행 축 |
@@ -571,18 +589,35 @@ content_interest_score
 | `first_checkout_at` | timestamp | Y | 최초 Checkout |
 | `first_purchase_at` | timestamp | Y | 최초 구매 |
 | `reached_impression` | boolean | N | 노출 도달 |
-| `used_quick_look` | boolean | N | Quick Look 사용 |
-| `quick_look_close_reason` | string | Y | 마지막 닫힘 사유 |
-| `quick_look_dwell_ms` | long | Y | Quick Look 체류 합계 |
-| `quick_look_variants_viewed` | int | Y | 선택한 옵션 수 최댓값 |
+| `reached_quick_look` | boolean | N | Quick Look 도달 |
+| `quick_look_close_reason` | string | Y | 마지막 닫힘 사유 (미구현) |
+| `quick_look_dwell_ms` | long | Y | Quick Look 체류 합계 (미구현) |
+| `quick_look_variants_viewed` | int | Y | 선택한 옵션 수 최댓값 (미구현) |
 | `reached_click` | boolean | N | 클릭 도달 |
-| `reached_product_view` | boolean | N | 상세 조회 도달 |
+| `reached_detail_view` | boolean | N | 상세 조회 도달. `reached_product_view` 또는 `reached_quick_look` |
+| `detail_entry_path` | string | Y | 상세를 연 경로. `quick_look`, `direct_click`. 상세를 안 열었으면 NULL |
+| `reached_product_view` | boolean | N | 상품 상세 조회 도달 |
 | `reached_information_view` | boolean | N | 정보 확인 도달 |
 | `reached_add_to_cart` | boolean | N | 장바구니 도달 |
 | `reached_checkout` | boolean | N | Checkout 도달 |
 | `reached_purchase` | boolean | N | 구매 도달 |
 | `dropoff_step` | string | Y | 마지막 도달 후 이탈 단계 |
 | `processed_at` | timestamp | N | 처리 시각 |
+
+Quick Look은 목록에서 상세를 여는 화면 동선이라 퍼널 단계로 센다. 거기서 바로
+장바구니에 담을 수 있어서 빼면 담기 세션이 상세 조회 세션보다 많아진다.
+`dropoff_step`은 `purchase → checkout → add_to_cart → information_view →
+product_view → quick_look → click → impression` 순으로 마지막 도달 단계를 고른다.
+
+`detail_entry_path`는 상세를 **어느 경로로 열었는지**를 세션·상품마다 하나만 고른다.
+Quick Look과 상품 상세를 둘 다 열었으면 `first_quick_look_at`과
+`first_product_view_at`을 비교해 **먼저 일어난 쪽**으로 귀속한다. 한 컬럼에 한 값이라
+두 경로가 겹쳐 세어질 수 없다. `reached_quick_look`은 이와 별개로 "Quick Look을
+썼나"라서 두 경로 모두에서 참일 수 있다.
+
+`quick_look_close_reason`·`quick_look_dwell_ms`·`quick_look_variants_viewed`는 아직
+만들지 않는다. 닫힘 사유와 체류는 `quick_look_close` Event에 있으므로 필요해지면
+같은 Fact에 붙인다.
 
 ## 15. `persona_behavior_feature_delta`
 

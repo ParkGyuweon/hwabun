@@ -316,6 +316,12 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         c("account_id")
     )
 
+    # 시드 표식은 생성기가 주입한 선호라 실사용자 Event에는 올 수 없다
+    # (event-properties-schema.md §3.14·§7-8).
+    seed_scope_ok = (c("actor_type") != F.lit("user")) | _properties_column(
+        raw_df, "seeded"
+    ).isNull()
+
     synthetic_properties_ok = (
         (c("actor_type") != F.lit("synthetic"))
         | (
@@ -378,6 +384,7 @@ def _validation_columns(raw_df: Any) -> dict[str, Any]:
         "banner_contract_ok": banner_contract_ok,
         "synthetic_properties_ok": synthetic_properties_ok,
         "identity_scope_ok": identity_scope_ok,
+        "seed_scope_ok": seed_scope_ok,
     }
 
 
@@ -400,6 +407,7 @@ def _bad_reason(expressions: dict[str, Any]) -> Any:
         .when(~expressions["banner_contract_ok"], F.lit("invalid_banner_properties"))
         .when(~expressions["synthetic_properties_ok"], F.lit("invalid_properties"))
         .when(~expressions["identity_scope_ok"], F.lit("invalid_identity_scope"))
+        .when(~expressions["seed_scope_ok"], F.lit("invalid_seed_scope"))
         .otherwise(F.lit("invalid_record"))
     )
 
@@ -509,6 +517,14 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
     scenario_id = _properties_column(canonical, "scenario_id")
     simulation_run_id = _properties_column(canonical, "simulation_run_id")
     generator_type = _properties_column(canonical, "generator_type")
+    # 시드 Event는 관측된 행동이 아니라 생성기가 주입한 선호 표식이다
+    # (event-properties-schema.md §3.14). 행동 Mart가 한 컬럼으로 거를 수 있어야 해서
+    # cleaned_events에서 판정해 아래 Fact까지 실어 나른다. 판정 정본은
+    # properties.seeded 이고 session_id 의 "seed:" 접두는 파생이라 쓰지 않는다.
+    is_seeded = F.coalesce(
+        _properties_column(canonical, "seeded") == F.lit("true"),
+        F.lit(False),
+    )
     processed_at = F.current_timestamp()
     source_fallback = raw_source.isNull()
     quality_flags = F.when(
@@ -542,6 +558,7 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
         is_synthetic.alias("is_synthetic"),
         user_id.alias("user_id"),
         identity_scope.alias("identity_scope"),
+        is_seeded.alias("is_seeded"),
         "account_id",
         "persona_id",
         "session_id",
@@ -604,21 +621,37 @@ def build_processed_frames(raw_df: Any, time_zone: str) -> dict[str, Any]:
     }
 
 
+def _write_processed_dataset(
+    frame: Any,
+    path: str,
+    partition_column: str | None = None,
+) -> None:
+    """빈 결과에 partitionBy를 걸면 데이터 파일이 없어 스키마를 다시 읽을 수 없다.
+
+    거부도 중복도 없는 실행에서는 `bad_events`와 `duplicate_events`가 정상적으로
+    0행이다. 그때 파티션 쓰기를 하면 `_SUCCESS`만 남아 Q5의 읽기가
+    UNABLE_TO_INFER_SCHEMA로 실패한다. 0행이면 파티션 없이 써서 스키마를 남긴다.
+    """
+
+    writer = frame.write.mode("overwrite")
+    if partition_column is not None and not frame.isEmpty():
+        writer.parquet(path, partitionBy=partition_column)
+    else:
+        writer.parquet(path)
+
+
 def run(spark: Any, config: CleanEventsConfig) -> None:
     spark.conf.set("spark.sql.session.timeZone", "UTC")
     raw_df = spark.read.option("mergeSchema", "true").parquet(config.input_path)
     frames = build_processed_frames(raw_df, config.time_zone)
-    frames["cleaned_events"].write.mode("overwrite").parquet(
-        config.cleaned_path,
-        partitionBy="event_date_kst",
+    _write_processed_dataset(
+        frames["cleaned_events"], config.cleaned_path, "event_date_kst"
     )
-    frames["bad_events"].write.mode("overwrite").parquet(
-        config.bad_path,
-        partitionBy="bad_recorded_date",
+    _write_processed_dataset(
+        frames["bad_events"], config.bad_path, "bad_recorded_date"
     )
-    frames["duplicate_events"].write.mode("overwrite").parquet(
-        config.duplicate_path,
-        partitionBy="event_date_kst",
+    _write_processed_dataset(
+        frames["duplicate_events"], config.duplicate_path, "event_date_kst"
     )
 
 

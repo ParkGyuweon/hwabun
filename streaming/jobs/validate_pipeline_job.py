@@ -44,6 +44,15 @@ DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
 DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 
+# Mart 실행 축. build_marts_job.EXECUTION_AXES 와 같아야 한다.
+EXECUTION_AXES = (
+    "actor_type",
+    "source",
+    "generator_type",
+    "scenario_id",
+    "simulation_run_id",
+)
+
 
 @dataclass(frozen=True)
 class ValidatePipelineConfig:
@@ -277,6 +286,51 @@ def _duplicate_count(df: Any, columns: list[str]) -> int:
     from pyspark.sql import functions as F
 
     return df.groupBy(*columns).count().where(F.col("count") > 1).count()
+
+
+EXPLORE_MIN_SAMPLE_SIZE = 100
+EXPLORE_SHARE_RANGE = (0.1, 0.3)
+
+
+def _banner_explore_share(impressions: Any) -> dict[str, Any]:
+    """실사용자 배너 노출에서 탐색 배정 비중을 잰다.
+
+    탐색 배정은 화면이 한다. 추천 서버는 `explore` 를 아예 내보내지 않고
+    (`batch/serving/banners.py` 의 trait_source 계약 — "프론트 플랜의 무작위 탐색은
+    서버가 아니라 화면 몫"), 합성 로그의 `explore` 는 생성기가 정한 값이라 검증
+    대상이 아니다. 그래서 `actor_type='user'` 노출만 모집단으로 쓴다. 합성 로그만
+    있는 실행에서는 표본이 0 이라 이 검사가 자연히 면제된다.
+
+    `trait_source` 는 배정 결과가 아니라 그 시점에 무엇으로 축을 골랐는지다.
+    성향이 아직 없는 세션은 탐색 배정과 무관하게 `coldstart` 로 빠지므로 분모에서 뺀다.
+    히어로 배너가 목록 첫 화면이라 coldstart 노출 비중이 커서, 전체를 분모로 잡으면
+    배정이 정상이어도 20% 가 나올 수 없다.
+    """
+
+    from pyspark.sql import functions as F
+
+    user_impressions = impressions.where(F.col("actor_type") == F.lit("user"))
+    user_count = user_impressions.count()
+    assigned = user_impressions.where(F.col("trait_source") != F.lit("coldstart"))
+    assigned_count = assigned.count()
+    explore_count = assigned.where(F.col("trait_source") == F.lit("explore")).count()
+    share = explore_count / assigned_count if assigned_count else None
+
+    low, high = EXPLORE_SHARE_RANGE
+    # 표본이 작으면 비중이 크게 흔들린다. 운영 가드레일은 N>=100 에서만 건다.
+    exempt = assigned_count < EXPLORE_MIN_SAMPLE_SIZE
+    passed = exempt or (share is not None and low <= share <= high)
+    note = "실사용자 노출만 평가하고 coldstart 는 분모에서 제외"
+    if exempt:
+        note += f"; 실사용자 표본이 {EXPLORE_MIN_SAMPLE_SIZE} 미만이라 면제"
+    return {
+        "user_impressions": user_count,
+        "assigned": assigned_count,
+        "explore": explore_count,
+        "share": share,
+        "passed": passed,
+        "note": note,
+    }
 
 
 def _synthetic_session_persona_conflict_count(cleaned: Any) -> int:
@@ -920,6 +974,7 @@ def validate_frames(
                     "product_id",
                     "actor_type",
                     "source",
+                    "generator_type",
                     "scenario_id",
                     "simulation_run_id",
                 ],
@@ -938,6 +993,7 @@ def validate_frames(
                     "product_id",
                     "actor_type",
                     "source",
+                    "generator_type",
                     "scenario_id",
                     "simulation_run_id",
                 ],
@@ -946,9 +1002,73 @@ def validate_frames(
             "funnel_daily_kpi grain is unique",
         )
     )
+    # 단계 도달 세션은 앞 단계를 넘을 수 없다. 담기는 Quick Look 경로가 있어
+    # 분모가 detail_view_sessions 이고, 정보 조회는 상품 상세에서만 일어난다.
+    invalid_funnel_counts = funnel_daily.where(
+        (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+        | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+        | (F.col("information_view_sessions") > F.col("product_view_sessions"))
+        | (F.col("checkout_sessions") > F.col("add_to_cart_sessions"))
+        | (F.col("purchase_sessions") > F.col("checkout_sessions"))
+    ).count()
+    checks.append(_check(
+        "funnel_daily_counts_are_bounded",
+        invalid_funnel_counts == 0,
+        f"invalid_rows={invalid_funnel_counts}",
+    ))
+    # 두 진입 경로는 배타라야 한다. 각각은 상한 안에 있으면서 합만 넘칠 수 있어서
+    # (한 세션이 양쪽에 계상되는 경우) 상한 검사로는 안 잡힌다.
+    # 퀵룩 선진입은 Mart 컬럼으로 두지 않고 여기서 funnel_session_fact 로 직접 센다 —
+    # 소비자가 없는 값을 공개 Mart 에 늘리지 않는다.
+    entry_paths = (
+        funnel_session.groupBy(
+            F.col("funnel_date_kst"), F.col("product_id"),
+            *[F.col(axis) for axis in EXECUTION_AXES],
+        )
+        .agg(
+            F.sum(
+                (F.col("detail_entry_path") == F.lit("quick_look")).cast("int")
+            ).cast("long").alias("_quick_look_entry_sessions"),
+            F.sum(
+                (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+            ).cast("long").alias("_direct_click_sessions"),
+            F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("_detail_view_sessions"),
+        )
+    )
+    unbalanced_entry_paths = entry_paths.where(
+        F.col("_quick_look_entry_sessions") + F.col("_direct_click_sessions")
+        != F.col("_detail_view_sessions")
+    ).count()
+    checks.append(_check(
+        "funnel_detail_entry_paths_are_exclusive",
+        unbalanced_entry_paths == 0,
+        f"unbalanced_rows={unbalanced_entry_paths}; "
+        "quick_look 선진입 + direct_click = detail_view",
+    ))
+    funnel_rate_columns = [
+        "impression_to_click_rate", "click_to_view_rate", "view_to_information_rate",
+        "view_to_cart_rate", "cart_to_purchase_rate", "view_to_purchase_rate",
+        "dropoff_after_impression_rate", "dropoff_after_view_rate",
+        "dropoff_after_cart_rate",
+    ]
+    invalid_funnel_rates = funnel_daily.where(
+        F.greatest(*[
+            F.when(
+                F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+            for column in funnel_rate_columns
+        ]) == 1
+    ).count()
+    checks.append(_check(
+        "funnel_daily_rates_are_within_unit_interval",
+        invalid_funnel_rates == 0,
+        f"out_of_range={invalid_funnel_rates}",
+    ))
     brand_grain = [
         "event_date_kst", "brand_id", "actor_type", "source",
-        "scenario_id", "simulation_run_id",
+        "generator_type", "scenario_id", "simulation_run_id",
     ]
     checks.append(
         _check(
@@ -966,9 +1086,13 @@ def validate_frames(
         invalid_brand_ids == 0,
         f"invalid_rows={invalid_brand_ids}",
     ))
+    # 담기는 Quick Look에서도 일어나므로 분모는 상세를 연 세션이다.
+    # 정보 조회는 상품 상세에서만 일어나 product_view 기준을 유지한다.
     invalid_brand_counts = brand_daily.where(
-        (F.col("add_to_cart_sessions") > F.col("product_view_sessions"))
+        (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
         | (F.col("information_view_sessions") > F.col("product_view_sessions"))
+        | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
     ).count()
     checks.append(_check(
         "brand_daily_counts_are_bounded",
@@ -990,10 +1114,10 @@ def validate_frames(
     ).count()
     invalid_zero_denominators = brand_daily.where(
         ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
-        | ((F.col("product_view_sessions") == 0) & (
-            F.col("information_view_rate").isNotNull()
-            | F.col("view_to_cart_rate").isNotNull()
-        ))
+        | ((F.col("product_view_sessions") == 0)
+           & F.col("information_view_rate").isNotNull())
+        | ((F.col("detail_view_sessions") == 0)
+           & F.col("view_to_cart_rate").isNotNull())
     ).count()
     checks.append(_check(
         "brand_daily_rates_follow_contract",
@@ -1021,7 +1145,7 @@ def validate_frames(
         f"differing_rows={brand_difference_count}; mart_processed_at excluded",
     ))
 
-    axes = ["actor_type", "source", "scenario_id", "simulation_run_id"]
+    axes = list(EXECUTION_AXES)
     purchase_grains = {
         "product_repurchase_daily": (
             product_repurchase,
@@ -1172,6 +1296,7 @@ def validate_frames(
                     "ingredient_id",
                     "actor_type",
                     "source",
+                    "generator_type",
                     "scenario_id",
                     "simulation_run_id",
                 ],
@@ -1268,22 +1393,13 @@ def validate_frames(
     ))
     impressions = banner_facts.where(F.col("event_name") == "banner_impression")
     impression_count = impressions.count()
-    # trait_source 는 배정 결과가 아니라 그 시점에 무엇으로 축을 골랐는지다.
-    # 성향이 아직 없는 세션은 explore 배정과 무관하게 coldstart 로 빠지므로
-    # (Front 의 성향 계산기), 탐색 조작이 적용된 모집단만 분모로 쓴다.
-    # 히어로 배너가 목록 첫 화면이라 coldstart 노출 비중이 크고, 전체를 분모로
-    # 잡으면 배정이 정상이어도 20% 가 나올 수 없다.
-    assigned = impressions.where(F.col("trait_source") != F.lit("coldstart"))
-    assigned_count = assigned.count()
-    explore_count = assigned.where(F.col("trait_source") == "explore").count()
-    explore_share = explore_count / assigned_count if assigned_count else None
-    # Sampling fluctuates at small N; enforce a broad operational guardrail only at N>=100.
-    explore_ok = assigned_count < 100 or (explore_share is not None and 0.1 <= explore_share <= 0.3)
+    explore = _banner_explore_share(impressions)
     checks.append(_check(
         "banner_explore_impression_share_is_near_twenty_percent",
-        explore_ok,
-        f"impressions={impression_count} assigned={assigned_count} "
-        f"explore={explore_count} share={explore_share}; coldstart 는 분모에서 제외",
+        explore["passed"],
+        f"impressions={impression_count} user_impressions={explore['user_impressions']} "
+        f"assigned={explore['assigned']} explore={explore['explore']} "
+        f"share={explore['share']}; {explore['note']}",
     ))
     checks.append(_check(
         "user_trait_daily_grain_is_unique",

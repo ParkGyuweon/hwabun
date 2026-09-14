@@ -57,9 +57,13 @@ DEFAULT_PRICE_MIN_SAMPLE_SIZE = 3
 
 DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 
+# Quick Look은 목록에서 상세를 여는 경로다. 화면에 있는 정상 동선이고 여기서 바로
+# 장바구니에 담을 수 있어서, 퍼널에서 빼면 담기 세션이 조회 세션보다 많아진다
+# (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
 FUNNEL_PRODUCT_EVENTS = (
     "product_impression",
     "product_click",
+    "quick_look",
     "product_view",
     "add_to_cart",
     "begin_checkout",
@@ -350,6 +354,10 @@ def _funnel_stage_events(sessionized_df: Any, product_fact_df: Any) -> Any:
 
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    sessionized_df = _observed_events(sessionized_df)
+    product_fact_df = _observed_events(product_fact_df)
+
     product_events = product_fact_df.where(
         F.col("event_name").isin(*FUNNEL_PRODUCT_EVENTS)
     ).select(
@@ -454,6 +462,9 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         F.min(F.when(F.col("event_name") == "product_click", F.col("event_time"))).alias(
             "first_click_at"
         ),
+        F.min(F.when(F.col("event_name") == "quick_look", F.col("event_time"))).alias(
+            "first_quick_look_at"
+        ),
         F.min(F.when(F.col("event_name") == "product_view", F.col("event_time"))).alias(
             "first_product_view_at"
         ),
@@ -475,6 +486,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     first_stage = F.coalesce(
         F.col("first_impression_at"),
         F.col("first_click_at"),
+        F.col("first_quick_look_at"),
         F.col("first_product_view_at"),
         F.col("first_information_view_at"),
         F.col("first_add_to_cart_at"),
@@ -484,18 +496,37 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     reached = {
         "impression": F.col("first_impression_at").isNotNull(),
         "click": F.col("first_click_at").isNotNull(),
+        "quick_look": F.col("first_quick_look_at").isNotNull(),
         "product_view": F.col("first_product_view_at").isNotNull(),
         "information_view": F.col("first_information_view_at").isNotNull(),
         "add_to_cart": F.col("first_add_to_cart_at").isNotNull(),
         "checkout": F.col("first_checkout_at").isNotNull(),
         "purchase": F.col("first_purchase_at").isNotNull(),
     }
+    # 상세를 연 세션은 Quick Look이든 상품 상세든 하나다. 담기율의 분모는 이쪽이라야
+    # 분자(담기)와 같은 모집단을 센다.
+    reached["detail_view"] = reached["product_view"] | reached["quick_look"]
+    # 상세를 어느 경로로 열었나. 둘 다 했으면 먼저 일어난 쪽으로 귀속한다.
+    # 두 값이 배타라야 합이 detail_view_sessions 와 맞는다. 반대로
+    # reached_quick_look 은 "퀵룩을 썼나" 라서 비배타로 남는다 — E2 진단의
+    # quick_look_open_detail_rate 분모가 그 값이라 여기서 바꾸면 어긋난다.
+    entry_path = (
+        F.when(~reached["detail_view"], F.lit(None).cast("string"))
+        .when(~reached["quick_look"], F.lit("direct_click"))
+        .when(~reached["product_view"], F.lit("quick_look"))
+        .when(
+            F.col("first_quick_look_at") <= F.col("first_product_view_at"),
+            F.lit("quick_look"),
+        )
+        .otherwise(F.lit("direct_click"))
+    )
     dropoff_step = (
         F.when(reached["purchase"], F.lit(None).cast("string"))
         .when(reached["checkout"], F.lit("checkout"))
         .when(reached["add_to_cart"], F.lit("add_to_cart"))
         .when(reached["information_view"], F.lit("information_view"))
         .when(reached["product_view"], F.lit("product_view"))
+        .when(reached["quick_look"], F.lit("quick_look"))
         .when(reached["click"], F.lit("click"))
         .when(reached["impression"], F.lit("impression"))
     )
@@ -515,6 +546,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "source",
         "first_impression_at",
         "first_click_at",
+        "first_quick_look_at",
         "first_product_view_at",
         "first_information_view_at",
         "first_add_to_cart_at",
@@ -522,6 +554,9 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "first_purchase_at",
         reached["impression"].alias("reached_impression"),
         reached["click"].alias("reached_click"),
+        reached["quick_look"].alias("reached_quick_look"),
+        entry_path.alias("detail_entry_path"),
+        reached["detail_view"].alias("reached_detail_view"),
         reached["product_view"].alias("reached_product_view"),
         reached["information_view"].alias("reached_information_view"),
         reached["add_to_cart"].alias("reached_add_to_cart"),
@@ -546,14 +581,10 @@ def _product_daily_kpi(
 ) -> Any:
     from pyspark.sql import functions as F
 
-    group_columns = [
-        "event_date_kst",
-        "product_id",
-        "actor_type",
-        "source",
-        "scenario_id",
-        "simulation_run_id",
-    ]
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
+    group_columns = ["event_date_kst", "product_id", *EXECUTION_AXES]
 
     def count_events(event_name: str) -> Any:
         return F.sum(
@@ -632,19 +663,28 @@ def _product_daily_kpi(
 def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     from pyspark.sql import functions as F
 
-    group_columns = [
-        "funnel_date_kst",
-        "product_id",
-        "actor_type",
-        "source",
-        "scenario_id",
-        "simulation_run_id",
-    ]
+    group_columns = ["funnel_date_kst", "product_id", *EXECUTION_AXES]
     result = funnel_session_df.groupBy(*group_columns).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.sum(F.col("reached_impression").cast("int")).cast("long").alias("impression_sessions"),
         F.sum(F.col("reached_click").cast("int")).cast("long").alias("click_sessions"),
+        # 퀵룩 계열은 비배타다 — "퀵룩을 썼나". E2 진단의 퀵룩 담기율이 이 분모를 쓴다.
+        F.sum(F.col("reached_quick_look").cast("int")).cast("long").alias("quick_look_sessions"),
+        F.sum(
+            (F.col("reached_quick_look") & F.col("reached_add_to_cart")).cast("int")
+        ).cast("long").alias("quick_look_cart_sessions"),
+        # 직접 클릭 계열은 배타다 — "퀵룩 없이 상세로 직행했나". 둘 다면 먼저 한 쪽.
+        F.sum(
+            (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+        ).cast("long").alias("direct_click_sessions"),
+        F.sum(
+            (
+                (F.col("detail_entry_path") == F.lit("direct_click"))
+                & F.col("reached_add_to_cart")
+            ).cast("int")
+        ).cast("long").alias("direct_click_cart_sessions"),
+        F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
         F.sum(F.col("reached_product_view").cast("int")).cast("long").alias("product_view_sessions"),
         F.sum(F.col("reached_information_view").cast("int")).cast("long").alias("information_view_sessions"),
         F.sum(F.col("reached_add_to_cart").cast("int")).cast("long").alias("add_to_cart_sessions"),
@@ -656,9 +696,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         result.withColumn("impression_to_click_rate", _safe_ratio(F.col("click_sessions"), F.col("impression_sessions")))
         .withColumn("click_to_view_rate", _safe_ratio(F.col("product_view_sessions"), F.col("click_sessions")))
         .withColumn("view_to_information_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
-        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
+        # 전환 분모는 상세를 연 세션이다. Quick Look에서 담거나 사는 경로가 있어서
+        # product_view만 분모로 두면 분자와 모집단이 어긋나 비율이 1.0을 넘는다.
+        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
         .withColumn("cart_to_purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("add_to_cart_sessions")))
-        .withColumn("view_to_purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("product_view_sessions")))
+        .withColumn("view_to_purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")))
         .withColumn(
             "dropoff_after_impression_rate",
             F.when(
@@ -667,10 +709,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
             ).otherwise(F.lit(None).cast("double")),
         )
         .withColumn(
+            # view_to_cart_rate 의 여집합이라 같은 분모를 써야 한다.
             "dropoff_after_view_rate",
             F.when(
-                F.col("product_view_sessions") > 0,
-                F.lit(1.0) - F.col("add_to_cart_sessions") / F.col("product_view_sessions"),
+                F.col("detail_view_sessions") > 0,
+                F.lit(1.0) - F.col("add_to_cart_sessions") / F.col("detail_view_sessions"),
             ).otherwise(F.lit(None).cast("double")),
         )
         .withColumn(
@@ -688,7 +731,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
 
     from pyspark.sql import functions as F
 
-    axes = ["actor_type", "source", "scenario_id", "simulation_run_id"]
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
+    axes = list(EXECUTION_AXES)
     key_columns = ["event_date_kst", "brand_id", *axes]
     valid_brand = F.col("brand_id").isNotNull() & (
         F.length(F.trim(F.col("brand_id"))) > 0
@@ -697,7 +743,7 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     product_events = product_fact_df.where(
         valid_brand
         & F.col("event_name").isin(
-            "product_impression", "product_view", "add_to_cart"
+            "product_impression", "product_view", "quick_look", "add_to_cart"
         )
     ).select(
         *key_columns,
@@ -706,6 +752,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "product_id",
         (F.col("event_name") == "product_impression").alias("_impression"),
         (F.col("event_name") == "product_view").alias("_product_view"),
+        (F.col("event_name") == "quick_look").alias("_quick_look"),
+        # 상세를 연 세션은 Quick Look이든 상품 상세든 하나다. 담기율의 분모라서
+        # 분자(담기)와 같은 모집단을 세야 한다.
+        F.col("event_name").isin("product_view", "quick_look").alias("_detail_view"),
         F.lit(False).alias("_information_view"),
         (F.col("event_name") == "add_to_cart").alias("_add_to_cart"),
     )
@@ -741,6 +791,8 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "product_id",
         F.lit(False).alias("_impression"),
         F.lit(False).alias("_product_view"),
+        F.lit(False).alias("_quick_look"),
+        F.lit(False).alias("_detail_view"),
         F.lit(True).alias("_information_view"),
         F.lit(False).alias("_add_to_cart"),
     )
@@ -748,6 +800,8 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     stages = product_events.unionByName(information_events)
     result = stages.groupBy(*key_columns).agg(
         F.countDistinct(F.when(F.col("_impression"), F.col("session_id"))).cast("long").alias("impression_sessions"),
+        F.countDistinct(F.when(F.col("_quick_look"), F.col("session_id"))).cast("long").alias("quick_look_sessions"),
+        F.countDistinct(F.when(F.col("_detail_view"), F.col("session_id"))).cast("long").alias("detail_view_sessions"),
         F.countDistinct(F.when(F.col("_product_view"), F.col("session_id"))).cast("long").alias("product_view_sessions"),
         F.countDistinct(F.when(F.col("_information_view"), F.col("session_id"))).cast("long").alias("information_view_sessions"),
         F.countDistinct(F.when(F.col("_add_to_cart"), F.col("session_id"))).cast("long").alias("add_to_cart_sessions"),
@@ -756,13 +810,42 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         F.current_timestamp().alias("mart_processed_at"),
     )
     return (
-        result.withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_sessions"), F.col("impression_sessions")))
+        result.withColumn("detail_entry_rate", _safe_ratio(F.col("detail_view_sessions"), F.col("impression_sessions")))
         .withColumn("information_view_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
-        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
+        # 담기 분모는 상세를 연 세션이다. Quick Look에서 담는 경로가 있어서
+        # product_view만 분모로 두면 분자와 모집단이 어긋나 비율이 1.0을 넘는다.
+        .withColumn("view_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
     )
 
 
-EXECUTION_AXES = ("actor_type", "source", "scenario_id", "simulation_run_id")
+# 실행 축. `generator_type`이 있어야 PC(python_batch)와 PA(agent_llm)를 가른다.
+# PA 로그는 정성 축이라 정량 지표에 섞으면 안 되는데 `actor_type`은 둘 다
+# `synthetic`이라 구분이 안 된다 (persona-schema.md §9, dw-schema.md §2).
+EXECUTION_AXES = (
+    "actor_type",
+    "source",
+    "generator_type",
+    "scenario_id",
+    "simulation_run_id",
+)
+
+
+def _observed_events(frame: Any | None) -> Any | None:
+    """시드 Event를 뺀 관측 행동만 남긴다.
+
+    시드는 생성기가 Persona의 사전 선호를 주입하려고 만든 것이라 관측된 행동이 아니다
+    (`event-properties-schema.md` §3.14). 긍정 시드는 조회 없이 담기만, 부정 시드는
+    담기 없는 조회를 내서 전환 지표의 분자와 분모를 양방향으로 왜곡한다. 어느 Mart가
+    제외 대상인지는 `dw-schema.md`가 정본이다.
+
+    `is_seeded`가 없는 입력은 시드 판정 이전에 만들어진 것이라 그대로 통과시킨다.
+    """
+
+    from pyspark.sql import functions as F
+
+    if frame is None or "is_seeded" not in frame.columns:
+        return frame
+    return frame.where(~F.coalesce(F.col("is_seeded"), F.lit(False)))
 
 
 def _valid_brand() -> Any:
@@ -874,6 +957,9 @@ def _repurchase_metrics(orders_df: Any, key_columns: list[str], window_days: int
 def _product_repurchase_daily(purchase_fact_df: Any, window_days: int) -> Any:
     """상품 재구매 — 같은 사용자가 같은 상품을 서로 다른 주문으로 다시 산 비율."""
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    purchase_fact_df = _observed_events(purchase_fact_df)
+
     key_columns = ["snapshot_date_kst", "brand_id", "product_id", *EXECUTION_AXES]
     orders = _repurchase_orders(purchase_fact_df, window_days, key_columns)
     return _repurchase_metrics(orders, key_columns, window_days)
@@ -890,6 +976,10 @@ def _brand_repurchase_daily(
     `restock`은 재구매의 선언 신호이므로(`event-properties-schema.md` §3.9) 관측
     재구매와 교차 검증할 수 있도록 같은 행에 보존한다.
     """
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    purchase_fact_df = _observed_events(purchase_fact_df)
+    purchase_reason_fact_df = _observed_events(purchase_reason_fact_df)
 
     from pyspark.sql import functions as F
 
@@ -948,6 +1038,10 @@ def _purchase_reason_daily(
     """
 
     from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    purchase_reason_fact_df = _observed_events(purchase_reason_fact_df)
+    purchase_fact_df = _observed_events(purchase_fact_df)
 
     key_columns = ["event_date_kst", "brand_id", "reason", *EXECUTION_AXES]
     order_brands = (
@@ -1068,12 +1162,12 @@ def _ingredient_weekly_interest(
     from pyspark.sql.types import ArrayType, StringType
     from pyspark.sql.window import Window
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    sessionized_df = _observed_events(sessionized_df)
+
     dimensions = [
         "interest_week_kst",
-        "actor_type",
-        "source",
-        "scenario_id",
-        "simulation_run_id",
+        *EXECUTION_AXES,
     ]
     events = (
         sessionized_df.withColumn(
@@ -1339,6 +1433,9 @@ def load_banner_values(feature_vocab_path: str, affinity_lift_path: str) -> set[
 def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
     group_columns = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
         "banner_slot", "trait_source", "policy_version", "actor_type", "source",
@@ -1490,6 +1587,9 @@ def _cross_brand_daily(sessionized_df: Any) -> Any:
     from pyspark.sql import Window
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    sessionized_df = _observed_events(sessionized_df)
+
     views = sessionized_df.where(
         (F.col("event_name") == "product_view") & F.col("brand_id").isNotNull()
     )
@@ -1608,6 +1708,9 @@ def _analytics_baseline(
 ) -> Any:
     from pyspark.sql import functions as F
 
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
     period = (F.col("event_date_kst") >= F.lit(start_date).cast("date")) & (
         F.col("event_date_kst") <= F.lit(end_date).cast("date")
     )
@@ -1687,9 +1790,12 @@ def build_mart_frames(
         "cross_brand_daily": _cross_brand_daily(sessionized_df),
     }
     if trait_contract is not None:
+        # 장기 성향은 주입된 선호도 신호로 본다. 시드를 뺄지는 별도 결정 대기.
         frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
     if allowed_banner_values is not None:
-        frames["banner_daily"] = _banner_daily(product_fact_df, allowed_banner_values)
+        frames["banner_daily"] = _banner_daily(
+            product_fact_df, allowed_banner_values
+        )
     # 구매 이유 대조는 user_trait_daily 를 읽으므로 그 뒤에 둔다.
     if purchase_fact_df is not None and purchase_reason_fact_df is not None:
         frames["product_repurchase_daily"] = _product_repurchase_daily(
