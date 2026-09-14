@@ -21,7 +21,7 @@ public class RecommendationClient {
 
   public RecommendationClient(
     @Value("${recommendation.url:http://localhost:8300}") String baseUrl,
-    @Value("${recommendation.timeout-ms:300}") int timeoutMs
+    @Value("${recommendation.timeout-ms:3000}") int timeoutMs
   ) {
     SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
     factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
