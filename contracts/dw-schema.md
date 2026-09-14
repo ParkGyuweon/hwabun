@@ -460,6 +460,13 @@ NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`�
 제거가 기준이라 정책 버전으로 다시 쪼개면 같은 세션이 여러 행에 걸린다. 그쪽 사전/사후는
 `analytics_baseline`의 기준선 기간으로 가른다.
 
+**실데이터 검증 범위** — 현재 화면이 히어로 1칸(`hero=new_brand`)이라 실행 로그의
+`banner_type`이 `new_brand` 한 종류뿐이다. `new_brand`는 `banner_value=NULL`이 허용되는
+유일한 타입이므로, 다른 축(`concern`·`ingredient`·`clean`·`price_bin`·`category`·`segment`)의
+`banner_value` 규칙은 실데이터가 아니라 단위 테스트로만 검증된다. 배너 행이 복구되면
+재검증 대상이다. `trait_source`는 세 값(`profile`·`explore`·`coldstart`)이 실행 로그에
+모두 나타난다.
+
 ### 4.11 `user_trait_daily`
 
 ```text
@@ -501,11 +508,27 @@ input = sessionized_events
 같은 세션·상품의 선행 `recommendation_click`을 사용한다. 배너 귀속은 같은 세션·상품의
 선행 `banner_click`을 사용하며 직전 Event만으로 제한하지 않는다.
 
+선행 `recommendation_click`은 **`recommendation_id`가 비어 있지 않을 때만** 추천 귀속으로
+센다. Front가 이 Event를 내는 세 지점(목록 맞춤 기획전 `promo_pick`, 히어로 배너, 상세
+유사 상품)이 모두 값을 채우므로 누락이 없다. 형식은 서버 응답의 uuid hex 또는 Front가
+만든 `rec-{product_id}-{persona}` 두 가지이며 둘 다 비어 있지 않다(프론트 확인
+2026-09-14). 유사 상품이 추천 API로 넘어가면 형식만 uuid로 바뀌고 조건은 그대로다.
+
 `brand_view_sessions`를 공통 분모로 `cross_brand_entry_rate`,
 `recommendation_cross_brand_entry_rate`, `banner_cross_brand_entry_rate`를 저장한다. 또한
 전체 교차 유입 세션을 분모로 `recommendation_share_of_cross_brand_entries`,
 `banner_share_of_cross_brand_entries`를 저장한다. `top_source_brand_id`는 공개 임계값과
 정책 버전이 확정될 때까지 산출하지 않는다.
+
+추천과 배너는 **동시에 귀속될 수 있다.** 두 기여 세션 수를 더해 전체 교차 유입과
+비교하지 않는다. 교차 유입이 0인 행의 두 share는 0이 아니라 NULL이다.
+
+브랜드를 모르는 조회(`brand_id`가 NULL이거나 Dimension에 없는 상품)는 어느 브랜드에도
+귀속하지 않는다. 직전 상품이나 세션의 첫 상품으로 추정하지 않는다
+([`event-attribution-contract.md`](./event-attribution-contract.md) §2).
+
+이 Mart만 실행 축에 `generator_type`이 없다. 대시보드 엔드포인트가 쓰지 않아 제외했다
+(프론트 확인 2026-09-14). 필요해지면 다른 Mart와 같은 방식으로 추가한다.
 
 ### 4.13 `analytics_baseline`
 
@@ -574,6 +597,9 @@ input = purchase_fact
 | `purchase_order_count` | bigint | N | 고유 주문 수 |
 | `repurchase_rate` | double | Y | `repeat_buyer_count / buyer_count` |
 | `median_days_between_purchases` | double | Y | 재구매 사용자의 평균 간격의 중앙값 |
+| `backend_order_count`, `local_order_count` | bigint | N | 주문 경로별 고유 주문 수 |
+| `kakaopay_order_count`, `card_order_count`, `test_order_count` | bigint | N | 결제수단별 고유 주문 수 |
+| `backend_paid_value` | decimal(18,2) | Y | `backend` 주문의 실결제액 합. 주문 단위로 접은 뒤 합산 |
 | `window_days`, `window_start_date`, `window_end_date` | int, date, date | N | 관측 창 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
@@ -583,6 +609,17 @@ input = purchase_fact
 `snapshot_date_kst`는 입력의 최대 `event_date_kst`이며 창은 그 날부터 `window_days`일
 직전까지다. `brand_id`·`user_id`·`order_id`가 비어 있는 row는 제외한다.
 
+결제수단·주문 경로는 **행을 버리지 않고 축으로만 가른다.** `order_channel='local'`은
+브라우저에서만 만든 시연 주문이라 Backend 주문과 대사(對査)할 수 없지만
+([`event-properties-schema.md`](./event-properties-schema.md) §3.16), 여기서 걸러내면
+재구매율이 왜 달라졌는지 되짚을 근거가 사라진다. `buyer_count`·`repurchase_rate`는
+`local` 주문을 포함하고, 읽는 쪽이 필요하면 `backend_order_count`로 좁힌다.
+
+`backend_paid_value`만 예외다. 시연 주문의 금액을 섞으면 실결제액 축이 시연 횟수에
+따라 흔들리므로 `backend` 주문만 센다. 결제 계약(§3.15·§3.16) 이전에 쌓인 주문은
+분포가 모두 0이고 NULL이 아니다 — 0건과 "아직 안 들어왔다"를 구분해야 하기 때문이다.
+값 자체가 없는 `backend_paid_value`만 NULL로 남는다.
+
 ### 4.16 `brand_repurchase_daily`
 
 ```text
@@ -590,7 +627,7 @@ key = snapshot_date_kst + brand_id + actor_type + source + generator_type + scen
 input = purchase_fact, purchase_reason_fact
 ```
 
-컬럼은 §4.15와 같고 `declared_restock_order_count`(bigint, N)가 추가된다.
+컬럼은 §4.15와 같고(결제수단·주문 경로 분포 포함) `declared_restock_order_count`(bigint, N)가 추가된다.
 
 브랜드 재구매는 상품이 달라도 같은 브랜드를 다시 사면 성립한다. 따라서 §4.15를 합산해서
 구할 수 없다. 한 사용자가 같은 브랜드의 다른 상품 두 개를 사면 상품 단위로는 1회 구매가

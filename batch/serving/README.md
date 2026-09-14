@@ -30,6 +30,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 | `session_store.py` | 상태 이벤트 로그 append·재기동 시 재생 (Jira 224) |
 | `prescription.py` | 대시보드 처방 문장 v0.3 (Jira 220/225, GMS) |
 | `bench_recommend.py` | 응답 시간 측정 (p95 15ms 급) |
+| `e2e_smoke.py` | 로컬 E2E 스모크 24단계 (판매자→등록→동기화→추천→회원→주문→결제→마트 API). `BE`/`RS`/`FE` env 로 주소. 09-14 14/24, 실패는 전부 백엔드 요청 항목 (Jira 296) |
 | `live_stats.py` | **실시간 처리 현황** `GET /live`(시연용 한 페이지) · `GET /live/stats`(JSON). 초당 반영 이벤트·Kafka 파티션별 소비·방금 상태가 바뀐 사용자·추천 p50/p95 (Jira 295) |
 
 ## 실시간 처리 현황 `/live` (Jira 295, 시연용)
@@ -45,6 +46,8 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 | 추천 응답 p50/p95 · 요청/초 | 최근 60초 `/api/recommend` `latency_ms` | |
 | 방금 상태가 바뀐 사용자 | 최근 40명, 어느 파티션(또는 직접)에서 어떤 이벤트로 | |
 
+상단 오른쪽 **▶ 페르소나 9,900명 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다 — 로컬 시연 전용(Docker 이미지엔 simulator/ 가 없어 비활성). 절차 정본은 `docs/ai/live-demo-runbook.md`.
+
 `GET /live/stats` 가 같은 숫자를 JSON 으로 준다(`events.series_60s`·`partitions`·`recent`…). 인증은 없다 — 추천 서버는
 내부 네트워크 전용이고, 시연에서 밖에 보이려면 nginx 에 `/live` 를 `recommend:8300` 으로 여는 한 줄이 필요하다(배포 README).
 운영 지표의 정본은 수집기 Prometheus 메트릭이고, 이 페이지는 시연·디버그용이다.
@@ -59,9 +62,9 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 
 ```bash
 cd batch/serving
-python -m unittest test_recommend_server      # 28
+python -m unittest test_recommend_server      # 32
 python -m unittest test_banners               # 18   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
-python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription
+python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription   # 11·5·7·3·17 = 43
 python -m unittest test_live                  # 4    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
 ```
 테스트는 등록 상품 파일 복사본과 임시 세션 로그를 쓰므로 레포 파일을 건드리지 않는다. `test_prescription.test_live_once` 는 `RUN_LIVE`+`GMS_KEY` 가 있을 때만.

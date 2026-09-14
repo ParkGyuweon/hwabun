@@ -197,7 +197,7 @@ class Engine:
         self.states = {}                        # persona_id -> UserVector (Redis 자리)
         # 세션 상태 영속화 (Jira 224) — 이벤트 로그를 재생해 재시작 전 상태로 돌아간다
         self.session_log = SessionLog()
-        n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False))
+        n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False, source="replay"))
         self.session_replayed = {"personas": n_p, "events": n_e, "ms": ms, "path": self.session_log.path}
         self.load_ms = (time.perf_counter() - t0) * 1000
 
@@ -586,7 +586,78 @@ def live_stats():
     snap = LIVE.snapshot()
     snap["sessions_in_memory"] = len(e.states)
     snap["kafka"] = (_kafka.health() if _kafka is not None else None)
+    snap["demo"] = _demo_status()
     return snap
+
+
+# ── 시연 구동 (Jira 295): /live 의 시작 버튼이 demo_live.py 를 자식 프로세스로 띄운다 ──
+_DEMO_SCRIPT = os.path.join(ROOT, "simulator", "generator", "demo_live.py")
+_demo = {"proc": None, "started_at": None, "args": None, "log": None}
+
+
+def _demo_status():
+    p = _demo["proc"]
+    running = p is not None and p.poll() is None
+    tail = ""
+    try:
+        if _demo["log"] and os.path.exists(_demo["log"]):
+            with open(_demo["log"], "rb") as f:
+                f.seek(0, 2); n = f.tell(); f.seek(max(0, n - 400))
+                raw = f.read()
+                try:
+                    txt = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    txt = raw.decode("cp949", "replace")          # Windows 콘솔 인코딩으로 남은 옛 줄
+                lines = txt.strip().splitlines()
+                tail = lines[-1] if lines else ""
+    except Exception:
+        tail = ""
+    return {"available": os.path.exists(_DEMO_SCRIPT), "running": running,
+            "exit_code": (None if running or p is None else p.returncode),
+            "started_at": _demo["started_at"], "args": _demo["args"], "last_line": tail}
+
+
+class DemoStart(BaseModel):
+    rate: int = 3000
+    max_events: int = 0
+    http: bool = False
+
+
+@app.post("/live/demo/start")
+def live_demo_start(req: DemoStart):
+    """9,900명 로그 되감기 시작 — 로컬 시연 전용. Docker 이미지에는 simulator/ 가 없어 404 가 된다"""
+    if not os.path.exists(_DEMO_SCRIPT):
+        raise HTTPException(404, {"code": "DEMO_UNAVAILABLE", "path": _DEMO_SCRIPT})
+    if _demo_status()["running"]:
+        return {"ok": True, "already": True, **_demo_status()}
+    import subprocess
+    log_path = os.path.join(os.path.dirname(SessionLog().path), "demo_live.log")
+    port = os.environ.get("PORT", "8300")
+    args = [sys.executable, _DEMO_SCRIPT, "--recommend", f"http://127.0.0.1:{port}",
+            "--rate", str(max(100, min(int(req.rate), 20000)))]
+    if req.max_events:
+        args += ["--max-events", str(int(req.max_events))]
+    if req.http:
+        args += ["--http"]
+    if KAFKA_BOOTSTRAP:
+        args += ["--bootstrap", KAFKA_BOOTSTRAP]
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+    _demo["log"] = log_path
+    _demo["proc"] = subprocess.Popen(args, stdout=open(log_path, "ab"), stderr=subprocess.STDOUT, env=env, cwd=ROOT)
+    _demo["started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S"); _demo["args"] = args[2:]
+    return {"ok": True, **_demo_status()}
+
+
+@app.post("/live/demo/stop")
+def live_demo_stop():
+    p = _demo["proc"]
+    if p is not None and p.poll() is None:
+        p.terminate()
+        try:
+            p.wait(5)
+        except Exception:
+            p.kill()
+    return {"ok": True, **_demo_status()}
 
 
 @app.get("/live", include_in_schema=False)

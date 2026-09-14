@@ -38,6 +38,31 @@
   },
   {
     "schema_version": "0.2.0-draft",
+    "event_id": "e4a3d8fb-5a67-4d24-b1aa-3f8e5c4d2a43",
+    "event_name": "payment_failed",
+    "intent": "conversion",
+    "occurred_at": "2026-08-31T05:09:40.000Z",
+    "persona_id": null,
+    "account_id": null,
+    "session_id": "session-user-0001",
+    "page_view_id": "page-view-user-0001",
+    "sequence_no": 12,
+    "page_type": "cart",
+    "product_id": null,
+    "actor_type": "user",
+    "environment": "dev",
+    "received_at": "2026-08-31T05:09:40.120Z",
+    "source": "web",
+    "request_id": "request-user-0001",
+    "event_index": 0,
+    "properties": {
+      "order_id": "ORD-20260903-0001",
+      "reason_code": "user_cancel",
+      "payment_method": "kakaopay"
+    }
+  },
+  {
+    "schema_version": "0.2.0-draft",
     "event_id": "c2e1b6d9-3e45-4b02-9f88-1d6c3a2b0e21",
     "event_name": "purchase",
     "intent": "conversion",
@@ -71,7 +96,13 @@
         }
       ],
       "order_value": 119.0,
-      "currency": "USD"
+      "currency": "USD",
+      "payment_method": "kakaopay",
+      "paid_value": 107.1,
+      "order_channel": "backend",
+      "pg_provider": "portone",
+      "payment_id": "hwabun-ORD-20260903-0001",
+      "paid_at": "2026-08-31T05:10:00.000Z"
     }
   },
   {

@@ -80,6 +80,7 @@ EVENT_INTENTS = {
     "view_cart": "conversion",
     "begin_checkout": "conversion",
     "purchase": "conversion",
+    "payment_failed": "conversion",
     "rage_click": "friction",
     "dead_click": "friction",
 }

@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 try:
     from pyspark.sql import SparkSession
@@ -14,11 +15,23 @@ from streaming.jobs.build_marts_job import (
 )
 
 
-PURCHASE_SCHEMA = (
-    "order_id string, product_id string, brand_id string, user_id string, "
-    "event_date_kst date, event_time timestamp, actor_type string, source string, "
-    "generator_type string, scenario_id string, simulation_run_id string"
+PURCHASE_FIELDS = (
+    "order_id string",
+    "product_id string",
+    "brand_id string",
+    "user_id string",
+    "event_date_kst date",
+    "event_time timestamp",
+    "actor_type string",
+    "source string",
+    "generator_type string",
+    "scenario_id string",
+    "simulation_run_id string",
+    "paid_value decimal(18,2)",
+    "payment_method string",
+    "order_channel string",
 )
+PURCHASE_SCHEMA = ", ".join(PURCHASE_FIELDS)
 REASON_SCHEMA = (
     "order_id string, reason string, event_date_kst date, user_id string, "
     "is_primary boolean, skipped boolean, actor_type string, source string, "
@@ -27,6 +40,10 @@ REASON_SCHEMA = (
 TRAIT_SCHEMA = (
     "trait_date_kst date, user_id string, trait string, is_primary_trait boolean"
 )
+
+
+PURCHASE_COLUMN_COUNT = len(PURCHASE_FIELDS)
+DEFAULT_PAYMENT = (Decimal("10.00"), "kakaopay", "backend")
 
 
 def _at(day, hour=1):
@@ -53,7 +70,16 @@ class PurchaseMartsSparkTest(unittest.TestCase):
         cls.spark.stop()
 
     def _purchases(self, rows):
-        return self.spark.createDataFrame(rows, PURCHASE_SCHEMA)
+        """결제 컬럼을 생략한 행은 기본 결제(카카오페이 · backend 주문)로 채운다.
+
+        결제 계약(299) 이전에 쓰인 픽스처가 많아 전부 다시 쓰면 무엇을 검증하던
+        테스트인지 흐려진다. 결제 축을 보는 테스트만 값을 직접 준다.
+        """
+        padded = [
+            row if len(row) == PURCHASE_COLUMN_COUNT else row + DEFAULT_PAYMENT
+            for row in rows
+        ]
+        return self.spark.createDataFrame(padded, PURCHASE_SCHEMA)
 
     def _reasons(self, rows):
         return self.spark.createDataFrame(rows, REASON_SCHEMA)
@@ -337,6 +363,79 @@ class PurchaseMartsSparkTest(unittest.TestCase):
                 self.assertEqual(0, duplicates)
                 self.assertEqual(0, first.select(*columns).exceptAll(second.select(*columns)).count())
                 self.assertEqual(0, second.select(*columns).exceptAll(first.select(*columns)).count())
+
+    def test_payment_split_counts_orders_not_item_rows(self):
+        """결제 분포는 주문 단위다. 상품 row 를 그대로 세면 장바구니 크기만큼 부푼다.
+
+        O1 은 상품 3개짜리 한 주문이다. 주문 경로·결제수단은 각각 1로 잡혀야 하고
+        실결제액도 30.00 이 아니라 30.00 한 번이어야 한다.
+        """
+        purchases = self._purchases(
+            [
+                ("O1", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, Decimal("30.00"), "kakaopay", "backend"),
+                ("O1", "P2", "A", "U1", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, Decimal("30.00"), "kakaopay", "backend"),
+                ("O1", "P3", "A", "U1", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, Decimal("30.00"), "kakaopay", "backend"),
+            ]
+        )
+
+        row = _brand_repurchase_daily(
+            purchases, self._reasons([]), 90
+        ).where("brand_id = 'A'").first()
+
+        self.assertEqual(1, row["backend_order_count"])
+        self.assertEqual(1, row["kakaopay_order_count"])
+        self.assertEqual(Decimal("30.00"), row["backend_paid_value"])
+
+    def test_payment_split_separates_channel_and_method(self):
+        """시연 주문(local)을 버리지 않고 축으로 가른다.
+
+        빼버리면 재구매율이 왜 달라졌는지 되짚을 근거가 사라진다. 대신 실결제액
+        합은 backend 주문만 세어 시연 금액이 섞이지 않게 한다.
+        """
+        purchases = self._purchases(
+            [
+                ("O1", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, Decimal("10.00"), "kakaopay", "backend"),
+                ("O2", "P1", "A", "U2", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, Decimal("20.00"), "card", "backend"),
+                ("O3", "P1", "A", "U3", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, Decimal("99.00"), "test", "local"),
+            ]
+        )
+
+        row = _product_repurchase_daily(purchases, 90).where("product_id = 'P1'").first()
+
+        self.assertEqual(2, row["backend_order_count"])
+        self.assertEqual(1, row["local_order_count"])
+        self.assertEqual(1, row["kakaopay_order_count"])
+        self.assertEqual(1, row["card_order_count"])
+        self.assertEqual(1, row["test_order_count"])
+        self.assertEqual(Decimal("30.00"), row["backend_paid_value"])
+        # local 주문도 구매자 수에는 그대로 남는다 — 걸러내는 게 아니라 가르는 것이다.
+        self.assertEqual(3, row["buyer_count"])
+
+    def test_payment_split_is_zero_when_payment_keys_are_absent(self):
+        """결제 계약 이전에 쌓인 주문은 분포가 0이고 NULL 이 아니다.
+
+        NULL 이면 대시보드가 "아직 안 들어왔다"와 "0건"을 구분하지 못한다.
+        """
+        purchases = self._purchases(
+            [
+                ("O1", "P1", "A", "U1", date(2026, 9, 11), _at(11), "user", "web",
+                 None, None, None, None, None, None),
+            ]
+        )
+
+        row = _product_repurchase_daily(purchases, 90).where("product_id = 'P1'").first()
+
+        self.assertEqual(0, row["backend_order_count"])
+        self.assertEqual(0, row["local_order_count"])
+        self.assertEqual(0, row["kakaopay_order_count"])
+        self.assertIsNone(row["backend_paid_value"])
+
 
 
 if __name__ == "__main__":

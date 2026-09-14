@@ -267,6 +267,10 @@
 }
 
 .btn--icon {
+  /* 글자(♡)를 원 정중앙에. 버튼 기본 정렬은 베이스라인이라 하트가 위·왼쪽으로 치우쳐 보였다 (AI 파트 지적 2026-09-14) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 48px;
   padding: 0;
   font-size: 18px;

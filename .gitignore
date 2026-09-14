@@ -46,6 +46,7 @@ shop_backend/archive/
 # LLM 에이전트가 수집한 행동 로그 (실행할 때마다 새로 생긴다)
 simulator/agents/data/
 simulator/agents/.cache/
+simulator/generator/.cache/
 
 # Spark 로컬 실행 산출물 — Raw/Processed/Mart와 Checkpoint를 포함한다
 data/

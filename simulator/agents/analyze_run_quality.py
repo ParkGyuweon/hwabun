@@ -148,6 +148,37 @@ def measure(events_path, exclude=()):
                 m["담기 target 누락"] = sum(1 for d in cart_dec if not d.get("llm_target"))
                 m["담기 판단"] = len(cart_dec)
             m["모델"] = next((d.get("model") for d in dec if d.get("model")), "?")
+            # 2026-09-14: **고른 상품 ↔ 실제 열린 상품** 일치. 러너의 이름 매칭이 깨지면 모델이 고른 것과
+            # 다른 카드가 열리는데, 다른 지표는 전부 "열린 것" 기준이라 이걸 먼저 보지 않으면 실행 전체를
+            # 잘못 읽는다 (09-14 종류 필터 실행: 62% 불일치를 lift 하락으로 읽을 뻔했다). 브랜드로 비교한다 —
+            # 카드 이름은 한글, 상품표는 영문이라 이름 자체는 못 맞추지만 브랜드는 양쪽 다 영문이다.
+            try:
+                with open(PRODUCTS_FILE, encoding="utf-8") as f:
+                    brand = {q["product_id"]: (q.get("brand_name") or "").upper() for q in json.load(f)}
+            except Exception:
+                brand = {}
+            clicks = defaultdict(list)
+            for e in ev:
+                if e.get("event_name") == "product_click" and e.get("product_id"):
+                    clicks[e.get("persona_id")].append((e.get("client_ts") or e.get("occurred_at") or "", e["product_id"]))
+            picks = defaultdict(list)
+            for d in dec:
+                if d.get("action") == "click_product" and d.get("succeeded", True) and d.get("target"):
+                    picks[d.get("persona_id")].append((d.get("decided_at") or "", d["target"]))
+            tot = mism = 0
+            for pid, dl in picks.items():
+                cl = sorted(clicks.get(pid, []))
+                for i, (_, target) in enumerate(sorted(dl)):
+                    if i >= len(cl):
+                        break
+                    b = brand.get(cl[i][1], "")
+                    if not b:
+                        continue
+                    tot += 1
+                    if not target.upper().startswith(b[:6]):
+                        mism += 1
+            if tot:
+                m["고른≠열린 브랜드 (5%↑ 매칭 고장·지표 무효)"] = f"{mism}/{tot} ({mism / tot:.0%})"
     return m
 
 

@@ -162,7 +162,7 @@ SEGMENT_KO = [
     {"value": "brown", "ko": "갈색 눈", "field": "eye_color"},
     {"value": "green", "ko": "녹색 눈", "field": "eye_color"},
     {"value": "gray", "ko": "회색 눈", "field": "eye_color"},
-    {"value": "hazel", "ko": "헤이즐 눈", "field": "eye_color"},
+    {"value": "hazel", "ko": "담갈색 눈", "field": "eye_color"},
 ]
 
 GROUPS = [

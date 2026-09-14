@@ -34,7 +34,7 @@ class LiveStatsUnit(unittest.TestCase):
 
     def test_window_trims_old(self):
         ls = LiveStats(window=1)
-        ls._events.append((time.time() - 5, 7))
+        ls._events.append((time.time() - 5, 7, None))
         ls.total_events += 7
         s = ls.snapshot()
         self.assertEqual(s["events"]["per_sec"], 0)

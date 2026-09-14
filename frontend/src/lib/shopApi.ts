@@ -99,12 +99,17 @@ interface VariantDto {
   priceKrw: number | string;
   salePriceKrw: number | string | null;
   status: string;
+  /** 옵션 이미지·스와치. `product_variant.image_url · swatch_url` 컬럼은 있는데 `VariantView` 가 아직 안 준다 — 오면 바로 쓴다 */
+  imageUrl?: string | null;
+  swatchUrl?: string | null;
 }
 interface ProductDetailDto {
   product: ProductSummaryDto;
   variants: VariantDto[];
   ingredients: string | null;
   description: Record<string, unknown> | null;
+  /** 상품 이미지 여러 장 (`product_image` 테이블, sort_order 순). `ProductDetail` 이 아직 안 준다 — 오면 갤러리에 그대로 들어간다 */
+  images?: Array<string | { url: string }> | null;
 }
 
 function mapSummary(s: ProductSummaryDto): Product {
@@ -157,14 +162,17 @@ function mapDetail(d: ProductDetailDto): Product {
   const variants: ProductVariant[] = active.map((v) => ({
     sku_id: v.skuId,
     label: v.label,
-    image_url: base.image_url ?? '',
-    swatch_url: null,
+    image_url: v.imageUrl ?? base.image_url ?? '',
+    swatch_url: v.swatchUrl ?? null,
     variant_id: v.variantId,
   }));
+  const extraImages = (d.images ?? []).map((i) => (typeof i === 'string' ? i : i?.url)).filter((u): u is string => Boolean(u));
+  const images = [...new Set([...base.images, ...extraImages])];
   const first = active[0];
   const sale = first?.salePriceKrw != null ? krwToUsd(first.salePriceKrw) : null;
   return {
     ...base,
+    images,
     variants,
     size: first?.size ?? null,
     description: mapDescription(d.description),
@@ -175,8 +183,12 @@ function mapDetail(d: ProductDetailDto): Product {
 }
 
 /**
- * 백엔드 카탈로그. 목록은 요약만 주므로 상세를 상품마다 한 번 더 부른다.
- * 백엔드 상품은 사장님이 직접 등록한 것뿐이라 수가 작다. 실패한 상세는 요약으로 대신한다.
+ * 백엔드 카탈로그 **목록** — `GET /api/products` 한 번, 요약만.
+ *
+ * 예전에는 여기서 상품마다 `GET /api/products/{id}` 를 다시 불렀다. 백엔드 상품이 사장님 등록분 몇 개일 때 짠 것인데,
+ * 시드 208개가 들어가자 상세 진입 한 번에 요청 459건 · 46MB · 19초가 됐다 (백엔드 지적 2026-09-14, N+1).
+ * 목록·추천 카드는 요약으로 충분하다. 상세는 사용자가 실제로 연 상품만 `fetchBackendProductDetail` 로 받는다
+ * (`productRegistry.ensureBackendDetail`).
  */
 export async function listBackendProducts(): Promise<Product[] | null> {
   let res: Response;
@@ -193,18 +205,18 @@ export async function listBackendProducts(): Promise<Product[] | null> {
     return null;
   }
   if (!Array.isArray(rows)) return null;
-  const details = await Promise.all(
-    rows.map(async (s) => {
-      try {
-        const r = await fetch(`/api/products/${encodeURIComponent(s.productId)}`, { headers: { Accept: 'application/json' } });
-        if (!r.ok) return mapSummary(s);
-        return mapDetail((await r.json()) as ProductDetailDto);
-      } catch {
-        return mapSummary(s);
-      }
-    }),
-  );
-  return details;
+  return rows.map(mapSummary);
+}
+
+/** `GET /api/products/{id}` — 옵션·전성분·설명·(오면) 이미지 여러 장. 실패하면 null 이고 호출부가 요약을 그대로 쓴다 */
+export async function fetchBackendProductDetail(productId: string): Promise<Product | null> {
+  try {
+    const r = await fetch(`/api/products/${encodeURIComponent(productId)}`, { headers: { Accept: 'application/json' } });
+    if (!r.ok) return null;
+    return mapDetail((await r.json()) as ProductDetailDto);
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------ 상품 등록 (판매자) */
@@ -275,6 +287,8 @@ export async function registerProductBackend(form: RegistrationForm): Promise<Re
 /* ------------------------------------------------------------------ 장바구니·주문·결제 (고객) */
 
 export type CheckoutResult = { ok: true; orderId: string; status: string } | ApiFailure;
+export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null } | ApiFailure;
+export type ConfirmResult = { ok: true; orderId: string; status: string; paidAt: string | null } | ApiFailure;
 
 /** 장바구니 전부가 백엔드 상품(옵션 id 있음)이고 고객 로그인이 있을 때만 API 를 탈 수 있다 */
 export function canCheckoutOnBackend(items: CartItem[]): boolean {
@@ -282,10 +296,10 @@ export function canCheckoutOnBackend(items: CartItem[]): boolean {
 }
 
 /**
- * 서버 장바구니에 담고 → 주문 만들고 → 결제까지. 셋을 한 번에 한다.
- * 결제 연동은 없고 백엔드가 PAID 로 표시만 한다. 그래야 피드백·리뷰 API 의 "구매 이력" 조건이 성립한다.
+ * 서버 장바구니에 담고 → 주문 생성. 응답의 `totalAmount`(KRW) 가 결제 금액의 정본이다 (AI 정리 2026-09-14 §4).
+ * 주문 번호 필드가 `id` 라 `orderId ?? id` 로 읽는다 (요청서 9-7).
  */
-export async function checkoutOnBackend(items: CartItem[], idempotencyKey: string): Promise<CheckoutResult> {
+export async function createBackendOrder(items: CartItem[], idempotencyKey: string): Promise<CreateOrderResult> {
   try {
     for (const item of items) {
       const r = await authFetch('MEMBER', '/api/cart/items', {
@@ -304,13 +318,53 @@ export async function checkoutOnBackend(items: CartItem[], idempotencyKey: strin
     const order = (await created.json()) as Record<string, unknown>;
     const orderId = String(order.orderId ?? order.id ?? order.order_id ?? '');
     if (!orderId) return { ok: false, status: created.status, reason: '주문 응답에 주문 번호가 없습니다' };
-    const paid = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/pay`, { method: 'POST' });
-    if (!paid.ok) return fail(paid);
-    const paidBody = (await paid.json()) as Record<string, unknown>;
-    return { ok: true, orderId, status: String(paidBody.status ?? 'PAID') };
+    const amt = Number(order.totalAmount ?? order.total_amount);
+    return { ok: true, orderId, totalAmountKrw: Number.isFinite(amt) && amt > 0 ? Math.round(amt) : null };
   } catch {
     return offline();
   }
+}
+
+/** `POST /api/orders/{id}/pay` — 결제 연동 없이 PAID 표시 (테스트 주문). 백엔드가 PAYMENT_MODE=test 일 때만 허용할 예정 */
+export async function payBackendOrder(orderId: string): Promise<CheckoutResult> {
+  try {
+    const paid = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/pay`, { method: 'POST' });
+    if (!paid.ok) return fail(paid);
+    const body = (await paid.json()) as Record<string, unknown>;
+    return { ok: true, orderId, status: String(body.status ?? 'PAID') };
+  } catch {
+    return offline();
+  }
+}
+
+/**
+ * `POST /api/orders/{id}/confirm { paymentId }` — 서버가 포트원 `GET /payments/{paymentId}` 로 조회해
+ * status==PAID · amount.total==주문 totalAmount 를 대조하고 PAID 로 바꾼다 (요청서 10번). **이 응답이 결제의 정본**이다.
+ */
+export async function confirmBackendOrder(orderId: string, paymentId: string): Promise<ConfirmResult> {
+  try {
+    const res = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentId }),
+    });
+    if (!res.ok) return fail(res);
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const paidAt = typeof body.paidAt === 'string' ? body.paidAt : typeof body.paid_at === 'string' ? body.paid_at : null;
+    return { ok: true, orderId, status: String(body.status ?? 'PAID'), paidAt };
+  } catch {
+    return offline();
+  }
+}
+
+/**
+ * 결제 연동이 꺼져 있을 때의 서버 주문: 담기 → 주문 → /pay. 예전 흐름 그대로다.
+ * 그래야 피드백·리뷰 API 의 "구매 이력" 조건이 성립한다.
+ */
+export async function checkoutOnBackend(items: CartItem[], idempotencyKey: string): Promise<CheckoutResult> {
+  const created = await createBackendOrder(items, idempotencyKey);
+  if (!created.ok) return created;
+  return payBackendOrder(created.orderId);
 }
 
 /* ------------------------------------------------------------------ 피드백 */

@@ -1,0 +1,138 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Shop backend up",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "up{job=\"shop-backend\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "stat",
+      "title": "Shop Backend product requests (5m)",
+      "description": "상세 진입 1회에서 목록 1건과 상세 N건이 함께 증가하면 프런트 N+1 요청을 확인할 수 있습니다.",
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(increase(http_server_requests_seconds_count{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\"}[5m]))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "stat",
+      "title": "Detail / list ratio (5m)",
+      "description": "정상적인 상세 진입은 유사상품 전용 API 적용 후 1에 가까워져야 합니다. 현재 구조에서는 카탈로그 상품 수만큼 커질 수 있습니다.",
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(increase(http_server_requests_seconds_count{application=\"shop-backend\",uri=\"/api/products/{id}\"}[5m])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"shop-backend\",uri=\"/api/products\"}[5m])), 1)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "stat",
+      "title": "Shop Backend product API p95 latency",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\"}[5m])))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "stat",
+      "title": "Hikari connections in use",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(hikaricp_connections_active{application=\"shop-backend\"})", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "min": 0 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "stat",
+      "title": "DB reads per product-list request (5m)",
+      "description": "GET /api/products 한 번에서 발생한 Repository/JDBC 조회 수입니다. 개선 전 기준선은 2 + (반환 상품 수 × 3)이며, 개선 후 목표는 catalog projection과 highlights 일괄 조회의 2회입니다.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(increase(shop_backend_catalog_db_operations_total{application=\"shop-backend\",endpoint=\"list\"}[5m])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"shop-backend\",uri=\"/api/products\",method=\"GET\"}[5m])), 1)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "stat",
+      "title": "Products returned per list request (5m)",
+      "description": "목록 API 한 번이 반환한 상품 수입니다. 위 DB reads 값과 함께 보면 상품 수 증가에 따라 DB 조회가 얼마나 선형 증가하는지 확인할 수 있습니다.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(increase(shop_backend_catalog_list_products_returned_total{application=\"shop-backend\"}[5m])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"shop-backend\",uri=\"/api/products\",method=\"GET\"}[5m])), 1)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "values": false } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Catalog DB reads by endpoint and source",
+      "description": "개선 전에는 list · brands·variants가 반환 상품 수만큼 증가했습니다. 개선 후에는 list · catalog_projection과 list · highlights가 각각 1회씩만 증가해야 합니다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (endpoint, source) (rate(shop_backend_catalog_db_operations_total{application=\"shop-backend\"}[1m]))", "legendFormat": "{{endpoint}} · {{source}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Shop Backend product API request rate by endpoint",
+      "description": "목록 요청 대비 /{id} 상세 요청이 급증하는지 확인합니다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (uri) (rate(http_server_requests_seconds_count{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\"}[1m]))", "legendFormat": "{{uri}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Shop Backend product API p50 / p95 / p99 latency",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\"}[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\"}[5m])))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\"}[5m])))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "DB connection pool",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(hikaricp_connections_active{application=\"shop-backend\"})", "legendFormat": "active", "refId": "A" },
+        { "expr": "sum(hikaricp_connections_idle{application=\"shop-backend\"})", "legendFormat": "idle", "refId": "B" },
+        { "expr": "sum(hikaricp_connections_pending{application=\"shop-backend\"})", "legendFormat": "pending", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP errors: product APIs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (status) (rate(http_server_requests_seconds_count{application=\"shop-backend\",uri=~\"/api/products|/api/products/\\\\{id\\\\}\",status=~\"4..|5..\"}[1m]))", "legendFormat": "{{status}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 41,
+  "tags": ["spring-boot", "shop-backend", "performance"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "Shop Backend Performance",
+  "uid": "shop-backend-performance",
+  "version": 2
+}

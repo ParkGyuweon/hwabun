@@ -285,6 +285,17 @@ def preferred_categories(p):
     return [c for c, _ in sorted(seen.items(), key=lambda kv: -kv[1])]
 
 
+# 2026-09-14: 사이트가 09-09 부터 원화를 보인다 (frontend/src/lib/localize.ts KRW_PER_USD). 이력·예산은
+# 달러 원천이라 내부 계산은 달러로 두고, **모델에게 보이는 글자는 전부 원화**로 맞춘다 — 프로필은
+# "$20~$45" 인데 카드는 "32,200원" 이면 모델이 비교할 수 없고, 러너의 가격 파싱도 None 이 됐다.
+KRW_PER_USD = 1340.86
+
+
+def won(usd):
+    """달러 → 화면과 같은 원화 표기 (100원 단위)"""
+    return f"{int(round(usd * KRW_PER_USD / 100.0) * 100):,}원"
+
+
 def budget_of(p):
     """이 사람이 익숙한 가격대의 **상한**. 없으면 None.
 
@@ -319,6 +330,22 @@ def load_catalog():
         return []
 
 
+_CATEGORY_KO = None
+
+
+def category_label_ko(code):
+    """영문 카테고리 코드 → 사이트 한글 라벨 (contracts/localization/labels-ko.json). 없으면 None"""
+    global _CATEGORY_KO
+    if _CATEGORY_KO is None:
+        try:
+            with io.open(os.path.join(ROOT, "contracts", "localization", "labels-ko.json"),
+                         encoding="utf-8") as f:
+                _CATEGORY_KO = dict(json.load(f).get("category") or {})
+        except Exception:
+            _CATEGORY_KO = {}
+    return _CATEGORY_KO.get(code)
+
+
 def spread_start(page, rng, prefer=()):
     """목록에서 시작하는 사람이 무엇을 먼저 하는가.
 
@@ -346,11 +373,15 @@ def spread_start(page, rng, prefer=()):
         # 똑같은 탭을 먼저** 찾는다 — 부분 일치로만 찾으면 "Treatments" 를
         # 쓰던 사람이 "Lip Balms & Treatments" 탭으로 끌려간다
         names = [re.sub(r"\s*\d+$", "", t).strip() for t in labels]
-        idx = next((n for c in prefer for n, t in enumerate(names)
-                    if t and c and t.lower() == c.lower()), None)
+        # 2026-09-14: 탭 글자가 한글("크림·로션")이고 이력 카테고리는 영문 코드("Moisturizers")라
+        # 09-09 한국어화 뒤로는 이름이 맞은 적이 없었다 — 전원 무작위 탭으로 갔다.
+        # 계약 어휘집(contracts/localization/labels-ko.json category) 으로 코드→한글을 붙여 비교한다
+        want = [(c.lower(), (category_label_ko(c) or "").lower()) for c in prefer if c]
+        idx = next((n for c, ko in want for n, t in enumerate(names)
+                    if t and t.lower() in (c, ko)), None)
         if idx is None:                       # 이름이 딱 맞는 탭이 없을 때만
-            idx = next((n for c in prefer for n, t in enumerate(names)
-                        if t and c and c.lower() in t.lower()), None)
+            idx = next((n for c, ko in want for n, t in enumerate(names)
+                        if t and (c in t.lower() or (ko and ko in t.lower()))), None)
         if idx is None:                       # 이력의 카테고리가 탭에 없으면
             idx = rng.randrange(tabs.count())  # 그때만 무작위
         try:
@@ -430,8 +461,8 @@ def profile_text(p):
     price_line = ""
     if own:
         band = budget_of(p)
-        price_line = f"\n- 지금까지 낸 가격: ${min(own):.0f} ~ ${max(own):.0f}"
-        price_line += (f" (${band:.0f} 아래가 익숙한 가격대다)" if band
+        price_line = f"\n- 지금까지 낸 가격: {won(min(own))} ~ {won(max(own))}"
+        price_line += (f" ({won(band)} 아래가 익숙한 가격대다)" if band
                        else " (비싼 것도 사 본 적이 있다)")
 
     cat_line = ""
@@ -1119,7 +1150,10 @@ def detail_price(user):
     if len(parts) < 2 or " — " not in parts[1]:
         return None
     try:
-        return float(parts[1].split(" — ")[-1].strip().lstrip("$").replace(",", ""))
+        raw = parts[1].split(" — ")[-1].strip().replace(",", "")
+        if raw.endswith("원"):                       # 09-09 한국어화 뒤 화면은 원화다
+            return float(raw[:-1]) / KRW_PER_USD     # 내부 비교는 달러(이력·예산과 같은 단위)
+        return float(raw.lstrip("$"))
     except ValueError:
         return None
 
@@ -1268,14 +1302,14 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             for c in cart:
                 pr = cart_prices.get(c)
                 over = budget is not None and pr is not None and pr > budget
-                items.append(f"{c}" + (f" ${pr:.0f}" if pr is not None else "")
-                             + (f"  (익숙한 가격대 ${budget:.0f} 위)" if over else ""))
+                items.append(f"{c}" + (f" {won(pr)}" if pr is not None else "")
+                             + (f"  (익숙한 가격대 {won(budget)} 위)" if over else ""))
             total = sum(v for v in cart_prices.values())
             tail = ""
             if total:
-                tail = f" — 합계 ${total:.0f}"
+                tail = f" — 합계 {won(total)}"
                 if budget is not None:
-                    tail += f" (익숙한 가격대는 한 개에 ${budget:.0f} 아래다)"
+                    tail += f" (익숙한 가격대는 한 개에 {won(budget)} 아래다)"
             user = (f"[장바구니] {', '.join(items)}{tail}{NL}{NL}") + user
         if history:
             recent = NL.join(f"  {i}. {h}" for i, h in
