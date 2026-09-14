@@ -123,7 +123,9 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
                   <div className="mypage__order-body">
                     <span>상품 {o.count}개</span>
                     <strong>{formatPrice(o.paid)}</strong>
-                    <span className={`mypage__order-mode mypage__order-mode--${o.mode}`}>{o.mode === 'backend' ? '서버 주문' : '테스트 주문'}</span>
+                    <span className={`mypage__order-mode mypage__order-mode--${o.mode}`}>
+                      {o.payment_method === 'kakaopay' ? '카카오페이 테스트 결제' : o.mode === 'backend' ? '서버 주문' : '테스트 주문'}
+                    </span>
                   </div>
                 </li>
               ))}

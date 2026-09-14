@@ -29,6 +29,12 @@ interface CartPageProps {
   onPlaceOrder: () => void;
   /** 완료 화면이 떠 있으면 그 주문. 없으면 null */
   order: PlacedOrder | null;
+  /** 이 장바구니가 카카오페이(포트원 테스트 채널) 결제창으로 가는가. 아니면 테스트 주문 */
+  paymentEnabled?: boolean;
+  /** 결제창까지 갔다가 실패·취소한 이유. 장바구니는 남아 있어 다시 시도할 수 있다 */
+  paymentError?: string | null;
+  /** 결제창이 떠 있거나 서버 확인 중 */
+  paying?: boolean;
   onSurveySubmit: (reasons: string[]) => void;
   onSurveySkip: () => void;
 }
@@ -52,6 +58,9 @@ export default function CartPage({
   onCancelCheckout,
   onPlaceOrder,
   order,
+  paymentEnabled = false,
+  paymentError = null,
+  paying = false,
   onSurveySubmit,
   onSurveySkip,
 }: CartPageProps) {
@@ -78,17 +87,19 @@ export default function CartPage({
     return (
       <main className="page cart">
         <section className="done" data-log-section="order_complete">
-          <p className="done__eyebrow">주문 완료</p>
-          <h1 className="done__title">주문이 접수되었습니다</h1>
+          <p className="done__eyebrow">{order.payment_method === 'kakaopay' ? '결제 완료' : '주문 완료'}</p>
+          <h1 className="done__title">{order.payment_method === 'kakaopay' ? '결제가 완료되었습니다' : '주문이 접수되었습니다'}</h1>
           <p className="done__meta">
             주문번호 {order.orderId.slice(0, 8)} · 상품 {order.count}개 ·{' '}
             {formatPrice(order.paid)}
           </p>
           {/* 없는 기능을 있는 것처럼 두지 않는다. 여기서 멈추는 것이 이 쇼핑몰의 경계다 */}
           <p className="done__note">
-            {order.mode === 'backend'
-              ? '백엔드에 주문이 만들어지고 결제 완료(PAID)로 표시됐습니다. 실제 결제 연동은 없어 청구되지 않습니다.'
-              : '결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않고 실제로 청구되지 않습니다.'}
+            {order.payment_method === 'kakaopay'
+              ? '테스트 결제(포트원 샌드박스 · 카카오페이 테스트 채널)입니다. 서버가 결제 승인을 확인해 결제 완료(PAID)로 표시했고, 실제로 청구되지 않습니다.'
+              : order.mode === 'backend'
+                ? '백엔드에 주문이 만들어지고 결제 완료(PAID)로 표시됐습니다. 실제 결제 연동은 없어 청구되지 않습니다.'
+                : '결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않고 실제로 청구되지 않습니다.'}
             {order.note ? ` ${order.note}` : ''}
           </p>
 
@@ -217,13 +228,20 @@ export default function CartPage({
                   type="button"
                   className="btn btn--primary cart__order"
                   data-log-action="place_order"
+                  disabled={paying}
                   onClick={() => {
-                    setConfirming(false);
+                    // 결제창이 뜨는 동안은 확인 단계에 머문다 — 실패하면 같은 자리에서 다시 시도한다
+                    if (!paymentEnabled) setConfirming(false);
                     onPlaceOrder();
                   }}
                 >
-                  주문 완료
+                  {paying ? '결제 진행 중…' : paymentEnabled ? '카카오페이로 결제하기' : '주문 완료'}
                 </button>
+                {paymentError ? (
+                  <p className="cart__pay-error" role="alert">
+                    {paymentError}
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   className="cart__back"
@@ -249,9 +267,11 @@ export default function CartPage({
                 주문하기
               </button>
             )}
-            {/* 결제 연동은 없다. 없는 기능을 있는 것처럼 두면 dead_click 만 쌓인다 */}
+            {/* 결제 키가 없으면 결제 연동은 없다. 없는 기능을 있는 것처럼 두면 dead_click 만 쌓인다 */}
             <p className="cart__note">
-              결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않습니다.
+              {paymentEnabled
+                ? '포트원 테스트 채널의 카카오페이 결제창이 열립니다. 테스트 결제라 실제로 청구되지 않습니다.'
+                : '결제 연동이 없는 테스트 주문입니다. 카드 정보를 받지 않습니다.'}
             </p>
           </aside>
         </div>

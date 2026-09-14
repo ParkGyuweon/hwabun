@@ -47,6 +47,12 @@ export interface PlacedOrder {
   mode: 'backend' | 'local';
   /** 로컬로 물러난 이유. 서버 주문이면 null */
   note: string | null;
+  /** 어떻게 결제됐나. kakaopay = 포트원 카카오페이(테스트 채널), test = /pay 또는 로컬 테스트 주문 */
+  payment_method?: 'kakaopay' | 'card' | 'test';
+  /** 포트원 paymentId. 테스트 주문이면 없다 */
+  payment_id?: string | null;
+  /** 서버 confirm 응답 시각(ISO). 테스트 주문이면 없다 */
+  paid_at?: string | null;
 }
 
 /**

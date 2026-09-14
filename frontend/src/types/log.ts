@@ -61,6 +61,8 @@ export type P0EventName =
    * 상품 선호가 아니라 **이유 선언**이라 가중치는 0 이고, `reasons` 값 자체를 AI 가 따로 쓴다.
    */
   | 'purchase_reason_select'
+  /** 결제창까지 갔다가 실패·취소. 계약 등록 전이라 lib/payment PAYMENT_FAILED_EVENT_ENABLED 로 막혀 있다 */
+  | 'payment_failed'
   /**
    * 추천 배너. 유료 광고가 아니라 추천 결과를 강조해 보여주는 영역이다 (기획 §15-10).
    * 노출은 선호 신호가 아니라 클릭률의 **분모**이고, 클릭 이후 행동만 추천에 반영한다.
@@ -267,6 +269,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   purchase: 'conversion',
   // 왜 샀는지를 말하는 것이지 사는 쪽으로 움직인 것이 아니다
   purchase_reason_select: 'validation',
+  // 결제 직전에 막힌 것. 퍼널 마지막 칸의 이탈이라 friction 이다
+  payment_failed: 'friction',
 
   // 담았다 뺀 것은 재고(再考)다. 좌절(friction)이 아니라 망설임 축에 둔다
   remove_from_cart: 'hesitation',
@@ -372,6 +376,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
    * `reasons` 값은 AI 가 선언 이유 vs 행동 추론 대조에 따로 쓴다.
    */
   purchase_reason_select: 0,
+  // 결제 실패는 상품 선호가 아니라 마찰이다. 벡터에 넣지 않는다
+  payment_failed: 0,
 
 
   // 메타. 선호도가 아니다
