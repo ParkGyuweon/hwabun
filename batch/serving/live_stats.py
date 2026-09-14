@@ -139,9 +139,9 @@ h1{font-size:22px;margin:0 0 4px;font-weight:700;color:var(--brown)}.sub{color:v
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:0 1px 2px rgba(43,43,43,.04)}
 .k{color:var(--mute);font-size:12px}.v{font-size:34px;line-height:1.2;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:var(--fg)}
 .v small{font-size:13px;color:var(--mute);font-weight:400;margin-left:4px}
-.main{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px;align-items:stretch}.right{display:flex;flex-direction:column;gap:12px}.left{display:flex;flex-direction:column}.left ul{flex:1;max-height:none}@media(max-width:1000px){.main{grid-template-columns:1fr}}
+.main{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px;align-items:stretch}.right{display:flex;flex-direction:column;gap:12px}.left{display:flex;flex-direction:column;min-height:0}.left ul{flex:1 1 0;min-height:0;height:0;max-height:none;overflow:auto}@media(max-width:1000px){.main{grid-template-columns:1fr}}
 canvas{width:100%;height:170px;display:block}
-.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:300px;gap:40px;padding:8px 40px 0;max-width:1000px;margin:0 auto}.bars.big .bar span{font-size:28px;font-weight:700}.bars.big .bar em{font-size:15px}.bars.big .bar b{font-size:15px}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc-deep);font-weight:600}.bars.big .bar b{font-size:14px}
+.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:320px;gap:40px;padding:8px 40px 0;max-width:1000px;margin:0 auto}.bars.big .bar span{font-size:28px;font-weight:700}.bars.big .bar em{font-size:15px}.bars.big .bar b{font-size:15px}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc-deep);font-weight:600}.bars.big .bar b{font-size:14px}
 .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
 .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--acc-light),var(--acc));border-radius:8px 8px 3px 3px;min-height:3px;transition:height .35s ease-out;box-shadow:0 0 0 1px rgba(122,91,67,.12) inset}
 .bar b{font-size:12px;color:var(--brown);font-weight:600}
@@ -184,7 +184,7 @@ async function tick(){try{const r=await fetch('/live/stats',{cache:'no-store'});
  const k=d.kafka;$('kafka').innerHTML=k?('Kafka '+(k.connected?'<span class="ok">연결</span>':'<span class="off">미연결</span>')+' · 토픽 '+k.topic+' · lag '+(k.lag==null?'-':k.lag)):'Kafka 구독 없음(직접 수신만)';
  const parts=d.partitions||{};const rates=d.partitions_rate||{};const keys=Object.keys(parts);const bars=$('bars');
  if(keys.length){const r10=x=>(rates[x]||{}).per_sec_10s_avg||0;const mx=Math.max(1,...keys.map(r10));
-  bars.innerHTML=keys.map(x=>'<div class="bar"><span>'+fmt(parts[x])+'</span><em>+'+fmt(Math.round(r10(x)))+'/s</em><i style="height:'+Math.max(3,Math.round(r10(x)/mx*215))+'px"></i><b>파티션 P'+x+'</b></div>').join('');
+  bars.innerHTML=keys.map(x=>'<div class="bar"><span>'+fmt(parts[x])+'</span><em>+'+fmt(Math.round(r10(x)))+'/s</em><i style="height:'+Math.max(3,Math.round(r10(x)/mx*232))+'px"></i><b>파티션 P'+x+'</b></div>').join('');
   const tot=keys.reduce((a,x)=>a+parts[x],0);$('barnote').textContent='파티션 '+keys.length+'개 · 누적 '+fmt(tot)+' · 가장 많이 받은 파티션 '+Math.round(Math.max(...keys.map(x=>parts[x]))/Math.max(1,tot)*100)+'%';}
  else{bars.innerHTML='';$('barnote').textContent=k?'아직 Kafka 로 들어온 이벤트가 없다':'Kafka 구독이 꺼져 있어 파티션 정보가 없다 (KAFKA_BOOTSTRAP_SERVERS)';}
  $('recent').innerHTML=(d.recent||[]).map(r=>'<li><span class="t">'+r.age_sec+'s 전</span><span>'+r.persona_id+'<span class="pill">'+(r.source==='kafka'?'P'+(r.partition==null?'?':r.partition):'직접')+'</span></span><span class="e">'+(r.events||[]).join(' · ')+'</span></li>').join('');
