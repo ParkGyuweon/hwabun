@@ -18,6 +18,14 @@ from streaming.jobs.clean_events_job import (
     SUPPORTED_SCHEMA_VERSIONS,
     parse_args as parse_clean_args,
 )
+from streaming.jobs.build_marts_job import (
+    ORDER_CHANNELS as MART_ORDER_CHANNELS,
+    PAYMENT_METHODS as MART_PAYMENT_METHODS,
+)
+from streaming.jobs.validate_pipeline_job import (
+    ORDER_CHANNELS as VALIDATE_ORDER_CHANNELS,
+    PAYMENT_METHODS as VALIDATE_PAYMENT_METHODS,
+)
 from streaming.jobs.derive_facts_job import (
     CONTENT_INTEREST_EVENTS,
     DEFAULT_CONTENT_INTEREST_PATH,
@@ -125,7 +133,7 @@ class RawSinkConfigTest(unittest.TestCase):
 
 
 class CleanEventsConfigTest(unittest.TestCase):
-    def test_q2_event_intents_match_the_42_event_json_contract(self):
+    def test_q2_event_intents_match_the_43_event_json_contract(self):
         contract_path = Path(__file__).parents[2] / "contracts" / "event-schema.json"
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
         registered = set(contract["properties"]["event_name"]["enum"])
@@ -146,7 +154,7 @@ class CleanEventsConfigTest(unittest.TestCase):
             if intent:
                 contracted_intents.update({event_name: intent for event_name in events})
 
-        self.assertEqual(42, len(registered))
+        self.assertEqual(43, len(registered))
         self.assertEqual(registered, set(EVENT_INTENTS))
         self.assertEqual(contracted_intents, EVENT_INTENTS)
         self.assertEqual("session", EVENT_INTENTS["banner_impression"])
@@ -351,6 +359,63 @@ class ValidatePipelineConfigTest(unittest.TestCase):
     def test_empty_report_path_is_rejected(self):
         with self.assertRaises(ValueError):
             ValidatePipelineConfig(report_path=" ")
+
+
+class PaymentEnumContractTest(unittest.TestCase):
+    """결제 enum 은 계약·Mart·검증 세 곳에 복사돼 있다. 어긋나면 조용히 갈린다."""
+
+    @classmethod
+    def setUpClass(cls):
+        contract_path = Path(__file__).parents[2] / "contracts" / "event-schema.json"
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        cls.purchase_properties = next(
+            rule["then"]["properties"]["properties"]["properties"]
+            for rule in contract["allOf"]
+            if rule.get("if", {})
+            .get("properties", {})
+            .get("event_name", {})
+            .get("const")
+            == "purchase"
+        )
+
+    def test_payment_method_enum_matches_the_json_contract(self):
+        contracted = self.purchase_properties["payment_method"]["enum"]
+
+        self.assertEqual(set(contracted), set(MART_PAYMENT_METHODS))
+        self.assertEqual(set(contracted), set(VALIDATE_PAYMENT_METHODS))
+
+    def test_order_channel_enum_matches_the_json_contract(self):
+        contracted = self.purchase_properties["order_channel"]["enum"]
+
+        self.assertEqual(set(contracted), set(MART_ORDER_CHANNELS))
+        self.assertEqual(set(contracted), set(VALIDATE_ORDER_CHANNELS))
+
+    def test_optional_payment_keys_are_not_required(self):
+        """키 생략이 계약이다. 필수로 바뀌면 confirm 을 건너뛴 시연 주문이 전부 거절된다."""
+        required = set(
+            next(
+                rule["then"]["properties"]["properties"]["required"]
+                for rule in json.loads(
+                    (
+                        Path(__file__).parents[2] / "contracts" / "event-schema.json"
+                    ).read_text(encoding="utf-8")
+                )["allOf"]
+                if rule.get("if", {})
+                .get("properties", {})
+                .get("event_name", {})
+                .get("const")
+                == "purchase"
+            )
+        )
+
+        self.assertEqual(
+            {"order_id", "items", "payment_method", "paid_value", "order_channel"},
+            required,
+        )
+        for optional in ("pg_provider", "payment_id", "paid_at"):
+            with self.subTest(key=optional):
+                self.assertNotIn(optional, required)
+                self.assertIn(optional, self.purchase_properties)
 
 
 if __name__ == "__main__":

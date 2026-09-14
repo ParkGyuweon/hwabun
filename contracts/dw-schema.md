@@ -597,6 +597,9 @@ input = purchase_fact
 | `purchase_order_count` | bigint | N | 고유 주문 수 |
 | `repurchase_rate` | double | Y | `repeat_buyer_count / buyer_count` |
 | `median_days_between_purchases` | double | Y | 재구매 사용자의 평균 간격의 중앙값 |
+| `backend_order_count`, `local_order_count` | bigint | N | 주문 경로별 고유 주문 수 |
+| `kakaopay_order_count`, `card_order_count`, `test_order_count` | bigint | N | 결제수단별 고유 주문 수 |
+| `backend_paid_value` | decimal(18,2) | Y | `backend` 주문의 실결제액 합. 주문 단위로 접은 뒤 합산 |
 | `window_days`, `window_start_date`, `window_end_date` | int, date, date | N | 관측 창 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
@@ -606,6 +609,17 @@ input = purchase_fact
 `snapshot_date_kst`는 입력의 최대 `event_date_kst`이며 창은 그 날부터 `window_days`일
 직전까지다. `brand_id`·`user_id`·`order_id`가 비어 있는 row는 제외한다.
 
+결제수단·주문 경로는 **행을 버리지 않고 축으로만 가른다.** `order_channel='local'`은
+브라우저에서만 만든 시연 주문이라 Backend 주문과 대사(對査)할 수 없지만
+([`event-properties-schema.md`](./event-properties-schema.md) §3.16), 여기서 걸러내면
+재구매율이 왜 달라졌는지 되짚을 근거가 사라진다. `buyer_count`·`repurchase_rate`는
+`local` 주문을 포함하고, 읽는 쪽이 필요하면 `backend_order_count`로 좁힌다.
+
+`backend_paid_value`만 예외다. 시연 주문의 금액을 섞으면 실결제액 축이 시연 횟수에
+따라 흔들리므로 `backend` 주문만 센다. 결제 계약(§3.15·§3.16) 이전에 쌓인 주문은
+분포가 모두 0이고 NULL이 아니다 — 0건과 "아직 안 들어왔다"를 구분해야 하기 때문이다.
+값 자체가 없는 `backend_paid_value`만 NULL로 남는다.
+
 ### 4.16 `brand_repurchase_daily`
 
 ```text
@@ -613,7 +627,7 @@ key = snapshot_date_kst + brand_id + actor_type + source + generator_type + scen
 input = purchase_fact, purchase_reason_fact
 ```
 
-컬럼은 §4.15와 같고 `declared_restock_order_count`(bigint, N)가 추가된다.
+컬럼은 §4.15와 같고(결제수단·주문 경로 분포 포함) `declared_restock_order_count`(bigint, N)가 추가된다.
 
 브랜드 재구매는 상품이 달라도 같은 브랜드를 다시 사면 성립한다. 따라서 §4.15를 합산해서
 구할 수 없다. 한 사용자가 같은 브랜드의 다른 상품 두 개를 사면 상품 단위로는 1회 구매가
