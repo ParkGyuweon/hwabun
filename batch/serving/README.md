@@ -30,6 +30,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 | `session_store.py` | 상태 이벤트 로그 append·재기동 시 재생 (Jira 224) |
 | `prescription.py` | 대시보드 처방 문장 v0.3 (Jira 220/225, GMS) |
 | `bench_recommend.py` | 응답 시간 측정 (p95 15ms 급) |
+| `e2e_smoke.py` | 로컬 E2E 스모크 24단계 (판매자→등록→동기화→추천→회원→주문→결제→마트 API). `BE`/`RS`/`FE` env 로 주소. 09-14 14/24, 실패는 전부 백엔드 요청 항목 (Jira 296) |
 | `live_stats.py` | **실시간 처리 현황** `GET /live`(시연용 한 페이지) · `GET /live/stats`(JSON). 초당 반영 이벤트·Kafka 파티션별 소비·방금 상태가 바뀐 사용자·추천 p50/p95 (Jira 295) |
 
 ## 실시간 처리 현황 `/live` (Jira 295, 시연용)
@@ -61,9 +62,9 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 
 ```bash
 cd batch/serving
-python -m unittest test_recommend_server      # 28
+python -m unittest test_recommend_server      # 32
 python -m unittest test_banners               # 18   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
-python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription
+python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription   # 11·5·7·3·17 = 43
 python -m unittest test_live                  # 4    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
 ```
 테스트는 등록 상품 파일 복사본과 임시 세션 로그를 쓰므로 레포 파일을 건드리지 않는다. `test_prescription.test_live_once` 는 `RUN_LIVE`+`GMS_KEY` 가 있을 때만.

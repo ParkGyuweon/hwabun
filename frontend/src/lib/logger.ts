@@ -382,10 +382,18 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
    * 호출부가 properties 에 product_id 를 실으면 그것이 대상이고,
    * 안 실으면(섹션 체류·스크롤 등 화면 자체 이벤트) 보고 있는 상품이 곧 대상이다.
    */
-  const hasTarget = Object.prototype.hasOwnProperty.call(properties, 'product_id');
-  const targetProductId = hasTarget
-    ? ((properties.product_id as string | null | undefined) ?? null)
-    : context.productId;
+  // `product_id: undefined` 로 온 것은 "대상 없음" 이 아니라 "안 실은 것" 으로 본다 — 스프레드로 빈 값이 섞여도 컨텍스트 상품이 남는다
+  const hasTarget =
+    Object.prototype.hasOwnProperty.call(properties, 'product_id') && properties.product_id !== undefined;
+  let targetProductId = hasTarget ? ((properties.product_id as string | null) ?? null) : context.productId;
+  /**
+   * 상세 화면의 이벤트는 수집기가 top-level product_id 를 요구한다 (event-properties-schema §24-25 ·
+   * EventContractValidator PRODUCT_DETAIL_SCOPED_EVENTS). 대상이 비면 보고 있는 상품으로 채운다 —
+   * 상세에서 대상 없는 이벤트는 정의상 없다 (AI 파트 보고 2026-09-14 §2: scroll_depth·scroll_pause 거절).
+   */
+  if (targetProductId === null && context.pageType === 'product_detail' && context.productId !== null) {
+    targetProductId = context.productId;
+  }
 
   const { product_id: _lifted, ...restProperties } = properties;
   const finalProperties: Record<string, unknown> = hasTarget ? restProperties : { ...properties };
