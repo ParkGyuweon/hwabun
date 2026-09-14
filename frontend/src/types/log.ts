@@ -269,8 +269,8 @@ export const EVENT_INTENT: Record<EventName, IntentClass> = {
   purchase: 'conversion',
   // 왜 샀는지를 말하는 것이지 사는 쪽으로 움직인 것이 아니다
   purchase_reason_select: 'validation',
-  // 결제 직전에 막힌 것. 퍼널 마지막 칸의 이탈이라 friction 이다
-  payment_failed: 'friction',
+  // 계약(AI·데이터 파트 2026-09-14): 결제 시도까지 간 전환 단계의 사건이라 conversion 으로 등록된다. 수집기 INTENTS 와 같아야 통과한다
+  payment_failed: 'conversion',
 
   // 담았다 뺀 것은 재고(再考)다. 좌절(friction)이 아니라 망설임 축에 둔다
   remove_from_cart: 'hesitation',
