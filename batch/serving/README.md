@@ -45,6 +45,8 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 | 추천 응답 p50/p95 · 요청/초 | 최근 60초 `/api/recommend` `latency_ms` | |
 | 방금 상태가 바뀐 사용자 | 최근 40명, 어느 파티션(또는 직접)에서 어떤 이벤트로 | |
 
+상단 오른쪽 **▶ 페르소나 9,900명 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다 — 로컬 시연 전용(Docker 이미지엔 simulator/ 가 없어 비활성). 절차 정본은 `docs/ai/live-demo-runbook.md`.
+
 `GET /live/stats` 가 같은 숫자를 JSON 으로 준다(`events.series_60s`·`partitions`·`recent`…). 인증은 없다 — 추천 서버는
 내부 네트워크 전용이고, 시연에서 밖에 보이려면 nginx 에 `/live` 를 `recommend:8300` 으로 여는 한 줄이 필요하다(배포 README).
 운영 지표의 정본은 수집기 Prometheus 메트릭이고, 이 페이지는 시연·디버그용이다.
