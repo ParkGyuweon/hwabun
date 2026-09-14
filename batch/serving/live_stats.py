@@ -130,24 +130,26 @@ LIVE_HTML = """<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><title>HWABUN 추천 서버 — 실시간 처리 현황</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root{--bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--mute:#8b93a7;--acc:#5ad1a5;--acc2:#ffb454;--bad:#ff6b6b}
+/* HWABUN 팔레트: Fresh Green #A8C96E · Soft Mint #D8E9C3 · Blossom Pink #E68FA1 · Earthy Brown #7A5B43 · Warm Ivory #FAF7F1 · Light Gray #E9ECEF · Charcoal #2B2B2B · Soft Gray #6B7280 */
+:root{--bg:#FAF7F1;--card:#FFFFFF;--line:#E9ECEF;--fg:#2B2B2B;--mute:#6B7280;--acc:#A8C96E;--acc-light:#D8E9C3;--acc-deep:#7FA34A;--pink:#E68FA1;--brown:#7A5B43;--acc2:#A8C96E;--bad:#E68FA1}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;padding:20px 16px}
-h1{font-size:18px;margin:0 0 4px;font-weight:600}.sub{color:var(--mute);margin-bottom:16px}
+h1{font-size:18px;margin:0 0 4px;font-weight:700;color:var(--brown)}.sub{color:var(--mute);margin-bottom:16px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-.k{color:var(--mute);font-size:12px}.v{font-size:32px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px rgba(43,43,43,.04)}
+.k{color:var(--mute);font-size:12px}.v{font-size:32px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:var(--fg)}
 .v small{font-size:13px;color:var(--mute);font-weight:400;margin-left:4px}
 .row{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}@media(max-width:800px){.row{grid-template-columns:1fr}}
 canvas{width:100%;height:120px;display:block}
-.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:340px;gap:28px;padding:16px 24px 0}.bars.big .bar span{font-size:22px;font-weight:700}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc)}.bars.big .bar b{font-size:14px}
+.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:340px;gap:28px;padding:16px 24px 0}.bars.big .bar span{font-size:22px;font-weight:700}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc-deep);font-weight:600}.bars.big .bar b{font-size:14px}
 .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
-.bar i{display:block;width:100%;background:linear-gradient(180deg,#ffd27a,var(--acc2));border-radius:8px 8px 3px 3px;min-height:3px;transition:height .35s ease-out;box-shadow:0 0 0 1px rgba(255,180,84,.25) inset}
-.bar b{font-size:12px;color:var(--mute);font-weight:500}
+.bar i{display:block;width:100%;background:linear-gradient(180deg,var(--acc-light),var(--acc));border-radius:8px 8px 3px 3px;min-height:3px;transition:height .35s ease-out;box-shadow:0 0 0 1px rgba(122,91,67,.12) inset}
+.bar b{font-size:12px;color:var(--brown);font-weight:600}
 ul{list-style:none;margin:8px 0 0;padding:0;max-height:260px;overflow:auto}
 li{display:grid;grid-template-columns:60px 1fr auto;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
 li .t{color:var(--mute)}li .e{color:var(--mute);font-size:12px}
-.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:#22283a;color:var(--fg);margin-left:6px}
-.ok{color:var(--acc)}.off{color:var(--bad)}
+li{border-bottom:1px solid var(--line)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:var(--acc-light);color:var(--brown);margin-left:6px}
+.ok{color:var(--acc-deep);font-weight:600}.off{color:var(--pink);font-weight:600}
 </style></head><body>
 <h1>HWABUN 추천 서버 — 실시간 처리 현황</h1>
 <div class="sub">행동 이벤트가 추천 상태에 반영되는 마지막 층. 1초마다 갱신 · <span id="kafka"></span></div>
@@ -166,9 +168,9 @@ li .t{color:var(--mute)}li .e{color:var(--mute);font-size:12px}
 const $=id=>document.getElementById(id);
 function fmt(n){return (n||0).toLocaleString('ko-KR')}
 function draw(series){const c=$('spark'),ctx=c.getContext('2d');const W=c.width,H=c.height;ctx.clearRect(0,0,W,H);
- const max=Math.max(1,...series);const bw=W/series.length;ctx.fillStyle='#5ad1a5';
+ const max=Math.max(1,...series);const bw=W/series.length;ctx.fillStyle='#A8C96E';
  series.forEach((v,i)=>{const h=Math.round(v/max*(H-16));ctx.fillRect(i*bw+1,H-h,Math.max(1,bw-2),h)});
- ctx.fillStyle='#8b93a7';ctx.font='11px system-ui';ctx.fillText('max '+max+'/s',4,12)}
+ ctx.fillStyle='#6B7280';ctx.font='11px system-ui';ctx.fillText('max '+max+'/s',4,12)}
 async function tick(){try{const r=await fetch('/live/stats',{cache:'no-store'});const d=await r.json();
  $('eps').innerHTML=fmt(d.events.per_sec)+'<small>/s</small>';$('eps10').textContent='10초 평균 '+d.events.per_sec_10s_avg+'/s';
  $('total').textContent=fmt(d.events.total);const s=d.events.by_source||{};$('src').textContent='Kafka '+fmt(s.kafka)+' · 직접 '+fmt(s.http);
