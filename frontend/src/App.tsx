@@ -195,6 +195,8 @@ export default function App() {
    * 리뷰 필터 "내 피부 타입만" · "내 피부 타입 일치" 칩 · 추천 목의 피부 매칭이 전부 이 값을 본다.
    * 로그의 persona_id 도 로그인 중에는 회원 id 다 — 추천 요청과 행동 로그가 같은 식별자를 써야 추천 서버의
    * 세션 상태(좋아요 → 목록 반영)가 이어진다 (계약 recommendation-io-spec §5 · AI 파트 요청 2026-09-14 §1).
+   * 주의: 추천 서버 호출 식별자는 이 값이 아니라 `memberId ?? persona.persona_id` 다 (ProductListPage) — 프로필이 빈
+   * 회원이 스위처 페르소나로 떨어지면 로그와 어긋난다 (live-demo-runbook §5 폴백 수정 요청).
    */
   const member = useAuth('MEMBER');
   const getMemberProfile = useCallback(() => loadMemberProfile(member?.id), [member?.id]);
