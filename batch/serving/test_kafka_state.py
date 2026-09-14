@@ -36,7 +36,7 @@ def msg(pid, name, eid, product="P479839", props=None, schema="0.2.0-draft"):
                        "page_view_id": "pv1", "sequence_no": 1, "page_type": "product_detail", "product_id": product,
                        "actor_type": "user", "environment": "production", "received_at": "2026-09-09T10:00:00Z",
                        "source": "web", "request_id": "r1", "event_index": 0,
-                       "properties": props or {}, "tenant_id": None}, ensure_ascii=False).encode("utf-8")
+                       "properties": props or {}}, ensure_ascii=False).encode("utf-8")
 
 
 class FakeMsg:
