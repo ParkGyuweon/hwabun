@@ -17,6 +17,10 @@ spring:
 server:
   port: ${SERVER_PORT:8090}
 
+recommendation:
+  url: ${RECOMMEND_URL:http://localhost:8300}
+  timeout-ms: ${RECOMMEND_TIMEOUT_MS:300}
+
 management:
   endpoints:
     web:
