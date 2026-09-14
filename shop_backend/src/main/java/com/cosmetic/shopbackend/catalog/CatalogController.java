@@ -184,6 +184,9 @@ public class CatalogController {
       .findById(id)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     requireOwner(actor, p.getBrandId());
+    if (!p.getBrandId().equals(r.brandId())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "상품의 브랜드는 변경할 수 없습니다");
+    }
     validate(r);
     p.update(input(r), defaultRating(r.tertiaryCategory()));
     Product saved = products.save(p);
@@ -196,6 +199,22 @@ public class CatalogController {
         variants.save(v);
       });
     return detail(saved, locale);
+  }
+
+  @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(summary = "판매자 상품 삭제", description = "판매자가 자신의 브랜드 상품을 비활성화합니다.")
+  public void delete(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @PathVariable String id
+  ) {
+    Product p = products
+      .findById(id)
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    requireOwner(actor, p.getBrandId());
+    // 주문·리뷰 등 기존 참조를 보존하기 위해 물리 삭제 대신 비활성화합니다.
+    p.status(Product.Status.INACTIVE);
+    products.save(p);
   }
 
   @PatchMapping("/{id}/status")
