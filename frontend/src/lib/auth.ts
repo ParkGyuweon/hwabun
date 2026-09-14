@@ -212,6 +212,8 @@ export async function register(
 export async function authFetch(role: AccountRole, input: string, init: RequestInit = {}): Promise<Response> {
   const s = sessionSnapshot(role);
   if (!s) return new Response('{"error":"unauthorized"}', { status: 401, headers: { 'Content-Type': 'application/json' } });
+  // 개발자 모드(모의 세션)는 백엔드를 아예 부르지 않는다. 503 을 돌려 호출부가 "서버 없음" 갈래(모의 데이터)로 가게 한다
+  if (s.token === DEV_TOKEN) return new Response('{"error":"dev_mode"}', { status: 503, headers: { 'Content-Type': 'application/json' } });
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${s.token}`);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
@@ -228,10 +230,20 @@ export async function authFetch(role: AccountRole, input: string, init: RequestI
   return res;
 }
 
+/** 개발자 모드 세션의 토큰. 이 값이면 `authFetch` 가 백엔드를 부르지 않는다 */
+export const DEV_TOKEN = 'dev.local.token';
+
+/** 지금 이 역할이 개발자 모드(모의 세션)로 들어와 있나 */
+export function isDevSession(session: AccountSession | null): boolean {
+  return session !== null && session.token === DEV_TOKEN;
+}
+
 /**
- * 개발용 모의 세션. 백엔드(feat/shop-backend)가 머지되기 전에 대시보드·플랫폼 화면을 보기 위한 것.
- * 토큰이 가짜라 보호된 API 는 401 이 나고, 그 순간 세션이 지워져 게이트로 돌아간다 — 흉내는 화면까지만.
- * 프로덕션 빌드에서는 호출하는 버튼 자체가 없다 (import.meta.env.DEV).
+ * 개발자 모드 · 모의 세션. 백엔드 없이 대시보드·플랫폼 화면을 전부 보기 위한 것.
+ *
+ * 배포 화면(j15a306.p.ssafy.io)에도 버튼이 있다 (2026-09-14 요청) — shop_backend 가 배포에 아직 없어 로그인이 안 되고,
+ * 그 상태로도 대시보드 내용을 확인해야 해서다. 이 세션이면 `authFetch` 가 서버를 부르지 않고 503 을 돌려주므로
+ * 화면은 전부 모의 데이터(배지 "모의")로 그려지고, 401 로 튕기지도 않는다. 실제 계정으로 로그인하면 덮어써진다.
  */
 export function devSession(role: AccountRole): void {
   const name = role === 'MEMBER' ? '개발용 고객' : role === 'SELLER' ? '개발용 담당자' : '개발용 운영자';
@@ -241,7 +253,7 @@ export function devSession(role: AccountRole): void {
     name,
     role,
     status: 'ACTIVE',
-    token: 'dev.local.token',
+    token: DEV_TOKEN,
     expires_at: null,
   });
 }
