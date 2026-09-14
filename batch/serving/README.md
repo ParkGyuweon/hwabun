@@ -30,6 +30,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 | `session_store.py` | 상태 이벤트 로그 append·재기동 시 재생 (Jira 224) |
 | `prescription.py` | 대시보드 처방 문장 v0.3 (Jira 220/225, GMS) |
 | `bench_recommend.py` | 응답 시간 측정 (p95 15ms 급) |
+| `e2e_smoke.py` | 로컬 E2E 스모크 24단계 (판매자→등록→동기화→추천→회원→주문→결제→마트 API). `BE`/`RS`/`FE` env 로 주소. 09-14 14/24, 실패는 전부 백엔드 요청 항목 (Jira 296) |
 | `live_stats.py` | **실시간 처리 현황** `GET /live`(시연용 한 페이지) · `GET /live/stats`(JSON). 초당 반영 이벤트·Kafka 파티션별 소비·방금 상태가 바뀐 사용자·추천 p50/p95 (Jira 295) |
 
 ## 실시간 처리 현황 `/live` (Jira 295, 시연용)
