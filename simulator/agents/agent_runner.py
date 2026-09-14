@@ -392,7 +392,18 @@ PREFER_CATEGORY = False
 # 금지형("★ 아닌 상품은 고르지 마라") + 목록 줄에 자기 종류를 ★ 로 표시한다.
 # 화면에 보이는 것만으로 잡을 수 있는 상한은 lift 1.64x (99명 중 97명이 ★ 를 봤다)
 PREFER_STRICT = False
+# 종류 필터를 **코드로** 강제한다 (2026-09-14, Jira 241). 프롬프트 손잡이 셋이 전부
+# 무효(lift 1.00~1.26x)라 남은 자리는 허용 행동을 코드가 거르는 것과 같은 자리다:
+# 목록 화면에서 내 종류 카드가 하나라도 보이면 **그 카드만 보여 준다** — 모델은 보이는
+# 것 안에서만 고를 수 있으니 다른 종류는 고를 수가 없다. 내 종류가 화면에 없으면
+# 전부 보여 준다 (빈 화면을 주면 leave 만 남는다). 상한 lift 1.64x 를 그대로 재는 실험.
+PREFER_FILTER = False
 CURRENT_PREF = ()          # 지금 돌고 있는 사람의 종류 — read_list 가 ★ 를 찍을 때 본다
+
+
+def _in_pref(pid):
+    """이 상품이 지금 사람의 종류 안인가. 종류를 모르는 상품(등록 상품 등)은 밖으로 본다."""
+    return bool(CURRENT_PREF) and categories().get(pid) in CURRENT_PREF
 
 
 def profile_text(p):
@@ -548,6 +559,18 @@ def read_list(page, visited=()):
         " / Math.max(document.body.scrollHeight,1) * 100)")
     cards = page.locator(".card[data-product-id]")
     lines, seen = [], set()
+    hidden = 0
+    # 코드 필터: 화면에 내 종류 카드가 하나라도 보이면 그것만 남긴다
+    only_pref = False
+    if PREFER_FILTER and CURRENT_PREF:
+        for i in range(cards.count()):
+            c = cards.nth(i)
+            try:
+                if c.is_visible() and _in_pref(c.get_attribute("data-product-id")):
+                    only_pref = True
+                    break
+            except Exception:
+                continue
     for i in range(cards.count()):
         if len(lines) >= 12:
             break
@@ -556,6 +579,9 @@ def read_list(page, visited=()):
             if not c.is_visible():      # 화면 밖 카드는 보이지 않는 것이다
                 continue
             pid = c.get_attribute("data-product-id")
+            if only_pref and not _in_pref(pid):
+                hidden += 1
+                continue
             # 프로모션 배너와 그리드가 같은 .card 를 써서 같은 상품이 두 번 잡힌다.
             # 중복을 그대로 주면 LLM 이 "1번과 11번 중 뭐지" 로 헷갈린다
             if pid in seen:
@@ -579,6 +605,8 @@ def read_list(page, visited=()):
         lines.append(f"{len(lines)+1}. {title}{kind_tag} — {price}"
                      f"{'  [이미 봄]' if _seen_before(title, visited) else ''}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
+    if hidden:
+        body += f"\n(내가 안 쓰는 종류 {hidden}개는 눈에 들어오지 않았다)"
     # 바닥이어도 "더 보기" 가 남아 있으면 목록 끝이 아니다. 끝이라고 말하면
     # LLM 이 leave 를 고르고, 26번째 상품부터는 아무도 보지 못한다
     more = page.locator(".list__more").count() > 0
@@ -777,8 +805,13 @@ def ask(client, system, user, cache_on, dry):
 # ============================================================================
 
 def norm(s):
-    """상품명 비교용 정규화. LLM 이 이름을 조금 다르게 쓰는 것을 흡수한다"""
-    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+    """상품명 비교용 정규화. LLM 이 이름을 조금 다르게 쓰는 것을 흡수한다
+
+    2026-09-14: 한글을 살린다. 이전 식(`[^a-z0-9]` 제거)은 09-09 사이트 한국어화 뒤
+    카드 이름을 거의 전부 빈 문자열로 만들었고, 빈 이름은 `name in want` 에 항상 참이라
+    화면 첫 카드가 매번 열렸다(종류 필터 실험에서 고른 것과 다른 상품 62%).
+    """
+    return re.sub(r"[^0-9a-z가-힣]", "", str(s).lower())
 
 
 def click_safe(loc, page):
@@ -813,15 +846,28 @@ def find_card(page, target):
     want = norm(target)
     if not want:
         return None
+    # 2026-09-14: 이름이 비었거나 아주 짧은 카드는 건너뛴다. `name in want` 는 빈 이름에
+    # 항상 참이라, 화면 순서상 앞에 있는 빈 카드(배너·히어로 자리)가 매번 먹었다 —
+    # 종류 필터 실험에서 62% 가 고른 것과 다른 상품을 열었다(09-08 은 1%). 같은 이유로
+    # 첫 매칭이 아니라 **가장 길게 겹치는 카드**를 고른다.
+    best, best_len = None, 0
     for i in range(cards.count()):
         card = cards.nth(i)
         try:
             name = norm(card.locator(".card__name").inner_text(timeout=1000))
         except Exception:
             continue
-        if want in name or name in want or want[:14] in name:
-            return card
-    return None
+        if len(name) < 4:
+            continue
+        if want in name or name in want:
+            score = min(len(name), len(want))
+        elif want[:14] in name:
+            score = 14
+        else:
+            continue
+        if score > best_len:
+            best, best_len = card, score
+    return best
 
 
 def do_action(page, act, target, scroll_center=None):
@@ -964,19 +1010,25 @@ def first_unvisited(page, visited):
     """
     seen = {norm(v) for v in visited}
     cards = page.locator(".card[data-product-id]")
+    other = None
     for i in range(min(cards.count(), 40)):
         c = cards.nth(i)
         try:
             if not c.is_visible():
                 continue
+            pid = c.get_attribute("data-product-id")
             brand = c.locator(".card__brand").inner_text(timeout=800).strip()
             name = c.locator(".card__name").inner_text(timeout=800).strip()
         except Exception:
             continue
         full = f"{brand} {name}"
-        if not any(norm(full) in v or v in norm(full) for v in seen if v):
-            return full
-    return None
+        if any(norm(full) in v or v in norm(full) for v in seen if v):
+            continue
+        if PREFER_FILTER and CURRENT_PREF and not _in_pref(pid):
+            other = other or full      # 내 종류가 하나도 없을 때만 쓴다
+            continue
+        return full
+    return other
 
 
 def has_unvisited_in_list(page, visited):
@@ -1126,7 +1178,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             decisions=None):
     global CURRENT_PREF
     CURRENT_PREF = tuple(preferred_categories(persona)[:3])
-    if PREFER_STRICT:
+    if PREFER_FILTER:
+        category_rule = ("\n- 목록에는 내가 쓰는 종류의 상품이 먼저 눈에 들어온다. "
+                         "그 안에서 고르십시오.")
+    elif PREFER_STRICT:
         category_rule = ("\n- **★ 표시가 없는 상품은 고르지 마십시오.** ★ 는 내가 주로 사 온 종류다. "
                          "화면에 ★ 상품이 하나도 없을 때만 다른 종류를 고르거나 scroll 하십시오. "
                          "reason 에 종류를 적으십시오.")
@@ -1446,6 +1501,8 @@ def main():
                     help="실험: 프로필·목록에 상품 종류를 적고 내 종류를 먼저 보게 한다")
     ap.add_argument("--prefer-strict", action="store_true",
                     help="실험: 내 종류를 ★ 로 표시하고 ★ 아닌 상품은 고르지 못하게 한다 (--prefer-category 포함)")
+    ap.add_argument("--prefer-filter", action="store_true",
+                    help="종류 필터를 코드로 강제 — 목록에 내 종류 카드가 보이면 그것만 보여 준다 (Jira 241)")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
@@ -1464,9 +1521,10 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
-    global PREFER_CATEGORY, PREFER_STRICT
+    global PREFER_CATEGORY, PREFER_STRICT, PREFER_FILTER
+    PREFER_FILTER = a.prefer_filter
     PREFER_STRICT = a.prefer_strict
-    PREFER_CATEGORY = a.prefer_category or a.prefer_strict
+    PREFER_CATEGORY = a.prefer_category or a.prefer_strict or a.prefer_filter
     # dry-run · 스크립트 모드가 기본 경로에 쓰면 진짜 실행 파일을 덮어쓴다 —
     # 2026-09-08 에 --dry-run --limit 1 이 09-07 100명 본실행 33,217건을 지웠다
     if (a.dry_run or a.script) and a.out == ap.get_default("out"):

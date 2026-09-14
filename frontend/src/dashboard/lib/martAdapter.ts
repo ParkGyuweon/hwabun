@@ -92,6 +92,13 @@ const EXIT_KINDS: ProductMetrics['exitContent'][] = ['ingredient_list', 'usage_g
 
 const ratio = (num: number, den: number): number => (den === 0 ? 0 : num / den);
 const nz = (v: number | null | undefined, fallback: number): number => (v === null || v === undefined || Number.isNaN(v) ? fallback : v);
+/**
+ * 담기율(view_to_cart_rate) 폴백 — 마트가 비율을 안 주면 여기서 나눈다. 분모는 계약 0.2.1 대로
+ * `detail_view_sessions`(상세 ∪ 퀵룩). 분자 add_to_cart_sessions 가 퀵룩 담기를 포함해서 분모도 퀵룩을 세야
+ * 1.0 을 안 넘는다(데이터 235 E2E). 마트에 그 컬럼이 아직 없으면 옛 분모 product_view_sessions 로 물러난다.
+ */
+const cartRateOf = (x: { view_to_cart_rate: number | null; add_to_cart_sessions: number; product_view_sessions: number; detail_view_sessions?: number | null }): number =>
+  nz(x.view_to_cart_rate, ratio(x.add_to_cart_sessions, x.detail_view_sessions ?? x.product_view_sessions));
 
 function median(xs: number[]): number {
   if (xs.length === 0) return 0;
@@ -124,7 +131,7 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
     addToCart: p.add_to_cart_count,
     removed: p.remove_from_cart_count,
     detailRate: nz(p.detail_entry_rate, ratio(p.product_view_sessions, p.impression_sessions)),
-    cartRate: nz(p.view_to_cart_rate, ratio(p.add_to_cart_sessions, p.product_view_sessions)),
+    cartRate: cartRateOf(p),
     removalRate: nz(p.removal_rate, ratio(p.remove_from_cart_sessions, p.add_to_cart_sessions_by_product)),
     ingredientViewRate: nz(kind('ingredient_list'), infoRate),
     reviewViewRate: nz(kind('user_review'), infoRate),
@@ -153,7 +160,7 @@ function toProducts(p: ProductsPayload, mock: ProductMetrics[]): { rows: Product
         click: f ? ratio(f.click_sessions, f.impression_sessions) : ratio(clicks, impressions),
         detail: f ? ratio(f.product_view_sessions, f.click_sessions) : ratio(detailViews, clicks),
         info: infoRate,
-        cart: f ? ratio(f.add_to_cart_sessions, f.product_view_sessions) : ratio(addToCart, detailViews),
+        cart: f ? ratio(f.add_to_cart_sessions, f.detail_view_sessions ?? f.product_view_sessions) : ratio(addToCart, detailViews),
       };
       const interest =
         r.product_interest_score ??
@@ -238,7 +245,7 @@ function toSegments(p: SegmentsPayload, mockMatrix: BehaviorMetrics['segmentMatr
   const types = ['dry', 'oily', 'combination', 'normal'];
   const byType = p.by_segment
     .filter((s) => s.segment_type === 'skin_type')
-    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: nz(s.view_to_cart_rate, ratio(s.add_to_cart_sessions, s.product_view_sessions)) }));
+    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s) }));
 
   const matrix = p.grid
     ? types.map((type) => ({
@@ -247,7 +254,7 @@ function toSegments(p: SegmentsPayload, mockMatrix: BehaviorMetrics['segmentMatr
           const c = p.grid?.find((g) => g.skin_type === type && g.skin_tone === tone);
           return {
             tone,
-            cartRate: c ? nz(c.view_to_cart_rate, ratio(c.add_to_cart_sessions, c.product_view_sessions)) : 0,
+            cartRate: c ? cartRateOf(c) : 0,
             sessions: c?.product_view_sessions ?? 0,
           };
         }),
@@ -293,7 +300,7 @@ function toFriction(p: FrictionPayload, mock: BehaviorMetrics) {
           source: e.entry_source,
           ko: ENTRY_KO[e.entry_source] ?? e.entry_source,
           sessions: e.product_view_sessions,
-          cartRate: nz(e.view_to_cart_rate, ratio(e.add_to_cart_sessions, e.product_view_sessions)),
+          cartRate: cartRateOf(e),
         }))
         .sort((a, b) => b.sessions - a.sessions)
     : mock.entryConversion;
