@@ -4,7 +4,7 @@
 
 ## 관계
 
-SELLER_ACCOUNT 1:N BRAND 1:N PRODUCT 1:N PRODUCT_VARIANT
+SELLER_ACCOUNT 1:1 BRAND 1:N PRODUCT 1:N PRODUCT_VARIANT
 MEMBER 1:1 CART 1:N CART_ITEM
 MEMBER 1:N SHOP_ORDER 1:N ORDER_ITEM
 ORDER_ITEM 1:0..1 REVIEW, ORDER_ITEM 1:N FEEDBACK
@@ -17,8 +17,8 @@ PRODUCT N:M SKIN_TYPE, CONCERN, CLEAN, TEXTURE, INGREDIENT
 
 | 영역 | 테이블 | 설명 |
 |---|---|---|
-| 계정 | seller_account, member, admin_account | 사업자·회원·관리자 계정. member는 피부 타입·피부색·헤어 색·눈동자 색 FK를 가진다. |
-| 브랜드 | brand | seller_account가 소유하는 브랜드. |
+| 계정 | seller_account, member, admin_account | 브랜드 관리자·회원·플랫폼 관리자 계정. member는 피부 타입·피부색·헤어 색·눈동자 색 FK를 가진다. |
+| 브랜드 | brand | 브랜드마다 하나의 seller_account를 관리자 계정으로 연결한다. `brand.seller_account_id`는 브랜드 관리자와의 1:1 매핑이다. |
 | 기준값 | skin_type, skin_tone, hair_color, eye_color, concern, category | 회원과 상품이 공유하는 코드 및 카테고리 계층. |
 | 상품 | product | 브랜드, 카테고리, price_bin, secondary/tertiary category, 가격·평점·인기도와 등록 원문을 저장한다. rating_source로 실측·주입 평점을 구분하며, 등록 API는 계약 어휘를 검증하고 기본 옵션을 생성한다. |
 | 상품 미디어 | product_image | 상품 이미지와 표시 순서. |

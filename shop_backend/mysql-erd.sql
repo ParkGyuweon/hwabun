@@ -18,7 +18,7 @@ CREATE TABLE admin_account (
 CREATE TABLE brand (
  brand_id VARCHAR(64) PRIMARY KEY, seller_account_id VARCHAR(64) NOT NULL, name VARCHAR(200) NOT NULL, description TEXT NULL, logo_url VARCHAR(1000) NULL,
  status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE', created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- FOREIGN KEY(seller_account_id) REFERENCES seller_account(seller_account_id) ON DELETE RESTRICT, UNIQUE KEY uq_brand_seller_name (seller_account_id,name)
+ FOREIGN KEY(seller_account_id) REFERENCES seller_account(seller_account_id) ON DELETE RESTRICT, UNIQUE KEY uq_brand_seller_name (seller_account_id,name), UNIQUE KEY uq_brand_seller_account (seller_account_id)
 );
 CREATE TABLE skin_type (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
 CREATE TABLE skin_tone (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);

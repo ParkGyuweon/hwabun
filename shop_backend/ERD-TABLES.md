@@ -4,10 +4,10 @@
 
 ## 계정·브랜드
 
-- seller_account: 사업자 로그인 계정
+- seller_account: 브랜드별 관리자 로그인 계정(브랜드 하나당 하나)
 - member: 구매자 계정과 피부 타입·피부 톤·헤어 색·눈동자 색 FK
 - admin_account: 운영자 로그인 계정
-- brand: seller_account가 소유하는 브랜드
+- brand: 브랜드 본체. `seller_account_id`로 전용 관리자 계정과 1:1 연결
 
 ## 기준값
 
