@@ -316,6 +316,9 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `cart_size_after` | int | Y | 변경 후 장바구니 크기 |
 | `unit_price` | decimal(18,2) | Y | 상품 단가 |
 | `order_value` | decimal(18,2) | Y | 전환 시점 주문 표시 금액. 매출·정산 합산 금지 |
+| `paid_value` | decimal(18,2) | Y | 할인 후 실결제액. 주문 단위라 상품 row에서 합산 금지 |
+| `payment_method` | string | Y | `kakaopay`, `card`, `test` (event-properties-schema.md §3.15) |
+| `order_channel` | string | Y | `backend`, `local` (§3.16). `local`은 Backend 주문 row가 없는 시연 주문 |
 | `item_revenue` | decimal(18,2) | Y | 행동 분석용 `quantity * unit_price`. 매출·정산 합산 금지 |
 | `cart_value` | decimal(18,2) | Y | 장바구니 금액 |
 | `currency` | string | Y | 통화 |
@@ -358,6 +361,9 @@ unique key는 `order_id + product_id`다.
 | `unit_price` | decimal(18,2) | N | `items[].unit_price` |
 | `item_revenue` | decimal(18,2) | N | `quantity * unit_price` 파생 |
 | `order_value` | decimal(18,2) | Y | 주문 전체 금액. 상품 row에서 합산 금지 |
+| `paid_value` | decimal(18,2) | Y | 할인 후 실결제액. 주문 단위라 상품 row에서 합산 금지 |
+| `payment_method` | string | Y | `kakaopay`, `card`, `test` (event-properties-schema.md §3.15) |
+| `order_channel` | string | Y | `backend`, `local` (§3.16). `local`은 Backend 주문 row가 없는 시연 주문 |
 | `currency` | string | Y | 통화 |
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
@@ -365,6 +371,18 @@ unique key는 `order_id + product_id`다.
 `item_revenue`는 Event가 운반하지 않고 여기서 파생한다. `order_value`는 주문 단위
 값이므로 explode된 상품 row를 합산하면 상품 수만큼 중복된다. 두 금액은
 행동 분석용이며, 매출·정산은 Backend PAID 주문 상품 Fact만 사용한다.
+
+`paid_value`는 할인을 적용한 실결제액, `order_value`는 할인 전 주문 금액이다.
+전환의 금액 축은 `paid_value`를 쓴다 — `order_value`로 보면 쿠폰이 붙은 주문이
+실제보다 크게 잡힌다. `paid_value`도 `order_value`와 같이 주문 단위라 explode된
+상품 row를 그대로 더하면 상품 수만큼 부풀어 오른다. `order_id`로 먼저 접어야 한다.
+
+`pg_provider` · `payment_id` · `paid_at`은 Fact로 내리지 않는다. PG 대사(對査)용
+식별자라 행동 집계의 축이 아니고, 필요하면 `cleaned_events.properties`에 그대로
+남아 있다. Fact 컬럼으로 만들면 쓰는 곳 없이 스키마만 넓어진다.
+
+`payment_failed`는 상품 grain이 없어 이 Dataset으로 파생하지 않는다.
+`cleaned_events`까지만 내려간다 (event-properties-schema.md §4.5).
 
 같은 `order_id`가 여러 번 수신되면 `cleaned_events` 단계에서 이미 `event_id` 정본
 1건으로 정리된다. 이 Dataset에서 다시 중복 제거하지 않는다.
