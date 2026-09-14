@@ -3,6 +3,15 @@ global:
   evaluation_interval: 5s
 
 scrape_configs:
+  # Docker Desktop의 host gateway를 통해 호스트에서 실행 중인 쇼핑몰 백엔드(8090)를 수집한다.
+  - job_name: shop-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8090
+        labels:
+          environment: local
+
   - job_name: log-connector
     metrics_path: /actuator/prometheus
     static_configs:

@@ -22,6 +22,21 @@ public class Product {
   @Column(name = "product_name", nullable = false)
   private String name;
 
+  @Column(name = "product_name_ko")
+  private String nameKo;
+
+  @Column(name = "size_ko")
+  private String sizeKo;
+
+  @Column(name = "ingredients_text_ko", columnDefinition = "text")
+  private String ingredientsTextKo;
+
+  @Column(name = "description_ko_json", columnDefinition = "json")
+  private String descriptionKoJson;
+
+  @Column(name = "badges_json", columnDefinition = "json")
+  private String badgesJson;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "product_source", nullable = false)
   private Source productSource = Source.brand_registered;
@@ -144,6 +159,11 @@ public class Product {
   public String getName() {
     return name;
   }
+  public String getNameKo() { return nameKo; }
+  public String getSizeKo() { return sizeKo; }
+  public String getIngredientsTextKo() { return ingredientsTextKo; }
+  public String getDescriptionKoJson() { return descriptionKoJson; }
+  public String getBadgesJson() { return badgesJson; }
 
   public Source getProductSource() {
     return productSource;
