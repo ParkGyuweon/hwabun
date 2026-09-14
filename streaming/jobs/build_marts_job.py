@@ -506,6 +506,20 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     # 상세를 연 세션은 Quick Look이든 상품 상세든 하나다. 담기율의 분모는 이쪽이라야
     # 분자(담기)와 같은 모집단을 센다.
     reached["detail_view"] = reached["product_view"] | reached["quick_look"]
+    # 상세를 어느 경로로 열었나. 둘 다 했으면 먼저 일어난 쪽으로 귀속한다.
+    # 두 값이 배타라야 합이 detail_view_sessions 와 맞는다. 반대로
+    # reached_quick_look 은 "퀵룩을 썼나" 라서 비배타로 남는다 — E2 진단의
+    # quick_look_open_detail_rate 분모가 그 값이라 여기서 바꾸면 어긋난다.
+    entry_path = (
+        F.when(~reached["detail_view"], F.lit(None).cast("string"))
+        .when(~reached["quick_look"], F.lit("direct_click"))
+        .when(~reached["product_view"], F.lit("quick_look"))
+        .when(
+            F.col("first_quick_look_at") <= F.col("first_product_view_at"),
+            F.lit("quick_look"),
+        )
+        .otherwise(F.lit("direct_click"))
+    )
     dropoff_step = (
         F.when(reached["purchase"], F.lit(None).cast("string"))
         .when(reached["checkout"], F.lit("checkout"))
@@ -541,6 +555,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         reached["impression"].alias("reached_impression"),
         reached["click"].alias("reached_click"),
         reached["quick_look"].alias("reached_quick_look"),
+        entry_path.alias("detail_entry_path"),
         reached["detail_view"].alias("reached_detail_view"),
         reached["product_view"].alias("reached_product_view"),
         reached["information_view"].alias("reached_information_view"),
@@ -654,7 +669,21 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.sum(F.col("reached_impression").cast("int")).cast("long").alias("impression_sessions"),
         F.sum(F.col("reached_click").cast("int")).cast("long").alias("click_sessions"),
+        # 퀵룩 계열은 비배타다 — "퀵룩을 썼나". E2 진단의 퀵룩 담기율이 이 분모를 쓴다.
         F.sum(F.col("reached_quick_look").cast("int")).cast("long").alias("quick_look_sessions"),
+        F.sum(
+            (F.col("reached_quick_look") & F.col("reached_add_to_cart")).cast("int")
+        ).cast("long").alias("quick_look_cart_sessions"),
+        # 직접 클릭 계열은 배타다 — "퀵룩 없이 상세로 직행했나". 둘 다면 먼저 한 쪽.
+        F.sum(
+            (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+        ).cast("long").alias("direct_click_sessions"),
+        F.sum(
+            (
+                (F.col("detail_entry_path") == F.lit("direct_click"))
+                & F.col("reached_add_to_cart")
+            ).cast("int")
+        ).cast("long").alias("direct_click_cart_sessions"),
         F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
         F.sum(F.col("reached_product_view").cast("int")).cast("long").alias("product_view_sessions"),
         F.sum(F.col("reached_information_view").cast("int")).cast("long").alias("information_view_sessions"),
