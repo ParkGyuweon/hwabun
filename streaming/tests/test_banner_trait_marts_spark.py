@@ -131,6 +131,111 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             1, direct_recommendation_row["recommendation_cross_brand_entry_sessions"]
         )
 
+    def _cross_brand_events(self, rows):
+        """`_cross_brand_daily` 입력 최소 컬럼. 실행 축은 한 값으로 고정한다."""
+        events = self.spark.createDataFrame(
+            rows,
+            [
+                "event_id", "session_id", "event_order", "event_name",
+                "product_id", "brand_id", "properties_json",
+            ],
+        )
+        values = {
+            "event_time": datetime(2026, 9, 8, 1, 0, tzinfo=timezone.utc),
+            "event_date_kst": date(2026, 9, 8),
+            "actor_type": "user",
+            "source": "web",
+            "scenario_id": None,
+            "simulation_run_id": None,
+        }
+        for name, value in values.items():
+            events = events.withColumn(name, F.lit(value))
+        return events
+
+    def test_same_destination_brand_counts_once_across_products(self):
+        """한 세션이 같은 브랜드의 다른 상품 여러 개를 봐도 교차 유입은 1회다.
+
+        기존 테스트는 같은 상품을 두 번 보는 경우만 덮는다. 278 완료 조건은
+        "동일 목적 브랜드의 상품을 여러 번 조회해도 1회" 라 상품이 달라도
+        같은지 고정한다.
+        """
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            ("b1", "S1", 2, "product_view", "P-B1", "B", "{}"),
+            ("b2", "S1", 3, "product_view", "P-B2", "B", "{}"),
+            ("b3", "S1", 4, "product_view", "P-B3", "B", "{}"),
+        ])
+
+        row = _cross_brand_daily(events).where("destination_brand_id = 'B'").first()
+
+        self.assertEqual(1, row["brand_view_sessions"])
+        self.assertEqual(1, row["cross_brand_entry_sessions"])
+
+    def test_click_on_another_product_is_not_attributed(self):
+        """다른 상품의 클릭을 목적 상품 유입으로 귀속하면 안 된다."""
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            # 클릭은 P-B1 에 있었는데 실제로 본 것은 P-B2 다
+            ("rec", "S1", 2, "recommendation_click", "P-B1", "B", '{"recommendation_id":"R1"}'),
+            ("ban", "S1", 3, "banner_click", "P-B1", "B", "{}"),
+            ("b2", "S1", 4, "product_view", "P-B2", "B", "{}"),
+        ])
+
+        row = _cross_brand_daily(events).where("destination_brand_id = 'B'").first()
+
+        self.assertEqual(1, row["cross_brand_entry_sessions"])
+        self.assertEqual(0, row["recommendation_cross_brand_entry_sessions"])
+        self.assertEqual(0, row["banner_cross_brand_entry_sessions"])
+
+    def test_click_after_the_view_is_not_attributed(self):
+        """귀속은 선행 클릭만 본다. 조회 뒤에 눌린 클릭은 원인이 아니다."""
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            ("b1", "S1", 2, "product_view", "P-B", "B", "{}"),
+            ("rec", "S1", 3, "recommendation_click", "P-B", "B", '{"recommendation_id":"R1"}'),
+        ])
+
+        row = _cross_brand_daily(events).where("destination_brand_id = 'B'").first()
+
+        self.assertEqual(1, row["cross_brand_entry_sessions"])
+        self.assertEqual(0, row["recommendation_cross_brand_entry_sessions"])
+
+    def test_null_brand_view_is_not_attributed_to_any_brand(self):
+        """브랜드를 모르는 조회는 어느 브랜드에도 귀속하지 않는다.
+
+        직전 상품이나 세션의 첫 상품으로 추정하지 않는다
+        (event-attribution-contract.md §2).
+        """
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            ("x1", "S1", 2, "product_view", "P-X", None, "{}"),
+            ("b1", "S1", 3, "product_view", "P-B", "B", "{}"),
+        ])
+
+        mart = _cross_brand_daily(events)
+        brands = {row["destination_brand_id"] for row in mart.collect()}
+
+        self.assertEqual({"A", "B"}, brands)
+        self.assertEqual(
+            1,
+            mart.where("destination_brand_id = 'B'").first()["cross_brand_entry_sessions"],
+        )
+
+    def test_share_is_null_when_no_cross_brand_entry(self):
+        """교차 유입이 0 이면 기여 비율은 0 이 아니라 NULL 이다."""
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A1", "A", "{}"),
+            ("a2", "S1", 2, "product_view", "P-A2", "A", "{}"),
+        ])
+
+        row = _cross_brand_daily(events).where("destination_brand_id = 'A'").first()
+
+        self.assertEqual(1, row["brand_view_sessions"])
+        self.assertEqual(0, row["cross_brand_entry_sessions"])
+        self.assertEqual(0.0, row["cross_brand_entry_rate"])
+        self.assertIsNone(row["recommendation_share_of_cross_brand_entries"])
+        self.assertIsNone(row["banner_share_of_cross_brand_entries"])
+
     def test_user_trait_daily_scores_and_ranks_configured_signals(self):
         events = self.spark.createDataFrame(
             [
