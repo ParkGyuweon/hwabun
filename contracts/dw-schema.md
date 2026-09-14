@@ -460,6 +460,13 @@ NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`�
 제거가 기준이라 정책 버전으로 다시 쪼개면 같은 세션이 여러 행에 걸린다. 그쪽 사전/사후는
 `analytics_baseline`의 기준선 기간으로 가른다.
 
+**실데이터 검증 범위** — 현재 화면이 히어로 1칸(`hero=new_brand`)이라 실행 로그의
+`banner_type`이 `new_brand` 한 종류뿐이다. `new_brand`는 `banner_value=NULL`이 허용되는
+유일한 타입이므로, 다른 축(`concern`·`ingredient`·`clean`·`price_bin`·`category`·`segment`)의
+`banner_value` 규칙은 실데이터가 아니라 단위 테스트로만 검증된다. 배너 행이 복구되면
+재검증 대상이다. `trait_source`는 세 값(`profile`·`explore`·`coldstart`)이 실행 로그에
+모두 나타난다.
+
 ### 4.11 `user_trait_daily`
 
 ```text
@@ -506,6 +513,16 @@ input = sessionized_events
 전체 교차 유입 세션을 분모로 `recommendation_share_of_cross_brand_entries`,
 `banner_share_of_cross_brand_entries`를 저장한다. `top_source_brand_id`는 공개 임계값과
 정책 버전이 확정될 때까지 산출하지 않는다.
+
+추천과 배너는 **동시에 귀속될 수 있다.** 두 기여 세션 수를 더해 전체 교차 유입과
+비교하지 않는다. 교차 유입이 0인 행의 두 share는 0이 아니라 NULL이다.
+
+브랜드를 모르는 조회(`brand_id`가 NULL이거나 Dimension에 없는 상품)는 어느 브랜드에도
+귀속하지 않는다. 직전 상품이나 세션의 첫 상품으로 추정하지 않는다
+([`event-attribution-contract.md`](./event-attribution-contract.md) §2).
+
+이 Mart만 실행 축에 `generator_type`이 없다. 대시보드 엔드포인트가 쓰지 않아 제외했다
+(프론트 확인 2026-09-14). 필요해지면 다른 Mart와 같은 방식으로 추가한다.
 
 ### 4.13 `analytics_baseline`
 
