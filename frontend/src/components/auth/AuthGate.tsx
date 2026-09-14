@@ -34,11 +34,13 @@ export default function AuthGate({ role, product, children }: AuthGateProps) {
         {role === 'ADMIN' ? (
           <p className="auth-gate__note">운영자 계정은 가입 화면이 없습니다. 팀에서 발급한 계정으로 들어오세요.</p>
         ) : null}
-        {import.meta.env.DEV ? (
-          <button type="button" className="auth-gate__dev" onClick={() => devSession(role)}>
-            백엔드 없이 보기 (개발용 · 모의 세션)
-          </button>
-        ) : null}
+        {/*
+          개발자 모드 — 배포에도 둔다 (2026-09-14). shop_backend 가 배포에 없어 로그인이 안 되는 동안에도
+          대시보드·플랫폼 화면을 전부 볼 수 있어야 한다. 모의 세션이라 서버는 부르지 않고 화면은 모의 데이터다.
+        */}
+        <button type="button" className="auth-gate__dev" onClick={() => devSession(role)}>
+          개발자 모드 · 백엔드 없이 모의 데이터로 보기
+        </button>
       </div>
     </div>
   );
