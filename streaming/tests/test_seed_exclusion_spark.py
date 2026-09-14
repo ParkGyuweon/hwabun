@@ -7,7 +7,14 @@ try:
 except ImportError:  # Spark integration runs in the project Spark image.
     SparkSession = None
 
-from streaming.jobs.build_marts_job import _observed_events, build_mart_frames
+from streaming.jobs.build_marts_job import (
+    EXECUTION_AXES,
+    _observed_events,
+    build_mart_frames,
+)
+from streaming.jobs.validate_pipeline_job import (
+    EXECUTION_AXES as VALIDATE_EXECUTION_AXES,
+)
 
 
 # product_event_fact 실제 스키마 (derive_facts_job 출력)
@@ -123,6 +130,10 @@ class SeedExclusionSparkTest(unittest.TestCase):
     def test_none_input_stays_none(self):
         self.assertIsNone(_observed_events(None))
 
+    def test_execution_axes_match_between_marts_and_validation(self):
+        """축이 어긋나면 grain 검사가 조용히 다른 것을 재게 된다."""
+        self.assertEqual(EXECUTION_AXES, VALIDATE_EXECUTION_AXES)
+
     def test_seed_cart_never_inflates_brand_conversion(self):
         """긍정 시드(조회 없는 담기)가 담기율을 끌어올리면 안 된다."""
         product_fact = self._product_fact(
@@ -202,6 +213,60 @@ class SeedExclusionSparkTest(unittest.TestCase):
             through_frames["detail_view_sessions"], direct["detail_view_sessions"]
         )
         self.assertEqual(through_frames["view_to_cart_rate"], direct["view_to_cart_rate"])
+
+    def test_detail_entry_paths_split_exclusively_by_first_touch(self):
+        """상세 진입 경로는 배타여야 합이 detail_view_sessions 와 맞는다.
+
+        quick_look_sessions 는 "퀵룩을 썼나" 라서 비배타로 남는다 (E2 진단의
+        퀵룩 담기율 분모). 그래서 배타 판정은 direct_click_* 쪽에만 건다.
+        둘 다 한 세션은 먼저 일어난 쪽으로 귀속한다.
+        """
+        rows = [
+            # S1 퀵룩만
+            self._event("s1-q", "quick_look", "S1", False, 1),
+            # S2 상세만
+            self._event("s2-v", "product_view", "S2", False, 1),
+            # S3 퀵룩 먼저 → 상세
+            self._event("s3-q", "quick_look", "S3", False, 1),
+            self._event("s3-v", "product_view", "S3", False, 2),
+            # S4 상세 먼저 → 퀵룩. 담기까지 간다
+            self._event("s4-v", "product_view", "S4", False, 1),
+            self._event("s4-q", "quick_look", "S4", False, 2),
+            self._event("s4-c", "add_to_cart", "S4", False, 3),
+        ]
+
+        frames = build_mart_frames(
+            self._empty_sessionized(), self._product_fact(rows), "Asia/Seoul"
+        )
+        funnel = frames["funnel_daily_kpi"].first()
+        paths = {
+            row["session_id"]: row["detail_entry_path"]
+            for row in frames["funnel_session_fact"]
+            .select("session_id", "detail_entry_path").collect()
+        }
+
+        self.assertEqual("quick_look", paths["S1"])
+        self.assertEqual("direct_click", paths["S2"])
+        self.assertEqual("quick_look", paths["S3"])
+        self.assertEqual("direct_click", paths["S4"])
+
+        self.assertEqual(4, funnel["detail_view_sessions"])
+        self.assertEqual(2, funnel["direct_click_sessions"])       # S2 S4
+        self.assertEqual(3, funnel["quick_look_sessions"])         # S1 S3 S4 (비배타)
+        self.assertEqual(1, funnel["quick_look_cart_sessions"])    # S4
+        self.assertEqual(1, funnel["direct_click_cart_sessions"])  # S4
+
+        # 퀵룩 선진입(S1 S3) + direct_click(S2 S4) = detail_view(4)
+        quick_look_entry = sum(1 for p in paths.values() if p == "quick_look")
+        self.assertEqual(
+            funnel["detail_view_sessions"],
+            quick_look_entry + funnel["direct_click_sessions"],
+        )
+        # 비배타 컬럼끼리 더하면 안 맞는다는 것도 고정한다.
+        self.assertNotEqual(
+            funnel["detail_view_sessions"],
+            funnel["quick_look_sessions"] + funnel["direct_click_sessions"],
+        )
 
     def test_seed_rows_stay_out_of_the_funnel_fact(self):
         product_fact = self._product_fact(
