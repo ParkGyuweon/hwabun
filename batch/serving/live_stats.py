@@ -129,10 +129,11 @@ class LiveStats:
 LIVE_HTML = """<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><title>HWABUN 추천 서버 — 실시간 처리 현황</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
 /* HWABUN 팔레트: Fresh Green #A8C96E · Soft Mint #D8E9C3 · Blossom Pink #E68FA1 · Earthy Brown #7A5B43 · Warm Ivory #FAF7F1 · Light Gray #E9ECEF · Charcoal #2B2B2B · Soft Gray #6B7280 */
 :root{--bg:#FAF7F1;--card:#FFFFFF;--line:#E9ECEF;--fg:#2B2B2B;--mute:#6B7280;--acc:#A8C96E;--acc-light:#D8E9C3;--acc-deep:#7FA34A;--pink:#E68FA1;--brown:#7A5B43;--acc2:#A8C96E;--bad:#E68FA1}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;padding:12px 16px;min-height:100vh}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 'Pretendard','Apple SD Gothic Neo','Helvetica Neue',Helvetica,Arial,'Malgun Gothic',sans-serif;padding:12px 16px;min-height:100vh}
 h1{font-size:18px;margin:0 0 4px;font-weight:700;color:var(--brown)}.sub{color:var(--mute);margin-bottom:10px;font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 1px 2px rgba(43,43,43,.04)}
@@ -170,7 +171,7 @@ function fmt(n){return (n||0).toLocaleString('ko-KR')}
 function draw(series){const c=$('spark'),ctx=c.getContext('2d');const W=c.width,H=c.height;ctx.clearRect(0,0,W,H);
  const max=Math.max(1,...series);const bw=W/series.length;ctx.fillStyle='#A8C96E';
  series.forEach((v,i)=>{const h=Math.round(v/max*(H-16));ctx.fillRect(i*bw+1,H-h,Math.max(1,bw-2),h)});
- ctx.fillStyle='#6B7280';ctx.font='11px system-ui';ctx.fillText('max '+max+'/s',4,12)}
+ ctx.fillStyle='#6B7280';ctx.font='11px Pretendard, sans-serif';ctx.fillText('max '+max+'/s',4,12)}
 async function tick(){try{const r=await fetch('/live/stats',{cache:'no-store'});const d=await r.json();
  $('eps').innerHTML=fmt(d.events.per_sec)+'<small>/s</small>';$('eps10').textContent='10초 평균 '+d.events.per_sec_10s_avg+'/s';
  $('total').textContent=fmt(d.events.total);const s=d.events.by_source||{};$('src').textContent='Kafka '+fmt(s.kafka)+' · 직접 '+fmt(s.http);
