@@ -48,7 +48,7 @@ class LiveStats:
         now = time.time()
         names = [e.get("event_name") if isinstance(e, dict) else str(e) for e in events]
         with self.lock:
-            self._events.append((now, len(events)))
+            self._events.append((now, len(events), (int(partition) if partition is not None else None)))
             self.total_events += len(events)
             self.event_names.update(names)
             self.sources[source] += len(events)
@@ -88,15 +88,20 @@ class LiveStats:
             self._trim(now)
             series = [0] * seconds                  # series[-1] = 지금 이 1초
             ev_1s = ev_10s = 0
-            for ts, n in self._events:
+            part_1s, part_10s = Counter(), Counter()
+            for ts, n, part in self._events:
                 age = now - ts
                 idx = seconds - 1 - int(age)
                 if 0 <= idx < seconds:
                     series[idx] += n
                 if age < 1:
                     ev_1s += n
+                    if part is not None:
+                        part_1s[part] += n
                 if age < 10:
                     ev_10s += n
+                    if part is not None:
+                        part_10s[part] += n
             rec_10s = [l for ts, l in self._recs if now - ts < 10]
             rec_60s = [l for ts, l in self._recs if now - ts < 60]
             lat = sorted(rec_60s)
@@ -110,6 +115,8 @@ class LiveStats:
                            "by_name": dict(self.event_names.most_common(8)),
                            "by_source": dict(self.sources)},
                 "partitions": {str(k): v for k, v in sorted(self.partitions.items())},
+                "partitions_rate": {str(k): {"per_sec": part_1s.get(k, 0), "per_sec_10s_avg": round(part_10s.get(k, 0) / 10.0, 1)}
+                                    for k in sorted(self.partitions)},
                 "personas_touched": len(self.personas_touched),
                 "recommend": {"per_sec_10s_avg": round(len(rec_10s) / 10.0, 2),
                               "total": self.total_recommends,
@@ -132,9 +139,9 @@ h1{font-size:18px;margin:0 0 4px;font-weight:600}.sub{color:var(--mute);margin-b
 .v small{font-size:13px;color:var(--mute);font-weight:400;margin-left:4px}
 .row{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}@media(max-width:800px){.row{grid-template-columns:1fr}}
 canvas{width:100%;height:120px;display:block}
-.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}
+.bars{display:flex;gap:10px;align-items:flex-end;height:120px;padding-top:8px}.bars.big{height:340px;gap:28px;padding:16px 24px 0}.bars.big .bar span{font-size:22px;font-weight:700}.bars.big .bar em{font-style:normal;font-size:13px;color:var(--acc)}.bars.big .bar b{font-size:14px}
 .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
-.bar i{display:block;width:100%;background:var(--acc2);border-radius:6px 6px 2px 2px;min-height:2px;transition:height .4s}
+.bar i{display:block;width:100%;background:linear-gradient(180deg,#ffd27a,var(--acc2));border-radius:8px 8px 3px 3px;min-height:3px;transition:height .35s ease-out;box-shadow:0 0 0 1px rgba(255,180,84,.25) inset}
 .bar b{font-size:12px;color:var(--mute);font-weight:500}
 ul{list-style:none;margin:8px 0 0;padding:0;max-height:260px;overflow:auto}
 li{display:grid;grid-template-columns:60px 1fr auto;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
@@ -150,13 +157,10 @@ li .t{color:var(--mute)}li .e{color:var(--mute);font-size:12px}
   <div class="card"><div class="k">상태가 바뀐 사용자</div><div class="v" id="personas">0<small>명</small></div><div class="k">메모리 세션 <span id="mem">-</span></div></div>
   <div class="card"><div class="k">추천 응답</div><div class="v" id="p50">-<small>ms p50</small></div><div class="k" id="rec"></div></div>
 </div>
+<div class="card" style="margin-top:12px"><div class="k">Kafka 파티션별 소비 — key = session_id 라 한 사람의 이벤트는 한 파티션으로 간다 · 막대 = 최근 10초 처리량, 숫자 = 누적</div><div class="bars big" id="bars"></div><div class="k" id="barnote"></div></div>
 <div class="row">
   <div class="card"><div class="k">최근 60초 · 초당 이벤트</div><canvas id="spark" width="800" height="120"></canvas></div>
-  <div class="card"><div class="k">Kafka 파티션별 소비 (key = session_id)</div><div class="bars" id="bars"></div><div class="k" id="barnote"></div></div>
-</div>
-<div class="row">
   <div class="card"><div class="k">방금 상태가 바뀐 사용자</div><ul id="recent"></ul></div>
-  <div class="card"><div class="k">이벤트 종류</div><ul id="names"></ul></div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
@@ -173,11 +177,12 @@ async function tick(){try{const r=await fetch('/live/stats',{cache:'no-store'});
  $('rec').textContent='p95 '+(d.recommend.p95_ms==null?'-':d.recommend.p95_ms+'ms')+' · '+d.recommend.per_sec_10s_avg+' 요청/s · 누적 '+fmt(d.recommend.total);
  draw(d.events.series_60s);
  const k=d.kafka;$('kafka').innerHTML=k?('Kafka '+(k.connected?'<span class="ok">연결</span>':'<span class="off">미연결</span>')+' · 토픽 '+k.topic+' · lag '+(k.lag==null?'-':k.lag)):'Kafka 구독 없음(직접 수신만)';
- const parts=d.partitions||{};const keys=Object.keys(parts);const bars=$('bars');
- if(keys.length){const mx=Math.max(1,...keys.map(x=>parts[x]));bars.innerHTML=keys.map(x=>'<div class="bar"><span>'+fmt(parts[x])+'</span><i style="height:'+Math.round(parts[x]/mx*80)+'px"></i><b>P'+x+'</b></div>').join('');$('barnote').textContent='파티션 '+keys.length+'개가 나눠 받는다';}
+ const parts=d.partitions||{};const rates=d.partitions_rate||{};const keys=Object.keys(parts);const bars=$('bars');
+ if(keys.length){const r10=x=>(rates[x]||{}).per_sec_10s_avg||0;const mx=Math.max(1,...keys.map(r10));
+  bars.innerHTML=keys.map(x=>'<div class="bar"><span>'+fmt(parts[x])+'</span><em>+'+fmt(Math.round(r10(x)))+'/s</em><i style="height:'+Math.max(3,Math.round(r10(x)/mx*250))+'px"></i><b>파티션 P'+x+'</b></div>').join('');
+  const tot=keys.reduce((a,x)=>a+parts[x],0);$('barnote').textContent='파티션 '+keys.length+'개 · 누적 '+fmt(tot)+' · 가장 많이 받은 파티션 '+Math.round(Math.max(...keys.map(x=>parts[x]))/Math.max(1,tot)*100)+'%';}
  else{bars.innerHTML='';$('barnote').textContent=k?'아직 Kafka 로 들어온 이벤트가 없다':'Kafka 구독이 꺼져 있어 파티션 정보가 없다 (KAFKA_BOOTSTRAP_SERVERS)';}
  $('recent').innerHTML=(d.recent||[]).map(r=>'<li><span class="t">'+r.age_sec+'s 전</span><span>'+r.persona_id+'<span class="pill">'+(r.source==='kafka'?'P'+(r.partition==null?'?':r.partition):'직접')+'</span></span><span class="e">'+(r.events||[]).join(' · ')+'</span></li>').join('');
- const names=d.events.by_name||{};$('names').innerHTML=Object.keys(names).map(n=>'<li><span class="t"></span><span>'+n+'</span><span>'+fmt(names[n])+'</span></li>').join('');
 }catch(e){$('kafka').innerHTML='<span class="off">서버 응답 없음</span>'}}
 tick();setInterval(tick,1000);
 </script></body></html>
