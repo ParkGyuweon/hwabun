@@ -1,6 +1,8 @@
 # 브랜드 대시보드 마트 조회 API 계약 (백엔드 ↔ 프론트 · 데이터)
 
-> 상태: **초안 0.2 (2026-09-11, 프론트 작성).** 합의 전. 0.1 → 0.2: `content_daily_kpi`·`persona_segment_daily_kpi` 는 dw-schema 의
+> 상태: **초안 0.2.1 (2026-09-11, 프론트 작성).** 합의 전. 0.2 → 0.2.1: 데이터 235 E2E 결함 보고(이은솔, 09-11)를 반영 —
+> `view_to_cart_rate` 분모를 **`detail_view_sessions`(상세 조회 ∪ 퀵룩 세션)** 로, 퍼널 계열 마트에서 **seed 세션 제외**, `brand_daily_kpi` 행 수
+> 876 → 336 수용, E7 마트 3종은 실데이터 미검증(§8-4). 프론트 폴백(`martAdapter.ts` `cartRateOf`)은 이미 같은 분모다. 0.1 → 0.2: 0.1 → 0.2: `content_daily_kpi`·`persona_segment_daily_kpi` 는 dw-schema 의
 > **후보**일 뿐 Spark 잡이 만들지 않는 것을 확인해 E3·E4 를 조건부로 내렸고, 이미 만들어지는 구매·재구매 마트를 E7 로 넣었다.
 > 세포라 브랜드의 `brand_id` 정합 방법(§8-2)을 결정안으로 적었다. 이 문서가 확정되면 `README.md` 단일 출처 표에
 > "브랜드 대시보드 마트 조회 API" 행으로 들어간다.
@@ -134,13 +136,13 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 
 | 필드 | 원천 | 비고 |
 | --- | --- | --- |
-| `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `unique_user_count`, `product_count_viewed` | `brand_daily_kpi` 합산 | 브랜드 단위 세션 dedup 은 마트가 이미 했다. 일자를 합산하면 여러 날 온 세션이 중복되지만 그대로 둔다 (마트 grain 을 존중) |
+| `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, **`detail_view_sessions`** (0.2.1), `unique_user_count`, `product_count_viewed` | `brand_daily_kpi` 합산 | 브랜드 단위 세션 dedup 은 마트가 이미 했다. 일자를 합산하면 여러 날 온 세션이 중복되지만 그대로 둔다 (마트 grain 을 존중) |
 | `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `add_to_cart_sessions_by_product`, `remove_from_cart_sessions` | `product_daily_kpi` 브랜드 합산 | 담았다 뺀 비율의 분자·분모. `add_to_cart_sessions_by_product` 는 상품 합산이라 `brand_daily_kpi` 의 `add_to_cart_sessions` 와 다르다. 이름을 다르게 둔 이유 |
-| `detail_entry_rate`, `information_view_rate`, `view_to_cart_rate` | 위 합산에서 재계산 | 분모 0 → null |
+| `detail_entry_rate`, `information_view_rate`, `view_to_cart_rate` | 위 합산에서 재계산 | 분모 0 → null. **`view_to_cart_rate = add_to_cart_sessions / detail_view_sessions`** (0.2.1). 분자가 퀵룩 담기를 포함하므로 분모도 퀵룩을 센다 — `product_view_sessions` 로 나누면 1.0 을 넘는 행이 생긴다(데이터 235 E2E: 107/876 행, 최대 20.0). 마트·서버·프론트 폴백 셋이 같은 식이어야 한다 |
 | `removal_rate` | `remove_from_cart_sessions / add_to_cart_sessions_by_product` | 같은 마트 안에서 나눈다 |
 | `purchase_sessions`, `purchase_count`, `purchase_quantity` | `product_daily_kpi` 브랜드 합산 | 0.2 추가. 실사용자 `purchase` 이벤트가 쌓이면 값이 생긴다 (생성기는 안 만든다). 매출 금액은 DW 범위 밖(dw-schema §6.4) — 기존 `GET /api/seller/dashboard` 의 PAID 합계가 정본 |
 
-`funnel`: `funnel_daily_kpi` 를 브랜드로 합산한 일곱 칸 (`checkout_sessions`·`purchase_sessions` 는 0.2 추가, 마트에 이미 있다). `click_sessions` 가 `brand_daily_kpi` 에 없어 이 마트를 쓴다.
+`funnel`: `funnel_daily_kpi` 를 브랜드로 합산한 일곱 칸 (+ `detail_view_sessions`, §6-6 이 되면) (`checkout_sessions`·`purchase_sessions` 는 0.2 추가, 마트에 이미 있다). `click_sessions` 가 `brand_daily_kpi` 에 없어 이 마트를 쓴다.
 상품 합산이라 브랜드 세션 dedup 이 아니다 → §6-1 요청. 프론트는 퍼널 아래에 "상품 합산" 을 적는다.
 
 ### E2 `products`
@@ -171,7 +173,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 | 블록 | 원천 | 상태 |
 | --- | --- | --- |
 | 상단 수량·세션·비율 | `product_daily_kpi` 합산 · 비율 재계산 | 가능 |
-| `funnel` | `funnel_daily_kpi` 합산 | 가능 |
+| `funnel` | `funnel_daily_kpi` 합산 | 가능. 담기율 분모 `detail_view_sessions` 는 §6-6 — 상품 단위는 `quick_look_sessions + product_view_sessions` 로 **더할 수 없다**(한 세션이 둘 다 가능). 컬럼이 오기 전까지 프론트 폴백은 `product_view_sessions` |
 | `diagnostics` | `{ exit_content_kind_top, exit_sessions, variant_select_per_session, quick_look_open_detail_rate }` | **조건부** · §6-3. 없으면 `null` |
 
 병목 단계(노출→클릭→상세→정보확인→담기 중 브랜드 중앙값 대비 최저)는 **프론트가** `funnel` 에서 계산한다.
@@ -193,7 +195,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
       "conversion": null
     }
   ],
-  "brand": { "product_view_sessions": 4800, "add_to_cart_sessions": 300, "view_to_cart_rate": 0.0625 },
+  "brand": { "product_view_sessions": 4800, "detail_view_sessions": 5100, "add_to_cart_sessions": 300, "view_to_cart_rate": 0.0588 },
   "behaviors": null
 }
 ```
@@ -205,7 +207,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 | `avg_dwell_ms_per_session` | `dwell_ms_sum / product_view_sessions` 재계산 | 화면의 "얼마나 오래 읽나" |
 | `view_rate` | `section_view_sessions / product_view_sessions` | 화면의 "몇 명이 봤나". 마트에 없어 서버가 만든다 |
 | `conversion` | `{ viewed_sessions, viewed_cart_sessions, cart_lift }` | **조건부** · §6-2. 화면의 "본 사람의 담기율 배수". `cart_lift = (viewed_cart_sessions/viewed_sessions) / brand.view_to_cart_rate` |
-| `brand` | `brand_daily_kpi` 합산 | lift 의 분모 |
+| `brand` | `brand_daily_kpi` 합산 | lift 의 분모. `view_to_cart_rate` 는 E1 과 같은 식(`/ detail_view_sessions`) |
 | `behaviors` | `[{ event, done_sessions, cart_rate_with, cart_rate_without }]` · event ∈ `ingredient_view_mode_change`·`review_filter_apply`·`accordion_toggle`·`text_copy` | **조건부** · §6-2 |
 
 `content_kind` 는 상품 상세 안에서 읽는 10종만 프론트가 고른다 (`ingredient_list`·`ingredient_callout`·`clinical_claim`·
@@ -218,7 +220,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 {
   "by_segment": [
     { "segment_type": "skin_type", "segment_value": "dry", "segment_user_count": 1100, "session_count": 1500,
-      "product_view_sessions": 1240, "add_to_cart_sessions": 88, "view_to_cart_rate": 0.071, "avg_interest_score": 3.1 }
+      "product_view_sessions": 1240, "detail_view_sessions": 1300, "add_to_cart_sessions": 88, "view_to_cart_rate": 0.068, "avg_interest_score": 3.1 }
   ],
   "grid": null,
   "top_content": null,
@@ -229,7 +231,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 | 블록 | 원천 | 상태 |
 | --- | --- | --- |
 | `by_segment` | `persona_segment_daily_kpi` `product_id`·일자 합산. `segment_type` ∈ `skin_type`·`skin_tone` (있으면 `eye_color`·`hair_color` 도) | **조건부** — 마트 미구현 (dw-schema §4-6 후보). §6-4 |
-| `grid` | `[{ skin_type, skin_tone, product_view_sessions, add_to_cart_sessions, view_to_cart_rate }]` 20칸 | **조건부** · §6-4 (교차 축 마트). 화면 히트맵의 정본 |
+| `grid` | `[{ skin_type, skin_tone, product_view_sessions, detail_view_sessions, add_to_cart_sessions, view_to_cart_rate }]` 20칸 | **조건부** · §6-4 (교차 축 마트). 화면 히트맵의 정본 |
 | `top_content` | `[{ skin_type, content_kind, dwell_ms_sum, dwell_share }]` 타입 4행 × 상위 2 | **조건부** · §6-4 |
 | `same_skin_filter_rate` | `review_filter_apply(same_skin_type)` 세션 / 필터 사용 세션 | **조건부** · §6-2 behaviors 와 같은 마트 |
 
@@ -266,7 +268,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
   "by_location": [ { "section_id": "product_image", "event_name": "dead_click", "event_count": 412, "session_count": 380 } ],
   "counts": { "rage_click": 121, "dead_click": 412, "scroll_backtrack": 2900 },
   "quick_exit_rate": 0.29,
-  "entry_source": [ { "entry_source": "similar_products", "product_view_sessions": 860, "add_to_cart_sessions": 95, "view_to_cart_rate": 0.11 } ],
+  "entry_source": [ { "entry_source": "similar_products", "product_view_sessions": 860, "detail_view_sessions": 900, "add_to_cart_sessions": 95, "view_to_cart_rate": 0.106 } ],
   "event_volumes": [ { "event_name": "section_dwell", "event_count": 30000 } ]
 }
 ```
@@ -321,10 +323,10 @@ MySQL `dw` 스키마에 아래 컬럼만 있으면 E1·E2·E5·E7 이 돈다. E3
 
 | 마트 | 사용 컬럼 |
 | --- | --- |
-| `brand_daily_kpi` | key 전체, `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `unique_user_count`, `product_count_viewed`, `mart_processed_at` |
+| `brand_daily_kpi` | key 전체, `impression_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, **`detail_view_sessions`** (0.2.1, 데이터 235 수정안 2), `unique_user_count`, `product_count_viewed`, `mart_processed_at` |
 | `product_daily_kpi` | key 전체, `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `quick_look_sessions`, `product_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `unique_user_count`, `session_count`, `product_interest_score`, `mart_processed_at` |
 | `funnel_daily_kpi` | key 전체, `impression_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `click_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `mart_processed_at` |
-| `funnel_daily_kpi` (추가) | `checkout_sessions`, `purchase_sessions` |
+| `funnel_daily_kpi` (추가) | `checkout_sessions`, `purchase_sessions`, `detail_view_sessions` (§6-6) |
 | `product_daily_kpi` (추가) | `purchase_sessions`, `purchase_count`, `purchase_quantity` |
 | `ingredient_weekly_interest` | 전 컬럼 |
 | `brand_repurchase_daily` · `product_repurchase_daily` | 전 컬럼 (최신 스냅샷만 읽음) |
@@ -346,6 +348,8 @@ MySQL `dw` 스키마에 아래 컬럼만 있으면 E1·E2·E5·E7 이 돈다. E3
 | 6-3 | **`product_exit_daily`** (grain: …, product_id, `last_content_kind` · 컬럼: `exit_sessions`) 와 `product_daily_kpi` 에 `variant_select_count`, `quick_look_close_open_detail_count` | E2 `diagnostics` | 상품 진단 표의 이탈 지점·옵션 왕복·퀵룩→상세 |
 | 6-4 | **`persona_segment_daily_kpi` 물리화** (dw-schema §4-6 후보 그대로) + `segment_type = 'skin_type_x_skin_tone'` (`segment_value = "dry|fair"`) 행 추가, **`segment_content_daily`** (grain: …, skin_type, content_kind · `dwell_ms_sum`) | E4 `grid`·`top_content` | 히트맵 4×5 와 "고객군별 가장 오래 본 콘텍츠" |
 | 6-5 | **`friction_daily`**, **`exit_daily`**, **`entry_source_daily`** (§3 E6 표) | E6 전부 | 막히는 곳 화면 전체 |
+| 6-6 | **`detail_view_sessions`** 를 `view_to_cart_rate` 가 있는 마트 전부에 — `funnel_daily_kpi`(상품·브랜드 퍼널), `persona_segment_daily_kpi`·교차 축(6-4), `entry_source_daily`(6-5). `brand_daily_kpi` 는 데이터 235 수정안에 이미 포함 | E2 `funnel` 담기율, E4 `by_segment`·`grid`, E6 `entry_source` | 세션 합집합(상세 ∪ 퀵룩)이라 프론트·서버가 두 컬럼을 더해 만들 수 없다. 한 화면 안에서 브랜드(E1)와 상품(E2) 담기율 분모가 다르면 안 된다 |
+| 6-7 | **seed 세션 제외**를 퍼널 계열 마트(데이터 235 수정안 1: `funnel_session_fact`·`product_daily`·`funnel_daily`·`brand_daily`·`cross_brand_daily`)에 더해 E7 의 재구매·구매사유 마트에도 같은 원칙으로. 판정은 `session_id` 접두 `seed:` 보다 생성기가 우선으로 찍는 **`properties.seeded = true`** (`gen_behavior_logs.py` `is_seed`) 로 — 이 필드를 `event-properties-schema.md` 에 적어 달라 | 전 엔드포인트 | seed 는 페르소나 선호 주입용(persona-schema §9)이라 방문이 아니다. 전체 세션의 57% 가 seed 였다 |
 
 `docs/dashboard/action-prescription-prompt.md` §9 와 겹친다: §9-1 콘텐츠별 담기율 = 6-2 · §9-2 `scroll_backtrack` 의 `content_kind` 귀속 = 6-5 `friction_daily.section_id` · §9-6 겹쳐 보인 체류 제외 합계 = 6-2 물리화 때 `co_visible_blocks ≤ 2` 필터. 한 표로 본다.
 
@@ -366,11 +370,16 @@ MySQL `dw` 스키마에 아래 컬럼만 있으면 E1·E2·E5·E7 이 돈다. E3
 ## 8. 열린 질문
 
 1. `actorType` 기본을 `all` 로 둘지 `synthetic` 으로 둘지. PA 100명 로그는 정성 축이라(명세 §0-1) 정량 지표에 섞지
-   않기로 했는데, PA 의 `actor_type` 이 `web` 인지 `synthetic` 인지에 따라 기본값이 달라진다. 데이터 파트 확인 필요.
-2. **세포라 브랜드의 `brand_id` (결정안 0.2).** dw 의 `dim_product.brand_id` 는 원천 `products_200.json` 의 세포라 브랜드
+   않기로 했는데, PA 의 `actor_type` 이 `web` 인지 `synthetic` 인지에 따라 기본값이 달라진다.
+   **데이터 답(09-11): PA 도 전부 `synthetic`** (`gen_behavior_logs.py:26,499` 고정, 이번 실행 1,029,340 건 전량). 그래서 `actorType` 값으로는
+   PA 를 못 가른다. 기본값보다 PA 에 별도 `actor_type`(예: `agent`)을 줄 수 있는지가 먼저 — 데이터 파트 판단. 정해질 때까지 프론트 기본은 `all` 유지.
+2. **세포라 브랜드의 `brand_id` (결정안 0.2 → 데이터 확인 09-11: 결정안 그대로, `dim_brand` 56 행, 매핑 테이블 불필요).** dw 의 `dim_product.brand_id` 는 원천 `products_200.json` 의 세포라 브랜드
    번호(예 LANEIGE `6125`)를 문자열로 쓴다 (`derive_facts_job.py`). 등록 상품(SB…)만 shop_backend `brand_id` 로 덮어쓴다.
    그래서 세포라 브랜드는 shop_backend `brand` 테이블에 **`brand_id = 세포라 번호 문자열`(`"6125"`), `name = brand_name`** 으로
    시드하고 시연 판매자 계정에 연결하면 이 API 의 `brandId` 가 마트 `brand_id` 와 그대로 만난다. 매핑 테이블이 필요 없다.
    백엔드 시드(`docs/shop-backend-requests.md` 5·7번)에 이 규칙으로 부탁한다. 데이터 파트는 `dim_brand` 에 같은 값이
    들어가는지만 확인.
 3. `previous` 기간 비교를 서버가 줄지 프론트가 두 번 부를지. 초안은 서버가 준다 (요청 한 번).
+4. **E7 마트 3종(`brand_repurchase_daily`·`product_repurchase_daily`·`purchase_reason_daily`)은 실데이터로 검증된 적이 없다** (데이터 235 E2E 에서
+   셋 다 0 행 — 생성기가 `purchase` 를 안 만든다). 생성기가 purchase 를 내고 마트가 한 번 검증되기 전까지 프론트 E7 은 모의값으로 둔다.
+   백엔드도 E7 projection 을 그 뒤로 미룬다.

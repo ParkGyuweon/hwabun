@@ -32,6 +32,8 @@ export interface BrandPeriod {
   product_view_sessions: number;
   information_view_sessions: number;
   add_to_cart_sessions: number;
+  /** 상세 조회 ∪ 퀵룩 세션 — view_to_cart_rate 분모 (계약 0.2.1, 데이터 235 결함 보고). 마트에 아직 없으면 생략 */
+  detail_view_sessions?: number | null;
   unique_user_count: number;
   product_count_viewed: number;
   product_view_count: number;
@@ -53,6 +55,8 @@ export interface FunnelSessions {
   add_to_cart_sessions: number;
   quick_look_sessions?: number;
   quick_look_cart_sessions?: number;
+  /** 상세 조회 ∪ 퀵룩 세션 — view_to_cart_rate 분모 (계약 0.2.1, 데이터 235 결함 보고). 마트에 아직 없으면 생략 */
+  detail_view_sessions?: number | null;
 }
 
 export interface OverviewPayload extends MartEnvelope {
@@ -128,7 +132,7 @@ export interface BehaviorRow {
 
 export interface ContentPayload extends MartEnvelope {
   by_content_kind: ContentRow[];
-  brand: { product_view_sessions: number; add_to_cart_sessions: number; view_to_cart_rate: number | null };
+  brand: { product_view_sessions: number; add_to_cart_sessions: number; detail_view_sessions?: number | null; view_to_cart_rate: number | null };
   behaviors: BehaviorRow[] | null;
 }
 
@@ -141,6 +145,8 @@ export interface SegmentRow {
   session_count: number;
   product_view_sessions: number;
   add_to_cart_sessions: number;
+  /** 상세 조회 ∪ 퀵룩 세션 — view_to_cart_rate 분모 (계약 0.2.1, 데이터 235 결함 보고). 마트에 아직 없으면 생략 */
+  detail_view_sessions?: number | null;
   view_to_cart_rate: number | null;
   avg_interest_score: number | null;
 }
@@ -153,6 +159,7 @@ export interface SegmentsPayload extends MartEnvelope {
         skin_tone: string;
         product_view_sessions: number;
         add_to_cart_sessions: number;
+        detail_view_sessions?: number | null;
         view_to_cart_rate: number | null;
       }>
     | null;
@@ -189,6 +196,7 @@ export interface FrictionPayload extends MartEnvelope {
     entry_source: string;
     product_view_sessions: number;
     add_to_cart_sessions: number;
+    detail_view_sessions?: number | null;
     view_to_cart_rate: number | null;
   }> | null;
   event_volumes: Array<{ event_name: string; event_count: number }> | null;
