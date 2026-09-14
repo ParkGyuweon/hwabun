@@ -134,6 +134,7 @@ Event.product_id
 | `quantity_change` | `conversion` | 수량 변경 | 구매 의도 |
 | `begin_checkout` | `conversion` | 주문 시작 | Checkout 진입 |
 | `purchase` | `conversion` | 주문 완료 행동 로그 | 구매 전환. 매출·정산 근거로 사용하지 않음 |
+| `payment_failed` | `conversion` | 결제창 실패·취소 | 전환 마찰. 어디서 이탈하는지의 마지막 칸 |
 | `purchase_reason_select` | `validation` | 구매 직후 이유 선택 | 선언 이유와 행동 추론 대조 |
 | `remove_from_cart` | `hesitation` | 장바구니 상품 제거 | 전환 마찰 |
 | `hover_dwell` | `hesitation` | CTA hover 체류 | 구매 전 망설임 |
@@ -348,6 +349,7 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
 | `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
 | `purchase` | `order_id: string`, `items: object[]` | `order_value: number`, `currency: string` |
+| `payment_failed` | `order_id: string` | `reason_code: string`, `payment_method: string` |
 | `purchase_reason_select` | `order_id: string`, `reasons: string[]` | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 | `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |

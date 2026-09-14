@@ -80,7 +80,8 @@
         "purchase_reason_select",
         "banner_impression",
         "banner_click",
-        "login"
+        "login",
+        "payment_failed"
       ]
     },
     "intent": {
@@ -552,7 +553,8 @@
               "add_to_cart",
               "view_cart",
               "begin_checkout",
-              "purchase"
+              "purchase",
+              "payment_failed"
             ]
           }
         },
