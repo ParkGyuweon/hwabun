@@ -873,6 +873,61 @@ def _null_safe_join(left: Any, right: Any, columns: list[str]) -> Any:
     return left.join(renamed, condition, "left").drop(*aliases.values())
 
 
+PAYMENT_METHODS = ("kakaopay", "card", "test")
+ORDER_CHANNELS = ("backend", "local")
+
+
+def _order_payment_aggs(F: Any) -> list[Any]:
+    """주문 단위 결제 속성을 주문 fold 단계에서 한 번만 집는다.
+
+    ``paid_value`` · ``payment_method`` · ``order_channel`` 은 한 주문의 상품 row 마다
+    같은 값이 반복된다 (``derive_facts_job._purchase_fact``). 상품 row 를 그대로 더하면
+    상품 수만큼 부풀어 오르므로 ``order_id`` 로 접을 때 ``max`` 로 대표값 하나만 남긴다.
+    """
+
+    return [
+        F.max("paid_value").alias("paid_value"),
+        F.max("payment_method").alias("payment_method"),
+        F.max("order_channel").alias("order_channel"),
+    ]
+
+
+def _payment_split(orders_df: Any, key_columns: list[str]) -> Any:
+    """key 단위 결제수단·주문경로 분포. 행을 버리지 않고 축으로만 가른다.
+
+    ``order_channel='local'`` 은 브라우저에서만 만든 시연 주문이라 Backend 주문과
+    대사할 수 없다 (``event-properties-schema.md`` §3.16). 여기서 걸러내지 않는 이유는
+    무엇이 시연이었는지가 Mart 를 읽는 쪽에서 보여야 하기 때문이다. 조용히 빼면
+    재구매율이 왜 달라졌는지 되짚을 근거가 사라진다.
+
+    ``paid_value`` 합은 ``backend`` 주문만 센다. 시연 주문의 금액을 섞으면 실결제액
+    축이 시연 횟수에 따라 흔들린다.
+    """
+
+    from pyspark.sql import functions as F
+
+    def _count(column: str, value: str) -> Any:
+        return F.countDistinct(
+            F.when(F.col(column) == F.lit(value), F.col("order_id"))
+        ).cast("long")
+
+    aggregations = [
+        _count("order_channel", channel).alias(f"{channel}_order_count")
+        for channel in ORDER_CHANNELS
+    ] + [
+        _count("payment_method", method).alias(f"{method}_order_count")
+        for method in PAYMENT_METHODS
+    ]
+    return orders_df.groupBy(*key_columns).agg(
+        *aggregations,
+        F.sum(
+            F.when(F.col("order_channel") == F.lit("backend"), F.col("paid_value"))
+        )
+        .cast("decimal(18,2)")
+        .alias("backend_paid_value"),
+    )
+
+
 def _repurchase_orders(purchase_fact_df: Any, window_days: int, key_columns: list[str]) -> Any:
     """관측 창 안의 구매를 주문 단위로 접는다.
 
@@ -894,14 +949,16 @@ def _repurchase_orders(purchase_fact_df: Any, window_days: int, key_columns: lis
         # 구매가 없는 스냅샷도 스키마는 유지한다.
         empty = valid.withColumn("snapshot_date_kst", F.col("event_date_kst"))
         return empty.groupBy(*key_columns, "user_id", "order_id").agg(
-            F.min("event_time").alias("purchased_at")
+            F.min("event_time").alias("purchased_at"),
+            *_order_payment_aggs(F),
         )
     windowed = valid.where(
         F.col("event_date_kst")
         > F.date_sub(F.lit(snapshot).cast("date"), int(window_days))
     ).withColumn("snapshot_date_kst", F.lit(snapshot).cast("date"))
     return windowed.groupBy(*key_columns, "user_id", "order_id").agg(
-        F.min("event_time").alias("purchased_at")
+        F.min("event_time").alias("purchased_at"),
+        *_order_payment_aggs(F),
     )
 
 
@@ -940,7 +997,7 @@ def _repurchase_metrics(orders_df: Any, key_columns: list[str], window_days: int
         .alias("median_days_between_purchases"),
         F.current_timestamp().alias("mart_processed_at"),
     )
-    return (
+    summary = (
         result.withColumn(
             "repurchase_rate",
             _safe_ratio(F.col("repeat_buyer_count"), F.col("buyer_count")),
@@ -952,6 +1009,9 @@ def _repurchase_metrics(orders_df: Any, key_columns: list[str], window_days: int
         )
         .withColumn("window_end_date", F.col("snapshot_date_kst"))
     )
+    # 결제수단·주문경로 분포는 주문 단위라 구매자 단위 집계와 grain 이 다르다.
+    # 같은 groupBy 에 섞으면 한 주문의 상품 row 수만큼 중복되므로 따로 세어 붙인다.
+    return _null_safe_join(summary, _payment_split(orders_df, key_columns), key_columns)
 
 
 def _product_repurchase_daily(purchase_fact_df: Any, window_days: int) -> Any:
