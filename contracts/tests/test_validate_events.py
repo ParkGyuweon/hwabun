@@ -551,6 +551,97 @@ class EventValidatorTest(unittest.TestCase):
 
         self.assert_has_error(result.errors, "$.intent")
 
+    def purchase_event(self, **overrides: object) -> dict[str, object]:
+        """결제 필드를 모두 갖춘 최소 purchase 이벤트."""
+        event = copy.deepcopy(self.user_event)
+        event.update({
+            "event_name": "purchase",
+            "intent": "conversion",
+            "product_id": None,
+        })
+        properties: dict[str, object] = {
+            "order_id": "ORD-1",
+            "items": [{"product_id": "P1", "quantity": 1, "unit_price": 24.0}],
+            "payment_method": "kakaopay",
+            "paid_value": 24.0,
+            "order_channel": "backend",
+        }
+        properties.update(overrides)
+        event["properties"] = properties
+        return event
+
+    def test_purchase_accepts_required_payment_fields_without_optional_keys(self) -> None:
+        """pg_provider · payment_id · paid_at 은 키를 생략한다.
+
+        시연 경로의 주문은 confirm 을 건너뛰어 paid_at 이 없다. 이 세 키를 필수로
+        두면 그 purchase 가 전부 거절된다 (추유림 확인).
+        """
+        self.assertEqual([], self.validate_values([self.purchase_event()]).errors)
+
+    def test_purchase_accepts_optional_payment_fields_when_present(self) -> None:
+        event = self.purchase_event(
+            pg_provider="portone",
+            payment_id="hwabun-ORD-1",
+            paid_at="2026-08-31T05:10:00.000Z",
+        )
+
+        self.assertEqual([], self.validate_values([event]).errors)
+
+    def test_purchase_requires_each_payment_field(self) -> None:
+        """셋 중 하나라도 빠지면 거부한다. 없으면 결제수단·실결제액 축이 통째로 빈다."""
+        for missing in ("payment_method", "paid_value", "order_channel"):
+            event = self.purchase_event()
+            del event["properties"][missing]
+            with self.subTest(missing=missing):
+                self.assert_has_error(
+                    self.validate_values([event]).errors, "$.properties"
+                )
+
+    def test_purchase_rejects_unregistered_payment_method(self) -> None:
+        """enum 밖 결제수단은 거부한다. 통과시키면 결제수단 분포에 미등록 값이 섞인다."""
+        event = self.purchase_event(payment_method="naverpay")
+
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+    def test_purchase_rejects_unregistered_order_channel(self) -> None:
+        """order_channel 은 backend · local 뿐이다.
+
+        local 은 브라우저에서만 만든 시연 주문이라 Mart 가 매출성 집계에서 제외한다.
+        값이 흔들리면 그 분리가 무너진다.
+        """
+        event = self.purchase_event(order_channel="mobile")
+
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+    def test_purchase_rejects_null_optional_payment_keys(self) -> None:
+        """선택 키는 null 이 아니라 키 생략이다.
+
+        null 을 허용하면 "값이 없다"와 "아직 안 들어왔다"가 구분되지 않는다.
+        """
+        for key in ("pg_provider", "payment_id", "paid_at"):
+            event = self.purchase_event(**{key: None})
+            with self.subTest(key=key):
+                self.assert_has_error(
+                    self.validate_values([event]).errors, "$.properties"
+                )
+
+    def test_purchase_rejects_negative_paid_value(self) -> None:
+        event = self.purchase_event(paid_value=-1)
+
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+    def test_payment_failed_requires_order_id(self) -> None:
+        """주문 단위 Event 라 order_id 가 없으면 실패를 어느 주문에 붙일지 알 수 없다."""
+        event = copy.deepcopy(self.user_event)
+        event.update({
+            "event_name": "payment_failed",
+            "intent": "conversion",
+            "product_id": None,
+        })
+        event["properties"] = {"reason_code": "USER_CANCEL"}
+
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
     def test_seeded_marker_must_be_a_boolean_on_synthetic_events(self) -> None:
         """시드 표식은 boolean 이다. 문자열 "true" 는 걸러야 한다.
 

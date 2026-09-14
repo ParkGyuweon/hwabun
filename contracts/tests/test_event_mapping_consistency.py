@@ -35,6 +35,22 @@ class EventMappingConsistencyTest(unittest.TestCase):
         )
         if case["product_id_policy"] == "conditional":
             event["page_type"] = "product_list"
+        if case["event_name"] == "purchase":
+            event["properties"] = {
+                "order_id": "ORD-20260903-0001",
+                "items": [
+                    {"product_id": "P342", "quantity": 1, "unit_price": 24.0}
+                ],
+                "payment_method": "kakaopay",
+                "paid_value": 24.0,
+                "order_channel": "backend",
+            }
+        if case["event_name"] == "payment_failed":
+            event["properties"] = {
+                "order_id": "ORD-20260903-0001",
+                "reason_code": "user_cancel",
+                "payment_method": "kakaopay",
+            }
         if case["event_name"] in {"banner_impression", "banner_click"}:
             event["properties"] = {
                 "banner_type": "concern",
