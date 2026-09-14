@@ -8,6 +8,8 @@
  * 순서
  *   1. 목을 먼저 만든다 (동기). 화면이 비는 순간이 없다
  *   2. 식별자(회원 accountId 또는 페르소나 id)가 있으면 서버를 부른다. 없으면 부르지 않는다 (계약 §5 · 09-10 합의)
+ *      부르기 전에 로거의 전송(`settled`)을 기다린다 — "좋아요 → 뒤로 가기" 에서 좋아요가 수집 API 에 닿기 전에
+ *      추천을 읽으면 옛 목록이 온다 (AI 파트 요청 2026-09-14 저녁 §2). 목이 먼저 깔려 있어 기다리는 동안 화면은 비지 않는다
  *   3. 응답이 오면 카탈로그에 있는 상품만 남기고 바꿔 끼운다. 비었거나 실패면 목 그대로
  *
  * 다시 부르는 때: 식별자·축·정책·칸 수가 바뀔 때. 장바구니는 아니다 — 서버는 자기 상태(POST /api/events →
@@ -17,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type BuildInput, buildRecommendation } from '../lib/recommendMock';
 import { fetchRecommendation } from '../lib/recommendApi';
+import { settled as logsSettled } from '../lib/logger';
 import type { RecommendResponse } from '../types/recommendation';
 import type { MemberProfile } from '../lib/memberProfile';
 
@@ -42,13 +45,18 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
   useEffect(() => {
     if (!key || !identityId) return;
     const controller = new AbortController();
-    void fetchRecommendation(
-      { personaId: identityId, size: k, bannerSlots, reserved, axes, hero: heroPolicy ?? 'top', profile },
-      controller.signal,
-    ).then((res) => {
-      if (controller.signal.aborted) return;
-      if (res) setServer({ key, response: res });
-    });
+    void logsSettled()
+      .then(() => {
+        if (controller.signal.aborted) return null;
+        return fetchRecommendation(
+          { personaId: identityId, size: k, bannerSlots, reserved, axes, hero: heroPolicy ?? 'top', profile },
+          controller.signal,
+        );
+      })
+      .then((res) => {
+        if (controller.signal.aborted) return;
+        if (res) setServer({ key, response: res });
+      });
     return () => controller.abort();
     // key 가 입력 전부를 담는다. axes 배열 참조가 바뀌어도 내용이 같으면 다시 부르지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps

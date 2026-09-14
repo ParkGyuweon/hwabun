@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import type { AccountSession } from '../../lib/auth';
 import { logout } from '../../lib/auth';
 import {
@@ -25,6 +26,9 @@ import { formatPrice } from '../../lib/format';
  * 둘 다 이 브라우저 저장본이고, 화면에 그렇게 적는다. API 가 열리면 저장·조회 함수 본문만 바뀐다.
  *
  * 비밀번호 변경·회원 탈퇴는 백엔드 API 가 없어 넣지 않았다. 빈 버튼을 두는 것보다 없는 것이 낫다.
+ *
+ * 모달은 `document.body` 로 포털한다. 헤더(`.site-header`)에 `backdrop-filter` 가 있어 그 안의 `position: fixed` 는
+ * 화면이 아니라 헤더 상자를 기준으로 잡힌다 — 헤더 높이 안에서 가운데 정렬돼 카드 윗부분이 잘렸다 (팀원 제보 09-14).
  */
 export default function MyPage({ session, onClose }: { session: AccountSession; onClose: () => void }) {
   const getProfile = useCallback(() => loadMemberProfile(session.id), [session.id]);
@@ -56,7 +60,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
     setSavedAt(Date.now());
   };
 
-  return (
+  return createPortal(
     <div className="auth-modal" role="presentation" onClick={onClose}>
       <div className="auth-modal__card mypage" role="dialog" aria-modal="true" aria-label="내 정보" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="auth-modal__close" aria-label="닫기" onClick={onClose}>
@@ -147,7 +151,8 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

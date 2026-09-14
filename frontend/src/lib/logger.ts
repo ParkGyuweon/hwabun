@@ -531,6 +531,32 @@ const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
 const dropWarned = new Set<number>();
 
 /**
+ * 지금 나가고 있는 전송들. `settled()` 가 이것을 기다린다.
+ *
+ * 수집 API 는 Kafka 로 보내며 추천 서버의 사용자 상태도 같이 바꾼다. 그래서 "좋아요 → 뒤로 가기" 직후의
+ * 추천 요청이 좋아요 전송보다 먼저 서버에 닿으면 옛 목록을 받는다 (AI 파트 요청 2026-09-14 저녁 §2).
+ * 화면 응답은 이것을 기다리지 않는다 — 추천 재요청처럼 "서버 상태를 읽는" 쪽만 기다린다.
+ */
+const inFlight = new Set<Promise<void>>();
+
+/** 전송 완료를 기다리는 상한. 수집 서버가 느려도 목록이 이만큼 이상 목(mock)에 머물면 안 된다 */
+const SETTLE_TIMEOUT_MS = 1500;
+
+/**
+ * 큐를 비우고, 나가고 있는 전송이 모두 끝날 때까지 기다린다 (상한 `SETTLE_TIMEOUT_MS`).
+ *
+ * 백오프 중(수집 서버 장애)이면 큐는 그대로 두고 즉시 끝난다 — 죽은 서버를 기다리느라 화면을 세우지 않는다.
+ * 실패·거절도 "끝남" 으로 친다. 결과가 어떻든 그 뒤의 추천 요청은 나가야 한다.
+ */
+export function settled(): Promise<void> {
+  flush();
+  if (inFlight.size === 0) return Promise.resolve();
+  const all = Promise.allSettled([...inFlight]).then(() => undefined);
+  const cap = new Promise<void>((resolve) => window.setTimeout(resolve, SETTLE_TIMEOUT_MS));
+  return Promise.race([all, cap]);
+}
+
+/**
  * 배치 전송 지점.
  *
  * 화면 응답이 로그 저장을 기다리지 않도록 반드시 비동기로 유지한다.
@@ -610,7 +636,7 @@ export function flush(useBeacon = false): void {
  * 그건 토큰 문제가 아니라 서버가 익명을 막고 있다는 뜻이라, 다시 보내도 같다.
  */
 function post(body: string, batch: LogEnvelope[], token: string | null, retriedAnonymously = false): void {
-  fetch(COLLECT_ENDPOINT, {
+  const request = fetch(COLLECT_ENDPOINT, {
     method: 'POST',
     headers: token
       ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
@@ -666,6 +692,9 @@ function post(body: string, batch: LogEnvelope[], token: string | null, retriedA
       // 네트워크 오류·타임아웃은 지나가는 문제라 다시 보낸다
       requeue(batch, error instanceof Error ? error.message : '네트워크 오류');
     });
+
+  inFlight.add(request);
+  void request.finally(() => inFlight.delete(request));
 }
 
 /**
