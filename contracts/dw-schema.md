@@ -460,6 +460,13 @@ NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`�
 제거가 기준이라 정책 버전으로 다시 쪼개면 같은 세션이 여러 행에 걸린다. 그쪽 사전/사후는
 `analytics_baseline`의 기준선 기간으로 가른다.
 
+**실데이터 검증 범위** — 현재 화면이 히어로 1칸(`hero=new_brand`)이라 실행 로그의
+`banner_type`이 `new_brand` 한 종류뿐이다. `new_brand`는 `banner_value=NULL`이 허용되는
+유일한 타입이므로, 다른 축(`concern`·`ingredient`·`clean`·`price_bin`·`category`·`segment`)의
+`banner_value` 규칙은 실데이터가 아니라 단위 테스트로만 검증된다. 배너 행이 복구되면
+재검증 대상이다. `trait_source`는 세 값(`profile`·`explore`·`coldstart`)이 실행 로그에
+모두 나타난다.
+
 ### 4.11 `user_trait_daily`
 
 ```text
@@ -501,11 +508,27 @@ input = sessionized_events
 같은 세션·상품의 선행 `recommendation_click`을 사용한다. 배너 귀속은 같은 세션·상품의
 선행 `banner_click`을 사용하며 직전 Event만으로 제한하지 않는다.
 
+선행 `recommendation_click`은 **`recommendation_id`가 비어 있지 않을 때만** 추천 귀속으로
+센다. Front가 이 Event를 내는 세 지점(목록 맞춤 기획전 `promo_pick`, 히어로 배너, 상세
+유사 상품)이 모두 값을 채우므로 누락이 없다. 형식은 서버 응답의 uuid hex 또는 Front가
+만든 `rec-{product_id}-{persona}` 두 가지이며 둘 다 비어 있지 않다(프론트 확인
+2026-09-14). 유사 상품이 추천 API로 넘어가면 형식만 uuid로 바뀌고 조건은 그대로다.
+
 `brand_view_sessions`를 공통 분모로 `cross_brand_entry_rate`,
 `recommendation_cross_brand_entry_rate`, `banner_cross_brand_entry_rate`를 저장한다. 또한
 전체 교차 유입 세션을 분모로 `recommendation_share_of_cross_brand_entries`,
 `banner_share_of_cross_brand_entries`를 저장한다. `top_source_brand_id`는 공개 임계값과
 정책 버전이 확정될 때까지 산출하지 않는다.
+
+추천과 배너는 **동시에 귀속될 수 있다.** 두 기여 세션 수를 더해 전체 교차 유입과
+비교하지 않는다. 교차 유입이 0인 행의 두 share는 0이 아니라 NULL이다.
+
+브랜드를 모르는 조회(`brand_id`가 NULL이거나 Dimension에 없는 상품)는 어느 브랜드에도
+귀속하지 않는다. 직전 상품이나 세션의 첫 상품으로 추정하지 않는다
+([`event-attribution-contract.md`](./event-attribution-contract.md) §2).
+
+이 Mart만 실행 축에 `generator_type`이 없다. 대시보드 엔드포인트가 쓰지 않아 제외했다
+(프론트 확인 2026-09-14). 필요해지면 다른 Mart와 같은 방식으로 추가한다.
 
 ### 4.13 `analytics_baseline`
 
