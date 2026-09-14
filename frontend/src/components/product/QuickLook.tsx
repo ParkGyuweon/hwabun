@@ -7,6 +7,7 @@ import VariantPicker from './VariantPicker';
 import { IMAGE_WIDTH_MAIN, sizedImage } from '../../lib/image';
 import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
+import { setWished, useWished } from '../../lib/wishlist';
 import type { Product, ProductVariant } from '../../types/product';
 import type { CartItem } from '../../types/cart';
 
@@ -34,7 +35,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
   const [variant, setVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [addedAt, setAddedAt] = useState<number | null>(null);
-  const [loved, setLoved] = useState(false);
+  // 세션 동안 기억한다 (lib/wishlist). 상세에서 찜한 것도 여기 켜진다
+  const loved = useWished(product.product_id);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // 렌더 중에는 Date.now() 를 부르지 않는다. 실제 진입 시각은 이펙트에서 채운다 (useExitSummary 와 동일)
@@ -47,7 +49,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
    * 리렌더 전 클로저가 잡혀 added_to_cart 가 false 로 나간다.
    */
   const addedRef = useRef(false);
-  const lovedRef = useRef(false);
+  const lovedRef = useRef(loved);
 
   /**
    * 닫힘 요약. 열림(quick_look)과 짝이다.
@@ -131,7 +133,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
   const toggleWishlist = () => {
     const next = !loved;
     lovedRef.current = next;
-    setLoved(next);
+    setWished(product.product_id, next);
     setWishNotice(next ? 'add' : 'remove');
     track('wishlist_toggle', {
       product_id: product.product_id,
