@@ -125,7 +125,7 @@ class RawSinkConfigTest(unittest.TestCase):
 
 
 class CleanEventsConfigTest(unittest.TestCase):
-    def test_q2_event_intents_match_the_42_event_json_contract(self):
+    def test_q2_event_intents_match_the_43_event_json_contract(self):
         contract_path = Path(__file__).parents[2] / "contracts" / "event-schema.json"
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
         registered = set(contract["properties"]["event_name"]["enum"])
@@ -146,7 +146,7 @@ class CleanEventsConfigTest(unittest.TestCase):
             if intent:
                 contracted_intents.update({event_name: intent for event_name in events})
 
-        self.assertEqual(42, len(registered))
+        self.assertEqual(43, len(registered))
         self.assertEqual(registered, set(EVENT_INTENTS))
         self.assertEqual(contracted_intents, EVENT_INTENTS)
         self.assertEqual("session", EVENT_INTENTS["banner_impression"])
