@@ -197,7 +197,7 @@ class Engine:
         self.states = {}                        # persona_id -> UserVector (Redis 자리)
         # 세션 상태 영속화 (Jira 224) — 이벤트 로그를 재생해 재시작 전 상태로 돌아간다
         self.session_log = SessionLog()
-        n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False))
+        n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False, source="replay"))
         self.session_replayed = {"personas": n_p, "events": n_e, "ms": ms, "path": self.session_log.path}
         self.load_ms = (time.perf_counter() - t0) * 1000
 

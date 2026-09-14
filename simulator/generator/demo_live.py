@@ -1,0 +1,244 @@
+# -*- coding: utf-8 -*-
+"""
+시연용 한 방 스크립트 — PC 페르소나 9,900명의 행동 로그를 Kafka 로 쏟아 넣고 추천 서버 `/live` 에서 본다 (Jira 295)
+================================================================================
+
+    python simulator/generator/demo_live.py                 # 9,900명 · 3,000건/초 · Kafka(127.0.0.1:9092)
+    python simulator/generator/demo_live.py --rate 5000     # 더 세게
+    python simulator/generator/demo_live.py --http          # Kafka 없이 추천 서버 POST /api/events 로 직접 (파티션 칸은 비어 있다)
+    python simulator/generator/demo_live.py --max-events 1000000   # 100만 건만
+
+무엇을 하는가
+    1. 추천 서버(`--recommend`, 기본 http://127.0.0.1:8300)가 떠 있는지 `/health` 로 확인한다.
+    2. Kafka(`--bootstrap`, 기본 127.0.0.1:9092)에 붙을 수 있는지 본다. 못 붙으면 `--http` 로 물러난다(경고 출력).
+    3. 9,900명 로그가 캐시(`simulator/generator/.cache/demo_behavior_9900.jsonl`)에 없으면 `gen_behavior_logs.py --limit 9900`
+       으로 만든다 (약 1,030만 건 · 6.9GB · 1분). 있으면 그대로 쓴다.
+    4. 로그를 **key = session_id** 로 Kafka `activity-events` 에 초당 `--rate` 건씩 넣는다 — 수집기(backend/)와 같은 규칙이라
+       파티션 3개로 갈라지고, 추천 서버 소비자가 읽어 상태에 반영한다. 그 사이 `/api/recommend` 도 초당 2~3번 불러
+       응답 시간 칸을 살린다.
+    5. 10초마다 진행을 찍고, 끝나면 `/live/stats` 요약을 출력한다.
+
+무엇을 보는가
+    브라우저에서 `<추천 서버>/live`. 초당 반영 이벤트 · Kafka 파티션 3개별 소비 · 상태 바뀐 사용자(→ 9,900) · 추천 p50/p95.
+
+주의
+    - 추천 서버는 `KAFKA_BOOTSTRAP_SERVERS` 를 주고 띄워야 Kafka 를 읽는다. 로컬은 `start-local.bat`(Kafka 4.2.1) 뒤
+      `KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092 python -m uvicorn batch.serving.recommend_server:app --port 8300`.
+    - 시연 중 추천 서버 세션 로그(`SESSION_EVENTS_PATH`)가 커진다. 시연 전용 경로를 주는 것이 깔끔하다.
+    - Windows 는 `localhost` 가 IPv6 폴백으로 2초 걸린다 — 주소는 전부 `127.0.0.1`.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CACHE = os.path.join(HERE, ".cache", "demo_behavior_9900.jsonl")
+
+
+def http_json(url, body=None, timeout=20):
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method="POST" if data else "GET")
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def port_open(hostport, timeout=2.0):
+    host, port = hostport.rsplit(":", 1)
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def ensure_log(limit, path):
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        print(f"[demo] 로그 캐시 사용: {path} ({os.path.getsize(path)/1e9:.1f}GB)")
+        return path
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    print(f"[demo] 로그 생성 중: {limit:,}명 → {path}  (약 1분)")
+    cmd = [sys.executable, os.path.join(HERE, "gen_behavior_logs.py"), "--limit", str(limit), "--out", path]
+    env = dict(os.environ, PYTHONUTF8="1")
+    r = subprocess.run(cmd, env=env)
+    if r.returncode != 0 or not os.path.exists(path):
+        raise SystemExit("로그 생성 실패")
+    return path
+
+
+class Ticker(threading.Thread):
+    """시연 동안 /api/recommend 를 초당 2~3번 — /live 의 응답 시간 칸을 살린다"""
+    def __init__(self, base, limit):
+        super().__init__(daemon=True)
+        self.base, self.limit, self.stop = base, limit, threading.Event()
+
+    def run(self):
+        while not self.stop.is_set():
+            pid = f"PC{random.randint(1, self.limit):05d}"
+            try:
+                http_json(f"{self.base}/api/recommend?persona_id={pid}&size=10&hero=new_brand&banner_slots=1")
+            except Exception:
+                pass
+            self.stop.wait(0.4)
+
+
+def stream_kafka(path, bootstrap, topic, rate, max_events):
+    from confluent_kafka import Producer
+    p = Producer({"bootstrap.servers": bootstrap, "linger.ms": 20, "batch.num.messages": 2000,
+                  "queue.buffering.max.messages": 500000, "compression.type": "lz4"})
+    failed = [0]
+
+    def on_delivery(err, _msg):
+        if err is not None:
+            failed[0] += 1
+    t0 = time.time(); n = 0; last = t0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                key = json.loads(line).get("session_id") or ""
+            except Exception:
+                continue
+            while True:
+                try:
+                    p.produce(topic, value=line.encode("utf-8"), key=key.encode("utf-8"), on_delivery=on_delivery)
+                    break
+                except BufferError:
+                    p.poll(0.05)
+            n += 1
+            if n % 500 == 0:
+                p.poll(0)
+            target = t0 + n / rate
+            now = time.time()
+            if now < target:
+                time.sleep(min(0.05, target - now))
+            if now - last >= 10:
+                last = now
+                print(f"[demo] Kafka 로 {n:,}건 · 실패 {failed[0]} · {n/(now-t0):,.0f}건/초", flush=True)
+            if max_events and n >= max_events:
+                break
+    p.flush(60)
+    return n, failed[0]
+
+
+def stream_http(path, base, rate, max_events, batch=50):
+    """Kafka 없이 추천 서버에 직접. 이벤트 모양은 /api/events 의 {persona_id, events[]}"""
+    import queue
+    q = queue.Queue(maxsize=200); ok = [0]; fail = [0]; lock = threading.Lock()
+
+    def worker():
+        while True:
+            item = q.get()
+            if item is None:
+                return
+            pid, evs = item
+            try:
+                http_json(f"{base}/api/events", {"persona_id": pid, "events": evs})
+                with lock:
+                    ok[0] += len(evs)
+            except Exception:
+                with lock:
+                    fail[0] += len(evs)
+    ths = [threading.Thread(target=worker, daemon=True) for _ in range(6)]
+    for t in ths:
+        t.start()
+    t0 = time.time(); n = 0; last = t0; cur = None; buf = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            pid = d.get("persona_id")
+            if pid != cur or len(buf) >= batch:
+                if buf:
+                    q.put((cur, buf))
+                buf, cur = [], pid
+            buf.append({"event_name": d.get("event_name"), "product_id": d.get("product_id"),
+                        "properties": d.get("properties") or {}})
+            n += 1
+            target = t0 + n / rate
+            now = time.time()
+            if now < target:
+                time.sleep(min(0.05, target - now))
+            if now - last >= 10:
+                last = now
+                print(f"[demo] HTTP 로 {n:,}건 읽음 · 반영 {ok[0]:,} · 실패 {fail[0]:,} · {n/(now-t0):,.0f}건/초", flush=True)
+            if max_events and n >= max_events:
+                break
+    if buf:
+        q.put((cur, buf))
+    for _ in ths:
+        q.put(None)
+    for t in ths:
+        t.join()
+    return n, fail[0]
+
+
+def main():
+    ap = argparse.ArgumentParser(description="9,900명 로그를 쏟아 넣고 /live 로 본다")
+    ap.add_argument("--recommend", default="http://127.0.0.1:8300")
+    ap.add_argument("--bootstrap", default="127.0.0.1:9092")
+    ap.add_argument("--topic", default="activity-events")
+    ap.add_argument("--rate", type=int, default=3000, help="초당 이벤트 수 (기본 3,000)")
+    ap.add_argument("--limit", type=int, default=9900, help="페르소나 수")
+    ap.add_argument("--max-events", type=int, default=0, help="이만큼만 보내고 멈춘다 (0 = 전부, 9,900명은 약 1,030만 건)")
+    ap.add_argument("--log", default=CACHE, help="행동 로그 경로 (없으면 생성)")
+    ap.add_argument("--http", action="store_true", help="Kafka 대신 추천 서버 POST /api/events 로 직접")
+    ap.add_argument("--no-ticker", action="store_true", help="/api/recommend 를 같이 부르지 않는다")
+    a = ap.parse_args()
+
+    try:
+        h = http_json(f"{a.recommend}/health")
+    except Exception as ex:
+        raise SystemExit(f"추천 서버가 응답하지 않는다: {a.recommend} ({ex}). 먼저 띄우십시오")
+    kafka_state = h.get("kafka_state") or {}
+    use_kafka = not a.http
+    if use_kafka and not port_open(a.bootstrap):
+        print(f"[demo] Kafka {a.bootstrap} 에 붙을 수 없다 → HTTP 직접 전송으로 물러난다 (파티션 칸은 비어 있다)")
+        use_kafka = False
+    if use_kafka and not kafka_state:
+        print("[demo] 경고: 추천 서버가 KAFKA_BOOTSTRAP_SERVERS 없이 떠 있다 — Kafka 에 넣어도 서버가 읽지 않는다. "
+              "서버를 KAFKA_BOOTSTRAP_SERVERS 로 다시 띄우거나 --http 를 쓰십시오")
+    path = ensure_log(a.limit, a.log)
+    print(f"[demo] 보기: {a.recommend}/live   (경로: {'Kafka ' + a.bootstrap + ' → 파티션 3 → 소비자' if use_kafka else 'HTTP 직접'} · {a.rate:,}건/초)")
+
+    ticker = None
+    if not a.no_ticker:
+        ticker = Ticker(a.recommend, a.limit); ticker.start()
+    t0 = time.time()
+    try:
+        if use_kafka:
+            n, failed = stream_kafka(path, a.bootstrap, a.topic, a.rate, a.max_events)
+        else:
+            n, failed = stream_http(path, a.recommend, a.rate, a.max_events)
+    except KeyboardInterrupt:
+        print("\n[demo] 중단"); n, failed = 0, 0
+    finally:
+        if ticker:
+            ticker.stop.set()
+    dt = time.time() - t0
+    print(f"[demo] 끝 — {n:,}건 / {dt:,.0f}초 ({(n/dt if dt else 0):,.0f}건/초) · 실패 {failed}")
+    try:
+        s = http_json(f"{a.recommend}/live/stats")
+        k = s.get("kafka") or {}
+        print(f"[demo] /live: 반영 누적 {s['events']['total']:,} · 사용자 {s['personas_touched']:,} · "
+              f"파티션 {s['partitions']} · 추천 p50 {s['recommend']['p50_ms']}ms p95 {s['recommend']['p95_ms']}ms"
+              + (f" · Kafka processed {k.get('processed'):,} filtered {k.get('filtered'):,} lag {k.get('lag')}" if k else ""))
+    except Exception:
+        pass
+
+
+if __name__ == "__main__":
+    main()

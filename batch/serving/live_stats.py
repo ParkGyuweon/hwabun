@@ -43,7 +43,7 @@ class LiveStats:
 
     # ── 기록 ────────────────────────────────────────────────────────────
     def record_events(self, persona_id, events, source="http", partition=None):
-        if not events:
+        if not events or source == "replay":       # 기동 시 세션 로그 재생은 "지금 들어온 것" 이 아니다
             return
         now = time.time()
         names = [e.get("event_name") if isinstance(e, dict) else str(e) for e in events]
