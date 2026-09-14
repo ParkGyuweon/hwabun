@@ -212,3 +212,20 @@ python gen_behavior_logs.py --limit 50 \
   --scenario-id normal_day \
   --simulation-run-id run_20260831_001
 ```
+
+## 시연: 9,900명을 쏟아 넣고 실시간으로 본다 — `demo_live.py` (Jira 295)
+
+```bash
+# 1) Kafka (로컬: C:/Users/SSAFY/kafka_2.13-4.2.1/start-local.bat, 토픽 activity-events 파티션 3)
+# 2) 추천 서버를 Kafka 구독으로
+KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092 SESSION_EVENTS_PATH=/tmp/demo_session.jsonl python -m uvicorn batch.serving.recommend_server:app --port 8300
+# 3) 한 방
+python simulator/generator/demo_live.py                # 9,900명 · 3,000건/초 · 캐시 없으면 로그 생성(1분, 6.9GB)
+python simulator/generator/demo_live.py --rate 5000 --max-events 3000000
+python simulator/generator/demo_live.py --http         # Kafka 없이 (파티션 칸은 비어 있다)
+```
+
+브라우저 `http://127.0.0.1:8300/live`: 초당 반영 이벤트(60초 막대) · **Kafka 파티션 3개별 소비**(key = session_id 라 사람이
+파티션에 갈린다) · 상태 바뀐 사용자(→ 9,900) · 방금 바뀐 사용자 40명 · 추천 p50/p95. 실측(2026-09-14, 노트북): 3,000건/초
+투입에 소비 lag 3 이하, 추천 p50 1.2ms 유지. 5,000건/초도 lag 두 자리. 상태에 영향 없는 이벤트(dwell 류 약 30%)는
+소비자가 걸러(`filtered`) 화면 카운터엔 반영분만 잡힌다. 로그는 `.cache/` 에 남고 gitignore 다.

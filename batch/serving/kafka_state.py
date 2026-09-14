@@ -123,7 +123,9 @@ class StateConsumer(threading.Thread):
     def process_batch(self, values) -> int:
         """메시지 value 들 → persona 별로 묶어 observe. 처리한 이벤트 수를 돌려준다"""
         by_pid: dict[str, list] = {}
-        for v in values:
+        part_of: dict[str, object] = {}
+        for item in values:                                    # value 또는 (value, partition)
+            v, part = (item if isinstance(item, tuple) else (item, None))
             ev = parse(v)
             if ev is None:
                 self.stats["invalid"] += 1
@@ -136,9 +138,11 @@ class StateConsumer(threading.Thread):
                 continue
             by_pid.setdefault(ev["persona_id"], []).append(
                 {"event_name": ev["event_name"], "product_id": ev["product_id"], "properties": ev["properties"]})
+            part_of.setdefault(ev["persona_id"], part)          # key=session_id 라 한 사람은 한 파티션
         n = 0
         for pid, evs in by_pid.items():
-            n += self.engine.observe(pid, evs, persist=False)   # 상태만 반영
+            n += self.engine.observe(pid, evs, persist=False,   # 상태만 반영
+                                     source="kafka", partition=part_of.get(pid))
         if by_pid:                                             # 세션 로그 JSONL 은 배치당 파일 한 번만 연다
             self.engine.session_log.append_many(by_pid.items())
         if n:
@@ -190,7 +194,8 @@ class StateConsumer(threading.Thread):
                             if getattr(err, "code", lambda: None)() == getattr(err, "_PARTITION_EOF", -191):
                                 continue
                             raise RuntimeError(str(err))
-                        values.append(m.value())
+                        part = getattr(m, "partition", None)             # 파티션 번호는 /live 가 보인다 (Jira 295)
+                        values.append((m.value(), part() if callable(part) else None))
                     self.process_batch(values)
                     consumer.commit(asynchronous=False)    # 상태 반영·기록 뒤에 commit
                     self.stats["commits"] += 1

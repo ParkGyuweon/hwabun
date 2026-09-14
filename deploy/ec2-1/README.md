@@ -98,6 +98,7 @@ docker compose exec recommend python -c "import urllib.request;print(urllib.requ
 | --- | --- |
 | 포트 | 8300, 컨테이너 네트워크 안에서만 (`expose`). 인증이 없어 외부에 열지 않는다 |
 | 백엔드 → 추천 | `RECOMMEND_URL=http://recommend:8300` — 읽는 쪽은 백엔드 프록시 브랜치 `feat/recommendation-proxy-mvp`(dev 미머지, 2026-09-14). dev 의 `backend/`(수집기)는 이 값을 쓰지 않는다 |
+| 추천 실시간 현황 | `GET /live`(시연용 페이지)·`/live/stats` — 내부 전용. 밖에 보이려면 nginx `location = /live` · `location /live/` → `http://recommend:8300` 한 블록 추가 (Jira 295) |
 | 추천 신규 규칙 | `NEW_BRAND_DAYS=14` · `NEW_BRAND_ALWAYS_PREFIX=SB` — SSAFY Beauty 8개는 09-23 이후에도 신규(히어로 `new_brand` 후보) 로 남는다 (Jira 249) |
 | 기동 시간 | 첫 요청 전 모델·페르소나 로드 약 4~10초. `start_period` 40초 뒤 헬스체크 |
 | 워커 | **1**. 사용자 상태·등록 상품이 프로세스 메모리라 늘리면 답이 갈린다. 확장은 Redis 도입 뒤 |
