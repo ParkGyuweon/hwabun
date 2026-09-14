@@ -2,7 +2,7 @@
 
 HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)과 인사이트 대시보드.
 
-기준일 2026-09-11
+기준일 2026-09-14
 
 ## 1. 시스템 아키텍처
 
@@ -15,27 +15,28 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
                                           │                         │
               ┌───────────────────────────┘                         └──────────────────────┐
               ▼                                                                             ▼
-[ 쇼핑몰 백엔드 · shop_backend/ (Spring, 8090, MySQL) ]          [ 수집 · backend/ (Spring, 8080) ]
+[ 쇼핑몰 백엔드 · shop_backend/ (Spring, 8090, MySQL) — 배포 산출물엔 없음 ]   [ 수집 · backend/ (Spring, 8080) ]
  로그인(JWT)·브랜드·상품·주문·결제·리뷰·피드백·정산·판매자 대시보드     POST /api/events → 검증 → Kafka activity-events
  상품 등록 계약(어휘 검증·unmapped 저장) 구현, dev 머지              key=session_id · 파티션 3 · 백프레셔 429/503
-              │  /api/recommend 프록시(백엔드 브랜치 feat/recommendation-proxy-mvp, dev 미머지) · 승인 훅 대신 5분 주기 카탈로그 동기화
+              │  /api/recommend 프록시(백엔드 브랜치 feat/recommendation-proxy-mvp, dev 미머지 — hero·가입 속성 4개를 버림) · 승인 훅 대신 5분 주기 카탈로그 동기화
               │  (지금) 프론트가 Vite 프록시로 8300 을 직접 부름 · 없으면 목            │
               ▼                                                                       ▼
 [ 추천 · batch/serving/ (FastAPI, 8300, 내부 전용) ]              [ 처리 · streaming/ (Spark 3.5.6) ]
- GET  /api/recommend    items 10 + hero (hero=new_brand · banner_slots=1, Jira 237; 배너 행 6칸은 09-10 제거)   Q1 raw_sink → raw_events (Parquet)
+ GET  /api/recommend    items 10 + hero (hero=new_brand · banner_slots=1, Jira 237). 신규 = 등록 후 14일(brand_id 기준, Jira 247)   Q1 raw_sink → raw_events (Parquet)
  POST /api/products     등록 즉시 카탈로그 편입 (SSAFY Beauty 8개 편입됨)         Q2 clean_events (스키마 검증·중복 제거)
  DELETE /api/products   판매 중단                                                 Q3 derive_facts → 상품·배너 Fact
  POST /api/events       세션 상태 갱신 (이벤트 로그 영속, 재시작 시 재생)            Q4 build_marts → content/banner/segment daily Mart
- ◀── Kafka activity-events 구독 (group recommend-state-v1) — 실제 소비자 행동을 초 단위로 상태에 반영
+ ◀── Kafka activity-events 구독 (group recommend-state-v1) — 실제 소비자 행동을 초 단위로 상태에 반영 (09-14 브로커 다운, connected=false)
  POST /api/prescription 대시보드 처방 문장 (LLM gpt-4.1-mini, 자동 거부 포함)      Q5 validate → 품질 리포트
  POST /api/catalog/sync 쇼핑몰 백엔드 ACTIVE 상품 동기화 (승인 훅 없어도 카탈로그 일치)
         ▲                                                                              │
         │ 모델·산출물 (오프라인 배치 batch/jobs/)                                        ▼
  Sephora 리뷰 844,865건 · 상품 200개(+등록 8 = 카탈로그 208)                                     [ 소비 ]  브랜드 대시보드 (마트 API 계약 초안 contracts/dashboard-mart-api-spec.md,
-   → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              프론트 연결 완료 · MySQL projection·shop_backend 6 엔드포인트 대기)
+   → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              프론트 7 엔드포인트 호출 준비 · 마트→MySQL 로더·shop_backend 7 엔드포인트 없음 → 행동 화면은 목)
    → CF 동시발생 · LTR 369 트리 → batch/ingest/data/serving/
 
 [ 운영 · deploy/ec2-1 ]  docker compose — backend(8080) · recommend(8300) · nginx(443 → /api/ → backend) · Prometheus · Grafana
+                        09-14 실측: recommend 컨테이너 1개만 healthy(레포 ef607ba, 247 이전) · backend·nginx 내려감 · shop_backend·MySQL 정의 없음
 ```
 
 ---
@@ -46,7 +47,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | --- | --- | --- | --- |
 | 프론트엔드 | React · TypeScript · Vite | 19.2 · 6.0 · 8.2 | 엔트리 3개 — 쇼핑몰 `index.html` · 브랜드 대시보드 `dashboard.html` · 플랫폼 운영 `platform.html`. dev 5173. 프록시: 인증·브랜드·상품·주문·리뷰·피드백 → 8090, `/api/recommend` → 8300, 그 외 `/api` → 8080 |
 | | oxlint | 1.79 | ESLint 대신 사용 |
-| 쇼핑몰 백엔드 | Spring Boot · JPA · MySQL | 4.1.1 · 21 · 8.4 | `shop_backend/` (8090, MySQL 13306). 로그인(JWT)·브랜드·상품(등록 계약 검증)·주문·결제·리뷰·피드백·정산·판매자 대시보드 |
+| 쇼핑몰 백엔드 | Spring Boot · JPA · MySQL | 4.1.1 · 21 · 8.4 | `shop_backend/` (8090, MySQL 13306). Dockerfile·배포 compose 서비스는 아직 없음(로컬 기동만). 로그인(JWT)·브랜드·상품(등록 계약 검증)·주문·결제·리뷰·피드백·정산·판매자 대시보드 |
 | 수집 서버 | Spring Boot · Java | 4.1.1 · 21 | `backend/` (8080). `POST /api/events` → Kafka. Actuator + Micrometer 로 Prometheus 메트릭 |
 | | springdoc-openapi | 3.1.0 | Swagger UI |
 | 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id` |
@@ -57,7 +58,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 (GPU, 배치 산출물용). 정확도 목적 리뷰 임베딩은 기각 |
 | 시뮬레이터 | Python 생성기 | — | PC 9,900명 합성 로그 · 배너 이벤트 · 피드백 시연 데이터 |
 | | Playwright (Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | PA 100명이 실제 브라우저를 조작. `--local-model` 로 Qwen2.5 도 가능 |
-| 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`): backend · recommend · nginx(HTTPS) · Prometheus · Grafana |
+| 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`): backend · recommend · nginx(HTTPS) · Prometheus · Grafana. 09-14 실측은 recommend 만 기동, nginx 에 `/api/recommend` 라우트 없음 |
 | | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 대시보드 2종(backend-overview · collector-validation) 프로비저닝 |
 | 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개(+등록 8) · 페르소나 12,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
 | | 시연 브랜드 | — | SSAFY Beauty 8개 상품 (`simulator/feedback/products.ssafy-beauty.json`) — 등록 경로로 추천 카탈로그에 편입 |
@@ -270,7 +271,7 @@ S15P21A306/
 │   ├── README.md · BACKEND_INGESTION_POLICY.md
 │   └── build.gradle · gradlew
 │
-├── shop_backend/                    Spring Boot 쇼핑몰 백엔드 (백엔드) — 8090, MySQL 13306
+├── shop_backend/                    Spring Boot 쇼핑몰 백엔드 (백엔드) — 8090, MySQL 13306 (docker-compose.mysql.yml 별도, Dockerfile 없음)
 │   ├── src/main/java/com/cosmetic/shopbackend/  컨트롤러 8종 — identity·brand·catalog·commerce·feedback·dashboard·admin·settlement
 │   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md   테이블 29개 DDL·설명
 │   └── MYSQL-SETUP.md · docker-compose.mysql.yml     로컬 MySQL 실행
@@ -313,4 +314,3 @@ S15P21A306/
 │
 └── 1차 평가/                        평가 제출물 (팀원별 폴더)
 ```
-
