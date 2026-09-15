@@ -376,6 +376,7 @@ source = dim_product, contracts/product-feature-vocab.json
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
+| `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily` | 제외 | 콘텐츠를 읽고 담았는지를 재는 지표. 시드는 조회 없이 담기를 내서 "콘텐츠를 안 봐도 담는다"를 만든다 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 서빙은 scope로 가른다 — 아래 |
 | `category_price_reference`, `brand_cohort_dim` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 | `commons_cohort_weekly` | 해당 없음 | 시드를 이미 뺀 `brand_daily_kpi`를 입력으로 쓴다 |
@@ -458,7 +459,7 @@ input = search_event_fact, product_event_fact
 ### 4.4 `content_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + product_id + section_id + content_kind + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + product_id + section_id + content_kind + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_product
 ```
 
@@ -471,7 +472,29 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 `dwell_ms_sum`은 `content_interest_fact`를 기본 원천으로 사용한다.
-`section_dwell_agg`와 동시에 합산하지 않는다.
+`section_dwell_agg`와 동시에 합산하지 않는다. `content_interest_fact`가
+`section_dwell_agg`를 이미 병합한 결과라 둘을 더하면 같은 체류가 두 번 들어간다.
+
+**`product_view_sessions`·`ingredient_view_sessions`·`review_view_sessions`는
+상품 단위다.** key에 `content_kind`가 있어도 이 셋은 `content_kind`마다 같은 값이
+반복된다. 분모가 "이 상품을 본 세션"이라서다. 행 단위로 세면 `user_review` 행이
+`ingredient_view_sessions = 0`을 달고 나와 "아무도 성분을 안 봤다"로 읽힌다.
+따라서 **이 세 컬럼을 `content_kind` 축으로 합산하면 안 된다** — 같은 세션을
+콘텐츠 종류 수만큼 센다. `avg_dwell_ms_per_session`·`ingredient_view_rate`·
+`review_view_rate`가 전부 이 분모를 쓴다.
+
+`ingredient_view_sessions`는 `content_kind`가 `ingredient_list`·`ingredient_callout`인
+세션, `review_view_sessions`는 `user_review`·`review_stats`·`review_filter`인 세션을
+센다. 둘의 합집합이 §4.14가 쓰는 `INFORMATION_CONTENT_KINDS`와 같다.
+
+**두 분자는 분모의 모집단으로 제한한다.** 상품 조회 세션에 없는 콘텐츠 열람 세션은
+세지 않는다 — Quick Look으로 상세를 연 세션이 그렇게 될 수 있고, 제한하지 않으면
+`ingredient_view_rate`가 1.0을 넘는다. 분자와 분모가 같은 모집단이어야 한다는 것은
+§4.1이 `add_to_cart_rate`에서 이미 밟은 규칙이다.
+
+`product_view_sessions`의 날짜는 `funnel_session_fact.first_product_view_at`의 KST
+일자다. `funnel_date_kst`는 퍼널 첫 단계(대개 노출)의 날짜라 자정을 넘긴 세션에서
+콘텐츠를 읽은 날과 어긋난다. §4.14의 정보 확인 세션이 같은 방식을 쓴다.
 이 Mart는 `product_id`가 있는 상품 상세 콘텐츠만 입력으로 사용한다.
 `product_id = NULL`인 플랫폼 목록 섹션은 상품·브랜드 KPI에 포함하지 않는다. 플랫폼
 공통 콘텐츠 Mart가 필요해지면 `product_id` 없는 별도 grain과 key를 계약한 뒤
@@ -1002,6 +1025,77 @@ R1 판정과 화면의 표본 병기에 필요하다. 세션 분모는 `is_sampl
 얇은 것과 식별 위험이 있는 것은 다른 문제라서다.
 
 시드 Event는 입력 단계(`brand_daily_kpi`)에서 이미 빠져 있다(§4.0).
+
+### 4.19 `content_conversion_daily`
+
+```text
+key = event_date_kst + brand_id + product_id + content_kind + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = content_interest_fact, funnel_session_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 콘텐츠 집계 축 |
+| `category_id` | string | Y | 상품 차원 스냅샷 |
+| `viewed_sessions` | bigint | N | 그 콘텐츠를 본 고유 세션 수 |
+| `viewed_cart_sessions` | bigint | N | 그중 같은 상품을 담기까지 간 세션 수 |
+| `viewed_cart_rate` | double | Y | `viewed_cart_sessions / viewed_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**§4.4와 분리한 이유는 분모가 다르기 때문이다.** §4.4의 비율은 상품 조회 세션을
+분모로 쓰고, 이 Mart는 **그 콘텐츠를 본 세션**을 분모로 쓴다. 한 Mart에 두 분모를
+섞으면 같은 행의 비율끼리 더하거나 비교할 수 없게 된다.
+
+**대시보드가 만들 수 없는 값이다.** "그 콘텐츠를 본 세션"과 "그 세션이 담았는가"를
+맞추려면 세션 단위 조인이 필요한데, 집계된 Mart 두 개를 받아서는 복원되지 않는다.
+`docs/dashboard/dashboard-mart-api-spec.md` §6-2가 이 Mart를 요구하는 근거다.
+
+**cart_lift를 미리 계산하지 않는다.** 기준이 되는 브랜드 담기율(§4.14
+`view_to_cart_rate`, 분모 `detail_view_sessions`)과 나누면 "본 사람의 담기율 배수"가
+나오지만, 그 나눗셈을 여기서 하면 어느 브랜드·어느 기간의 비율을 썼는지가 행에 박혀
+다른 기준으로 다시 볼 수 없다. 나눗셈은 읽는 쪽 몫이다.
+
+`content_kind`가 NULL인 행은 제외한다. 어떤 콘텐츠인지 모르면 대조가 성립하지 않는다.
+`product_id`가 NULL인 플랫폼 목록 섹션도 §4.4와 같은 이유로 제외한다.
+
+담기 도달 여부는 `funnel_session_fact.reached_add_to_cart`에서 가져오고, **같은 상품**에
+대한 담기만 센다. 세션이 다른 상품을 담은 것은 이 콘텐츠의 효과가 아니다.
+
+### 4.20 `behavior_conversion_daily`
+
+```text
+key = event_date_kst + brand_id + product_id + event_name + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = sessionized_events, funnel_session_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 행동 집계 축 |
+| `event_name` | string | N | `ingredient_view_mode_change`, `review_filter_apply`, `accordion_toggle`, `text_copy` |
+| `done_sessions` | bigint | N | 그 행동을 한 세션 수 |
+| `done_cart_sessions` | bigint | N | 그중 담기까지 간 세션 수 |
+| `not_done_sessions` | bigint | N | 그 행동을 **안 한** 세션 수 |
+| `not_done_cart_sessions` | bigint | N | 그중 담기까지 간 세션 수 |
+| `done_cart_rate`, `not_done_cart_rate` | double | Y | 각 모집단의 담기율 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**두 모집단의 합이 전체다.** `done_sessions + not_done_sessions`는 같은 key의 상품
+조회 세션 수(§4.4 `product_view_sessions`)와 같아야 한다. 한쪽만 세면 "안 한 사람"의
+담기율이 비어 대조가 성립하지 않는데, 이 Mart의 존재 이유가 바로 그 대조다.
+
+**모집단은 상품 조회 세션이고 `funnel_session_fact`에서 온다.** 행동 Event만으로
+모집단을 만들면 행동을 한 세션만 남아 `not_done_*`이 전부 0이 된다.
+
+**입력이 `sessionized_events`다.** 네 Event는 `PRODUCT_EVENT_NAMES` 밖이라
+`product_event_fact`에 없다. `sessionized_events`는 `is_seeded`·`brand_id`·실행 축을
+모두 갖고 있어 §4.12·§4.11과 같은 방식으로 읽을 수 있다.
+
+**한 건도 일어나지 않은 `event_name`도 행을 남긴다.** 모집단 × Event 4종을 교차해
+만들기 때문이다. 행이 없으면 "아무도 안 했다"와 "그 Event를 집계하지 않는다"를
+구분할 수 없다. 재생 데이터에서 `text_copy`는 128세션뿐이라 실제로 밟는 경우다.
+
+행동 Event는 세션·상품·Event 단위로 중복을 제거한 뒤 판정한다. 같은 세션에서 아코디언을
+열 번 열어도 "한 세션"이다 — 이 Mart가 재는 것은 빈도가 아니라 여부다.
 
 ## 5. 실시간 Mart 후보
 
