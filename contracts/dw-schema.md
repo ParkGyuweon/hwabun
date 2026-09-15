@@ -232,6 +232,7 @@ source = event-properties-schema.md
 | `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
+| `persona_segment_daily_kpi` | 제외 | 세그먼트 전환 지표. 퍼널과 같은 원칙 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 뺄지는 미결 |
 | `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 
@@ -368,17 +369,67 @@ Quick Look 선진입 세션 + direct_click_sessions = detail_view_sessions
 ### 4.6 `persona_segment_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
-input = funnel_session_fact, persona_behavior_feature_delta, bridge_persona_segment, dim_persona_segment, dim_product
+key = event_date_kst + brand_id + segment_type + segment_value + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = product_event_fact, bridge_persona_segment
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | generator/scenario/run만 Y | segment 집계 축 |
-| `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
-| `segment_user_count`, `session_count`, `product_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 행동 집계 |
-| `avg_interest_score`, `category_interest_score`, `affinity_lift` | double | Y | 행동 로그 기반 지표 |
+| `segment_user_count`, `session_count` | bigint | N | 세그먼트 규모 |
+| `impression_sessions`, `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 단계별 고유 세션 수 |
+| `product_count_viewed` | bigint | N | 상세를 연 고유 상품 수 |
+| `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 상세 조회 세션 |
+| `view_to_purchase_rate` | double | Y | 구매 세션 / 상세 조회 세션 |
+| `avg_interest_score` | double | Y | 관심도 합 / 세션 수 (§2.3). 음수일 수 있다 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`segment_type`은 세 종류다.
+
+| segment_type | segment_value | 비고 |
+| --- | --- | --- |
+| `skin_type` | `combination`, `dry`, `normal`, `oily` | `persona-schema.md` §3 |
+| `skin_tone` | `fair`, `light`, `medium`, `tan`, `deep` | 〃 |
+| `skin_type_x_skin_tone` | `dry|fair` 형식 | 교차 축 |
+
+**세 축을 합산하지 않는다.** 한 세션이 `skin_type` 행과 `skin_tone` 행에 동시에
+들어가므로 더하면 같은 세션을 두 번 센다. 교차 축도 단일 축의 분해가 아니라 별도
+집계다 — 건성 담기율 0.5는 `dry|fair` 1.0과 `dry|deep` 0.0으로 갈릴 수 있고, 그
+차이를 보는 것이 이 Mart의 목적이다. 교차 축끼리는 배타라 그 안에서만 합이 성립한다.
+
+`bridge_persona_segment`에는 7종의 `segment_type`이 있지만 `hair_color`·`eye_color`·
+`review_bucket`·`persona_source`는 내지 않는다. 대시보드 고객군 화면이 피부 축만
+쓴다(`docs/dashboard/dashboard-redesign-spec.md` §2-3). 필요해지면 축을 늘리면 되고
+Mart 구조는 그대로다.
+
+**`product_id`는 key가 아니다.** 브랜드 grain이라 한 세션이 같은 브랜드 상품 여러 개를
+봐도 세션은 한 번만 센다. `product_id`를 key에 두면 대시보드가 그것을 합산할 때 세션이
+상품 수만큼 부푼다 — `brand_daily_kpi`를 `product_daily_kpi` 합산으로 만들 수 없는 것과
+같은 이유다(§4.14). `product_count_viewed`가 상품 축의 대체값이다.
+
+**`persona_id`가 없는 세션은 어느 행에도 들어가지 않는다.** 실제 사용자의 피부 정보는
+이벤트 경로에 없다. 임의 세그먼트에 귀속하면 없는 사실을 만들어 내므로 제외한다.
+그래서 **세그먼트 세션 합은 `brand_daily_kpi` 전체보다 작고, 작은 것이 정상이다.**
+`skin_tone='notSureST'`도 값이 아니라 결측이라(`persona-schema.md` §3) segment_value가
+되지 않으며, 톤이 결측인 Persona는 교차 축에서도 빠지고 `skin_type` 축에는 남는다.
+
+담기·구매 분모는 `detail_view_sessions`(상품 상세 ∪ Quick Look)로 §4.1·§4.14와 같다.
+모든 비율은 분모가 0이면 NULL이다. 시드 Event는 제외한다(§4.0).
+
+`bridge_persona_segment`는 저장소에 없는 생성물이다(`.gitignore`의 `data/`). 실행 전에
+`py contracts/persona/build_persona_tables.py --sample PC:all`로 만든다. 없으면 이 Mart를
+만들지 않고 검증 Job은 경고만 남긴다.
+
+**계약에서 뺀 컬럼이 셋 있다.** `persona_behavior_feature_delta`도 input에서 뺐다.
+
+| 뺀 것 | 이유 |
+| --- | --- |
+| `category_interest_score` | 브랜드 grain이라 카테고리 축이 없다. 상품 축이 필요하면 `product_daily_kpi.product_interest_score`를 쓴다 |
+| `affinity_lift` | 행동 로그 파생이 아니라 AI 파트 `batch/ingest/data/affinity_lift.csv` 조인이다. 대시보드 E4 응답에도 없다 |
+| `category_id` | 위와 같다. 브랜드 grain에 단일 카테고리가 없다 |
+| `persona_behavior_feature_delta` (input) | §2.3의 `avg_interest_score` 산식은 `product_interest_score`만 요구하고 그것은 `product_event_fact`와 `EVENT_WEIGHT`로 낸다. 이 Fact의 시간 감쇠는 추천 피처용이라 KPI 산식에 없다 |
+
 
 ### 4.7 `scenario_daily_kpi`
 
