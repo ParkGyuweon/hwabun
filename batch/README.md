@@ -1,6 +1,6 @@
 # batch/ — AI 파트 (상품 인코딩 · 학습 · 추천 서버)
 
-기준일 2026-09-11. 대표 지표는 `docs/ai/evaluation-framework.md` 부록 W (holdout_a 42.15 / holdout_b 43.15%, LTR 369 트리).
+기준일 2026-09-15. 어휘집 0.7(price_bin 원화, 벡터 불변). 대표 지표는 `docs/ai/evaluation-framework.md` 부록 W (holdout_a 42.15 / holdout_b 43.15%, LTR 369 트리).
 
 | 폴더 | 무엇 | 진입점 |
 |---|---|---|
@@ -17,9 +17,10 @@ reviews(844,865) ─ build_affinity_lift ─→ affinity_lift.csv        (속성
 personas(9,900)  ─ build_cooc ─────────→ item_cooc.npz             (CF 동시발생, 홀드아웃 제외)
                  ─ train_ltr ──────────→ ltr_model.pkl (369 트리)   (19 피처 = ltr_features.py)
                                           ↓
-recommend_server.py (8300)  ←─ GET /api/recommend  ←─ 프론트(로컬 Vite) / 쇼핑몰 백엔드 프록시(운영, 미머지)
+recommend_server.py (8300)  ←─ GET /api/recommend  ←─ 프론트(로컬 Vite) / 쇼핑몰 백엔드 프록시(운영, 09-14 머지)
         ↑ POST /api/events · Kafka activity-events (kafka_state.py)  ← 수집기 / 시뮬레이터
-        ↑ POST /api/products · catalog_sync.py (5분)                  ← 상품 등록
+        ↑ POST /api/products · catalog_sync.py (5분, 원천 200개는 교체 안 함)  ← 상품 등록
+        ↑ user_trait.py ← user_trait_daily (dw MySQL → 스냅샷 → null) → 응답 long_term_trait
 ```
 
 ## 재생성
@@ -37,9 +38,11 @@ python batch/regenerate_all.py          # 어휘집 → 인코딩 → 친화도 
 ```bash
 cd <레포 루트>
 PYTHONPATH=. python -m unittest discover -s batch/jobs -p "test_*.py"     # 98
-cd batch/serving && python -m unittest test_recommend_server               # 28  (test_banners 와 한 프로세스로 돌리지 않는다 — 등록 테스트 상품이 샌다)
-python -m unittest test_banners                                            # 18
-python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription
+cd batch/serving && python -m unittest test_recommend_server               # 35  (test_banners 와 한 프로세스로 돌리지 않는다 — 등록 테스트 상품이 샌다)
+python -m unittest test_banners                                            # 22
+python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 52
+python -m unittest test_live                                               # 4
+cd <레포 루트> && PYTHONPATH=. python -m unittest discover -s simulator/generator -p "test_*.py"   # 23 (생성기·추천 클라이언트, 절대 import 라 루트에서)
 ```
 
 ## 런타임에 쓰는 파일 (산출물 아님)
