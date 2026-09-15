@@ -1130,16 +1130,22 @@ def _brand_price_band_daily_kpi(
     # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
     product_fact_df = _observed_events(product_fact_df)
 
+    # 이 Mart 의 통화는 **카탈로그 기준 가격의 단위**다. product_event_fact 에도
+    # 같은 이름의 컬럼이 있지만 그쪽은 결제 시점 통화라 뜻이 다르고, 이름이
+    # 겹치면 Join 뒤 참조가 모호해진다. 조인 전에 이름을 갈라 둔다.
     catalog = dim_product_df.select(
         F.col("product_id").alias("_dim_product_id"),
         _price_bin_column(price_bins).alias("price_bin"),
-        F.col("currency").alias("currency"),
+        F.col("currency").alias("_catalog_currency"),
     )
     events = product_fact_df.where(_valid_brand()).join(
         catalog, F.col("product_id") == F.col("_dim_product_id"), "inner"
     )
 
-    key_columns = ["event_date_kst", "brand_id", "price_bin", "currency", *EXECUTION_AXES]
+    key_columns = [
+        "event_date_kst", "brand_id", "price_bin", "_catalog_currency",
+        *EXECUTION_AXES,
+    ]
 
     def stage_sessions(condition: Any, alias: str) -> Any:
         return F.countDistinct(
@@ -1160,7 +1166,7 @@ def _brand_price_band_daily_kpi(
         F.current_timestamp().alias("mart_processed_at"),
     )
     return (
-        result
+        result.withColumnRenamed("_catalog_currency", "currency")
         .withColumn(
             "detail_entry_rate",
             _safe_ratio(F.col("detail_view_sessions"), F.col("impression_sessions")),
