@@ -73,7 +73,39 @@ class TestHeroBanners(unittest.TestCase):
         # axes 에 있는 축(segment)에 트레잇이 없으면 다음 순서(기본)로 — 응답 모양은 그대로
         h2 = pl.hero_for(pid, traits, ("segment",))
         self.assertEqual(h2["banner_type"], "concern")
-        self.assertEqual(set(h2), {"product_id", "banner_type", "banner_value", "trait_source"})
+        self.assertEqual(set(h2), {"product_id", "banner_type", "banner_value", "trait_source", "hero_policy_version"})
+
+    def test_hero_fills_first_axis_from_product_when_trait_missing(self):
+        """Jira 307 (프론트 3-2 합의) — axes[0] 에 트레잇이 없으면 상품 자신의 그 축 값 + coldstart.
+        트레잇이 있는 다음 축(concern)이 있어도 1순위 가격을 먼저 채운다. 트레잇이 있으면 채우지 않는다."""
+        e = rs.get_engine()
+        pl = e.planner
+        pid = next(p["product_id"] for p in e.products
+                   if pl.attrs_of[e.index[p["product_id"]]].get("concern")
+                   and pl.attrs_of[e.index[p["product_id"]]].get("price_bin"))
+        ax = pl.attrs_of[e.index[pid]]
+        traits = {"concern": (ax["concern"][0], "session")}          # price_bin 트레잇 없음
+        h = pl.hero_for(pid, traits, ("price_bin", "concern"))
+        self.assertEqual((h["banner_type"], h["banner_value"], h["trait_source"]),
+                         ("price_bin", ax["price_bin"][0], "coldstart"))
+        # 1순위에 트레잇이 있으면 채움 없이 그 트레잇 (출처 session)
+        traits2 = {"concern": (ax["concern"][0], "session"), "price_bin": (ax["price_bin"][0], "session")}
+        h2 = pl.hero_for(pid, traits2, ("price_bin", "concern"))
+        self.assertEqual((h2["banner_type"], h2["trait_source"]), ("price_bin", "session"))
+        # 1순위가 segment 면 채우지 않고 다음 순서(concern 트레잇)로
+        h3 = pl.hero_for(pid, traits, ("segment", "concern"))
+        self.assertEqual((h3["banner_type"], h3["trait_source"]), ("concern", "session"))
+        # axes 가 비면 채움 없음 — 기본 순서
+        h4 = pl.hero_for(pid, traits)
+        self.assertEqual(h4["banner_type"], "concern")
+
+    def test_hero_carries_policy_version(self):
+        """Jira 307 (프론트 3-5) — 히어로마다 hero_policy_version. 응답에도 그대로 나간다"""
+        e = rs.get_engine()
+        pid = e.products[0]["product_id"]
+        self.assertEqual(e.planner.hero_for(pid, {})["hero_policy_version"], bn.BannerPlanner.HERO_POLICY_VERSION)
+        b = client.get("/api/recommend", params={**Q, "hero": "top"}).json()
+        self.assertEqual(b["hero"]["hero_policy_version"], "hero-2026-09-15")
 
     def test_hero_axes_reach_response(self):
         """E2E 스모크 — axes 맨 앞을 price_bin 으로 보내도 히어로 모양은 그대로다 (응답에 traits 가 없어 축 선택 자체는 위 단위 테스트가 본다)"""
