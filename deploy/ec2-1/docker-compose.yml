@@ -9,9 +9,53 @@ services:
       ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
       ACTIVITY_EVENTS_PARTITIONS: ${ACTIVITY_EVENTS_PARTITIONS:-3}
       CREATE_ACTIVITY_EVENTS_TOPIC: "false"
+      SHOP_BACKEND_JWT_SECRET: ${SHOP_BACKEND_JWT_SECRET:?Set SHOP_BACKEND_JWT_SECRET in .env}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
     expose:
       - "8080"
+    mem_limit: 1g
+
+  shop-backend:
+    build:
+      context: ../..
+      dockerfile: deploy/shop_backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8090"
+      SHOP_BACKEND_JWT_SECRET: ${SHOP_BACKEND_JWT_SECRET:?Set SHOP_BACKEND_JWT_SECRET in .env}
+      SHOP_BACKEND_JWT_EXPIRATION_MS: ${SHOP_BACKEND_JWT_EXPIRATION_MS:-900000}
+      SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+      SHOP_BACKEND_MYSQL_USER: ${MYSQL_USER:-shop_backend}
+      SHOP_BACKEND_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-ec2}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "8090"
+    mem_limit: 1g
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-shop_backend}
+      MYSQL_USER: ${MYSQL_USER:-shop_backend}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../../shop_backend/mysql-erd.sql:/docker-entrypoint-initdb.d/001-mysql-erd.sql:ro
+      - ../../shop_backend/seed/shop_backend_seed.sql:/docker-entrypoint-initdb.d/002-shop-backend-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    expose:
+      - "3306"
     mem_limit: 1g
 
   # 추천 추론 서버 (AI, 계약 §5). 백엔드가 RECOMMEND_URL=http://recommend:8300 으로 프록시한다.
@@ -32,7 +76,7 @@ services:
       ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
       RECOMMEND_STATE_GROUP: recommend-state-v1          # Spark 와 다른 consumer group — 같은 이벤트를 독립적으로 읽는다
       GMS_KEY: ${GMS_KEY:-}                      # 처방 문장 생성 (없으면 /api/prescription 만 503)
-      SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222). 비우면 안 함
+      SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-http://shop-backend:8090}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222)
       CATALOG_SYNC_INTERVAL_SEC: ${CATALOG_SYNC_INTERVAL_SEC:-300}
       NEW_BRAND_DAYS: ${NEW_BRAND_DAYS:-14}                 # 신규 브랜드 = 등록 후 N일 (Jira 247-b, 2026-09-11 결정)
       NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
@@ -49,6 +93,7 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+      - shop-backend
     ports:
       - "80:80"
       - "443:443"
@@ -100,3 +145,4 @@ volumes:
   prometheus-data:
   grafana-data:
   recommend-data:
+  mysql-data:
