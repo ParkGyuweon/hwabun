@@ -36,6 +36,7 @@ DEFAULT_PRODUCT_REPURCHASE_PATH = "data/marts/product_repurchase_daily"
 DEFAULT_BRAND_REPURCHASE_PATH = "data/marts/brand_repurchase_daily"
 DEFAULT_PURCHASE_REASON_PATH = "data/marts/purchase_reason_daily"
 DEFAULT_REASON_TRAIT_MAP_PATH = "contracts/purchase-reason-trait-map.json"
+DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -82,6 +83,7 @@ class ValidatePipelineConfig:
     brand_repurchase_path: str = DEFAULT_BRAND_REPURCHASE_PATH
     purchase_reason_path: str = DEFAULT_PURCHASE_REASON_PATH
     reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH
+    behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -115,6 +117,7 @@ class ValidatePipelineConfig:
             "brand_repurchase_path": self.brand_repurchase_path,
             "purchase_reason_path": self.purchase_reason_path,
             "reason_trait_map_path": self.reason_trait_map_path,
+            "behavior_weights_path": self.behavior_weights_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
             "banner_daily_path": self.banner_daily_path,
@@ -222,6 +225,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build Job과 같은 매핑이어야 구매 이유 Mart 재계산 비교가 성립한다",
     )
     parser.add_argument(
+        "--behavior-weights-path",
+        default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
+        help="Build Job과 같은 EVENT_WEIGHT 원본이어야 상품 Mart 재계산 비교가 성립한다",
+    )
+    parser.add_argument(
         "--ingredient-weekly-path",
         default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
     )
@@ -275,6 +283,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         brand_repurchase_path=args.brand_repurchase_path,
         purchase_reason_path=args.purchase_reason_path,
         reason_trait_map_path=args.reason_trait_map_path,
+        behavior_weights_path=args.behavior_weights_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
         banner_daily_path=args.banner_daily_path,
@@ -465,6 +474,7 @@ def validate_frames(
     require_events: bool = False,
     time_zone: str = DEFAULT_TIME_ZONE,
     reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH,
+    behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH,
 ) -> dict[str, Any]:
     """Run cross-dataset checks and return a JSON-serializable report."""
 
@@ -1150,6 +1160,130 @@ def validate_frames(
         f"differing_rows={brand_difference_count}; mart_processed_at excluded",
     ))
 
+    # product_daily_kpi — 지금까지 grain 유일성 하나만 검사했다. 비율 네 개가
+    # 검증 없이 나가는 동안 add_to_cart_rate 가 1.0 을 넘고 있었다 (Jira 277).
+    invalid_product_counts = product_daily.where(
+        (F.col("product_view_sessions") < 0)
+        | (F.col("quick_look_sessions") < 0)
+        | (F.col("session_count") < 0)
+        | (F.col("unique_user_count") > F.col("session_count"))
+        | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+        | (F.col("detail_view_sessions") > F.col("session_count"))
+        | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+        | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+        | (F.col("product_click_count") > F.col("product_impression_count"))
+        | (F.col("purchase_count") > F.col("purchase_quantity"))
+    ).count()
+    checks.append(_check(
+        "product_daily_counts_are_bounded",
+        invalid_product_counts == 0,
+        f"invalid_rows={invalid_product_counts}",
+    ))
+
+    product_rate_columns = [
+        "product_ctr", "detail_entry_rate", "add_to_cart_rate", "purchase_rate"
+    ]
+    invalid_product_rates = product_daily.where(
+        F.greatest(*[
+            F.when(
+                F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+            for column in product_rate_columns
+        ]) == 1
+    ).count()
+    invalid_product_denominators = product_daily.where(
+        ((F.col("product_impression_count") == 0) & F.col("product_ctr").isNotNull())
+        | ((F.col("product_impression_count") == 0)
+           & F.col("detail_entry_rate").isNotNull())
+        | ((F.col("detail_view_sessions") == 0) & F.col("add_to_cart_rate").isNotNull())
+        | ((F.col("detail_view_sessions") == 0) & F.col("purchase_rate").isNotNull())
+    ).count()
+    checks.append(_check(
+        "product_daily_rates_follow_contract",
+        invalid_product_rates == 0 and invalid_product_denominators == 0,
+        f"out_of_range={invalid_product_rates}; "
+        f"non_null_zero_denominator={invalid_product_denominators}",
+    ))
+
+    # 상품 Dimension 매칭. Fact 단계에는 같은 검사가 있지만 Mart 단계에는 없었다.
+    product_dimension_gap = (
+        product_daily.select("product_id", "brand_id")
+        .distinct()
+        .join(
+            dim_product.select(
+                F.col("product_id").alias("_dim_product_id"),
+                F.col("brand_id").alias("_dim_brand_id"),
+            ),
+            F.col("product_id") == F.col("_dim_product_id"),
+            "left",
+        )
+        .where(
+            F.col("_dim_product_id").isNull()
+            | ~F.col("brand_id").eqNullSafe(F.col("_dim_brand_id"))
+        )
+        .count()
+    )
+    checks.append(_check(
+        "product_daily_products_match_dimension",
+        product_dimension_gap == 0,
+        f"unmatched_rows={product_dimension_gap}",
+    ))
+
+    # 통화는 grain 이 아니라 대표값 한 개다 (F.first). 한 상품·하루에 통화가
+    # 섞이면 revenue_amount 가 두 통화를 그냥 더하고 currency 는 하나만 보고한다.
+    # grain 에 올리면 통화 없는 조회 행과 결제 행이 갈려 Mart 가 깨지므로
+    # 여기서 혼합 자체를 막는다 (Jira 303 통화 전환 경계일 대비).
+    mixed_currency_groups = (
+        product_fact.where(
+            F.col("currency").isNotNull()
+            & ~F.coalesce(F.col("is_seeded"), F.lit(False))
+        )
+        .groupBy("event_date_kst", "product_id", *EXECUTION_AXES)
+        .agg(F.countDistinct("currency").alias("_currencies"))
+        .where(F.col("_currencies") > 1)
+        .count()
+    )
+    checks.append(_check(
+        "product_daily_currency_is_unambiguous",
+        mixed_currency_groups == 0,
+        f"mixed_currency_groups={mixed_currency_groups}",
+    ))
+
+    # product_daily_kpi · funnel_daily_kpi 재계산 결정성. 두 Mart 에만 없었다.
+    # 235 에서 시드 필터를 Mart 함수 밖(호출부)에 뒀다가 brand_daily 가 542행
+    # 어긋났던 것과 같은 함정을 잡는다.
+    try:
+        from .behavior_weights import load as load_behavior_weights
+    except ImportError:
+        from behavior_weights import load as load_behavior_weights
+    try:
+        from .build_marts_job import _funnel_daily_kpi, _product_daily_kpi
+    except ImportError:
+        from build_marts_job import _funnel_daily_kpi, _product_daily_kpi
+
+    daily_rebuilt = {
+        "product_daily_kpi": (
+            product_daily,
+            _product_daily_kpi(
+                product_fact, load_behavior_weights(behavior_weights_path)["event"]
+            ),
+        ),
+        "funnel_daily_kpi": (funnel_daily, _funnel_daily_kpi(funnel_session)),
+    }
+    for name, (stored, expected) in daily_rebuilt.items():
+        columns = [c for c in stored.columns if c != "mart_processed_at"]
+        difference = (
+            expected.select(*columns).exceptAll(stored.select(*columns)).count()
+            + stored.select(*columns).exceptAll(expected.select(*columns)).count()
+        )
+        checks.append(_check(
+            f"{name}_is_deterministic_from_inputs",
+            difference == 0,
+            f"differing_rows={difference}; mart_processed_at excluded",
+        ))
+
     axes = list(EXECUTION_AXES)
     purchase_grains = {
         "product_repurchase_daily": (
@@ -1610,7 +1744,11 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         # 기준선을 만들지 않은 실행에서는 경로가 없다. 검증은 그대로 진행한다.
         pass
     return validate_frames(
-        frames, config.require_events, config.time_zone, config.reason_trait_map_path
+        frames,
+        config.require_events,
+        config.time_zone,
+        config.reason_trait_map_path,
+        config.behavior_weights_path,
     )
 
 

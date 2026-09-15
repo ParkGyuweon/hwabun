@@ -144,6 +144,7 @@ function Invoke-PipelineValidation {
         '--brand-repurchase-path', "$dataRoot/marts/brand_repurchase_daily",
         '--purchase-reason-path', "$dataRoot/marts/purchase_reason_daily",
         '--reason-trait-map-path', '/opt/project/contracts/purchase-reason-trait-map.json',
+        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts',
         '--ingredient-weekly-path', "$dataRoot/marts/ingredient_weekly_interest",
         '--category-price-path', "$dataRoot/marts/category_price_reference",
         '--banner-daily-path', "$dataRoot/marts/banner_daily",
