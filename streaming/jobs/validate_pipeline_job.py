@@ -36,8 +36,11 @@ DEFAULT_PRODUCT_REPURCHASE_PATH = "data/marts/product_repurchase_daily"
 DEFAULT_BRAND_REPURCHASE_PATH = "data/marts/brand_repurchase_daily"
 DEFAULT_PURCHASE_REASON_PATH = "data/marts/purchase_reason_daily"
 DEFAULT_REASON_TRAIT_MAP_PATH = "contracts/purchase-reason-trait-map.json"
+DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
+DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
+DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
@@ -55,6 +58,10 @@ EXECUTION_AXES = (
 
 # 결제 계약 enum. event-properties-schema.md §3.15 · §3.16 이 정본이고
 # build_marts_job 의 같은 이름 상수와 일치해야 한다.
+# 피부 세그먼트 축. build_marts_job 의 같은 이름 상수와 일치해야 한다.
+PERSONA_SEGMENT_TYPES = ("skin_type", "skin_tone")
+PERSONA_CROSS_SEGMENT_TYPE = "skin_type_x_skin_tone"
+
 PAYMENT_METHODS = ("kakaopay", "card", "test")
 ORDER_CHANNELS = ("backend", "local")
 
@@ -82,8 +89,11 @@ class ValidatePipelineConfig:
     brand_repurchase_path: str = DEFAULT_BRAND_REPURCHASE_PATH
     purchase_reason_path: str = DEFAULT_PURCHASE_REASON_PATH
     reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH
+    behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
+    persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
+    price_band_path: str = DEFAULT_PRICE_BAND_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
     cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
@@ -115,8 +125,11 @@ class ValidatePipelineConfig:
             "brand_repurchase_path": self.brand_repurchase_path,
             "purchase_reason_path": self.purchase_reason_path,
             "reason_trait_map_path": self.reason_trait_map_path,
+            "behavior_weights_path": self.behavior_weights_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
+            "persona_segment_path": self.persona_segment_path,
+            "price_band_path": self.price_band_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
             "cross_brand_daily_path": self.cross_brand_daily_path,
@@ -222,12 +235,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build Job과 같은 매핑이어야 구매 이유 Mart 재계산 비교가 성립한다",
     )
     parser.add_argument(
+        "--behavior-weights-path",
+        default=_env("BEHAVIOR_WEIGHTS_PATH", DEFAULT_BEHAVIOR_WEIGHTS_PATH),
+        help="Build Job과 같은 EVENT_WEIGHT 원본이어야 상품 Mart 재계산 비교가 성립한다",
+    )
+    parser.add_argument(
         "--ingredient-weekly-path",
         default=_env("INGREDIENT_WEEKLY_INTEREST_PATH", DEFAULT_INGREDIENT_WEEKLY_PATH),
     )
     parser.add_argument(
         "--category-price-path",
         default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
+    )
+    parser.add_argument(
+        "--persona-segment-path",
+        default=_env("PERSONA_SEGMENT_DAILY_PATH", DEFAULT_PERSONA_SEGMENT_PATH),
+    )
+    parser.add_argument(
+        "--price-band-path",
+        default=_env("BRAND_PRICE_BAND_DAILY_PATH", DEFAULT_PRICE_BAND_PATH),
     )
     parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
@@ -275,8 +301,11 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         brand_repurchase_path=args.brand_repurchase_path,
         purchase_reason_path=args.purchase_reason_path,
         reason_trait_map_path=args.reason_trait_map_path,
+        behavior_weights_path=args.behavior_weights_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
+        persona_segment_path=args.persona_segment_path,
+        price_band_path=args.price_band_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
         cross_brand_daily_path=args.cross_brand_daily_path,
@@ -465,6 +494,7 @@ def validate_frames(
     require_events: bool = False,
     time_zone: str = DEFAULT_TIME_ZONE,
     reason_trait_map_path: str = DEFAULT_REASON_TRAIT_MAP_PATH,
+    behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH,
 ) -> dict[str, Any]:
     """Run cross-dataset checks and return a JSON-serializable report."""
 
@@ -1150,6 +1180,130 @@ def validate_frames(
         f"differing_rows={brand_difference_count}; mart_processed_at excluded",
     ))
 
+    # product_daily_kpi — 지금까지 grain 유일성 하나만 검사했다. 비율 네 개가
+    # 검증 없이 나가는 동안 add_to_cart_rate 가 1.0 을 넘고 있었다 (Jira 277).
+    invalid_product_counts = product_daily.where(
+        (F.col("product_view_sessions") < 0)
+        | (F.col("quick_look_sessions") < 0)
+        | (F.col("session_count") < 0)
+        | (F.col("unique_user_count") > F.col("session_count"))
+        | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+        | (F.col("detail_view_sessions") > F.col("session_count"))
+        | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+        | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+        | (F.col("product_click_count") > F.col("product_impression_count"))
+        | (F.col("purchase_count") > F.col("purchase_quantity"))
+    ).count()
+    checks.append(_check(
+        "product_daily_counts_are_bounded",
+        invalid_product_counts == 0,
+        f"invalid_rows={invalid_product_counts}",
+    ))
+
+    product_rate_columns = [
+        "product_ctr", "detail_entry_rate", "add_to_cart_rate", "purchase_rate"
+    ]
+    invalid_product_rates = product_daily.where(
+        F.greatest(*[
+            F.when(
+                F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+            for column in product_rate_columns
+        ]) == 1
+    ).count()
+    invalid_product_denominators = product_daily.where(
+        ((F.col("product_impression_count") == 0) & F.col("product_ctr").isNotNull())
+        | ((F.col("product_impression_count") == 0)
+           & F.col("detail_entry_rate").isNotNull())
+        | ((F.col("detail_view_sessions") == 0) & F.col("add_to_cart_rate").isNotNull())
+        | ((F.col("detail_view_sessions") == 0) & F.col("purchase_rate").isNotNull())
+    ).count()
+    checks.append(_check(
+        "product_daily_rates_follow_contract",
+        invalid_product_rates == 0 and invalid_product_denominators == 0,
+        f"out_of_range={invalid_product_rates}; "
+        f"non_null_zero_denominator={invalid_product_denominators}",
+    ))
+
+    # 상품 Dimension 매칭. Fact 단계에는 같은 검사가 있지만 Mart 단계에는 없었다.
+    product_dimension_gap = (
+        product_daily.select("product_id", "brand_id")
+        .distinct()
+        .join(
+            dim_product.select(
+                F.col("product_id").alias("_dim_product_id"),
+                F.col("brand_id").alias("_dim_brand_id"),
+            ),
+            F.col("product_id") == F.col("_dim_product_id"),
+            "left",
+        )
+        .where(
+            F.col("_dim_product_id").isNull()
+            | ~F.col("brand_id").eqNullSafe(F.col("_dim_brand_id"))
+        )
+        .count()
+    )
+    checks.append(_check(
+        "product_daily_products_match_dimension",
+        product_dimension_gap == 0,
+        f"unmatched_rows={product_dimension_gap}",
+    ))
+
+    # 통화는 grain 이 아니라 대표값 한 개다 (F.first). 한 상품·하루에 통화가
+    # 섞이면 revenue_amount 가 두 통화를 그냥 더하고 currency 는 하나만 보고한다.
+    # grain 에 올리면 통화 없는 조회 행과 결제 행이 갈려 Mart 가 깨지므로
+    # 여기서 혼합 자체를 막는다 (Jira 303 통화 전환 경계일 대비).
+    mixed_currency_groups = (
+        product_fact.where(
+            F.col("currency").isNotNull()
+            & ~F.coalesce(F.col("is_seeded"), F.lit(False))
+        )
+        .groupBy("event_date_kst", "product_id", *EXECUTION_AXES)
+        .agg(F.countDistinct("currency").alias("_currencies"))
+        .where(F.col("_currencies") > 1)
+        .count()
+    )
+    checks.append(_check(
+        "product_daily_currency_is_unambiguous",
+        mixed_currency_groups == 0,
+        f"mixed_currency_groups={mixed_currency_groups}",
+    ))
+
+    # product_daily_kpi · funnel_daily_kpi 재계산 결정성. 두 Mart 에만 없었다.
+    # 235 에서 시드 필터를 Mart 함수 밖(호출부)에 뒀다가 brand_daily 가 542행
+    # 어긋났던 것과 같은 함정을 잡는다.
+    try:
+        from .behavior_weights import load as load_behavior_weights
+    except ImportError:
+        from behavior_weights import load as load_behavior_weights
+    try:
+        from .build_marts_job import _funnel_daily_kpi, _product_daily_kpi
+    except ImportError:
+        from build_marts_job import _funnel_daily_kpi, _product_daily_kpi
+
+    daily_rebuilt = {
+        "product_daily_kpi": (
+            product_daily,
+            _product_daily_kpi(
+                product_fact, load_behavior_weights(behavior_weights_path)["event"]
+            ),
+        ),
+        "funnel_daily_kpi": (funnel_daily, _funnel_daily_kpi(funnel_session)),
+    }
+    for name, (stored, expected) in daily_rebuilt.items():
+        columns = [c for c in stored.columns if c != "mart_processed_at"]
+        difference = (
+            expected.select(*columns).exceptAll(stored.select(*columns)).count()
+            + stored.select(*columns).exceptAll(expected.select(*columns)).count()
+        )
+        checks.append(_check(
+            f"{name}_is_deterministic_from_inputs",
+            difference == 0,
+            f"differing_rows={difference}; mart_processed_at excluded",
+        ))
+
     axes = list(EXECUTION_AXES)
     purchase_grains = {
         "product_repurchase_daily": (
@@ -1519,6 +1673,206 @@ def validate_frames(
         f"invalid_rows={invalid_cross_rate_values}; share denominator=cross-brand entries",
     ))
 
+
+    persona_segment = frames.get("persona_segment_daily")
+    if persona_segment is None:
+        # bridge_persona_segment 는 저장소에 없는 생성물이다. 만들지 않은 실행에는
+        # 이 Mart 도 없다. 없다고 실패로 보지 않는다.
+        warnings.append({
+            "check": "persona_segment_daily_is_absent",
+            "detail": (
+                "py contracts/persona/build_persona_tables.py --sample PC:all 로 "
+                "bridge_persona_segment 를 만든 실행에서만 생성된다"
+            ),
+        })
+    else:
+        counts["persona_segment_daily"] = persona_segment.count()
+        checks.append(_check(
+            "persona_segment_daily_grain_is_unique",
+            _duplicate_count(persona_segment, [
+                "event_date_kst", "brand_id", "segment_type", "segment_value",
+                *EXECUTION_AXES,
+            ]) == 0,
+            "persona_segment_daily_kpi grain=date+brand+segment_type+segment_value+축",
+        ))
+        checks.append(_check(
+            "persona_segment_types_are_registered",
+            persona_segment.where(
+                ~F.col("segment_type").isin(
+                    *PERSONA_SEGMENT_TYPES, PERSONA_CROSS_SEGMENT_TYPE
+                )
+            ).count() == 0,
+            f"허용 축={sorted((*PERSONA_SEGMENT_TYPES, PERSONA_CROSS_SEGMENT_TYPE))}",
+        ))
+        invalid_segment_counts = persona_segment.where(
+            (F.col("segment_user_count") < 0)
+            | (F.col("segment_user_count") > F.col("session_count"))
+            | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+            | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+            | (F.col("detail_view_sessions") > F.col("session_count"))
+            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+            | (F.col("impression_sessions") > F.col("session_count"))
+        ).count()
+        checks.append(_check(
+            "persona_segment_counts_are_bounded",
+            invalid_segment_counts == 0,
+            f"invalid_rows={invalid_segment_counts}",
+        ))
+        segment_rate_columns = [
+            "view_to_cart_rate", "view_to_purchase_rate", "detail_entry_rate"
+        ]
+        invalid_segment_rates = persona_segment.where(
+            F.greatest(*[
+                F.when(
+                    F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                    F.lit(1),
+                ).otherwise(F.lit(0))
+                for column in segment_rate_columns
+            ]) == 1
+        ).count()
+        invalid_segment_denominators = persona_segment.where(
+            ((F.col("detail_view_sessions") == 0) & F.col("view_to_cart_rate").isNotNull())
+            | ((F.col("detail_view_sessions") == 0)
+               & F.col("view_to_purchase_rate").isNotNull())
+            | ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
+            | ((F.col("session_count") == 0) & F.col("avg_interest_score").isNotNull())
+        ).count()
+        checks.append(_check(
+            "persona_segment_rates_follow_contract",
+            invalid_segment_rates == 0 and invalid_segment_denominators == 0,
+            f"out_of_range={invalid_segment_rates}; "
+            f"non_null_zero_denominator={invalid_segment_denominators}",
+        ))
+
+        # 세그먼트 세션 합은 브랜드 전체와 같지 않다 — persona 없는 세션을 귀속하지
+        # 않기 때문이다. 다만 넘어설 수는 없다. 넘으면 조인이 행을 불린 것이다.
+        segment_overflow = (
+            persona_segment.where(
+                F.col("segment_type") == F.lit(PERSONA_CROSS_SEGMENT_TYPE)
+            )
+            .groupBy("event_date_kst", "brand_id", *EXECUTION_AXES)
+            .agg(F.sum("detail_view_sessions").cast("long").alias("_segment_sessions"))
+            .join(
+                brand_daily.select(
+                    "event_date_kst", "brand_id", *EXECUTION_AXES,
+                    F.col("detail_view_sessions").alias("_brand_sessions"),
+                ),
+                ["event_date_kst", "brand_id", *EXECUTION_AXES],
+                "inner",
+            )
+            .where(F.col("_segment_sessions") > F.col("_brand_sessions"))
+            .count()
+        )
+        checks.append(_check(
+            "persona_segment_sessions_do_not_exceed_brand_total",
+            segment_overflow == 0,
+            f"overflowing_rows={segment_overflow}; "
+            "교차 축은 배타라 합이 브랜드 전체를 넘을 수 없다",
+        ))
+
+    price_band = frames.get("price_band_daily")
+    if price_band is None:
+        warnings.append({
+            "check": "brand_price_band_daily_is_absent",
+            "detail": "어휘집 price_bin_edges 와 dim_product 가 있는 실행에서만 생성된다",
+        })
+    else:
+        counts["brand_price_band_daily"] = price_band.count()
+        checks.append(_check(
+            "price_band_daily_grain_is_unique",
+            _duplicate_count(price_band, [
+                "event_date_kst", "brand_id", "price_bin", "currency", *EXECUTION_AXES,
+            ]) == 0,
+            "brand_price_band_daily_kpi grain=date+brand+price_bin+currency+축",
+        ))
+
+        invalid_price_counts = price_band.where(
+            (F.col("session_count") < 0)
+            | (F.col("unique_user_count") > F.col("session_count"))
+            | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+            | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+            | (F.col("detail_view_sessions") > F.col("session_count"))
+            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+            | (F.col("product_count") < 1)
+        ).count()
+        checks.append(_check(
+            "price_band_counts_are_bounded",
+            invalid_price_counts == 0,
+            f"invalid_rows={invalid_price_counts}",
+        ))
+
+        price_rate_columns = [
+            "detail_entry_rate", "view_to_cart_rate", "view_to_purchase_rate"
+        ]
+        invalid_price_rates = price_band.where(
+            F.greatest(*[
+                F.when(
+                    F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                    F.lit(1),
+                ).otherwise(F.lit(0))
+                for column in price_rate_columns
+            ]) == 1
+        ).count()
+        invalid_price_denominators = price_band.where(
+            ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
+            | ((F.col("detail_view_sessions") == 0) & F.col("view_to_cart_rate").isNotNull())
+            | ((F.col("detail_view_sessions") == 0)
+               & F.col("view_to_purchase_rate").isNotNull())
+        ).count()
+        checks.append(_check(
+            "price_band_rates_follow_contract",
+            invalid_price_rates == 0 and invalid_price_denominators == 0,
+            f"out_of_range={invalid_price_rates}; "
+            f"non_null_zero_denominator={invalid_price_denominators}",
+        ))
+
+        checks.append(_check(
+            "price_band_currency_is_present",
+            price_band.where(
+                F.col("currency").isNull()
+                | (F.length(F.trim(F.col("currency"))) == 0)
+            ).count() == 0,
+            "통화는 grain 이라 비어 있으면 서로 다른 통화가 한 행에 섞인다",
+        ))
+
+        # 반열린 구간이라 한 상품은 한 구간에만 속한다. 구간별 상품 수를 더하면
+        # 그 브랜드·일자에 실제로 등장한 상품 수와 같아야 한다. 크면 Dimension
+        # 조인이 상품을 복제했거나 경계 판정이 겹친 것이다.
+        observed_products = (
+            product_fact.where(
+                ~F.coalesce(F.col("is_seeded"), F.lit(False))
+                & F.col("brand_id").isNotNull()
+                & (F.length(F.trim(F.col("brand_id"))) > 0)
+            )
+            .join(
+                dim_product.select(F.col("product_id").alias("_dim_product_id")),
+                F.col("product_id") == F.col("_dim_product_id"),
+                "left_semi",
+            )
+            .groupBy("event_date_kst", "brand_id", *EXECUTION_AXES)
+            .agg(F.countDistinct("product_id").cast("long").alias("_observed_products"))
+        )
+        banded_products = price_band.groupBy(
+            "event_date_kst", "brand_id", *EXECUTION_AXES
+        ).agg(F.sum("product_count").cast("long").alias("_banded_products"))
+        # 실행 축에 NULL 이 있으므로 등호 Join 이면 그 행이 통째로 빠진다.
+        join_keys = ["event_date_kst", "brand_id", *EXECUTION_AXES]
+        condition = None
+        for column in join_keys:
+            clause = banded_products[column].eqNullSafe(observed_products[column])
+            condition = clause if condition is None else condition & clause
+        overlapping = (
+            banded_products.join(observed_products, condition, "inner")
+            .where(F.col("_banded_products") != F.col("_observed_products"))
+            .count()
+        )
+        checks.append(_check(
+            "price_band_maps_each_product_once",
+            overlapping == 0,
+            f"mismatched_rows={overlapping}; 구간별 상품 수 합 != 관측 상품 수",
+        ))
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -1603,6 +1957,19 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         for name, path in paths.items()
     }
     try:
+        frames["persona_segment_daily"] = spark.read.option(
+            "mergeSchema", "true"
+        ).parquet(config.persona_segment_path)
+    except Exception:
+        # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
+        pass
+    try:
+        frames["price_band_daily"] = spark.read.option(
+            "mergeSchema", "true"
+        ).parquet(config.price_band_path)
+    except Exception:
+        pass
+    try:
         frames["analytics_baseline"] = spark.read.option("mergeSchema", "true").parquet(
             config.baseline_path
         )
@@ -1610,7 +1977,11 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         # 기준선을 만들지 않은 실행에서는 경로가 없다. 검증은 그대로 진행한다.
         pass
     return validate_frames(
-        frames, config.require_events, config.time_zone, config.reason_trait_map_path
+        frames,
+        config.require_events,
+        config.time_zone,
+        config.reason_trait_map_path,
+        config.behavior_weights_path,
     )
 
 

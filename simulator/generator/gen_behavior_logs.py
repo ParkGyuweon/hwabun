@@ -147,7 +147,11 @@ SCENARIO = {
 
     # [회의 안건 4-4] 시간축 압축 폭 (일)
     #   리뷰가 2019~2023년에 걸쳐 있어 그대로 쓰면 시간 감쇠(tau=30일)가 소멸한다
-    "window_days": 120,
+    # 시드(과거 구매) 세션을 흩어 놓는 기간. 첫 구매와 재구매(S2, restock_gap_days)가 **둘 다** 데이터 마트의
+    # 재구매 창(build_marts_job --repurchase-window-days 기본 90일, NOW 기준) 안에 들어야 재구매율이 잡힌다.
+    # 120일이었을 때 시드 결제가 창 밖(4~5월)에 몰려 repeat_buyer 가 전부 0 이었다 (09-15 실측, Jira 313).
+    # 85일 × 0.7 = 약 60일에 걸쳐 첫 구매를 놓고, 재구매 간격 14~30일이면 대부분 창 안에서 두 번째 구매가 난다.
+    "window_days": 85,
 
     # [미정] 목록 페이지 체류 시간 (ms). checkpoint dwell 발생량을 좌우한다
     "list_dwell_ms": (8000, 70000),
@@ -175,6 +179,19 @@ SCENARIO = {
     "p_view_cart": 0.70,
     #   장바구니에서 수량을 조절하는 확률
     "p_quantity_change": 0.18,
+
+    # [추정] 결제 (Jira 312). 09-15 로컬 마트 스냅샷에서 구매 마트 3종이 0 이었다 — 이 생성기가 purchase 를
+    #   안 만들었기 때문. 결제 이벤트는 프론트 화면(포트원·카카오페이 테스트 채널, 09-14)에서만 나오고 있었다.
+    #   p_purchase_after_cart: 목표 상품을 담은 세션이 결제까지 가는 비율. 프론트 가중치 원칙
+    #     "purchase : add_to_cart ≥ 2 : 1" 은 가중치 얘기지 전환율이 아니다 — 여기 값은 첫 실측(구매 로그 1,000건)
+    #     전까지의 가설이다. 시드(과거 구매)는 확률 없이 전부 결제한다: 리뷰를 썼다 = 샀다.
+    #   p_payment_failed: 결제창에서 실패·취소. 전환 마찰의 마지막 칸(계약 §2 payment_failed).
+    #   p_reason_answer: 구매 직후 이유 설문에 답하는 비율. 나머지는 skipped=true·reasons=[] (계약 §3.9).
+    "p_purchase_after_cart": 0.45,
+    "p_payment_failed": 0.05,
+    "p_reason_answer": 0.70,
+    "p_discount": 0.20,            # 쿠폰·프로모션으로 paid_value < order_value 인 주문 비율
+    "payment_methods": (("kakaopay", 0.6), ("card", 0.4)),   # `test` 는 시연 주문 전용이라 합성 로그에 안 쓴다
 
     # [미정] 유사 상품 추천을 눌러 다음 상세로 넘어가는 확률.
     #   직전 상세의 추천 노출과 같은 recommendation_id / position 을 실어야
@@ -228,7 +245,7 @@ SCENARIO = {
     # 재구매 (S2) — 같은 상품에 리뷰가 2건 이상이면 재구매로 본다.
     # 실측: 9,900명 중 60.6% 가 해당하고 리뷰 간격 중앙값이 264일이다.
     # 시드 창(120일) 안에 넣어야 하므로 간격은 압축한다.
-    "restock_gap_days": (20, 60),
+    "restock_gap_days": (14, 30),           # 재구매 간격. 상한을 낮춰 두 번째 구매가 NOW 를 넘지 않게 (Jira 313)
 }
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -807,6 +824,68 @@ def post_events(base_url, events, rps=0, timeout=40):
     return st["sent"], st["dropped"] + st["gave_up"], time.time() - t0
 
 
+# ── 결제 (Jira 312) ────────────────────────────────────────────────────────
+#
+# 담기까지만 만들면 퍼널의 끝과 재구매·구매 사유 마트가 빈다. 프론트가 결제할 때 남기는 순서를 그대로 따른다:
+#   cart 화면 → begin_checkout(items·cart_value·currency) → purchase(order_id·items·payment_method·paid_value·
+#   order_channel·order_value·currency) → purchase_reason_select(order_id·reasons·primary_reason | skipped)
+# 금액 단위는 이벤트 계약대로 USD (데이터 티켓 303 이 원화로 옮기기 전까지). order_channel 은 `backend` —
+# 합성 로그는 백엔드 주문 API 를 거친 것으로 본다(`local` 은 브라우저만의 시연 주문이라 매출 집계에서 빠진다).
+PURCHASE_REASONS = ("ingredient", "skin_fit", "reviews", "review_same_skin", "price",
+                    "brand_trust", "texture_finish", "clean_claim", "recommendation", "restock")
+# 재구매가 아닐 때의 이유 분포 [추정] — 성분·피부 적합·리뷰가 앞, 추천은 낮게(추천 경유 비율은 노출 정책이 정한다)
+REASON_WEIGHTS = (0.20, 0.18, 0.16, 0.10, 0.12, 0.08, 0.07, 0.04, 0.05, 0.0)
+
+
+def _pick_reasons(rng, restock):
+    """1~2개. 재구매면 restock 이 첫 번째. 같은 값을 두 번 넣지 않는다."""
+    if restock:
+        picked = ["restock"]
+    else:
+        w = np.array(REASON_WEIGHTS) / sum(REASON_WEIGHTS)
+        picked = [str(rng.choice(PURCHASE_REASONS, p=w))]
+    if rng.random() < 0.35:
+        rest = [r for r in PURCHASE_REASONS if r not in picked and r != "restock"]
+        picked.append(str(rng.choice(rest)))
+    return picked
+
+
+def checkout(e, catalog, gids, rng, SC, quantities=None, restock=False):
+    """cart 화면에서 결제까지. 돌려주는 것: 구매했으면 order_id, 실패·취소면 None.
+
+    gids 는 결제할 상품 id 들(장바구니 전체가 아니다 — 시드 상품은 이미 과거에 산 것이라 다시 결제하지 않는다).
+    quantities 는 {gid: n}, 없으면 1. Emitter 가 시드면 seeded=True 가 자동으로 붙는다.
+    """
+    quantities = quantities or {}
+    items = [{"product_id": g, "quantity": int(quantities.get(g, 1)),
+              "unit_price": float(catalog[g]["price"])} for g in gids]
+    order_value = round(sum(it["quantity"] * it["unit_price"] for it in items), 2)
+    order_id = f"ord-{uuid.uuid4().hex[:16]}"
+    methods, weights = zip(*SC["payment_methods"])
+    method = str(rng.choice(methods, p=np.array(weights) / sum(weights)))
+
+    if e.page != "cart":
+        e.new_page("cart")
+        e.tick(); e.emit("page_view", navigation_source="in_app")
+    e.tick(800, 5000)
+    e.emit("begin_checkout", items=items, cart_value=order_value, currency="USD")
+    e.tick(3000, 20000)                      # 결제창
+    if rng.random() < SC["p_payment_failed"]:
+        e.emit("payment_failed", order_id=order_id, reason_code="user_cancel", payment_method=method)
+        return None
+    paid = round(order_value * 0.9, 2) if rng.random() < SC["p_discount"] else order_value
+    e.emit("purchase", order_id=order_id, items=items, payment_method=method, paid_value=paid,
+           order_channel="backend", order_value=order_value, currency="USD")
+    e.tick(1500, 8000)
+    if rng.random() < SC["p_reason_answer"]:
+        reasons = _pick_reasons(rng, restock)
+        e.emit("purchase_reason_select", order_id=order_id, reasons=reasons,
+               primary_reason=reasons[0], skipped=False)
+    else:
+        e.emit("purchase_reason_select", order_id=order_id, reasons=[], skipped=True)
+    return order_id
+
+
 def validate_property_contract(events):
     """Fail before file output or HTTP delivery when generated properties drift."""
 
@@ -999,8 +1078,10 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         e.new_page("product_detail")
         e.emit("add_to_cart", g, seeded=True, quantity=1,
                price_usd=catalog[g]["price"])
+        # 시드는 과거 구매다(리뷰를 썼다 = 샀다). 담기에서 끝내면 purchase_fact 가 비어 재구매 마트가 0 이 된다 (Jira 312)
+        checkout(e, catalog, [g], rng, SC)
 
-        # ── S2. 재구매 — 같은 상품을 시간 간격을 두고 다시 담는다 ──────────
+        # ── S2. 재구매 — 같은 상품을 시간 간격을 두고 다시 산다 ──────────────
         # 리뷰를 두 번 쓴 것은 두 번 샀다는 뜻이다. 지금까지 `dict.fromkeys` 가
         # 중복을 뭉개 **한 번 산 것으로 보이고 있었다.**
         #
@@ -1024,6 +1105,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             re.new_page("product_detail")
             re.emit("add_to_cart", g, seeded=True, quantity=1,
                     price_usd=catalog[g]["price"])
+            checkout(re, catalog, [g], rng, SC, restock=True)     # 재구매 = 두 번째 결제, 사유는 restock
 
     # 이탈 상품 — **노출**로 고른다. 취향으로 고르지 않는다.
     #   popular_v0  같은 카테고리 -> 인기순. 전원이 같은 화면을 본다
@@ -1226,7 +1308,9 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     # ── 장바구니 화면 ────────────────────────────────────────────────────
     # 프론트는 헤더 장바구니를 누를 때 view_cart 를 남긴다 (App.tsx openCart).
     # product_id 는 싣지 않는다 — 화면 단위 이벤트라 특정 상품의 증거가 아니다.
-    if regret is not None or rng.random() < SC["p_view_cart"]:
+    # 결제까지 가는 세션 (Jira 312). 목표 상품만 결제한다 — 시드는 과거에 이미 산 것이고, 이탈 상품은 빼는 중이다
+    buy = rng.random() < SC["p_purchase_after_cart"]
+    if regret is not None or buy or rng.random() < SC["p_view_cart"]:
         cart = [g for g in seeds] + [target] + ([regret] if regret else [])
         e.new_page("cart")
         e.tick(); e.emit("page_view", navigation_source="in_app")
@@ -1235,6 +1319,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                item_count=len(cart), distinct_products=len(cart),
                cart_value=round(sum(catalog[g]["price"] for g in cart), 2))
         # 수량 조절. 프론트는 entry_source="cart" 를 싣는다 (App.tsx)
+        q = 1
         if rng.random() < SC["p_quantity_change"]:
             q = int(rng.integers(2, 4))
             e.tick(500, 4000)
@@ -1245,6 +1330,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             e.emit("remove_from_cart", regret, quantity=1,
                    price_usd=catalog[regret]["price"],
                    cart_size_after=len(cart) - 1)
+        if buy:
+            checkout(e, catalog, [target], rng, SC, quantities={target: q})
 
     e.new_page("product_list")
     e.tick(); e.emit("page_view", navigation_source="in_app")

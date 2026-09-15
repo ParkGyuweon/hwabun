@@ -145,14 +145,28 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 | `primary_category`, `secondary_category`, `tertiary_category` | string | Y | 카테고리 계층 |
 | `category_id` | string | Y | Dashboard 필터 ID |
 | `category_path` | array<string> | Y | 카테고리 경로 |
-| `base_price` | decimal(18,2) | Y | 기준 가격 |
-| `currency` | string | Y | 가격 통화 |
+| `base_price` | decimal(18,2) | Y | 기준 가격. **원화**다 |
+| `source_price_usd` | decimal(18,2) | Y | 세포라 원천 가격. 정본이 아니라 출처 보존용 |
+| `currency` | string | Y | 가격 통화. 현재 `KRW` |
 | `rating` | double | Y | 평균 평점 |
 | `rating_source` | string | Y | `observed`, `injected`. 주입값을 실측과 섞지 않는다 |
 | `review_count`, `loves_count` | bigint | Y | 리뷰·관심 수 |
 | `skin_type_tags`, `concern_tags`, `ingredient_ids` | array<string> | Y | 상품 속성 |
 | `caution_ingredient_count` | int | Y | 주의 성분 수 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
+
+가격 정본은 **원화**다 (Jira 302). 추천 어휘집 0.7의 `price_bin` 경계가 원화이므로
+카탈로그가 달러로 남으면 가격대 Mart가 환율을 다시 들고 있어야 한다. 환율이 여러 곳에
+흩어지면 같은 상품이 화면·추천·대시보드에서 다른 가격대로 잡힌다.
+
+산출 규칙은 `batch/jobs/product_encoder.price_krw_of`와 **같아야 한다.** `price_krw`가
+있으면 그 값이고, 없으면 `price_usd × 1340.86`을 100원 단위로 반올림한다. 환율과 반올림
+단위는 `contracts/localization/products-ko.json`의 `_meta`와 같다 — 화면 표시 가격과
+어긋나지 않게 하기 위해서다. 두 곳이 갈리면 조용히 다른 구간이 된다.
+
+`source_price_usd`는 세포라 원천값 보존용이다. 정본이 아니므로 집계에 쓰지 않는다.
+행동 Event의 금액(`unit_price`·`cart_value`·`order_value`·`paid_value`)은 아직 USD다.
+그 전환은 별도 티켓(S15P21A306-303)이며, 이 Dimension만 먼저 옮겼다.
 
 ### 3.3 `dim_persona_segment`
 
@@ -232,6 +246,7 @@ source = event-properties-schema.md
 | `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
+| `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 뺄지는 미결 |
 | `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 
@@ -247,9 +262,28 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
-| `quick_look_sessions`, `product_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
+| `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
 | `product_ctr`, `detail_entry_rate`, `add_to_cart_rate`, `purchase_rate`, `product_interest_score` | double | Y | 비율·관심도 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`detail_view_sessions`는 상품 상세(`product_view`)와 Quick Look(`quick_look`) 중 하나
+이상을 연 고유 세션이다. 둘 다 연 세션도 한 번만 센다. §4.14와 같은 정의다.
+
+**`add_to_cart_rate`와 `purchase_rate`의 분모는 `detail_view_sessions`다.**
+`product_view_sessions`를 분모로 두면 Quick Look에서 담은 세션이 분자에만 들어가
+비율이 1.0을 넘는다. 실제로 그랬다 — 데이터 235 재생에서 1,248행 중 323행(26%)이
+1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 235에서 고쳤는데 상품 Mart가
+빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다 (Jira 277).
+
+`product_ctr`와 `detail_entry_rate`의 분모는 `product_impression_count`로 **Event 수**다.
+세션 수가 아니다. 노출 대비 클릭·상세 진입은 노출 하나하나를 모수로 보는 지표이고,
+이름이 §4.14의 `detail_entry_rate`(세션 기준)와 같지만 분모가 다르다. 두 Mart의 값을
+같은 지표로 나란히 놓지 않는다.
+
+`currency`는 key가 아니라 대표값 하나다. Event의 `currency`는 담기·결제 Event에만 붙고
+조회 Event에는 없어서, key에 올리면 통화 없는 조회 행과 결제 행이 갈려 세션 집계가
+무너진다. 대신 한 상품·하루에 통화가 둘 이상 섞이지 않는 것을 검증 Job이 막는다
+(`product_daily_currency_is_unambiguous`). 섞이면 `revenue_amount`가 두 통화를 더한다.
 
 ### 4.2 `recommendation_daily_kpi`
 
@@ -349,17 +383,121 @@ Quick Look 선진입 세션 + direct_click_sessions = detail_view_sessions
 ### 4.6 `persona_segment_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + segment_type + segment_value + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
-input = funnel_session_fact, persona_behavior_feature_delta, bridge_persona_segment, dim_persona_segment, dim_product
+key = event_date_kst + brand_id + segment_type + segment_value + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = product_event_fact, bridge_persona_segment
 ```
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | generator/scenario/run만 Y | segment 집계 축 |
-| `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
-| `segment_user_count`, `session_count`, `product_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 행동 집계 |
-| `avg_interest_score`, `category_interest_score`, `affinity_lift` | double | Y | 행동 로그 기반 지표 |
+| `segment_user_count`, `session_count` | bigint | N | 세그먼트 규모 |
+| `impression_sessions`, `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 단계별 고유 세션 수 |
+| `product_count_viewed` | bigint | N | 상세를 연 고유 상품 수 |
+| `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 상세 조회 세션 |
+| `view_to_purchase_rate` | double | Y | 구매 세션 / 상세 조회 세션 |
+| `avg_interest_score` | double | Y | 관심도 합 / 세션 수 (§2.3). 음수일 수 있다 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`segment_type`은 세 종류다.
+
+| segment_type | segment_value | 비고 |
+| --- | --- | --- |
+| `skin_type` | `combination`, `dry`, `normal`, `oily` | `persona-schema.md` §3 |
+| `skin_tone` | `fair`, `light`, `medium`, `tan`, `deep` | 〃 |
+| `skin_type_x_skin_tone` | `dry|fair` 형식 | 교차 축 |
+
+**세 축을 합산하지 않는다.** 한 세션이 `skin_type` 행과 `skin_tone` 행에 동시에
+들어가므로 더하면 같은 세션을 두 번 센다. 교차 축도 단일 축의 분해가 아니라 별도
+집계다 — 건성 담기율 0.5는 `dry|fair` 1.0과 `dry|deep` 0.0으로 갈릴 수 있고, 그
+차이를 보는 것이 이 Mart의 목적이다. 교차 축끼리는 배타라 그 안에서만 합이 성립한다.
+
+`bridge_persona_segment`에는 7종의 `segment_type`이 있지만 `hair_color`·`eye_color`·
+`review_bucket`·`persona_source`는 내지 않는다. 대시보드 고객군 화면이 피부 축만
+쓴다(`docs/dashboard/dashboard-redesign-spec.md` §2-3). 필요해지면 축을 늘리면 되고
+Mart 구조는 그대로다.
+
+**`product_id`는 key가 아니다.** 브랜드 grain이라 한 세션이 같은 브랜드 상품 여러 개를
+봐도 세션은 한 번만 센다. `product_id`를 key에 두면 대시보드가 그것을 합산할 때 세션이
+상품 수만큼 부푼다 — `brand_daily_kpi`를 `product_daily_kpi` 합산으로 만들 수 없는 것과
+같은 이유다(§4.14). `product_count_viewed`가 상품 축의 대체값이다.
+
+**`persona_id`가 없는 세션은 어느 행에도 들어가지 않는다.** 실제 사용자의 피부 정보는
+이벤트 경로에 없다. 임의 세그먼트에 귀속하면 없는 사실을 만들어 내므로 제외한다.
+그래서 **세그먼트 세션 합은 `brand_daily_kpi` 전체보다 작고, 작은 것이 정상이다.**
+`skin_tone='notSureST'`도 값이 아니라 결측이라(`persona-schema.md` §3) segment_value가
+되지 않으며, 톤이 결측인 Persona는 교차 축에서도 빠지고 `skin_type` 축에는 남는다.
+
+담기·구매 분모는 `detail_view_sessions`(상품 상세 ∪ Quick Look)로 §4.1·§4.14와 같다.
+모든 비율은 분모가 0이면 NULL이다. 시드 Event는 제외한다(§4.0).
+
+`bridge_persona_segment`는 저장소에 없는 생성물이다(`.gitignore`의 `data/`). 실행 전에
+`py contracts/persona/build_persona_tables.py --sample PC:all`로 만든다. 없으면 이 Mart를
+만들지 않고 검증 Job은 경고만 남긴다.
+
+**계약에서 뺀 컬럼이 셋 있다.** `persona_behavior_feature_delta`도 input에서 뺐다.
+
+| 뺀 것 | 이유 |
+| --- | --- |
+| `category_interest_score` | 브랜드 grain이라 카테고리 축이 없다. 상품 축이 필요하면 `product_daily_kpi.product_interest_score`를 쓴다 |
+| `affinity_lift` | 행동 로그 파생이 아니라 AI 파트 `batch/ingest/data/affinity_lift.csv` 조인이다. 대시보드 E4 응답에도 없다 |
+| `category_id` | 위와 같다. 브랜드 grain에 단일 카테고리가 없다 |
+| `persona_behavior_feature_delta` (input) | §2.3의 `avg_interest_score` 산식은 `product_interest_score`만 요구하고 그것은 `product_event_fact`와 `EVENT_WEIGHT`로 낸다. 이 Fact의 시간 감쇠는 추천 피처용이라 KPI 산식에 없다 |
+
+
+### 4.6-1 `brand_price_band_daily_kpi`
+
+```text
+key = event_date_kst + brand_id + price_bin + currency + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = product_event_fact, dim_product, contracts/product-feature-vocab.json
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | `price_bin`·generator/scenario/run만 Y | 가격대 집계 축 |
+| `session_count`, `unique_user_count` | bigint | N | 구간 규모 |
+| `impression_sessions`, `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 단계별 고유 세션 수 |
+| `product_count` | bigint | N | 이 구간에서 관측된 고유 상품 수 |
+| `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 상세 조회 세션 |
+| `view_to_purchase_rate` | double | Y | 구매 세션 / 상세 조회 세션 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**구간은 여기서 정의하지 않는다.** `contracts/product-feature-vocab.json`의
+`price_bin_edges`와 `blocks[].vocab`을 읽는다. 추천 CBF 피처 벡터·배너 축·상품 등록
+화면이 이미 그 축을 쓰므로(`product-feature-spec.md` §4.1), 대시보드가 다른 구간을
+정의하면 같은 이름의 가격대가 두 벌이 되어 "이 가격대 반응"이 어느 쪽 구간인지 알 수
+없게 된다. 어휘집 0.7 기준 원화 5구간이다.
+
+| price_bin | 구간 |
+| --- | --- |
+| `~26k` | 26,000원 미만 |
+| `26k-46k` | 26,000 이상 46,000 미만 |
+| `46k-66k` | 46,000 이상 66,000 미만 |
+| `66k-105k` | 66,000 이상 105,000 미만 |
+| `105k+` | 105,000원 이상 |
+
+구간은 **반열린** `[하한, 상한)`이다. 26,000원짜리 상품은 `26k-46k`에 들어가고, 한 상품이
+두 구간에 동시에 속할 수 없다 — 검사가 아니라 구조로 막는다.
+
+`base_price`가 NULL이거나 0 이하인 상품은 **`price_bin = NULL` 행으로 보존한다.** 빼면
+그 상품들의 반응을 볼 수 없고, 임의 구간에 넣으면 그 구간 수치가 오염된다. Dimension에
+없는 상품은 가격을 모르므로 이 Mart에 넣지 않는다.
+
+**`currency`는 key다.** 통화가 다른 가격을 환산 규칙 없이 한 구간으로 합치지 않는 것을
+필터가 아니라 grain으로 지킨다. 카탈로그가 전부 원화인 지금은 행 수에 차이가 없지만,
+다른 통화가 들어와도 조용히 섞이지 않는다.
+
+담기·구매 분모는 `detail_view_sessions`(상품 상세 ∪ Quick Look)로 §4.1·§4.14와 같다.
+브랜드 grain이라 한 세션이 같은 구간의 상품 여러 개를 봐도 세션은 한 번만 센다.
+모든 비율은 분모가 0이면 NULL이다. 시드 Event는 제외한다(§4.0).
+
+`price_bin`을 걷어낸 합계는 `brand_daily_kpi`와 같지 않다. 한 세션이 여러 구간의 상품을
+밟으면 구간마다 한 번씩 세어지기 때문이다. **두 Mart를 서로 대체하지 않는다.**
+
+고객군 축(피부 타입)과의 교차는 이 Mart로 낼 수 없다. 축을 하나 더 얹으면 그 축을 걷어낸
+합계가 무너지므로 별도 Mart가 필요하다 (S15P21A306-301).
+
 
 ### 4.7 `scenario_daily_kpi`
 
@@ -560,7 +698,7 @@ input = product_event_fact, funnel_session_fact
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통 계약 | scenario/run만 Y | 브랜드·일자·실행 분리 축 |
-| `impression_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
+| `impression_sessions`, `click_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
 | `unique_user_count` | bigint | N | 브랜드 KPI에 기여한 고유 사용자 수 |
 | `product_count_viewed` | bigint | N | 조회된 고유 상품 수 |
 | `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
@@ -575,6 +713,12 @@ input = product_event_fact, funnel_session_fact
 `detail_view_sessions`를 쓰고, 정보 확인만 상품 상세에서 일어나므로
 `product_view_sessions`를 유지한다. `quick_look_sessions`와 `product_view_sessions`는
 겹칠 수 있어 더해서 `detail_view_sessions`를 만들 수 없다.
+
+`click_sessions`는 `product_click`을 낸 고유 세션이다. 브랜드 퍼널의 노출 → 클릭 →
+상세 단계를 상품 Mart 합산 없이 브랜드 단위로 보기 위해 둔다
+([`dashboard-mart-api-spec.md`](./dashboard-mart-api-spec.md) §6-1). 이 Mart는 비율을
+노출 → 상세로 바로 잇고(`detail_entry_rate`) 클릭을 분모로 쓰지 않는다. Quick Look은
+클릭 없이 상세를 여는 경로라 클릭을 분모에 두면 그 세션이 빠지기 때문이다.
 
 상품 grain Mart의 세션 수를 합산하지 않고 Fact에서 `session_id`를 브랜드별로 직접
 중복 제거한다. 따라서 한 세션이 같은 브랜드 상품 여러 개를 보더라도 각 단계 세션은
