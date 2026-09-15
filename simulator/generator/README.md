@@ -197,11 +197,20 @@ python simulator/generator/build_persona_style.py
    - 별점 4~5점 상품 → `add_to_cart`
    - 별점 1~2점 상품 → 상세에 들어갔다 얕게 보고 이탈 (`scroll_backtrack`, 35% 확률로 `rage_click`)
    - 3점 상품 → 아무 데도 넣지 않는다
+   - 시드 세션은 NOW 기준 **최근 85일**에 흩어 놓고 재구매 간격은 14~30일이다 (Jira 313, 2026-09-15). 데이터 마트의
+     재구매 창이 최근 90일이라 첫 구매와 재구매가 둘 다 창 안에 있어야 재구매율이 잡힌다. 120일이었을 때는 시드 결제가
+     4~5월에 몰려 `repeat_buyer` 가 전부 0 이었다.
 2. **탐색** — 목록 → 상세 → 복귀를 2~6회. 이탈 상품은 취향이 아니라
    노출(같은 카테고리 → 인기순)로 고른다
 3. **목표 상품** — 끝까지 보고 `add_to_cart`. 45% 확률로 `wishlist_toggle`
 
 리뷰 작성 이벤트는 만들지 않는다. 리뷰는 구매 후 행위라 `add_to_cart` 로 환산했다.
+
+4. **결제** (Jira 312, 2026-09-15) — 시드(과거 구매)와 재구매(S2)는 담기 뒤 **전부** `begin_checkout → purchase →
+   purchase_reason_select` 까지 간다(리뷰를 썼다 = 샀다). 목표 상품은 담은 세션의 45% `[추정]`가 결제까지 간다.
+   결제 5% 는 `payment_failed`(user_cancel), 설문은 70% 응답(1~2개, 재구매면 `restock` 첫 번째)·30% `skipped`.
+   금액은 이벤트 계약대로 USD, `order_channel=backend`, 결제수단은 kakaopay 60 / card 40 (`test` 는 시연 전용이라 안 씀).
+   이게 없던 09-14 캐시로는 데이터 마트의 재구매·구매 사유 3종이 0 이었다.
 
 모든 synthetic Event의 `properties`에는 `scenario_id`, `simulation_run_id`,
 `generator_type`이 포함된다. 기본 시나리오는 `normal_day`, 생성 방식은
