@@ -12,6 +12,7 @@ except ImportError:  # Spark integration runs in the project Spark image.
 
 from streaming.jobs.derive_facts_job import _write_processed_dataset
 from streaming.jobs.validate_pipeline_job import (
+    DEFAULT_BEHAVIOR_WEIGHTS_PATH,
     DEFAULT_REASON_TRAIT_MAP_PATH,
     ValidatePipelineConfig,
     run as run_validation,
@@ -121,10 +122,13 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 baseline_path=supporting_path,
             )
 
-            def verify_loaded_frames(frames, require_events, time_zone, reason_map_path):
+            def verify_loaded_frames(
+                frames, require_events, time_zone, reason_map_path, weights_path
+            ):
                 self.assertFalse(require_events)
                 self.assertEqual("Asia/Seoul", time_zone)
                 self.assertEqual(DEFAULT_REASON_TRAIT_MAP_PATH, reason_map_path)
+                self.assertEqual(DEFAULT_BEHAVIOR_WEIGHTS_PATH, weights_path)
                 for name in derived_paths:
                     self.assertEqual(0, frames[name].count())
                     self.assertEqual(empty.schema, frames[name].schema)
