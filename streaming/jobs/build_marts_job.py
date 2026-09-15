@@ -48,6 +48,10 @@ DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
 DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
 DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
 DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
+DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
+DEFAULT_CONTENT_DAILY_PATH = "data/marts/content_daily_kpi"
+DEFAULT_CONTENT_CONVERSION_PATH = "data/marts/content_conversion_daily"
+DEFAULT_BEHAVIOR_CONVERSION_PATH = "data/marts/behavior_conversion_daily"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -115,6 +119,10 @@ class BuildMartsConfig:
     dim_brand_path: str = DEFAULT_DIM_BRAND_PATH
     brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
     commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
+    content_interest_path: str = DEFAULT_CONTENT_INTEREST_PATH
+    content_daily_path: str = DEFAULT_CONTENT_DAILY_PATH
+    content_conversion_path: str = DEFAULT_CONTENT_CONVERSION_PATH
+    behavior_conversion_path: str = DEFAULT_BEHAVIOR_CONVERSION_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -155,6 +163,10 @@ class BuildMartsConfig:
             "dim_brand_path": self.dim_brand_path,
             "brand_cohort_path": self.brand_cohort_path,
             "commons_cohort_path": self.commons_cohort_path,
+            "content_interest_path": self.content_interest_path,
+            "content_daily_path": self.content_daily_path,
+            "content_conversion_path": self.content_conversion_path,
+            "behavior_conversion_path": self.behavior_conversion_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -322,6 +334,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="commons_cohort_weekly output path (B층 — dw-schema §2.5)",
     )
     parser.add_argument(
+        "--content-interest-path",
+        default=_env("CONTENT_INTEREST_FACT_PATH", DEFAULT_CONTENT_INTEREST_PATH),
+        help="content_interest_fact input path",
+    )
+    parser.add_argument(
+        "--content-daily-path",
+        default=_env("CONTENT_DAILY_KPI_PATH", DEFAULT_CONTENT_DAILY_PATH),
+        help="content_daily_kpi output path",
+    )
+    parser.add_argument(
+        "--content-conversion-path",
+        default=_env("CONTENT_CONVERSION_DAILY_PATH", DEFAULT_CONTENT_CONVERSION_PATH),
+        help="content_conversion_daily output path",
+    )
+    parser.add_argument(
+        "--behavior-conversion-path",
+        default=_env("BEHAVIOR_CONVERSION_DAILY_PATH", DEFAULT_BEHAVIOR_CONVERSION_PATH),
+        help="behavior_conversion_daily output path",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -389,6 +421,10 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         dim_brand_path=args.dim_brand_path,
         brand_cohort_path=args.brand_cohort_path,
         commons_cohort_path=args.commons_cohort_path,
+        content_interest_path=args.content_interest_path,
+        content_daily_path=args.content_daily_path,
+        content_conversion_path=args.content_conversion_path,
+        behavior_conversion_path=args.behavior_conversion_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -943,6 +979,20 @@ def _null_safe_join(left: Any, right: Any, columns: list[str]) -> Any:
     return left.join(renamed, condition, "left").drop(*aliases.values())
 
 
+def _null_safe_semi_join(left: Any, right: Any, columns: list[str]) -> Any:
+    """``left`` 에서 ``right`` 에 있는 key 의 행만 남긴다. NULL 축을 같은 값으로 본다.
+
+    ``_null_safe_join`` 과 달리 오른쪽 컬럼을 가져오지 않으므로 이름 충돌이
+    없고 rename 도 필요 없다.
+    """
+
+    condition = None
+    for column in columns:
+        clause = left[column].eqNullSafe(right[column])
+        condition = clause if condition is None else condition & clause
+    return left.join(right, condition, "left_semi")
+
+
 # 피부 세그먼트 축. Jira 277 이 요구하는 세 종류만 낸다. bridge 에는
 # hair_color·eye_color·review_bucket·persona_source 도 있지만 대시보드 고객군
 # 화면(dashboard-redesign-spec.md §2-3)이 피부 축만 쓴다.
@@ -1208,6 +1258,280 @@ def _brand_price_band_daily_kpi(
         )
     )
 
+
+# 상품 상세 안에서 읽는 콘텐츠 묶음. §4.4 의 ingredient_view_sessions ·
+# review_view_sessions 가 무엇을 세는지 정하는 값이다. INFORMATION_CONTENT_KINDS 를
+# 성분·리뷰로 쪼갠 것이라 둘의 합집합이 그것과 같아야 한다.
+INGREDIENT_CONTENT_KINDS = ("ingredient_list", "ingredient_callout")
+REVIEW_CONTENT_KINDS = ("user_review", "review_stats", "review_filter")
+
+# E3 behaviors 블록이 대조를 요구하는 행동 (dashboard-mart-api-spec.md §6-2).
+# 네 Event 는 PRODUCT_EVENT_NAMES 밖이라 product_event_fact 에 없다.
+# sessionized_events 를 읽는 이유가 이것이다.
+CONVERSION_BEHAVIOR_EVENTS = (
+    "ingredient_view_mode_change",
+    "review_filter_apply",
+    "accordion_toggle",
+    "text_copy",
+)
+
+
+def _product_view_sessions(funnel_session_df: Any, time_zone: str) -> Any:
+    """상품을 조회한 세션. E3 세 Mart 가 공유하는 모집단이자 분모다.
+
+    날짜는 ``first_product_view_at`` 의 KST 일자로 잡는다. ``funnel_date_kst`` 는
+    퍼널 첫 단계(대개 노출)의 날짜라 자정을 넘긴 세션에서 콘텐츠를 읽은 날과
+    어긋난다. ``_brand_daily_kpi`` 의 정보 확인 세션이 같은 방식을 쓴다.
+    """
+
+    from pyspark.sql import functions as F
+
+    return funnel_session_df.where(
+        F.col("reached_product_view") & _valid_brand()
+    ).select(
+        F.to_date(
+            F.from_utc_timestamp(F.col("first_product_view_at"), time_zone)
+        ).alias("event_date_kst"),
+        "brand_id",
+        "product_id",
+        *EXECUTION_AXES,
+        "session_id",
+        F.col("reached_add_to_cart").alias("_reached_cart"),
+    )
+
+
+def _product_scoped_content(content_interest_df: Any) -> Any:
+    """상품 상세 콘텐츠만 남긴다.
+
+    ``product_id`` 가 NULL 인 행은 플랫폼 목록 섹션이다 (재생 데이터 기준 67%).
+    어느 상품의 관심인지 알 수 없어 상품·브랜드 KPI 에 섞으면 지표를 흔든다.
+    계약 §4.4 가 별도 grain 으로 미룬 대상이다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    return _observed_events(content_interest_df).where(
+        F.col("product_id").isNotNull()
+        & (F.length(F.trim(F.col("product_id"))) > 0)
+        & _valid_brand()
+    )
+
+
+def _content_daily_kpi(
+    content_interest_df: Any,
+    funnel_session_df: Any,
+    time_zone: str,
+) -> Any:
+    """상품 상세 콘텐츠별 행동 집계 (dw-schema.md §4.4).
+
+    ``dwell_ms_sum`` 은 ``content_interest_fact`` 만 원천으로 쓴다. ``section_dwell_agg``
+    를 같이 합산하면 같은 체류가 두 번 들어간다 — 전자가 후자를 이미 병합한다.
+    """
+
+    from pyspark.sql import functions as F
+
+    content = _product_scoped_content(content_interest_df)
+
+    axes = list(EXECUTION_AXES)
+    content_key = [
+        "event_date_kst", "brand_id", "product_id", "section_id", "content_kind", *axes
+    ]
+    product_key = ["event_date_kst", "brand_id", "product_id", *axes]
+
+    per_content = content.groupBy(*content_key).agg(
+        F.first("category_id", ignorenulls=True).alias("category_id"),
+        F.sum("view_count").cast("long").alias("section_view_count"),
+        F.countDistinct("session_id").cast("long").alias("section_view_sessions"),
+        # 합이 NULL 이 되는 경우(모든 입력이 NULL)를 0 으로 맞춘다. 체류 0 은
+        # "머물지 않았다" 이지 "모른다" 가 아니라서 계약이 N 으로 선언했다.
+        F.coalesce(F.sum("dwell_ms_sum"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
+        F.sum("accordion_expand_count").cast("long").alias("accordion_expand_count"),
+        F.sum("text_select_count").cast("long").alias("text_selection_count"),
+        F.sum("text_copy_count").cast("long").alias("text_copy_count"),
+        # size(NULL) 은 설정에 따라 -1 을 낸다. 배열이 없으면 0 으로 센다.
+        F.coalesce(
+            F.sum(F.size(F.coalesce(
+                F.col("matched_ingredients"), F.array().cast("array<string>")
+            ))),
+            F.lit(0),
+        ).cast("long").alias("matched_ingredient_count"),
+        F.sum("content_interest_score").cast("double").alias("content_interest_score"),
+    )
+
+    # 분모와 성분·리뷰 열람 세션은 **상품 단위**라 content_kind 마다 같은 값이 반복된다.
+    # 행 단위로 세면 user_review 행이 ingredient_view_sessions=0 을 달고 나와
+    # "아무도 성분을 안 봤다" 로 읽힌다. 소비자도 반복을 정상으로 본다
+    # (docs/dashboard/dashboard-mart-api-spec.md E3).
+    view_sessions = _product_view_sessions(funnel_session_df, time_zone).select(
+        *product_key, "session_id"
+    ).distinct()
+    views = view_sessions.groupBy(*product_key).agg(
+        F.countDistinct("session_id").cast("long").alias("product_view_sessions")
+    )
+
+    # 분자를 분모의 모집단으로 제한한다. Quick Look 으로 상세를 연 세션은 콘텐츠를
+    # 읽고도 퍼널의 product_view 에 없어서, 제한하지 않으면 비율이 1.0 을 넘는다.
+    # product_daily_kpi 의 add_to_cart_rate 가 같은 이유로 1,248행 중 323행에서
+    # 1.0 을 넘었다 (Jira 277). 분자와 분모는 같은 모집단을 세야 한다.
+    viewed_content = _null_safe_semi_join(
+        content, view_sessions, [*product_key, "session_id"]
+    )
+
+    def kind_sessions(kinds: tuple[str, ...], alias: str) -> Any:
+        return viewed_content.groupBy(*product_key).agg(
+            F.countDistinct(
+                F.when(F.col("content_kind").isin(*kinds), F.col("session_id"))
+            ).cast("long").alias(alias)
+        )
+
+    result = _null_safe_join(per_content, views, product_key)
+    result = _null_safe_join(
+        result, kind_sessions(INGREDIENT_CONTENT_KINDS, "ingredient_view_sessions"),
+        product_key,
+    )
+    result = _null_safe_join(
+        result, kind_sessions(REVIEW_CONTENT_KINDS, "review_view_sessions"), product_key
+    )
+    return (
+        # 콘텐츠를 읽었는데 퍼널에 상품 조회가 없는 조합은 분모가 0이다. 비율은
+        # _safe_ratio 가 NULL 로 만들고, 건수는 계약이 N 이라 0 으로 채운다.
+        result.withColumn(
+            "product_view_sessions",
+            F.coalesce(F.col("product_view_sessions"), F.lit(0).cast("long")),
+        )
+        .withColumn(
+            "avg_dwell_ms_per_session",
+            _safe_ratio(F.col("dwell_ms_sum"), F.col("product_view_sessions")),
+        )
+        .withColumn(
+            "ingredient_view_rate",
+            _safe_ratio(
+                F.col("ingredient_view_sessions"), F.col("product_view_sessions")
+            ),
+        )
+        .withColumn(
+            "review_view_rate",
+            _safe_ratio(F.col("review_view_sessions"), F.col("product_view_sessions")),
+        )
+        .withColumn("mart_processed_at", F.current_timestamp())
+    )
+
+
+def _content_conversion_daily(
+    content_interest_df: Any,
+    funnel_session_df: Any,
+    time_zone: str,
+) -> Any:
+    """"그 콘텐츠를 본 세션이 담았는가" (dw-schema.md §4.19).
+
+    세션 단위 조인이라 프론트가 Mart 두 개를 받아 만들 수 없다. 콘텐츠를 본 세션
+    집합과 그 세션의 담기 도달 여부를 ``funnel_session_fact`` 에서 맞춘다.
+
+    분모는 **그 콘텐츠를 본 세션**이다. 브랜드 담기율과 나누면 "본 사람의 담기율
+    배수"(E3 cart_lift)가 되는데, 그 나눗셈은 읽는 쪽 몫이다 — 여기서 미리 나누면
+    어느 브랜드 비율을 썼는지가 행에 박혀 재사용이 막힌다.
+    """
+
+    from pyspark.sql import functions as F
+
+    content = _product_scoped_content(content_interest_df).where(
+        F.col("content_kind").isNotNull()
+    )
+
+    axes = list(EXECUTION_AXES)
+    key_columns = ["event_date_kst", "brand_id", "product_id", "content_kind", *axes]
+
+    # 세션이 그 상품을 담았는지. 같은 세션·상품이면 퍼널 행은 하나다.
+    cart = _product_view_sessions(funnel_session_df, time_zone).select(
+        "brand_id", "product_id", "session_id", "_reached_cart"
+    ).distinct()
+
+    joined = content.select(*key_columns, "category_id", "session_id").join(
+        cart, ["brand_id", "product_id", "session_id"], "left"
+    )
+    return joined.groupBy(*key_columns).agg(
+        F.first("category_id", ignorenulls=True).alias("category_id"),
+        F.countDistinct("session_id").cast("long").alias("viewed_sessions"),
+        F.countDistinct(
+            F.when(F.col("_reached_cart"), F.col("session_id"))
+        ).cast("long").alias("viewed_cart_sessions"),
+        F.current_timestamp().alias("mart_processed_at"),
+    ).withColumn(
+        "viewed_cart_rate",
+        _safe_ratio(F.col("viewed_cart_sessions"), F.col("viewed_sessions")),
+    )
+
+
+def _behavior_conversion_daily(
+    sessionized_df: Any,
+    funnel_session_df: Any,
+    time_zone: str,
+) -> Any:
+    """행동을 한 세션과 안 한 세션의 담기율을 나란히 낸다 (dw-schema.md §4.20).
+
+    모집단은 **그 상품을 조회한 세션 전체**이고 행동 여부로 둘로 가른다. 그래서
+    ``done_sessions + not_done_sessions`` 가 모집단과 같다. 한쪽만 세면 "안 한 사람"
+    담기율이 비어 대조가 성립하지 않는다 — 이 Mart 의 존재 이유가 그 대조다.
+    """
+
+    from pyspark.sql import functions as F
+
+    axes = list(EXECUTION_AXES)
+    product_key = ["event_date_kst", "brand_id", "product_id", *axes]
+    key_columns = [*product_key, "event_name"]
+
+    universe = _product_view_sessions(funnel_session_df, time_zone).select(
+        *product_key, "session_id", "_reached_cart"
+    ).distinct()
+
+    behaviours = _observed_events(sessionized_df).where(
+        F.col("event_name").isin(*CONVERSION_BEHAVIOR_EVENTS)
+        & F.col("product_id").isNotNull()
+        & (F.length(F.trim(F.col("product_id"))) > 0)
+        & _valid_brand()
+    ).select("brand_id", "product_id", "session_id", "event_name").distinct()
+
+    # 한 건도 일어나지 않은 Event 도 행을 남긴다. 그래야 "아무도 안 했다" 와
+    # "그 Event 를 집계하지 않는다" 가 구분된다. 모집단 × Event 4개라 행이 네 배가
+    # 되지만 모집단 자체가 상품·일자 grain 이라 규모가 유지된다.
+    events = universe.sparkSession.createDataFrame(
+        [(name,) for name in CONVERSION_BEHAVIOR_EVENTS], "event_name string"
+    )
+    scored = (
+        universe.crossJoin(F.broadcast(events))
+        .join(
+            behaviours.withColumn("_done", F.lit(True)),
+            ["brand_id", "product_id", "session_id", "event_name"],
+            "left",
+        )
+        .withColumn("_done", F.coalesce(F.col("_done"), F.lit(False)))
+    )
+    return (
+        scored.groupBy(*key_columns).agg(
+            F.countDistinct(
+                F.when(F.col("_done"), F.col("session_id"))
+            ).cast("long").alias("done_sessions"),
+            F.countDistinct(
+                F.when(F.col("_done") & F.col("_reached_cart"), F.col("session_id"))
+            ).cast("long").alias("done_cart_sessions"),
+            F.countDistinct(
+                F.when(~F.col("_done"), F.col("session_id"))
+            ).cast("long").alias("not_done_sessions"),
+            F.countDistinct(
+                F.when(~F.col("_done") & F.col("_reached_cart"), F.col("session_id"))
+            ).cast("long").alias("not_done_cart_sessions"),
+            F.current_timestamp().alias("mart_processed_at"),
+        )
+        .withColumn(
+            "done_cart_rate",
+            _safe_ratio(F.col("done_cart_sessions"), F.col("done_sessions")),
+        )
+        .withColumn(
+            "not_done_cart_rate",
+            _safe_ratio(F.col("not_done_cart_sessions"), F.col("not_done_sessions")),
+        )
+    )
 
 PAYMENT_METHODS = ("kakaopay", "card", "test")
 ORDER_CHANNELS = ("backend", "local")
@@ -2418,6 +2742,7 @@ def build_mart_frames(
     persona_bridge_df: Any | None = None,
     price_bins: list[tuple[str, float | None]] | None = None,
     dim_brand_df: Any | None = None,
+    content_interest_df: Any | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -2430,6 +2755,17 @@ def build_mart_frames(
         ),
         "cross_brand_daily": _cross_brand_daily(sessionized_df),
     }
+    if content_interest_df is not None:
+        # E3 세 Mart 는 상품 조회 세션을 공통 분모로 쓴다 (dw-schema §4.4·§4.19·§4.20).
+        frames["content_daily_kpi"] = _content_daily_kpi(
+            content_interest_df, funnel_session, time_zone
+        )
+        frames["content_conversion_daily"] = _content_conversion_daily(
+            content_interest_df, funnel_session, time_zone
+        )
+        frames["behavior_conversion_daily"] = _behavior_conversion_daily(
+            sessionized_df, funnel_session, time_zone
+        )
     if persona_bridge_df is not None:
         frames["persona_segment_daily_kpi"] = _persona_segment_daily_kpi(
             product_fact_df, persona_bridge_df, event_weights
@@ -2565,6 +2901,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     dim_brand = spark.read.option("mergeSchema", "true").parquet(
         config.dim_brand_path
     )
+    content_interest = spark.read.option("mergeSchema", "true").parquet(
+        config.content_interest_path
+    )
     persona_bridge = load_persona_segments(spark, config.persona_bridge_path)
     price_bins = load_price_bins(config.feature_vocab_path)
     frames = build_mart_frames(
@@ -2589,6 +2928,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         persona_bridge,
         price_bins,
         dim_brand,
+        content_interest,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -2621,6 +2961,19 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         frames["commons_cohort_weekly"],
         config.commons_cohort_path,
         "snapshot_week_kst",
+    )
+    _write_mart(
+        frames["content_daily_kpi"], config.content_daily_path, "event_date_kst"
+    )
+    _write_mart(
+        frames["content_conversion_daily"],
+        config.content_conversion_path,
+        "event_date_kst",
+    )
+    _write_mart(
+        frames["behavior_conversion_daily"],
+        config.behavior_conversion_path,
+        "event_date_kst",
     )
     _write_mart(
         frames["product_repurchase_daily"],
