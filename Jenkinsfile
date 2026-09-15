@@ -17,6 +17,11 @@ pipeline {
             defaultValue: false,
             description: 'CI 성공 후 EC2의 backend/shop-backend/mysql/recommend/prometheus/grafana를 배포합니다.'
         )
+        booleanParam(
+            name: 'LOAD_DB_SEED',
+            defaultValue: false,
+            description: '배포 후 shop_backend_seed.sql을 MySQL에 적용합니다. 데이터 변경 작업이므로 필요할 때만 선택합니다.'
+        )
     }
 
     stages {
@@ -121,6 +126,22 @@ pipeline {
                       -f deploy/ec2-1/docker-compose.yml \\
                       up -d --build \\
                       backend shop-backend mysql recommend prometheus grafana nginx
+                '''
+            }
+        }
+
+        stage('MySQL seed 적용') {
+            when {
+                allOf {
+                    expression { params.DEPLOY_TO_EC2 }
+                    expression { params.LOAD_DB_SEED }
+                }
+            }
+            steps {
+                sh '''
+                    docker cp shop_backend/seed/shop_backend_seed.sql ec2-1-mysql-1:/tmp/shop_backend_seed.sql
+                    docker exec ec2-1-mysql-1 sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" shop_backend < /tmp/shop_backend_seed.sql'
+                    docker exec ec2-1-mysql-1 rm -f /tmp/shop_backend_seed.sql
                 '''
             }
         }
