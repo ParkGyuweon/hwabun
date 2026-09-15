@@ -1,0 +1,10 @@
+{"user_id": "1001", "identity_scope": "account", "trait": "price", "trait_score": 4.5, "is_primary_trait": true, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "1001", "identity_scope": "account", "trait": "ingredient", "trait_score": 1.0, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "1001", "identity_scope": "account", "trait": "review", "trait_score": 0.0, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "1001", "identity_scope": "account", "trait": "concern", "trait_score": 2.5, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "1001", "identity_scope": "account", "trait": "participate", "trait_score": 0.0, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "PC00001", "identity_scope": "persona", "trait": "price", "trait_score": 0.5, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "PC00001", "identity_scope": "persona", "trait": "ingredient", "trait_score": 3.2, "is_primary_trait": true, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "PC00001", "identity_scope": "persona", "trait": "review", "trait_score": 1.1, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "PC00001", "identity_scope": "persona", "trait": "concern", "trait_score": 2.0, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}
+{"user_id": "PC00001", "identity_scope": "persona", "trait": "participate", "trait_score": 0.0, "is_primary_trait": false, "window_end_date": "2026-09-13", "trait_policy_version": "user-trait-v2"}

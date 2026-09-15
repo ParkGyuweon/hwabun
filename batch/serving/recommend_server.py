@@ -108,6 +108,7 @@ from live_stats import LiveStats, LIVE_HTML                            # noqa: E
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
+from user_trait import UserTraitStore                                  # noqa: E402  (Jira 306 장기 성향)
 import validate_product_registration as vpr                    # noqa: E402
 
 # 히어로 정책 (2026-09-10, Jira 237). top = items[0] (계약 원안) · new_brand = 신규 상품 중 점수 최고.
@@ -118,6 +119,10 @@ HERO_POLICIES = ("top", "new_brand")
 # 운영 중 갱신되는 값이 없어 한 번 신규면 영영 신규였다 — 오프라인 평가 스크립트는 여전히 그 규칙을 쓴다.
 # NEW_BRAND_ALWAYS_PREFIX 에 걸리는 product_id 는 기간과 무관하게 신규로 둔다. 배포는 "SB"(시연 브랜드 SSAFY Beauty 8개,
 # 2026-09-14 결정, Jira 249) — 09-23 에 14일이 지나도 히어로 new_brand 후보에서 빠지지 않게. 오프라인 평가는 비움.
+# 장기 성향(user_trait_daily) — 응답 long_term_trait (Jira 306). dw MySQL(DW_MYSQL_HOST) → 스냅샷 파일 → 없음(null).
+# 시작 때 한 번 읽고 USER_TRAIT_RELOAD_SEC(기본 300)마다 다시 읽는다. 요청당 조회는 딕셔너리 한 번.
+_user_traits = UserTraitStore()
+
 NEW_BRAND_DAYS = float(os.environ.get("NEW_BRAND_DAYS", "14"))
 NEW_BRAND_ALWAYS_PREFIX = tuple(p for p in os.environ.get("NEW_BRAND_ALWAYS_PREFIX", "").split(",") if p.strip())
 
@@ -489,7 +494,10 @@ class Engine:
                 # 신규 상품이 카탈로그에 없으면 0 이고 그 칸은 일반 순위 — 설계된 동작
                 "reserved_filled": (sum(1 for b in banners if b["reserved"]) if banners is not None
                                     else sum(1 for it in items if it["reserved"])),
-                "items": items, "latency_ms": round(ms, 2)}
+                "items": items, "latency_ms": round(ms, 2),
+                # 장기 성향 5종 점수 + primary (Jira 306). 회원은 identity_scope=account, 시뮬레이터는 persona.
+                # 마트 행이 없으면 null — 프론트는 세션 성향만으로 간다 (long_term_blend_weight 미적용)
+                "long_term_trait": _user_traits.get(persona_id)}
         if banners is not None:
             body.update({"banner_slots": int(banner_slots), "axes": list(axes),
                          "banner_list_id": "banner_row", "hero": hero, "banners": banners,
@@ -578,6 +586,10 @@ def _startup():
             threading.Thread(target=_sync_loop, daemon=True, name="catalog-sync").start()
             print(f"[catalog-sync] {SHOP_BACKEND_URL} 를 {CATALOG_SYNC_INTERVAL}초마다 읽는다", flush=True)
     get_engine()
+    try:
+        _user_traits.load()                    # 장기 성향 표 (Jira 306). 없어도 기동한다
+    except Exception as ex:
+        print(f"[user-trait] 첫 적재 실패: {ex.__class__.__name__}: {ex}", flush=True)
 
 
 @app.get("/live/stats")
@@ -685,6 +697,7 @@ def health():
                               "last": ({k: (len(v) if isinstance(v, (list, dict)) else v)
                                         for k, v in _last_sync.items()} if _last_sync else None)}
                              if SHOP_BACKEND_URL else None),
+            "user_trait": _user_traits.health(),                 # 장기 성향 표 출처·행 수 (Jira 306)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
