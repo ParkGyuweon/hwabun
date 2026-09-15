@@ -247,9 +247,28 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
-| `quick_look_sessions`, `product_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
+| `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
 | `product_ctr`, `detail_entry_rate`, `add_to_cart_rate`, `purchase_rate`, `product_interest_score` | double | Y | 비율·관심도 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+`detail_view_sessions`는 상품 상세(`product_view`)와 Quick Look(`quick_look`) 중 하나
+이상을 연 고유 세션이다. 둘 다 연 세션도 한 번만 센다. §4.14와 같은 정의다.
+
+**`add_to_cart_rate`와 `purchase_rate`의 분모는 `detail_view_sessions`다.**
+`product_view_sessions`를 분모로 두면 Quick Look에서 담은 세션이 분자에만 들어가
+비율이 1.0을 넘는다. 실제로 그랬다 — 데이터 235 재생에서 1,248행 중 323행(26%)이
+1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 235에서 고쳤는데 상품 Mart가
+빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다 (Jira 277).
+
+`product_ctr`와 `detail_entry_rate`의 분모는 `product_impression_count`로 **Event 수**다.
+세션 수가 아니다. 노출 대비 클릭·상세 진입은 노출 하나하나를 모수로 보는 지표이고,
+이름이 §4.14의 `detail_entry_rate`(세션 기준)와 같지만 분모가 다르다. 두 Mart의 값을
+같은 지표로 나란히 놓지 않는다.
+
+`currency`는 key가 아니라 대표값 하나다. Event의 `currency`는 담기·결제 Event에만 붙고
+조회 Event에는 없어서, key에 올리면 통화 없는 조회 행과 결제 행이 갈려 세션 집계가
+무너진다. 대신 한 상품·하루에 통화가 둘 이상 섞이지 않는 것을 검증 Job이 막는다
+(`product_daily_currency_is_unambiguous`). 섞이면 `revenue_amount`가 두 통화를 더한다.
 
 ### 4.2 `recommendation_daily_kpi`
 
@@ -560,7 +579,7 @@ input = product_event_fact, funnel_session_fact
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통 계약 | scenario/run만 Y | 브랜드·일자·실행 분리 축 |
-| `impression_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
+| `impression_sessions`, `click_sessions`, `quick_look_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions` | bigint | N | 브랜드 단계별 고유 세션 수 |
 | `unique_user_count` | bigint | N | 브랜드 KPI에 기여한 고유 사용자 수 |
 | `product_count_viewed` | bigint | N | 조회된 고유 상품 수 |
 | `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
@@ -575,6 +594,12 @@ input = product_event_fact, funnel_session_fact
 `detail_view_sessions`를 쓰고, 정보 확인만 상품 상세에서 일어나므로
 `product_view_sessions`를 유지한다. `quick_look_sessions`와 `product_view_sessions`는
 겹칠 수 있어 더해서 `detail_view_sessions`를 만들 수 없다.
+
+`click_sessions`는 `product_click`을 낸 고유 세션이다. 브랜드 퍼널의 노출 → 클릭 →
+상세 단계를 상품 Mart 합산 없이 브랜드 단위로 보기 위해 둔다
+([`dashboard-mart-api-spec.md`](./dashboard-mart-api-spec.md) §6-1). 이 Mart는 비율을
+노출 → 상세로 바로 잇고(`detail_entry_rate`) 클릭을 분모로 쓰지 않는다. Quick Look은
+클릭 없이 상세를 여는 경로라 클릭을 분모에 두면 그 세션이 빠지기 때문이다.
 
 상품 grain Mart의 세션 수를 합산하지 않고 Fact에서 `session_id`를 브랜드별로 직접
 중복 제거한다. 따라서 한 세션이 같은 브랜드 상품 여러 개를 보더라도 각 단계 세션은
