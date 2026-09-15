@@ -79,19 +79,31 @@ sudo docker compose exec -T nginx nginx -s reload
 
 ## 추천 추론 서버 (AI, Jira 219 · 2026-09-11 EC2-1 최초 배포)
 
-> 2026-09-11 기준 EC2-1 에는 이 `recommend` 컨테이너만 떠 있다. 백엔드·nginx 는 백엔드 파트가 올린다.
-> EC2 레포에 GitLab 자격증명이 없어 `git pull` 이 안 된다 — deploy token 을 넣기 전까지는 로컬에서
-> `git bundle create x.bundle <old>..origin/dev` → scp → `git pull --ff-only /tmp/x.bundle refs/remotes/origin/dev` 로 옮긴다.
+> **재배포는 로컬에서 한 줄 (2026-09-15, Jira 305):** `bash deploy/ec2-1/redeploy-local.sh`
+> EC2 레포(`/home/ubuntu/S15P21A306`)의 체크아웃은 백엔드가 `ec2-1-deploy` 브랜치로 쓰고 있으므로 **dev 로 옮기지 않는다.**
+> 스크립트는 `origin/dev` 를 별도 워크트리 `/home/ubuntu/dev-build` 에 받아 `recommend` 만 빌드·교체한다
+> (`redeploy-recommend-from-dev.sh`). EC2 레포에 GitLab 자격증명이 없어 fetch 는 로컬 레지스트리의 `GITLAB_TOKEN`(scope api)을
+> 첫 줄로 흘려 보내 그 한 번에만 쓴다 — 어디에도 저장되지 않는다. 끝에 `/health` 와 어휘집 버전이 찍히면 성공.
+> 예전 bundle→scp 절차(09-11)는 더 쓰지 않는다.
 
 `recommend` 서비스는 파이썬 FastAPI 추천 서버다 (`deploy/recommend.Dockerfile`, 계약
 `contracts/recommendation-io-spec.md` §5). 모델·페르소나·산출물이 이미지 안에 들어가고,
 판매자가 등록한 상품은 `/data` 볼륨(`recommend-data`)에 남는다.
 
+함정 두 가지:
+- **볼륨은 이미지 갱신으로 안 바뀐다.** `/data/registered_products.jsonl` 은 최초 배포 때 값이 그대로다 (09-15: SB 8개 price_krw 가 옛 1,400 환산값).
+  shop-backend 가 떠 있으면 카탈로그 동기화가 백엔드 원화값으로 덮어쓴다. 급하면
+  `sudo docker cp /home/ubuntu/dev-build/batch/ingest/data/serving/registered_products.jsonl ec2-1-recommend-1:/data/ && sudo docker restart ec2-1-recommend-1`.
+- dev 의 compose 에 없는 서비스(shop-backend·mysql, `ec2-1-deploy` 브랜치)가 떠 있으면 `Found orphan containers` 경고가 난다. 정상이고 건드리지 않는다. `--remove-orphans` 를 붙이지 않는다.
+
+수동으로 할 때 (EC2 안에서):
+
 ```bash
 # 빌드는 BuildKit 이어야 한다 — Dockerfile 옆의 recommend.Dockerfile.dockerignore 를 쓴다
-DOCKER_BUILDKIT=1 docker compose build recommend
-docker compose up -d recommend
-docker compose exec recommend python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8300/health').read()[:200])"
+cd /home/ubuntu/dev-build/deploy/ec2-1     # dev 워크트리. .env 는 원 레포 것을 쓴다
+sudo DOCKER_BUILDKIT=1 docker compose --env-file /home/ubuntu/S15P21A306/deploy/ec2-1/.env build recommend
+sudo docker compose --env-file /home/ubuntu/S15P21A306/deploy/ec2-1/.env up -d --no-deps recommend
+sudo docker compose --env-file /home/ubuntu/S15P21A306/deploy/ec2-1/.env exec recommend python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8300/health').read()[:200])"
 ```
 
 | 항목 | 값 |
