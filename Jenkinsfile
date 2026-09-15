@@ -119,13 +119,43 @@ pipeline {
             }
             steps {
                 sh '''
+                    set -eu
                     test -f /run/secrets/ec2-1.env
+
+                    changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+                    services=""
+
+                    if printf '%s\n' "$changed" | grep -Eq '^(backend/|deploy/backend\.Dockerfile$)'; then
+                        services="$services backend"
+                    fi
+                    if printf '%s\n' "$changed" | grep -Eq '^(shop_backend/|deploy/shop_backend\.Dockerfile$)'; then
+                        services="$services shop-backend"
+                    fi
+                    if printf '%s\n' "$changed" | grep -Eq '^(frontend/|deploy/nginx\.Dockerfile$|deploy/nginx/)'; then
+                        services="$services nginx"
+                    fi
+                    if printf '%s\n' "$changed" | grep -Eq '^(batch/|simulator/personas/data/|simulator/feedback/|deploy/recommend\.Dockerfile$|deploy/recommend-entrypoint\.sh$)'; then
+                        services="$services recommend"
+                    fi
+                    if printf '%s\n' "$changed" | grep -Eq '^monitoring/'; then
+                        services="$services prometheus grafana"
+                    fi
+                    if printf '%s\n' "$changed" | grep -Eq '^deploy/ec2-1/(docker-compose\.yml|prometheus\.yml|\.env\.example)$'; then
+                        services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                    fi
+
+                    services="$(printf '%s\n' "$services" | xargs -n1 | sort -u | tr '\n' ' ')"
+                    if [ -z "$(printf '%s' "$services" | tr -d ' ')" ]; then
+                        echo '변경된 배포 대상 서비스가 없어 Docker 재빌드를 건너뜁니다.'
+                        exit 0
+                    fi
+
+                    echo "변경된 서비스만 배포합니다:$services"
                     docker compose \\
                       -p ec2-1 \\
                       --env-file /run/secrets/ec2-1.env \\
                       -f deploy/ec2-1/docker-compose.yml \\
-                      up -d --build \\
-                      backend shop-backend mysql recommend prometheus grafana nginx
+                      up -d --build $services
                 '''
             }
         }
