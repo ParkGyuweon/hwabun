@@ -206,11 +206,7 @@ export default function DashboardApp() {
           <h1>{active.title}</h1>
           <p>{active.desc}</p>
           {/* 어느 브랜드 데이터인지 항상 적는다. 스코프가 둘이라 이게 없으면 숫자를 잘못 읽는다 */}
-          <p className="main__scope" title={SCOPE_LABEL[SCREEN_SCOPE[active.key]].source}>
-            <span className="main__scope-what">{SCOPE_LABEL[SCREEN_SCOPE[active.key]].what}</span>
-            <strong>{SCOPE_LABEL[SCREEN_SCOPE[active.key]].brand}</strong>
-            <span className="main__scope-src">{SCOPE_LABEL[SCREEN_SCOPE[active.key]].source}</span>
-          </p>
+          <ScopeNote scope={SCREEN_SCOPE[active.key]} brandName={brand?.name ?? null} />
 
           <div className="main__controls">
             {screen === 'overview' ? (
@@ -243,6 +239,31 @@ export default function DashboardApp() {
       </main>
     </div>
     </BehaviorProvider>
+  );
+}
+
+/**
+ * 헤더의 "어느 브랜드 데이터인가" 한 줄.
+ *
+ * 행동·리뷰 스코프는 마트가 붙기 전까지 세포라 카탈로그의 고정 브랜드(`BEHAVIOR_BRAND`) 모의값이라
+ * 그 이름을 적는 것이 정직하다. 마트 행이 실제로 쓰이면(`anyReal`) 숫자의 주인은 **로그인한 브랜드**로
+ * 바뀌므로 그 이름으로 갈아끼운다. 이 줄을 고정으로 두면 브랜드 1254 로 로그인해 놓고 헤더는
+ * Drunk Elephant 를 가리키게 된다 (09-15 확인. 시드가 브랜드별 판매자 계정을 넣으면서 실제로 갈릴 수 있게 됐다).
+ *
+ * 피드백·등록 스코프는 마트와 무관한 로컬 분류본이라 언제나 고정 라벨이다.
+ */
+function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string | null }) {
+  const { anyReal } = useBehavior();
+  const label = SCOPE_LABEL[scope];
+  const live = scope === 'behavior' && anyReal && brandName !== null;
+  const brand = live && brandName ? brandName : label.brand;
+  const source = live ? '행동 마트 실측 · 로그인한 브랜드' : label.source;
+  return (
+    <p className="main__scope" title={source}>
+      <span className="main__scope-what">{label.what}</span>
+      <strong>{brand}</strong>
+      <span className="main__scope-src">{source}</span>
+    </p>
   );
 }
 
