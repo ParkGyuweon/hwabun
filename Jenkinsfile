@@ -1,6 +1,7 @@
 pipeline {
     agent {
         node {
+            label 'built-in'
             customWorkspace '/home/ubuntu/S15P21A306'
         }
     }
