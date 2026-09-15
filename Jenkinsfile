@@ -34,6 +34,7 @@ pipeline {
                 anyOf {
                     changeset 'backend/**'
                     changeset 'Jenkinsfile'
+                    expression { params.DEPLOY_TO_EC2 }
                 }
             }
             steps {
@@ -51,6 +52,7 @@ pipeline {
                 anyOf {
                     changeset 'shop_backend/**'
                     changeset 'Jenkinsfile'
+                    expression { params.DEPLOY_TO_EC2 }
                 }
             }
             steps {
@@ -69,6 +71,7 @@ pipeline {
                     changeset 'frontend/**'
                     changeset 'deploy/nginx.Dockerfile'
                     changeset 'Jenkinsfile'
+                    expression { params.DEPLOY_TO_EC2 }
                 }
             }
             steps {
@@ -92,6 +95,7 @@ pipeline {
                     changeset 'simulator/personas/data/**'
                     changeset 'simulator/feedback/**'
                     changeset 'Jenkinsfile'
+                    expression { params.DEPLOY_TO_EC2 }
                 }
             }
             steps {
@@ -101,17 +105,7 @@ pipeline {
 
         stage('EC2 배포') {
             when {
-                allOf {
-                    expression { params.DEPLOY_TO_EC2 }
-                    anyOf {
-                        changeset 'backend/**'
-                        changeset 'shop_backend/**'
-                        changeset 'frontend/**'
-                        changeset 'deploy/**'
-                        changeset 'monitoring/**'
-                        changeset 'Jenkinsfile'
-                    }
-                }
+                expression { params.DEPLOY_TO_EC2 }
             }
             steps {
                 sh '''
