@@ -1,0 +1,2 @@
+# EC2 로 bash -s 스트리밍하는 스크립트 — Windows 체크아웃에서도 LF 유지 (CRLF 면 원격 bash 가 \r 를 명령 일부로 읽는다)
+deploy/ec2-1/*.sh text eol=lf
