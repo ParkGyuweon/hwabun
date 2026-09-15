@@ -55,8 +55,9 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    expose:
-      - "3306"
+    # 외부 공개 금지. EC2 localhost로만 열어 IntelliJ SSH 터널에서만 접근한다.
+    ports:
+      - "127.0.0.1:3306:3306"
     mem_limit: 1g
 
   # 추천 추론 서버 (AI, 계약 §5). 백엔드가 RECOMMEND_URL=http://recommend:8300 으로 프록시한다.
