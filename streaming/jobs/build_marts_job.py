@@ -44,6 +44,7 @@ DEFAULT_INGREDIENT_VOCAB_PATH = "batch/ingest/data/serving/ingredient_vocab.csv"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
+DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -107,6 +108,7 @@ class BuildMartsConfig:
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
+    price_band_path: str = DEFAULT_PRICE_BAND_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -143,6 +145,7 @@ class BuildMartsConfig:
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
             "persona_segment_path": self.persona_segment_path,
+            "price_band_path": self.price_band_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -290,6 +293,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="persona_segment_daily_kpi output path",
     )
     parser.add_argument(
+        "--price-band-path",
+        default=_env("BRAND_PRICE_BAND_DAILY_PATH", DEFAULT_PRICE_BAND_PATH),
+        help="brand_price_band_daily_kpi output path",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -353,6 +361,7 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
         persona_segment_path=args.persona_segment_path,
+        price_band_path=args.price_band_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -1050,6 +1059,120 @@ def _persona_segment_daily_kpi(
             _safe_ratio(F.col("interest_score"), F.col("session_count")),
         )
         .drop("interest_score")
+    )
+
+
+def load_price_bins(feature_vocab_path: str) -> list[tuple[str, float | None]]:
+    """추천 어휘집에서 가격 구간을 읽는다. 경계 숫자를 여기에 복제하지 않는다.
+
+    ``price_bin`` 은 추천 CBF 피처·배너 축·상품 등록 화면이 이미 쓰는 축이다
+    (`product-feature-spec.md` §4.1). 대시보드가 다른 구간을 정의하면 같은 이름의
+    가격대가 두 벌이 되어 "이 가격대 반응" 이 어느 쪽 구간인지 알 수 없게 된다.
+
+    반환은 ``(토큰, 상한)`` 목록이고 마지막 구간의 상한은 ``None`` 이다. 구간은
+    반열린 ``[하한, 상한)`` 이라 한 상품이 두 구간에 들어갈 수 없다 — 검사가 아니라
+    구조로 막는다.
+    """
+
+    with open(feature_vocab_path, encoding="utf-8") as stream:
+        vocab = json.load(stream)
+    edges = [float(edge) for edge in vocab["price_bin_edges"]]
+    tokens = next(
+        block["vocab"]
+        for block in vocab.get("blocks", [])
+        if block.get("name") == "price_bin"
+    )
+    if len(tokens) != len(edges):
+        raise ValueError(
+            "price_bin vocab and price_bin_edges must describe the same bins: "
+            f"{len(tokens)} tokens vs {len(edges)} edges"
+        )
+    # edges[0] 은 첫 구간의 하한(0)이라 상한 목록은 한 칸 밀린다.
+    uppers: list[float | None] = [*edges[1:], None]
+    return list(zip(tokens, uppers))
+
+
+def _price_bin_column(price_bins: list[tuple[str, float | None]]) -> Any:
+    """``base_price`` 를 구간 토큰으로 바꾼다. 가격이 없거나 0 이하면 NULL."""
+
+    from pyspark.sql import functions as F
+
+    price = F.col("base_price").cast("double")
+    expression = None
+    for token, upper in price_bins:
+        condition = price < F.lit(upper) if upper is not None else F.lit(True)
+        clause = F.when(condition, F.lit(token))
+        expression = clause if expression is None else expression.when(
+            condition, F.lit(token)
+        )
+    return F.when(
+        price.isNull() | (price <= F.lit(0.0)), F.lit(None).cast("string")
+    ).otherwise(expression)
+
+
+def _brand_price_band_daily_kpi(
+    product_fact_df: Any,
+    dim_product_df: Any,
+    price_bins: list[tuple[str, float | None]],
+) -> Any:
+    """브랜드 × 가격대 반응 KPI.
+
+    ``currency`` 를 key 에 둔다. 통화가 다른 가격을 환산 규칙 없이 한 구간으로 합치지
+    않는 것을 필터가 아니라 grain 으로 지킨다. 카탈로그가 전부 원화인 지금은 행 수에
+    차이가 없지만, 다른 통화가 들어와도 조용히 섞이지 않는다.
+
+    가격이 NULL 이거나 0 이하인 상품은 ``price_bin = NULL`` 행으로 보존한다. 빼면 그
+    상품들의 반응을 볼 수 없고, 임의 구간에 넣으면 그 구간이 오염된다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
+    catalog = dim_product_df.select(
+        F.col("product_id").alias("_dim_product_id"),
+        _price_bin_column(price_bins).alias("price_bin"),
+        F.col("currency").alias("currency"),
+    )
+    events = product_fact_df.where(_valid_brand()).join(
+        catalog, F.col("product_id") == F.col("_dim_product_id"), "inner"
+    )
+
+    key_columns = ["event_date_kst", "brand_id", "price_bin", "currency", *EXECUTION_AXES]
+
+    def stage_sessions(condition: Any, alias: str) -> Any:
+        return F.countDistinct(
+            F.when(condition, F.col("session_id"))
+        ).cast("long").alias(alias)
+
+    is_detail = F.col("event_name").isin("product_view", "quick_look")
+    result = events.groupBy(*key_columns).agg(
+        F.countDistinct("session_id").cast("long").alias("session_count"),
+        F.countDistinct("user_id").cast("long").alias("unique_user_count"),
+        stage_sessions(F.col("event_name") == "product_impression", "impression_sessions"),
+        stage_sessions(F.col("event_name") == "quick_look", "quick_look_sessions"),
+        stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
+        stage_sessions(is_detail, "detail_view_sessions"),
+        stage_sessions(F.col("event_name") == "add_to_cart", "add_to_cart_sessions"),
+        stage_sessions(F.col("event_name") == "purchase", "purchase_sessions"),
+        F.countDistinct("product_id").cast("long").alias("product_count"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    return (
+        result
+        .withColumn(
+            "detail_entry_rate",
+            _safe_ratio(F.col("detail_view_sessions"), F.col("impression_sessions")),
+        )
+        .withColumn(
+            "view_to_cart_rate",
+            _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")),
+        )
+        .withColumn(
+            "view_to_purchase_rate",
+            _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")),
+        )
     )
 
 
@@ -2018,6 +2141,7 @@ def build_mart_frames(
     reason_trait_map: dict[str, Any] | None = None,
     repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS,
     persona_bridge_df: Any | None = None,
+    price_bins: list[tuple[str, float | None]] | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -2033,6 +2157,10 @@ def build_mart_frames(
     if persona_bridge_df is not None:
         frames["persona_segment_daily_kpi"] = _persona_segment_daily_kpi(
             product_fact_df, persona_bridge_df, event_weights
+        )
+    if price_bins is not None and dim_product_df is not None:
+        frames["brand_price_band_daily_kpi"] = _brand_price_band_daily_kpi(
+            product_fact_df, dim_product_df, price_bins
         )
     if trait_contract is not None:
         # 장기 성향은 주입된 선호도 신호로 본다. 시드를 뺄지는 별도 결정 대기.
@@ -2151,6 +2279,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         config.purchase_reason_fact_path
     )
     persona_bridge = load_persona_segments(spark, config.persona_bridge_path)
+    price_bins = load_price_bins(config.feature_vocab_path)
     frames = build_mart_frames(
         sessionized,
         product_fact,
@@ -2171,6 +2300,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         reason_trait_map,
         config.repurchase_window_days,
         persona_bridge,
+        price_bins,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -2189,6 +2319,11 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     _write_mart(
         frames["persona_segment_daily_kpi"],
         config.persona_segment_path,
+        "event_date_kst",
+    )
+    _write_mart(
+        frames["brand_price_band_daily_kpi"],
+        config.price_band_path,
         "event_date_kst",
     )
     _write_mart(
