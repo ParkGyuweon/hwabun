@@ -83,9 +83,36 @@ class BrandAttributionSparkTest(unittest.TestCase):
             ["product_id", "brand_id", "brand_name"],
         )
 
-        rows = _build_dim_brand(products).select("brand_id", "brand_name").collect()
+        mart = _build_dim_brand(products, "test-salt")
+        rows = mart.select("brand_id", "brand_name").collect()
 
         self.assertEqual([("B1", "Brand One")], [tuple(row) for row in rows])
+
+    def test_dim_brand_carries_commons_columns(self):
+        """Commons Mart 가 읽는 두 컬럼을 여기서 한 번만 만든다 (dw-schema §3.1)."""
+        products = self.spark.createDataFrame(
+            [("P1", "B1", "Brand One")],
+            ["product_id", "brand_id", "brand_name"],
+        )
+
+        row = _build_dim_brand(products, "test-salt").first()
+
+        self.assertTrue(row["commons_participating"])
+        self.assertEqual(16, len(row["brand_hash"]))
+        # 원 brand_id 가 그대로 남으면 가명이 아니다
+        self.assertNotIn("B1", row["brand_hash"])
+
+    def test_dim_brand_hash_changes_with_the_salt(self):
+        """소금이 달라지면 값도 달라져야 한다. 안 그러면 소금이 쓰이지 않는 것이다."""
+        products = self.spark.createDataFrame(
+            [("P1", "B1", "Brand One")],
+            ["product_id", "brand_id", "brand_name"],
+        )
+
+        first = _build_dim_brand(products, "salt-one").first()["brand_hash"]
+        second = _build_dim_brand(products, "salt-two").first()["brand_hash"]
+
+        self.assertNotEqual(first, second)
 
     def test_registered_dimension_uses_shop_brand_mapping_without_guessing(self):
         registered = self.spark.createDataFrame(

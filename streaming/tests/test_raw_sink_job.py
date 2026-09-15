@@ -234,8 +234,15 @@ class DeriveFactsConfigTest(unittest.TestCase):
         self.assertIn("purchase", PRODUCT_EVENT_NAMES)
         self.assertNotIn("view_cart", PRODUCT_EVENT_NAMES)
 
+    def test_commons_hash_salt_is_required(self):
+        """소금 없는 해시를 조용히 만들면 보호가 있는 것처럼 보인다 (dw-schema §2.5.1 R5)."""
+        with self.assertRaises(ValueError) as caught:
+            parse_derive_args([])
+
+        self.assertIn("commons_hash_salt", str(caught.exception))
+
     def test_defaults_point_to_q2_and_fact_outputs(self):
-        config = parse_derive_args([])
+        config = parse_derive_args(["--commons-hash-salt", "test-salt"])
 
         self.assertEqual("data/processed/cleaned_events", config.input_path)
         self.assertEqual(DEFAULT_SESSIONIZED_PATH, config.sessionized_path)
