@@ -12,6 +12,29 @@
 CREATE DATABASE IF NOT EXISTS `dw`
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
+-- behavior_conversion_daily
+CREATE TABLE `dw`.`behavior_conversion_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `event_name` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `done_sessions` BIGINT NOT NULL,
+  `done_cart_sessions` BIGINT NOT NULL,
+  `not_done_sessions` BIGINT NOT NULL,
+  `not_done_cart_sessions` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `done_cart_rate` DOUBLE NULL,
+  `not_done_cart_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_behavior_conversion_daily__grain` (`brand_id`, `event_date_kst`, `product_id`, `event_name`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- brand_daily_kpi
 CREATE TABLE `dw`.`brand_daily_kpi` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -96,6 +119,60 @@ CREATE TABLE `dw`.`brand_repurchase_daily` (
   `declared_restock_order_count` BIGINT NOT NULL,
   PRIMARY KEY (`dw_row_id`),
   KEY `ix_brand_repurchase_daily__grain` (`brand_id`, `snapshot_date_kst`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- content_conversion_daily
+CREATE TABLE `dw`.`content_conversion_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `content_kind` VARCHAR(64) NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `category_id` VARCHAR(64) NULL,
+  `viewed_sessions` BIGINT NOT NULL,
+  `viewed_cart_sessions` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `viewed_cart_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_content_conversion_daily__grain` (`brand_id`, `event_date_kst`, `product_id`, `content_kind`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- content_daily_kpi
+CREATE TABLE `dw`.`content_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `section_id` VARCHAR(64) NULL,
+  `content_kind` VARCHAR(64) NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `category_id` VARCHAR(64) NULL,
+  `section_view_count` BIGINT NOT NULL,
+  `section_view_sessions` BIGINT NOT NULL,
+  `dwell_ms_sum` BIGINT NOT NULL,
+  `accordion_expand_count` BIGINT NOT NULL,
+  `text_selection_count` BIGINT NOT NULL,
+  `text_copy_count` BIGINT NOT NULL,
+  `matched_ingredient_count` BIGINT NOT NULL,
+  `content_interest_score` DOUBLE NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `ingredient_view_sessions` BIGINT NOT NULL,
+  `review_view_sessions` BIGINT NOT NULL,
+  `avg_dwell_ms_per_session` DOUBLE NULL,
+  `ingredient_view_rate` DOUBLE NULL,
+  `review_view_rate` DOUBLE NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_content_daily_kpi__grain` (`brand_id`, `event_date_kst`, `product_id`, `section_id`, `content_kind`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- funnel_daily_kpi
