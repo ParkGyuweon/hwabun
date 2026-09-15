@@ -306,5 +306,7 @@ CREATE TABLE `dw`.`user_trait_daily` (
 -- MySQL 로 옮기지 않는 Mart — Parquet 에만 둔다 (§7.2)
 --   analytics_baseline: 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다
 --   banner_daily: 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다
+--   brand_cohort_dim: 브랜드 → 코호트 배정표다. 대시보드는 cohort_key 만 알면 되고 그 값은 Backend 가 브랜드 인가와 함께 넘긴다
 --   category_price_reference: 카탈로그 파생 참조표다. Event 를 읽지 않고 브랜드 축도 없다
+--   commons_cohort_weekly: 소비자가 아직 없다. E4 에 코호트 배지를 넣을지 프론트와 합의 전이다 (dashboard-mart-api-spec.md §1-5). 합의되면 GRAINS 로 옮긴다
 --   cross_brand_daily: 읽는 엔드포인트가 없다

@@ -268,12 +268,25 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `banner_daily` | 일자 + 브랜드/상품 + 배너 축/값/slot/성향 출처 + 정책 버전 + 실행 축 | 배너 노출·클릭·CTR과 어휘 유효성 |
 | `user_trait_daily` | `trait_date_kst + user_id + trait` | 버전 가중치 기반 최근 30일 장기 성향 |
 | `cross_brand_daily` | 일자 + 도착 브랜드 + 실행 축 | 실제 상품 조회 순서 기반 교차 브랜드 유입률 |
+| `persona_segment_daily_kpi` | `event_date_kst + brand_id + segment_type + segment_value + 실행 축` | 피부 타입·톤·교차 세그먼트별 전환 |
+| `brand_price_band_daily_kpi` | `event_date_kst + brand_id + price_bin + currency + 실행 축` | 가격대별 노출·상세·담기·구매 세션 |
+| `brand_cohort_dim` | `brand_id` | 브랜드를 상품 수 밴드 × 가격 구간 코호트에 배정 |
+| `commons_cohort_weekly` | `snapshot_week_kst + cohort_key + metric_name + 실행 축` | **B층** 코호트별 비율 분위. 소표본·지배 셀은 억제 |
 | `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
 
 재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품이 여러 개 있어도 구매는
 한 번이며, 브랜드 재구매는 상품이 달라도 성립하므로 상품 Mart를 합산해서 구할 수 없다.
 구매 이유는 주문 단위 선언이라 다브랜드 주문에서는 각 브랜드에 한 번씩만 계상하고,
 비중의 분모는 건너뛴 주문을 뺀 **응답한 주문**뿐이다.
+
+`commons_cohort_weekly`만 **브랜드 밖으로 나가도 되는 Mart**다. 나머지는 전부 그 브랜드만
+보는 A층이고, 여러 브랜드 행이 한 테이블에 있는 것은 저장 구조일 뿐 공개 범위가 아니다.
+브랜드 격리는 Backend 인가가 한다. 층 경계와 억제 규칙 R1~R9는
+[`../contracts/dw-schema.md`](../contracts/dw-schema.md) §2.5가 정본이다.
+
+`brand_cohort_dim`과 `dim_brand`의 `brand_hash`를 만들려면 `COMMONS_HASH_SALT` 환경 변수가
+필요하다. 비어 있으면 Q3가 시작 단계에서 실패한다 — 소금 없는 해시를 조용히 만들면 보호가
+있는 것처럼 보이기 때문이다. `infra/spark/.env.example`을 참고한다.
 
 매출·정산 금액은 이 Mart들의 범위가 아니다. Backend의 PAID 주문 상품이 정본이며
 DW는 금액을 복제하지 않는다.
