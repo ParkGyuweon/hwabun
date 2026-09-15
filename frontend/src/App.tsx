@@ -23,7 +23,7 @@ import {
 import type { PaymentMethod } from './lib/payment';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
-import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
+import { backendCatalogState, catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
@@ -195,6 +195,8 @@ export default function App() {
    * 리뷰 필터 "내 피부 타입만" · "내 피부 타입 일치" 칩 · 추천 목의 피부 매칭이 전부 이 값을 본다.
    * 로그의 persona_id 도 로그인 중에는 회원 id 다 — 추천 요청과 행동 로그가 같은 식별자를 써야 추천 서버의
    * 세션 상태(좋아요 → 목록 반영)가 이어진다 (계약 recommendation-io-spec §5 · AI 파트 요청 2026-09-14 §1).
+   * 주의: 추천 서버 호출 식별자는 이 값이 아니라 `memberId ?? persona.persona_id` 다 (ProductListPage) — 프로필이 빈
+   * 회원이 스위처 페르소나로 떨어지면 로그와 어긋난다 (live-demo-runbook §5 폴백 수정 요청).
    */
   const member = useAuth('MEMBER');
   const getMemberProfile = useCallback(() => loadMemberProfile(member?.id), [member?.id]);
@@ -398,11 +400,24 @@ export default function App() {
 
   /**
    * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다 — begin_checkout 과 같은 order_id.
-   * 결제 정보(payment_method · pg_provider · payment_id · paid_at)는 properties 에 덧붙인다. 계약 §6 필드 추가는 데이터 파트가
-   * 넣기로 했고(2026-09-14), properties 는 열린 객체라 먼저 실어도 거절되지 않는다.
+   *
+   * 결제 속성 (계약 §6 등록은 데이터 파트, Jira 299 · 2026-09-14 회신):
+   *   payment_method  항상. kakaopay · card · test
+   *   order_channel   항상. backend(서버 주문) · local(백엔드 없을 때의 로컬 테스트 주문 — 마트에서 걸러낼 수 있게)
+   *   paid_value      항상. 할인 적용 실결제액. order_value 는 정가 합계라 둘을 같이 둔다
+   *   pg_provider · payment_id · paid_at  PG 결제(kakaopay)일 때만 **키 자체를 싣는다**. 테스트 주문은 키가 없다 —
+   *                   optional string 이지 string|null 이 아니다. null 을 실으면 계약 타입이 갈라진다.
    */
   const finishOrder = useCallback(
     (placed: PlacedOrder) => {
+      const pg =
+        placed.payment_method === 'kakaopay'
+          ? {
+              pg_provider: PAYMENT_PROVIDER,
+              ...(placed.payment_id ? { payment_id: placed.payment_id } : {}),
+              ...(placed.paid_at ? { paid_at: placed.paid_at } : {}),
+            }
+          : {};
       track('purchase', {
         order_id: placed.orderId,
         items: placed.items,
@@ -411,9 +426,7 @@ export default function App() {
         currency: 'USD',
         order_channel: placed.mode,
         payment_method: placed.payment_method ?? 'test',
-        pg_provider: placed.payment_method === 'kakaopay' ? PAYMENT_PROVIDER : null,
-        payment_id: placed.payment_id ?? null,
-        paid_at: placed.paid_at ?? null,
+        ...pg,
       });
       setPaymentError(null);
       setOrder(placed);
@@ -504,6 +517,22 @@ export default function App() {
         finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' });
         return;
       }
+      /*
+       * 서버가 주문을 거절했으면 테스트 주문으로 덮지 않는다 (백엔드 요청 2026-09-15 §5).
+       * 예전에는 조용히 로컬 주문으로 완료 화면까지 갔는데, 그러면 거절 이유가 완료 화면 각주로 밀려
+       * 주문이 된 것처럼 보였다. 서버가 거절한 것은 고쳐야 할 일이라 화면에 남긴다.
+       */
+      setPaymentError(`주문에 실패했습니다 (${r.status}). ${r.reason}`);
+      return;
+    }
+
+    /*
+     * 서버 주문을 탈 수 없는 이유를 구분해 알린다 (백엔드 요청 2026-09-15 §5).
+     *
+     * 백엔드 카탈로그를 아예 못 받은 때(서버 미기동)만 예전처럼 테스트 주문으로 진행한다 — 그 경우는
+     * 고칠 수 있는 게 화면에 없고, 시연이 백엔드 없이도 돌아야 한다. 로그인·옵션 때문이면 멈추고 이유를 띄운다.
+     */
+    if (backendCatalogState() === 'unavailable') {
       finishOrder({
         orderId: localOrderId,
         items,
@@ -511,16 +540,23 @@ export default function App() {
         total,
         paid,
         mode: 'local',
-        note: `서버 주문 실패: ${r.reason}. 테스트 주문으로 대신 접수했습니다.`,
+        note: '상품 서버에 연결하지 못해 테스트 주문으로 접수했습니다.',
         payment_method: 'test',
       });
       return;
     }
-
-    const note = cartItems.some((i) => !i.variant_id)
-      ? '세포라·시드 상품은 백엔드에 없어 테스트 주문으로 접수됩니다.'
-      : '고객 로그인이 없어 테스트 주문으로 접수됩니다.';
-    finishOrder({ orderId: localOrderId, items, count, total, paid, mode: 'local', note, payment_method: 'test' });
+    if (!member) {
+      setPaymentError('주문하려면 고객 로그인이 필요합니다.');
+      return;
+    }
+    const missing = cartItems.filter((i) => !i.variant_id);
+    if (missing.length > 0) {
+      setPaymentError(
+        `옵션 정보를 아직 받지 못한 상품이 있어 주문할 수 없습니다: ${missing.map((i) => i.product_name).join(', ')}. 잠시 뒤 다시 담아 주세요.`,
+      );
+      return;
+    }
+    setPaymentError('주문을 진행할 수 없습니다. 장바구니를 다시 확인해 주세요.');
   }, [cartItems, paying, member, finishOrder, failPayment]);
 
   /**

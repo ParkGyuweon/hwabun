@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
+import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
@@ -176,6 +177,7 @@ export default function ProductListPage({
    * 담은 상품은 후보에서 뺀다. 빼면 다음 순위가 올라와 칸 수는 유지된다.
    */
   const trait = useTrait();
+  const recommendIdentityId = memberId ?? persona?.persona_id ?? null;
   const recommendationInput = useMemo(
     () => ({
       products,
@@ -190,11 +192,14 @@ export default function ProductListPage({
       reserved: BANNER_RESERVED,
       // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
       heroPolicy: HERO_POLICY,
-      identityId: persona?.persona_id ?? null,
-      // 실회원(accountId)일 때만 속성 쿼리. 시뮬레이션 페르소나는 서버가 표에서 읽는다
-      profile: memberId && persona?.persona_id === memberId ? memberProfile : null,
+      // 로그인 회원은 피부 프로필이 비어 있어도 회원 id 로 부른다 — 행동 로그(persona_id = 회원 id)와 같은 식별자여야
+      // 추천 서버의 세션 상태(좋아요 → 목록 반영)가 이어진다 (AI 파트 요청 2026-09-14, live-demo-runbook §5).
+      // 프로필이 비면 속성 쿼리가 없을 뿐, 스위처 페르소나로 떨어지지 않는다.
+      identityId: recommendIdentityId,
+      // 실회원(accountId)일 때만 속성 쿼리(빈 칸은 안 실린다). 시뮬레이션 페르소나는 서버가 표에서 읽는다
+      profile: memberId ? memberProfile : null,
     }),
-    [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source, memberId, memberProfile],
+    [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source, memberId, memberProfile, recommendIdentityId],
   );
   const { recommendation, source: recommendationSource } = useRecommendation(recommendationInput);
 
@@ -332,8 +337,8 @@ export default function ProductListPage({
   // 목록이 바뀌면 노출을 처음부터 다시 센다
   const promoRef = useImpression({
     // 페르소나가 바뀌면 다른 추천이므로 노출을 다시 센다
-    pageViewKey: `promo:${persona?.persona_id ?? 'anonymous'}`,
-    eventName: persona ? 'recommendation_impression' : 'product_impression',
+    pageViewKey: `promo:${recommendIdentityId ?? 'anonymous'}`,
+    eventName: recommendIdentityId ? 'recommendation_impression' : 'product_impression',
     listId: 'promo_pick',
     algorithm: promoAlgorithm,
     recommendationId: promoRecommendationId,
@@ -349,7 +354,7 @@ export default function ProductListPage({
    * 노출은 분모일 뿐이다.
    */
   const heroRef = useImpression({
-    pageViewKey: `hero:${persona?.persona_id ?? 'anonymous'}:${trait.trait_source}`,
+    pageViewKey: `hero:${recommendIdentityId ?? 'anonymous'}:${trait.trait_source}`,
     eventName: 'recommendation_impression',
     listId: 'hero_banner',
     algorithm: bannerAlgorithm,
@@ -446,6 +451,8 @@ export default function ProductListPage({
       entry_source: listId,
       position: position + 1,
     });
+    // 퀵룩에서도 담기가 된다. 백엔드 옵션(variant_id)이 없으면 서버 주문을 못 타므로 여기서도 상세를 받아 둔다
+    ensureBackendDetail(productId);
     setQuickLook(products.find((p) => p.product_id === productId) ?? null);
   };
 

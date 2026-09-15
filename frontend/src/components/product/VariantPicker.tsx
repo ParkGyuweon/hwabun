@@ -13,6 +13,20 @@ interface VariantPickerProps {
 }
 
 /**
+ * 옵션 종류 (계약 event-properties-schema §3.7 `variant_kind`: size · shade · other).
+ *
+ * 계약은 원천의 `variation_type`(Size → size, Color → shade)을 매핑하라고 하는데, 수집본·백엔드 옵션 어디에도
+ * 그 필드가 없다. 그래서 라벨에서 용량 단위(ml · oz · g · Mini/Standard/Jumbo 등)가 읽히면 `size`, 아니면
+ * `other` 로 둔다. `shade` 는 근거가 없어 붙이지 않는다 — 틀린 톤 신호보다 빈 값이 낫다.
+ * `size` 는 성향 표(contracts/user-trait-weights.json)에서 가격 성향 +0.5 다.
+ */
+const SIZE_LABEL = /(\d+(\.\d+)?\s*(ml|oz|fl\.? ?oz|g|kg|l)\b)|\b(mini|standard|jumbo|travel|full[- ]size|refill|value size|size)\b/i;
+
+export function variantKindOf(label: string): 'size' | 'shade' | 'other' {
+  return SIZE_LABEL.test(label) ? 'size' : 'other';
+}
+
+/**
  * 세포라 상세 페이지의 색상/향 옵션 선택 줄.
  *
  * 옵션 전환은 구매 의도가 뚜렷한 신호라 별도 이벤트로 남긴다.
@@ -34,6 +48,8 @@ export default function VariantPicker({
       product_id: productId,
       sku_id: variant.sku_id,
       label: variant.label,
+      previous_sku_id: selected.sku_id,
+      variant_kind: variantKindOf(variant.label),
     });
   };
 

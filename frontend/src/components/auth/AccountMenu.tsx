@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
 import AuthForm from './AuthForm';
 import MyPage from '../account/MyPage';
@@ -42,7 +43,8 @@ export default function AccountMenu() {
       <button type="button" className="account__btn account__btn--login" onClick={() => setOpen(true)}>
         로그인
       </button>
-      {open ? (
+      {/* body 로 포털 — 헤더의 backdrop-filter 가 fixed 기준을 헤더로 바꿔 카드가 잘린다 (MyPage 주석) */}
+      {open ? createPortal(
         <div className="auth-modal" role="presentation" onClick={() => setOpen(false)}>
           <div
             className="auth-modal__card"
@@ -63,7 +65,8 @@ export default function AccountMenu() {
               </a>
             </p>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
