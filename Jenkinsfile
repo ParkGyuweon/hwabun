@@ -122,7 +122,14 @@ pipeline {
                     set -eu
                     test -f /run/secrets/ec2-1.env
 
-                    changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+                    # merge 커밋은 diff-tree 기본 동작이 변경 파일을 비워 둔다. 그러면
+                    # 수동 배포가 "변경된 서비스 없음"으로 끝나므로, 첫 부모 대비 diff를
+                    # 사용해 현재 배포 대상에 들어온 변경을 정확히 잡는다.
+                    if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+                        changed="$(git diff --name-only HEAD^ HEAD)"
+                    else
+                        changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+                    fi
                     services=""
 
                     if printf '%s\\n' "$changed" | grep -Eq '^(backend/|deploy/backend[.]Dockerfile$)'; then
