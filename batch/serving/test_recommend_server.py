@@ -24,6 +24,15 @@ _COPY = os.path.join(_TMP, "registered_products.jsonl")
 shutil.copy(os.path.join(BD, "..", "ingest", "data", "serving", "registered_products.jsonl"), _COPY)
 os.environ["REGISTERED_PRODUCTS_PATH"] = _COPY
 os.environ.setdefault("SESSION_EVENTS_PATH", os.path.join(tempfile.mkdtemp(prefix="sess_"), "session_events.jsonl"))  # 세션 로그가 레포에 쌓이지 않게
+# 장기 성향 스냅샷 (Jira 306) — PC00001 만 5행. 다른 페르소나는 null 이어야 한다
+_TRAIT = os.path.join(_TMP, "user_trait_snapshot.jsonl")
+with open(_TRAIT, "w", encoding="utf-8") as _f:
+    for _t, _s, _p in (("price", 4.5, True), ("ingredient", 1.0, False), ("review", 0.0, False),
+                       ("concern", 2.5, False), ("participate", 0.0, False)):
+        _f.write(json.dumps({"user_id": "PC00001", "identity_scope": "persona", "trait": _t, "trait_score": _s,
+                             "is_primary_trait": _p, "window_end_date": "2026-09-13",
+                             "trait_policy_version": "user-trait-v2"}) + "\n")
+os.environ["USER_TRAIT_SNAPSHOT_PATH"] = _TRAIT
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -32,6 +41,29 @@ import recommend_server as rs              # noqa: E402
 client = TestClient(rs.app)
 PID = "PC00001"
 N_SEED = 200
+
+
+class TestLongTermTrait(unittest.TestCase):
+    """응답 최상위 long_term_trait (Jira 306) — 스냅샷에 있으면 5종 점수+primary, 없으면 null"""
+
+    def test_present_for_snapshot_user(self):
+        b = client.get("/api/recommend", params={"persona_id": "PC00001", "size": 5}).json()
+        lt = b["long_term_trait"]
+        self.assertEqual(lt["primary"], "price")
+        self.assertEqual(lt["price"], 4.5)
+        self.assertEqual(lt["concern"], 2.5)
+        self.assertEqual(lt["identity_scope"], "persona")
+        self.assertEqual(lt["window_end_date"], "2026-09-13")
+        self.assertEqual(lt["trait_policy_version"], "user-trait-v2")
+        self.assertEqual(set(lt), {"price", "ingredient", "review", "concern", "participate",
+                                   "primary", "window_end_date", "trait_policy_version", "identity_scope"})
+
+    def test_null_when_no_row(self):
+        b = client.get("/api/recommend", params={"persona_id": "PC00002", "size": 5}).json()
+        self.assertIsNone(b["long_term_trait"])
+        h = client.get("/health").json()["user_trait"]
+        self.assertTrue(str(h["source"]).startswith("snapshot:"))
+        self.assertEqual(h["users"], 1)
 
 
 class TestServer(unittest.TestCase):
