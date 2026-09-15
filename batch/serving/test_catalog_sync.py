@@ -107,7 +107,7 @@ class TestSync(unittest.TestCase):
         r3 = cs.sync(e, "http://localhost:8090", opener=be, log=lambda m: None)
         self.assertEqual(r3["replaced"], ["bk-1"])
         self.assertEqual(r3["unchanged"], 1)
-        self.assertAlmostEqual(e.products[e.index["bk-1"]]["price_usd"], 49000 / rs.KRW_PER_USD, places=2)
+        self.assertEqual(e.products[e.index["bk-1"]]["price_krw"], 49000.0)      # 원화 그대로 (Jira 302)
         # 목록에서 빠지면 판매 중단, 시연 시드(SSAFY)는 그대로
         be.products = [be.products[0]]
         r4 = cs.sync(e, "http://localhost:8090", opener=be, log=lambda m: None)

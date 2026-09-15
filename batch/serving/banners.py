@@ -83,9 +83,8 @@ class BannerPlanner:
         # 앞 30% 안에 히알루론산이 있는 상품은 전부 히알루론산이 문구가 됐다 (프론트 지적 2026-09-10)
         ing = [k for k, w in sorted(e.ingredient_values(p).items(), key=lambda kv: -kv[1])
                if w >= INGREDIENT_MIN_POSITION]
-        pl = e.blk["price_bin"]["vocab"]
-        price = p.get("price_usd")
-        pb = [pl[int(np.digitize(float(price), e.edges[1:], right=False))]] if price is not None else []
+        pb_label = e.price_bin_label(p)          # 원화 경계 (Jira 302)
+        pb = [pb_label] if pb_label is not None else []
         cat = [c for c in (p.get("secondary_category"),) if c]
         return {"concern": list(tg["concern"]), "ingredient": ing, "clean": list(tg["clean"]),
                 "price_bin": pb, "category": cat}

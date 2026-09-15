@@ -32,7 +32,7 @@
 | 4 | `tertiary_category` | 세부 제품 종류 19종 | `tertiary_category` | 원핫 | 19 | 100% | 0.11 |
 | 5 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
 | 6 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.5% | 0.06 |
-| 7 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
+| 7 | `price_bin` | 가격대 5구간 (원화 경계, Jira 302) | `price_krw` | 원핫 | 5 | 100% | 0.04 |
 | 8 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
 | 9 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 26.0% | 0.02 |
 
@@ -104,7 +104,7 @@ lift 는 **단독 예측력**이라 가중치의 근거로 쓰면 안 됩니다.
 | `ingredient` | Hyaluronic Acid, Silicone, Vitamin C, Squalane, Probiotic/Ferment, Green Tea, Peptides, Aloe, Lactic Acid, Licorice, Shea Butter, Panthenol(B5), Niacinamide, Jojoba, AHA/Glycolic Acid, Salicylic Acid, Ceramide, Rosehip/Rose, Caffeine, Urea, Adenosine, Allantoin, Retinol, Zinc, Alcohol Denat, SPF, Centella(Cica), Willow Bark, Collagen, Mineral Oil/Petrolatum |
 | `secondary_category` | Moisturizers, Treatments, Cleansers, Eye Care, Masks, Lip Balms & Treatments, Sunscreen, Self Tanners |
 | `clean` | Clean at Sephora, Vegan, Without Parabens, Cruelty-Free, Clean + Planet Positive, Fragrance Free, Oil Free, Without Sulfates SLS & SLES, Without Silicones, Refill Available, Without Phthalates, Alcohol Free, Without Mineral Oil, Gluten Free, Hypoallergenic, Without Oxybenzone |
-| `price_bin` | ~$20, $20-35, $35-50, $50-80, $80+ |
+| `price_bin` | `~26k`, `26k-46k`, `46k-66k`, `66k-105k`, `105k+` — 원화 경계 26,000 / 46,000 / 66,000 / 105,000 (v0.7, Jira 302. 옛 USD 경계 20/35/50/80 과 **현 카탈로그 208개에서** 같은 구간 배정 — 등가 환산은 아니다) |
 | `texture` | Hydrating, Plumping, Radiant Finish, Natural Finish, High Shine Finish |
 
 ### 인코딩 방식
@@ -153,7 +153,7 @@ idf(t) = log(N / (1 + df(t)))        N = 200
 | 3 | `ingredient` | 핵심 성분 **30종** | `highlights` 태그 + **전성분 파싱** | 멀티핫 + IDF + 위치가중 | **30** | **98.0%** | 0.27 |
 | 4 | `secondary_category` | 대분류 8종 | `secondary_category` | 원핫 | 8 | 100% | 0.06 |
 | 5 | `clean` | 클린뷰티·성분 배제 16종 | `highlights` | 멀티핫 + IDF | 16 | 85.5% | 0.06 |
-| 6 | `price_bin` | 가격대 5구간 | `price_usd` | 원핫 | 5 | 100% | 0.04 |
+| 6 | `price_bin` | 가격대 5구간 (원화 경계, Jira 302) | `price_krw` | 원핫 | 5 | 100% | 0.04 |
 | 7 | `rating` | 평점 | `rating` | 스칼라 | 1 | 100% | 0.02 |
 | 8 | `texture` | 제형·마감 5종 | `highlights` | 멀티핫 + IDF | 5 | 26.0% | 0.02 |
 | 9 | `brand` | 브랜드 55종 | `brand_name` | 원핫 | 55 | 100% | **0.60** |
@@ -383,6 +383,12 @@ mean $52.44  std $38.52  왜도 3.92
 
 구간 경계는 실제 분위수(p25 $33, p50 $45.5, p75 $65)를 참고해 **읽기 쉬운 값**으로 조정했습니다. 분포가 13~29%로 고르게 나뉩니다.
 
+> **2026-09-15 (v0.7, Jira 302) — 경계를 원화로 옮겼습니다.** 상품 등록이 원화라 USD 경계는 환율을 하나 더 필요로 했고,
+> 그 환율이 프론트·백엔드·추천에서 셋으로 갈렸습니다. 이제 인코더는 `price_krw`(원천 200개는 `products-ko.json` 과 같은
+> 1,340.86 환산·100원 반올림값)를 원화 경계 `[0, 26000, 46000, 66000, 105000]` 에 넣습니다. 경계는 200개 상품의 구간이
+> 하나도 안 바뀌는 틈에 둔 값이라(예: $20 정가 26,800원 vs 아래 구간 최고 25,500원) **벡터는 v0.6 과 동일**하고 위 표의
+> 구간별 개수도 그대로입니다. 토큰은 `~26k / 26k-46k / 46k-66k / 66k-105k / 105k+`. `price_usd` 는 LTR `price_prox` 용으로만 남습니다.
+
 가격 민감도는 사용자마다 다르므로 가중치는 0.03으로 낮게 둡니다. 성분이 같아도 가격대가 다르면 다른 상품이라는 정도의 신호입니다.
 
 ### 2-4. rating — 채택하되 최소 가중치
@@ -517,7 +523,7 @@ vector = vector / norm(vector)         # 전체 L2 정규화
   ],
   "scalars": [...],
   "prior_only": [...],
-  "price_bin_edges": [0, 20, 35, 50, 80],
+  "price_bin_edges": [0, 26000, 46000, 66000, 105000],
   "total_content_dim": 76
 }
 ```

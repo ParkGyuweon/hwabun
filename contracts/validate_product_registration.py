@@ -14,7 +14,7 @@
 
     A 필수 필드     계약 §3 의 필수 항목이 있는가
     B 어휘          카테고리·태그가 어휘집에 있는가. 성분 어휘는 태그로 거부한다
-    C 파생값        rating · loves_count · price_usd 가 채워졌는가 (계약 §4)
+    C 파생값        rating · loves_count 가 채워졌는가 (계약 §4). 가격은 price_krw 원화 그대로 구간 판정 (Jira 302)
     D 인코딩 가능    벡터를 실제로 만들 수 있는가. 빈 블록을 경고로 보고한다
 
 D 는 계약 위반이 아니어도 경고한다. highlights 를 비우면 concern 블록(가중치 0.42)
@@ -58,7 +58,7 @@ REQUIRED_INPUT = ["product_name", "brand_name", "secondary_category",
                   "tertiary_category", "ingredients", "price_krw"]
 
 # 계약 §4 — 등록 파이프라인이 채우는 필드
-REQUIRED_DERIVED = ["product_id", "price_usd", "rating", "loves_count"]
+REQUIRED_DERIVED = ["product_id", "rating", "loves_count"]
 
 # 계약 §3.1 — 폼 태그로 받는 블록. ingredient 는 제외한다
 TAG_BLOCKS = ("concern", "clean", "texture")
