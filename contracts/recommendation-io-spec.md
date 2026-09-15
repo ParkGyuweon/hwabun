@@ -1246,7 +1246,7 @@ r/200 → r/208 로 흔들리고, **그것만으로 트리 모델이 순위를 �
 > | 확정 | 구현 |
 > |---|---|
 > | 전용 칸은 **배너 칸** | `banner_slots=6&reserved=2` → 칸 5·6 `new_brand`(`banner_value: null`, 키 유지). `items` 는 순수 순위(reserved=0 과 동일). `list_id=banner_row` 로 CTR 을 따로 본다 |
-> | `hero.banner_type` **항상** 있음 | `items[0]` 에 사용자 축과 맞는 값 — **요청 `axes` 순서로 먼저** 찾고, 거기 없는 축은 기본 순서(concern → ingredient → clean → category → price_bin → segment)로 이어 훑는다 (2026-09-15, Jira 304. 화면이 히어로 한 장만 그리므로 `axes=price_bin,…` 이 히어로에 닿는다). 어느 축도 안 맞으면 상품 자신의 값(concern → ingredient → clean → category → price_bin). 이미지 변형 5종 선택용. **`hero=new_brand`(Jira 237) 면 대상이 items[0] 대신 점수 최고 신규 상품**이고 축 문구 규칙은 같다 |
+> | `hero.banner_type` **항상** 있음 | `items[0]` 에 축 문구. **① 요청 `axes[0]`** (2026-09-15, Jira 307·프론트 3-2 합의): 사용자 트레잇이 있고 상품에도 그 값이 있으면 그것. **트레잇이 없으면 상품 자신의 그 축 값 + `trait_source=coldstart`** — 가격 성향 사용자는 항상 가격 문구, 근거가 세션이 아니란 것은 로그로. segment 는 채우지 않음. **②** 그 외 사용자 축과 맞는 값을 `axes` 순서로 먼저, 거기 없는 축은 기본 순서(concern → ingredient → clean → category → price_bin → segment)로 (Jira 304). **③** 어느 축도 안 맞으면 상품 자신의 값. `hero.hero_policy_version`(현재 `hero-2026-09-15`)이 이 규칙의 판이다 — 프론트 `BANNER_POLICY_VERSION` 과 같이 이벤트에 실을지는 데이터 결정. 이미지 변형 5종 선택용. **`hero=new_brand`(Jira 237) 면 대상이 items[0] 대신 점수 최고 신규 상품**이고 축 문구 규칙은 같다 |
 > | 성분 축은 **위치가중 ≥ 0.3** | `ingredient` 소속은 전성분 앞 30% 성분만 (`INGREDIENT_MIN_POSITION`), **첫 값은 위치가중 내림차순**(09-10 수정 — 전에는 어휘집 등재 순서라 앞 30% 에 히알루론산이 있으면 그것이 문구가 됐다. 원천 74개 값이 바뀜, 프론트와 동일 규칙). 대시보드 미량 경고와 충돌 안 함 |
 > | `reason` 은 **key 하나** | 아이템·배너 모두 `attribute → content → cf → new_brand → popular` 우선순위로 하나. 문장은 프론트가 다시 쓴다 |
 >
