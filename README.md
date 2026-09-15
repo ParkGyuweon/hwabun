@@ -27,7 +27,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
  POST /api/products     등록 즉시 카탈로그 편입 (SSAFY Beauty 8개 편입됨)         Q2 clean_events (스키마 검증·중복 제거)
  DELETE /api/products   판매 중단                                                 Q3 derive_facts → 상품·배너 Fact
  POST /api/events       세션 상태 갱신 (이벤트 로그 영속, 재시작 시 재생)            Q4 build_marts → content/banner/segment daily Mart
- ◀── Kafka activity-events 구독 (group recommend-state-v1) — 실제 소비자 행동을 초 단위로 상태에 반영 (09-15 실측: 브로커에 연결 안 됨 connected=false — 브로커 위치는 데이터·인프라와 확인 중)
+ ◀── Kafka activity-events 구독 (group recommend-state-v1) — 실제 소비자 행동을 초 단위로 상태에 반영 (09-15 17:40 실측: EC2-2 브로커 j15a306a:9092 구독 중)
  POST /api/prescription 대시보드 처방 문장 (LLM gpt-4.1-mini, 자동 거부 포함)      Q5 validate → 품질 리포트
  POST /api/catalog/sync 쇼핑몰 백엔드 ACTIVE 상품 동기화 (승인 훅 없어도 카탈로그 일치)
         ▲                                                                              │
@@ -37,7 +37,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
    → CF 동시발생 · LTR 369 트리 → batch/ingest/data/serving/
 
 [ 운영 · deploy/ec2-1 ]  docker compose(백엔드 ec2-1-deploy 브랜치, dev 를 pull 해 올림) — shop-backend(8090) · mysql · backend(8080) · recommend(8300) · nginx(443) · Prometheus · Grafana
-                        09-15 실측: 전부 기동, recommend 는 dev 최신(어휘집 0.7) · 수집기·추천 모두 Kafka brokers down · .env 에 GMS_KEY·DW_MYSQL_* 비어 있음
+                        09-15 17:40 실측: 전부 기동, recommend 는 dev 최신(어휘집 0.7) · 수집기·추천 모두 EC2-2 Kafka 연결 · .env 에 GMS_KEY·DW_MYSQL_* 은 비어 있음
 ```
 
 ---
@@ -51,7 +51,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | 쇼핑몰 백엔드 | Spring Boot · JPA · MySQL | 4.1.1 · 21 · 8.4 | `shop_backend/` (8090, MySQL 13306). 09-15 EC2-1 Compose(ec2-1-deploy)에서 MySQL 과 함께 가동. 로그인(JWT)·브랜드·상품(등록 계약 검증)·주문·결제·리뷰·피드백·정산·판매자 대시보드 |
 | 수집 서버 | Spring Boot · Java | 4.1.1 · 21 | `backend/` (8080). `POST /api/events` → Kafka. Actuator + Micrometer 로 Prometheus 메트릭 |
 | | springdoc-openapi | 3.1.0 | Swagger UI |
-| 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id`. 로컬은 `infra/kafka/`. 09-15 기준 EC2 의 수집기·추천이 브로커에 연결되지 않음 |
+| 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id`. 운영 브로커는 EC2-2(`j15a306a.p.ssafy.io:9092`, `deploy/ec2-2/`), 로컬은 `infra/kafka/` |
 | 스트리밍 | Spark Structured Streaming | 3.5.6 | `streaming/` Q1~Q5. 출력 Parquet. 로컬은 `infra/spark/` compose |
 | 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 369 트리, 2026-09-10). sklearn 버전은 모델 pickle 과 고정 |
 | | FastAPI · uvicorn · pydantic | 0.141 · 0.52 · 2.13 | **추천 추론 서버** `batch/serving/` (8300, 내부 전용). 추천·배너·상품 등록·처방 문장. `deploy/recommend.Dockerfile` |
@@ -59,7 +59,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 (GPU, 배치 산출물용). 정확도 목적 리뷰 임베딩은 기각 |
 | 시뮬레이터 | Python 생성기 | — | PC 9,900명 합성 로그 · 배너 이벤트 · 피드백 시연 데이터 |
 | | Playwright (Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | PA 100명이 실제 브라우저를 조작. `--local-model` 로 Qwen2.5 도 가능 |
-| 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`, 백엔드 ec2-1-deploy): shop-backend · mysql · backend · recommend · nginx(HTTPS) · Prometheus · Grafana. 09-15 실측 전부 기동, Kafka 연결만 안 됨. 추천 재배포는 `deploy/ec2-1/redeploy-local.sh` 한 줄(Jira 305·309) |
+| 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`, 백엔드 ec2-1-deploy): shop-backend · mysql · backend · recommend · nginx(HTTPS) · Prometheus · Grafana. 09-15 실측 전부 기동, Kafka 는 EC2-2 브로커에 연결됨. 추천 재배포는 `deploy/ec2-1/redeploy-local.sh` 한 줄(Jira 305·309) |
 | | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 대시보드 2종(backend-overview · collector-validation) 프로비저닝 |
 | 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개(+등록 8) · 페르소나 12,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
 | | 시연 브랜드 | — | SSAFY Beauty 8개 상품 (`simulator/feedback/products.ssafy-beauty.json`) — 등록 경로로 추천 카탈로그에 편입 |
