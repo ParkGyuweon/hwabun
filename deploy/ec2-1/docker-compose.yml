@@ -28,6 +28,9 @@ services:
       SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
       SHOP_BACKEND_MYSQL_USER: ${MYSQL_USER:-shop_backend}
       SHOP_BACKEND_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      # PortOne V2 API Secret: payment confirmation is server-only.
+      # Never pass this value to the nginx/frontend build.
+      PORTONE_API_SECRET: ${PORTONE_API_SECRET:-}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-ec2}
     depends_on:
@@ -100,6 +103,11 @@ services:
     build:
       context: ../..
       dockerfile: deploy/nginx.Dockerfile
+      # Vite reads VITE_* values only while building the static bundle.
+      # Store ID and channel key are public browser identifiers, not API secrets.
+      args:
+        VITE_PORTONE_STORE_ID: ${VITE_PORTONE_STORE_ID:-}
+        VITE_PORTONE_CHANNEL_KEY: ${VITE_PORTONE_CHANNEL_KEY:-}
     restart: unless-stopped
     depends_on:
       - backend

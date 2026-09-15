@@ -88,6 +88,8 @@ interface ProductSummaryDto {
   lovesCount: number | null;
   primaryImageUrl: string | null;
   highlights: string[] | null;
+  /** 목록에서도 구매 단위 ID를 받아 장바구니 API로 바로 전달한다. */
+  variants?: VariantDto[] | null;
   /** 요청서 9-11 — 백엔드가 아직 안 내려준다. 오면 14일 신규 판정에 쓴다 */
   createdAt?: string | null;
 }
@@ -112,16 +114,27 @@ interface ProductDetailDto {
   images?: Array<string | { url: string }> | null;
 }
 
+function mapVariant(v: VariantDto, fallbackImage: string | null): ProductVariant {
+  return {
+    sku_id: v.skuId,
+    label: v.label,
+    image_url: v.imageUrl ?? fallbackImage ?? '',
+    swatch_url: v.swatchUrl ?? null,
+    variant_id: v.variantId,
+  };
+}
+
 function mapSummary(s: ProductSummaryDto): Product {
+  const active = (s.variants ?? []).filter((v) => v.status === 'ACTIVE');
   return {
     product_id: s.productId,
     product_name: s.productName,
     brand_name: s.brandName ?? '',
     category: ['Skincare', s.secondaryCategory, s.tertiaryCategory].filter(Boolean),
     image_url: s.primaryImageUrl,
-    sku_id: null,
+    sku_id: active[0]?.skuId ?? null,
     images: s.primaryImageUrl ? [s.primaryImageUrl] : [],
-    variants: [],
+    variants: active.map((v) => mapVariant(v, s.primaryImageUrl)),
     description: null,
     price_usd: krwToUsd(s.priceKrw),
     size: null,
@@ -159,13 +172,7 @@ function mapDescription(d: Record<string, unknown> | null): ProductDescription |
 function mapDetail(d: ProductDetailDto): Product {
   const base = mapSummary(d.product);
   const active = d.variants.filter((v) => v.status === 'ACTIVE');
-  const variants: ProductVariant[] = active.map((v) => ({
-    sku_id: v.skuId,
-    label: v.label,
-    image_url: v.imageUrl ?? base.image_url ?? '',
-    swatch_url: v.swatchUrl ?? null,
-    variant_id: v.variantId,
-  }));
+  const variants: ProductVariant[] = active.map((v) => mapVariant(v, base.image_url));
   const extraImages = (d.images ?? []).map((i) => (typeof i === 'string' ? i : i?.url)).filter((u): u is string => Boolean(u));
   const images = [...new Set([...base.images, ...extraImages])];
   const first = active[0];

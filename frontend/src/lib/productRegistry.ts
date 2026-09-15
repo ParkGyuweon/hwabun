@@ -346,7 +346,7 @@ const localById = new Map<string, Product>([...seedProducts, ...sampleProducts].
  *
  * 백엔드 목록 요약에는 이미지 여러 장·옵션·설명·한국어 표시명·리뷰가 없다. 반면 정적 사본에는 전부 있고, 세포라 리뷰
  * 2,000건은 `review.order_item_id NOT NULL` 이라 백엔드에 들어갈 수 없어(시드 README §4) 정적으로만 있다.
- * 그래서 `source` 는 그대로 두고(리뷰·피드백은 지금처럼 정적 경로), 백엔드가 주인인 값 — 가격·평점·brand_id — 만 덮어쓴다.
+ * 리뷰 원문은 정적 사본을 유지하되, 구매에 쓰는 `source`·`variants`는 백엔드 값을 우선한다.
  * 백엔드에만 있는 상품(사장님이 새로 등록한 것)은 요약 그대로이고, 상세 페이지를 열 때 `ensureBackendDetail` 이 채운다.
  */
 function mergeWithLocal(row: Product): Product {
@@ -356,6 +356,9 @@ function mergeWithLocal(row: Product): Product {
     ...local,
     price_usd: row.price_usd > 0 ? row.price_usd : local.price_usd,
     rating: row.rating ?? local.rating,
+    sku_id: row.sku_id ?? local.sku_id,
+    variants: row.variants,
+    source: 'backend',
     backend_brand_id: row.backend_brand_id,
   };
 }
@@ -377,11 +380,11 @@ export async function refreshBackendCatalog(): Promise<void> {
 }
 
 /**
- * 상세 페이지가 연 상품이 백엔드에만 있는 것이면 그 **한 건**의 상세를 받아 끼운다. 목록에서는 부르지 않는다.
- * 프론트가 정적으로 아는 상품은 이미 옵션·이미지·설명이 있어 부르지 않는다. 같은 상품은 한 번만 부른다.
+ * 상세 페이지가 연 상품 한 건의 상세를 받아 끼운다. 목록에는 구매용 variant가 있지만,
+ * 여기서는 전성분·설명·갤러리까지 보강한다. 같은 상품은 한 번만 부른다.
  */
 export function ensureBackendDetail(productId: string | null): void {
-  if (!productId || detailRequested.has(productId) || localById.has(productId)) return;
+  if (!productId || detailRequested.has(productId)) return;
   const idx = backend.findIndex((p) => p.product_id === productId);
   if (idx === -1) return;
   detailRequested.add(productId);
