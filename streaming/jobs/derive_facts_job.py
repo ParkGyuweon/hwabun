@@ -89,6 +89,7 @@ class DeriveFactsConfig:
     registered_product_path: str = DEFAULT_REGISTERED_PRODUCT_PATH
     registered_product_brand_path: str | None = None
     behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
+    commons_hash_salt: str = ""
     time_zone: str = DEFAULT_TIME_ZONE
 
     def __post_init__(self) -> None:
@@ -111,6 +112,13 @@ class DeriveFactsConfig:
         for name, value in values.items():
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
+        if not self.commons_hash_salt.strip():
+            # 소금 없는 해시를 조용히 만들면 보호가 있는 것처럼 보인다
+            # (dw-schema.md §2.5.1 R5).
+            raise ValueError(
+                "commons_hash_salt must be set — COMMONS_HASH_SALT 환경 변수나 "
+                "--commons-hash-salt 로 준다. 저장소에 두지 않는다"
+            )
 
 
 def _env(name: str, default: str) -> str:
@@ -173,6 +181,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output path for dim_brand (grain=brand_id)",
     )
     parser.add_argument(
+        "--commons-hash-salt",
+        default=_env("COMMONS_HASH_SALT", ""),
+        help="brand_hash 소금값. 저장소에 두지 않고 환경 변수로 준다 (dw-schema §2.5.1 R5)",
+    )
+    parser.add_argument(
         "--product-catalog-path",
         default=_env("PRODUCT_CATALOG_PATH", DEFAULT_PRODUCT_CATALOG_PATH),
         help="Seed product catalog JSON used to build dim_product",
@@ -219,6 +232,7 @@ def parse_args(argv: list[str] | None = None) -> DeriveFactsConfig:
         product_catalog_path=args.product_catalog_path,
         registered_product_path=args.registered_product_path,
         registered_product_brand_path=args.registered_product_brand_path,
+        commons_hash_salt=args.commons_hash_salt,
         behavior_weights_path=args.behavior_weights_path,
         time_zone=args.time_zone,
     )
@@ -894,12 +908,38 @@ def _merge_dim_products(seed_df: Any, registered_df: Any) -> Any:
     )
 
 
-def _build_dim_brand(dim_product_df: Any) -> Any:
+# Commons Mart 가명. 길이를 줄이는 이유는 코호트 키에 섞여 로그·파일명에 남기 때문이다.
+BRAND_HASH_LENGTH = 16
+
+
+def _brand_hash_column(salt: str) -> Any:
+    """``sha256(salt + brand_id)`` 앞 16자.
+
+    **해시가 익명화를 보장하지 않는다.** 브랜드가 수십 개고 목록이 공개돼 있으면 전수
+    대입으로 뒤집힌다. 실제 보호는 R1(브랜드 5 미만 억제)과 R3(지배 50% 억제)가 한다
+    (``dw-schema.md`` §2.5.1). 이 값은 "원 brand_id 를 공유 Mart 에 싣지 않는다"는
+    표기 규칙일 뿐이다.
+
+    소금값은 저장소에 두지 않는다. 없으면 부르는 쪽이 먼저 실패한다.
+    """
+
+    from pyspark.sql import functions as F
+
+    return F.substring(
+        F.sha2(F.concat(F.lit(salt), F.col("brand_id")), 256), 1, BRAND_HASH_LENGTH
+    )
+
+
+def _build_dim_brand(dim_product_df: Any, commons_hash_salt: str) -> Any:
     """Build the analytics brand dimension at grain ``brand_id``.
 
     Account-to-brand authentication is owned by Backend and deliberately is not
     copied into the DW dimension. Conflicting names resolve deterministically and
     remain detectable from ``dim_product`` by the validation job.
+
+    ``brand_hash`` 와 ``commons_participating`` 은 Commons Mart 가 읽는다. 여기서 한 번만
+    만들고 ``brand_cohort_dim`` 은 Join 으로 가져간다 — 두 곳에서 따로 계산하면 조용히
+    갈라진다 (``dw-schema.md`` §3.1).
     """
 
     from pyspark.sql import functions as F
@@ -915,6 +955,9 @@ def _build_dim_brand(dim_product_df: Any) -> Any:
         )
         .groupBy("brand_id")
         .agg(F.min("brand_name").alias("brand_name"))
+        .withColumn("brand_hash", _brand_hash_column(commons_hash_salt))
+        # 옵트인을 받을 온보딩 단계가 없다. 동의 UI 가 생기면 여기서 갈린다 (R7·R8).
+        .withColumn("commons_participating", F.lit(True))
         .withColumn("created_at", F.lit(None).cast("timestamp"))
         .withColumn("updated_at", F.current_timestamp())
     )
@@ -1283,7 +1326,7 @@ def run(spark: Any, config: DeriveFactsConfig) -> None:
     else:
         registered_dim_product = seed_dim_product.limit(0)
     dim_product = _merge_dim_products(seed_dim_product, registered_dim_product)
-    dim_brand = _build_dim_brand(dim_product)
+    dim_brand = _build_dim_brand(dim_product, config.commons_hash_salt)
     weights = _load_behavior_weights(config.behavior_weights_path)
     frames = build_derived_frames(
         spark.read.option("mergeSchema", "true").parquet(config.input_path),
