@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
+import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
 import { useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
@@ -450,6 +451,8 @@ export default function ProductListPage({
       entry_source: listId,
       position: position + 1,
     });
+    // 퀵룩에서도 담기가 된다. 백엔드 옵션(variant_id)이 없으면 서버 주문을 못 타므로 여기서도 상세를 받아 둔다
+    ensureBackendDetail(productId);
     setQuickLook(products.find((p) => p.product_id === productId) ?? null);
   };
 

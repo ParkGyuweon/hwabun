@@ -346,8 +346,14 @@ const localById = new Map<string, Product>([...seedProducts, ...sampleProducts].
  *
  * 백엔드 목록 요약에는 이미지 여러 장·옵션·설명·한국어 표시명·리뷰가 없다. 반면 정적 사본에는 전부 있고, 세포라 리뷰
  * 2,000건은 `review.order_item_id NOT NULL` 이라 백엔드에 들어갈 수 없어(시드 README §4) 정적으로만 있다.
- * 그래서 `source` 는 그대로 두고(리뷰·피드백은 지금처럼 정적 경로), 백엔드가 주인인 값 — 가격·평점·brand_id — 만 덮어쓴다.
- * 백엔드에만 있는 상품(사장님이 새로 등록한 것)은 요약 그대로이고, 상세 페이지를 열 때 `ensureBackendDetail` 이 채운다.
+ * 그래서 콘텐츠는 정적 사본을 쓰고, 백엔드가 주인인 값 — 가격·평점·brand_id — 을 덮어쓴다.
+ *
+ * **`source` 는 `backend` 로 둔다 (백엔드 지적 2026-09-15).** 예전에는 정적 사본의 `seed_catalog` 가 그대로 남았는데,
+ * 그러면 백엔드에 실제로 있는 상품이 "백엔드에 없는 상품" 으로 보여 구매가 로컬 테스트 주문으로 떨어졌다.
+ * 리뷰·피드백이 정적 경로를 타는 것은 `source` 가 아니라 각자의 조회 함수가 정하므로 영향이 없다.
+ *
+ * 옵션(`variants`)은 목록 요약에 아예 없다 (`ProductSummary` 에 옵션 칸이 없다). 그래서 여기서는 채울 수 없고
+ * `ensureBackendDetail` 이 상세를 받아 채운다. 정적 사본의 옵션에는 `variant_id` 가 없다 — 202개 중 0개다.
  */
 function mergeWithLocal(row: Product): Product {
   const local = localById.get(row.product_id);
@@ -357,6 +363,36 @@ function mergeWithLocal(row: Product): Product {
     price_usd: row.price_usd > 0 ? row.price_usd : local.price_usd,
     rating: row.rating ?? local.rating,
     backend_brand_id: row.backend_brand_id,
+    source: 'backend',
+  };
+}
+
+/**
+ * 백엔드 상세를 정적 사본 위에 얹는다. **구매에 필요한 값은 백엔드가 우선이다** (백엔드 요청 2026-09-15 §4).
+ *
+ * 옵션·용량·할인가는 주문이 걸린 값이라 백엔드 것을 쓴다. 백엔드가 `{product_id}-DEFAULT` 기본 옵션을 만들어 줘서
+ * 옵션 없는 상품도 여기서 `variant_id` 가 생기고, `variantIdOf` 가 `variants[0]` 으로 떨어져 자동 선택된다.
+ *
+ * 나머지 콘텐츠(이미지 여러 장·설명·전성분·한국어 표시명)는 백엔드가 비어 있을 때만 정적 사본을 쓴다.
+ */
+function mergeDetailWithLocal(detail: Product): Product {
+  const local = localById.get(detail.product_id);
+  if (!local) return detail;
+  return {
+    ...local,
+    // 주문이 걸린 값 — 백엔드 우선
+    variants: detail.variants,
+    sku_id: detail.sku_id ?? local.sku_id,
+    size: detail.size ?? local.size,
+    price_usd: detail.price_usd > 0 ? detail.price_usd : local.price_usd,
+    sale_price_usd: detail.sale_price_usd ?? local.sale_price_usd ?? null,
+    rating: detail.rating ?? local.rating,
+    backend_brand_id: detail.backend_brand_id,
+    source: 'backend',
+    // 콘텐츠 — 백엔드가 비면 정적 사본
+    images: detail.images.length > 0 ? detail.images : local.images,
+    description: detail.description ?? local.description,
+    ingredients: detail.ingredients.length > 0 ? detail.ingredients : local.ingredients,
   };
 }
 
@@ -377,22 +413,29 @@ export async function refreshBackendCatalog(): Promise<void> {
 }
 
 /**
- * 상세 페이지가 연 상품이 백엔드에만 있는 것이면 그 **한 건**의 상세를 받아 끼운다. 목록에서는 부르지 않는다.
- * 프론트가 정적으로 아는 상품은 이미 옵션·이미지·설명이 있어 부르지 않는다. 같은 상품은 한 번만 부른다.
+ * 화면이 연 백엔드 상품 **한 건**의 상세를 받아 끼운다. 목록 전체로는 부르지 않는다. 같은 상품은 한 번만 부른다.
+ *
+ * 예전에는 프론트가 정적으로 아는 상품(시드 208개)을 건너뛰었다. "이미 옵션·이미지·설명이 있다" 는 이유였는데,
+ * **정적 사본의 옵션에는 `variant_id` 가 없다** (202개 중 0개, SSAFY Beauty 8개는 옵션 자체가 없다).
+ * 그래서 그 208개는 장바구니 `variant_id` 가 끝까지 비고, `canCheckoutOnBackend` 가 false 라
+ * `/api/cart/items` · `/api/orders` 가 아예 안 나갔다 (백엔드 지적 2026-09-15). 지금은 건너뛰지 않는다.
+ *
+ * 상세는 상품 상세 페이지와 퀵룩이 열릴 때 부른다. 퀵룩에서도 담기가 되기 때문이다.
  */
 export function ensureBackendDetail(productId: string | null): void {
-  if (!productId || detailRequested.has(productId) || localById.has(productId)) return;
+  if (!productId || detailRequested.has(productId)) return;
   const idx = backend.findIndex((p) => p.product_id === productId);
-  if (idx === -1) return;
+  if (idx === -1) return; // 백엔드 목록에 없는 상품(정적 전용)은 받을 상세가 없다
   detailRequested.add(productId);
   void fetchBackendProductDetail(productId).then((detail) => {
     if (!detail) {
       detailRequested.delete(productId); // 다음에 열면 다시 시도한다
       return;
     }
+    const merged = mergeDetailWithLocal(detail);
     const at = backend.findIndex((p) => p.product_id === productId);
     if (at === -1) return;
-    backend = backend.map((p, i) => (i === at ? detail : p));
+    backend = backend.map((p, i) => (i === at ? merged : p));
     bump();
   });
 }

@@ -23,7 +23,7 @@ import {
 import type { PaymentMethod } from './lib/payment';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
-import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
+import { backendCatalogState, catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
@@ -517,6 +517,22 @@ export default function App() {
         finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' });
         return;
       }
+      /*
+       * 서버가 주문을 거절했으면 테스트 주문으로 덮지 않는다 (백엔드 요청 2026-09-15 §5).
+       * 예전에는 조용히 로컬 주문으로 완료 화면까지 갔는데, 그러면 거절 이유가 완료 화면 각주로 밀려
+       * 주문이 된 것처럼 보였다. 서버가 거절한 것은 고쳐야 할 일이라 화면에 남긴다.
+       */
+      setPaymentError(`주문에 실패했습니다 (${r.status}). ${r.reason}`);
+      return;
+    }
+
+    /*
+     * 서버 주문을 탈 수 없는 이유를 구분해 알린다 (백엔드 요청 2026-09-15 §5).
+     *
+     * 백엔드 카탈로그를 아예 못 받은 때(서버 미기동)만 예전처럼 테스트 주문으로 진행한다 — 그 경우는
+     * 고칠 수 있는 게 화면에 없고, 시연이 백엔드 없이도 돌아야 한다. 로그인·옵션 때문이면 멈추고 이유를 띄운다.
+     */
+    if (backendCatalogState() === 'unavailable') {
       finishOrder({
         orderId: localOrderId,
         items,
@@ -524,16 +540,23 @@ export default function App() {
         total,
         paid,
         mode: 'local',
-        note: `서버 주문 실패: ${r.reason}. 테스트 주문으로 대신 접수했습니다.`,
+        note: '상품 서버에 연결하지 못해 테스트 주문으로 접수했습니다.',
         payment_method: 'test',
       });
       return;
     }
-
-    const note = cartItems.some((i) => !i.variant_id)
-      ? '세포라·시드 상품은 백엔드에 없어 테스트 주문으로 접수됩니다.'
-      : '고객 로그인이 없어 테스트 주문으로 접수됩니다.';
-    finishOrder({ orderId: localOrderId, items, count, total, paid, mode: 'local', note, payment_method: 'test' });
+    if (!member) {
+      setPaymentError('주문하려면 고객 로그인이 필요합니다.');
+      return;
+    }
+    const missing = cartItems.filter((i) => !i.variant_id);
+    if (missing.length > 0) {
+      setPaymentError(
+        `옵션 정보를 아직 받지 못한 상품이 있어 주문할 수 없습니다: ${missing.map((i) => i.product_name).join(', ')}. 상품 상세를 한 번 열었다 담아 주세요.`,
+      );
+      return;
+    }
+    setPaymentError('주문을 진행할 수 없습니다. 장바구니를 다시 확인해 주세요.');
   }, [cartItems, paying, member, finishOrder, failPayment]);
 
   /**
