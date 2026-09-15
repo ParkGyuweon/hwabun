@@ -39,6 +39,7 @@ DEFAULT_REASON_TRAIT_MAP_PATH = "contracts/purchase-reason-trait-map.json"
 DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
+DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
@@ -56,6 +57,10 @@ EXECUTION_AXES = (
 
 # 결제 계약 enum. event-properties-schema.md §3.15 · §3.16 이 정본이고
 # build_marts_job 의 같은 이름 상수와 일치해야 한다.
+# 피부 세그먼트 축. build_marts_job 의 같은 이름 상수와 일치해야 한다.
+PERSONA_SEGMENT_TYPES = ("skin_type", "skin_tone")
+PERSONA_CROSS_SEGMENT_TYPE = "skin_type_x_skin_tone"
+
 PAYMENT_METHODS = ("kakaopay", "card", "test")
 ORDER_CHANNELS = ("backend", "local")
 
@@ -86,6 +91,7 @@ class ValidatePipelineConfig:
     behavior_weights_path: str = DEFAULT_BEHAVIOR_WEIGHTS_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
+    persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
     cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
@@ -120,6 +126,7 @@ class ValidatePipelineConfig:
             "behavior_weights_path": self.behavior_weights_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
+            "persona_segment_path": self.persona_segment_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
             "cross_brand_daily_path": self.cross_brand_daily_path,
@@ -237,6 +244,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--category-price-path",
         default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
     )
+    parser.add_argument(
+        "--persona-segment-path",
+        default=_env("PERSONA_SEGMENT_DAILY_PATH", DEFAULT_PERSONA_SEGMENT_PATH),
+    )
     parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
     parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
@@ -286,6 +297,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         behavior_weights_path=args.behavior_weights_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
+        persona_segment_path=args.persona_segment_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
         cross_brand_daily_path=args.cross_brand_daily_path,
@@ -1653,6 +1665,103 @@ def validate_frames(
         f"invalid_rows={invalid_cross_rate_values}; share denominator=cross-brand entries",
     ))
 
+
+    persona_segment = frames.get("persona_segment_daily")
+    if persona_segment is None:
+        # bridge_persona_segment 는 저장소에 없는 생성물이다. 만들지 않은 실행에는
+        # 이 Mart 도 없다. 없다고 실패로 보지 않는다.
+        warnings.append({
+            "check": "persona_segment_daily_is_absent",
+            "detail": (
+                "py contracts/persona/build_persona_tables.py --sample PC:all 로 "
+                "bridge_persona_segment 를 만든 실행에서만 생성된다"
+            ),
+        })
+    else:
+        counts["persona_segment_daily"] = persona_segment.count()
+        checks.append(_check(
+            "persona_segment_daily_grain_is_unique",
+            _duplicate_count(persona_segment, [
+                "event_date_kst", "brand_id", "segment_type", "segment_value",
+                *EXECUTION_AXES,
+            ]) == 0,
+            "persona_segment_daily_kpi grain=date+brand+segment_type+segment_value+축",
+        ))
+        checks.append(_check(
+            "persona_segment_types_are_registered",
+            persona_segment.where(
+                ~F.col("segment_type").isin(
+                    *PERSONA_SEGMENT_TYPES, PERSONA_CROSS_SEGMENT_TYPE
+                )
+            ).count() == 0,
+            f"허용 축={sorted((*PERSONA_SEGMENT_TYPES, PERSONA_CROSS_SEGMENT_TYPE))}",
+        ))
+        invalid_segment_counts = persona_segment.where(
+            (F.col("segment_user_count") < 0)
+            | (F.col("segment_user_count") > F.col("session_count"))
+            | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+            | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+            | (F.col("detail_view_sessions") > F.col("session_count"))
+            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+            | (F.col("impression_sessions") > F.col("session_count"))
+        ).count()
+        checks.append(_check(
+            "persona_segment_counts_are_bounded",
+            invalid_segment_counts == 0,
+            f"invalid_rows={invalid_segment_counts}",
+        ))
+        segment_rate_columns = [
+            "view_to_cart_rate", "view_to_purchase_rate", "detail_entry_rate"
+        ]
+        invalid_segment_rates = persona_segment.where(
+            F.greatest(*[
+                F.when(
+                    F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                    F.lit(1),
+                ).otherwise(F.lit(0))
+                for column in segment_rate_columns
+            ]) == 1
+        ).count()
+        invalid_segment_denominators = persona_segment.where(
+            ((F.col("detail_view_sessions") == 0) & F.col("view_to_cart_rate").isNotNull())
+            | ((F.col("detail_view_sessions") == 0)
+               & F.col("view_to_purchase_rate").isNotNull())
+            | ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
+            | ((F.col("session_count") == 0) & F.col("avg_interest_score").isNotNull())
+        ).count()
+        checks.append(_check(
+            "persona_segment_rates_follow_contract",
+            invalid_segment_rates == 0 and invalid_segment_denominators == 0,
+            f"out_of_range={invalid_segment_rates}; "
+            f"non_null_zero_denominator={invalid_segment_denominators}",
+        ))
+
+        # 세그먼트 세션 합은 브랜드 전체와 같지 않다 — persona 없는 세션을 귀속하지
+        # 않기 때문이다. 다만 넘어설 수는 없다. 넘으면 조인이 행을 불린 것이다.
+        segment_overflow = (
+            persona_segment.where(
+                F.col("segment_type") == F.lit(PERSONA_CROSS_SEGMENT_TYPE)
+            )
+            .groupBy("event_date_kst", "brand_id", *EXECUTION_AXES)
+            .agg(F.sum("detail_view_sessions").cast("long").alias("_segment_sessions"))
+            .join(
+                brand_daily.select(
+                    "event_date_kst", "brand_id", *EXECUTION_AXES,
+                    F.col("detail_view_sessions").alias("_brand_sessions"),
+                ),
+                ["event_date_kst", "brand_id", *EXECUTION_AXES],
+                "inner",
+            )
+            .where(F.col("_segment_sessions") > F.col("_brand_sessions"))
+            .count()
+        )
+        checks.append(_check(
+            "persona_segment_sessions_do_not_exceed_brand_total",
+            segment_overflow == 0,
+            f"overflowing_rows={segment_overflow}; "
+            "교차 축은 배타라 합이 브랜드 전체를 넘을 수 없다",
+        ))
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -1736,6 +1845,13 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         name: spark.read.option("mergeSchema", "true").parquet(path)
         for name, path in paths.items()
     }
+    try:
+        frames["persona_segment_daily"] = spark.read.option(
+            "mergeSchema", "true"
+        ).parquet(config.persona_segment_path)
+    except Exception:
+        # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
+        pass
     try:
         frames["analytics_baseline"] = spark.read.option("mergeSchema", "true").parquet(
             config.baseline_path

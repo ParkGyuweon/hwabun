@@ -57,6 +57,7 @@ validate_pipeline() {
     --behavior-weights-path /opt/project/frontend/src/types/log.ts \
     --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest" \
     --category-price-path "$data_root/marts/category_price_reference" \
+    --persona-segment-path "$data_root/marts/persona_segment_daily_kpi" \
     --banner-daily-path "$data_root/marts/banner_daily" \
     --user-trait-daily-path "$data_root/marts/user_trait_daily" \
     --cross-brand-daily-path "$data_root/marts/cross_brand_daily" \
@@ -112,6 +113,8 @@ run_batch_pipeline() {
     --reason-trait-map-path /opt/project/contracts/purchase-reason-trait-map.json
     --ingredient-weekly-path "$data_root/marts/ingredient_weekly_interest"
     --category-price-path "$data_root/marts/category_price_reference"
+    --persona-segment-path "$data_root/marts/persona_segment_daily_kpi"
+    --persona-bridge-path /opt/project/contracts/persona/data/pcall/bridge_persona_segment.jsonl
     --banner-daily-path "$data_root/marts/banner_daily"
     --user-trait-daily-path "$data_root/marts/user_trait_daily"
     --cross-brand-daily-path "$data_root/marts/cross_brand_daily"
