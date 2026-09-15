@@ -43,6 +43,12 @@ DEFAULT_PRODUCT_INGREDIENT_PATH = "batch/ingest/data/serving/product_ingredient.
 DEFAULT_INGREDIENT_VOCAB_PATH = "batch/ingest/data/serving/ingredient_vocab.csv"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
+DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
+# 저장소에 커밋하지 않는 생성물이다. 실행 전에
+#   py contracts/persona/build_persona_tables.py --sample PC:all
+DEFAULT_PERSONA_BRIDGE_PATH = (
+    "contracts/persona/data/pcall/bridge_persona_segment.jsonl"
+)
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
@@ -100,6 +106,8 @@ class BuildMartsConfig:
     ingredient_vocab_path: str = DEFAULT_INGREDIENT_VOCAB_PATH
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
+    persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
+    persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
     cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
@@ -134,6 +142,8 @@ class BuildMartsConfig:
             "ingredient_vocab_path": self.ingredient_vocab_path,
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
+            "persona_segment_path": self.persona_segment_path,
+            "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
             "cross_brand_daily_path": self.cross_brand_daily_path,
@@ -274,6 +284,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("CATEGORY_PRICE_REFERENCE_PATH", DEFAULT_CATEGORY_PRICE_PATH),
         help="category_price_reference output path",
     )
+    parser.add_argument(
+        "--persona-segment-path",
+        default=_env("PERSONA_SEGMENT_DAILY_PATH", DEFAULT_PERSONA_SEGMENT_PATH),
+        help="persona_segment_daily_kpi output path",
+    )
+    parser.add_argument(
+        "--persona-bridge-path",
+        default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
+        help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
+    )
     parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
     parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
@@ -332,6 +352,8 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         ingredient_vocab_path=args.ingredient_vocab_path,
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
+        persona_segment_path=args.persona_segment_path,
+        persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
         cross_brand_daily_path=args.cross_brand_daily_path,
@@ -883,6 +905,152 @@ def _null_safe_join(left: Any, right: Any, columns: list[str]) -> Any:
         clause = left[column].eqNullSafe(renamed[alias])
         condition = clause if condition is None else condition & clause
     return left.join(renamed, condition, "left").drop(*aliases.values())
+
+
+# 피부 세그먼트 축. Jira 277 이 요구하는 세 종류만 낸다. bridge 에는
+# hair_color·eye_color·review_bucket·persona_source 도 있지만 대시보드 고객군
+# 화면(dashboard-redesign-spec.md §2-3)이 피부 축만 쓴다.
+SEGMENT_TYPES = ("skin_type", "skin_tone")
+CROSS_SEGMENT_TYPE = "skin_type_x_skin_tone"
+
+# 값이 아니라 결측이다 (persona-schema.md §3). segment_value 로 새면
+# "모르겠다" 가 하나의 고객군으로 잡힌다.
+MISSING_SEGMENT_VALUES = ("notSureST",)
+
+
+def load_persona_segments(spark: Any, path: str) -> Any:
+    """bridge_persona_segment JSONL 을 읽는다.
+
+    저장소에 커밋하지 않는 생성물이라 (`.gitignore` 의 ``data/``) 실행 전에
+    ``py contracts/persona/build_persona_tables.py --sample PC:all`` 로 만든다.
+    """
+
+    from pyspark.sql.types import StringType, StructField, StructType
+
+    schema = StructType([
+        StructField("persona_id", StringType(), True),
+        StructField("segment_type", StringType(), True),
+        StructField("segment_value", StringType(), True),
+    ])
+    return spark.read.schema(schema).json(path)
+
+
+def _persona_segments(bridge_df: Any) -> Any:
+    """bridge 를 단일 축 2종과 교차 축 1종으로 넓힌다.
+
+    교차 축을 따로 만드는 이유는 합산으로 구할 수 없기 때문이다. 건성·fair 셀의
+    세션 수는 건성 행과 fair 행 어디에도 없다.
+    """
+
+    from pyspark.sql import functions as F
+
+    base = bridge_df.where(
+        F.col("segment_type").isin(*SEGMENT_TYPES)
+        & F.col("segment_value").isNotNull()
+        & (F.length(F.trim(F.col("segment_value"))) > 0)
+        & ~F.col("segment_value").isin(*MISSING_SEGMENT_VALUES)
+    ).select("persona_id", "segment_type", "segment_value")
+
+    wide = base.groupBy("persona_id").pivot(
+        "segment_type", list(SEGMENT_TYPES)
+    ).agg(F.first("segment_value", ignorenulls=True))
+    cross = wide.where(
+        F.col("skin_type").isNotNull() & F.col("skin_tone").isNotNull()
+    ).select(
+        "persona_id",
+        F.lit(CROSS_SEGMENT_TYPE).alias("segment_type"),
+        F.concat_ws("|", F.col("skin_type"), F.col("skin_tone")).alias("segment_value"),
+    )
+    return base.unionByName(cross)
+
+
+def _persona_segment_daily_kpi(
+    product_fact_df: Any,
+    bridge_df: Any,
+    event_weights: dict[str, float] | None = None,
+) -> Any:
+    """피부 세그먼트별 브랜드 KPI.
+
+    브랜드 grain 이다. `product_id` 를 key 에 두면 세그먼트 합계를 낼 때 한 세션이
+    상품 수만큼 중복으로 세어진다 — `brand_daily_kpi` 가 `product_daily_kpi` 합산으로
+    만들어질 수 없는 것과 같은 이유다 (dw-schema.md §4.6).
+
+    `persona_id` 가 없는 세션은 어느 행에도 들어가지 않는다. 실제 사용자의 피부 정보는
+    이벤트 경로에 없으므로 임의 세그먼트에 귀속하면 없는 사실을 만들어 낸다. 그래서
+    세그먼트 행의 합은 `brand_daily_kpi` 전체와 같지 않고, 다른 것이 정상이다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
+    segments = _persona_segments(bridge_df)
+    events = product_fact_df.where(
+        _valid_brand()
+        & F.col("persona_id").isNotNull()
+        & (F.length(F.trim(F.col("persona_id"))) > 0)
+    ).join(segments, ["persona_id"], "inner")
+
+    key_columns = [
+        "event_date_kst", "brand_id", "segment_type", "segment_value", *EXECUTION_AXES
+    ]
+
+    def stage_sessions(condition: Any, alias: str) -> Any:
+        return F.countDistinct(
+            F.when(condition, F.col("session_id"))
+        ).cast("long").alias(alias)
+
+    is_detail = F.col("event_name").isin("product_view", "quick_look")
+    aggregations = [
+        F.countDistinct("user_id").cast("long").alias("segment_user_count"),
+        F.countDistinct("session_id").cast("long").alias("session_count"),
+        stage_sessions(F.col("event_name") == "product_impression", "impression_sessions"),
+        stage_sessions(F.col("event_name") == "quick_look", "quick_look_sessions"),
+        stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
+        stage_sessions(is_detail, "detail_view_sessions"),
+        stage_sessions(F.col("event_name") == "add_to_cart", "add_to_cart_sessions"),
+        stage_sessions(F.col("event_name") == "purchase", "purchase_sessions"),
+        F.countDistinct(
+            F.when(is_detail, F.col("product_id"))
+        ).cast("long").alias("product_count_viewed"),
+        F.current_timestamp().alias("mart_processed_at"),
+    ]
+    if event_weights:
+        interest = F.lit(0.0)
+        for event_name, weight in event_weights.items():
+            interest = interest + F.when(
+                F.col("event_name") == F.lit(event_name), F.lit(float(weight))
+            ).otherwise(F.lit(0.0))
+        aggregations.append(
+            F.sum(interest).cast("double").alias("interest_score")
+        )
+    else:
+        aggregations.append(F.lit(None).cast("double").alias("interest_score"))
+
+    result = events.groupBy(*key_columns).agg(*aggregations)
+    return (
+        result
+        # 담기·구매 분모는 상세를 연 세션이다 (§4.1·§4.14 와 같은 규칙).
+        .withColumn(
+            "view_to_cart_rate",
+            _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")),
+        )
+        .withColumn(
+            "view_to_purchase_rate",
+            _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")),
+        )
+        .withColumn(
+            "detail_entry_rate",
+            _safe_ratio(F.col("detail_view_sessions"), F.col("impression_sessions")),
+        )
+        # 관심도 평균의 분모는 세션 수다 (dw-schema.md §2.3).
+        .withColumn(
+            "avg_interest_score",
+            _safe_ratio(F.col("interest_score"), F.col("session_count")),
+        )
+        .drop("interest_score")
+    )
 
 
 PAYMENT_METHODS = ("kakaopay", "card", "test")
@@ -1849,6 +2017,7 @@ def build_mart_frames(
     purchase_reason_fact_df: Any | None = None,
     reason_trait_map: dict[str, Any] | None = None,
     repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS,
+    persona_bridge_df: Any | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -1861,6 +2030,10 @@ def build_mart_frames(
         ),
         "cross_brand_daily": _cross_brand_daily(sessionized_df),
     }
+    if persona_bridge_df is not None:
+        frames["persona_segment_daily_kpi"] = _persona_segment_daily_kpi(
+            product_fact_df, persona_bridge_df, event_weights
+        )
     if trait_contract is not None:
         # 장기 성향은 주입된 선호도 신호로 본다. 시드를 뺄지는 별도 결정 대기.
         frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
@@ -1977,6 +2150,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     purchase_reason_fact = spark.read.option("mergeSchema", "true").parquet(
         config.purchase_reason_fact_path
     )
+    persona_bridge = load_persona_segments(spark, config.persona_bridge_path)
     frames = build_mart_frames(
         sessionized,
         product_fact,
@@ -1996,6 +2170,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         purchase_reason_fact,
         reason_trait_map,
         config.repurchase_window_days,
+        persona_bridge,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -2010,6 +2185,11 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     )
     _write_mart(
         frames["brand_daily_kpi"], config.brand_daily_path, "event_date_kst"
+    )
+    _write_mart(
+        frames["persona_segment_daily_kpi"],
+        config.persona_segment_path,
+        "event_date_kst",
     )
     _write_mart(
         frames["product_repurchase_daily"],
