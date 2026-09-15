@@ -348,9 +348,14 @@ const localById = new Map<string, Product>([...seedProducts, ...sampleProducts].
  * 2,000건은 `review.order_item_id NOT NULL` 이라 백엔드에 들어갈 수 없어(시드 README §4) 정적으로만 있다.
  * 그래서 콘텐츠는 정적 사본을 쓰고, 백엔드가 주인인 값 — 가격·평점·brand_id — 을 덮어쓴다.
  *
- * **`source` 는 `backend` 로 둔다 (백엔드 지적 2026-09-15).** 예전에는 정적 사본의 `seed_catalog` 가 그대로 남았는데,
- * 그러면 백엔드에 실제로 있는 상품이 "백엔드에 없는 상품" 으로 보여 구매가 로컬 테스트 주문으로 떨어졌다.
- * 리뷰·피드백이 정적 경로를 타는 것은 `source` 가 아니라 각자의 조회 함수가 정하므로 영향이 없다.
+ * **`source` 는 정적 사본 값(`seed_catalog`)을 그대로 둔다.** 백엔드가 "병합 후 `backend` 로 바꿔 달라" 고 했는데
+ * (2026-09-15), 그렇게 하면 세포라 상품 리뷰가 통째로 사라진다 — `source === 'backend'` 인 상품은 상세가
+ * `GET /api/products/{id}/reviews` 를 읽는데 백엔드는 이 상품들에 빈 배열을 준다 (`review.order_item_id NOT NULL`
+ * 이라 세포라 리뷰 2,000건이 시드에 못 들어간다, 시드 README §4. 배포본으로 확인: P126301 은 백엔드 0건 · 정적 10건).
+ *
+ * 그리고 `source` 는 구매 경로를 막던 값이 **아니다.** `canCheckoutOnBackend` 는 `variant_id` 와 로그인만 본다.
+ * 막고 있던 것은 옵션이고, 그건 `ensureBackendDetail` 이 채운다. "이 상품이 백엔드에 있는가" 는 `backend_brand_id`
+ * 로 이미 알 수 있어서 `source` 를 겸업시킬 이유가 없다.
  *
  * 옵션(`variants`)은 목록 요약에 아예 없다 (`ProductSummary` 에 옵션 칸이 없다). 그래서 여기서는 채울 수 없고
  * `ensureBackendDetail` 이 상세를 받아 채운다. 정적 사본의 옵션에는 `variant_id` 가 없다 — 202개 중 0개다.
@@ -363,7 +368,6 @@ function mergeWithLocal(row: Product): Product {
     price_usd: row.price_usd > 0 ? row.price_usd : local.price_usd,
     rating: row.rating ?? local.rating,
     backend_brand_id: row.backend_brand_id,
-    source: 'backend',
   };
 }
 
@@ -388,7 +392,7 @@ function mergeDetailWithLocal(detail: Product): Product {
     sale_price_usd: detail.sale_price_usd ?? local.sale_price_usd ?? null,
     rating: detail.rating ?? local.rating,
     backend_brand_id: detail.backend_brand_id,
-    source: 'backend',
+    // `source` 는 정적 사본 값 유지 — 위 mergeWithLocal 주석 참고 (리뷰가 백엔드에 없다)
     // 콘텐츠 — 백엔드가 비면 정적 사본
     images: detail.images.length > 0 ? detail.images : local.images,
     description: detail.description ?? local.description,

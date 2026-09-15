@@ -552,7 +552,7 @@ export default function App() {
     const missing = cartItems.filter((i) => !i.variant_id);
     if (missing.length > 0) {
       setPaymentError(
-        `옵션 정보를 아직 받지 못한 상품이 있어 주문할 수 없습니다: ${missing.map((i) => i.product_name).join(', ')}. 상품 상세를 한 번 열었다 담아 주세요.`,
+        `옵션 정보를 아직 받지 못한 상품이 있어 주문할 수 없습니다: ${missing.map((i) => i.product_name).join(', ')}. 잠시 뒤 다시 담아 주세요.`,
       );
       return;
     }
