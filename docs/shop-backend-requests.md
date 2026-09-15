@@ -136,7 +136,7 @@ AI 파트 요청(고객 가입에서 피부 속성 4개를 받아야 추천의 �
 | 9-3 | `IdentityController.RegisterMember` · `Member` | `skinTypeCode`·`skinToneCode`·`hairColorCode`·`eyeColorCode` (nullable) 받기 | 지금은 Jackson 이 버려 NULL 저장. 추천 속성 친화도가 빠짐 | = 8번 |
 | 9-4 | `CatalogController.summary()` | 목록 `priceKrw` 가 `min(unitPrice)` = 할인가 ?? 정가. **정가**로 두고 `salePriceKrw` 를 따로 | 할인이 있으면 정가 자리에 할인가가 와 할인 표시가 영영 안 뜸 | 4번 + 의미 분리 |
 | 9-5 | `CatalogController.ProductRequest` | `size` (String, nullable) 받아 기본 옵션 `variant.size` 에 넣기 | 용량이 끝까지 사라짐. 프론트는 이미 `size` 를 보냄 | 신규 |
-| 9-6 | `ProductContract.usd()` | 환율 1,300 → **1,400** (계약 product-registration-spec §4.1 · 추천 서버와 같은 값) | `price_bin` 이 추천 서버와 어긋남 | 신규 |
+| 9-6 | `ProductContract.usd()` · `priceBin()` | **(2026-09-15 갱신, Jira 302)** 환율 대신 `priceKrw` 를 원화 경계 **26,000 / 46,000 / 66,000 / 105,000** 으로 자르고 토큰 `~26k / 26k-46k / 46k-66k / 66k-105k / 105k+` 로 저장. `usd()` 는 세포라 원천 표시용(`source_price_usd`)이 아니면 지운다 | 백엔드 1,300·추천 1,400 이라 47,000원이 35-50 / 20-35 로 갈렸음. 계약 §4.1 이 원화로 바뀜 | 갱신 |
 | 9-7 | `CommerceController` 주문·결제 응답 | `ShopOrder` 엔티티 대신 `{orderId, status, totalAmount, currency, paidAt, createdAt}` DTO | `requestHash`·`idempotencyKey` 가 응답에 노출됨. 프론트는 `orderId ?? id` 로 이미 우회 | 낮음 · 보안 정리 |
 | 9-8 | `brand` 시드 | 세포라 55개 브랜드를 **`brand_id` = 세포라 번호 문자열(예 `"6125"`), `name` = 브랜드명**으로 넣고 시연 판매자 계정에 연결 | dw 마트 `brand_id` 가 그 값이라 매핑 없이 대시보드가 붙음 (계약 0.2 §8-2) | 5·7번 확장 |
 | 9-9 | 대시보드 API | `GET /api/seller/dashboard/{overview·products·content·segments·ingredients·friction·purchase}` — 계약 0.2 (MR !196). projection 이 끝나면 overview·products·ingredients·purchase 네 개가 먼저 됨 | 행동 6화면이 모의 | = 7번 |

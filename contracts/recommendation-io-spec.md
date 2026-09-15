@@ -142,7 +142,7 @@ reviews_*.csv                                │
 
 | 소스 | 필드 |
 |---|---|
-| `batch/ingest/data/products_200.json` | `secondary_category`, `tertiary_category`, `highlights`, `price_usd`, `rating` |
+| `batch/ingest/data/products_200.json` | `secondary_category`, `tertiary_category`, `highlights`, `price_krw`(구간, Jira 302), `price_usd`(LTR `price_prox`), `rating` |
 | `contracts/product-feature-vocab.json` | 블록별 어휘·문서빈도·가중치 |
 
 ### 처리
@@ -1122,13 +1122,13 @@ POST /api/products            body = 등록 입력 1건 또는 배열 (product-r
   "secondary_category": "Treatments", "tertiary_category": "Exfoliators",
   "highlights": ["Pores", "Without Parabens"],
   "ingredients": "Water, Lactic Acid, …",       // 문자열 또는 문자열 배열
-  "price_krw": 30800                            // 또는 price_usd
+  "price_krw": 30800                            // 원화 그대로 구간 판정 (Jira 302). price_usd 만 오는 옛 형식도 받는다
 }
 ```
 
 | 단계 | 규칙 | 근거 |
 |---|---|---|
-| 파생 | `price_krw` → `price_usd` **고정 환율 1,400** · `rating` 카테고리 중앙값 주입(`rating_source=injected`) · `loves_count=0` | product-registration-spec §4 |
+| 파생 | `price_krw` **원화 그대로** 구간 판정(경계 26,000/46,000/66,000/105,000) · `price_usd` 는 1,340.86 환산 파생(LTR `price_prox` 용) · `rating` 카테고리 중앙값 주입(`rating_source=injected`) · `loves_count=0` | product-registration-spec §4 (2026-09-15, Jira 302) |
 | 검사 | `contracts/validate_product_registration.py` 의 `check()` 그대로. 위반이면 **422** `REGISTRATION_CONTRACT_VIOLATION` + 위반 목록, **한 건이라도 위반이면 배열 전체 거절** | 등록 폼과 같은 기준 |
 | 인코딩 | 어휘집(`product-feature-vocab.json`)으로 148차원. 어휘집 밖 브랜드는 brand 블록 0 벡터 | product-feature-spec |
 | 편입 | 콘텐츠 벡터·prior(0)·속성 친화도(중립 0.5)·CF 동시발생(0 행·열)·지지자(0) 를 한 행씩 늘리고 Recommender·LTR 피처를 재조립 | — |
@@ -1138,7 +1138,7 @@ POST /api/products            body = 등록 입력 1건 또는 배열 (product-r
 
 ```json
 { "registered": [ { "product_id": "SB000001", "brand_name": "SSAFY Beauty", "position_in_catalog": 200,
-                    "price_usd": 22.0, "rating": 4.461, "rating_source": "injected",
+                    "price_krw": 29500.0, "price_bin": "26k-46k", "price_usd": 22.0, "rating": 4.461, "rating_source": "injected",
                     "brand_in_vocab": false, "reserved_candidate": true, "action": "added", "warnings": [] } ],
   "products": 208, "registered_products": 8 }
 ```
@@ -1278,7 +1278,7 @@ r/200 → r/208 로 흔들리고, **그것만으로 트리 모델이 순위를 �
 | `concern` | 9종 | `product-feature-vocab.json` `concern` 블록 |
 | `ingredient` | 30종 | 〃 `ingredient` |
 | `clean` | 16종 | 〃 `clean` |
-| `price_bin` | 5구간 | 〃 `price_bin_edges` |
+| `price_bin` | 5구간 (`~26k` … `105k+`, 원화 경계) | 〃 `price_bin_edges` |
 | `category` | 8 / 19종 | 〃 `secondary` / `tertiary_category` |
 | `segment` | 20종 | `affinity_lift.csv` 의 세그먼트 (skin_type 4 · tone 5 · hair 5 · eye 5) |
 | `new_brand` | `null` | 전용 칸. 축이 아니라 자리 |

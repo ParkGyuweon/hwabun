@@ -51,18 +51,31 @@ class TestDerive(unittest.TestCase):
         self.assertEqual(x["rating_source"], "injected")
         self.assertEqual(x["rating"], self.medians["Exfoliators"])
 
-    def test_price_krw_to_usd_fixed_rate(self):
+    def test_price_krw_is_kept_as_is_and_bins_in_krw(self):
+        # 구간은 원화 그대로 판정한다 (Jira 302). 47,000원은 46,000 경계 위 → 46k-66k.
+        # 예전엔 환율 1,400 으로 $33.57 → 20-35 로 떨어져 백엔드(1,300 → 35-50)와 갈렸다.
         x = cr.derive({"product_name": "a", "brand_name": "B", "secondary_category": "Treatments",
                        "tertiary_category": "Face Serums", "ingredients": "Water",
-                       "price_krw": 28000}, self.medians, self.overall)
-        self.assertAlmostEqual(x["price_usd"], 28000 / cr.KRW_PER_USD, places=2)
+                       "price_krw": 47000}, self.medians, self.overall)
+        self.assertEqual(x["price_krw"], 47000.0)
+        self.assertEqual(Encoder().price_bin_label(x), "46k-66k")
+        # price_usd 는 LTR price_prox·표시용 파생값 — 원천 카탈로그와 같은 환율
+        self.assertAlmostEqual(x["price_usd"], round(47000 / cr.USD_KRW_SOURCE, 2), places=2)
+
+    def test_krw_edges_keep_every_source_product_in_its_usd_bin(self):
+        # 원화 경계는 200개 상품의 구간이 하나도 안 바뀌는 틈에 둔 값이어야 한다 (벡터 불변 조건)
+        e = Encoder()
+        usd_edges = [20, 35, 50, 80]
+        for p in e.products:
+            i = sum(p["price_usd"] >= u for u in usd_edges)
+            self.assertEqual(e.price_bin_label(p), e.blk["price_bin"]["vocab"][i], p["product_id"])
 
     def test_price_usd_only_fills_krw_even_when_krw_key_is_none(self):
         # pydantic model_dump 는 price_krw=None 을 명시적으로 넘긴다
         x = cr.derive({"product_name": "a", "brand_name": "B", "secondary_category": "Treatments",
                        "tertiary_category": "Face Serums", "ingredients": "Water",
                        "price_usd": 22, "price_krw": None}, self.medians, self.overall)
-        self.assertEqual(x["price_krw"], round(22 * cr.KRW_PER_USD))
+        self.assertEqual(x["price_krw"], 29500)          # 22 × 1,340.86 = 29,498.9 → 100원 반올림
         cr.validate(x, self.vocab, self.medians, self.overall)   # 계약 필수 price_krw 통과
 
     def test_all_ssafy_products_pass_contract(self):

@@ -196,7 +196,8 @@ class TestRegistration(unittest.TestCase):
         self.assertTrue(reg["reserved_candidate"])
         self.assertFalse(reg["brand_in_vocab"])
         self.assertEqual(reg["rating_source"], "injected")
-        self.assertAlmostEqual(reg["price_usd"], 30800 / rs.KRW_PER_USD, places=2)
+        self.assertEqual(reg["price_krw"], 30800.0)
+        self.assertEqual(reg["price_bin"], "26k-46k")          # 원화 경계 26,000 ≤ 30,800 < 46,000 (Jira 302)
         # 바로 다음 요청부터 전용 칸 후보다. 다른 테스트가 등록한 것까지 후보가 10개를 넘을 수
         # 있어(reserved 상한 10) 목록 포함 여부 대신 엔진의 신규 마스크로 확인한다
         self.assertTrue(client.get("/api/products/SB0TEST1").json()["reserved_candidate"])

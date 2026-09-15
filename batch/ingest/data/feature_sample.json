@@ -1,5 +1,5 @@
 {
-  "vocab_version": "0.6",
+  "vocab_version": "0.7",
   "n_dim": 148,
   "blocks": [
     {
@@ -128,7 +128,7 @@
         "price_bin": {
           "weight": 0.04,
           "values": {
-            "35-50": 0.04
+            "46k-66k": 0.04
           }
         },
         "rating": {
@@ -503,7 +503,7 @@
         "price_bin": {
           "weight": 0.04,
           "values": {
-            "35-50": 0.04
+            "46k-66k": 0.04
           }
         },
         "rating": {
@@ -881,7 +881,7 @@
         "price_bin": {
           "weight": 0.04,
           "values": {
-            "20-35": 0.04
+            "26k-46k": 0.04
           }
         },
         "rating": {
@@ -1255,7 +1255,7 @@
         "price_bin": {
           "weight": 0.04,
           "values": {
-            "20-35": 0.04
+            "26k-46k": 0.04
           }
         },
         "rating": {
@@ -1644,7 +1644,7 @@
         "price_bin": {
           "weight": 0.04,
           "values": {
-            "50-80": 0.04
+            "66k-105k": 0.04
           }
         },
         "rating": {
@@ -2026,7 +2026,7 @@
         "price_bin": {
           "weight": 0.04,
           "values": {
-            "35-50": 0.04
+            "46k-66k": 0.04
           }
         },
         "rating": {
