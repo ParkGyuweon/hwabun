@@ -63,7 +63,7 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 ```bash
 cd batch/serving
 python -m unittest test_recommend_server      # 32
-python -m unittest test_banners               # 18   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
+python -m unittest test_banners               # 20   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
 python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription   # 11·5·7·3·17 = 43
 python -m unittest test_live                  # 4    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
 ```

@@ -10,6 +10,24 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 # 어휘집은 계약, 상품 카탈로그는 수집 결과라 서로 다른 곳에 있다
 VOCAB = os.path.join(ROOT, "contracts", "product-feature-vocab.json")
 PRODUCTS = os.path.join(ROOT, "batch", "ingest", "data", "products_200.json")
+
+# 가격 구간(price_bin)은 **원화**로 판정한다 (Jira 302). 등록 상품은 원화로 들어오고, 세포라 원천
+# 200개는 products_200.json 의 price_krw(한국어화 카탈로그 products-ko.json 과 같은 값)를 읽는다.
+# 아래 환산은 price_krw 가 없는 옛 형식(price_usd 만 있는 시연 시드·테스트 픽스처)에만 쓴다.
+# 값은 products-ko.json _meta.usd_krw (2026-09-09 open.er-api) 와 같고 100원 반올림도 같다.
+USD_KRW_SOURCE = 1340.86
+KRW_ROUNDING = 100
+
+
+def price_krw_of(x):
+    """상품 기록 → 원화 가격. price_krw 가 정본, 없으면 price_usd 를 원천 환율로 환산(100원 반올림)"""
+    krw = x.get("price_krw")
+    if krw is not None:
+        return float(krw)
+    usd = x.get("price_usd")
+    if usd is None:
+        return None
+    return float(round(float(usd) * USD_KRW_SOURCE / KRW_ROUNDING) * KRW_ROUNDING)
 REVIEW_CONCERN = os.path.join(ROOT, "batch", "ingest", "data", "concern_from_reviews.npz")
 REVIEW_CONCERN_TOPK = 2
 
@@ -64,6 +82,15 @@ class Encoder:
         self.tex_set = set(self.blk["texture"]["vocab"])
         self.review_concern = self._load_review_concern(review_concern_path)
         self._rating_med = None      # 카테고리별 평점 중앙값 (등록 상품 기본값)
+
+    def price_bin_label(self, x):
+        """원화 가격 → 구간 토큰. 경계는 어휘집 `price_bin_edges`(원화, Jira 302).
+        인코더·export_features·banners·등록 응답이 전부 이 함수를 쓴다 — 구간 판정은 한 곳에서만."""
+        krw = price_krw_of(x)
+        if krw is None:
+            return None
+        pl = self.blk["price_bin"]["vocab"]
+        return pl[int(np.digitize(krw, self.edges[1:], right=False))]
 
     # ---------- 태그 분류 ----------
     def _load_review_concern(self, path):
@@ -225,9 +252,7 @@ class Encoder:
             if tok in iv:
                 v[j] = np.log(self.N / (1 + df[tok])) * iv[tok]
         raw["ingredient"] = v
-        pl = self.blk["price_bin"]["vocab"]
-        raw["price_bin"] = self._onehot(
-            pl[int(np.digitize(x["price_usd"], self.edges[1:], right=False))], "price_bin")
+        raw["price_bin"] = self._onehot(self.price_bin_label(x), "price_bin")
         raw["rating"] = np.array([self.rating_value(x)])
 
         # brand — 다음 구매에서 유지되는 속성 중 lift 가 압도적이다 (6.08x).
