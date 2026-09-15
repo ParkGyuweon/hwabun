@@ -61,13 +61,11 @@ def export_products(e, matrix, prior, path):
 
 
 def price_bin_of(e, product):
-    """어휘집 경계로 가격대 라벨을 정한다. 인코더와 같은 경계를 쓴다"""
-    price = float(product.get("price_usd") or 0)
-    labels = e.blk["price_bin"]["vocab"]
-    for label, edge in zip(labels, e.edges):
-        if price <= edge:
-            return label
-    return labels[-1]
+    """가격대 토큰 — 인코더 `price_bin_label` 그대로 (원화 경계, Jira 302).
+
+    예전엔 여기서 따로 계산했는데 `zip(labels, edges)` 가 한 칸 밀려 있어 product_feature.jsonl 의
+    price_bin 이 벡터와 달랐다 (~20 이 0개, 80+ 가 82개). 판정은 인코더 한 곳에서만 한다."""
+    return e.price_bin_label(product) or e.blk["price_bin"]["vocab"][-1]
 
 
 def export_affinity(path):

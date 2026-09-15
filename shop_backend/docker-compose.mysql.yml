@@ -14,7 +14,7 @@ services:
     volumes:
       - shop-backend-mysql-data:/var/lib/mysql
       - ./mysql-erd.sql:/docker-entrypoint-initdb.d/001-mysql-erd.sql:ro
-      - ./contracts-data-dump.sql:/docker-entrypoint-initdb.d/002-contracts-data-dump.sql:ro
+      - ./seed/shop_backend_seed.sql:/docker-entrypoint-initdb.d/002-shop-backend-seed.sql:ro
     networks:
       - shop-backend-db
     healthcheck:

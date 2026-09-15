@@ -38,7 +38,11 @@ public class IdentityController {
   public record RegisterMember(
     @Email @NotBlank String email,
     @NotBlank @Size(min = 8) String password,
-    @NotBlank String nickname
+    @NotBlank String nickname,
+    @Size(max = 32) String skinTypeCode,
+    @Size(max = 32) String skinToneCode,
+    @Size(max = 32) String hairColorCode,
+    @Size(max = 32) String eyeColorCode
   ) {}
 
   public record RegisterSeller(
@@ -73,6 +77,10 @@ public class IdentityController {
     m.setEmail(r.email());
     m.setNickname(r.nickname());
     m.setPasswordHash(encoder.encode(r.password()));
+    m.setSkinTypeCode(r.skinTypeCode());
+    m.setSkinToneCode(r.skinToneCode());
+    m.setHairColorCode(r.hairColorCode());
+    m.setEyeColorCode(r.eyeColorCode());
     members.save(m);
     return ResponseEntity.status(HttpStatus.CREATED).body(
       response(

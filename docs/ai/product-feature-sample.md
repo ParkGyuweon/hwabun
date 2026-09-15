@@ -1,6 +1,6 @@
 # Product Feature 샘플 — 실제 상품 6개
 
-> 어휘집 `0.6` · 콘텐츠 벡터 148차원
+> 어휘집 `0.7` · 콘텐츠 벡터 148차원
 > 원본 데이터: [`batch/ingest/data/feature_sample.json`](../../batch/ingest/data/feature_sample.json) (벡터 전체 값 포함)
 > **이 문서는 생성물입니다.** 고칠 일이 있으면 `batch/ingest/build_feature_sample.py` 를 고치고 다시 실행하세요.
 
@@ -58,7 +58,7 @@
 | `ingredient` | 0.27 | `Green Tea` 0.0438, `Lactic Acid` 0.1378, `AHA/Glycolic Acid` 0.1731, `Salicylic Acid` 0.1484 |
 | `clean` | 0.06 | `Vegan` 0.035, `Without Parabens` 0.0487 |
 | `texture` | 0.02 | (없음) |
-| `price_bin` | 0.04 | `35-50` 0.04 |
+| `price_bin` | 0.04 | `46k-66k` 0.04 |
 | `rating` | 0.02 | `rating` 0.02 |
 | `brand` | 0.6 | `5674` 0.6 |
 

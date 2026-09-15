@@ -4,7 +4,7 @@
     판매자 등록 → 쇼핑몰 백엔드 승인 → POST /api/products (이 서버) → 다음 요청부터 추천 후보
 
 계약 `contracts/product-registration-spec.md` 의 입력 필드를 받아 §4 파생값을 채우고
-(price_krw→price_usd 고정 환율 · rating 카테고리 중앙값 주입 · loves_count 0),
+(price_krw 원화 그대로 구간 판정 · rating 카테고리 중앙값 주입 · loves_count 0),
 `contracts/validate_product_registration.py` 의 검사를 그대로 통과시킨 뒤
 어휘집으로 인코딩한다. 어휘집 밖 브랜드는 brand 블록이 0 벡터가 되고, 지지자 0 이라
 `Recommender.new_mask()` 가 곧바로 전용 칸(reserved) 후보로 본다.
@@ -34,13 +34,10 @@ sys.path.insert(0, os.path.join(ROOT, "contracts"))
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 
 import validate_product_registration as vpr          # noqa: E402
+from product_encoder import USD_KRW_SOURCE, price_krw_of  # noqa: E402
 
 REGISTERED_PATH = os.path.join(ROOT, "batch", "ingest", "data", "serving",
                                "registered_products.jsonl")
-
-# 계약 §4.1 — 등록 시점 고정 환율. 구간 경계가 넓어(0/20/35/50/80 USD) ±10% 오차로
-# 구간이 바뀌는 상품은 드물다. 실시간 조회는 하지 않는다.
-KRW_PER_USD = 1400.0
 
 INPUT_FIELDS = ("product_id", "product_name", "brand_name", "brand_id",
                 "secondary_category", "tertiary_category", "highlights",
@@ -75,13 +72,17 @@ def derive(inp: dict, medians=None, overall=None) -> dict:
     # 인코더는 `ingredients` 를 문자열 리스트로 읽고 join 한다. 문자열 하나로 와도 받는다
     x["ingredients"] = [ing] if isinstance(ing, str) else list(ing)
 
-    # §4.1 가격
-    if x.get("price_usd") is None and inp.get("price_krw") is not None:
-        x["price_usd"] = round(float(inp["price_krw"]) / KRW_PER_USD, 2)
-    if x.get("price_usd") is not None:
-        x["price_usd"] = float(x["price_usd"])
-        if x.get("price_krw") is None:          # pydantic 이 None 을 명시적으로 넘겨도 채운다
-            x["price_krw"] = round(x["price_usd"] * KRW_PER_USD)
+    # §4.1 가격 — 구간(price_bin)은 **원화 그대로** 판정한다 (Jira 302). 환율은 구간에 관여하지 않는다.
+    # price_usd 만 온 옛 형식(시연 시드)은 원천 카탈로그와 같은 환산(1,340.86·100원 반올림)으로 원화를 채운다.
+    # price_usd 는 LTR `price_prox`(원천 200개와 같은 자리에서 비교)와 표시용 파생값으로만 남는다.
+    if inp.get("price_krw") is not None:
+        x["price_krw"] = float(inp["price_krw"])
+    elif inp.get("price_usd") is not None:      # pydantic 이 price_krw=None 을 명시적으로 넘겨도 채운다
+        x["price_krw"] = price_krw_of({"price_usd": inp["price_usd"]})
+    if inp.get("price_usd") is not None:
+        x["price_usd"] = float(inp["price_usd"])
+    elif x.get("price_krw") is not None:
+        x["price_usd"] = round(x["price_krw"] / USD_KRW_SOURCE, 2)
 
     # §4.2 rating 주입 — 실측이 있으면 observed 로 둔다
     if inp.get("rating") is not None:
@@ -217,7 +218,7 @@ def _main(argv):
         warns = validate(x, vocab, medians, overall)
         tag = "있음" if x["product_id"] in have else "신규"
         print(f"{x['product_id']}  {x['brand_name']}  {x['secondary_category']}/{x['tertiary_category']}"
-              f"  ${x['price_usd']}  rating {x['rating']:.3f}({x['rating_source']})  [{tag}]")
+              f"  {x['price_krw']:,.0f}원  rating {x['rating']:.3f}({x['rating_source']})  [{tag}]")
         for w in warns:
             print("   ⚠", w)
         if tag == "신규" and not a.dry_run:

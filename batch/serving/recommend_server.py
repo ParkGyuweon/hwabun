@@ -51,7 +51,7 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
         {"product_id":"SB000001","product_name":"…","brand_name":"SSAFY Beauty",
          "secondary_category":"Treatments","tertiary_category":"Exfoliators",
          "highlights":["Pores"],"ingredients":"Water, Lactic Acid, …","price_krw":30800}
-    → §4 파생(price_usd·rating 주입·loves 0) → 계약 검사(422) → 인코딩 → 즉시 카탈로그 편입
+    → §4 파생(price_bin 원화 판정·rating 주입·loves 0) → 계약 검사(422) → 인코딩 → 즉시 카탈로그 편입
     → `batch/ingest/data/serving/registered_products.jsonl` 에 남아 재시작 후에도 유지
     시연 브랜드 SSAFY Beauty 8개는 이 파일에 미리 들어 있다 (catalog_registry.py 로 변환).
     DELETE /api/products/{id}  판매 중단 — 후보에서 즉시 제외, 재등록하면 복귀 (Jira 219)
@@ -100,7 +100,7 @@ from product_encoder import Encoder, brand_key                 # noqa: E402  (br
 from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
                          Recommender, load_cooc, schedule_for)
 from user_vector import UserVector                             # noqa: E402
-from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive,  # noqa: E402
+from catalog_registry import (Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
@@ -322,7 +322,8 @@ class Engine:
         for x in derived:
             i = self.index[x["product_id"]]
             out.append({"product_id": x["product_id"], "brand_name": x["brand_name"],
-                        "position_in_catalog": i, "price_usd": x["price_usd"],
+                        "position_in_catalog": i, "price_krw": x["price_krw"],
+                        "price_bin": self.enc.price_bin_label(x), "price_usd": x["price_usd"],
                         "rating": x["rating"], "rating_source": x["rating_source"],
                         "brand_in_vocab": brand_key(x) in self.known,
                         "reserved_candidate": bool(is_new[i]),
@@ -459,14 +460,14 @@ class Engine:
                 b["product_source"] = self.products[b.pop("_row")].get("product_source", "seed_catalog")
             if hero_row is not None:
                 hp = self.products[hero_row]
-                hero = self.planner.hero_for(hp["product_id"], traits)
+                hero = self.planner.hero_for(hp["product_id"], traits, tuple(axes))     # axes 순서 우선 (Jira 304)
                 hr = self.reasons(persona, st, rows_seed, [(hero_row, True)], is_new)[0]
                 hero.update({"hero_policy": "new_brand", "reserved": True,
                              "product_name": hp.get("product_name"), "brand_name": hp.get("brand_name"),
                              "score": round(float(s_b[hero_row]), 4), "reason": pick_reason(hr),
                              "product_source": hp.get("product_source", "seed_catalog")})
             elif items:
-                hero = self.planner.hero_for(items[0]["product_id"], traits)
+                hero = self.planner.hero_for(items[0]["product_id"], traits, tuple(axes))
                 # 'new_brand' 를 요청했는데 신규 상품이 없으면 top 으로 돌아간 것 — 응답에 그대로 적는다
                 hero["hero_policy"] = "top"
         ms = (time.perf_counter() - t0) * 1000
@@ -720,7 +721,7 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
 
 
 class ProductRegistration(BaseModel):
-    """계약 product-registration-spec 입력. price_krw 또는 price_usd 중 하나."""
+    """계약 product-registration-spec 입력. price_krw(원화, 정본). price_usd 만 오는 옛 형식도 받는다."""
     product_id: Optional[str] = None
     product_name: str
     brand_name: str

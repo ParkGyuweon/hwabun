@@ -209,7 +209,9 @@ price = np.array([x["price_usd"] for x in d], dtype=float)
 loves = np.array([x["loves_count"] for x in d], dtype=float)
 rating = np.array([x["rating"] for x in d], dtype=float)
 
-PRICE_EDGES = [0, 20, 35, 50, 80]
+# 원화 경계 (Jira 302). 200개 상품의 구간이 하나도 안 바뀌는 틈에 둔 둥근 값 —
+# $20 정가는 26,800원, 그 아래 구간 최고가는 25,500원이라 26,000 이 둘을 갈라 놓는다 (46,000·66,000·105,000 도 같은 식).
+PRICE_EDGES = [0, 26000, 46000, 66000, 105000]
 BLOCKS = [
     ("secondary_category", "one_hot", 0.06,
      sorted({x["secondary_category"] for x in d})),
@@ -224,7 +226,7 @@ BLOCKS = [
     ("texture", "multi_hot_idf", 0.02,
      [k for k, v in counts["texture"].most_common() if v >= MIN_FREQ]),
     ("price_bin", "one_hot", 0.04,
-     ["~20", "20-35", "35-50", "50-80", "80+"]),
+     ["~26k", "26k-46k", "46k-66k", "66k-105k", "105k+"]),
     # brand: 다음 구매에서 유지되는 속성 중 lift 가 압도적이다 (6.08x, 2위 price_bin 1.30x).
     # 어휘집에는 카탈로그에 실재하는 브랜드만 담는다 -> 신규 브랜드는 영벡터가 된다.
     ("brand", "one_hot", 0.60,
@@ -248,7 +250,7 @@ for name, _, _, vocab in BLOCKS:
         df[name] = {t: int(counts[name][t]) for t in vocab}
 
 spec = {
-    "version": "0.6",
+    "version": "0.7",
     "generated_from": "batch/ingest/data/products_200.json",
     "n_products": N,
     "min_tag_freq": MIN_FREQ,
@@ -318,6 +320,10 @@ spec = {
     "price_bin_edges": PRICE_EDGES,
     "total_content_dim": sum(len(v) for _, _, _, v in BLOCKS) + 1,
     "changelog": [
+        {"version": "0.7",
+         "change": "price_bin 을 원화로 판정 (Jira 302). 경계 [0,26000,46000,66000,105000] KRW, 토큰 ~26k/26k-46k/46k-66k/66k-105k/105k+. "
+                   "200개 상품의 구간이 하나도 안 바뀌는 틈에 둔 값이라 벡터·LTR·홀드아웃 불변. 인코더는 products_200.json price_krw 를 읽는다.",
+         "why": "등록은 원화인데 구간이 USD 라 프론트·백엔드·추천 환율이 셋으로 갈렸다. 데이터를 원화로 두면 환율이 사라진다."},
         {"version": "0.6",
          "change": "brand 블록 vocab 의 키를 brand_name -> brand_id 문자열로 (labels 에 이름). 55개 1:1 이라 "
                    "원천 200개 벡터는 값이 한 자리도 안 바뀐다 (2026-09-11, Jira 247)",
