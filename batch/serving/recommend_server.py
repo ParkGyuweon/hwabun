@@ -51,7 +51,7 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
         {"product_id":"SB000001","product_name":"…","brand_name":"SSAFY Beauty",
          "secondary_category":"Treatments","tertiary_category":"Exfoliators",
          "highlights":["Pores"],"ingredients":"Water, Lactic Acid, …","price_krw":30800}
-    → §4 파생(price_usd·rating 주입·loves 0) → 계약 검사(422) → 인코딩 → 즉시 카탈로그 편입
+    → §4 파생(price_bin 원화 판정·rating 주입·loves 0) → 계약 검사(422) → 인코딩 → 즉시 카탈로그 편입
     → `batch/ingest/data/serving/registered_products.jsonl` 에 남아 재시작 후에도 유지
     시연 브랜드 SSAFY Beauty 8개는 이 파일에 미리 들어 있다 (catalog_registry.py 로 변환).
     DELETE /api/products/{id}  판매 중단 — 후보에서 즉시 제외, 재등록하면 복귀 (Jira 219)
@@ -100,7 +100,7 @@ from product_encoder import Encoder, brand_key                 # noqa: E402  (br
 from recommender import (CF_MIN_SUPPORT, LAMBDA_MMR, RESERVED,  # noqa: E402
                          Recommender, load_cooc, schedule_for)
 from user_vector import UserVector                             # noqa: E402
-from catalog_registry import (KRW_PER_USD, Registry, RegistrationError, derive,  # noqa: E402
+from catalog_registry import (Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
@@ -108,6 +108,7 @@ from live_stats import LiveStats, LIVE_HTML                            # noqa: E
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
+from user_trait import UserTraitStore                                  # noqa: E402  (Jira 306 장기 성향)
 import validate_product_registration as vpr                    # noqa: E402
 
 # 히어로 정책 (2026-09-10, Jira 237). top = items[0] (계약 원안) · new_brand = 신규 상품 중 점수 최고.
@@ -118,6 +119,10 @@ HERO_POLICIES = ("top", "new_brand")
 # 운영 중 갱신되는 값이 없어 한 번 신규면 영영 신규였다 — 오프라인 평가 스크립트는 여전히 그 규칙을 쓴다.
 # NEW_BRAND_ALWAYS_PREFIX 에 걸리는 product_id 는 기간과 무관하게 신규로 둔다. 배포는 "SB"(시연 브랜드 SSAFY Beauty 8개,
 # 2026-09-14 결정, Jira 249) — 09-23 에 14일이 지나도 히어로 new_brand 후보에서 빠지지 않게. 오프라인 평가는 비움.
+# 장기 성향(user_trait_daily) — 응답 long_term_trait (Jira 306). dw MySQL(DW_MYSQL_HOST) → 스냅샷 파일 → 없음(null).
+# 시작 때 한 번 읽고 USER_TRAIT_RELOAD_SEC(기본 300)마다 다시 읽는다. 요청당 조회는 딕셔너리 한 번.
+_user_traits = UserTraitStore()
+
 NEW_BRAND_DAYS = float(os.environ.get("NEW_BRAND_DAYS", "14"))
 NEW_BRAND_ALWAYS_PREFIX = tuple(p for p in os.environ.get("NEW_BRAND_ALWAYS_PREFIX", "").split(",") if p.strip())
 
@@ -174,7 +179,10 @@ class Engine:
         self._vocab = vpr.load_vocab()
         self._medians, self._overall = vpr.rating_reference()
         records, inactive = self.registry.load_ops()
-        self._append(records, persist=False)
+        _, _, kept = self._append(records, persist=False)
+        if kept:                                   # 오염된 파일(Jira 308 이전에 원천 id 가 append 된 것) 방어
+            print(f"[registry] 원천 id {len(kept)}행은 무시했다 — /data 의 registered_products.jsonl 정리 권장", flush=True)
+        self.seed_rows_ignored = len(kept)
         # 비활성(판매 중단) 상품 — 후보에서만 빠진다. 벡터·행은 남아 기존 순위 계산이 안 흔들린다 (Jira 219)
         self.inactive: set[str] = {g for g in inactive if g in self.index}
         self.planner = BannerPlanner(self.enc, self.products, self.index)   # §5-1 hero·banners (Jira 218)
@@ -215,12 +223,25 @@ class Engine:
                                ltr=ltr[0] if ltr else None, ltr_feat=feat)
 
     # ── 등록 상품 편입 (Jira 216) ───────────────────────────────────────────
+    def is_seed(self, product_id) -> bool:
+        """원천 카탈로그(products_200) 상품인가 — 앞 n_seed 행. 등록·동기화·파일 재생이 이 행을 바꾸면 안 된다"""
+        i = self.index.get(product_id)
+        return i is not None and i < self.n_seed
+
     def _append(self, records, persist=True):
-        """파생값까지 채워진 상품 기록들을 카탈로그 뒤에 붙인다. 이미 있는 id 는 그 행을 갈아 끼운다"""
-        new_rows, replaced = [], []
+        """파생값까지 채워진 상품 기록들을 카탈로그 뒤에 붙인다. 이미 있는 **등록** id 는 그 행을 갈아 끼운다.
+
+        **원천 200개 id 는 건드리지 않는다** (Jira 308). 쇼핑몰 백엔드 목록에는 세포라 원천도 시드로 들어 있어
+        카탈로그 동기화가 그 id 를 등록 입력으로 보내는데, 갈아 끼우면 loves 0·rating 주입·registered_at 지금이 되어
+        208개 전부가 "신규" 로 잡히고 인기 순위 피처가 학습 때와 달라진다 (EC2 실측 09-15: replaced 203).
+        돌려주는 것: (added, replaced, kept)"""
+        new_rows, replaced, kept = [], [], []
         for x in records:
-            v = np.asarray(self.enc.encode(x), np.float32)
             gid = x["product_id"]
+            if self.is_seed(gid):
+                kept.append(gid)
+                continue
+            v = np.asarray(self.enc.encode(x), np.float32)
             if gid in self.index:
                 i = self.index[gid]
                 self.V[i] = v
@@ -249,8 +270,9 @@ class Engine:
             self.planner.grow([x for x, _ in new_rows])
         if persist:
             for x in records:
-                self.registry.append(x)
-        return [x["product_id"] for x, _ in new_rows], replaced
+                if x["product_id"] not in kept:
+                    self.registry.append(x)
+        return [x["product_id"] for x, _ in new_rows], replaced, kept
 
     def deactivate(self, product_id):
         """판매 중단 — 추천 후보에서 즉시 빠진다. 재등록(POST)하면 돌아온다"""
@@ -314,15 +336,25 @@ class Engine:
             x = derive(inp, self._medians, self._overall)
             warnings[x["product_id"]] = validate(x, self._vocab, self._medians, self._overall)
             derived.append(x)
-        added, replaced = self._append(derived)
+        added, replaced, kept = self._append(derived)
         for x in derived:
             self.inactive.discard(x["product_id"])          # 다시 등록하면 재활성
         is_new = self.new_mask()
         out = []
         for x in derived:
             i = self.index[x["product_id"]]
+            if x["product_id"] in kept:                      # 원천 상품 — 그대로 둔다 (Jira 308)
+                p = self.products[i]
+                out.append({"product_id": x["product_id"], "brand_name": p.get("brand_name"),
+                            "position_in_catalog": i, "price_krw": p.get("price_krw"),
+                            "price_bin": self.enc.price_bin_label(p), "price_usd": p.get("price_usd"),
+                            "rating": p.get("rating"), "rating_source": "observed",
+                            "brand_in_vocab": brand_key(p) in self.known, "reserved_candidate": False,
+                            "action": "seed_kept", "warnings": warnings[x["product_id"]]})
+                continue
             out.append({"product_id": x["product_id"], "brand_name": x["brand_name"],
-                        "position_in_catalog": i, "price_usd": x["price_usd"],
+                        "position_in_catalog": i, "price_krw": x["price_krw"],
+                        "price_bin": self.enc.price_bin_label(x), "price_usd": x["price_usd"],
                         "rating": x["rating"], "rating_source": x["rating_source"],
                         "brand_in_vocab": brand_key(x) in self.known,
                         "reserved_candidate": bool(is_new[i]),
@@ -459,14 +491,14 @@ class Engine:
                 b["product_source"] = self.products[b.pop("_row")].get("product_source", "seed_catalog")
             if hero_row is not None:
                 hp = self.products[hero_row]
-                hero = self.planner.hero_for(hp["product_id"], traits)
+                hero = self.planner.hero_for(hp["product_id"], traits, tuple(axes))     # axes 순서 우선 (Jira 304)
                 hr = self.reasons(persona, st, rows_seed, [(hero_row, True)], is_new)[0]
                 hero.update({"hero_policy": "new_brand", "reserved": True,
                              "product_name": hp.get("product_name"), "brand_name": hp.get("brand_name"),
                              "score": round(float(s_b[hero_row]), 4), "reason": pick_reason(hr),
                              "product_source": hp.get("product_source", "seed_catalog")})
             elif items:
-                hero = self.planner.hero_for(items[0]["product_id"], traits)
+                hero = self.planner.hero_for(items[0]["product_id"], traits, tuple(axes))
                 # 'new_brand' 를 요청했는데 신규 상품이 없으면 top 으로 돌아간 것 — 응답에 그대로 적는다
                 hero["hero_policy"] = "top"
         ms = (time.perf_counter() - t0) * 1000
@@ -488,7 +520,10 @@ class Engine:
                 # 신규 상품이 카탈로그에 없으면 0 이고 그 칸은 일반 순위 — 설계된 동작
                 "reserved_filled": (sum(1 for b in banners if b["reserved"]) if banners is not None
                                     else sum(1 for it in items if it["reserved"])),
-                "items": items, "latency_ms": round(ms, 2)}
+                "items": items, "latency_ms": round(ms, 2),
+                # 장기 성향 5종 점수 + primary (Jira 306). 회원은 identity_scope=account, 시뮬레이터는 persona.
+                # 마트 행이 없으면 null — 프론트는 세션 성향만으로 간다 (long_term_blend_weight 미적용)
+                "long_term_trait": _user_traits.get(persona_id)}
         if banners is not None:
             body.update({"banner_slots": int(banner_slots), "axes": list(axes),
                          "banner_list_id": "banner_row", "hero": hero, "banners": banners,
@@ -577,6 +612,10 @@ def _startup():
             threading.Thread(target=_sync_loop, daemon=True, name="catalog-sync").start()
             print(f"[catalog-sync] {SHOP_BACKEND_URL} 를 {CATALOG_SYNC_INTERVAL}초마다 읽는다", flush=True)
     get_engine()
+    try:
+        _user_traits.load()                    # 장기 성향 표 (Jira 306). 없어도 기동한다
+    except Exception as ex:
+        print(f"[user-trait] 첫 적재 실패: {ex.__class__.__name__}: {ex}", flush=True)
 
 
 @app.get("/live/stats")
@@ -684,6 +723,7 @@ def health():
                               "last": ({k: (len(v) if isinstance(v, (list, dict)) else v)
                                         for k, v in _last_sync.items()} if _last_sync else None)}
                              if SHOP_BACKEND_URL else None),
+            "user_trait": _user_traits.health(),                 # 장기 성향 표 출처·행 수 (Jira 306)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
@@ -720,7 +760,7 @@ def recommend(persona_id: Optional[str] = Query(None, description="없으면 익
 
 
 class ProductRegistration(BaseModel):
-    """계약 product-registration-spec 입력. price_krw 또는 price_usd 중 하나."""
+    """계약 product-registration-spec 입력. price_krw(원화, 정본). price_usd 만 오는 옛 형식도 받는다."""
     product_id: Optional[str] = None
     product_name: str
     brand_name: str

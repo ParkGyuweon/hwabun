@@ -355,5 +355,5 @@ optional" 은 벡터에 쓸 곳이 없으므로 **배너 표시용으로만** �
 | `banner_*` 2종 `event-schema.json` enum 등록, `hero_banner` section/entry enum | 데이터 |
 | `RankingService` (추천 API 서빙) | 백엔드 · AI |
 | 배너 반응 마트 `banner_daily`, 장기 성향 `user_trait_daily` | 데이터 |
-| 카테고리 가격 중앙값 (`price_bin` 이 KRW 로 바뀔 때 같이) | 데이터 |
+| 카테고리 가격 중앙값 — `price_bin` 은 2026-09-15 원화로 바뀜(Jira 302, 경계 26,000/46,000/66,000/105,000). 이벤트 `currency`·`price_usd`·`dim_product.currency` 를 원화로 옮길지는 데이터 결정 | 데이터 |
 | 사용자별 추천 결과 캐싱 정책 | 백엔드 |

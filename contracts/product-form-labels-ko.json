@@ -97,7 +97,7 @@
     }
   ],
   "_note": "화면은 ko, 서버로 보내는 값은 value. value 는 어휘집 문자열이라 한 글자도 바꾸면 안 된다. 이 파일은 batch/ingest/build_form_labels.py 가 만든다 — 직접 고치지 말 것",
-  "vocab_version": "0.6",
+  "vocab_version": "0.7",
   "highlights_groups": [
     {
       "group": "concern",
@@ -239,24 +239,24 @@
   ],
   "price_bin": [
     {
-      "value": "~20",
-      "ko": "2만원대 이하"
+      "value": "~26k",
+      "ko": "2.6만원 이하"
     },
     {
-      "value": "20-35",
-      "ko": "2~4만원대"
+      "value": "26k-46k",
+      "ko": "2.6~4.6만원"
     },
     {
-      "value": "35-50",
-      "ko": "4~6만원대"
+      "value": "46k-66k",
+      "ko": "4.6~6.6만원"
     },
     {
-      "value": "50-80",
-      "ko": "6~10만원대"
+      "value": "66k-105k",
+      "ko": "6.6~10.5만원"
     },
     {
-      "value": "80+",
-      "ko": "10만원대 이상"
+      "value": "105k+",
+      "ko": "10.5만원 이상"
     }
   ],
   "secondary_category": [

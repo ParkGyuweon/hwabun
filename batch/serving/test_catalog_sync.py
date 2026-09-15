@@ -87,10 +87,18 @@ class TestSync(unittest.TestCase):
     def test_add_skip_unchanged_update_and_deactivate(self):
         e = self.e
         n0 = len(e.products)
-        be = FakeBackend([summary("bk-1"), summary("bk-2", name="크림", sec="Moisturizers", ter="Moisturizers")])
+        seed_id = e.products[0]["product_id"]                 # 세포라 원천 — 백엔드 목록에도 시드로 있다 (Jira 308)
+        seed_before = dict(e.products[0])
+        be = FakeBackend([summary("bk-1"), summary("bk-2", name="크림", sec="Moisturizers", ter="Moisturizers"),
+                          summary(seed_id, name="백엔드가 부르는 이름")])
         r = cs.sync(e, "http://localhost:8090", opener=be, log=lambda m: None)
         self.assertIsNone(r["error"])
         self.assertEqual(sorted(r["added"]), ["bk-1", "bk-2"])
+        self.assertEqual(r["seed_kept"], 1)
+        self.assertEqual(r["replaced"], [])
+        self.assertEqual(e.products[0], seed_before)               # 원천 행 불변 (product_source·rating·loves)
+        self.assertFalse(e.new_flags()[0])
+        self.assertFalse(any(seed_id in u for u in be.calls if "/api/products/" in u))   # 원천은 상세도 안 부른다
         self.assertEqual(len(e.products), n0 + 2)
         self.assertEqual(e.products[e.index["bk-1"]]["sync_source"], "shop_backend")
         self.assertTrue(e.rec.new_mask()[e.index["bk-1"]])      # 어휘집 밖 브랜드 → 전용 칸 후보
@@ -107,7 +115,7 @@ class TestSync(unittest.TestCase):
         r3 = cs.sync(e, "http://localhost:8090", opener=be, log=lambda m: None)
         self.assertEqual(r3["replaced"], ["bk-1"])
         self.assertEqual(r3["unchanged"], 1)
-        self.assertAlmostEqual(e.products[e.index["bk-1"]]["price_usd"], 49000 / rs.KRW_PER_USD, places=2)
+        self.assertEqual(e.products[e.index["bk-1"]]["price_krw"], 49000.0)      # 원화 그대로 (Jira 302)
         # 목록에서 빠지면 판매 중단, 시연 시드(SSAFY)는 그대로
         be.products = [be.products[0]]
         r4 = cs.sync(e, "http://localhost:8090", opener=be, log=lambda m: None)
