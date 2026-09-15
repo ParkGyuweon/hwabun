@@ -83,7 +83,8 @@ def sync(engine, base_url: str, opener=None, timeout: float = 10.0, log=print) -
     base = base_url.rstrip("/").replace("://localhost", "://127.0.0.1")
     t0 = time.perf_counter()
     out = {"source": base, "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "listed": 0,
-           "added": [], "replaced": [], "unchanged": 0, "deactivated": [], "rejected": {}, "error": None}
+           "added": [], "replaced": [], "unchanged": 0, "seed_kept": 0, "deactivated": [], "rejected": {},
+           "error": None}
     try:
         listed = _get(opener, base + "/api/products", timeout)
     except Exception as ex:
@@ -106,6 +107,11 @@ def sync(engine, base_url: str, opener=None, timeout: float = 10.0, log=print) -
         if not pid:
             continue
         seen.add(pid)
+        # 세포라 원천 200개도 백엔드 시드로 목록에 있다 — 추천 카탈로그의 원천 행은 건드리지 않는다 (Jira 308).
+        # 상세도 부르지 않는다 (200회 절약). Engine._append 도 같은 이유로 원천 id 를 거른다(이중 방어)
+        if engine.is_seed(pid):
+            out["seed_kept"] += 1
+            continue
         # 상세는 전성분이 필요할 때만 (새 상품이거나 요약이 달라졌을 때) 부른다
         probe = to_registration(s, None)
         probe_hash = input_hash({k: v for k, v in probe.items() if k != "ingredients"})
@@ -143,6 +149,6 @@ def sync(engine, base_url: str, opener=None, timeout: float = 10.0, log=print) -
             out["deactivated"].append(pid)
 
     out["ms"] = round((time.perf_counter() - t0) * 1000, 1)
-    log(f"[catalog-sync] {base} 목록 {out['listed']} · 추가 {len(out['added'])} · 갱신 {len(out['replaced'])} · "
+    log(f"[catalog-sync] {base} 목록 {out['listed']} · 원천 유지 {out['seed_kept']} · 추가 {len(out['added'])} · 갱신 {len(out['replaced'])} · "
         f"그대로 {out['unchanged']} · 중단 {len(out['deactivated'])} · 거부 {len(out['rejected'])} · {out['ms']}ms")
     return out

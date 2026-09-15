@@ -43,6 +43,31 @@ PID = "PC00001"
 N_SEED = 200
 
 
+class TestSeedKept(unittest.TestCase):
+    """Jira 308 — 원천 200개 id 로 POST /api/products 가 와도 그 행은 바뀌지 않는다 (action seed_kept)"""
+
+    def test_registering_seed_id_keeps_row(self):
+        e = rs.get_engine()
+        p0 = e.products[0]
+        before = dict(p0)
+        body = {"product_id": p0["product_id"], "product_name": "덮어쓰기 시도", "brand_name": "X",
+                "brand_id": "x", "secondary_category": p0["secondary_category"],
+                "tertiary_category": p0["tertiary_category"], "highlights": ["Pores"],
+                "ingredients": "Water", "price_krw": 1000}
+        r = client.post("/api/products", json=body)
+        self.assertEqual(r.status_code, 201, r.text)
+        reg = r.json()["registered"][0]
+        self.assertEqual(reg["action"], "seed_kept")
+        self.assertEqual(reg["position_in_catalog"], 0)
+        self.assertFalse(reg["reserved_candidate"])
+        self.assertEqual(e.products[0], before)
+        self.assertEqual(e.products[0].get("product_source", "seed_catalog"), "seed_catalog")
+        self.assertFalse(e.new_flags()[0])
+        # 파일에도 남기지 않는다
+        with open(os.environ["REGISTERED_PRODUCTS_PATH"], encoding="utf-8") as f:
+            self.assertFalse(any(json.loads(l).get("product_id") == p0["product_id"] for l in f if l.strip()))
+
+
 class TestLongTermTrait(unittest.TestCase):
     """응답 최상위 long_term_trait (Jira 306) — 스냅샷에 있으면 5종 점수+primary, 없으면 null"""
 
