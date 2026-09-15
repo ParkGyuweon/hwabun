@@ -41,6 +41,9 @@ DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
 DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
+DEFAULT_CONTENT_DAILY_PATH = "data/marts/content_daily_kpi"
+DEFAULT_CONTENT_CONVERSION_PATH = "data/marts/content_conversion_daily"
+DEFAULT_BEHAVIOR_CONVERSION_PATH = "data/marts/behavior_conversion_daily"
 DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
 DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -96,6 +99,9 @@ class ValidatePipelineConfig:
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
     price_band_path: str = DEFAULT_PRICE_BAND_PATH
+    content_daily_path: str = DEFAULT_CONTENT_DAILY_PATH
+    content_conversion_path: str = DEFAULT_CONTENT_CONVERSION_PATH
+    behavior_conversion_path: str = DEFAULT_BEHAVIOR_CONVERSION_PATH
     brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
     commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -134,6 +140,9 @@ class ValidatePipelineConfig:
             "category_price_path": self.category_price_path,
             "persona_segment_path": self.persona_segment_path,
             "price_band_path": self.price_band_path,
+            "content_daily_path": self.content_daily_path,
+            "content_conversion_path": self.content_conversion_path,
+            "behavior_conversion_path": self.behavior_conversion_path,
             "brand_cohort_path": self.brand_cohort_path,
             "commons_cohort_path": self.commons_cohort_path,
             "banner_daily_path": self.banner_daily_path,
@@ -262,6 +271,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("BRAND_PRICE_BAND_DAILY_PATH", DEFAULT_PRICE_BAND_PATH),
     )
     parser.add_argument(
+        "--content-daily-path",
+        default=_env("CONTENT_DAILY_KPI_PATH", DEFAULT_CONTENT_DAILY_PATH),
+    )
+    parser.add_argument(
+        "--content-conversion-path",
+        default=_env("CONTENT_CONVERSION_DAILY_PATH", DEFAULT_CONTENT_CONVERSION_PATH),
+    )
+    parser.add_argument(
+        "--behavior-conversion-path",
+        default=_env("BEHAVIOR_CONVERSION_DAILY_PATH", DEFAULT_BEHAVIOR_CONVERSION_PATH),
+    )
+    parser.add_argument(
         "--brand-cohort-path",
         default=_env("BRAND_COHORT_DIM_PATH", DEFAULT_BRAND_COHORT_PATH),
     )
@@ -320,6 +341,9 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         category_price_path=args.category_price_path,
         persona_segment_path=args.persona_segment_path,
         price_band_path=args.price_band_path,
+        content_daily_path=args.content_daily_path,
+        content_conversion_path=args.content_conversion_path,
+        behavior_conversion_path=args.behavior_conversion_path,
         brand_cohort_path=args.brand_cohort_path,
         commons_cohort_path=args.commons_cohort_path,
         banner_daily_path=args.banner_daily_path,
@@ -541,6 +565,9 @@ def validate_frames(
     banner_daily = frames["banner_daily"]
     user_trait_daily = frames["user_trait_daily"]
     cross_brand_daily = frames["cross_brand_daily"]
+    content_daily = frames["content_daily"]
+    content_conversion = frames["content_conversion"]
+    behavior_conversion = frames["behavior_conversion"]
 
     counts = {
         "raw": raw.count(),
@@ -2024,6 +2051,193 @@ def validate_frames(
             invalid_cohort_keys == 0,
             f"invalid_rows={invalid_cohort_keys}",
         ))
+    # ── E3 콘텐츠 Mart (dw-schema §4.4·§4.19·§4.20) ────────────────────────
+    # Event 목록은 Mart 가 정본이다. 여기에 복제하면 조용히 갈라진다.
+    try:
+        from .build_marts_job import (
+            CONVERSION_BEHAVIOR_EVENTS,
+            _behavior_conversion_daily,
+            _content_conversion_daily,
+            _content_daily_kpi,
+        )
+    except ImportError:
+        from build_marts_job import (
+            CONVERSION_BEHAVIOR_EVENTS,
+            _behavior_conversion_daily,
+            _content_conversion_daily,
+            _content_daily_kpi,
+        )
+
+    counts["content_daily_kpi"] = content_daily.count()
+    counts["content_conversion_daily"] = content_conversion.count()
+    counts["behavior_conversion_daily"] = behavior_conversion.count()
+
+    content_key = [
+        "event_date_kst", "brand_id", "product_id", "section_id", "content_kind",
+        *EXECUTION_AXES,
+    ]
+    checks.append(_check(
+        "content_daily_grain_is_unique",
+        _duplicate_count(content_daily, content_key) == 0,
+        "content_daily_kpi grain=date+brand+product+section+content_kind+축",
+    ))
+    checks.append(_check(
+        "content_conversion_grain_is_unique",
+        _duplicate_count(content_conversion, [
+            "event_date_kst", "brand_id", "product_id", "content_kind",
+            *EXECUTION_AXES,
+        ]) == 0,
+        "content_conversion_daily grain=date+brand+product+content_kind+축",
+    ))
+    checks.append(_check(
+        "behavior_conversion_grain_is_unique",
+        _duplicate_count(behavior_conversion, [
+            "event_date_kst", "brand_id", "product_id", "event_name",
+            *EXECUTION_AXES,
+        ]) == 0,
+        "behavior_conversion_daily grain=date+brand+product+event_name+축",
+    ))
+
+    # §4.4 — 플랫폼 목록 섹션은 상품 KPI 에 섞이지 않는다. 재생 데이터에서
+    # content_interest_fact 의 67% 가 product_id NULL 이라 빠짐없이 걸러야 한다.
+    platform_rows = content_daily.where(
+        F.col("product_id").isNull() | (F.length(F.trim(F.col("product_id"))) == 0)
+        | F.col("brand_id").isNull()
+    ).count()
+    checks.append(_check(
+        "content_daily_excludes_platform_sections",
+        platform_rows == 0,
+        f"leaked_rows={platform_rows}",
+    ))
+
+    invalid_content_counts = content_daily.where(
+        (F.col("section_view_sessions") > F.col("section_view_count"))
+        | (F.col("section_view_sessions") < 0)
+        | (F.col("dwell_ms_sum") < 0)
+        | (F.col("matched_ingredient_count") < 0)
+        # 분자는 분모 모집단으로 제한돼 있다 (§4.4)
+        | (F.col("ingredient_view_sessions") > F.col("product_view_sessions"))
+        | (F.col("review_view_sessions") > F.col("product_view_sessions"))
+    ).count()
+    checks.append(_check(
+        "content_daily_counts_are_bounded",
+        invalid_content_counts == 0,
+        f"invalid_rows={invalid_content_counts}; 세션 <= 조회수 · 열람 <= 상품 조회 세션",
+    ))
+
+    invalid_content_rates = content_daily.where(
+        (F.col("ingredient_view_rate").isNotNull()
+         & ~F.col("ingredient_view_rate").between(0.0, 1.0))
+        | (F.col("review_view_rate").isNotNull()
+           & ~F.col("review_view_rate").between(0.0, 1.0))
+        | (F.col("avg_dwell_ms_per_session").isNotNull()
+           & (F.col("avg_dwell_ms_per_session") < 0))
+        # 분모가 0이면 NULL 이고, 0이 아니면 값이 있어야 한다 (§2.3)
+        | ((F.col("product_view_sessions") == 0)
+           & F.col("ingredient_view_rate").isNotNull())
+        | ((F.col("product_view_sessions") > 0)
+           & F.col("ingredient_view_rate").isNull())
+    ).count()
+    checks.append(_check(
+        "content_daily_rates_follow_contract",
+        invalid_content_rates == 0,
+        f"invalid_rows={invalid_content_rates}; 0~1 · 분모 0이면 NULL",
+    ))
+
+    # §4.4 — 상품 단위 컬럼은 content_kind 마다 같은 값이어야 한다. 갈라지면
+    # 대시보드가 콘텐츠별로 다른 분모를 보고 비교한다.
+    repeated = content_daily.groupBy(
+        "event_date_kst", "brand_id", "product_id", *EXECUTION_AXES
+    ).agg(
+        F.countDistinct("product_view_sessions").alias("_views"),
+        F.countDistinct("ingredient_view_sessions").alias("_ingredients"),
+        F.countDistinct("review_view_sessions").alias("_reviews"),
+    ).where(
+        (F.col("_views") > 1) | (F.col("_ingredients") > 1) | (F.col("_reviews") > 1)
+    ).count()
+    checks.append(_check(
+        "content_daily_product_scoped_columns_repeat",
+        repeated == 0,
+        f"split_rows={repeated}; product_view/ingredient/review 세션은 상품 단위다",
+    ))
+
+    invalid_conversion = content_conversion.where(
+        (F.col("viewed_cart_sessions") > F.col("viewed_sessions"))
+        | (F.col("viewed_sessions") <= 0)
+        | F.col("content_kind").isNull()
+        | (F.col("viewed_cart_rate").isNotNull()
+           & ~F.col("viewed_cart_rate").between(0.0, 1.0))
+    ).count()
+    checks.append(_check(
+        "content_conversion_counts_are_bounded",
+        invalid_conversion == 0,
+        f"invalid_rows={invalid_conversion}; 담기 <= 열람 · content_kind 필수",
+    ))
+
+    # §4.20 의 불변식. 두 모집단의 합이 상품 조회 세션과 같아야 한다.
+    behaviour_totals = behavior_conversion.groupBy(
+        "event_date_kst", "brand_id", "product_id", *EXECUTION_AXES
+    ).agg(
+        F.countDistinct(
+            F.col("done_sessions") + F.col("not_done_sessions")
+        ).alias("_universes"),
+        F.countDistinct("event_name").alias("_events"),
+    ).where(
+        (F.col("_universes") > 1) | (F.col("_events") != len(CONVERSION_BEHAVIOR_EVENTS))
+    ).count()
+    checks.append(_check(
+        "behavior_conversion_populations_partition_the_universe",
+        behaviour_totals == 0,
+        f"invalid_groups={behaviour_totals}; done+not_done 이 Event 마다 같고 "
+        f"Event {len(CONVERSION_BEHAVIOR_EVENTS)}종이 모두 있어야 한다",
+    ))
+
+    invalid_behaviour = behavior_conversion.where(
+        ~F.col("event_name").isin(*CONVERSION_BEHAVIOR_EVENTS)
+        | (F.col("done_cart_sessions") > F.col("done_sessions"))
+        | (F.col("not_done_cart_sessions") > F.col("not_done_sessions"))
+        | ((F.col("done_sessions") + F.col("not_done_sessions")) <= 0)
+        | (F.col("done_cart_rate").isNotNull()
+           & ~F.col("done_cart_rate").between(0.0, 1.0))
+        | (F.col("not_done_cart_rate").isNotNull()
+           & ~F.col("not_done_cart_rate").between(0.0, 1.0))
+        | ((F.col("done_sessions") == 0) & F.col("done_cart_rate").isNotNull())
+        | ((F.col("done_sessions") > 0) & F.col("done_cart_rate").isNull())
+    ).count()
+    checks.append(_check(
+        "behavior_conversion_values_follow_contract",
+        invalid_behaviour == 0,
+        f"invalid_rows={invalid_behaviour}; 담기 <= 모집단 · 0~1 · 분모 0이면 NULL",
+    ))
+
+    # 재계산 결정성. 시드 제외가 Mart 함수 안에 있는지를 이 검사가 잡는다 —
+    # 235 에서 필터를 호출부에 뒀다가 brand_daily 가 542행 어긋났다.
+    content_rebuilt = {
+        "content_daily_kpi": (
+            content_daily,
+            _content_daily_kpi(content_interest, funnel_session, time_zone),
+        ),
+        "content_conversion_daily": (
+            content_conversion,
+            _content_conversion_daily(content_interest, funnel_session, time_zone),
+        ),
+        "behavior_conversion_daily": (
+            behavior_conversion,
+            _behavior_conversion_daily(sessionized, funnel_session, time_zone),
+        ),
+    }
+    for name, (stored, expected) in content_rebuilt.items():
+        columns = [c for c in stored.columns if c != "mart_processed_at"]
+        difference = (
+            expected.select(*columns).exceptAll(stored.select(*columns)).count()
+            + stored.select(*columns).exceptAll(expected.select(*columns)).count()
+        )
+        checks.append(_check(
+            f"{name}_is_deterministic_from_inputs",
+            difference == 0,
+            f"differing_rows={difference}; mart_processed_at excluded",
+        ))
+
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -2102,6 +2316,9 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "banner_daily": config.banner_daily_path,
         "user_trait_daily": config.user_trait_daily_path,
         "cross_brand_daily": config.cross_brand_daily_path,
+        "content_daily": config.content_daily_path,
+        "content_conversion": config.content_conversion_path,
+        "behavior_conversion": config.behavior_conversion_path,
     }
     frames = {
         name: spark.read.option("mergeSchema", "true").parquet(path)
