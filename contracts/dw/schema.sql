@@ -1,0 +1,310 @@
+-- MySQL `dw` projection 스키마
+--
+-- 생성물이다. 직접 고치지 않는다.
+--   py contracts/dw/build_ddl.py --marts data/e2e-235/marts
+--
+-- 타입 매핑 · VARCHAR 길이 · NULL 정책 · PRIMARY KEY 순서의 정본은
+-- contracts/dw-schema.md §7 이다. 값을 바꾸려면 계약을 먼저 고친다.
+--
+-- 적재는 조회 테이블을 직접 지우지 않는다. 실행별 staging 에 넣고
+-- 건수·키 중복·필수값을 검증한 뒤 RENAME TABLE 로 교체한다 (§7.1).
+
+CREATE DATABASE IF NOT EXISTS `dw`
+  DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+-- brand_daily_kpi
+CREATE TABLE `dw`.`brand_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `impression_sessions` BIGINT NOT NULL,
+  `click_sessions` BIGINT NOT NULL,
+  `quick_look_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `information_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `unique_user_count` BIGINT NOT NULL,
+  `product_count_viewed` BIGINT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `detail_entry_rate` DOUBLE NULL,
+  `information_view_rate` DOUBLE NULL,
+  `view_to_cart_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_brand_daily_kpi__grain` (`brand_id`, `event_date_kst`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- brand_price_band_daily_kpi
+CREATE TABLE `dw`.`brand_price_band_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `price_bin` VARCHAR(32) NULL,
+  `currency` VARCHAR(32) NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `session_count` BIGINT NOT NULL,
+  `unique_user_count` BIGINT NOT NULL,
+  `impression_sessions` BIGINT NOT NULL,
+  `quick_look_sessions` BIGINT NOT NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `purchase_sessions` BIGINT NOT NULL,
+  `product_count` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `detail_entry_rate` DOUBLE NULL,
+  `view_to_cart_rate` DOUBLE NULL,
+  `view_to_purchase_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_brand_price_band_daily_kpi__grain` (`brand_id`, `event_date_kst`, `price_bin`, `currency`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- brand_repurchase_daily  -- 실데이터 미검증 (재생에서 0행)
+CREATE TABLE `dw`.`brand_repurchase_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `snapshot_date_kst` DATE NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `buyer_count` BIGINT NOT NULL,
+  `repeat_buyer_count` BIGINT NOT NULL,
+  `purchase_order_count` BIGINT NOT NULL,
+  `median_days_between_purchases` DOUBLE NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `repurchase_rate` DOUBLE NULL,
+  `window_days` INT NOT NULL,
+  `window_start_date` DATE NULL,
+  `window_end_date` DATE NULL,
+  `backend_order_count` BIGINT NOT NULL,
+  `local_order_count` BIGINT NOT NULL,
+  `kakaopay_order_count` BIGINT NOT NULL,
+  `card_order_count` BIGINT NOT NULL,
+  `test_order_count` BIGINT NOT NULL,
+  `backend_paid_value` DECIMAL(18,2) NULL,
+  `declared_restock_order_count` BIGINT NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_brand_repurchase_daily__grain` (`brand_id`, `snapshot_date_kst`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- funnel_daily_kpi
+CREATE TABLE `dw`.`funnel_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `funnel_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `category_id` VARCHAR(64) NULL,
+  `impression_sessions` BIGINT NOT NULL,
+  `click_sessions` BIGINT NOT NULL,
+  `quick_look_sessions` BIGINT NOT NULL,
+  `quick_look_cart_sessions` BIGINT NOT NULL,
+  `direct_click_sessions` BIGINT NOT NULL,
+  `direct_click_cart_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `information_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `checkout_sessions` BIGINT NOT NULL,
+  `purchase_sessions` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `impression_to_click_rate` DOUBLE NULL,
+  `click_to_view_rate` DOUBLE NULL,
+  `view_to_information_rate` DOUBLE NULL,
+  `view_to_cart_rate` DOUBLE NULL,
+  `cart_to_purchase_rate` DOUBLE NULL,
+  `view_to_purchase_rate` DOUBLE NULL,
+  `dropoff_after_impression_rate` DOUBLE NULL,
+  `dropoff_after_view_rate` DOUBLE NULL,
+  `dropoff_after_cart_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_funnel_daily_kpi__grain` (`brand_id`, `funnel_date_kst`, `product_id`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ingredient_weekly_interest
+CREATE TABLE `dw`.`ingredient_weekly_interest` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `interest_week_kst` DATE NOT NULL,
+  `ingredient_id` INT NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `ingredient` VARCHAR(128) NULL,
+  `label_ko` VARCHAR(128) NULL,
+  `vocab_version` VARCHAR(32) NULL,
+  `ingredient_interest_score` DOUBLE NULL,
+  `direct_match_score` DOUBLE NULL,
+  `product_attributed_score` DOUBLE NULL,
+  `contributing_event_count` BIGINT NOT NULL,
+  `ingredient_interest_share` DOUBLE NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_ingredient_weekly_interest__grain` (`interest_week_kst`, `ingredient_id`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- persona_segment_daily_kpi
+CREATE TABLE `dw`.`persona_segment_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `segment_type` VARCHAR(64) NOT NULL,
+  `segment_value` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `segment_user_count` BIGINT NOT NULL,
+  `session_count` BIGINT NOT NULL,
+  `impression_sessions` BIGINT NOT NULL,
+  `quick_look_sessions` BIGINT NOT NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `purchase_sessions` BIGINT NOT NULL,
+  `product_count_viewed` BIGINT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `view_to_cart_rate` DOUBLE NULL,
+  `view_to_purchase_rate` DOUBLE NULL,
+  `detail_entry_rate` DOUBLE NULL,
+  `avg_interest_score` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_persona_segment_daily_kpi__grain` (`brand_id`, `event_date_kst`, `segment_type`, `segment_value`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- product_daily_kpi
+CREATE TABLE `dw`.`product_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `category_id` VARCHAR(64) NULL,
+  `product_impression_count` BIGINT NOT NULL,
+  `product_click_count` BIGINT NOT NULL,
+  `quick_look_count` BIGINT NOT NULL,
+  `product_view_count` BIGINT NOT NULL,
+  `add_to_cart_count` BIGINT NOT NULL,
+  `remove_from_cart_count` BIGINT NOT NULL,
+  `purchase_count` BIGINT NOT NULL,
+  `purchase_quantity` BIGINT NULL,
+  `quick_look_sessions` BIGINT NOT NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `remove_from_cart_sessions` BIGINT NOT NULL,
+  `purchase_sessions` BIGINT NOT NULL,
+  `unique_user_count` BIGINT NOT NULL,
+  `session_count` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `product_interest_score` DOUBLE NULL,
+  `product_ctr` DOUBLE NULL,
+  `detail_entry_rate` DOUBLE NULL,
+  `add_to_cart_rate` DOUBLE NULL,
+  `purchase_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_product_daily_kpi__grain` (`brand_id`, `event_date_kst`, `product_id`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- product_repurchase_daily  -- 실데이터 미검증 (재생에서 0행)
+CREATE TABLE `dw`.`product_repurchase_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `snapshot_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `buyer_count` BIGINT NOT NULL,
+  `repeat_buyer_count` BIGINT NOT NULL,
+  `purchase_order_count` BIGINT NOT NULL,
+  `median_days_between_purchases` DOUBLE NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `repurchase_rate` DOUBLE NULL,
+  `window_days` INT NOT NULL,
+  `window_start_date` DATE NULL,
+  `window_end_date` DATE NULL,
+  `backend_order_count` BIGINT NOT NULL,
+  `local_order_count` BIGINT NOT NULL,
+  `kakaopay_order_count` BIGINT NOT NULL,
+  `card_order_count` BIGINT NOT NULL,
+  `test_order_count` BIGINT NOT NULL,
+  `backend_paid_value` DECIMAL(18,2) NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_product_repurchase_daily__grain` (`brand_id`, `snapshot_date_kst`, `product_id`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- purchase_reason_daily  -- 실데이터 미검증 (재생에서 0행)
+CREATE TABLE `dw`.`purchase_reason_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `reason` VARCHAR(64) NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `order_count` BIGINT NOT NULL,
+  `primary_order_count` BIGINT NOT NULL,
+  `skipped_order_count` BIGINT NOT NULL,
+  `trait_compared_order_count` BIGINT NOT NULL,
+  `trait_matched_order_count` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `reason_share` DOUBLE NULL,
+  `trait_match_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_purchase_reason_daily__grain` (`brand_id`, `event_date_kst`, `reason`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- user_trait_daily
+CREATE TABLE `dw`.`user_trait_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` VARCHAR(64) NOT NULL,
+  `trait_date_kst` DATE NOT NULL,
+  `trait` VARCHAR(32) NOT NULL,
+  `identity_scope` VARCHAR(32) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `trait_score` DOUBLE NULL,
+  `contributing_event_count` BIGINT NOT NULL,
+  `trait_rank` INT NULL,
+  `is_primary_trait` TINYINT(1) NULL,
+  `window_start_date` DATE NULL,
+  `window_end_date` DATE NULL,
+  `trait_policy_version` VARCHAR(32) NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_user_trait_daily__grain` (`user_id`, `trait_date_kst`, `trait`, `identity_scope`, `actor_type`, `source`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- MySQL 로 옮기지 않는 Mart — Parquet 에만 둔다 (§7.2)
+--   analytics_baseline: 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다
+--   banner_daily: 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다
+--   category_price_reference: 카탈로그 파생 참조표다. Event 를 읽지 않고 브랜드 축도 없다
+--   cross_brand_daily: 읽는 엔드포인트가 없다
