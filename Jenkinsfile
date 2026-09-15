@@ -1,5 +1,9 @@
 pipeline {
-    agent any
+    agent {
+        node {
+            customWorkspace '/home/ubuntu/S15P21A306'
+        }
+    }
 
     options {
         timestamps()
