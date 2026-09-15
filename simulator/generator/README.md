@@ -203,6 +203,12 @@ python simulator/generator/build_persona_style.py
 
 리뷰 작성 이벤트는 만들지 않는다. 리뷰는 구매 후 행위라 `add_to_cart` 로 환산했다.
 
+4. **결제** (Jira 312, 2026-09-15) — 시드(과거 구매)와 재구매(S2)는 담기 뒤 **전부** `begin_checkout → purchase →
+   purchase_reason_select` 까지 간다(리뷰를 썼다 = 샀다). 목표 상품은 담은 세션의 45% `[추정]`가 결제까지 간다.
+   결제 5% 는 `payment_failed`(user_cancel), 설문은 70% 응답(1~2개, 재구매면 `restock` 첫 번째)·30% `skipped`.
+   금액은 이벤트 계약대로 USD, `order_channel=backend`, 결제수단은 kakaopay 60 / card 40 (`test` 는 시연 전용이라 안 씀).
+   이게 없던 09-14 캐시로는 데이터 마트의 재구매·구매 사유 3종이 0 이었다.
+
 모든 synthetic Event의 `properties`에는 `scenario_id`, `simulation_run_id`,
 `generator_type`이 포함된다. 기본 시나리오는 `normal_day`, 생성 방식은
 `python_batch`이며, 실행 ID는 생략 시 UTC 시각을 기준으로 자동 생성한다.

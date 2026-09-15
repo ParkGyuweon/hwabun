@@ -14,6 +14,8 @@ if np is not None:
         SimulationContext,
         browse_list,
         BANNER_POLICY_VERSION,
+        SCENARIO,
+        checkout,
         make_banners,
         default_simulation_run_id,
         seed_session_id,
@@ -215,6 +217,73 @@ class SyntheticEventMetadataTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Event Properties"):
             validate_property_contract(events)
+
+
+@unittest.skipIf(np is None, "numpy is required for the simulator generator")
+class CheckoutTest(unittest.TestCase):
+    """Jira 312 — 담기 뒤 결제 이벤트. 계약(event-properties-schema §4·§3.9·§3.15·§3.16)을 통과해야 한다."""
+
+    def setUp(self):
+        self.context = SimulationContext(scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id="run_test_312",
+                                         generator_type=DEFAULT_GENERATOR_TYPE)
+        self.catalog = {"P1": {"price": 24.0}, "P2": {"price": 10.5}}
+
+    def _run(self, seed, **sc_over):
+        events = []
+        e = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0), np.random.default_rng(seed), self.context)
+        e.new_page("product_detail")
+        e.emit("add_to_cart", "P1", quantity=1, price_usd=24.0)
+        sc = {**SCENARIO, **sc_over}
+        oid = checkout(e, self.catalog, ["P1", "P2"], e.rng, sc, quantities={"P2": 2})
+        return events, oid
+
+    def test_purchase_path_has_required_properties_and_passes_contract(self):
+        events, oid = self._run(1, p_payment_failed=0.0, p_reason_answer=1.0)
+        names = [x["event_name"] for x in events]
+        self.assertEqual(["add_to_cart", "page_view", "begin_checkout", "purchase", "purchase_reason_select"], names)
+        bc, pu, rs = events[2], events[3], events[4]
+        self.assertEqual("cart", pu["page_type"])
+        self.assertIsNone(pu["product_id"])                       # 주문 단위 이벤트 — 상품은 items[] 에
+        self.assertEqual(2, len(pu["properties"]["items"]))
+        self.assertEqual({"product_id": "P2", "quantity": 2, "unit_price": 10.5}, pu["properties"]["items"][1])
+        self.assertEqual(45.0, pu["properties"]["order_value"])   # 24 + 2×10.5
+        self.assertIn(pu["properties"]["payment_method"], ("kakaopay", "card"))
+        self.assertEqual("backend", pu["properties"]["order_channel"])
+        self.assertEqual("USD", pu["properties"]["currency"])
+        self.assertLessEqual(pu["properties"]["paid_value"], pu["properties"]["order_value"])
+        self.assertEqual(bc["properties"]["cart_value"], pu["properties"]["order_value"])
+        self.assertEqual(oid, pu["properties"]["order_id"]); self.assertEqual(oid, rs["properties"]["order_id"])
+        self.assertFalse(rs["properties"]["skipped"])
+        self.assertTrue(1 <= len(rs["properties"]["reasons"]) <= 2)
+        self.assertEqual(rs["properties"]["reasons"][0], rs["properties"]["primary_reason"])
+        for k in ("pg_provider", "payment_id", "paid_at"):
+            self.assertNotIn(k, pu["properties"])                  # 키 생략 (계약 §4: null 을 싣지 않는다)
+        validate_property_contract(events)
+
+    def test_skipped_survey_has_empty_reasons_and_no_primary(self):
+        events, _ = self._run(2, p_payment_failed=0.0, p_reason_answer=0.0)
+        rs = events[-1]
+        self.assertEqual("purchase_reason_select", rs["event_name"])
+        self.assertTrue(rs["properties"]["skipped"]); self.assertEqual([], rs["properties"]["reasons"])
+        self.assertNotIn("primary_reason", rs["properties"])
+        validate_property_contract(events)
+
+    def test_payment_failed_path_stops_before_purchase(self):
+        events, oid = self._run(3, p_payment_failed=1.0)
+        self.assertIsNone(oid)
+        self.assertEqual(["add_to_cart", "page_view", "begin_checkout", "payment_failed"], [x["event_name"] for x in events])
+        self.assertEqual("conversion", events[-1]["intent"])
+        validate_property_contract(events)
+
+    def test_restock_reason_comes_first(self):
+        events = []
+        e = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0), np.random.default_rng(4), self.context,
+                    session_id=seed_session_id(self.context, "PC00001", "P1#restock1"), is_seed=True)
+        e.new_page("product_detail")
+        checkout(e, self.catalog, ["P1"], e.rng, {**SCENARIO, "p_payment_failed": 0.0, "p_reason_answer": 1.0}, restock=True)
+        rs = events[-1]
+        self.assertEqual("restock", rs["properties"]["reasons"][0])
+        self.assertTrue(all(x["properties"].get("seeded") for x in events))   # 시드 세션이면 전부 seeded
 
 
 if __name__ == "__main__":
