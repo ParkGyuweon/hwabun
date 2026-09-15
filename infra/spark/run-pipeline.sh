@@ -59,6 +59,8 @@ validate_pipeline() {
     --category-price-path "$data_root/marts/category_price_reference" \
     --persona-segment-path "$data_root/marts/persona_segment_daily_kpi" \
     --price-band-path "$data_root/marts/brand_price_band_daily_kpi" \
+    --brand-cohort-path "$data_root/marts/brand_cohort_dim" \
+    --commons-cohort-path "$data_root/marts/commons_cohort_weekly" \
     --banner-daily-path "$data_root/marts/banner_daily" \
     --user-trait-daily-path "$data_root/marts/user_trait_daily" \
     --cross-brand-daily-path "$data_root/marts/cross_brand_daily" \
@@ -88,6 +90,7 @@ run_batch_pipeline() {
     --product-catalog-path /opt/project/batch/ingest/data/products_200.json
     --registered-product-path /opt/project/batch/ingest/data/serving/registered_products.jsonl
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
+    --commons-hash-salt "${COMMONS_HASH_SALT:-}"
   )
   if [[ -n "${REGISTERED_PRODUCT_BRAND_PATH:-}" ]]; then
     derive_args+=(
@@ -125,6 +128,9 @@ run_batch_pipeline() {
     --feature-vocab-path /opt/project/contracts/product-feature-vocab.json
     --affinity-lift-path /opt/project/batch/ingest/data/affinity_lift.csv
     --behavior-weights-path /opt/project/frontend/src/types/log.ts
+    --dim-brand-path "$data_root/processed/dim_brand"
+    --brand-cohort-path "$data_root/marts/brand_cohort_dim"
+    --commons-cohort-path "$data_root/marts/commons_cohort_weekly"
   )
   if [[ -n "${BASELINE_POLICY_VERSION:-}" && -n "${BASELINE_START_DATE:-}" && -n "${BASELINE_END_DATE:-}" ]]; then
     mart_args+=(
