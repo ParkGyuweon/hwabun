@@ -704,8 +704,12 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
                 F.col("secondary_category").cast("string"),
                 F.col("tertiary_category").cast("string"),
             ).alias("category_path"),
-            F.col("price_usd").cast("decimal(18,2)").alias("base_price"),
-            F.lit("USD").alias("currency"),
+            _base_price_krw(
+                F.col("price_krw") if "price_krw" in catalog_df.columns else None,
+                F.col("price_usd"),
+            ).alias("base_price"),
+            F.col("price_usd").cast("decimal(18,2)").alias("source_price_usd"),
+            F.lit("KRW").alias("currency"),
             F.array().cast("array<string>").alias("skin_type_tags"),
             F.array().cast("array<string>").alias("concern_tags"),
             F.array().cast("array<string>").alias("ingredient_ids"),
@@ -719,6 +723,33 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
         .where(F.col("product_id").isNotNull() & (F.length(F.col("product_id")) > 0))
         .dropDuplicates(["product_id"])
     )
+
+
+# 가격 정본은 원화다 (Jira 302). 추천 어휘집 0.7 의 price_bin 경계가 원화라
+# 카탈로그도 같은 단위여야 Mart 가 환율을 다시 들고 있지 않아도 된다.
+# 규칙은 ``batch/jobs/product_encoder.price_krw_of`` 와 같아야 한다 — 두 곳이
+# 갈리면 같은 상품이 추천과 대시보드에서 다른 가격대로 잡힌다.
+USD_KRW_SOURCE = 1340.86
+KRW_ROUNDING = 100
+
+
+def _base_price_krw(krw_column: Any | None, usd_column: Any) -> Any:
+    """``price_krw`` 가 정본. 없으면 원천 환율로 환산하고 100원 단위로 반올림한다.
+
+    ``krw_column`` 이 ``None`` 인 경우는 그 키가 아예 없는 옛 형식이다 (시연 시드·
+    테스트 픽스처). 반올림 단위까지 ``products-ko.json`` 의 표시 가격과 같아야
+    화면과 Mart 의 가격대가 어긋나지 않는다.
+    """
+
+    from pyspark.sql import functions as F
+
+    converted = (
+        F.round(usd_column.cast("double") * F.lit(USD_KRW_SOURCE) / F.lit(KRW_ROUNDING))
+        * F.lit(KRW_ROUNDING)
+    ).cast("decimal(18,2)")
+    if krw_column is None:
+        return converted
+    return F.coalesce(krw_column.cast("decimal(18,2)"), converted)
 
 
 def _active_registered_product_records(path: str) -> list[dict[str, Any]]:
@@ -818,8 +849,16 @@ def _build_registered_dim_product(
                 F.col("registered.secondary_category").cast("string"),
                 F.col("registered.tertiary_category").cast("string"),
             ).alias("category_path"),
-            F.col("registered.price_usd").cast("decimal(18,2)").alias("base_price"),
-            F.lit("USD").alias("currency"),
+            _base_price_krw(
+                F.col("registered.price_krw")
+                if "price_krw" in registered_df.columns
+                else None,
+                F.col("registered.price_usd"),
+            ).alias("base_price"),
+            F.col("registered.price_usd")
+            .cast("decimal(18,2)")
+            .alias("source_price_usd"),
+            F.lit("KRW").alias("currency"),
             F.array().cast("array<string>").alias("skin_type_tags"),
             F.array().cast("array<string>").alias("concern_tags"),
             F.array().cast("array<string>").alias("ingredient_ids"),
