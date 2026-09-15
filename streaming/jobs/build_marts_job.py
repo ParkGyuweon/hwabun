@@ -611,6 +611,14 @@ def _product_daily_kpi(
         F.countDistinct(
             F.when(F.col("event_name") == "product_view", F.col("session_id"))
         ).alias("product_view_sessions"),
+        # 상세를 연 세션은 상품 상세든 Quick Look이든 하나다. 담기·구매의 분모라서
+        # 분자와 같은 모집단을 세야 한다 (dw-schema.md §4.1, 데이터 235 수정안 2).
+        F.countDistinct(
+            F.when(
+                F.col("event_name").isin("product_view", "quick_look"),
+                F.col("session_id"),
+            )
+        ).alias("detail_view_sessions"),
         F.countDistinct(
             F.when(F.col("event_name") == "add_to_cart", F.col("session_id"))
         ).alias("add_to_cart_sessions"),
@@ -655,8 +663,8 @@ def _product_daily_kpi(
         .drop("purchase_count_distinct_order")
         .withColumn("product_ctr", _safe_ratio(F.col("product_click_count"), F.col("product_impression_count")))
         .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("product_impression_count")))
-        .withColumn("add_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("product_view_sessions")))
-        .withColumn("purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("product_view_sessions")))
+        .withColumn("add_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
+        .withColumn("purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")))
     )
 
 
@@ -743,7 +751,8 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     product_events = product_fact_df.where(
         valid_brand
         & F.col("event_name").isin(
-            "product_impression", "product_view", "quick_look", "add_to_cart"
+            "product_impression", "product_click", "product_view",
+            "quick_look", "add_to_cart",
         )
     ).select(
         *key_columns,
@@ -751,6 +760,7 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "user_id",
         "product_id",
         (F.col("event_name") == "product_impression").alias("_impression"),
+        (F.col("event_name") == "product_click").alias("_click"),
         (F.col("event_name") == "product_view").alias("_product_view"),
         (F.col("event_name") == "quick_look").alias("_quick_look"),
         # 상세를 연 세션은 Quick Look이든 상품 상세든 하나다. 담기율의 분모라서
@@ -790,6 +800,7 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "user_id",
         "product_id",
         F.lit(False).alias("_impression"),
+        F.lit(False).alias("_click"),
         F.lit(False).alias("_product_view"),
         F.lit(False).alias("_quick_look"),
         F.lit(False).alias("_detail_view"),
@@ -800,6 +811,7 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     stages = product_events.unionByName(information_events)
     result = stages.groupBy(*key_columns).agg(
         F.countDistinct(F.when(F.col("_impression"), F.col("session_id"))).cast("long").alias("impression_sessions"),
+        F.countDistinct(F.when(F.col("_click"), F.col("session_id"))).cast("long").alias("click_sessions"),
         F.countDistinct(F.when(F.col("_quick_look"), F.col("session_id"))).cast("long").alias("quick_look_sessions"),
         F.countDistinct(F.when(F.col("_detail_view"), F.col("session_id"))).cast("long").alias("detail_view_sessions"),
         F.countDistinct(F.when(F.col("_product_view"), F.col("session_id"))).cast("long").alias("product_view_sessions"),
