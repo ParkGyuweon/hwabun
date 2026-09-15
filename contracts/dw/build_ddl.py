@@ -68,6 +68,9 @@ VARCHAR = {
     "banner_value": 128,          # 어휘집 원문. 실데이터 미실측
     "metric_name": 64,
     "secondary_category": 64,
+    "section_id": 64,
+    "content_kind": 64,
+    "event_name": 64,
     "segment_type": 64,
     "segment_value": 64,          # 교차 축 "dry|fair"
     "algorithm": 64,
@@ -101,6 +104,8 @@ NULLABLE_KEYS = {
     "destination_brand_id",
     "price_bin",            # §4.6-1 가격 결측 보존
     "reason",               # §4.17 건너뛴 응답은 NULL
+    "section_id",           # §4.4 섹션을 모르는 콘텐츠 Event 가 있다
+    "content_kind",         # §4.4
 }
 # 비 key 인데도 NOT NULL 인 컬럼.
 #   numerator·denominator 는 분모를 나중에 다시 검증하려고 저장하는 값이라
@@ -115,6 +120,8 @@ NOT_NULL_VALUES = {
     "is_sample_sufficient",
     "window_days",
     "min_sample_size",
+    # 체류 합. 0 은 "머물지 않았다" 이지 "모른다" 가 아니다 (§4.4)
+    "dwell_ms_sum",
 }
 # 이름으로 판정할 수 없어 계약에서 직접 가져오는 것.
 NULLABLE_VALUES = {
@@ -182,6 +189,21 @@ GRAINS = {
     ],
     "ingredient_weekly_interest": [
         "interest_week_kst", "ingredient_id",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "content_daily_kpi": [
+        "brand_id", "event_date_kst", "product_id", "section_id", "content_kind",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "content_conversion_daily": [
+        "brand_id", "event_date_kst", "product_id", "content_kind",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "behavior_conversion_daily": [
+        "brand_id", "event_date_kst", "product_id", "event_name",
         "actor_type", "source", "generator_type",
         "scenario_id", "simulation_run_id",
     ],

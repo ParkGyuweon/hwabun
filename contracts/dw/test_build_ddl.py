@@ -102,7 +102,7 @@ class GrainTest(unittest.TestCase):
 
         분류되지 않은 Mart 가 남으면 "빠뜨린 것"과 "일부러 뺀 것"을 구분할 수 없다.
         """
-        self.assertEqual(10, len(GRAINS))
+        self.assertEqual(13, len(GRAINS))
         self.assertEqual(6, len(PARQUET_ONLY))
         self.assertEqual(set(), set(GRAINS) & set(PARQUET_ONLY))
 

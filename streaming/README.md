@@ -272,6 +272,9 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `brand_price_band_daily_kpi` | `event_date_kst + brand_id + price_bin + currency + 실행 축` | 가격대별 노출·상세·담기·구매 세션 |
 | `brand_cohort_dim` | `brand_id` | 브랜드를 상품 수 밴드 × 가격 구간 코호트에 배정 |
 | `commons_cohort_weekly` | `snapshot_week_kst + cohort_key + metric_name + 실행 축` | **B층** 코호트별 비율 분위. 소표본·지배 셀은 억제 |
+| `content_daily_kpi` | `event_date_kst + brand_id + product_id + section_id + content_kind + 실행 축` | 상품 상세 콘텐츠별 조회·체류·성분/리뷰 열람 |
+| `content_conversion_daily` | `event_date_kst + brand_id + product_id + content_kind + 실행 축` | 그 콘텐츠를 본 세션의 담기율 |
+| `behavior_conversion_daily` | `event_date_kst + brand_id + product_id + event_name + 실행 축` | 행동을 한 세션과 안 한 세션의 담기율 대조 |
 | `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
 
 재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품이 여러 개 있어도 구매는
@@ -290,6 +293,13 @@ spark-submit streaming/jobs/build_marts_job.py \
 
 매출·정산 금액은 이 Mart들의 범위가 아니다. Backend의 PAID 주문 상품이 정본이며
 DW는 금액을 복제하지 않는다.
+
+콘텐츠 Mart 3종은 **상품 조회 세션을 공통 분모**로 쓴다. `content_daily_kpi`의
+`product_view_sessions`·`ingredient_view_sessions`·`review_view_sessions`는 상품 단위라
+`content_kind`마다 같은 값이 반복되며, 그 축으로 합산하면 같은 세션을 여러 번 센다.
+`content_conversion_daily`는 분모가 "그 콘텐츠를 본 세션"이라 분리된 Mart다.
+`behavior_conversion_daily`는 `done_sessions + not_done_sessions`가 상품 조회 세션과
+같아야 하고, 네 행동 Event는 `product_event_fact`에 없어 `sessionized_events`에서 읽는다.
 
 `banner_daily`는 `policy_version`을 key에 둬서 배너·정렬 정책 배포 전후를 같은 Mart에서
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고
