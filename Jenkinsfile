@@ -143,6 +143,12 @@ pipeline {
                     if printf '%s\\n' "$changed" | grep -Eq '^deploy/ec2-1/(docker-compose[.]yml|prometheus[.]yml|[.]env[.]example)$'; then
                         services="$services backend shop-backend mysql recommend prometheus grafana nginx"
                     fi
+                    # Jenkinsfile 변경은 서비스 선택·Compose 실행 방식을 바꿀 수 있다.
+                    # 수동 빌드에서는 HEAD 한 커밋만 보므로, 바로 전 Compose 변경이
+                    # 누락되지 않게 전체 구성을 재적용한다.
+                    if printf '%s\\n' "$changed" | grep -Eq '^Jenkinsfile$'; then
+                        services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                    fi
 
                     services="$(printf '%s\\n' "$services" | xargs -n1 | sort -u | tr '\\n' ' ')"
                     if [ -z "$(printf '%s' "$services" | tr -d ' ')" ]; then
