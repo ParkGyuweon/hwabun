@@ -40,6 +40,7 @@ DEFAULT_BEHAVIOR_WEIGHTS_PATH = "frontend/src/types/log.ts"
 DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
+DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
@@ -92,6 +93,7 @@ class ValidatePipelineConfig:
     ingredient_weekly_path: str = DEFAULT_INGREDIENT_WEEKLY_PATH
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
+    price_band_path: str = DEFAULT_PRICE_BAND_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
     cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
@@ -127,6 +129,7 @@ class ValidatePipelineConfig:
             "ingredient_weekly_path": self.ingredient_weekly_path,
             "category_price_path": self.category_price_path,
             "persona_segment_path": self.persona_segment_path,
+            "price_band_path": self.price_band_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
             "cross_brand_daily_path": self.cross_brand_daily_path,
@@ -248,6 +251,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--persona-segment-path",
         default=_env("PERSONA_SEGMENT_DAILY_PATH", DEFAULT_PERSONA_SEGMENT_PATH),
     )
+    parser.add_argument(
+        "--price-band-path",
+        default=_env("BRAND_PRICE_BAND_DAILY_PATH", DEFAULT_PRICE_BAND_PATH),
+    )
     parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
     parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
@@ -298,6 +305,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         ingredient_weekly_path=args.ingredient_weekly_path,
         category_price_path=args.category_price_path,
         persona_segment_path=args.persona_segment_path,
+        price_band_path=args.price_band_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
         cross_brand_daily_path=args.cross_brand_daily_path,
@@ -1762,6 +1770,109 @@ def validate_frames(
             f"overflowing_rows={segment_overflow}; "
             "교차 축은 배타라 합이 브랜드 전체를 넘을 수 없다",
         ))
+
+    price_band = frames.get("price_band_daily")
+    if price_band is None:
+        warnings.append({
+            "check": "brand_price_band_daily_is_absent",
+            "detail": "어휘집 price_bin_edges 와 dim_product 가 있는 실행에서만 생성된다",
+        })
+    else:
+        counts["brand_price_band_daily"] = price_band.count()
+        checks.append(_check(
+            "price_band_daily_grain_is_unique",
+            _duplicate_count(price_band, [
+                "event_date_kst", "brand_id", "price_bin", "currency", *EXECUTION_AXES,
+            ]) == 0,
+            "brand_price_band_daily_kpi grain=date+brand+price_bin+currency+축",
+        ))
+
+        invalid_price_counts = price_band.where(
+            (F.col("session_count") < 0)
+            | (F.col("unique_user_count") > F.col("session_count"))
+            | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+            | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
+            | (F.col("detail_view_sessions") > F.col("session_count"))
+            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+            | (F.col("product_count") < 1)
+        ).count()
+        checks.append(_check(
+            "price_band_counts_are_bounded",
+            invalid_price_counts == 0,
+            f"invalid_rows={invalid_price_counts}",
+        ))
+
+        price_rate_columns = [
+            "detail_entry_rate", "view_to_cart_rate", "view_to_purchase_rate"
+        ]
+        invalid_price_rates = price_band.where(
+            F.greatest(*[
+                F.when(
+                    F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                    F.lit(1),
+                ).otherwise(F.lit(0))
+                for column in price_rate_columns
+            ]) == 1
+        ).count()
+        invalid_price_denominators = price_band.where(
+            ((F.col("impression_sessions") == 0) & F.col("detail_entry_rate").isNotNull())
+            | ((F.col("detail_view_sessions") == 0) & F.col("view_to_cart_rate").isNotNull())
+            | ((F.col("detail_view_sessions") == 0)
+               & F.col("view_to_purchase_rate").isNotNull())
+        ).count()
+        checks.append(_check(
+            "price_band_rates_follow_contract",
+            invalid_price_rates == 0 and invalid_price_denominators == 0,
+            f"out_of_range={invalid_price_rates}; "
+            f"non_null_zero_denominator={invalid_price_denominators}",
+        ))
+
+        checks.append(_check(
+            "price_band_currency_is_present",
+            price_band.where(
+                F.col("currency").isNull()
+                | (F.length(F.trim(F.col("currency"))) == 0)
+            ).count() == 0,
+            "통화는 grain 이라 비어 있으면 서로 다른 통화가 한 행에 섞인다",
+        ))
+
+        # 반열린 구간이라 한 상품은 한 구간에만 속한다. 구간별 상품 수를 더하면
+        # 그 브랜드·일자에 실제로 등장한 상품 수와 같아야 한다. 크면 Dimension
+        # 조인이 상품을 복제했거나 경계 판정이 겹친 것이다.
+        observed_products = (
+            product_fact.where(
+                ~F.coalesce(F.col("is_seeded"), F.lit(False))
+                & F.col("brand_id").isNotNull()
+                & (F.length(F.trim(F.col("brand_id"))) > 0)
+            )
+            .join(
+                dim_product.select(F.col("product_id").alias("_dim_product_id")),
+                F.col("product_id") == F.col("_dim_product_id"),
+                "left_semi",
+            )
+            .groupBy("event_date_kst", "brand_id", *EXECUTION_AXES)
+            .agg(F.countDistinct("product_id").cast("long").alias("_observed_products"))
+        )
+        banded_products = price_band.groupBy(
+            "event_date_kst", "brand_id", *EXECUTION_AXES
+        ).agg(F.sum("product_count").cast("long").alias("_banded_products"))
+        # 실행 축에 NULL 이 있으므로 등호 Join 이면 그 행이 통째로 빠진다.
+        join_keys = ["event_date_kst", "brand_id", *EXECUTION_AXES]
+        condition = None
+        for column in join_keys:
+            clause = banded_products[column].eqNullSafe(observed_products[column])
+            condition = clause if condition is None else condition & clause
+        overlapping = (
+            banded_products.join(observed_products, condition, "inner")
+            .where(F.col("_banded_products") != F.col("_observed_products"))
+            .count()
+        )
+        checks.append(_check(
+            "price_band_maps_each_product_once",
+            overlapping == 0,
+            f"mismatched_rows={overlapping}; 구간별 상품 수 합 != 관측 상품 수",
+        ))
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -1851,6 +1962,12 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         ).parquet(config.persona_segment_path)
     except Exception:
         # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
+        pass
+    try:
+        frames["price_band_daily"] = spark.read.option(
+            "mergeSchema", "true"
+        ).parquet(config.price_band_path)
+    except Exception:
         pass
     try:
         frames["analytics_baseline"] = spark.read.option("mergeSchema", "true").parquet(
