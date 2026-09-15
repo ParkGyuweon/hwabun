@@ -18,7 +18,7 @@ CREATE TABLE admin_account (
 CREATE TABLE brand (
  brand_id VARCHAR(64) PRIMARY KEY, seller_account_id VARCHAR(64) NOT NULL, name VARCHAR(200) NOT NULL, description TEXT NULL, logo_url VARCHAR(1000) NULL,
  status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE', created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- FOREIGN KEY(seller_account_id) REFERENCES seller_account(seller_account_id) ON DELETE RESTRICT, UNIQUE KEY uq_brand_seller_name (seller_account_id,name)
+ FOREIGN KEY(seller_account_id) REFERENCES seller_account(seller_account_id) ON DELETE RESTRICT, UNIQUE KEY uq_brand_seller_name (seller_account_id,name), UNIQUE KEY uq_brand_seller_account (seller_account_id)
 );
 CREATE TABLE skin_type (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
 CREATE TABLE skin_tone (code VARCHAR(32) PRIMARY KEY, label_ko VARCHAR(50) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
@@ -42,10 +42,22 @@ CREATE TABLE category (
  category_id VARCHAR(64) PRIMARY KEY, parent_id VARCHAR(64) NULL, code VARCHAR(100) NOT NULL UNIQUE, name VARCHAR(200) NOT NULL, depth TINYINT NOT NULL, sort_order INT NOT NULL DEFAULT 0, is_active BOOLEAN NOT NULL DEFAULT TRUE,
  FOREIGN KEY(parent_id) REFERENCES category(category_id) ON DELETE RESTRICT
 );
+-- product.category_id 는 화면의 탐색 계층이 아니라 secondary_category 코드와 같은 호환 FK다.
+-- secondary/tertiary 는 추천 모델의 독립 feature이므로 이 테이블에 부모-자식 계층으로 복제하지 않는다.
+INSERT IGNORE INTO category(category_id, parent_id, code, name, depth, sort_order, is_active) VALUES
+ ('Cleansers',NULL,'Cleansers','클렌징',1,1,TRUE),
+ ('Eye Care',NULL,'Eye Care','아이 케어',1,2,TRUE),
+ ('Lip Balms & Treatments',NULL,'Lip Balms & Treatments','립 케어',1,3,TRUE),
+ ('Masks',NULL,'Masks','마스크팩',1,4,TRUE),
+ ('Moisturizers',NULL,'Moisturizers','크림·로션',1,5,TRUE),
+ ('Self Tanners',NULL,'Self Tanners','셀프 태닝',1,6,TRUE),
+ ('Sunscreen',NULL,'Sunscreen','선케어',1,7,TRUE),
+ ('Treatments',NULL,'Treatments','집중 케어',1,8,TRUE);
 CREATE TABLE product (
  product_id VARCHAR(64) PRIMARY KEY, brand_id VARCHAR(64) NOT NULL, category_id VARCHAR(64) NOT NULL, product_name VARCHAR(300) NOT NULL,
  product_source ENUM('seed_catalog','brand_registered') NOT NULL, status ENUM('DRAFT','PENDING_APPROVAL','ACTIVE','INACTIVE','REJECTED') NOT NULL DEFAULT 'DRAFT',
  secondary_category VARCHAR(64) NOT NULL, tertiary_category VARCHAR(64) NOT NULL, price_bin VARCHAR(16) NOT NULL, rating DECIMAL(4,2) NULL, rating_source ENUM('observed','injected') NOT NULL DEFAULT 'injected', loves_count INT NULL,
+ product_name_ko VARCHAR(300) NULL, size_ko VARCHAR(100) NULL, ingredients_text_ko TEXT NULL, description_ko_json JSON NULL, badges_json JSON NULL, discount_label VARCHAR(100) NULL,
  primary_image_url VARCHAR(1000) NULL, description_json JSON NULL, ingredients_text TEXT NULL, clean_json JSON NULL, texture_json JSON NULL,
  source_price_usd DECIMAL(12,2) NULL, source_rating DECIMAL(4,2) NULL, source_review_count INT NULL, source_loves_count INT NULL, source_rank INT NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -54,7 +66,7 @@ CREATE TABLE product (
  FOREIGN KEY(secondary_category) REFERENCES secondary_category(code), FOREIGN KEY(tertiary_category) REFERENCES tertiary_category(code), FOREIGN KEY(price_bin) REFERENCES price_bin(code)
 );
 CREATE TABLE product_variant (
- variant_id VARCHAR(64) PRIMARY KEY, product_id VARCHAR(64) NOT NULL, sku_id VARCHAR(64) NOT NULL UNIQUE, label VARCHAR(200) NOT NULL, size VARCHAR(100) NULL,
+ variant_id VARCHAR(64) PRIMARY KEY, product_id VARCHAR(64) NOT NULL, sku_id VARCHAR(64) NOT NULL UNIQUE, label VARCHAR(200) NOT NULL, label_ko VARCHAR(200) NULL, size VARCHAR(100) NULL, size_ko VARCHAR(100) NULL,
  price_krw DECIMAL(18,2) NOT NULL, sale_price_krw DECIMAL(18,2) NULL, image_url VARCHAR(1000) NULL, swatch_url VARCHAR(1000) NULL, status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE', sort_order INT NOT NULL DEFAULT 0,
  FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT, UNIQUE KEY uq_variant_order(product_id,sort_order), CHECK(price_krw > 0), CHECK(sale_price_krw IS NULL OR (sale_price_krw > 0 AND sale_price_krw <= price_krw))
 );
@@ -106,9 +118,10 @@ CREATE TABLE order_item (
  UNIQUE KEY uq_order_variant(order_id,variant_id), UNIQUE KEY uq_order_item_brand(order_item_id,brand_id), UNIQUE KEY uq_order_item_product(order_item_id,product_id), CHECK(quantity > 0), CHECK(unit_price > 0), CHECK(line_amount = unit_price * quantity), INDEX ix_order_item_brand(brand_id,order_id)
 );
 CREATE TABLE review (
- review_id VARCHAR(64) PRIMARY KEY, order_item_id VARCHAR(64) NOT NULL UNIQUE, rating TINYINT NOT NULL, is_recommended BOOLEAN NULL, title VARCHAR(300) NULL, body TEXT NULL,
- status ENUM('PUBLISHED','HIDDEN','DELETED') NOT NULL DEFAULT 'PUBLISHED', skin_type_snapshot VARCHAR(32) NULL, skin_tone_snapshot VARCHAR(32) NULL, hair_color_snapshot VARCHAR(32) NULL, concerns_snapshot_json JSON NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT, CHECK(rating BETWEEN 1 AND 5)
+ review_id VARCHAR(64) PRIMARY KEY, product_id VARCHAR(64) NOT NULL, order_item_id VARCHAR(64) NULL UNIQUE, source ENUM('SHOP','SEED_CATALOG') NOT NULL DEFAULT 'SHOP', external_id VARCHAR(128) NULL,
+ rating TINYINT NOT NULL, is_recommended BOOLEAN NULL, title VARCHAR(300) NULL, title_ko VARCHAR(300) NULL, body TEXT NULL, body_ko TEXT NULL,
+ status ENUM('PUBLISHED','HIDDEN','DELETED') NOT NULL DEFAULT 'PUBLISHED', skin_type_snapshot VARCHAR(32) NULL, skin_tone_snapshot VARCHAR(32) NULL, hair_color_snapshot VARCHAR(32) NULL, eye_color_snapshot VARCHAR(32) NULL, concerns_snapshot_json JSON NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT, UNIQUE KEY uq_review_source_external(source,external_id), CHECK((source='SEED_CATALOG' AND order_item_id IS NULL) OR (source='SHOP' AND order_item_id IS NOT NULL)), CHECK(rating BETWEEN 1 AND 5)
 );
 CREATE TABLE feedback (
  feedback_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, order_item_id VARCHAR(64) NOT NULL, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',

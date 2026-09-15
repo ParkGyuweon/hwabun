@@ -53,6 +53,11 @@ EXECUTION_AXES = (
     "simulation_run_id",
 )
 
+# 결제 계약 enum. event-properties-schema.md §3.15 · §3.16 이 정본이고
+# build_marts_job 의 같은 이름 상수와 일치해야 한다.
+PAYMENT_METHODS = ("kakaopay", "card", "test")
+ORDER_CHANNELS = ("backend", "local")
+
 
 @dataclass(frozen=True)
 class ValidatePipelineConfig:
@@ -1209,6 +1214,54 @@ def validate_frames(
         invalid_restock == 0,
         f"invalid_rows={invalid_restock}",
     ))
+
+    # 결제 계약(299) — purchase_fact 의 결제 축이 enum 밖으로 나가면
+    # 결제수단 분포가 조용히 미등록 값으로 채워진다.
+    invalid_payment = purchase_fact.where(
+        (
+            F.col("payment_method").isNotNull()
+            & ~F.col("payment_method").isin(*PAYMENT_METHODS)
+        )
+        | (
+            F.col("order_channel").isNotNull()
+            & ~F.col("order_channel").isin(*ORDER_CHANNELS)
+        )
+        | (F.col("paid_value") < 0)
+    ).count()
+    checks.append(_check(
+        "purchase_fact_payment_contract_is_valid",
+        invalid_payment == 0,
+        f"invalid_rows={invalid_payment}",
+    ))
+
+    for name, frame in (
+        ("product_repurchase_daily", product_repurchase),
+        ("brand_repurchase_daily", brand_repurchase),
+    ):
+        # 분포는 주문 단위다. 상품 row 를 세면 장바구니 크기만큼 부풀어
+        # 고유 주문 수를 넘어선다.
+        channel_total = F.col("backend_order_count") + F.col("local_order_count")
+        method_total = (
+            F.col("kakaopay_order_count")
+            + F.col("card_order_count")
+            + F.col("test_order_count")
+        )
+        invalid_split = frame.where(
+            F.col("backend_order_count").isNull()
+            | F.col("local_order_count").isNull()
+            | (channel_total > F.col("purchase_order_count"))
+            | (method_total > F.col("purchase_order_count"))
+            | (F.col("backend_paid_value") < 0)
+            | (
+                (F.col("backend_order_count") == 0)
+                & F.col("backend_paid_value").isNotNull()
+            )
+        ).count()
+        checks.append(_check(
+            f"{name}_payment_split_is_bounded",
+            invalid_split == 0,
+            f"invalid_rows={invalid_split}",
+        ))
 
     invalid_reason_counts = purchase_reason.where(
         (F.col("primary_order_count") > F.col("order_count"))

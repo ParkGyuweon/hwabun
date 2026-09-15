@@ -12,9 +12,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/recommend")
+@Tag(name = "추천", description = "로그인 회원 개인화 추천 프록시 API")
 public class RecommendationController {
 
   private final RecommendationClient recommendations;
@@ -26,6 +29,7 @@ public class RecommendationController {
   }
 
   @GetMapping
+  @Operation(summary = "개인화 추천 조회", description = "로그인한 MEMBER의 회원 속성을 서버에서 읽어 추천 서버로 전달합니다. 비로그인 요청은 거부합니다.")
   public ResponseEntity<String> recommend(
     @AuthenticationPrincipal ShopPrincipal actor,
     @RequestParam(defaultValue = "10") int size,

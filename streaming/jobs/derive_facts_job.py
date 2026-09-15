@@ -252,6 +252,9 @@ def _properties_schema() -> Any:
         "unit_price",
         "price_usd",
         "order_value",
+        "paid_value",
+        "payment_method",
+        "order_channel",
         "cart_value",
         "cart_size_after",
         "currency",
@@ -489,6 +492,11 @@ def _product_event_fact(
         _prop(F.col("_properties"), "order_value")
         .cast("decimal(18,2)")
         .alias("order_value"),
+        _prop(F.col("_properties"), "paid_value")
+        .cast("decimal(18,2)")
+        .alias("paid_value"),
+        _prop(F.col("_properties"), "payment_method").alias("payment_method"),
+        _prop(F.col("_properties"), "order_channel").alias("order_channel"),
         F.when(
             F.col("event_name") == F.lit("purchase"),
             (quantity * unit_price).cast("decimal(18,2)"),
@@ -520,7 +528,16 @@ def _product_event_fact(
 
 
 def _purchase_fact(product_event_fact_df: Any) -> Any:
-    """Project purchase item rows without turning behavior revenue into finance truth."""
+    """Project purchase item rows without turning behavior revenue into finance truth.
+
+    ``paid_value`` · ``payment_method`` · ``order_channel`` 은 주문 단위 값이라
+    한 주문의 상품 row 마다 같은 값이 반복된다. 합산하려면 ``order_id`` 로 먼저
+    접어야 한다 — 그냥 더하면 상품 수만큼 부풀어 오른다.
+
+    ``pg_provider`` · ``payment_id`` · ``paid_at`` 은 Fact 로 내리지 않는다.
+    PG 대사(對査)용 식별자라 행동 집계에 쓰는 축이 아니고, 필요하면
+    ``cleaned_events.properties`` 에 그대로 남아 있다.
+    """
 
     from pyspark.sql import functions as F
 
@@ -546,6 +563,9 @@ def _purchase_fact(product_event_fact_df: Any) -> Any:
         "unit_price",
         "item_revenue",
         "order_value",
+        "paid_value",
+        "payment_method",
+        "order_channel",
         "currency",
         "actor_type",
         "source",

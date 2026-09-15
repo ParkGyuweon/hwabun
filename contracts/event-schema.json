@@ -80,7 +80,8 @@
         "purchase_reason_select",
         "banner_impression",
         "banner_click",
-        "login"
+        "login",
+        "payment_failed"
       ]
     },
     "intent": {
@@ -470,6 +471,88 @@
     {
       "if": {
         "properties": {
+          "event_name": {"const": "purchase"}
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "type": "object",
+            "required": [
+              "order_id",
+              "items",
+              "payment_method",
+              "paid_value",
+              "order_channel"
+            ],
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "items": {
+                "type": "array"
+              },
+              "payment_method": {
+                "enum": ["kakaopay", "card", "test"]
+              },
+              "paid_value": {
+                "type": "number",
+                "minimum": 0
+              },
+              "order_channel": {
+                "enum": ["backend", "local"]
+              },
+              "pg_provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "payment_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "paid_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {"const": "payment_failed"}
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "type": "object",
+            "required": ["order_id"],
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "payment_method": {
+                "enum": ["kakaopay", "card", "test"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "event_name": {
             "enum": [
               "scroll_backtrack",
@@ -552,7 +635,8 @@
               "add_to_cart",
               "view_cart",
               "begin_checkout",
-              "purchase"
+              "purchase",
+              "payment_failed"
             ]
           }
         },

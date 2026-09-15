@@ -39,6 +39,20 @@ def _get(opener, url, timeout):
         return json.loads(r.read().decode("utf-8"))
 
 
+def _ingredients_of(detail: dict) -> str | None:
+    """상세 응답에서 전성분 문자열. `ingredientsText` → `ingredients`(문자열 또는 이름 목록) 순."""
+    for key in ("ingredientsText", "ingredients"):
+        v = detail.get(key)
+        if isinstance(v, str) and v.strip():
+            return v
+        if isinstance(v, list) and v:
+            names = [x if isinstance(x, str) else (x.get("name") or x.get("ingredient") or "") for x in v]
+            names = [n for n in names if n]
+            if names:
+                return ", ".join(names)
+    return None
+
+
 def to_registration(summary: dict, ingredients: str | None) -> dict:
     """백엔드 ProductSummary(+상세 전성분) → POST /api/products 입력"""
     return {
@@ -100,7 +114,9 @@ def sync(engine, base_url: str, opener=None, timeout: float = 10.0, log=print) -
             continue
         try:
             d = _get(opener, f"{base}/api/products/{pid}", timeout)
-            ing = d.get("ingredients") if isinstance(d, dict) else None
+            # 2026-09-14: 백엔드 상세가 전성분을 `ingredientsText`(문자열)로 옮기고 `ingredients` 는 빈 값이 됐다
+            # (feat/shop-backend-recommendation). 둘 다 읽고 비어 있지 않은 쪽을 쓴다 — 계약 §3 은 여전히 "전성분 문자열"
+            ing = _ingredients_of(d) if isinstance(d, dict) else None
         except Exception as ex:
             out["rejected"][pid] = [f"detail: {ex.__class__.__name__}"]
             continue
