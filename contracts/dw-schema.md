@@ -114,6 +114,65 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 가진 상품이 200개 중 137개다. `dim_product`와 segment Mart를 만들 때 병합하지 않으면
 같은 사람이 `brown`과 `brunette`로 나뉘어 집계된다.
 
+### 2.5 공개 층위와 공유 규칙
+
+브랜드 50개가 한 인프라를 나눠 쓴다. 브랜드 하나의 로그는 표본이 작아 혼자서는 판단이
+안 되고, 합치면 판단이 된다. 그런데 합치는 순간 내 숫자가 경쟁자에게 보인다.
+
+그래서 데이터를 한 덩어리로 보지 않고 **세 층**으로 가른다. 근거와 화면 설계는
+[`../docs/dashboard/collective-insight-data-boundary.md`](../docs/dashboard/collective-insight-data-boundary.md)에
+있고, 이 절은 그중 **Mart가 지켜야 하는 것**만 계약으로 옮긴 것이다.
+
+| 층 | 누가 보나 | 담는 것 | 담지 않는 것 |
+| --- | --- | --- | --- |
+| **A** 내부 자산 | 그 브랜드만 | 절대 건수·상품 단위 수치·세션 | — |
+| **B** 벤치마크 | 그 브랜드 (자기 위치만) | 코호트 분위(중앙값·25·75) | 절대 건수, 다른 브랜드 식별자, 상품 단위 |
+| **C** 커먼즈 | 모든 브랜드가 같은 것을 | 시장 전체 집계 | 브랜드 축 자체 |
+
+Mart를 이 층에 배정한다.
+
+| 층 | Mart |
+| --- | --- |
+| A | `product_daily_kpi`, `brand_daily_kpi`, `funnel_daily_kpi`, `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, 재구매 2종, `purchase_reason_daily`, `banner_daily`, `cross_brand_daily`, `user_trait_daily` |
+| B | `commons_cohort_weekly` (§4.18) |
+| C | `ingredient_weekly_interest` — 브랜드 축이 없고 주 단위다 |
+
+A층 Mart가 한 테이블에 여러 브랜드 행을 담는 것은 **저장 구조일 뿐 공개 범위가 아니다.**
+브랜드 격리는 Backend 인가가 한다(§6-7). B·C층은 그와 달리 **Mart 자체가 다른 브랜드에게
+보여도 되는 형태**여야 한다.
+
+#### 2.5.1 공유 규칙 R1~R9
+
+사람이 판단하지 않는다. `build_marts` 단계에서 규칙으로 건다.
+
+| # | 규칙 | 값 | 상태 |
+| --- | --- | --- | --- |
+| R1 | 최소 브랜드 수 | 셀에 브랜드 **5 미만**이면 억제 | 적용 |
+| R2 | 최소 표본 | 비율 분모 **200 미만**이면 `is_sample_sufficient=false` | 적용 (아래 근거) |
+| R3 | 지배 억제 | 한 브랜드가 셀 분모의 **50% 초과**면 억제 | 적용 |
+| R4 | 비율·분위만 | 절대 건수·합계 컬럼을 B·C층 Mart에 두지 않는다 | 적용 |
+| R5 | 해시 코호트 | 원 `brand_id`를 B·C층 Mart에 두지 않는다 | 적용 (아래 주의) |
+| R6 | 지연 발행 | C층은 주 단위 | 적용 — B층도 주 단위다 |
+| R7 | 기여 조건 | 옵트아웃 브랜드는 B·C층을 보지 못한다 | **미구현** |
+| R8 | 축별 동의 | 옵트인을 지표 묶음 단위로 | **미구현** |
+| R9 | 대체 상품 익명화 | 이름을 지우고 성분·가격대·카테고리 차이만 | 해당 Mart 없음 |
+
+**R1·R3는 값을 NULL로 만들고 행은 남긴다.** 행이 사라지면 "억제됐다"와 "코호트가 없다"를
+구분할 수 없다. 빈칸으로 보여주는 것이 정직하다.
+
+**R2의 200은 주간 분모 기준이다.** 일간에 걸면 재생 데이터 336행 중 5행(1%)만 통과한다.
+주간으로 접으면 브랜드 31/56(55%)이 통과한다. 그래서 B층 Mart의 grain을 일간이 아니라
+주간으로 잡았다 (2026-09-15 실측).
+
+**R7·R8은 동의를 받을 곳이 없어 구현하지 않는다.** 온보딩에 동의 단계가 없다.
+`commons_participating`은 전원 `true`로 채우고, 동의 UI가 생기면 그 값이 갈린다.
+없는 동의를 있는 것처럼 두지 않는다.
+
+**R5 주의 — 해시는 익명화가 아니다.** 브랜드가 56개고 목록이 공개돼 있으면 어떤 해시든
+전수 대입으로 뒤집힌다. `brand_hash`는 표기 규칙이고 **실제 보호는 R1과 R3가 한다.**
+소금값은 `COMMONS_HASH_SALT` 환경 변수로 받고 저장소에 두지 않는다. 값이 없으면 Job이
+실패한다 — 소금 없는 해시를 조용히 만들면 보호가 있는 것처럼 보인다.
+
 ## 3. Dimension
 
 ### 3.1 `dim_brand`
@@ -132,8 +191,17 @@ source = Backend 브랜드 등록 정보
 | `created_at` | timestamp | N | 브랜드 등록 시각 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
-`brand_hash`와 `commons_participating`의 산출·억제 규칙은 Commons Mart 작업에서
-확정한다. 브랜드 계정과의 1:1 인증 매핑은 Backend가 소유하고 DW에 복제하지 않는다.
+`brand_hash`는 `sha256(COMMONS_HASH_SALT + brand_id)`의 앞 16자다. 소금값은 환경 변수로
+받고 저장소에 두지 않으며, 없으면 Job이 실패한다. **해시가 익명화를 보장하지는 않는다** —
+브랜드 목록이 공개돼 있으면 전수 대입으로 뒤집힌다. 실제 보호는 R1·R3 억제가 한다(§2.5.1).
+
+`commons_participating`은 현재 전원 `true`다. 옵트인을 받을 온보딩 단계가 없어서
+R7·R8을 구현하지 않았다. 동의 UI가 생기면 이 값이 갈린다.
+
+산출 규칙은 `brand_cohort_dim`(§3.7)과 같아야 한다. 두 곳에서 따로 계산하면 조용히
+갈라진다.
+
+브랜드 계정과의 1:1 인증 매핑은 Backend가 소유하고 DW에 복제하지 않는다.
 원본 `brand_id`는 다른 브랜드에게 노출하지 않는다.
 
 ### 3.2 `dim_product`
@@ -233,6 +301,60 @@ source = event-properties-schema.md
 추가할 수 있다. Event payload에는 `persona_source`를 반복 저장하지 않고
 `simulation_run_id → dim_simulation_run.persona_source`로 조회한다.
 
+### 3.7 `brand_cohort_dim`
+
+```text
+grain/key = brand_id
+source = dim_product, contracts/product-feature-vocab.json
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| `brand_id` | string | N | 브랜드 식별자 |
+| `brand_hash` | string | N | §3.1과 같은 산출 규칙 |
+| `product_count` | bigint | N | 카탈로그의 상품 수 |
+| `product_count_band` | string | N | `1` · `2-3` · `4-10` · `11+` |
+| `dominant_price_bin` | string | Y | 상품이 가장 많은 가격 구간. 전 상품의 가격이 결측이면 NULL |
+| `dominant_secondary_category` | string | Y | 상품이 가장 많은 2차 카테고리 |
+| `cohort_key` | string | Y | `{product_count_band}\|{dominant_price_bin}`. 구간이 NULL이면 NULL |
+| `commons_participating` | boolean | N | §3.1과 같다. 현재 전원 `true` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**코호트는 "비슷한 처지의 브랜드"다.** 상품 16개짜리 브랜드와 1개짜리 브랜드를 같은
+잣대로 재면 비교가 의미를 잃는다. 그래서 규모와 가격대로 묶고, 그 안에서만 분위를 낸다.
+
+**축은 상품 수 밴드 × 가격 구간 두 개다.**
+
+`collective-insight-data-boundary.md` L190은 `product_count_band`를 `1–15 / 16–50 / 51+`로
+제안했으나 **이 카탈로그에서는 축이 상수가 된다** — 브랜드 56개 중 55개가 1–15에 들어가고
+최대 상품 수가 16개다. 실측 분포로 다시 잡았다 (2026-09-15).
+
+| band | 브랜드 수 |
+| --- | --- |
+| `1` | 19 |
+| `2-3` | 17 |
+| `4-10` | 17 |
+| `11+` | 3 |
+
+**카테고리를 축에 넣지 않는다.** 3축으로 가면 R1(브랜드 5 미만 억제)에서 56개 중 21개
+(37%)만 살아남아, 억제 규칙이 이 기능의 대상인 소규모 브랜드를 정확히 지운다. 2축이면
+35개(62%)다. `dominant_secondary_category`는 화면 설명용으로 남기되 `cohort_key`에는
+넣지 않는다.
+
+가격 구간은 [`product-feature-vocab.json`](./product-feature-vocab.json)의
+`price_bin_edges`를 읽는다. 숫자를 여기에 복제하지 않는다 — 추천 CBF 피처·배너 축·상품
+등록 화면이 같은 값을 쓰므로 갈라지면 같은 이름의 가격대가 두 벌이 된다.
+
+**동률이면 낮은 구간을 고른다.** 상품 2개가 각각 다른 구간이면 판정이 흔들리지 않게
+규칙 하나로 고정한다.
+
+`dim_product`에서만 파생하고 Event를 읽지 않는다. `category_price_reference`와 같은
+성격이라 Mart 단계(Q4)가 만든다.
+
+**상위 코호트 롤업은 구현하지 않는다.** R1이 "상위 코호트로 롤업"을 말하지만, 롤업 계층을
+정의하려면 어느 축을 먼저 버릴지 정해야 하고 그 판단은 화면이 붙어 실제 빈칸 비율을 본
+뒤가 낫다. 후속으로 둔다.
+
 ## 4. 일간 Mart 후보
 
 아래 Mart는 현재 Dashboard 요구를 저장 구조에 투영한 후보안이다. 지표 채택 전에는
@@ -255,7 +377,8 @@ source = event-properties-schema.md
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 서빙은 scope로 가른다 — 아래 |
-| `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
+| `category_price_reference`, `brand_cohort_dim` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
+| `commons_cohort_weekly` | 해당 없음 | 시드를 이미 뺀 `brand_daily_kpi`를 입력으로 쓴다 |
 
 `user_trait_daily`의 시드 유지는 **결정됐다** (2026-09-15, Jira 306). 실회원에게는
 시드가 없고, Persona 응답에 주입된 선호가 드러나는 것은 시연에서 보여주려는 바이므로
@@ -835,6 +958,51 @@ input = purchase_reason_fact, purchase_fact, user_trait_daily
 매출·정산 금액은 이 Mart들의 범위가 아니다. §6.4를 따라 Backend의 PAID 주문 상품이
 정본이며 DW는 금액을 복제하지 않는다.
 
+### 4.18 `commons_cohort_weekly`
+
+```text
+key = snapshot_week_kst + cohort_key + metric_name + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = brand_daily_kpi, brand_cohort_dim
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 코호트 집계 축 |
+| `metric_name` | string | N | `detail_entry_rate`, `view_to_cart_rate`, `information_view_rate` |
+| `p25`, `p50`, `p75` | double | Y | 코호트 안 브랜드들의 주간 비율 분위. 억제되면 NULL |
+| `brand_count` | bigint | N | 셀 안 브랜드 수. R1 판정 근거 |
+| `is_sample_sufficient` | boolean | N | R2 — 코호트 주간 분모가 `min_sample_size` 이상 |
+| `is_dominated` | boolean | N | R3 — 한 브랜드가 셀 분모의 50% 초과 |
+| `is_suppressed` | boolean | N | R1 또는 R3 위반. `true`면 분위 3종이 NULL |
+| `min_brand_count`, `min_sample_size`, `dominance_ratio` | int, int, double | N | 실행 당시 임계값 |
+| `window_start_date`, `window_end_date` | date | N | 관측 창 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**이 Mart는 B층이다** (§2.5). 다른 브랜드에게 보여도 되는 형태여야 한다.
+
+**브랜드 식별자가 없다.** 코호트 단위 집계라 행이 브랜드에 대응하지 않는다. R5는
+"원 `brand_id`를 두지 않는다"를 요구하는데 이 Mart는 `brand_hash`조차 없다. 내 위치는
+`brand_cohort_dim`에서 내 `cohort_key`를 찾아 이 Mart와 맞춰 보는 방식으로 읽는다.
+
+**절대 건수를 두지 않는다 (R4).** `brand_count`는 브랜드 수이지 매출·조회 건수가 아니고,
+R1 판정과 화면의 표본 병기에 필요하다. 세션 분모는 `is_sample_sufficient` 불리언으로만
+전달한다 — 숫자를 실으면 코호트가 작을 때 역산이 가능해진다.
+
+**억제는 행을 지우지 않고 값을 NULL로 만든다.** 행이 사라지면 "억제됐다"와 "코호트가
+아예 없다"를 구분할 수 없다. 빈칸으로 보여주는 것이 정직하다.
+
+**grain이 주간이다.** R2의 분모 200을 일간에 걸면 재생 데이터 336행 중 5행(1%)만
+통과한다. 주간으로 접으면 브랜드 31/56(55%)이 통과한다 (§2.5.1).
+
+`metric_name` 롱 포맷을 쓰는 이유는 지표를 더할 때 grain이 바뀌지 않게 하기 위해서다.
+`analytics_baseline`(§4.13)이 같은 형태다. 지금 세 지표는 전부 `brand_daily_kpi`에서
+나오며, 다른 Mart의 비율을 더하려면 그 Mart를 입력에 추가하고 `metric_name`만 늘린다.
+
+억제 판정 순서는 R1 → R3 → R2다. R1·R3는 값을 지우고 R2는 플래그만 남긴다 — 표본이
+얇은 것과 식별 위험이 있는 것은 다른 문제라서다.
+
+시드 Event는 입력 단계(`brand_daily_kpi`)에서 이미 빠져 있다(§4.0).
+
 ## 5. 실시간 Mart 후보
 
 ### 5.1 `realtime_event_stats`
@@ -957,6 +1125,8 @@ MySQL로 옮기지 않는 Mart와 그 이유다.
 
 | Mart | 이유 |
 | --- | --- |
+| `brand_cohort_dim` | 브랜드 → 코호트 배정표다. 대시보드는 `cohort_key`만 알면 되고 그 값은 Backend가 브랜드 인가와 함께 넘긴다 |
+| `commons_cohort_weekly` | **소비자가 아직 없다.** E4에 코호트 배지를 넣을지 프론트와 합의 전이다 (`dashboard-mart-api-spec.md` §1-5가 "코호트·중앙값 비교는 이 계약 범위 밖"). 합의되면 여기로 옮긴다 |
 | `banner_daily` | 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다 |
 | `cross_brand_daily` | 읽는 엔드포인트가 없다 |
 | `category_price_reference` | 카탈로그 파생 참조표다. Event를 읽지 않고 브랜드 축도 없다 |

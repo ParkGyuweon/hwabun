@@ -41,6 +41,8 @@ DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
 DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
+DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
+DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
@@ -94,6 +96,8 @@ class ValidatePipelineConfig:
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
     price_band_path: str = DEFAULT_PRICE_BAND_PATH
+    brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
+    commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
     cross_brand_daily_path: str = DEFAULT_CROSS_BRAND_DAILY_PATH
@@ -130,6 +134,8 @@ class ValidatePipelineConfig:
             "category_price_path": self.category_price_path,
             "persona_segment_path": self.persona_segment_path,
             "price_band_path": self.price_band_path,
+            "brand_cohort_path": self.brand_cohort_path,
+            "commons_cohort_path": self.commons_cohort_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
             "cross_brand_daily_path": self.cross_brand_daily_path,
@@ -255,6 +261,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--price-band-path",
         default=_env("BRAND_PRICE_BAND_DAILY_PATH", DEFAULT_PRICE_BAND_PATH),
     )
+    parser.add_argument(
+        "--brand-cohort-path",
+        default=_env("BRAND_COHORT_DIM_PATH", DEFAULT_BRAND_COHORT_PATH),
+    )
+    parser.add_argument(
+        "--commons-cohort-path",
+        default=_env("COMMONS_COHORT_WEEKLY_PATH", DEFAULT_COMMONS_COHORT_PATH),
+    )
     parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
     parser.add_argument("--cross-brand-daily-path", default=_env("CROSS_BRAND_DAILY_PATH", DEFAULT_CROSS_BRAND_DAILY_PATH))
@@ -306,6 +320,8 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         category_price_path=args.category_price_path,
         persona_segment_path=args.persona_segment_path,
         price_band_path=args.price_band_path,
+        brand_cohort_path=args.brand_cohort_path,
+        commons_cohort_path=args.commons_cohort_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
         cross_brand_daily_path=args.cross_brand_daily_path,
@@ -1873,6 +1889,141 @@ def validate_frames(
             overlapping == 0,
             f"mismatched_rows={overlapping}; 구간별 상품 수 합 != 관측 상품 수",
         ))
+
+    brand_cohort = frames.get("brand_cohort")
+    commons_cohort = frames.get("commons_cohort")
+    if brand_cohort is None or commons_cohort is None:
+        warnings.append({
+            "check": "commons_marts_are_absent",
+            "detail": "dim_brand 와 어휘집이 있는 실행에서만 생성된다",
+        })
+    else:
+        counts["brand_cohort_dim"] = brand_cohort.count()
+        counts["commons_cohort_weekly"] = commons_cohort.count()
+
+        checks.append(_check(
+            "brand_cohort_grain_is_unique",
+            _duplicate_count(brand_cohort, ["brand_id"]) == 0,
+            "brand_cohort_dim grain=brand_id",
+        ))
+        checks.append(_check(
+            "commons_cohort_grain_is_unique",
+            _duplicate_count(commons_cohort, [
+                "snapshot_week_kst", "cohort_key", "metric_name", *EXECUTION_AXES,
+            ]) == 0,
+            "commons_cohort_weekly grain=week+cohort+metric+축",
+        ))
+
+        # R5 — B층 Mart 는 다른 브랜드에게 보여도 되는 형태여야 한다.
+        leaked_identifiers = [
+            column for column in commons_cohort.columns
+            if column in ("brand_id", "brand_hash", "brand_name")
+        ]
+        checks.append(_check(
+            "commons_cohort_has_no_brand_identifier",
+            leaked_identifiers == [],
+            f"leaked={leaked_identifiers}; 코호트 단위 집계라 행이 브랜드에 대응하지 않는다",
+        ))
+
+        # R4 — 절대 건수를 두지 않는다. brand_count 와 임계값 파라미터만 예외다.
+        allowed_counts = {"brand_count", "min_brand_count", "min_sample_size"}
+        leaked_counts = [
+            column for column in commons_cohort.columns
+            if column not in allowed_counts
+            and (column.endswith("_count") or column.endswith("_sessions"))
+        ]
+        checks.append(_check(
+            "commons_cohort_has_no_absolute_counts",
+            leaked_counts == [],
+            f"leaked={leaked_counts}; 세션 분모는 is_sample_sufficient 로만 전달한다",
+        ))
+
+        # R1·R3 — 억제된 셀은 값이 비어야 한다. 행은 남는다.
+        leaked_suppressed = commons_cohort.where(
+            F.col("is_suppressed")
+            & (
+                F.col("p25").isNotNull()
+                | F.col("p50").isNotNull()
+                | F.col("p75").isNotNull()
+            )
+        ).count()
+        checks.append(_check(
+            "commons_cohort_suppressed_cells_are_empty",
+            leaked_suppressed == 0,
+            f"leaked_rows={leaked_suppressed}",
+        ))
+
+        invalid_commons = commons_cohort.where(
+            (F.col("brand_count") < 0)
+            | (F.col("p25") > F.col("p50"))
+            | (F.col("p50") > F.col("p75"))
+            | (
+                F.greatest(
+                    *[
+                        F.when(
+                            F.col(column).isNotNull()
+                            & ~F.col(column).between(0.0, 1.0),
+                            F.lit(1),
+                        ).otherwise(F.lit(0))
+                        for column in ("p25", "p50", "p75")
+                    ]
+                )
+                == 1
+            )
+            | (
+                # 억제되지 않았는데 값이 비면 계산이 끊긴 것이다
+                ~F.col("is_suppressed") & F.col("p50").isNull()
+            )
+        ).count()
+        checks.append(_check(
+            "commons_cohort_quantiles_follow_contract",
+            invalid_commons == 0,
+            f"invalid_rows={invalid_commons}; p25<=p50<=p75 · 0~1 · 억제 아니면 값 존재",
+        ))
+
+        # R1 이 실제로 걸렸는지. 임계값을 넘는데 억제된 셀이 있으면 판정이 어긋난 것이다.
+        wrong_suppression = commons_cohort.where(
+            (F.col("brand_count") >= F.col("min_brand_count"))
+            & ~F.col("is_dominated")
+            & F.col("is_suppressed")
+        ).count()
+        checks.append(_check(
+            "commons_cohort_suppression_matches_thresholds",
+            wrong_suppression == 0,
+            f"invalid_rows={wrong_suppression}",
+        ))
+
+        # cohort_key 는 brand_cohort_dim 이 만든 값이어야 한다.
+        unknown_cohorts = (
+            commons_cohort.select("cohort_key")
+            .distinct()
+            .join(
+                brand_cohort.where(F.col("cohort_key").isNotNull())
+                .select("cohort_key")
+                .distinct(),
+                ["cohort_key"],
+                "left_anti",
+            )
+            .count()
+        )
+        checks.append(_check(
+            "commons_cohort_keys_come_from_brand_cohort_dim",
+            unknown_cohorts == 0,
+            f"unknown_keys={unknown_cohorts}",
+        ))
+
+        # 가격을 모르는 브랜드는 코호트에 넣지 않는다 (dw-schema §3.7).
+        invalid_cohort_keys = brand_cohort.where(
+            (F.col("dominant_price_bin").isNull() & F.col("cohort_key").isNotNull())
+            | (F.col("product_count") < 1)
+            | F.col("product_count_band").isNull()
+            | F.col("brand_hash").isNull()
+        ).count()
+        checks.append(_check(
+            "brand_cohort_assignment_is_valid",
+            invalid_cohort_keys == 0,
+            f"invalid_rows={invalid_cohort_keys}",
+        ))
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -1969,6 +2120,15 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         ).parquet(config.price_band_path)
     except Exception:
         pass
+    for name, path in (
+        ("brand_cohort", config.brand_cohort_path),
+        ("commons_cohort", config.commons_cohort_path),
+    ):
+        try:
+            frames[name] = spark.read.option("mergeSchema", "true").parquet(path)
+        except Exception:
+            # Commons Mart 를 만들지 않은 실행에는 없다.
+            pass
     try:
         frames["analytics_baseline"] = spark.read.option("mergeSchema", "true").parquet(
             config.baseline_path

@@ -75,7 +75,8 @@ function Invoke-BatchPipeline {
         '--dim-brand-path', "$dataRoot/processed/dim_brand",
         '--product-catalog-path', '/opt/project/batch/ingest/data/products_200.json',
         '--registered-product-path', '/opt/project/batch/ingest/data/serving/registered_products.jsonl',
-        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
+        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts',
+        '--commons-hash-salt', $env:COMMONS_HASH_SALT
     )
     if ($env:REGISTERED_PRODUCT_BRAND_PATH) {
         $deriveArguments += @(
@@ -111,7 +112,10 @@ function Invoke-BatchPipeline {
         '--trait-weights-path', '/opt/project/contracts/user-trait-weights.json',
         '--feature-vocab-path', '/opt/project/contracts/product-feature-vocab.json',
         '--affinity-lift-path', '/opt/project/batch/ingest/data/affinity_lift.csv',
-        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts'
+        '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts',
+        '--dim-brand-path', "$dataRoot/processed/dim_brand",
+        '--brand-cohort-path', "$dataRoot/marts/brand_cohort_dim",
+        '--commons-cohort-path', "$dataRoot/marts/commons_cohort_weekly"
     )
     if ($env:BASELINE_POLICY_VERSION -and $env:BASELINE_START_DATE -and $env:BASELINE_END_DATE) {
         $martArguments += @(
@@ -152,6 +156,8 @@ function Invoke-PipelineValidation {
         '--category-price-path', "$dataRoot/marts/category_price_reference",
         '--persona-segment-path', "$dataRoot/marts/persona_segment_daily_kpi",
         '--price-band-path', "$dataRoot/marts/brand_price_band_daily_kpi",
+        '--brand-cohort-path', "$dataRoot/marts/brand_cohort_dim",
+        '--commons-cohort-path', "$dataRoot/marts/commons_cohort_weekly",
         '--banner-daily-path', "$dataRoot/marts/banner_daily",
         '--user-trait-daily-path', "$dataRoot/marts/user_trait_daily",
         '--cross-brand-daily-path', "$dataRoot/marts/cross_brand_daily",

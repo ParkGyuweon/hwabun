@@ -45,6 +45,9 @@ DEFAULT_INGREDIENT_WEEKLY_PATH = "data/marts/ingredient_weekly_interest"
 DEFAULT_CATEGORY_PRICE_PATH = "data/marts/category_price_reference"
 DEFAULT_PERSONA_SEGMENT_PATH = "data/marts/persona_segment_daily_kpi"
 DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
+DEFAULT_DIM_BRAND_PATH = "data/processed/dim_brand"
+DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
+DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -109,6 +112,9 @@ class BuildMartsConfig:
     category_price_path: str = DEFAULT_CATEGORY_PRICE_PATH
     persona_segment_path: str = DEFAULT_PERSONA_SEGMENT_PATH
     price_band_path: str = DEFAULT_PRICE_BAND_PATH
+    dim_brand_path: str = DEFAULT_DIM_BRAND_PATH
+    brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
+    commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -146,6 +152,9 @@ class BuildMartsConfig:
             "category_price_path": self.category_price_path,
             "persona_segment_path": self.persona_segment_path,
             "price_band_path": self.price_band_path,
+            "dim_brand_path": self.dim_brand_path,
+            "brand_cohort_path": self.brand_cohort_path,
+            "commons_cohort_path": self.commons_cohort_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -298,6 +307,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="brand_price_band_daily_kpi output path",
     )
     parser.add_argument(
+        "--dim-brand-path",
+        default=_env("DIM_BRAND_PATH", DEFAULT_DIM_BRAND_PATH),
+        help="dim_brand input path (brand_hash · commons_participating)",
+    )
+    parser.add_argument(
+        "--brand-cohort-path",
+        default=_env("BRAND_COHORT_DIM_PATH", DEFAULT_BRAND_COHORT_PATH),
+        help="brand_cohort_dim output path",
+    )
+    parser.add_argument(
+        "--commons-cohort-path",
+        default=_env("COMMONS_COHORT_WEEKLY_PATH", DEFAULT_COMMONS_COHORT_PATH),
+        help="commons_cohort_weekly output path (B층 — dw-schema §2.5)",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -362,6 +386,9 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         category_price_path=args.category_price_path,
         persona_segment_path=args.persona_segment_path,
         price_band_path=args.price_band_path,
+        dim_brand_path=args.dim_brand_path,
+        brand_cohort_path=args.brand_cohort_path,
+        commons_cohort_path=args.commons_cohort_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -1737,6 +1764,248 @@ def _category_price_reference(dim_product_df: Any, min_sample_size: int) -> Any:
     )
 
 
+# 코호트 축. 상품 수 밴드 경계는 재생 데이터 실측으로 잡았다 (dw-schema.md §3.7).
+# 기획 문서의 1-15 / 16-50 / 51+ 는 이 카탈로그에서 브랜드 56개 중 55개를 한 칸에
+# 몰아넣어 축이 상수가 된다 — 최대 상품 수가 16개다.
+PRODUCT_COUNT_BANDS = ((1, "1"), (3, "2-3"), (10, "4-10"), (None, "11+"))
+
+
+def _product_count_band_column(count_column: Any) -> Any:
+    """상품 수를 밴드 토큰으로 바꾼다."""
+
+    from pyspark.sql import functions as F
+
+    expression = None
+    for upper, token in PRODUCT_COUNT_BANDS:
+        condition = count_column <= F.lit(upper) if upper is not None else F.lit(True)
+        expression = (
+            F.when(condition, F.lit(token)) if expression is None
+            else expression.when(condition, F.lit(token))
+        )
+    return expression
+
+
+def _dominant_value(frame: Any, key: str, value: str, alias: str) -> Any:
+    """``key`` 마다 가장 많이 나온 ``value``. 동률이면 사전순으로 낮은 쪽.
+
+    동률에서 규칙이 없으면 실행마다 판정이 흔들려 재계산 결정성이 깨진다.
+    """
+
+    from pyspark.sql import functions as F
+
+    counted = (
+        frame.where(F.col(value).isNotNull())
+        .groupBy(key, value)
+        .agg(F.count("*").alias("_n"))
+    )
+    # struct 정렬로 (빈도 내림차순, 값 오름차순) 최댓값을 한 번에 고른다.
+    return counted.groupBy(key).agg(
+        F.min(F.struct((-F.col("_n")).alias("_rank"), F.col(value).alias("_value")))
+        .getField("_value")
+        .alias(alias)
+    )
+
+
+def _brand_cohort_dim(
+    dim_product_df: Any,
+    dim_brand_df: Any,
+    price_bins: list[tuple[str, float | None]],
+) -> Any:
+    """브랜드를 "비슷한 처지" 끼리 묶는다 (dw-schema.md §3.7).
+
+    상품 16개짜리 브랜드와 1개짜리 브랜드를 같은 잣대로 재면 비교가 의미를 잃는다.
+    규모(상품 수 밴드) × 가격 구간 두 축으로 묶고 그 안에서만 분위를 낸다.
+
+    카테고리를 축에 넣지 않는다. 3축이면 R1(브랜드 5 미만 억제)에서 56개 중 21개만
+    살아남아, 억제 규칙이 이 기능의 대상인 소규모 브랜드를 정확히 지운다.
+
+    ``brand_hash`` 는 ``dim_brand`` 에서 Join 으로 가져온다. 같은 값을 두 곳에서
+    계산하면 조용히 갈라진다.
+    """
+
+    from pyspark.sql import functions as F
+
+    products = dim_product_df.select(
+        F.trim(F.col("brand_id").cast("string")).alias("brand_id"),
+        "product_id",
+        "secondary_category",
+        _price_bin_column(price_bins).alias("price_bin"),
+    ).where(_valid_brand())
+
+    counts = products.groupBy("brand_id").agg(
+        F.countDistinct("product_id").cast("long").alias("product_count")
+    )
+    price = _dominant_value(products, "brand_id", "price_bin", "dominant_price_bin")
+    category = _dominant_value(
+        products, "brand_id", "secondary_category", "dominant_secondary_category"
+    )
+
+    cohort = (
+        counts.join(price, ["brand_id"], "left")
+        .join(category, ["brand_id"], "left")
+        .withColumn(
+            "product_count_band", _product_count_band_column(F.col("product_count"))
+        )
+        # 가격을 모르는 브랜드는 코호트에 넣지 않는다. 임의 구간에 넣으면 그 코호트의
+        # 분위가 오염되고, 빼면 그 브랜드가 벤치마크를 못 본다 — 후자가 정직하다.
+        .withColumn(
+            "cohort_key",
+            F.when(
+                F.col("dominant_price_bin").isNotNull(),
+                F.concat_ws(
+                    "|", F.col("product_count_band"), F.col("dominant_price_bin")
+                ),
+            ),
+        )
+    )
+    brands = dim_brand_df.select(
+        "brand_id", "brand_hash", "commons_participating"
+    )
+    return cohort.join(brands, ["brand_id"], "inner").select(
+        "brand_id",
+        "brand_hash",
+        "product_count",
+        "product_count_band",
+        "dominant_price_bin",
+        "dominant_secondary_category",
+        "cohort_key",
+        "commons_participating",
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+
+
+# 공유 규칙 임계값 (dw-schema.md §2.5.1). 값을 여기서 바꾸면 계약과 갈라진다.
+DEFAULT_MIN_BRAND_COUNT = 5        # R1
+DEFAULT_MIN_SAMPLE_SIZE = 200      # R2 — 주간 분모 기준
+DEFAULT_DOMINANCE_RATIO = 0.5      # R3
+
+# B층이 공유하는 비율. brand_daily_kpi 에서 나온다.
+# 지표를 더하려면 여기에 (이름, 분자, 분모) 를 추가한다 — grain 은 바뀌지 않는다.
+COMMONS_METRICS = (
+    ("detail_entry_rate", "detail_view_sessions", "impression_sessions"),
+    ("view_to_cart_rate", "add_to_cart_sessions", "detail_view_sessions"),
+    ("information_view_rate", "information_view_sessions", "product_view_sessions"),
+)
+
+
+def _commons_cohort_weekly(
+    brand_daily_df: Any,
+    brand_cohort_df: Any,
+    min_brand_count: int = DEFAULT_MIN_BRAND_COUNT,
+    min_sample_size: int = DEFAULT_MIN_SAMPLE_SIZE,
+    dominance_ratio: float = DEFAULT_DOMINANCE_RATIO,
+) -> Any:
+    """코호트별 비율 분위. B층이라 다른 브랜드에게 보여도 되는 형태다.
+
+    브랜드 하나의 로그는 표본이 작아 혼자서는 판단이 안 되고, 합치면 판단이 된다.
+    그런데 합치는 순간 내 숫자가 경쟁자에게 보인다. 그래서 **비율의 분위만 내고 절대
+    건수를 두지 않으며**, 표본이 얇거나 한 브랜드가 지배하는 셀은 값을 지운다
+    (``dw-schema.md`` §2.5.1 R1~R4).
+
+    grain 이 주간인 이유는 R2 때문이다. 분모 200 을 일간에 걸면 재생 데이터 336행 중
+    5행(1%)만 통과한다. 주간으로 접으면 브랜드 31/56(55%)이 통과한다.
+
+    **브랜드 식별자를 싣지 않는다.** 코호트 단위 집계라 행이 브랜드에 대응하지 않고,
+    ``brand_hash`` 조차 두지 않는다 (R5 보다 강하다).
+    """
+
+    from pyspark.sql import functions as F
+
+    # 주간 창은 관측 구간의 마지막 날에서 끊는다. 재구매 Mart 의 snapshot 과 같은 방식.
+    snapshot = brand_daily_df.agg(
+        F.max("event_date_kst").alias("snapshot")
+    ).first()["snapshot"]
+    window_days = 7
+
+    cohorts = brand_cohort_df.where(
+        F.col("cohort_key").isNotNull() & F.col("commons_participating")
+    ).select("brand_id", "cohort_key")
+
+    if snapshot is None:
+        # 브랜드 행이 없는 실행에서도 스키마는 남긴다.
+        weekly = brand_daily_df.withColumn(
+            "window_end_date", F.col("event_date_kst")
+        ).withColumn("window_start_date", F.col("event_date_kst"))
+    else:
+        start = F.date_sub(F.lit(snapshot).cast("date"), window_days - 1)
+        weekly = (
+            brand_daily_df.where(F.col("event_date_kst") >= start)
+            .withColumn("window_start_date", start)
+            .withColumn("window_end_date", F.lit(snapshot).cast("date"))
+        )
+
+    axes = list(EXECUTION_AXES)
+    per_brand = weekly.join(cohorts, ["brand_id"], "inner").groupBy(
+        "cohort_key", "window_start_date", "window_end_date", "brand_id", *axes
+    ).agg(*[
+        F.sum(F.col(column)).cast("long").alias(column)
+        for column in sorted({
+            column
+            for _, numerator, denominator in COMMONS_METRICS
+            for column in (numerator, denominator)
+        })
+    ])
+
+    key_columns = [
+        "window_start_date", "window_end_date", "cohort_key", "metric_name", *axes
+    ]
+    frames = []
+    for metric_name, numerator, denominator in COMMONS_METRICS:
+        scored = per_brand.select(
+            "cohort_key", "window_start_date", "window_end_date", *axes,
+            F.lit(metric_name).alias("metric_name"),
+            F.col(denominator).alias("_denominator"),
+            _safe_ratio(F.col(numerator), F.col(denominator)).alias("_value"),
+        )
+        frames.append(scored)
+    metrics = frames[0]
+    for extra in frames[1:]:
+        metrics = metrics.unionByName(extra)
+
+    aggregated = metrics.groupBy(*key_columns).agg(
+        F.countDistinct(
+            F.when(F.col("_value").isNotNull(), F.col("cohort_key"))
+        ).cast("long").alias("_unused"),
+        F.count(F.col("_value")).cast("long").alias("brand_count"),
+        F.sum("_denominator").cast("long").alias("_sample"),
+        F.max("_denominator").cast("long").alias("_largest"),
+        # 근사치가 아닌 정확 percentile. category_price_reference 와 같다.
+        F.expr("percentile(_value, 0.25)").cast("double").alias("_p25"),
+        F.expr("percentile(_value, 0.5)").cast("double").alias("_p50"),
+        F.expr("percentile(_value, 0.75)").cast("double").alias("_p75"),
+        F.current_timestamp().alias("mart_processed_at"),
+    ).drop("_unused")
+
+    # R1 → R3 → R2 순서로 판정한다. R1·R3 는 값을 지우고 R2 는 플래그만 남긴다 —
+    # 표본이 얇은 것과 식별 위험이 있는 것은 다른 문제다.
+    too_few_brands = F.col("brand_count") < F.lit(int(min_brand_count))
+    dominated = (F.col("_sample") > 0) & (
+        F.col("_largest") > F.col("_sample") * F.lit(float(dominance_ratio))
+    )
+    suppressed = too_few_brands | dominated
+
+    result = (
+        aggregated.withColumn("is_dominated", dominated)
+        .withColumn("is_suppressed", suppressed)
+        .withColumn(
+            "is_sample_sufficient", F.col("_sample") >= F.lit(int(min_sample_size))
+        )
+    )
+    for alias, source in (("p25", "_p25"), ("p50", "_p50"), ("p75", "_p75")):
+        result = result.withColumn(
+            alias, F.when(~F.col("is_suppressed"), F.col(source))
+        )
+    return (
+        result.drop("_sample", "_largest", "_p25", "_p50", "_p75")
+        .withColumn("snapshot_week_kst", F.col("window_end_date"))
+        .withColumn("min_brand_count", F.lit(int(min_brand_count)).cast("int"))
+        .withColumn("min_sample_size", F.lit(int(min_sample_size)).cast("int"))
+        .withColumn(
+            "dominance_ratio", F.lit(float(dominance_ratio)).cast("double")
+        )
+    )
+
+
 def load_trait_contract(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as stream:
         contract = json.load(stream)
@@ -2148,6 +2417,7 @@ def build_mart_frames(
     repurchase_window_days: int = DEFAULT_REPURCHASE_WINDOW_DAYS,
     persona_bridge_df: Any | None = None,
     price_bins: list[tuple[str, float | None]] | None = None,
+    dim_brand_df: Any | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -2168,6 +2438,14 @@ def build_mart_frames(
         frames["brand_price_band_daily_kpi"] = _brand_price_band_daily_kpi(
             product_fact_df, dim_product_df, price_bins
         )
+        if dim_brand_df is not None:
+            # 코호트는 카탈로그 파생이고, Commons 는 그 위에 brand_daily_kpi 를 얹는다.
+            frames["brand_cohort_dim"] = _brand_cohort_dim(
+                dim_product_df, dim_brand_df, price_bins
+            )
+            frames["commons_cohort_weekly"] = _commons_cohort_weekly(
+                frames["brand_daily_kpi"], frames["brand_cohort_dim"]
+            )
     if trait_contract is not None:
         # 장기 성향은 주입된 선호도 신호로 본다. 시드를 뺄지는 별도 결정 대기.
         frames["user_trait_daily"] = _user_trait_daily(sessionized_df, trait_contract)
@@ -2284,6 +2562,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     purchase_reason_fact = spark.read.option("mergeSchema", "true").parquet(
         config.purchase_reason_fact_path
     )
+    dim_brand = spark.read.option("mergeSchema", "true").parquet(
+        config.dim_brand_path
+    )
     persona_bridge = load_persona_segments(spark, config.persona_bridge_path)
     price_bins = load_price_bins(config.feature_vocab_path)
     frames = build_mart_frames(
@@ -2307,6 +2588,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         config.repurchase_window_days,
         persona_bridge,
         price_bins,
+        dim_brand,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -2331,6 +2613,14 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         frames["brand_price_band_daily_kpi"],
         config.price_band_path,
         "event_date_kst",
+    )
+    frames["brand_cohort_dim"].write.mode("overwrite").parquet(
+        config.brand_cohort_path,
+    )
+    _write_mart(
+        frames["commons_cohort_weekly"],
+        config.commons_cohort_path,
+        "snapshot_week_kst",
     )
     _write_mart(
         frames["product_repurchase_daily"],
