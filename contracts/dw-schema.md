@@ -7,20 +7,27 @@
 ## 1. 범위와 우선순위
 
 이 문서는 [`processed-schema.md`](./processed-schema.md)의 Processed Dataset을
-Delta Lake에 보존하고 MySQL `dw`로 제공하는 저장 계층, 책임 경계와 공통 물리
+**Parquet**으로 보존하고 MySQL `dw`로 제공하는 저장 계층, 책임 경계와 공통 물리
 규칙을 확정한다. Dimension과 Mart의 grain, 입력, key, 컬럼, 논리 타입 및 nullable은
 현재 Dashboard 후보를 구현 가능성 관점에서 정리한 초안이다.
 
-- Delta Lake의 `marts`는 계산 결과의 기준 저장소다.
+- **Parquet `marts`가 계산 결과의 기준 저장소다.** `build_marts_job.py`가
+  `mode("overwrite")`로 전체를 다시 쓰고, 파티션 컬럼은 Mart마다 §4가 정한다.
 - MySQL `dw` schema는 Dashboard API 조회용 serving projection이다.
-- 물리 파티션, 인덱스, Delta `MERGE`, MySQL DDL은 구현 단계에서 확정된 저장
-  계층과 공통 규칙을 보존하는 범위로 정한다.
+- 물리 파티션, 인덱스, MySQL DDL은 구현 단계에서 확정된 저장 계층과 공통 규칙을
+  보존하는 범위로 정한다.
 - 처리 근거, KPI 화면 연결, 현재 구현 상태와 검증 계획은
   [`../docs/analytics/dw-design.md`](../docs/analytics/dw-design.md)에서 설명한다.
 
-§2의 입력 grain·공통 타입·NULL·집계 원칙과 Delta→MySQL 책임 경계는 이번 작업의
+§2의 입력 grain·공통 타입·NULL·집계 원칙과 Parquet→MySQL 책임 경계는 이번 작업의
 확정 범위다. §3~§5의 Dimension·Mart·KPI는 저장 가능성을 확인하기 위한 후보이며,
 Dashboard에 실제 제공할 지표는 추천·AI 담당과 합의한 뒤 별도 확정한다.
+
+**Delta Lake는 이번 MVP의 범위가 아니다.** 매 실행이 전체 재계산·전체 덮어쓰기라
+Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜잭션 로그·타임 트래블이
+주는 이득보다 의존성과 운용 비용이 크다. `deploy/ec2-2/README`도 "Delta Lake나 다중
+서버 분산 저장·고가용성 구성은 포함하지 않는다"로 같은 범위를 적고 있다. 증분 적재가
+필요해지는 시점에 다시 판단한다 (2026-09-15 결정).
 
 ## 2. 공통 계약
 
@@ -853,7 +860,7 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
 
 ## 6. 후보 Mart 물리화 시 보존할 조건
 
-1. Delta `marts`와 MySQL `dw` projection은 같은 grain과 KPI 값을 가져야 한다.
+1. Parquet `marts`와 MySQL `dw` projection은 같은 grain과 KPI 값을 가져야 한다.
 2. MySQL serving table은 API 조회에 불필요한 상세 컬럼을 생략할 수 있지만 key와
    KPI 의미를 바꾸지 않는다.
 3. `category_id`, `brand_id`는 `dim_product`에서 보강한 집계 시점 스냅샷이다.
@@ -870,3 +877,211 @@ Collector가 Kafka 전송 전에 거부한 Event는 별도 topic/storage가 없�
 8. `*_interest_score`를 0으로 하한 절단하지 않는다. 음수는 부정 행동의 신호다.
 9. §2.4의 표기 병합을 집계 전에 적용한다. 특히 상품 리뷰 통계의 `brunette`를
    `brown`으로 합치지 않으면 segment Join이 같은 사람을 둘로 나눈다.
+
+## 7. MySQL `dw` projection
+
+### 7.1 적재 방식
+
+Spark는 Mart를 계산해 Parquet으로 쓰고, **적재 Job이 그것을 MySQL `dw`로 옮긴다.**
+적재 Job은 백엔드가 구현한다 (2026-09-15 합의). 이 절은 그 Job이 지켜야 할 계약이다.
+
+```text
+Parquet marts/<mart>          기준 저장소 (§1)
+  → dw.<mart>__stg_<run_id>   실행별 staging 테이블에 적재
+  → 검증                       건수 · 키 중복 · 필수값
+  → dw.<mart>                 조회 테이블과 교체
+```
+
+**조회 테이블을 직접 지우고 다시 넣지 않는다.** 적재 도중 조회가 들어오면 빈 결과나
+반쪽 결과를 보게 된다. staging에 다 넣고 검증이 끝난 뒤 한 번에 바꾼다.
+
+**검증에 실패하면 기존 조회 결과를 유지한다.** 오래된 값이 잘못된 값보다 낫다.
+실패한 staging 테이블은 원인을 확인할 수 있도록 남기고, 다음 성공 적재가 정리한다.
+
+교체는 MySQL `RENAME TABLE`의 원자성을 쓴다.
+
+```sql
+RENAME TABLE dw.brand_daily_kpi        TO dw.brand_daily_kpi__old,
+             dw.brand_daily_kpi__stg_1 TO dw.brand_daily_kpi;
+DROP TABLE dw.brand_daily_kpi__old;
+```
+
+검증 항목은 셋이다. 셋 다 통과해야 교체한다.
+
+| 검사 | 기준 |
+| --- | --- |
+| 건수 | staging 행 수 = Parquet 행 수 |
+| 키 중복 | PRIMARY KEY 기준 중복 0건 |
+| 필수값 | `NOT NULL` 컬럼에 NULL 0건 |
+
+Q5(`validate_pipeline_job`)가 이미 같은 불변식을 Parquet 단계에서 검사한다. 적재
+단계에서 다시 보는 이유는 **옮기는 과정 자체가 깨질 수 있기 때문**이다. 타입 변환에서
+잘리거나, 부분 적재로 끝나거나, 문자열이 VARCHAR 길이를 넘칠 수 있다.
+
+### 7.2 projection 대상과 적재 순서
+
+**Parquet을 읽을 수 없는 소비자가 있는 Mart만 MySQL로 옮긴다.** 지금 그런 소비자는
+둘뿐이다.
+
+1. **Dashboard API** — Spark는 잡을 띄우는 데만 수 초라 조회를 받을 수 없다.
+2. **추천 서버** — EC2-1에 있고 Parquet은 EC2-2에 있다. 파일을 읽을 수 없다
+   (`deploy/ec2-2/README`: "EC2-1의 추천 데이터 Volume은 이 서버에 자동
+   공유되지 않는다").
+
+나머지는 Parquet에만 둔다. 소비자가 없는데 테이블을 만들면 적재 Job이 옮길 대상만
+늘고, 스키마가 바뀔 때 고칠 곳도 는다.
+
+| 순서 | Mart | 소비자 |
+| --- | --- | --- |
+| 1 | `user_trait_daily` | 추천 서버 `long_term_trait` (Jira 306) |
+| 2 | `brand_daily_kpi`, `product_daily_kpi`, `funnel_daily_kpi` | Dashboard E1·E2 |
+| 3 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | Dashboard E4 |
+| 4 | `ingredient_weekly_interest` | Dashboard E5 |
+| 5 | `brand_repurchase_daily`, `product_repurchase_daily`, `purchase_reason_daily` | Dashboard E7 |
+
+`brand_price_band_daily_kpi`의 소비자는 **아직 합의 전이다.** E4 응답에 가격 블록을
+더해 달라고 프론트에 요청한 상태이고(§4.6-1), 합의가 되지 않으면 이 Mart도
+Parquet에만 둔다.
+
+MySQL로 옮기지 않는 Mart와 그 이유다.
+
+| Mart | 이유 |
+| --- | --- |
+| `banner_daily` | 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다 |
+| `cross_brand_daily` | 읽는 엔드포인트가 없다 |
+| `category_price_reference` | 카탈로그 파생 참조표다. Event를 읽지 않고 브랜드 축도 없다 |
+| `analytics_baseline` | 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다 |
+
+소비자가 생기면 DDL 생성기의 `GRAINS`에 한 줄 더하고 다시 돌린다.
+
+### 7.2.1 projection에서 빼는 컬럼
+
+§6-2가 "API 조회에 불필요한 상세 컬럼을 생략할 수 있지만 key와 KPI 의미를 바꾸지
+않는다"고 허용한다. 지금 빼는 것은 둘뿐이다.
+
+| Mart | 컬럼 | 이유 |
+| --- | --- | --- |
+| `product_daily_kpi` | `revenue_amount` | 행동 로그 기반 금액이다. §6-4가 매출·정산 합산을 금지한다 |
+| `product_daily_kpi` | `currency` | `revenue_amount`의 단위라 함께 뺀다 |
+
+**비율 컬럼은 빼지 않는다.** count에서 다시 나눌 수 있지만, 분모 규칙이 계약에만
+있어서 소비자가 틀릴 수 있다. 실제로 그 실수가 났다 — `product_daily_kpi`의
+`add_to_cart_rate`가 1,248행 중 323행에서 1.0을 넘었고 원인이 분모였다(Jira 277).
+비율을 값으로 실어 보내는 것이 그 규칙을 소비자에게 전달하는 방법이다.
+
+### 7.3 타입 매핑
+
+논리 타입에서 MySQL 타입으로 가는 규칙이다. **새 Mart도 이 표를 따른다.**
+
+| 논리 타입 | MySQL | 근거 |
+| --- | --- | --- |
+| date | `DATE` | |
+| timestamp | `DATETIME(3)` | `TIMESTAMP`는 2038년 상한과 자동 갱신이 있다. 집계 시각에 둘 다 필요 없다 |
+| bigint | `BIGINT` | |
+| int | `INT` | |
+| double | `DOUBLE` | 비율·점수. 정확한 소수가 필요한 값은 여기 없다 |
+| decimal(18,2) | `DECIMAL(18,2)` | 금액. `DOUBLE`로 두면 합산에서 오차가 쌓인다 |
+| boolean | `TINYINT(1)` | MySQL에 boolean이 없다 |
+| array&lt;string&gt; | `JSON` | Dimension에만 있다. Mart는 배열 컬럼을 두지 않는다 |
+| string | `VARCHAR(n)` | 길이는 §7.4 |
+
+문자 집합은 `utf8mb4` / `utf8mb4_0900_ai_ci`다. `label_ko` 같은 한국어 컬럼이 있고,
+이모지가 섞여도 깨지지 않아야 한다.
+
+### 7.4 VARCHAR 길이
+
+**컬럼 이름이 같으면 어느 Mart에 있든 길이가 같아야 한다.** 다르면 조인과 적재에서
+잘린다. 아래는 2026-09-15 재생 데이터(100만 건) 실측 최댓값에 여유를 둔 값이다.
+
+| 컬럼 | 실측 최댓값 | VARCHAR | 비고 |
+| --- | --- | --- | --- |
+| `brand_id` | 36 | 64 | UUID 36자. 입점 브랜드는 `ssafy-beauty` 같은 slug |
+| `product_id` | 8 | 64 | `P420652`, `SB000001` |
+| `ingredient` | 24 | 128 | 성분명 |
+| `metric_name`, `secondary_category`, `segment_type` | 22 | 64 | |
+| `policy_version`, `trait_policy_version`, `baseline_policy_version`, `vocab_version` | 19 | 32 | |
+| `segment_value` | 17 | 64 | 교차 축 `dry\|fair` 형식 |
+| `algorithm`, `reference_source`, `label_ko` | 16 | 64 | |
+| `generator_type`, `scenario_id`, `simulation_run_id` | 12 | 64 | |
+| `trait`, `banner_type`, `trait_source`, `actor_type`, `source`, `price_bin`, `identity_scope`, `currency` | ≤10 | 32 | enum 성격 |
+| `user_id` | 7 | 64 | 회원 id와 Persona id가 같은 공간을 쓰지 않는다 |
+| `banner_value` | — | 128 | 어휘집 원문. 실데이터에 `new_brand`(NULL)뿐이라 미실측 |
+
+실측이 없는 컬럼은 어휘집·계약의 최대 길이에 여유를 둔다. 길이를 늘리는 것은 온라인
+DDL로 가능하지만 줄이는 것은 데이터 손실이므로, 애매하면 넉넉히 잡는다.
+
+### 7.5 NULL 정책
+
+**NULL 허용 여부는 계약의 의도에서 온다. 데이터로 판정하지 않는다.**
+
+지금 데이터에 NULL이 없다는 것과 그 컬럼이 NULL일 수 없다는 것은 다르다. 실제로
+`brand_price_band_daily_kpi.price_bin`은 가격이 없는 상품을 버리지 않고 보존하려고
+**설계상 NULL을 허용**하는데(§4.6-1), 현재 카탈로그 208개에 가격 결측이 0개라
+데이터에는 NULL이 한 건도 없다. 데이터로 정하면 `NOT NULL`이 되고, 가격 없는 상품이
+처음 등록되는 순간 적재가 거부된다.
+
+§4에 nullable이 명시된 컬럼은 그대로 따른다. 명시가 없으면 아래 성격으로 정한다.
+
+| 성격 | NULL | 근거 |
+| --- | --- | --- |
+| grain key | `NOT NULL` | 키가 비면 행을 식별할 수 없다 |
+| ㄴ `generator_type`, `scenario_id`, `simulation_run_id` | 허용 | §2.2 — Web은 NULL |
+| ㄴ `brand_id` | 허용 | §2.2 — 상품 미귀속 Mart |
+| ㄴ `price_bin` | 허용 | §4.6-1 — 가격 결측 보존 |
+| count (bigint) | `NOT NULL` | 0은 "없음"이지 "모름"이 아니다 |
+| 비율 (double) | 허용 | 분모가 0이면 NULL이라고 §4가 이미 강제한다 |
+| 점수 (double) | 허용 | 가중치가 없는 실행에서는 NULL이다 |
+| Dimension 스냅샷 (`category_id` 등) | 허용 | 매칭되지 않을 수 있다 |
+| `mart_processed_at` | `NOT NULL` | 갱신 시각은 항상 있다 |
+
+데이터는 **교차 검증**에만 쓴다. 계약이 `NOT NULL`이라는데 데이터에 NULL이 있으면
+둘 중 하나가 틀린 것이므로 원인을 찾는다.
+
+### 7.6 명명과 인덱스
+
+| 대상 | 규칙 |
+| --- | --- |
+| 조회 테이블 | Mart 이름 그대로. `dw.brand_daily_kpi` |
+| staging | `dw.<mart>__stg_<run_id>` |
+| 교체 중 백업 | `dw.<mart>__old` — 교체 직후 삭제 |
+| 대리키 | `dw_row_id BIGINT AUTO_INCREMENT` |
+| grain 인덱스 | `ix_<mart>__grain` — §4의 grain 전체. 선두는 아래 규칙 |
+
+**grain을 PRIMARY KEY로 둘 수 없다.** 실행 축(`generator_type`·`scenario_id`·
+`simulation_run_id`)과 `brand_id`가 NULL을 허용하는데(§2.2), MySQL은 PRIMARY KEY에
+NULL을 넣지 못한다. UNIQUE KEY도 답이 아니다 — NULL을 서로 다른 값으로 보므로
+`(brand_id=NULL, …)` 행이 몇 개든 중복으로 잡히지 않는다.
+
+그래서 **대리키를 PRIMARY KEY로 두고 grain은 보조 인덱스로 둔다.** projection 대상
+10종이 전부 여기 해당한다 — 모든 Mart가 grain에 실행 축을 갖기 때문이다. 실행 축 없이
+카탈로그에서만 파생하는 Mart가 생기면 그때는 복합 PRIMARY KEY를 쓸 수 있다.
+
+**따라서 grain 유일성은 DB가 지켜주지 않는다. 적재 Job이 §7.1의 키 중복 검증으로
+막는다.** 이 검증을 건너뛰면 중복 행이 조용히 쌓이고 대시보드 합계가 부풀어 오른다.
+
+grain 인덱스의 컬럼 순서가 조회 성능을 정한다. **어떻게 읽히는가로 선두를 정한다.**
+
+| 읽는 방식 | 선두 | 해당 Mart |
+| --- | --- | --- |
+| 브랜드 하나의 기간 범위 | `brand_id` | 일간 KPI·재구매·구매이유·배너·교차유입 |
+| 사용자 한 명 | `user_id` | `user_trait_daily` |
+| 주차 범위 | `interest_week_kst` | `ingredient_weekly_interest` — 브랜드 축이 없다 |
+| 카테고리 | `secondary_category` | `category_price_reference` — 카탈로그 파생 |
+| 정책 버전 | `baseline_policy_version` | `analytics_baseline` — 기간 조회가 아니라 정책 스냅샷이다 |
+
+§4의 key 표기가 날짜를 앞에 두는 Mart는 인덱스에서 순서를 바꾼다 — grain의
+**구성**은 같고 **정렬 순서**만 다르다.
+
+인덱스 키 길이는 InnoDB 상한 3072 byte 안이어야 한다. `utf8mb4`는 문자당 4 byte라
+VARCHAR를 넉넉히 잡으면 넘기 쉽다. 2026-09-15 기준 가장 긴 것이 `banner_daily`의
+2,203 byte다 (grain 12컬럼). 새 Mart를 더할 때 확인한다.
+
+보조 인덱스는 grain 인덱스 선두로 커버되지 않는 조회에만 둔다.
+
+| Mart | PRIMARY KEY 선두 |
+| --- | --- |
+| 일간 KPI 계열 | `(brand_id, event_date_kst, …)` |
+| 재구매 계열 | `(brand_id, snapshot_date_kst, …)` |
+| `ingredient_weekly_interest` | `(interest_week_kst, …)` — 브랜드 축이 없다 |
+| `user_trait_daily` | `(user_id, trait_date_kst, trait, …)` — 사용자 단건 조회 |
+
