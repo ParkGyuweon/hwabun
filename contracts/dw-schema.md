@@ -254,8 +254,18 @@ source = event-properties-schema.md
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
-| `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 뺄지는 미결 |
+| `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 서빙은 scope로 가른다 — 아래 |
 | `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
+
+`user_trait_daily`의 시드 유지는 **결정됐다** (2026-09-15, Jira 306). 실회원에게는
+시드가 없고, Persona 응답에 주입된 선호가 드러나는 것은 시연에서 보여주려는 바이므로
+Mart에서 빼지 않는다. **대신 서빙에서 `actor_type`으로 가른다** — 추천 서버는
+`actor_type='user'` 행만 읽고 `identity_scope`를 `account` → `persona` 순으로 찾는다
+(`recommendation-io-spec.md` 장기 성향 절).
+
+따라서 이 Mart를 읽는 쪽은 **반드시 `actor_type`으로 좁혀야 한다.** 좁히지 않으면
+합성 Persona 행이 실회원 응답에 섞인다. MySQL projection이 `actor_type`을 포함한
+전체 컬럼을 싣는 이유도 이것이다 (§7.2.1).
 
 ### 4.1 `product_daily_kpi`
 
