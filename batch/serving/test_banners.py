@@ -54,6 +54,36 @@ class TestHeroBanners(unittest.TestCase):
             self.assertIn(x["banner_type"], bn.AXES + ("new_brand",))
             self.assertIn(x["trait_source"], ("session", "profile", "coldstart", "explore"))
 
+    def test_hero_follows_client_axes_order(self):
+        """Jira 304 — 같은 상품에 concern·price_bin 둘 다 맞으면 요청 axes 앞 축이 히어로 문구가 된다.
+        axes 가 비면 기본 순서(concern 먼저), axes 에 트레잇 없는 축만 있으면 기본 순서로 폴백."""
+        e = rs.get_engine()
+        pl = e.planner
+        pid = next(p["product_id"] for p in e.products
+                   if pl.attrs_of[e.index[p["product_id"]]].get("concern")
+                   and pl.attrs_of[e.index[p["product_id"]]].get("price_bin"))
+        ax = pl.attrs_of[e.index[pid]]
+        traits = {"concern": (ax["concern"][0], "session"), "price_bin": (ax["price_bin"][0], "session")}
+        self.assertEqual(pl.hero_for(pid, traits).get("banner_type"), "concern")
+        self.assertEqual(pl.hero_for(pid, traits, ("concern", "price_bin"))["banner_type"], "concern")
+        h = pl.hero_for(pid, traits, ("price_bin", "concern"))
+        self.assertEqual(h["banner_type"], "price_bin")
+        self.assertEqual(h["banner_value"], ax["price_bin"][0])
+        self.assertEqual(h["trait_source"], "session")
+        # axes 에 있는 축(segment)에 트레잇이 없으면 다음 순서(기본)로 — 응답 모양은 그대로
+        h2 = pl.hero_for(pid, traits, ("segment",))
+        self.assertEqual(h2["banner_type"], "concern")
+        self.assertEqual(set(h2), {"product_id", "banner_type", "banner_value", "trait_source"})
+
+    def test_hero_axes_reach_response(self):
+        """E2E 스모크 — axes 맨 앞을 price_bin 으로 보내도 히어로 모양은 그대로다 (응답에 traits 가 없어 축 선택 자체는 위 단위 테스트가 본다)"""
+        b = client.get("/api/recommend", params={**Q, "axes": "price_bin,concern,segment", "hero": "top"}).json()
+        h = b["hero"]
+        self.assertEqual(b["axes"], ["price_bin", "concern", "segment"])
+        self.assertIn(h["banner_type"], bn.AXES)
+        for k in ("product_id", "banner_value", "trait_source", "hero_policy"):
+            self.assertIn(k, h)
+
     def test_hero_always_has_banner_type(self):
         h = self.b["hero"]
         self.assertIsNotNone(h)

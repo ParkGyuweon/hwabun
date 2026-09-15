@@ -460,14 +460,14 @@ class Engine:
                 b["product_source"] = self.products[b.pop("_row")].get("product_source", "seed_catalog")
             if hero_row is not None:
                 hp = self.products[hero_row]
-                hero = self.planner.hero_for(hp["product_id"], traits)
+                hero = self.planner.hero_for(hp["product_id"], traits, tuple(axes))     # axes 순서 우선 (Jira 304)
                 hr = self.reasons(persona, st, rows_seed, [(hero_row, True)], is_new)[0]
                 hero.update({"hero_policy": "new_brand", "reserved": True,
                              "product_name": hp.get("product_name"), "brand_name": hp.get("brand_name"),
                              "score": round(float(s_b[hero_row]), 4), "reason": pick_reason(hr),
                              "product_source": hp.get("product_source", "seed_catalog")})
             elif items:
-                hero = self.planner.hero_for(items[0]["product_id"], traits)
+                hero = self.planner.hero_for(items[0]["product_id"], traits, tuple(axes))
                 # 'new_brand' 를 요청했는데 신규 상품이 없으면 top 으로 돌아간 것 — 응답에 그대로 적는다
                 hero["hero_policy"] = "top"
         ms = (time.perf_counter() - t0) * 1000

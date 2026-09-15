@@ -124,18 +124,29 @@ class BannerPlanner:
         return max(m.items(), key=lambda kv: len(kv[1]))[0]
 
     # ── 조립 ──────────────────────────────────────────────────────────────
-    def hero_for(self, product_id, traits):
-        """items[0] 에 축 문구를 얹는다. banner_type 은 항상 있다 — 사용자 축과 맞는 값이
-        있으면 그것, 없으면 상품 자신의 값(concern → ingredient → clean → category → price_bin)"""
+    HERO_AXES_DEFAULT = ("concern", "ingredient", "clean", "category", "price_bin", "segment")
+
+    def hero_for(self, product_id, traits, axes=()):
+        """items[0] 에 축 문구를 얹는다. banner_type 은 항상 있다.
+
+        사용자 축(traits)과 맞는 값이 있으면 그것 — **클라이언트가 보낸 `axes` 순서로 먼저** 찾고, 거기 없는
+        축은 기본 순서(concern → ingredient → clean → category → price_bin → segment)로 이어 훑는다 (Jira 304,
+        프론트 요청 09-14 §1: 화면은 히어로 한 장만 그리므로 가격만 본 세션의 `axes=price_bin,…` 이 히어로에
+        닿아야 한다). 어느 축도 안 맞으면 상품 자신의 값(concern → ingredient → clean → category → price_bin)."""
         ax = self.attrs_of[self.index[product_id]]
-        for a in ("concern", "ingredient", "clean", "category", "price_bin"):
+        order = [a for a in axes if a in self.HERO_AXES_DEFAULT]
+        order += [a for a in self.HERO_AXES_DEFAULT if a not in order]
+        for a in order:
             t = traits.get(a)
-            if t and t[0] in ax.get(a, []):
+            if not t:
+                continue
+            if a == "segment":
+                if product_id in self.members["segment"].get(t[0], ()):
+                    return {"product_id": product_id, "banner_type": "segment",
+                            "banner_value": t[0], "trait_source": t[1]}
+            elif t[0] in ax.get(a, []):
                 return {"product_id": product_id, "banner_type": a, "banner_value": t[0],
                         "trait_source": t[1]}
-        if traits.get("segment") and product_id in self.members["segment"].get(traits["segment"][0], ()):
-            return {"product_id": product_id, "banner_type": "segment",
-                    "banner_value": traits["segment"][0], "trait_source": traits["segment"][1]}
         for a in ("concern", "ingredient", "clean", "category", "price_bin"):
             if ax.get(a):
                 return {"product_id": product_id, "banner_type": a, "banner_value": ax[a][0],
