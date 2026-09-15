@@ -125,16 +125,31 @@ class BannerPlanner:
 
     # ── 조립 ──────────────────────────────────────────────────────────────
     HERO_AXES_DEFAULT = ("concern", "ingredient", "clean", "category", "price_bin", "segment")
+    # 히어로 축 선택 정책의 판. 규칙이 바뀌면 올린다 — 데이터 파트가 banner_daily 를 이 값과 프론트
+    # BANNER_POLICY_VERSION 으로 같이 자를 수 있게 (프론트 3-5 합의 2026-09-15, Jira 307).
+    #   hero-2026-09-15: axes 순서 우선(304) + axes[0] 트레잇 없으면 상품 자신 값·coldstart(307)
+    HERO_POLICY_VERSION = "hero-2026-09-15"
+    CONTENT_AXES = ("concern", "ingredient", "clean", "category", "price_bin")
+
+    def _hero(self, product_id, axis, value, source):
+        return {"product_id": product_id, "banner_type": axis, "banner_value": value,
+                "trait_source": source, "hero_policy_version": self.HERO_POLICY_VERSION}
 
     def hero_for(self, product_id, traits, axes=()):
         """items[0] 에 축 문구를 얹는다. banner_type 은 항상 있다.
 
-        사용자 축(traits)과 맞는 값이 있으면 그것 — **클라이언트가 보낸 `axes` 순서로 먼저** 찾고, 거기 없는
-        축은 기본 순서(concern → ingredient → clean → category → price_bin → segment)로 이어 훑는다 (Jira 304,
-        프론트 요청 09-14 §1: 화면은 히어로 한 장만 그리므로 가격만 본 세션의 `axes=price_bin,…` 이 히어로에
-        닿아야 한다). 어느 축도 안 맞으면 상품 자신의 값(concern → ingredient → clean → category → price_bin)."""
+        1. 요청 `axes[0]` (Jira 307, 프론트 3-2 합의): 트레잇이 있고 상품에도 그 값이 있으면 그것(trait_source 는
+           트레잇 출처). **트레잇이 없는데 상품에 그 축 값이 있으면 상품 자신의 값을 쓰고 `trait_source=coldstart`** —
+           가격 성향 사용자는 항상 가격 문구를 보고, 근거가 세션이 아니란 것이 로그에 남는다. 카탈로그 최빈값은
+           히어로 상품과 안 맞을 수 있어 쓰지 않는다. segment 는 상품 속성이 아니라 채우지 않는다.
+        2. 그 외: 사용자 축(traits)과 맞는 값을 `axes` 순서로 먼저, 거기 없는 축은 기본 순서
+           (concern → ingredient → clean → category → price_bin → segment)로 이어 훑는다 (Jira 304).
+        3. 어느 축도 안 맞으면 상품 자신의 값(concern → ingredient → clean → category → price_bin)."""
         ax = self.attrs_of[self.index[product_id]]
         order = [a for a in axes if a in self.HERO_AXES_DEFAULT]
+        first = order[0] if order else None
+        if first in self.CONTENT_AXES and not traits.get(first) and ax.get(first):
+            return self._hero(product_id, first, ax[first][0], "coldstart")
         order += [a for a in self.HERO_AXES_DEFAULT if a not in order]
         for a in order:
             t = traits.get(a)
@@ -142,18 +157,14 @@ class BannerPlanner:
                 continue
             if a == "segment":
                 if product_id in self.members["segment"].get(t[0], ()):
-                    return {"product_id": product_id, "banner_type": "segment",
-                            "banner_value": t[0], "trait_source": t[1]}
+                    return self._hero(product_id, "segment", t[0], t[1])
             elif t[0] in ax.get(a, []):
-                return {"product_id": product_id, "banner_type": a, "banner_value": t[0],
-                        "trait_source": t[1]}
-        for a in ("concern", "ingredient", "clean", "category", "price_bin"):
+                return self._hero(product_id, a, t[0], t[1])
+        for a in self.CONTENT_AXES:
             if ax.get(a):
-                return {"product_id": product_id, "banner_type": a, "banner_value": ax[a][0],
-                        "trait_source": "session"}
-        return {"product_id": product_id, "banner_type": "category",
-                "banner_value": self.products[self.index[product_id]].get("secondary_category"),
-                "trait_source": "session"}
+                return self._hero(product_id, a, ax[a][0], "session")
+        return self._hero(product_id, "category",
+                          self.products[self.index[product_id]].get("secondary_category"), "session")
 
     def plan(self, scores, seed_rows, persona, axes, banner_slots, reserved, exclude, is_new):
         """배너 칸 채우기. 앞 (banner_slots - reserved) 칸은 축 순환, 뒤 reserved 칸은 new_brand.

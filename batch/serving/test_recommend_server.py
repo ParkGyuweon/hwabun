@@ -24,6 +24,15 @@ _COPY = os.path.join(_TMP, "registered_products.jsonl")
 shutil.copy(os.path.join(BD, "..", "ingest", "data", "serving", "registered_products.jsonl"), _COPY)
 os.environ["REGISTERED_PRODUCTS_PATH"] = _COPY
 os.environ.setdefault("SESSION_EVENTS_PATH", os.path.join(tempfile.mkdtemp(prefix="sess_"), "session_events.jsonl"))  # 세션 로그가 레포에 쌓이지 않게
+# 장기 성향 스냅샷 (Jira 306) — PC00001 만 5행. 다른 페르소나는 null 이어야 한다
+_TRAIT = os.path.join(_TMP, "user_trait_snapshot.jsonl")
+with open(_TRAIT, "w", encoding="utf-8") as _f:
+    for _t, _s, _p in (("price", 4.5, True), ("ingredient", 1.0, False), ("review", 0.0, False),
+                       ("concern", 2.5, False), ("participate", 0.0, False)):
+        _f.write(json.dumps({"user_id": "PC00001", "identity_scope": "persona", "trait": _t, "trait_score": _s,
+                             "is_primary_trait": _p, "window_end_date": "2026-09-13",
+                             "trait_policy_version": "user-trait-v2"}) + "\n")
+os.environ["USER_TRAIT_SNAPSHOT_PATH"] = _TRAIT
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -32,6 +41,54 @@ import recommend_server as rs              # noqa: E402
 client = TestClient(rs.app)
 PID = "PC00001"
 N_SEED = 200
+
+
+class TestSeedKept(unittest.TestCase):
+    """Jira 308 — 원천 200개 id 로 POST /api/products 가 와도 그 행은 바뀌지 않는다 (action seed_kept)"""
+
+    def test_registering_seed_id_keeps_row(self):
+        e = rs.get_engine()
+        p0 = e.products[0]
+        before = dict(p0)
+        body = {"product_id": p0["product_id"], "product_name": "덮어쓰기 시도", "brand_name": "X",
+                "brand_id": "x", "secondary_category": p0["secondary_category"],
+                "tertiary_category": p0["tertiary_category"], "highlights": ["Pores"],
+                "ingredients": "Water", "price_krw": 1000}
+        r = client.post("/api/products", json=body)
+        self.assertEqual(r.status_code, 201, r.text)
+        reg = r.json()["registered"][0]
+        self.assertEqual(reg["action"], "seed_kept")
+        self.assertEqual(reg["position_in_catalog"], 0)
+        self.assertFalse(reg["reserved_candidate"])
+        self.assertEqual(e.products[0], before)
+        self.assertEqual(e.products[0].get("product_source", "seed_catalog"), "seed_catalog")
+        self.assertFalse(e.new_flags()[0])
+        # 파일에도 남기지 않는다
+        with open(os.environ["REGISTERED_PRODUCTS_PATH"], encoding="utf-8") as f:
+            self.assertFalse(any(json.loads(l).get("product_id") == p0["product_id"] for l in f if l.strip()))
+
+
+class TestLongTermTrait(unittest.TestCase):
+    """응답 최상위 long_term_trait (Jira 306) — 스냅샷에 있으면 5종 점수+primary, 없으면 null"""
+
+    def test_present_for_snapshot_user(self):
+        b = client.get("/api/recommend", params={"persona_id": "PC00001", "size": 5}).json()
+        lt = b["long_term_trait"]
+        self.assertEqual(lt["primary"], "price")
+        self.assertEqual(lt["price"], 4.5)
+        self.assertEqual(lt["concern"], 2.5)
+        self.assertEqual(lt["identity_scope"], "persona")
+        self.assertEqual(lt["window_end_date"], "2026-09-13")
+        self.assertEqual(lt["trait_policy_version"], "user-trait-v2")
+        self.assertEqual(set(lt), {"price", "ingredient", "review", "concern", "participate",
+                                   "primary", "window_end_date", "trait_policy_version", "identity_scope"})
+
+    def test_null_when_no_row(self):
+        b = client.get("/api/recommend", params={"persona_id": "PC00002", "size": 5}).json()
+        self.assertIsNone(b["long_term_trait"])
+        h = client.get("/health").json()["user_trait"]
+        self.assertTrue(str(h["source"]).startswith("snapshot:"))
+        self.assertEqual(h["users"], 1)
 
 
 class TestServer(unittest.TestCase):
