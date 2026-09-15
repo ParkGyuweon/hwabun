@@ -120,7 +120,7 @@ pipeline {
                       --env-file /run/secrets/ec2-1.env \\
                       -f deploy/ec2-1/docker-compose.yml \\
                       up -d --build \\
-                      backend shop-backend mysql recommend prometheus grafana
+                      backend shop-backend mysql recommend prometheus grafana nginx
                 '''
             }
         }
