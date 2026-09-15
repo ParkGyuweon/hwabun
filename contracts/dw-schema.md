@@ -145,14 +145,28 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 | `primary_category`, `secondary_category`, `tertiary_category` | string | Y | 카테고리 계층 |
 | `category_id` | string | Y | Dashboard 필터 ID |
 | `category_path` | array<string> | Y | 카테고리 경로 |
-| `base_price` | decimal(18,2) | Y | 기준 가격 |
-| `currency` | string | Y | 가격 통화 |
+| `base_price` | decimal(18,2) | Y | 기준 가격. **원화**다 |
+| `source_price_usd` | decimal(18,2) | Y | 세포라 원천 가격. 정본이 아니라 출처 보존용 |
+| `currency` | string | Y | 가격 통화. 현재 `KRW` |
 | `rating` | double | Y | 평균 평점 |
 | `rating_source` | string | Y | `observed`, `injected`. 주입값을 실측과 섞지 않는다 |
 | `review_count`, `loves_count` | bigint | Y | 리뷰·관심 수 |
 | `skin_type_tags`, `concern_tags`, `ingredient_ids` | array<string> | Y | 상품 속성 |
 | `caution_ingredient_count` | int | Y | 주의 성분 수 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
+
+가격 정본은 **원화**다 (Jira 302). 추천 어휘집 0.7의 `price_bin` 경계가 원화이므로
+카탈로그가 달러로 남으면 가격대 Mart가 환율을 다시 들고 있어야 한다. 환율이 여러 곳에
+흩어지면 같은 상품이 화면·추천·대시보드에서 다른 가격대로 잡힌다.
+
+산출 규칙은 `batch/jobs/product_encoder.price_krw_of`와 **같아야 한다.** `price_krw`가
+있으면 그 값이고, 없으면 `price_usd × 1340.86`을 100원 단위로 반올림한다. 환율과 반올림
+단위는 `contracts/localization/products-ko.json`의 `_meta`와 같다 — 화면 표시 가격과
+어긋나지 않게 하기 위해서다. 두 곳이 갈리면 조용히 다른 구간이 된다.
+
+`source_price_usd`는 세포라 원천값 보존용이다. 정본이 아니므로 집계에 쓰지 않는다.
+행동 Event의 금액(`unit_price`·`cart_value`·`order_value`·`paid_value`)은 아직 USD다.
+그 전환은 별도 티켓(S15P21A306-303)이며, 이 Dimension만 먼저 옮겼다.
 
 ### 3.3 `dim_persona_segment`
 
@@ -232,7 +246,7 @@ source = event-properties-schema.md
 | `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
-| `persona_segment_daily_kpi` | 제외 | 세그먼트 전환 지표. 퍼널과 같은 원칙 |
+| `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 뺄지는 미결 |
 | `category_price_reference` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 
@@ -429,6 +443,60 @@ Mart 구조는 그대로다.
 | `affinity_lift` | 행동 로그 파생이 아니라 AI 파트 `batch/ingest/data/affinity_lift.csv` 조인이다. 대시보드 E4 응답에도 없다 |
 | `category_id` | 위와 같다. 브랜드 grain에 단일 카테고리가 없다 |
 | `persona_behavior_feature_delta` (input) | §2.3의 `avg_interest_score` 산식은 `product_interest_score`만 요구하고 그것은 `product_event_fact`와 `EVENT_WEIGHT`로 낸다. 이 Fact의 시간 감쇠는 추천 피처용이라 KPI 산식에 없다 |
+
+
+### 4.6-1 `brand_price_band_daily_kpi`
+
+```text
+key = event_date_kst + brand_id + price_bin + currency + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = product_event_fact, dim_product, contracts/product-feature-vocab.json
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | `price_bin`·generator/scenario/run만 Y | 가격대 집계 축 |
+| `session_count`, `unique_user_count` | bigint | N | 구간 규모 |
+| `impression_sessions`, `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 단계별 고유 세션 수 |
+| `product_count` | bigint | N | 이 구간에서 관측된 고유 상품 수 |
+| `detail_entry_rate` | double | Y | 상세 조회 세션 / 노출 세션 |
+| `view_to_cart_rate` | double | Y | 장바구니 세션 / 상세 조회 세션 |
+| `view_to_purchase_rate` | double | Y | 구매 세션 / 상세 조회 세션 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**구간은 여기서 정의하지 않는다.** `contracts/product-feature-vocab.json`의
+`price_bin_edges`와 `blocks[].vocab`을 읽는다. 추천 CBF 피처 벡터·배너 축·상품 등록
+화면이 이미 그 축을 쓰므로(`product-feature-spec.md` §4.1), 대시보드가 다른 구간을
+정의하면 같은 이름의 가격대가 두 벌이 되어 "이 가격대 반응"이 어느 쪽 구간인지 알 수
+없게 된다. 어휘집 0.7 기준 원화 5구간이다.
+
+| price_bin | 구간 |
+| --- | --- |
+| `~26k` | 26,000원 미만 |
+| `26k-46k` | 26,000 이상 46,000 미만 |
+| `46k-66k` | 46,000 이상 66,000 미만 |
+| `66k-105k` | 66,000 이상 105,000 미만 |
+| `105k+` | 105,000원 이상 |
+
+구간은 **반열린** `[하한, 상한)`이다. 26,000원짜리 상품은 `26k-46k`에 들어가고, 한 상품이
+두 구간에 동시에 속할 수 없다 — 검사가 아니라 구조로 막는다.
+
+`base_price`가 NULL이거나 0 이하인 상품은 **`price_bin = NULL` 행으로 보존한다.** 빼면
+그 상품들의 반응을 볼 수 없고, 임의 구간에 넣으면 그 구간 수치가 오염된다. Dimension에
+없는 상품은 가격을 모르므로 이 Mart에 넣지 않는다.
+
+**`currency`는 key다.** 통화가 다른 가격을 환산 규칙 없이 한 구간으로 합치지 않는 것을
+필터가 아니라 grain으로 지킨다. 카탈로그가 전부 원화인 지금은 행 수에 차이가 없지만,
+다른 통화가 들어와도 조용히 섞이지 않는다.
+
+담기·구매 분모는 `detail_view_sessions`(상품 상세 ∪ Quick Look)로 §4.1·§4.14와 같다.
+브랜드 grain이라 한 세션이 같은 구간의 상품 여러 개를 봐도 세션은 한 번만 센다.
+모든 비율은 분모가 0이면 NULL이다. 시드 Event는 제외한다(§4.0).
+
+`price_bin`을 걷어낸 합계는 `brand_daily_kpi`와 같지 않다. 한 세션이 여러 구간의 상품을
+밟으면 구간마다 한 번씩 세어지기 때문이다. **두 Mart를 서로 대체하지 않는다.**
+
+고객군 축(피부 타입)과의 교차는 이 Mart로 낼 수 없다. 축을 하나 더 얹으면 그 축을 걷어낸
+합계가 무너지므로 별도 Mart가 필요하다 (S15P21A306-301).
 
 
 ### 4.7 `scenario_daily_kpi`
