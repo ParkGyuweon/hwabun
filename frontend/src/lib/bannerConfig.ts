@@ -48,7 +48,7 @@ export const BANNER_EVENTS_ENABLED = true;
  * 배너 뽑는 규칙(`bannerCreative`·`BANNER_RESERVED`·축 선택·**로그에 적는 축**)을 바꾸면 이 값을 올린다.
  * 올리지 않으면 전후 비교가 한 덩어리로 뭉개진다.
  */
-export const BANNER_POLICY_VERSION = 'banner-2026-09-11';
+export const BANNER_POLICY_VERSION = 'banner-2026-09-15';
 
 /*
  * 판 이력
@@ -61,6 +61,10 @@ export const BANNER_POLICY_VERSION = 'banner-2026-09-11';
  *                        완성형 배너는 브랜드 크리에이티브라 축 문구 배너가 아니고, PDRN 처럼 어휘집에 없는
  *                        토큰은 어떤 규칙으로도 banner_value 가 될 수 없다. 축 값은 조립 배너에만 기록한다.
  *                        → 이 판부터 new_brand 노출이 한 번 더 늘고, 축별 CTR 은 조립 배너만 본다
+ *   banner-2026-09-15    추천 서버 `hero_for(axes)` 반영 (AI Jira 304, 프론트 요청 09-14 §1). 히어로 `banner_type` 이
+ *                        클라이언트 `axes` 순서(세션 성향)를 먼저 따른다. 이 판부터 서버 경로에서도 성향 축 배너가
+ *                        노출되므로 `banner_daily` 의 `trait_source × banner_type` CTR 표본이 처음 쌓인다.
+ *                        프론트 코드는 안 바뀌었다 — 서버 판단이 바뀌어 전후를 잘라야 해서 올린다.
  */
 
 /**

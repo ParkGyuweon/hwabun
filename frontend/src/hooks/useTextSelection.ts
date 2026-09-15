@@ -46,6 +46,33 @@ function matchIngredients(text: string): string[] {
     .map(([standardName]) => standardName);
 }
 
+/**
+ * 긁은 문장이 어떤 종류의 정보인지 (계약 §3.6 `selection_kind`: ingredient · claim · usage · price · other).
+ *
+ * 성분은 사전 매칭이 있으면 그것이 우선이다 — 리뷰 문장에서 성분명을 긁어도 성분 관심이다.
+ * 나머지는 긁은 자리의 content_kind 로 정한다. 성향 표(contracts/user-trait-weights.json)가 이 값으로
+ * 가격(price 1.5/2.0)·고민(claim 1.0)·성분(ingredient 1.5/2.0) 성향을 센다. 값이 없으면 마트는
+ * content_kind 폴백 규칙으로만 잡아 usage·other 가 구분되지 않는다.
+ */
+function selectionKindOf(contentKind: string | null, matchedCount: number): 'ingredient' | 'claim' | 'usage' | 'price' | 'other' {
+  if (matchedCount > 0) return 'ingredient';
+  switch (contentKind) {
+    case 'ingredient_list':
+    case 'ingredient_callout':
+      return 'ingredient';
+    case 'price':
+      return 'price';
+    case 'clinical_claim':
+    case 'highlight_badge':
+    case 'what_it_is':
+      return 'claim';
+    case 'usage_guide':
+      return 'usage';
+    default:
+      return 'other';
+  }
+}
+
 /** 이보다 짧으면 드래그가 아니라 클릭하다 미끄러진 것으로 본다 */
 const MIN_LENGTH = 2;
 
@@ -92,9 +119,11 @@ export function useTextSelection(pageViewKey: string) {
 
       // 원문 대신 사전에 걸린 성분의 표준 명칭만 싣는다 (데이터 계약)
       const matched = matchIngredients(current.text);
+      const region = regionOfNode(current.anchor);
 
       track(eventName, {
-        ...regionOfNode(current.anchor),
+        ...region,
+        selection_kind: selectionKindOf(region.content_kind, matched.length),
         text_length: current.text.length,
         matched_ingredients: matched,
         matched_count: matched.length,

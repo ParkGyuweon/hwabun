@@ -14,7 +14,7 @@
 import type { BannerType } from '../types/log';
 import { authFetch } from './auth';
 import type { MemberProfile } from './memberProfile';
-import type { HeroPolicy, RecommendBanner, RecommendHero, RecommendItem, RecommendResponse } from '../types/recommendation';
+import type { HeroPolicy, LongTermTrait, RecommendBanner, RecommendHero, RecommendItem, RecommendResponse } from '../types/recommendation';
 
 /** 서버가 받는 축. 계약 §5 `axes` */
 const SERVER_AXES: ReadonlySet<string> = new Set(['concern', 'ingredient', 'clean', 'price_bin', 'category', 'segment']);
@@ -55,6 +55,8 @@ interface ServerHero {
   banner_value?: string | null;
   trait_source?: string;
   hero_policy?: string;
+  /** 히어로 축 선택 규칙의 판 (Jira 307). 현재 `hero-2026-09-15` */
+  hero_policy_version?: string;
   reserved?: boolean;
   product_name?: string;
   brand_name?: string;
@@ -85,6 +87,8 @@ export interface ServerRecommendResponse {
   hero_policy?: string;
   hero?: ServerHero | null;
   banners?: ServerBanner[] | null;
+  /** 마트 행이 없으면 null. `useRecommendation` 이 `setTraitProfile({ longTerm })` 로 세션 점수에 섞는다 */
+  long_term_trait?: LongTermTrait | null;
 }
 
 /** 서버 → 화면 모양. 필드 이름만 바뀐다 (position→rank · algorithm→model_version · banner_slot→slot) */
@@ -107,6 +111,7 @@ export function fromServer(body: ServerRecommendResponse, personaId: string): Re
         ...(body.hero.reason ? { reason: Object.values(body.hero.reason).join(' · ') } : {}),
         ...(body.hero.product_source ? { product_source: body.hero.product_source } : {}),
         ...(body.hero.reserved !== undefined ? { reserved: body.hero.reserved } : {}),
+        ...(body.hero.hero_policy_version ? { hero_policy_version: body.hero.hero_policy_version } : {}),
       }
     : null;
 
@@ -132,6 +137,8 @@ export function fromServer(body: ServerRecommendResponse, personaId: string): Re
     hero,
     banners,
     ...(heroPolicy ? { hero_policy: heroPolicy } : {}),
+    // 이름·모양이 계약과 같아 그대로 통과시킨다. 쓰는 곳은 useRecommendation 하나다
+    ...(body.long_term_trait !== undefined ? { long_term_trait: body.long_term_trait } : {}),
   };
 }
 
