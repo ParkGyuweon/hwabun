@@ -104,7 +104,7 @@ lift 는 **단독 예측력**이라 가중치의 근거로 쓰면 안 됩니다.
 | `ingredient` | Hyaluronic Acid, Silicone, Vitamin C, Squalane, Probiotic/Ferment, Green Tea, Peptides, Aloe, Lactic Acid, Licorice, Shea Butter, Panthenol(B5), Niacinamide, Jojoba, AHA/Glycolic Acid, Salicylic Acid, Ceramide, Rosehip/Rose, Caffeine, Urea, Adenosine, Allantoin, Retinol, Zinc, Alcohol Denat, SPF, Centella(Cica), Willow Bark, Collagen, Mineral Oil/Petrolatum |
 | `secondary_category` | Moisturizers, Treatments, Cleansers, Eye Care, Masks, Lip Balms & Treatments, Sunscreen, Self Tanners |
 | `clean` | Clean at Sephora, Vegan, Without Parabens, Cruelty-Free, Clean + Planet Positive, Fragrance Free, Oil Free, Without Sulfates SLS & SLES, Without Silicones, Refill Available, Without Phthalates, Alcohol Free, Without Mineral Oil, Gluten Free, Hypoallergenic, Without Oxybenzone |
-| `price_bin` | `~26k`, `26k-46k`, `46k-66k`, `66k-105k`, `105k+` — 원화 경계 26,000 / 46,000 / 66,000 / 105,000 (v0.7, Jira 302. 옛 USD 경계 20/35/50/80 과 같은 구간 배정) |
+| `price_bin` | `~26k`, `26k-46k`, `46k-66k`, `66k-105k`, `105k+` — 원화 경계 26,000 / 46,000 / 66,000 / 105,000 (v0.7, Jira 302. 옛 USD 경계 20/35/50/80 과 **현 카탈로그 208개에서** 같은 구간 배정 — 등가 환산은 아니다) |
 | `texture` | Hydrating, Plumping, Radiant Finish, Natural Finish, High Shine Finish |
 
 ### 인코딩 방식
