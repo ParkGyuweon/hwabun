@@ -30,6 +30,13 @@ export interface RecommendHero {
   score?: number;
   reason?: string;
   product_source?: string;
+  /**
+   * 서버의 히어로 축 선택 규칙 판 (Jira 307 · 현재 `hero-2026-09-15`).
+   *
+   * 프론트 `BANNER_POLICY_VERSION` 과 **다른 값이다** — 이쪽은 서버가 축을 고른 규칙,
+   * 저쪽은 프론트가 배너를 그린 규칙이다. 둘 다 이벤트에 실을지는 데이터 파트 결정 대기 (09-15).
+   */
+  hero_policy_version?: string;
   /** 신규 브랜드 몫으로 뽑혔다는 표시. 전용 칸 `reserved` 와 같은 뜻 */
   reserved?: boolean;
 }
@@ -46,6 +53,27 @@ export interface RecommendBanner {
   score: number;
   /** 신규·저노출 브랜드 전용 칸 */
   reserved?: boolean;
+}
+
+/**
+ * 장기 성향 (Jira 306 · 계약 recommendation-io-spec §5 "장기 성향").
+ *
+ * 마트 `user_trait_daily` 최신 창의 그 사용자 5행을 추천 서버가 접어서 준다. 행이 없으면 `null` 이다.
+ * 성향 5종은 항상 다 있고(없는 축은 0.0), `primary` 는 `is_primary_trait` 또는 최고점이다.
+ *
+ * **화면은 이 값을 그리지 않는다.** `useRecommendation` 이 `setTraitProfile({ longTerm })` 으로
+ * 성향 store 에 넘기고, 거기서 `long_term_blend_weight`(0.5)만큼 세션 점수에 더해진다.
+ */
+export interface LongTermTrait {
+  price: number;
+  ingredient: number;
+  review: number;
+  concern: number;
+  participate: number;
+  primary: string;
+  window_end_date: string | null;
+  trait_policy_version: string | null;
+  identity_scope?: string;
 }
 
 export interface RecommendResponse {
@@ -77,6 +105,11 @@ export interface RecommendResponse {
    * `banner_daily` 에서 `policy_version` 과 함께 자르는 키 (AI 회신 2026-09-10)
    */
   hero_policy?: HeroPolicy;
+  /**
+   * 장기 성향 (Jira 306). 마트 행이 없으면 `null`, 프론트 목이면 아예 없다.
+   * 화면이 읽는 값이 아니라 `useRecommendation` 이 성향 store 로 넘기는 값이다.
+   */
+  long_term_trait?: LongTermTrait | null;
 }
 
 export interface RecommendRequest {
