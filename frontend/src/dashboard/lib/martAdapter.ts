@@ -419,15 +419,19 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
       src.contentLift = lift ? 'real' : 'mock';
     }
     if (ct.behaviors && ct.behaviors.length > 0) {
-      const den = ct.brand.product_view_sessions;
       out = {
         ...out,
+        /**
+         * 실행률의 분모는 `done + not_done` 이다 (계약 0.3). 마트가 "그 상품의 조회 세션 수" 로 이 둘을 가르므로
+         * 같은 행에서 나누는 것이 브랜드 총계로 나누는 것보다 정확하다 — 세션 모집단이 어긋나지 않는다.
+         * 행동 0건이어도 행이 오고, 그때 `done_cart_rate` 는 null 이다. 0 은 "아무도 안 했다" 로 그대로 그린다.
+         */
         validationBehaviors: ct.behaviors.map((b) => ({
           event: b.event,
           ko: BEHAVIOR_KO[b.event] ?? b.event,
-          doneRate: ratio(b.done_sessions, den),
-          cartRateWith: b.cart_rate_with ?? 0,
-          cartRateWithout: b.cart_rate_without ?? 0,
+          doneRate: ratio(b.done_sessions, b.done_sessions + b.not_done_sessions),
+          cartRateWith: b.done_cart_rate ?? 0,
+          cartRateWithout: b.not_done_cart_rate ?? 0,
         })),
       };
       src.behaviors = 'real';

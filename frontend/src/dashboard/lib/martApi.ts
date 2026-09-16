@@ -120,14 +120,32 @@ export interface ContentRow {
   product_view_sessions: number;
   avg_dwell_ms_per_session: number | null;
   view_rate: number | null;
-  conversion: { viewed_sessions: number; viewed_cart_sessions: number; cart_lift: number | null } | null;
+  /**
+   * `content_conversion_daily` (계약 0.3). 마트가 주는 것은 `viewed_cart_rate` 까지고 `cart_lift` 는 서버가 나눈다
+   * (`viewed_cart_rate / brand.view_to_cart_rate`). 마트에서 미리 나누면 어느 브랜드·어느 기간의 비율을 썼는지가
+   * 행에 박혀 다른 기준으로 다시 볼 수 없다 (데이터 파트 2026-09-16).
+   */
+  conversion: {
+    viewed_sessions: number;
+    viewed_cart_sessions: number;
+    viewed_cart_rate?: number | null;
+    cart_lift: number | null;
+  } | null;
 }
 
+/**
+ * `behavior_conversion_daily` (계약 0.3 · dw-schema §4.20). 이름은 마트 컬럼 그대로다.
+ *
+ * **행동 0건이어도 행이 온다.** 네 Event 가 항상 전부 나오고 `done_sessions = 0` 이면 `done_cart_rate` 가 null 이다 —
+ * "아무도 안 했다" 이지 "집계 안 함" 이 아니다. 블록 자체가 null 인 것(= 마트 없음, 모의로 물러남)과 다르다.
+ * 재생 데이터에서 `text_copy` 가 128세션뿐이라 실제로 밟는다.
+ */
 export interface BehaviorRow {
   event: string;
   done_sessions: number;
-  cart_rate_with: number | null;
-  cart_rate_without: number | null;
+  not_done_sessions: number;
+  done_cart_rate: number | null;
+  not_done_cart_rate: number | null;
 }
 
 export interface ContentPayload extends MartEnvelope {
@@ -163,8 +181,78 @@ export interface SegmentsPayload extends MartEnvelope {
         view_to_cart_rate: number | null;
       }>
     | null;
+  /** `dwell_share` 의 분모는 **그 피부 타입의 총합**이라 한 타입 안에서만 합이 1 이다. 타입끼리 더하면 안 된다 */
   top_content: Array<{ skin_type: string; content_kind: string; dwell_ms_sum: number; dwell_share: number }> | null;
   same_skin_filter_rate: number | null;
+  /** 브랜드 × 가격대 (`brand_price_band_daily_kpi`, 계약 0.3). 축을 걷어낸 합계는 by_segment 와 같지 않다 */
+  price_bands?: PriceBandRow[] | null;
+  /** 고객군 × 가격대 (`segment_price_band_daily_kpi`, 계약 0.3). 재설계 명세 §2-3 S5 히트맵의 정본 */
+  segment_price_grid?: SegmentPriceCell[] | null;
+  /** 코호트 배지 (`commons_cohort_weekly`, 계약 0.3 · §1-5). 유일한 B층 블록 */
+  cohort?: CohortBlock | null;
+}
+
+/** 가격 구간은 `product-feature-vocab.json` 의 `price_bin_edges` 가 정본이다. 가격 결측 상품은 `price_bin = null` 행 */
+export interface PriceBandRow {
+  price_bin: string | null;
+  currency: string;
+  session_count: number;
+  product_count: number;
+  impression_sessions: number;
+  quick_look_sessions: number;
+  product_view_sessions: number;
+  detail_view_sessions: number;
+  add_to_cart_sessions: number;
+  purchase_sessions: number;
+  detail_entry_rate: number | null;
+  view_to_cart_rate: number | null;
+  view_to_purchase_rate: number | null;
+}
+
+export interface SegmentPriceCell {
+  segment_type: string;
+  segment_value: string;
+  price_bin: string | null;
+  currency: string;
+  segment_user_count: number;
+  session_count: number;
+  product_count: number;
+  product_view_sessions: number;
+  detail_view_sessions: number;
+  add_to_cart_sessions: number;
+  purchase_sessions: number;
+  view_to_cart_rate: number | null;
+  view_to_purchase_rate: number | null;
+}
+
+/**
+ * B층. 다른 브랜드를 식별할 값은 응답 어디에도 없다 — 마트가 브랜드 식별자를 아예 싣지 않는다 (dw-schema §4.18).
+ *
+ * `is_suppressed` 는 R1(브랜드 5 미만) 또는 R3(한 브랜드가 분모 50% 초과)이다. **행을 지우지 않고 값만 비운다** —
+ * "억제됐다" 와 "코호트가 아예 없다" 를 구분하기 위해서다. 화면은 이때 "표본 부족" 으로 적고 숫자를 적지 않는다.
+ * 블록 자체가 null 이면(코호트 미배정·그 주 행 없음) 배지를 그리지 않는다 — **모의로 채우지 않는다.**
+ */
+export interface CohortMetric {
+  metric_name: string;
+  p25: number | null;
+  p50: number | null;
+  p75: number | null;
+  my_value: number | null;
+  my_position: 'below_p25' | 'p25_p50' | 'p50_p75' | 'above_p75' | null;
+}
+
+export interface CohortBlock {
+  cohort_key: string;
+  product_count_band: string;
+  dominant_price_bin: string | null;
+  snapshot_week_kst: string;
+  window_start_date: string;
+  window_end_date: string;
+  brand_count: number;
+  is_suppressed: boolean;
+  is_sample_sufficient: boolean;
+  is_dominated: boolean;
+  metrics: CohortMetric[];
 }
 
 /* ---------- E5 ingredients ---------- */
