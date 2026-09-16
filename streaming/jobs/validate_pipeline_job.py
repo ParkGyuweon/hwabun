@@ -1636,8 +1636,7 @@ def validate_frames(
 
     banner_grain = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
-        "banner_slot", "trait_source", "policy_version", "actor_type", "source",
-        "scenario_id", "simulation_run_id",
+        "banner_slot", "trait_source", "policy_version", *EXECUTION_AXES,
     ]
     checks.append(_check(
         "banner_daily_grain_is_unique",

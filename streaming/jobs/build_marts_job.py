@@ -2871,10 +2871,11 @@ def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
     # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
     product_fact_df = _observed_events(product_fact_df)
 
+    # 실행 축 5종. cross_brand_daily 와 같은 이유로 generator_type 이 필요하다
+    # — 커밋 82afffe sweep 잔여분 (dw-schema.md §2, Jira 324).
     group_columns = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
-        "banner_slot", "trait_source", "policy_version", "actor_type", "source",
-        "scenario_id", "simulation_run_id",
+        "banner_slot", "trait_source", "policy_version", *EXECUTION_AXES,
     ]
     banners = product_fact_df.where(
         F.col("event_name").isin("banner_impression", "banner_click")

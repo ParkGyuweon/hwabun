@@ -174,6 +174,50 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
         self.assertEqual(1, row["brand_view_sessions"])
         self.assertEqual(1, row["cross_brand_entry_sessions"])
 
+    def test_banner_daily_grain_carries_all_five_execution_axes(self):
+        """배너 Mart 도 같은 sweep 잔여분이었다 (Jira 324).
+
+        cross_brand_daily 와 상황이 같다 — 구현돼 있는데 4축으로 남아 있어
+        PC 로그와 PA 로그가 한 행에 합쳐진다.
+        """
+        now = datetime(2026, 9, 8, 1, 0, tzinfo=timezone.utc)
+        properties = json.dumps({
+            "banner_type": "concern", "banner_value": "Pores", "banner_slot": 1,
+            "trait_source": "explore", "policy_version": "banner_sort_v1",
+        })
+
+        def cleaned(event_id, generator_type):
+            frame = self.spark.createDataFrame(
+                [(event_id, "banner_impression", "session", "P1", properties)],
+                ["event_id", "event_name", "intent", "product_id", "properties_json"],
+            )
+            values = {
+                "event_time": now, "processed_at": now,
+                "event_date_kst": date(2026, 9, 8), "user_id": "U1",
+                "identity_scope": "persona", "is_seeded": False, "persona_id": None,
+                "scenario_id": None, "simulation_run_id": None,
+                "generator_type": generator_type, "session_id": "S-" + event_id,
+                "page_view_id": "PV1", "actor_type": "synthetic",
+                "source": "simulator",
+            }
+            for name, value in values.items():
+                frame = frame.withColumn(name, F.lit(value))
+            return frame
+
+        fact = _product_event_fact(
+            cleaned("pc", "python_batch").unionByName(cleaned("pa", "agent_llm")),
+            "Asia/Seoul",
+        )
+        result = _banner_daily(fact, {"Pores"})
+        by_type = {r["generator_type"]: r for r in result.collect()}
+
+        self.assertEqual({"python_batch", "agent_llm"}, set(by_type))
+        for generator_type, row in by_type.items():
+            with self.subTest(generator_type=generator_type):
+                self.assertEqual(1, row["impression_count"])
+        for axis in EXECUTION_AXES:
+            self.assertIn(axis, set(result.columns))
+
     def test_generator_types_do_not_merge_into_one_row(self):
         """PC 로그와 PA 로그가 한 행에 합쳐지면 안 된다 (Jira 324).
 
@@ -363,7 +407,8 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
         text_columns = [
             "event_id", "event_name", "product_id", "brand_id", "session_id",
             "banner_type", "banner_value", "trait_source", "policy_version",
-            "actor_type", "source", "scenario_id", "simulation_run_id",
+            "actor_type", "source", "generator_type", "scenario_id",
+            "simulation_run_id",
         ]
         schema = StructType(
             [StructField(name, StringType(), True) for name in text_columns]
@@ -377,7 +422,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
                 (
                     "e1", "product_view", "P1", "B1", "S1",
                     None, None, None, None,
-                    "user", "web", None, None,
+                    "user", "web", None, None, None,
                     None, date(2026, 9, 8),
                 )
             ],
