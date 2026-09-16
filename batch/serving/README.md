@@ -16,6 +16,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 - Windows 에서는 `localhost` 대신 **`127.0.0.1`** (IPv6 폴백으로 요청마다 2초).
 - `GMS_KEY` 는 `POST /api/prescription` 만 쓴다. 없으면 그 엔드포인트만 503, 추천은 전부 정상.
 - `KAFKA_BOOTSTRAP_SERVERS` 를 주면 `activity-events` 를 구독해 상태를 갱신한다 (없으면 `POST /api/events` 만).
+- 처방 LLM(GMS 과금) 스위치(Jira 325): `PRESCRIPTION_LLM=off` 로 끄고, 재배포 없이 `POST /api/prescription/llm {"enabled": true|false}` 로 켜고 끈다. 꺼지면 503 → 프론트 규칙표 문장. 저장본(cached)은 꺼도 준다. `/health.prescription` 에 enabled·key_present·llm_calls·cache_hits.
 - `DW_MYSQL_HOST/USER/PASSWORD/DB` 또는 `USER_TRAIT_SNAPSHOT_PATH` 를 주면 응답 `long_term_trait` 가 채워진다 (둘 다 없으면 null, health `user_trait` 에 출처). 신선도(Jira 319): health `age_days`·`stale`(`USER_TRAIT_STALE_DAYS` 2 초과), `USER_TRAIT_MAX_AGE_DAYS`(14) 넘으면 `long_term_trait` null.
 - `seed=review` 는 리뷰 시드를 상태로 쓰는 **시연용** (`state_source: review_seed`).
 

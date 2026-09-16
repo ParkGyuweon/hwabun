@@ -27,6 +27,7 @@ ssh -i ~/Downloads/J15A306T.pem ubuntu@j15a306.p.ssafy.io \
 | `user_trait.source` | dw 연결 전엔 null (정상 — 적재 Job 이 아직 없어 세 경로 전부 없음, 09-16) | dw 붙으면 `dw_mysql:…`, `age_days` ≤ 2 (319) |
 | 컨테이너 어휘집 | `vocab 0.7 [0, 26000, 46000, 66000, 105000]` | 백엔드 재배포가 옛 브랜치로 되돌린 것(§6) |
 | 응답 `hero.hero_policy_version` | `hero-2026-09-15` | 307 이전 이미지 |
+| `prescription.enabled` / `key_present` / `llm_calls` | 시연 직전 true / true, 끝나면 false 로 | GMS 과금은 처방 요청에서만 난다(배치·Kafka 아님). 켜기·끄기: 컨테이너 안 `curl -X POST 127.0.0.1:8300/api/prescription/llm -H 'content-type: application/json' -d '{"enabled":false}'` (Jira 325). GMS_KEY 는 EC2-1 `deploy/ec2-1/.env` 에만 있다(레포 아님, 09-16 투입) |
 
 컨테이너 버전과 코드 존재는 재배포 스크립트 끝 줄이 찍어 준다: `image latest==running OK` · `code: user_trait.py`.
 

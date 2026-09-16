@@ -453,3 +453,24 @@ class TestNewBrandAge(unittest.TestCase):
         h = client.get("/health").json()
         self.assertEqual(h["new_brand_rule"]["days"], rs.NEW_BRAND_DAYS)
         self.assertIn("new_now", h["new_brand_rule"])
+
+
+class TestPrescriptionSwitch(unittest.TestCase):
+    """Jira 325 — 처방 LLM 스위치. 꺼져 있으면 503 LLM_UNAVAILABLE(프론트 규칙표 폴백), health 에 상태·호출 수"""
+
+    def test_toggle_and_health(self):
+        st = client.get("/api/prescription/llm").json()
+        self.assertIn("enabled", st); self.assertIn("llm_calls", st)
+        off = client.post("/api/prescription/llm", json={"enabled": False}).json()
+        self.assertFalse(off["enabled"])
+        self.assertFalse(client.get("/health").json()["prescription"]["enabled"])
+        body = {"brand_id": "SB", "period": {"start": "2026-09-01", "end": "2026-09-14"},
+                "verb": "increase", "metric": "add_to_cart_rate", "value": 0.12, "baseline": 0.10}
+        r = client.post("/api/prescription", json=body)
+        # 입력 규칙에서 먼저 끝나면 200(LLM 안 부름), 아니면 꺼져 있어 503 — 어느 쪽이든 LLM 호출 0
+        self.assertIn(r.status_code, (200, 422, 503))
+        if r.status_code == 503:
+            self.assertEqual(r.json()["detail"]["code"], "LLM_UNAVAILABLE")
+        self.assertEqual(client.get("/api/prescription/llm").json()["llm_calls"], 0)
+        on = client.post("/api/prescription/llm", json={"enabled": True}).json()
+        self.assertTrue(on["enabled"])
