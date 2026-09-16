@@ -382,7 +382,7 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | --- | --- | --- |
 | `wishlist_toggle` | `action: string` | `sku_id: string` |
 | `add_to_cart` | `quantity: integer` | `sku_id: string`, `price_usd: number`, `unit_price: number`, `currency: string`, `entry_source: string`, `context_product_id: string` |
-| `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `price_usd: number` |
+| `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `price_usd: number`, `unit_price: number`, `currency: string` |
 | `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
 | `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
@@ -393,6 +393,15 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
+
+**담기·빼기의 가격 속성은 통화에 따라 둘 중 하나다** (S15P21A306-303). 달러면
+`price_usd` 하나, 원화면 `unit_price` + `currency="KRW"`. **둘을 같이 싣지 않는다** —
+같이 오면 어느 쪽이 정본인지 판단할 근거가 없다. Processed는 `unit_price`를 먼저 보고
+없으면 `price_usd`로 떨어져서, 어느 쪽이 와도 Fact 컬럼은 `unit_price` 하나다
+(`dw-schema.md` §3.2).
+
+최종 필드 이름은 아직 정하지 않았다. 생성기는 `--currency`로 가르고(Jira 334) 프론트는
+아직 `price_usd`를 보낸다. 이름이 하나로 정해지면 이 표에서 나머지를 지운다.
 
 ## 5. 배열과 Object 구조
 
