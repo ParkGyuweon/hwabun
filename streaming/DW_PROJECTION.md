@@ -83,6 +83,9 @@ stdout의 전체 `status=published`, 각 Mart의 `published=true`와
 `source_rows=inserted_rows`를 확인한다. JSON 보고서는 `dw-projection-reports` Volume의
 `/reports/dw-projection.json`에도 Mart별로 남는다.
 실행마다 같은 보고서 파일이 갱신되므로 이력 보존이 필요하면 별도 파일명을 지정한다.
+Mart 사이의 `RENAME TABLE`은 하나의 트랜잭션으로 묶지 않는다. 중간 Mart에서 실패하면
+앞에서 성공한 Mart만 새 값으로 발행될 수 있으므로, 보고서의 실패 Mart만 원인 해결 후
+재실행한다.
 
 E4·E5 Mart까지 함께 발행하려면 EC2-2 `.env`에 `DW_PROJECTION_MARTS`를 추가한다.
 
