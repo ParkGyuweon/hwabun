@@ -25,6 +25,13 @@ simulator/**
 !simulator/personas/data/personas_holdout_a.json
 !simulator/personas/data/personas_holdout_b.json
 !simulator/feedback/banned_terms.py
+# /live 시연 구동 (Jira 335): Dockerfile 의 COPY 와 짝. 여기 없으면 빌드가 "not found" 로 멎는다
+!simulator/generator/demo_live.py
+!simulator/generator/gen_behavior_logs.py
+!simulator/generator/recommend_client.py
+!simulator/personas/data/persona_style.json
+!frontend/src/mocks/products.sample.json
+!frontend/src/mocks/products.ssafy-beauty.json
 batch/ingest/data/**
 !batch/ingest/data/products_200.json
 !batch/ingest/data/concern_from_reviews.npz
