@@ -725,6 +725,7 @@ def health():
                                         for k, v in _last_sync.items()} if _last_sync else None)}
                              if SHOP_BACKEND_URL else None),
             "user_trait": _user_traits.health(),                 # 장기 성향 표 출처·행 수 (Jira 306)
+            "prescription": _rx_health(),                        # 처방 LLM 스위치·호출 수 (Jira 325)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
@@ -841,6 +842,10 @@ def deactivate_product(product_id: str):
 _rx_store: Optional[rx.Store] = None
 _rx_client = None
 _rx_client_tried = False
+# 처방 LLM 스위치 (Jira 325). GMS 는 여기서만 과금된다 — 배치·Kafka 소비자는 안 쓴다.
+# env PRESCRIPTION_LLM=off 로 끄고, POST /api/prescription/llm 로 재배포 없이 켜고 끈다. 저장본은 꺼도 준다.
+_rx_enabled = (os.environ.get("PRESCRIPTION_LLM", "on") or "on").strip().lower() not in ("off", "0", "false", "no")
+_rx_stats = {"llm_calls": 0, "cache_hits": 0, "refused_off": 0}
 
 
 def _rx_deps():
@@ -867,10 +872,37 @@ def prescribe(body: rx.PrescriptionInput,
         return rx.prescribe(body, None, store, force=force, model=model)
     key = rx.store_key(body, model)
     if not force and store.get(key):
+        _rx_stats["cache_hits"] += 1
         return dict(store.get(key), cached=True)
+    if not _rx_enabled:                # 스위치 꺼짐 — 프론트는 503 을 규칙표 문장으로 받는다 (Jira 325)
+        _rx_stats["refused_off"] += 1
+        raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "처방 LLM 이 꺼져 있습니다 (PRESCRIPTION_LLM=off 또는 /api/prescription/llm)"})
     if client is None:
         raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "GMS_KEY 가 없어 처방 문장을 만들 수 없습니다"})
+    _rx_stats["llm_calls"] += 1
     return rx.prescribe(body, client, store, force=force, model=model)
+
+
+class LlmSwitch(BaseModel):
+    enabled: bool
+
+
+def _rx_health() -> dict:
+    return {"enabled": _rx_enabled, "key_present": bool(os.environ.get("GMS_KEY") or os.environ.get("GMS_API_KEY")),
+            "model": rx.MODEL, **_rx_stats}
+
+
+@app.get("/api/prescription/llm")
+def prescription_llm_state():
+    return _rx_health()
+
+
+@app.post("/api/prescription/llm")
+def prescription_llm_switch(body: LlmSwitch):
+    """처방 LLM 켜기/끄기 (Jira 325). 재배포 없이. 내부망 전용 서버라 인증은 없다 — nginx 가 밖에 열지 않는다"""
+    global _rx_enabled
+    _rx_enabled = bool(body.enabled)
+    return _rx_health()
 
 
 @app.post("/api/events")
