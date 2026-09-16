@@ -97,6 +97,14 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(0, source.row_count)
         self.assertEqual(0, sum(len(b) for b in source.batches(10)))
 
+    def test_spark_int96_timestamps(self):
+        pq.write_table(pa.Table.from_pylist([self.row()], schema=self.schema),
+                       self.path / "part-spark.parquet", use_deprecated_int96_timestamps=True)
+        (self.path / "_SUCCESS").touch()
+        source = ParquetSnapshot(self.path, self.contract)
+        row = dict(zip(self.contract.names, list(source.batches(10))[0][0]))
+        self.assertEqual(datetime(2026, 9, 16, 3), row["mart_processed_at"])
+
     def test_success_only_directory_is_not_empty_snapshot(self):
         (self.path / "_SUCCESS").touch()
         with self.assertRaises(ProjectionError):

@@ -151,7 +151,9 @@ class ParquetSnapshot:
         # Read every physical schema: ds.dataset otherwise uses the first file
         # and can silently materialize missing nullable columns as NULL.
         for file in files:
-            physical = pq.read_schema(file)
+            # Spark 3.5 writes timestamps as INT96 by default. Arrow otherwise
+            # exposes these as ns (and may need pandas to produce Python values).
+            physical = pq.ParquetFile(file, coerce_int96_timestamp_unit="us").schema_arrow
             fields = {field.name: field.type for field in physical}
             partitions = {}
             for part in file.relative_to(self.path).parts[:-1]:
@@ -173,7 +175,10 @@ class ParquetSnapshot:
                 if dtype != target and not timestamp_ok:
                     raise ProjectionError(f"Parquet type differs from DDL: {name}")
         partitioning = ds.partitioning(pa.schema([("trait_date_kst", pa.date32())]), flavor="hive")
-        self.dataset = ds.dataset([str(f) for f in files], format="parquet",
+        parquet_format = ds.ParquetFileFormat(
+            read_options=ds.ParquetReadOptions(coerce_int96_timestamp_unit="us")
+        )
+        self.dataset = ds.dataset([str(f) for f in files], format=parquet_format,
                                   partitioning=partitioning, partition_base_dir=str(self.path))
         self.row_count = self.dataset.count_rows()
         self.assert_unchanged()
