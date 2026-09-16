@@ -109,6 +109,7 @@ MEMBER_EMAIL = "{pid}@persona.hwabun.local"
 MEMBER_PASSWORD = "hwabun1234"
 CHECKOUT_ENABLED = False      # --checkout 으로 켠다. 켜면 회원 로그인으로 들어가고 checkout 행동이 열린다
 SURVEY_ANSWER_P = 0.7         # 구매 사유 설문 응답률 — 생성기(gen_behavior_logs)와 같은 값
+BANNER_VISIBLE = True         # --no-banner 로 끈다: 에이전트가 배너를 못 보는 대조군 (노출 A/B, Jira 321)
 
 # 행동을 세 개 더 연 이유
 #   5개(click_product/scroll/add_to_cart/back_to_list/leave)만으로는 프론트가 정의한
@@ -602,6 +603,8 @@ def _seen_before(title, visited):
 
 def read_banner(page):
     """히어로 배너(AdBanner) 한 줄. 화면에 보일 때만. 이미지형이면 alt 문구를 쓴다 (Jira 321)"""
+    if not BANNER_VISIBLE:
+        return ""                                # 대조군 — 배너는 화면에 있지만 에이전트 눈에는 없다
     ad = page.locator("[data-banner-slot]")
     try:
         if not ad.count() or not ad.first.is_visible():
@@ -1606,6 +1609,8 @@ def run_parallel(a):
         argv += ["--script", a.script]
     if a.checkout:
         argv.append("--checkout")
+    if not a.banner:
+        argv.append("--no-banner")
 
     print(f"워커 {n}개로 나눠 실행합니다 (Playwright sync API 가 스레드 안전하지"
           f" 않아 프로세스로 분리)")
@@ -1699,6 +1704,8 @@ def main():
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
+    ap.add_argument("--no-banner", dest="banner", action="store_false", default=True,
+                    help="에이전트가 배너를 못 보게 한다 (노출 A/B 대조군, Jira 321). 배너 노출 로그는 프론트가 그대로 남긴다")
     ap.add_argument("--checkout", action="store_true",
                     help="PA 회원으로 로그인하고 checkout(주문) 행동을 연다 (Jira 321). 결제 키 없는 프론트 전제")
     ap.add_argument("--script", default=None,
@@ -1714,8 +1721,9 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
-    global CHECKOUT_ENABLED
+    global CHECKOUT_ENABLED, BANNER_VISIBLE
     CHECKOUT_ENABLED = bool(a.checkout)
+    BANNER_VISIBLE = bool(a.banner)
     global PREFER_CATEGORY, PREFER_STRICT, PREFER_FILTER
     PREFER_FILTER = a.prefer_filter
     PREFER_STRICT = a.prefer_strict
