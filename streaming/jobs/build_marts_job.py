@@ -58,6 +58,7 @@ DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
 DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
 DEFAULT_PRODUCT_EXIT_DAILY_PATH = "data/marts/product_exit_daily"
 DEFAULT_SEGMENT_CONTENT_DAILY_PATH = "data/marts/segment_content_daily"
+DEFAULT_SEGMENT_PRICE_BAND_PATH = "data/marts/segment_price_band_daily_kpi"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -135,6 +136,7 @@ class BuildMartsConfig:
     section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
     product_exit_daily_path: str = DEFAULT_PRODUCT_EXIT_DAILY_PATH
     segment_content_daily_path: str = DEFAULT_SEGMENT_CONTENT_DAILY_PATH
+    segment_price_band_path: str = DEFAULT_SEGMENT_PRICE_BAND_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -185,6 +187,7 @@ class BuildMartsConfig:
             "section_dwell_path": self.section_dwell_path,
             "product_exit_daily_path": self.product_exit_daily_path,
             "segment_content_daily_path": self.segment_content_daily_path,
+            "segment_price_band_path": self.segment_price_band_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -404,6 +407,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="segment_content_daily output path",
     )
     parser.add_argument(
+        "--segment-price-band-path",
+        default=_env("SEGMENT_PRICE_BAND_PATH", DEFAULT_SEGMENT_PRICE_BAND_PATH),
+        help="segment_price_band_daily_kpi output path",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -481,6 +489,7 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         section_dwell_path=args.section_dwell_path,
         product_exit_daily_path=args.product_exit_daily_path,
         segment_content_daily_path=args.segment_content_daily_path,
+        segment_price_band_path=args.segment_price_band_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -2006,6 +2015,100 @@ def _segment_content_daily(
     )
 
 
+
+# S5 히트맵 축. 교차 축(skin_type_x_skin_tone)은 넣지 않는다 — 여기에 또 얹으면
+# 셀이 100개가 되어 표본이 무너진다. S5 정의가 5밴드 × 4타입 = 20셀이다
+# (docs/dashboard/dashboard-redesign-spec.md §2-3).
+S5_SEGMENT_TYPES = ("skin_type", "skin_tone")
+
+
+def _segment_price_band_daily_kpi(
+    product_fact_df: Any,
+    dim_product_df: Any,
+    bridge_df: Any,
+    price_bins: list[tuple[str, float | None]],
+) -> Any:
+    """고객군 × 가격 밴드 교차 KPI (dw-schema.md §4.26).
+
+    ``persona_segment_daily_kpi``(§4.6)와 ``brand_price_band_daily_kpi``(§4.6-1)의
+    축을 교차한다. **둘 중 어느 쪽에도 축을 얹을 수 없어서** 별도 Mart 로 나눴다 —
+    축을 더하면 그 축을 걷어낸 합계가 같은 세션을 여러 번 센다. 세션 하나가 여러
+    가격대의 상품을 밟고, 동시에 ``skin_type`` 행과 ``skin_tone`` 행에 들어간다.
+
+    같은 함정이 Jira 235 에서 실제로 났다 — 브랜드 세션을 상품 Mart 합산으로 구했다가
+    876행이 336행으로 정정됐다.
+
+    **세 Mart 를 서로 대체하지 않는다.** ``price_bin`` 을 걷어낸 합계는 §4.6 과 같지
+    않고, ``segment_*`` 를 걷어낸 합계는 §4.6-1 과 같지 않다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    product_fact_df = _observed_events(product_fact_df)
+
+    # 교차 축은 쓰지 않는다. _persona_segments 는 교차 축까지 내므로 여기서 거른다.
+    segments = _persona_segments(bridge_df).where(
+        F.col("segment_type").isin(*S5_SEGMENT_TYPES)
+    )
+
+    # 이 Mart 의 통화는 **카탈로그 기준 가격의 단위**다. product_event_fact 에도 같은
+    # 이름의 컬럼이 있지만 그쪽은 결제 시점 통화라 뜻이 다르다. 이름이 겹치면 Join 뒤
+    # 참조가 모호해져 실행에서만 터진다 (Jira 277 에서 AMBIGUOUS_REFERENCE 로 겪었다).
+    catalog = dim_product_df.select(
+        F.col("product_id").alias("_dim_product_id"),
+        _price_bin_column(price_bins).alias("price_bin"),
+        F.col("currency").alias("_catalog_currency"),
+    )
+
+    events = (
+        product_fact_df.where(
+            _valid_brand()
+            # persona_id 가 없는 세션은 어느 세그먼트에도 넣지 않는다. 실제 사용자의
+            # 피부 정보는 Event 경로에 없어서, 귀속하면 없는 사실을 만들어 낸다.
+            & F.col("persona_id").isNotNull()
+            & (F.length(F.trim(F.col("persona_id"))) > 0)
+        )
+        .join(segments, ["persona_id"], "inner")
+        .join(catalog, F.col("product_id") == F.col("_dim_product_id"), "inner")
+    )
+
+    key_columns = [
+        "event_date_kst", "brand_id", "segment_type", "segment_value",
+        "price_bin", "_catalog_currency", *EXECUTION_AXES,
+    ]
+
+    def stage_sessions(condition: Any, alias: str) -> Any:
+        return F.countDistinct(
+            F.when(condition, F.col("session_id"))
+        ).cast("long").alias(alias)
+
+    is_detail = F.col("event_name").isin("product_view", "quick_look")
+    result = events.groupBy(*key_columns).agg(
+        F.countDistinct("user_id").cast("long").alias("segment_user_count"),
+        F.countDistinct("session_id").cast("long").alias("session_count"),
+        stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
+        stage_sessions(is_detail, "detail_view_sessions"),
+        stage_sessions(F.col("event_name") == "add_to_cart", "add_to_cart_sessions"),
+        stage_sessions(F.col("event_name") == "purchase", "purchase_sessions"),
+        F.countDistinct("product_id").cast("long").alias("product_count"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+    return (
+        result.withColumnRenamed("_catalog_currency", "currency")
+        # 담기 분모는 상세를 연 세션이다 (§4.1·§4.6·§4.6-1 과 같은 규칙).
+        # Quick Look 에서 담는 경로가 있어 product_view 만 분모로 두면 1.0 을 넘는다.
+        .withColumn(
+            "view_to_cart_rate",
+            _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")),
+        )
+        .withColumn(
+            "view_to_purchase_rate",
+            _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")),
+        )
+    )
+
+
 PAYMENT_METHODS = ("kakaopay", "card", "test")
 ORDER_CHANNELS = ("backend", "local")
 
@@ -3260,6 +3363,12 @@ def build_mart_frames(
         frames["brand_price_band_daily_kpi"] = _brand_price_band_daily_kpi(
             product_fact_df, dim_product_df, price_bins
         )
+        if persona_bridge_df is not None:
+            # 고객군 × 가격 밴드 교차 (S5). 두 축 Mart 중 어느 쪽에도 축을
+            # 얹을 수 없어 별도로 낸다.
+            frames["segment_price_band_daily_kpi"] = _segment_price_band_daily_kpi(
+                product_fact_df, dim_product_df, persona_bridge_df, price_bins
+            )
         if dim_brand_df is not None:
             # 코호트는 카탈로그 파생이고, Commons 는 그 위에 brand_daily_kpi 를 얹는다.
             frames["brand_cohort_dim"] = _brand_cohort_dim(
@@ -3484,6 +3593,11 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     _write_mart(
         frames["segment_content_daily"],
         config.segment_content_daily_path,
+        "event_date_kst",
+    )
+    _write_mart(
+        frames["segment_price_band_daily_kpi"],
+        config.segment_price_band_path,
         "event_date_kst",
     )
     _write_mart(

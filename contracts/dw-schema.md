@@ -386,7 +386,7 @@ source = dim_product, contracts/product-feature-vocab.json
 | `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
-| `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
+| `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily` | 제외 | 콘텐츠를 읽고 담았는지를 재는 지표. 시드는 조회 없이 담기를 내서 "콘텐츠를 안 봐도 담는다"를 만든다 |
 | `friction_daily` | 제외 | **부정 시드가 `scroll_backtrack`·`rage_click`을 직접 낸다**(§3.14). 재생 데이터의 `rage_click` 43건이 전부 시드라, 빼지 않으면 마찰이 생성기 산물로만 채워진다 |
 | `exit_daily`, `entry_source_daily` | 제외 | 이탈·유입 경로 전환. 퍼널과 같은 원칙 |
@@ -682,7 +682,8 @@ input = product_event_fact, dim_product, contracts/product-feature-vocab.json
 밟으면 구간마다 한 번씩 세어지기 때문이다. **두 Mart를 서로 대체하지 않는다.**
 
 고객군 축(피부 타입)과의 교차는 이 Mart로 낼 수 없다. 축을 하나 더 얹으면 그 축을 걷어낸
-합계가 무너지므로 별도 Mart가 필요하다 (S15P21A306-301).
+합계가 무너지므로 별도 Mart로 낸다 — §4.26 `segment_price_band_daily_kpi`
+(S15P21A306-301).
 
 
 ### 4.7 `scenario_daily_kpi`
@@ -1310,6 +1311,72 @@ MySQL projection에서 `content_kind`는 nullable로 선언된다. 이 Mart는 �
 **현재 재생 데이터에서는 한 칸만 찬다.** 등장하는 persona 1,000명이 전원
 `combination`이다. 층화 표본 재생성(Jira 318)이 반영된 로그로 다시 돌려야 네 타입이
 모두 나온다. Mart 구조와 단위 테스트는 그와 무관하다.
+
+### 4.26 `segment_price_band_daily_kpi`
+
+```text
+key = event_date_kst + brand_id + segment_type + segment_value + price_bin + currency + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = product_event_fact, dim_product, bridge_persona_segment
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | price_bin·generator/scenario/run만 Y | 고객군 × 가격 교차 축 |
+| `segment_user_count`, `session_count` | bigint | N | 세그먼트 규모 |
+| `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `purchase_sessions` | bigint | N | 단계별 고유 세션 수 |
+| `product_count` | bigint | N | 그 셀에서 밟은 고유 상품 수 |
+| `view_to_cart_rate`, `view_to_purchase_rate` | double | Y | 분모는 `detail_view_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+대시보드 고객군 화면의 S5 히트맵을 채운다
+(`docs/dashboard/dashboard-redesign-spec.md` §2-3).
+
+**§4.6·§4.6-1 중 어느 쪽에도 축을 얹을 수 없어서 나눈 Mart다.** 세션 하나는 여러
+가격대의 상품을 밟고 동시에 `skin_type` 행과 `skin_tone` 행에 들어간다. 축을 더하면
+그 축을 걷어낸 합계가 같은 세션을 여러 번 센다. 같은 함정이 Jira 235에서 실제로
+났다 — 브랜드 세션을 상품 Mart 합산으로 구했다가 876행이 336행으로 정정됐다.
+
+**세 Mart를 서로 대체하지 않는다.** `price_bin`을 걷어낸 합계는 §4.6과 같지 않고,
+`segment_*`를 걷어낸 합계는 §4.6-1과 같지 않다.
+
+**`segment_type`이 다른 행을 합산하지 않는다.** 한 세션이 `skin_type` 행과
+`skin_tone` 행에 동시에 들어가므로 더하면 두 번 센다. §4.6과 같은 규칙이다.
+
+**교차 축(`skin_type_x_skin_tone`)은 내지 않는다.** 여기에 또 얹으면 셀이 100개가
+되어 표본이 무너진다. S5 정의가 5밴드 × 4타입 = 20셀이다.
+
+**`persona_id`가 없는 세션은 어느 행에도 넣지 않는다.** 실제 사용자의 피부 정보는
+Event 경로에 없으므로 임의 귀속은 없는 사실을 만들어 낸다. 그래서 이 Mart의 세션
+합은 §4.14 전체와 같지 않고, 다른 것이 정상이다. `notSureST`는 값이 아니라 결측이라
+`segment_value`가 되지 않는다(§4.6과 같다).
+
+**`currency`를 key에 둔다.** 통화가 다른 가격을 환산 규칙 없이 한 구간으로 합치지
+않는 것을 필터가 아니라 grain으로 지킨다. 가격이 NULL이거나 0 이하인 상품은
+`price_bin = NULL` 행으로 보존한다 — 빼면 그 상품들의 반응을 볼 수 없고, 임의
+구간에 넣으면 그 구간이 오염된다. §4.6-1과 같은 규칙이다.
+
+가격 구간은 `contracts/product-feature-vocab.json`의 `price_bin_edges`를 읽는다.
+숫자를 여기에 복제하지 않는다 — 추천 CBF 피처·배너 축·상품 등록 화면이 같은 값을
+쓰므로 갈라지면 같은 이름의 가격대가 두 벌이 된다. 현재 어휘집 0.7 기준 원화
+`[0, 26000, 46000, 66000, 105000]`이다(Jira 302).
+
+**표본 미달 셀을 지우지 않는다.** 화면이 `n<50`을 비우고 `n<200`을 흐리게 표시한다
+(`frontend/src/dashboard/screens/SegmentsScreen.tsx`의 기존 격자와 같은 기준).
+Mart는 세션 수를 그대로 싣고 판정은 읽는 쪽 몫이다 — §4.18의 억제와 다르다.
+그쪽은 다른 브랜드에게 보이는 B층이라 Mart가 지우지만, 이것은 자기 브랜드만 보는
+A층이다.
+
+시드 Event는 제외한다(§4.0).
+
+**실데이터로 검증할 수 없는 규칙이 셋 있다.** 카탈로그 208개가 전부 원화(`KRW`)이고
+`base_price`가 NULL이거나 0 이하인 상품이 0개이며, `product_event_fact`가 전부
+`actor_type=synthetic`이다. 따라서 통화 혼합 · 가격 결측 · 실사용자 미귀속 세 규칙은
+fixture 테스트로만 덮인다(§4.10의 `banner_type` 커버리지 한계와 같은 성격).
+
+**현재 재생 데이터에서는 격자가 한 줄만 찬다.** 등장 persona 1,000명이 전원
+`combination`·`light`다. 층화 표본 재생성(Jira 318 반영 완료, 로그 재생성 대기)이
+된 로그로 다시 돌려야 4타입 × 5밴드가 찬다. `purchase_sessions`도 생성기가 결제를
+내기 시작해야 0을 벗어난다(Jira 312).
 
 ## 5. 실시간 Mart 후보
 

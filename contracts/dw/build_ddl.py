@@ -267,6 +267,8 @@ PARQUET_ONLY = {
     "brand_cohort_dim":
         "브랜드 → 코호트 배정표다. 대시보드는 cohort_key 만 알면 되고 그 값은 "
         "Backend 가 브랜드 인가와 함께 넘긴다",
+    "segment_price_band_daily_kpi":
+        "E4 응답에 가격 블록을 넣을지 프론트와 합의 전이다 (dashboard-mart-api-spec.md §5). 합의되면 GRAINS 로 옮긴다",
     "commons_cohort_weekly":
         "소비자가 아직 없다. E4 에 코호트 배지를 넣을지 프론트와 합의 전이다 "
         "(dashboard-mart-api-spec.md §1-5). 합의되면 GRAINS 로 옮긴다",
