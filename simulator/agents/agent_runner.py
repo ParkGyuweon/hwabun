@@ -101,7 +101,7 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout")
+           "sort_list", "checkout", "click_banner")
 # 목록 정렬 (Jira 321). 프론트 ProductListPage 의 SortKey 라벨 그대로 — 화면에 보이는 말로 고르게 한다
 SORT_KEYS = {"인기순": "popular", "평점 높은순": "rating", "가격 낮은순": "price_asc", "가격 높은순": "price_desc"}
 # 결제 (Jira 321). PA 100명은 shop_backend 시드에 회원으로 들어 있다 (docs/shop-backend-requests.md:125)
@@ -518,6 +518,9 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - **장바구니에 담은 것이 있고 더 볼 상품이 없거나 살 마음이 섰으면 checkout 으로
   주문을 마치십시오.** 합계가 익숙한 가격대를 크게 넘으면 먼저 빼고 주문하십시오.
   담기만 하고 나가는 것(leave)도 사람이 하는 일이니 억지로 사지는 마십시오.
+- 목록 맨 위에 `[배너]` 로 표시된 상품 하나가 크게 실려 있을 수 있습니다. 광고 자리입니다.
+  문구가 내 피부나 고민에 맞아 보이면 click_banner 로 그 상품 상세에 들어갈 수 있고,
+  아니면 무시하고 목록을 보십시오. 배너라서 눌러야 하는 것은 아닙니다.
 - 목록 정렬은 sort_list 로 바꿀 수 있습니다 (인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
   가격이 신경 쓰이면 가격 낮은순, 실패하고 싶지 않으면 평점 높은순처럼 **내 성향에 맞는 이유가
   있을 때만** 한 번 바꾸십시오. 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
@@ -534,6 +537,7 @@ target 규칙
 - 목록에서 상품을 고를 때: 그 줄에 적힌 상품명을 그대로 적으십시오.
 - **상세에서 담거나 찜할 때: 지금 보고 있는 상품명을 적으십시오. null 로 두지 마십시오.**
 - sort_list 일 때: 정렬 이름을 그대로 적으십시오 (예: "가격 낮은순").
+- click_banner 일 때: 배너에 적힌 상품명을 적으십시오.
 - 상품과 무관한 행동(scroll · back_to_list · leave · checkout)일 때만 null 입니다."""
 
 
@@ -596,6 +600,31 @@ def _seen_before(title, visited):
     return False
 
 
+def read_banner(page):
+    """히어로 배너(AdBanner) 한 줄. 화면에 보일 때만. 이미지형이면 alt 문구를 쓴다 (Jira 321)"""
+    ad = page.locator("[data-banner-slot]")
+    try:
+        if not ad.count() or not ad.first.is_visible():
+            return ""
+        a = ad.first
+        img = a.locator(".ad__image")
+        if img.count():
+            text = img.first.get_attribute("alt") or ""
+        else:
+            parts = []
+            for sel in (".ad__brand", ".ad__badge", ".ad__kicker", ".ad__head", ".ad__sub"):
+                el = a.locator(sel)
+                if el.count():
+                    t = el.first.inner_text(timeout=800).strip().replace("\n", " ")
+                    if t:
+                        parts.append(t)
+            text = " · ".join(parts)
+        text = " ".join(text.split())
+        return f"[배너] {text}" if text else ""
+    except Exception:
+        return ""
+
+
 def read_list(page, visited=()):
     """목록 화면. **지금 화면에 실제로 보이는 카드만** 읽는다.
 
@@ -653,6 +682,9 @@ def read_list(page, visited=()):
         lines.append(f"{len(lines)+1}. {title}{kind_tag} — {price}"
                      f"{'  [이미 봄]' if _seen_before(title, visited) else ''}")
     body = "\n".join(lines) if lines else "(화면에 상품이 없습니다)"
+    banner = read_banner(page)
+    if banner:
+        body = banner + "\n\n" + body
     if hidden:
         body += f"\n(내가 안 쓰는 종류 {hidden}개는 눈에 들어오지 않았다)"
     # 바닥이어도 "더 보기" 가 남아 있으면 목록 끝이 아니다. 끝이라고 말하면
@@ -1039,6 +1071,20 @@ def do_action(page, act, target, scroll_center=None):
         page.wait_for_timeout(900)
         return ok
 
+    if a == "click_banner":
+        hit = page.locator("[data-banner-slot] .ad__hit")
+        if not hit.count():
+            return False
+        try:
+            if not hit.first.is_visible():
+                return False
+        except Exception:
+            return False
+        if not click_safe(hit.first, page):
+            return False
+        page.wait_for_timeout(1400)                  # 상세로 넘어간다 — banner_click 은 프론트가 남긴다
+        return True
+
     if a == "sort_list":
         # 프론트 <select> 하나다. 라벨로 받아 SortKey 로 바꾼다. 모르는 말이면 가격 낮은순 —
         # 정렬을 바꾸고 싶다는 뜻은 분명하고, 가격이 이 프롬프트가 가장 자주 든 이유다
@@ -1170,7 +1216,7 @@ def has_unvisited_in_list(page, visited):
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
                     n_details=0, has_unvisited=True, cart_over=False,
-                    sorted_once=False, checkout=None):
+                    sorted_once=False, checkout=None, has_banner=False):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -1192,6 +1238,8 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
     # 더 보기를 눌러 26번째 상품부터를 화면에 올린다)
     acts = ["click_product"]
+    if has_banner:
+        acts.insert(1, "click_banner")
     # 목록에서는 스크롤을 늘 연다. 바닥에 닿으면 do_action 이 위로 올리므로
     # "바닥이라 볼 것이 없다" 로 갇히지 않는다. 연속 스크롤은 프롬프트가 지적한다
     acts.append("scroll")
@@ -1314,7 +1362,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         category_rule = ""
     system = SYSTEM_TMPL.format(profile=profile_text(persona), category_rule=category_rule,
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
-    calls, done, failed, carted, purchased = 0, 0, 0, 0, 0
+    calls, done, failed, carted, purchased, banner_clicks = 0, 0, 0, 0, 0, 0
     sorted_once = False      # 목록 정렬은 세션당 한 번 (Jira 321)
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
@@ -1363,7 +1411,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                                cart_over=any(
                                    budget is not None and v > budget
                                    for v in cart_prices.values()),
-                               sorted_once=sorted_once)
+                               sorted_once=sorted_once,
+                               has_banner=(kind == "list" and bool(read_banner(page))))
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -1442,6 +1491,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 tgt = cart[-1] if cart else None
             elif new_act == "sort_list":
                 tgt = "가격 낮은순"
+            elif new_act == "click_banner":
+                tgt = None
             else:
                 tgt = None
             if verbose:
@@ -1496,6 +1547,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             carted += 1
         if okd and act == "checkout":
             purchased += 1
+        if okd and act == "click_banner":
+            banner_clicks += 1
         if decisions is not None:
             decisions.write(persona["persona_id"], turn, kind, acts, obj, act, tgt, okd)
         if verbose:
@@ -1508,7 +1561,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             break                                # 주문하면 세션이 끝난다 (프롬프트와 같은 약속)
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
-    return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased, broken=broken)
+    return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased,
+                banner_clicks=banner_clicks, broken=broken)
 
 
 # ============================================================================
@@ -1741,7 +1795,7 @@ def main():
         print(f"판단 근거 {dec_path}")
 
     from playwright.sync_api import sync_playwright
-    tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, broken=0)
+    tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, banner_clicks=0, broken=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -1819,7 +1873,7 @@ def main():
     dt = time.time() - t0
     print()
     print("=" * 60)
-    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건")
+    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건 / 배너 클릭 {tot['banner_clicks']}건")
     if tot.get("broken"):
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회"
               f" — AboutProduct.tsx 크래시는 2026-09-02 고쳐졌으므로 다른 원인입니다")

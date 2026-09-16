@@ -50,6 +50,9 @@ python simulator/agents/agent_runner.py --limit 10 \
 - 전제: 프론트에 결제 키(`VITE_PORTONE_*`)가 **없어야** 한다. 키가 있으면 카카오페이 창이 떠서 에이전트가 넘지 못한다.
   키 없는 프론트는 `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문)가 되고 `purchase` 이벤트 모양은 같다.
 - `sort_list` 는 세션당 한 번, target 은 화면의 정렬 이름(인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
+- `click_banner`: 목록 위 히어로 배너(AdBanner)가 보이면 화면 텍스트에 `[배너] 브랜드 · 배지 · 문구` 한 줄로 실리고
+  행동이 열린다. **프롬프트는 중립**이다("맞아 보이면 들어가고 아니면 무시") — 배너 효과를 재는 실험이라 유도하지 않는다.
+  이전엔 러너가 배너를 아예 못 봐서 PA 실행의 banner_click 이 0건이었다.
 
 ```bash
 # 배선 확인 (LLM 0회) — 프론트 5173 + shop_backend 8090 이 떠 있어야 한다
