@@ -8,7 +8,11 @@ from streaming.jobs.publish_user_trait_job import Config, MysqlStore, publish
 class PublishTests(unittest.TestCase):
     def setUp(self):
         self.config = Config("localhost", "writer", "secret")
-        self.source = Mock(spec=["row_count", "batches", "assert_unchanged"], row_count=2)
+        self.source = Mock(
+            spec=["row_count", "batches", "assert_unchanged"],
+            row_count=2,
+            unsafe=True,
+        )
         self.source.batches.return_value = iter([[("row-1",)], [("row-2",)]])
         self.store = Mock(spec=MysqlStore)
         self.store.acquire.return_value = True
