@@ -35,6 +35,20 @@ CREATE TABLE `dw`.`behavior_conversion_daily` (
   KEY `ix_behavior_conversion_daily__grain` (`brand_id`, `event_date_kst`, `product_id`, `event_name`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- brand_cohort_dim
+CREATE TABLE `dw`.`brand_cohort_dim` (
+  `brand_id` VARCHAR(64) NOT NULL,
+  `brand_hash` VARCHAR(64) NOT NULL,
+  `product_count` BIGINT NOT NULL,
+  `product_count_band` VARCHAR(32) NOT NULL,
+  `dominant_price_bin` VARCHAR(64) NULL,
+  `dominant_secondary_category` VARCHAR(64) NULL,
+  `cohort_key` VARCHAR(64) NULL,
+  `commons_participating` TINYINT(1) NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`brand_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- brand_daily_kpi
 CREATE TABLE `dw`.`brand_daily_kpi` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -108,8 +122,8 @@ CREATE TABLE `dw`.`brand_repurchase_daily` (
   `mart_processed_at` DATETIME(3) NOT NULL,
   `repurchase_rate` DOUBLE NULL,
   `window_days` INT NOT NULL,
-  `window_start_date` DATE NULL,
-  `window_end_date` DATE NULL,
+  `window_start_date` DATE NOT NULL,
+  `window_end_date` DATE NOT NULL,
   `backend_order_count` BIGINT NOT NULL,
   `local_order_count` BIGINT NOT NULL,
   `kakaopay_order_count` BIGINT NOT NULL,
@@ -119,6 +133,34 @@ CREATE TABLE `dw`.`brand_repurchase_daily` (
   `declared_restock_order_count` BIGINT NOT NULL,
   PRIMARY KEY (`dw_row_id`),
   KEY `ix_brand_repurchase_daily__grain` (`brand_id`, `snapshot_date_kst`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- commons_cohort_weekly
+CREATE TABLE `dw`.`commons_cohort_weekly` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `cohort_key` VARCHAR(64) NOT NULL,
+  `snapshot_week_kst` DATE NOT NULL,
+  `metric_name` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `window_start_date` DATE NOT NULL,
+  `window_end_date` DATE NOT NULL,
+  `brand_count` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `is_dominated` TINYINT(1) NOT NULL,
+  `is_suppressed` TINYINT(1) NOT NULL,
+  `is_sample_sufficient` TINYINT(1) NOT NULL,
+  `p25` DOUBLE NULL,
+  `p50` DOUBLE NULL,
+  `p75` DOUBLE NULL,
+  `min_brand_count` INT NOT NULL,
+  `min_sample_size` INT NOT NULL,
+  `dominance_ratio` DOUBLE NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_commons_cohort_weekly__grain` (`cohort_key`, `snapshot_week_kst`, `metric_name`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- content_conversion_daily
@@ -405,8 +447,8 @@ CREATE TABLE `dw`.`product_repurchase_daily` (
   `mart_processed_at` DATETIME(3) NOT NULL,
   `repurchase_rate` DOUBLE NULL,
   `window_days` INT NOT NULL,
-  `window_start_date` DATE NULL,
-  `window_end_date` DATE NULL,
+  `window_start_date` DATE NOT NULL,
+  `window_end_date` DATE NOT NULL,
   `backend_order_count` BIGINT NOT NULL,
   `local_order_count` BIGINT NOT NULL,
   `kakaopay_order_count` BIGINT NOT NULL,
@@ -461,6 +503,34 @@ CREATE TABLE `dw`.`segment_content_daily` (
   KEY `ix_segment_content_daily__grain` (`brand_id`, `event_date_kst`, `skin_type`, `content_kind`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- segment_price_band_daily_kpi
+CREATE TABLE `dw`.`segment_price_band_daily_kpi` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `segment_type` VARCHAR(64) NOT NULL,
+  `segment_value` VARCHAR(64) NOT NULL,
+  `price_bin` VARCHAR(32) NULL,
+  `currency` VARCHAR(32) NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `segment_user_count` BIGINT NOT NULL,
+  `session_count` BIGINT NOT NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `purchase_sessions` BIGINT NOT NULL,
+  `product_count` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `view_to_cart_rate` DOUBLE NULL,
+  `view_to_purchase_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_segment_price_band_daily_kpi__grain` (`brand_id`, `event_date_kst`, `segment_type`, `segment_value`, `price_bin`, `currency`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- user_trait_daily
 CREATE TABLE `dw`.`user_trait_daily` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -476,8 +546,8 @@ CREATE TABLE `dw`.`user_trait_daily` (
   `contributing_event_count` BIGINT NOT NULL,
   `trait_rank` INT NULL,
   `is_primary_trait` TINYINT(1) NULL,
-  `window_start_date` DATE NULL,
-  `window_end_date` DATE NULL,
+  `window_start_date` DATE NOT NULL,
+  `window_end_date` DATE NOT NULL,
   `trait_policy_version` VARCHAR(32) NULL,
   `mart_processed_at` DATETIME(3) NOT NULL,
   PRIMARY KEY (`dw_row_id`),
@@ -487,7 +557,5 @@ CREATE TABLE `dw`.`user_trait_daily` (
 -- MySQL 로 옮기지 않는 Mart — Parquet 에만 둔다 (§7.2)
 --   analytics_baseline: 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다
 --   banner_daily: 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다
---   brand_cohort_dim: 브랜드 → 코호트 배정표다. 대시보드는 cohort_key 만 알면 되고 그 값은 Backend 가 브랜드 인가와 함께 넘긴다
 --   category_price_reference: 카탈로그 파생 참조표다. Event 를 읽지 않고 브랜드 축도 없다
---   commons_cohort_weekly: 소비자가 아직 없다. E4 에 코호트 배지를 넣을지 프론트와 합의 전이다 (dashboard-mart-api-spec.md §1-5). 합의되면 GRAINS 로 옮긴다
 --   cross_brand_daily: 읽는 엔드포인트가 없다
