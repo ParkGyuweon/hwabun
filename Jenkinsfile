@@ -253,10 +253,10 @@ pipeline {
                     cat > "$grant_sql" <<SQL
 CREATE USER IF NOT EXISTS '$reader_user'@'%' IDENTIFIED BY '$reader_password';
 ALTER USER '$reader_user'@'%' IDENTIFIED BY '$reader_password';
-GRANT SELECT ON \`dw\`.* TO '$reader_user'@'%';
+GRANT SELECT ON dw.* TO '$reader_user'@'%';
 CREATE USER IF NOT EXISTS '$writer_user'@'$writer_host' IDENTIFIED BY '$writer_password';
 ALTER USER '$writer_user'@'$writer_host' IDENTIFIED BY '$writer_password';
-GRANT ALL PRIVILEGES ON \`dw\`.* TO '$writer_user'@'$writer_host';
+GRANT ALL PRIVILEGES ON dw.* TO '$writer_user'@'$writer_host';
 FLUSH PRIVILEGES;
 SQL
                     docker cp "$grant_sql" ec2-1-mysql-1:/tmp/dw-grant.sql
