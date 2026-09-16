@@ -399,6 +399,7 @@ source = dim_product, contracts/product-feature-vocab.json
 | `banner_daily` | 제외 | 노출·클릭 행동. 시드는 배너 Event를 내지 않아 실제 차이는 없다 |
 | `ingredient_weekly_interest` | 제외 | 탐색으로 드러난 관심을 재는 지표다 |
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
+| `event_daily` | 제외 | 관측된 로그 볼륨을 재는 진단 지표다. 시드는 생성기가 주입한 표식이지 방문이 아니다 |
 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily` | 제외 | 콘텐츠를 읽고 담았는지를 재는 지표. 시드는 조회 없이 담기를 내서 "콘텐츠를 안 봐도 담는다"를 만든다 |
 | `friction_daily` | 제외 | **부정 시드가 `scroll_backtrack`·`rage_click`을 직접 낸다**(§3.14). 재생 데이터의 `rage_click` 43건이 전부 시드라, 빼지 않으면 마찰이 생성기 산물로만 채워진다 |
@@ -1391,9 +1392,54 @@ fixture 테스트로만 덮인다(§4.10의 `banner_type` 커버리지 한계와
 된 로그로 다시 돌려야 4타입 × 5밴드가 찬다. `purchase_sessions`도 생성기가 결제를
 내기 시작해야 0을 벗어난다(Jira 312).
 
+### 4.27 `event_daily`
+
+```text
+key = event_date_kst + brand_id + event_name + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = cleaned_events, dim_product
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | brand/generator/scenario/run만 Y | Event 볼륨 축 |
+| `event_count` | bigint | N | 그 날 그 Event 수 |
+| `unique_session_count` | bigint | N | 그 Event를 낸 고유 세션 수 |
+| `unique_user_count` | bigint | N | 고유 사용자 수 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+E6의 `event_volumes` 블록이 읽는다(`dashboard-mart-api-spec.md` §3 E6).
+
+**다른 Mart와 달리 Event를 고르지 않고 전부 센다.** "어제 로그가 정상적으로
+들어왔나"를 보는 진단 지표라서다. 그래서 `event_count`의 합은 `cleaned_events`의
+관측 Event 수와 **정확히 같아야 한다** — Q5가 이것을 검사한다.
+
+**`brand_id`가 NULL인 행을 지우지 않는다.** `section_dwell`·`page_view`·
+`session_start`·`exit_summary`처럼 상품에 귀속되지 않는 Event가 있고, 재생 데이터
+기준 그것이 전체 Event의 **59%(603,564건)**다. 지우면 볼륨 진단이 성립하지 않고
+위의 합계 검사도 깨진다. 화면이 브랜드로 거르면 자연히 빠지므로 Mart가 미리 지울
+이유가 없다.
+
+`brand_id`는 `dim_product`에서 보강한다. `cleaned_events`에는 상품 차원이 붙기
+전이라 브랜드가 없다. 조인은 **left**다 — `inner`로 하면 플랫폼 공통 Event가 통째로
+사라진다.
+
+시드 Event는 제외한다(§4.0). 관측된 볼륨을 재는 지표이고, 시드는 생성기가 주입한
+표식이지 방문이 아니다.
+
+**§5.1 `realtime_event_stats`를 쓰지 않은 이유**는 그 key에 `brand_id`가 없어 E6의
+"브랜드 필터 가능" 요구를 못 맞추기 때문이다. 분 단위 스트리밍 Mart는 상시 구동
+Job과 별도 서빙 경로가 필요한데, 배치 Mart는 전부 MySQL projection을 통해 서빙한다.
+배치 주기가 일 1회로 확정된 이상 분 단위 신선도에 의미가 없다.
+
 ## 5. 실시간 Mart 후보
 
 ### 5.1 `realtime_event_stats`
+
+**미구현이고, 현재 정의로는 E6를 채울 수 없다.** key에 `brand_id`가 없어
+`dashboard-mart-api-spec.md` §3 E6의 "브랜드 필터 가능해야 한다"를 못 맞춘다.
+E6의 `event_volumes`는 §4.27 `event_daily`가 채운다(Jira 323). 이 절은 운영
+모니터링용 정의로 남긴다 — 실행 축도 4종이라 구현하려면 `generator_type`을
+먼저 넣어야 한다(§2).
 
 ```text
 key = event_minute_kst + event_name + source + actor_type + scenario_id + simulation_run_id
