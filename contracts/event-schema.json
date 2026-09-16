@@ -471,6 +471,84 @@
     {
       "if": {
         "properties": {
+          "event_name": {"enum": ["add_to_cart", "remove_from_cart"]}
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "type": "object",
+            "properties": {
+              "unit_price": {
+                "type": "number",
+                "minimum": 0
+              },
+              "currency": {
+                "const": "KRW"
+              },
+              "price_usd": {
+                "type": "number",
+                "minimum": 0,
+                "deprecated": true
+              }
+            },
+            "allOf": [
+              {
+                "if": {"required": ["unit_price"]},
+                "then": {"required": ["currency"]}
+              },
+              {
+                "if": {"required": ["currency"]},
+                "then": {"required": ["unit_price"]}
+              }
+            ],
+            "not": {"required": ["unit_price", "price_usd"]}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {"const": "view_cart"}
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "type": "object",
+            "required": ["currency"],
+            "properties": {
+              "currency": {"const": "KRW"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {"const": "begin_checkout"}
+        },
+        "required": ["event_name"]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "type": "object",
+            "required": ["currency"],
+            "properties": {
+              "currency": {"const": "KRW"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "event_name": {"const": "purchase"}
         },
         "required": ["event_name"]
@@ -484,7 +562,8 @@
               "items",
               "payment_method",
               "paid_value",
-              "order_channel"
+              "order_channel",
+              "currency"
             ],
             "properties": {
               "order_id": {
@@ -503,6 +582,9 @@
               },
               "order_channel": {
                 "enum": ["backend", "local"]
+              },
+              "currency": {
+                "const": "KRW"
               },
               "pg_provider": {
                 "type": "string",

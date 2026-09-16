@@ -381,12 +381,12 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | event_name | required properties | optional properties |
 | --- | --- | --- |
 | `wishlist_toggle` | `action: string` | `sku_id: string` |
-| `add_to_cart` | `quantity: integer` | `sku_id: string`, `price_usd: number`, `unit_price: number`, `currency: string`, `entry_source: string`, `context_product_id: string` |
-| `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `price_usd: number`, `unit_price: number`, `currency: string` |
-| `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number` | `navigation_source: string` |
+| `add_to_cart` | `quantity: integer` | `sku_id: string`, `unit_price: number`, `currency: string`, `entry_source: string`, `context_product_id: string`, `price_usd: number` (**deprecated**) |
+| `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `unit_price: number`, `currency: string`, `price_usd: number` (**deprecated**) |
+| `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number`, `currency: string` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
-| `begin_checkout` | `items: object[]` | `cart_value: number`, `currency: string` |
-| `purchase` | `order_id: string`, `items: object[]`, `payment_method: string`, `paid_value: number`, `order_channel: string` | `order_value: number`, `currency: string`, `pg_provider: string`, `payment_id: string`, `paid_at: string` |
+| `begin_checkout` | `items: object[]`, `currency: string` | `cart_value: number` |
+| `purchase` | `order_id: string`, `items: object[]`, `payment_method: string`, `paid_value: number`, `order_channel: string`, `currency: string` | `order_value: number`, `pg_provider: string`, `payment_id: string`, `paid_at: string` |
 | `payment_failed` | `order_id: string` | `reason_code: string`, `payment_method: string` |
 | `purchase_reason_select` | `order_id: string`, `reasons: string[]` | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 | `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
@@ -394,14 +394,16 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
 
-**담기·빼기의 가격 속성은 통화에 따라 둘 중 하나다** (S15P21A306-303). 달러면
-`price_usd` 하나, 원화면 `unit_price` + `currency="KRW"`. **둘을 같이 싣지 않는다** —
-같이 오면 어느 쪽이 정본인지 판단할 근거가 없다. Processed는 `unit_price`를 먼저 보고
-없으면 `price_usd`로 떨어져서, 어느 쪽이 와도 Fact 컬럼은 `unit_price` 하나다
-(`dw-schema.md` §3.2).
+**금액의 정본 통화는 원화이고 이름은 `unit_price`로 확정했다** (S15P21A306-303,
+2026-09-16 프론트 합의). 신규 Producer는 담기·빼기에 `unit_price`와
+`currency="KRW"`를 함께 싣고 `price_usd`를 보내지 않는다. `view_cart`·
+`begin_checkout`·`purchase`의 `cart_value`·`order_value`·`paid_value` 및
+`items[].unit_price`도 모두 원화이며 `currency="KRW"`다.
 
-최종 필드 이름은 아직 정하지 않았다. 생성기는 `--currency`로 가르고(Jira 334) 프론트는
-아직 `price_usd`를 보낸다. 이름이 하나로 정해지면 이 표에서 나머지를 지운다.
+`price_usd`는 과거 로그를 읽기 위한 **deprecated 입력**으로만 당분간 허용한다.
+`unit_price`와 함께 보내지 않는다. Processed는 전환 기간에 `unit_price`를 먼저 보고
+없으면 `price_usd`로 떨어지지만 Fact 컬럼은 계속 `unit_price` 하나다
+(`dw-schema.md` §3.2). 원화 로그 재생성 및 전환 검증이 끝나면 이 폴백을 제거한다.
 
 ## 5. 배열과 Object 구조
 
