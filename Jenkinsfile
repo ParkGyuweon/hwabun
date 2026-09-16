@@ -217,13 +217,15 @@ pipeline {
                     set -eu
                     test -f /run/secrets/ec2-1.env
                     test -f contracts/dw/schema.sql
-                    # Jenkins 배포와 동일한 비밀 설정을 사용한다. 계정은 EC2-2 사설 IP에서만 허용한다.
+                    # 추천 서버 읽기 계정과 EC2-2 Spark 쓰기 계정을 분리한다.
                     set -a
                     . /run/secrets/ec2-1.env
                     set +a
                     : "${DW_MYSQL_USER:?Set DW_MYSQL_USER in /run/secrets/ec2-1.env}"
                     : "${DW_MYSQL_PASSWORD:?Set DW_MYSQL_PASSWORD in /run/secrets/ec2-1.env}"
-                    : "${DW_MYSQL_CLIENT_HOST:?Set DW_MYSQL_CLIENT_HOST to EC2-2 private IP}"
+                    : "${DW_MYSQL_WRITER_USER:?Set DW_MYSQL_WRITER_USER in /run/secrets/ec2-1.env}"
+                    : "${DW_MYSQL_WRITER_PASSWORD:?Set DW_MYSQL_WRITER_PASSWORD in /run/secrets/ec2-1.env}"
+                    : "${DW_MYSQL_WRITER_HOST:?Set DW_MYSQL_WRITER_HOST to EC2-2 private IP}"
 
                     # schema.sql의 CREATE TABLE은 재실행용이 아니다. 이미 DB가 있으면 기존 데이터를 보호한다.
                     if docker exec ec2-1-mysql-1 sh -c \
@@ -240,16 +242,21 @@ pipeline {
 
                     # SQL 파일은 실행 직후 삭제한다. 작은따옴표는 SQL 방식으로 이스케이프한다.
                     sql_quote() { printf '%s' "$1" | sed "s/'/''/g"; }
-                    dw_user="$(sql_quote "$DW_MYSQL_USER")"
-                    dw_password="$(sql_quote "$DW_MYSQL_PASSWORD")"
-                    dw_host="$(sql_quote "$DW_MYSQL_CLIENT_HOST")"
+                    reader_user="$(sql_quote "$DW_MYSQL_USER")"
+                    reader_password="$(sql_quote "$DW_MYSQL_PASSWORD")"
+                    writer_user="$(sql_quote "$DW_MYSQL_WRITER_USER")"
+                    writer_password="$(sql_quote "$DW_MYSQL_WRITER_PASSWORD")"
+                    writer_host="$(sql_quote "$DW_MYSQL_WRITER_HOST")"
                     grant_sql="$(mktemp)"
                     trap 'rm -f "$grant_sql"' EXIT
                     chmod 600 "$grant_sql"
                     cat > "$grant_sql" <<SQL
-CREATE USER IF NOT EXISTS '$dw_user'@'$dw_host' IDENTIFIED BY '$dw_password';
-ALTER USER '$dw_user'@'$dw_host' IDENTIFIED BY '$dw_password';
-GRANT ALL PRIVILEGES ON \`dw\`.* TO '$dw_user'@'$dw_host';
+CREATE USER IF NOT EXISTS '$reader_user'@'%' IDENTIFIED BY '$reader_password';
+ALTER USER '$reader_user'@'%' IDENTIFIED BY '$reader_password';
+GRANT SELECT ON \`dw\`.* TO '$reader_user'@'%';
+CREATE USER IF NOT EXISTS '$writer_user'@'$writer_host' IDENTIFIED BY '$writer_password';
+ALTER USER '$writer_user'@'$writer_host' IDENTIFIED BY '$writer_password';
+GRANT ALL PRIVILEGES ON \`dw\`.* TO '$writer_user'@'$writer_host';
 FLUSH PRIVILEGES;
 SQL
                     docker cp "$grant_sql" ec2-1-mysql-1:/tmp/dw-grant.sql
