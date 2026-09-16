@@ -60,7 +60,7 @@ class ServingArtifactTest(unittest.TestCase):
         """
         import sys
         sys.path.insert(0, BD)
-        from ltr_features import LtrFeatures, load_ltr
+        from ltr_features import LtrFeatures, load_ltr, weighted_from_meta
         from persona_feature import AffinityTable
         from product_encoder import Encoder
         from recommender import CF_BETA, cf_bonus, load_cooc, schedule_for
@@ -81,7 +81,8 @@ class ServingArtifactTest(unittest.TestCase):
                              self.golden["ltr_model"]["feature_names"],
                              "모델의 피처 구성이 골든을 만들 때와 다르다")
             # 블록 경계는 어휘집(계약)에서 온다 — 자바도 같은 파일을 읽는다
-            feat = LtrFeatures(Encoder(), M, prior, affinity, cooc, supporters)
+            feat = LtrFeatures(Encoder(), M, prior, affinity, cooc, supporters,
+                               weighted=weighted_from_meta(meta))
 
         for case in self.golden["cases"]:
             si = [index[g] for g in case["seed_product_ids"]]

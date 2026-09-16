@@ -93,7 +93,7 @@ JOBS = os.path.join(ROOT, "batch", "jobs")
 sys.path.insert(0, JOBS)
 sys.path.insert(0, BD)                      # catalog_registry (같은 폴더) — 모듈 실행(-m) 에서도 보이게
 
-from ltr_features import LtrFeatures, load_ltr                 # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, weighted_from_meta  # noqa: E402
 from persona_feature import load as load_affinity              # noqa: E402
 import persona_feature as pf                                   # noqa: E402  (속성 별칭표, Jira 245)
 from product_encoder import Encoder, brand_key                 # noqa: E402  (brand_key: Jira 247)
@@ -215,7 +215,8 @@ class Engine:
         ltr = self.ltr
         # n_ref: 순위 피처 분모를 원천 카탈로그 크기로 고정 — 등록 상품이 붙어도 기존 순위 보존
         feat = (LtrFeatures(self.enc, self.V, self.prior, self.affinity, self.cooc, self.supporters,
-                            n_ref=getattr(self, "n_seed", None))
+                            n_ref=getattr(self, "n_seed", None),
+                            weighted=weighted_from_meta(self.ltr_meta))     # 20피처 모델이면 cos_seed_w (Jira 322)
                 if ltr else None)
         self.rec = Recommender(self.V, self.index, self.prior, affinity=self.affinity,
                                brands=self.brands, known_brands=self.known,

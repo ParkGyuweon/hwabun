@@ -43,7 +43,7 @@ from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder, brand_key               # noqa: E402
-from ltr_features import LtrFeatures, load_ltr                # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, weighted_from_meta  # noqa: E402
 from recommender import (load_cooc, cf_bonus,
                         BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for)
@@ -78,6 +78,11 @@ def split_history(persona, index):
     return history, target
 
 
+# 긍정 리뷰를 어떤 전환 이벤트로 재생하나 (Jira 320 실험). 리뷰 이력은 구매 이력이라
+# `purchase`(8.0) 가 뜻에 맞지만, 지금까지의 수치는 전부 `add_to_cart`(3.0) 로 재생한 값이다.
+POSITIVE_EVENT = "add_to_cart"
+
+
 def events_for(review):
     """리뷰 한 건 -> 이벤트. 부족한 UI 이벤트만 보강한다"""
     gid = review["group_id"]
@@ -94,7 +99,7 @@ def events_for(review):
         out += [ev("section_dwell", section_id=s, dwell_ms=8000) for s in SECTIONS]
         out.append(ev("scroll_depth", depth_percent=100))
         out.append(ev("wishlist_toggle", action="add"))
-        out.append(ev("add_to_cart"))    # 리뷰를 썼다는 것은 샀다는 뜻이다
+        out.append(ev(POSITIVE_EVENT))   # 리뷰를 썼다는 것은 샀다는 뜻이다
     elif rating > NEGATIVE:
         out += [ev("section_dwell", section_id=s, dwell_ms=4000)
                 for s in SECTIONS[:2]]
@@ -146,11 +151,12 @@ def run_persona(persona, history, target, ctx):
         cand = np.ones(len(M), bool)
         cand[list(blocked)] = False
         pos, _neg = state.weights()
-        rows = [index[g] for g in pos if g in index] or [
-            index[g] for g in state.converted if g in index]
+        gs = [g for g in pos if g in index] or [g for g in state.converted if g in index]
+        rows = [index[g] for g in gs]
         if rows:
+            sw = [pos.get(g, 1.0) for g in gs]                          # 실제 이벤트 가중치 (Jira 322)
             scores = recommender.ltr.predict_proba(
-                recommender.ltr_feat.make(persona, rows, cand))[:, 1].astype(np.float32)
+                recommender.ltr_feat.make(persona, rows, cand, seed_weights=sw))[:, 1].astype(np.float32)
         top = served_top(scores, blocked, recommender)
         masked = scores.copy()
         for i in blocked:
@@ -194,7 +200,12 @@ def main():
                                         "holdout_a", "holdout_b"),
                     default="valid")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--positive-event", choices=("add_to_cart", "purchase"), default="add_to_cart",
+                    help="긍정 리뷰를 재생할 전환 이벤트. purchase 는 log.ts 가중치 8.0 (Jira 320 실험)")
     a = ap.parse_args()
+    global POSITIVE_EVENT
+    POSITIVE_EVENT = a.positive_event
+    print(f"긍정 리뷰 재생 이벤트: {POSITIVE_EVENT}")
 
     encoder = Encoder()
     M = np.asarray(encoder.matrix(), np.float32)
@@ -223,7 +234,8 @@ def main():
                               cooc=cooc, supporters=supporters,
                               ltr=None if ltr is None else ltr[0],
                               ltr_feat=None if ltr is None else LtrFeatures(
-                                  encoder, M, prior, affinity, cooc, supporters))
+                                  encoder, M, prior, affinity, cooc, supporters,
+                                  weighted=weighted_from_meta(ltr[1])))
     ctx = (M, index, prior, affinity, recommender)
 
     # 홀드아웃은 페르소나 파일도 정본 파일도 따로다 (부록 Q)

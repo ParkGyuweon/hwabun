@@ -34,7 +34,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
         │ 모델·산출물 (오프라인 배치 batch/jobs/)                                        ▼
  Sephora 리뷰 844,865건 · 상품 200개(+등록 8 = 카탈로그 208)                                     [ 소비 ]  브랜드 대시보드 (마트 API 계약 초안 contracts/dashboard-mart-api-spec.md,
    → 상품 벡터 148차원 · 페르소나 12,000명 · 속성 친화도                              프론트 7 엔드포인트 호출 준비 · 마트→MySQL 로더·shop_backend 7 엔드포인트 없음 → 행동 화면은 목)
-   → CF 동시발생 · LTR 369 트리 → batch/ingest/data/serving/
+   → CF 동시발생 · LTR 239 트리(20피처, 가중 코사인) → batch/ingest/data/serving/
 
 [ 운영 · deploy/ec2-1 ]  docker compose(백엔드 ec2-1-deploy 브랜치, dev 를 pull 해 올림) — shop-backend(8090) · mysql · backend(8080) · recommend(8300) · nginx(443) · Prometheus · Grafana
                         09-15 17:40 실측: 전부 기동, recommend 는 dev 최신(어휘집 0.7) · 수집기·추천 모두 EC2-2 Kafka 연결 · .env 에 GMS_KEY·DW_MYSQL_* 은 비어 있음
@@ -53,7 +53,7 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | | springdoc-openapi | 3.1.0 | Swagger UI |
 | 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, key = `session_id`. 운영 브로커는 EC2-2(`j15a306a.p.ssafy.io:9092`, `deploy/ec2-2/`), 로컬은 `infra/kafka/` |
 | 스트리밍 | Spark Structured Streaming | 3.5.6 | `streaming/` Q1~Q5. 출력 Parquet. 로컬은 `infra/spark/` compose |
-| 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 369 트리, 2026-09-10). sklearn 버전은 모델 pickle 과 고정 |
+| 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 239 트리 · 20피처, 2026-09-16). sklearn 버전은 모델 pickle 과 고정 |
 | | FastAPI · uvicorn · pydantic | 0.141 · 0.52 · 2.13 | **추천 추론 서버** `batch/serving/` (8300, 내부 전용). 추천·배너·상품 등록·처방 문장. `deploy/recommend.Dockerfile` |
 | | OpenAI SDK → GMS | gpt-4.1-mini | 대시보드 처방 문장 (`POST /api/prescription`, 온도 0·JSON 스키마 강제). 키 없으면 이 엔드포인트만 503 |
 | | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 (GPU, 배치 산출물용). 정확도 목적 리뷰 임베딩은 기각 |
@@ -180,7 +180,7 @@ S15P21A306/
 │   │           ├── attribute_affinity.csv       친화도 4,000행 (계약 열)
 │   │           ├── item_cooc.npz                200×200 동시발생 + 지지자 수 (CF)
 │   │           ├── ltr_model.pkl · ltr_model_meta.json
-│   │           │                                 ★ 학습 결합 모델 (트리 369개, 2026-09-10 · 정본은 ltr_model_meta.json)
+│   │           │                                 ★ 학습 결합 모델 (트리 239개 · 피처 20개 cos_seed_w 포함, 2026-09-16 Jira 322 · 정본은 ltr_model_meta.json)
 │   │           ├── ranking_golden.json          순위 대조용 기준 결과 (페르소나 20명)
 │   │           ├── banner_axes.json             배너 축 6종의 상품 목록
 │   │           ├── backend_tables.sql           ★ 아래 CSV 6종의 CREATE TABLE
