@@ -275,6 +275,9 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `content_daily_kpi` | `event_date_kst + brand_id + product_id + section_id + content_kind + 실행 축` | 상품 상세 콘텐츠별 조회·체류·성분/리뷰 열람 |
 | `content_conversion_daily` | `event_date_kst + brand_id + product_id + content_kind + 실행 축` | 그 콘텐츠를 본 세션의 담기율 |
 | `behavior_conversion_daily` | `event_date_kst + brand_id + product_id + event_name + 실행 축` | 행동을 한 세션과 안 한 세션의 담기율 대조 |
+| `friction_daily` | `event_date_kst + brand_id + product_id + section_id + content_kind + event_name + 실행 축` | 위치별 UI 마찰 Event·세션과 마찰률 |
+| `exit_daily` | `event_date_kst + brand_id + product_id + 실행 축` | 체류 3초 미만 조기 이탈 세션 비율 |
+| `entry_source_daily` | `event_date_kst + brand_id + entry_source + 실행 축` | 유입 경로별 상세·담기 전환 |
 | `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
 
 재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품이 여러 개 있어도 구매는
@@ -300,6 +303,14 @@ DW는 금액을 복제하지 않는다.
 `content_conversion_daily`는 분모가 "그 콘텐츠를 본 세션"이라 분리된 Mart다.
 `behavior_conversion_daily`는 `done_sessions + not_done_sessions`가 상품 조회 세션과
 같아야 하고, 네 행동 Event는 `product_event_fact`에 없어 `sessionized_events`에서 읽는다.
+
+E6 마트 3종은 **상세를 연 세션(상세 ∪ 퀵룩)** 을 공통 분모로 쓴다. `friction_daily`는
+`event_name`을 key에 두는 롱 포맷이라 마찰 Event가 0건이어도 행이 남는다 —
+`dead_click`은 생성기가 만들지 않아 항상 0이고, `rage_click`은 부정 시드만 내므로
+시드를 빼면 0이 된다. `exit_daily`의 `exit_summary`는 세션 단위 Event라 상품이 없어
+그 세션이 상세를 연 상품 전부에 귀속하며, **상품 축으로 합산하면 세션이 부푼다.**
+`entry_source_daily`는 브랜드 단위라 `product_id`가 key에 없다 — `product_impression`에
+`entry_source`가 없어 노출 단계는 이 축으로 가를 수 없다.
 
 `banner_daily`는 `policy_version`을 key에 둬서 배너·정렬 정책 배포 전후를 같은 Mart에서
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고

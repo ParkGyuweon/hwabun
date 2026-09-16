@@ -377,6 +377,8 @@ source = dim_product, contracts/product-feature-vocab.json
 | `analytics_baseline` | 제외 | 위 Mart의 기준선이라 같은 모집단을 써야 한다 |
 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | 제외 | 세그먼트·가격대 전환 지표. 퍼널과 같은 원칙 |
 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily` | 제외 | 콘텐츠를 읽고 담았는지를 재는 지표. 시드는 조회 없이 담기를 내서 "콘텐츠를 안 봐도 담는다"를 만든다 |
+| `friction_daily` | 제외 | **부정 시드가 `scroll_backtrack`·`rage_click`을 직접 낸다**(§3.14). 재생 데이터의 `rage_click` 43건이 전부 시드라, 빼지 않으면 마찰이 생성기 산물로만 채워진다 |
+| `exit_daily`, `entry_source_daily` | 제외 | 이탈·유입 경로 전환. 퍼널과 같은 원칙 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 서빙은 scope로 가른다 — 아래 |
 | `category_price_reference`, `brand_cohort_dim` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 | `commons_cohort_weekly` | 해당 없음 | 시드를 이미 뺀 `brand_daily_kpi`를 입력으로 쓴다 |
@@ -1096,6 +1098,115 @@ input = sessionized_events, funnel_session_fact
 
 행동 Event는 세션·상품·Event 단위로 중복을 제거한 뒤 판정한다. 같은 세션에서 아코디언을
 열 번 열어도 "한 세션"이다 — 이 Mart가 재는 것은 빈도가 아니라 여부다.
+
+### 4.21 `friction_daily`
+
+```text
+key = event_date_kst + brand_id + product_id + section_id + content_kind + event_name + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = sessionized_events, funnel_session_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | section/content/generator/scenario/run만 Y | 마찰 집계 축 |
+| `event_name` | string | N | `rage_click`, `dead_click`, `scroll_backtrack` |
+| `event_count` | bigint | N | 그 위치에서 일어난 마찰 Event 수 |
+| `friction_sessions` | bigint | N | 마찰을 겪은 고유 세션 수 |
+| `detail_view_sessions` | bigint | N | 분모. 그 상품의 상세를 연 세션 수 |
+| `friction_rate` | double | Y | `friction_sessions / detail_view_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**UI 마찰이지 상품 선호가 아니다.** "이 상품이 별로다"가 아니라 "이 화면이 불편하다"를
+재는 지표라 전환 Mart와 grain을 따로 두고 분모만 공유한다.
+
+**`event_name`을 key에 두는 롱 포맷이다.** 마찰 Event를 나중에 더해도 grain이 바뀌지
+않는다. `commons_cohort_weekly`(§4.18)의 `metric_name`과 같은 형태다. E6의
+`by_location` 블록이 `section_id` + `event_name`을 그대로 읽고, `counts` 블록은
+`event_name`으로 합산해 만든다.
+
+**마찰이 0건인 `event_name`도 행을 남긴다.** `dead_click`은 생성기가 만들지 않아 PC
+로그에서 항상 0인데, 행이 없으면 화면이 "0이다"와 "집계하지 않는다"를 구분할 수 없다.
+같은 이유로 `rage_click`도 시드 제외 후 0이 되지만 행은 남는다.
+
+**입력이 `sessionized_events`다.** 세 Event는 `PRODUCT_EVENT_NAMES` 밖이라
+`product_event_fact`에 없고, `cleaned_events`는 `brand_id`가 비어 있다(실측 0%).
+`section_id`·`content_kind`는 `properties_json`에서 읽는다 — `content_kind`는 결측이
+있어 nullable이다(실측 67% 적재).
+
+분모는 상세를 연 세션이다(§7 spec §6-6). 마찰은 상세 안에서 일어나므로 노출 세션을
+분모로 두면 비율이 실제보다 작게 나온다.
+
+### 4.22 `exit_daily`
+
+```text
+key = event_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = sessionized_events(exit_summary), funnel_session_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 이탈 집계 축 |
+| `detail_view_sessions` | bigint | N | 분모. 그 상품의 상세를 연 세션 수 |
+| `exit_summary_sessions` | bigint | N | 그중 `exit_summary`가 기록된 세션 수 |
+| `quick_exit_sessions` | bigint | N | 그중 체류 3초 미만으로 나간 세션 수 |
+| `quick_exit_rate` | double | Y | `quick_exit_sessions / detail_view_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**`exit_summary`는 세션 단위 Event라 `product_id`·`brand_id`가 없다**(실측 0건).
+그래서 그 세션이 상세를 연 상품 **전부**에 귀속한다. 세션 하나가 상품 셋을 봤으면 세
+행에 들어가므로 **상품 축으로 합산하면 세션이 부푼다.**
+
+**`last_content_kind`로 이탈 지점을 가르지 않는다.** `event-properties-schema.md`가
+`exit_summary`의 선택 속성으로 선언해 두었지만 재생 데이터 1,000건 중 **0건**만 값을
+싣는다. `last_section_id`·`reason`도 같다. 콘텐츠별 이탈 지점은 `exit_summary`가 아니라
+콘텐츠 Event의 마지막 시각으로 따로 내야 한다 — 별도 Mart의 몫이다.
+
+**`exit_summary_sessions`를 따로 싣는 이유**는 분모와 다르기 때문이다.
+`exit_summary`가 없는 세션은 "빨리 나가지 않았다"가 아니라 "기록이 없다"다. 두 값이 크게
+벌어지면 수집 누락이므로 화면이 아니라 Q5가 먼저 본다.
+
+세션에 `exit_summary`가 여럿이면 **가장 긴** 체류로 판정한다. 어느 페이지에도 오래
+머물지 않았을 때만 조기 이탈이다 — 최솟값을 쓰면 오래 머문 세션도 짧은 페이지 하나
+때문에 조기 이탈로 잡힌다.
+
+**현재 재생 데이터에서 이 비율은 축퇴돼 있다.** `exit_summary`가 기록된 세션
+13,251건이 **전부** 3초 미만이다. 생성기가 `dwell_ms`를 항상 3초 미만으로 내기
+때문이고, Mart 계산이 아니라 입력의 문제다. 생성기가 고쳐지면 값이 갈린다.
+
+### 4.23 `entry_source_daily`
+
+```text
+key = event_date_kst + brand_id + entry_source + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = product_event_fact, funnel_session_fact
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 유입 경로 집계 축 |
+| `entry_source` | string | N | `list_grid`, `promo_pick`, `similar_products`, `quick_look`, `cart`, `breadcrumb` (§3.3) |
+| `product_view_sessions` | bigint | N | 상품 상세를 연 세션 수 |
+| `detail_view_sessions` | bigint | N | 상세 ∪ 퀵룩 세션 수. 담기 분모 |
+| `add_to_cart_sessions` | bigint | N | 담기까지 간 세션 수 |
+| `view_to_cart_rate` | double | Y | `add_to_cart_sessions / detail_view_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**`product_id`가 key에 없다.** E6는 브랜드 단위 수치를 그리는데 상품 단위 세션 수는
+브랜드로 합산할 수 없다 — 한 세션이 같은 브랜드 상품 여럿을 보면 상품 수만큼 부푼다.
+`brand_daily_kpi`(§4.14)를 `product_daily_kpi`(§4.1) 합으로 만들 수 없는 것과 같다.
+
+**`entry_source` 축으로도 합산하면 안 된다.** 한 세션이 상품 A는 목록에서, 상품 B는
+유사 상품에서 열면 두 행에 모두 들어간다. 경로별 비교가 목적이지 총합이 아니다.
+
+**노출 단계를 이 축으로 가를 수 없다.** `product_impression`에 `entry_source`가 없다
+(재생 데이터 100,625건 중 0건, `list_id`만 100%). 그래서 `impression_sessions`와
+`detail_entry_rate`를 내지 않고 `product_view_sessions`를 대신 싣는다.
+
+세션의 경로는 **첫 진입**으로 정한다. 같은 세션이 같은 상품에 여러 경로로 들어올 수
+있어서다(실측 21,555쌍 중 249쌍). `event_time` 오름차순, 동률이면 `event_id` 사전순으로
+고정한다 — 규칙이 없으면 실행마다 판정이 흔들려 재계산 결정성이 깨진다.
+
+담기 분모는 `detail_view_sessions`다(spec §6-6). Quick Look에서 담는 경로가 있어
+`product_view_sessions`만 분모로 두면 비율이 1.0을 넘는다.
 
 ## 5. 실시간 Mart 후보
 

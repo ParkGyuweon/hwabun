@@ -69,6 +69,7 @@ VARCHAR = {
     "metric_name": 64,
     "secondary_category": 64,
     "section_id": 64,
+    "entry_source": 64,
     "content_kind": 64,
     "event_name": 64,
     "segment_type": 64,
@@ -189,6 +190,22 @@ GRAINS = {
     ],
     "ingredient_weekly_interest": [
         "interest_week_kst", "ingredient_id",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "friction_daily": [
+        "brand_id", "event_date_kst", "product_id", "section_id", "content_kind",
+        "event_name",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "exit_daily": [
+        "brand_id", "event_date_kst", "product_id",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "entry_source_daily": [
+        "brand_id", "event_date_kst", "entry_source",
         "actor_type", "source", "generator_type",
         "scenario_id", "simulation_run_id",
     ],
