@@ -1346,11 +1346,49 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             "regret": int(regret is not None), "visits": n_visits}
 
 
+SAMPLE_STRATIFIED, SAMPLE_HEAD = "stratified", "head"
+
+
+def sample_personas(P, limit, how=SAMPLE_STRATIFIED, seed=42, key="stratum"):
+    """`--limit N` 에 쓸 페르소나 N명을 고른다 (Jira 318).
+
+    personas_9900.json 은 stratum(skin_type|skin_tone|review_bucket) 순으로 정렬돼 있어
+    앞에서 자르면 (`head`) 1,000명이 전부 combination|light|3 이 된다 — 고객군 마트의
+    skin_type × skin_tone 격자가 한 칸만 찬다 (데이터 파트 09-16 지적).
+    `stratified` 는 stratum 별 비례 배분(최대 잔여법)으로 N명을 고른다. 각 층 안에서는
+    고정 시드로 뽑고, 결과는 persona_id 순이라 같은 인자면 같은 사람이 나온다.
+    """
+    if not limit or limit >= len(P):
+        return list(P)
+    if how == SAMPLE_HEAD:
+        return P[:limit]
+    groups = {}
+    for p in P:
+        groups.setdefault(p.get(key) or "", []).append(p)
+    total = len(P)
+    quota = {g: len(v) * limit / total for g, v in groups.items()}
+    alloc = {g: int(q) for g, q in quota.items()}
+    rest = limit - sum(alloc.values())
+    # 잔여 자리는 소수부가 큰 층부터. 동률은 층 이름으로 고정
+    for g in sorted(quota, key=lambda g: (-(quota[g] - alloc[g]), g))[:rest]:
+        alloc[g] += 1
+    rng = np.random.default_rng(seed)
+    picked = []
+    for g in sorted(groups):
+        n = min(alloc[g], len(groups[g]))
+        if n:
+            idx = rng.choice(len(groups[g]), size=n, replace=False)
+            picked.extend(groups[g][i] for i in idx)
+    picked.sort(key=lambda p: p["persona_id"])
+    return picked
+
+
 def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
          scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
          generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
          pref_profile="default", pref_seed=0, exposure=EXPOSURE_POPULAR,
-         recommend_url=None, banner_slots=BANNER_SLOTS, reserved=0, hero=BANNER_HERO):
+         recommend_url=None, banner_slots=BANNER_SLOTS, reserved=0, hero=BANNER_HERO,
+         sample=SAMPLE_STRATIFIED):
     global RECO
     RECO = None
     if recommend_url:
@@ -1415,9 +1453,13 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
     if include_agents:
         A = json.load(open(os.path.join(PERSONA_DIR, "personas_100_agent.json"),
                            encoding="utf-8"))
-    people = (P + A) if not limit else (P[:limit] + A[:2])
+    people = (P + A) if not limit else (sample_personas(P, limit, how=sample) + A[:2])
     log(f"페르소나 PC {len(P):,}명" + (f" + 에이전트 PA {len(A)}명" if A else " (PA 제외)")
-        + f" -> 대상 {len(people):,}명")
+        + f" -> 대상 {len(people):,}명" + (f" ({sample} 표본)" if limit else ""))
+    if limit:
+        from collections import Counter
+        st = Counter(p.get("skin_type") for p in people if p.get("persona_id", "").startswith("PC"))
+        log("  skin_type 분포: " + " · ".join(f"{k} {v}" for k, v in sorted(st.items(), key=lambda x: -x[1])))
 
     load_style()
     hp = None
@@ -1538,6 +1580,8 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--sample", choices=(SAMPLE_STRATIFIED, SAMPLE_HEAD), default=SAMPLE_STRATIFIED,
+                    help="--limit 표본 방식. stratified: stratum 비례 층화(기본, Jira 318). head: 파일 앞 N명(옛 동작)")
     ap.add_argument("--show", type=int, default=0)
     ap.add_argument("--out", default=None,
                     help="jsonl 저장 경로. 생략하면 파일로 안 쓴다")
@@ -1604,4 +1648,5 @@ if __name__ == "__main__":
         banner_slots=a.banner_slots,
         reserved=a.reserved,
         hero=a.hero,
+        sample=a.sample,
     )

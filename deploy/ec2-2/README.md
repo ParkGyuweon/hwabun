@@ -104,7 +104,25 @@ docker compose exec -T spark-master bash -ec '
 
 상품·브랜드 매핑 등 최신 분석 입력은 EC2-2의 `batch/`, `contracts/`, `frontend/`를 사용한다.
 EC2-1의 추천 데이터 Volume은 이 서버에 자동 공유되지 않는다. 신규 상품 입력 등은 별도
-동기화가 필요하며, 이 Compose가 MySQL 적재나 상품 동기화를 수행하지는 않는다.
+동기화가 필요하며, 이 Compose가 상품 동기화를 수행하지는 않는다.
+
+## user_trait_daily MySQL 발행
+
+Q4·Q5가 성공한 뒤 선택 profile `dw`의 `dw-projection`을 수동 실행한다.
+Parquet을 묶음으로 읽어 MySQL staging에 적재하고, 건수·NULL 축을 포함한 grain 중복·
+필수값을 검증한 뒤 조회 테이블을 교체한다. 일반 `up`은 이 Job을 실행하지 않는다.
+자세한 최초 DB 준비·계정 권한·추천 서버 연결·실패 복구는
+[DW projection 실행 안내](../../streaming/DW_PROJECTION.md)를 따른다.
+
+```bash
+# 이 서버의 .env에 DW_MYSQL_HOST/PORT/DB/USER/PASSWORD 설정 후
+docker compose --profile dw build dw-projection
+docker compose --profile dw run --rm dw-projection
+```
+
+기본 입력은 `SPARK_DATA_PATH/marts/user_trait_daily`이고, 읽기 전용으로 마운트된다.
+현재 Job은 **user_trait_daily만** 옮긴다. 다른 Mart 발행·주기 실행은 아직 포함하지 않는다.
+Q4가 같은 입력 경로를 overwrite하는 동안에는 실행하지 않는다.
 
 ## 데이터 보존과 재시작
 

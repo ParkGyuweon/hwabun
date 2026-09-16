@@ -17,6 +17,7 @@ if np is not None:
         SCENARIO,
         checkout,
         make_banners,
+        sample_personas,
         default_simulation_run_id,
         seed_session_id,
         selectable_variants,
@@ -288,3 +289,43 @@ class CheckoutTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(np is None, "numpy is required for the simulator generator")
+class SamplePersonasTest(unittest.TestCase):
+    """--limit 층화 추출 (Jira 318). 파일이 stratum 순 정렬이라 앞에서 자르면 한 층만 남는다."""
+
+    def _personas(self):
+        strata = [("combination|light|3", 550), ("dry|light|3", 200), ("normal|fair|3", 150),
+                  ("oily|medium|4", 90), ("normal|deep|7+", 10)]
+        P, n = [], 0
+        for st, cnt in strata:
+            for _ in range(cnt):
+                n += 1
+                P.append({"persona_id": f"PC{n:05d}", "stratum": st, "skin_type": st.split("|")[0]})
+        return P
+
+    def test_head_keeps_old_behavior(self):
+        P = self._personas()
+        picked = sample_personas(P, 100, how="head")
+        self.assertEqual(picked, P[:100])
+        self.assertEqual({p["stratum"] for p in picked}, {"combination|light|3"})
+
+    def test_stratified_is_proportional_and_reproducible(self):
+        P = self._personas()
+        picked = sample_personas(P, 100)
+        self.assertEqual(len(picked), 100)
+        by = {}
+        for p in picked:
+            by[p["stratum"]] = by.get(p["stratum"], 0) + 1
+        self.assertEqual(by, {"combination|light|3": 55, "dry|light|3": 20, "normal|fair|3": 15,
+                              "oily|medium|4": 9, "normal|deep|7+": 1})
+        self.assertEqual(len({p["persona_id"] for p in picked}), 100)
+        self.assertEqual([p["persona_id"] for p in picked],
+                         [p["persona_id"] for p in sample_personas(P, 100)])
+        self.assertEqual([p["persona_id"] for p in picked], sorted(p["persona_id"] for p in picked))
+
+    def test_limit_at_or_above_population_returns_everyone(self):
+        P = self._personas()
+        self.assertEqual(len(sample_personas(P, 5000)), len(P))
+        self.assertEqual(len(sample_personas(P, None)), len(P))
