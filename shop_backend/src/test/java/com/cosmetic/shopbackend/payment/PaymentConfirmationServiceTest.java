@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class PaymentConfirmationServiceTest {
 
@@ -41,7 +42,7 @@ class PaymentConfirmationServiceTest {
     when(orders.markVerifiedPaid(anyString(), anyString(), anyString(), any(), any()))
       .thenReturn(1);
 
-    var result = new PaymentConfirmationService(orders, portOne, transactionManager, jdbc)
+    var result = new PaymentConfirmationService(orders, portOne, transactionManager, jdbc, new ObjectMapper())
       .confirm("order-1", "member-1", "hwabun-order-1");
 
     assertEquals("PAID", result.status());
@@ -74,7 +75,7 @@ class PaymentConfirmationServiceTest {
 
     ResponseStatusException error = assertThrows(
       ResponseStatusException.class,
-      () -> new PaymentConfirmationService(orders, portOne, transactionManager(), jdbc)
+      () -> new PaymentConfirmationService(orders, portOne, transactionManager(), jdbc, new ObjectMapper())
         .confirm("order-1", "member-1", "hwabun-order-1")
     );
 

@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Map;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,17 +25,20 @@ public class PaymentConfirmationService {
   private final PortOneClient portOne;
   private final TransactionTemplate transactions;
   private final JdbcTemplate jdbc;
+  private final ObjectMapper objectMapper;
 
   public PaymentConfirmationService(
     ShopOrderRepository orders,
     PortOneClient portOne,
     PlatformTransactionManager transactionManager,
-    JdbcTemplate jdbc
+    JdbcTemplate jdbc,
+    ObjectMapper objectMapper
   ) {
     this.orders = orders;
     this.portOne = portOne;
     this.transactions = new TransactionTemplate(transactionManager);
     this.jdbc = jdbc;
+    this.objectMapper = objectMapper;
   }
 
   public Confirmation confirm(String orderId, String memberId, String paymentId) {
@@ -105,8 +110,20 @@ public class PaymentConfirmationService {
     BigDecimal paid = decimal(amount.get("total"));
     if (paid.compareTo(order.getTotalAmount()) != 0) mismatch("amount");
     Object customDataValue = payment.get("customData");
-    if (!(customDataValue instanceof Map<?, ?>)) mismatch("customData");
-    Map<?, ?> customData = (Map<?, ?>) customDataValue;
+    Map<?, ?> customData;
+    if (customDataValue instanceof Map<?, ?> map) {
+      customData = map;
+    } else if (customDataValue instanceof String json) {
+      try {
+        customData = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+      } catch (Exception exception) {
+        mismatch("customData");
+        return;
+      }
+    } else {
+      mismatch("customData");
+      return;
+    }
     if (!order.getId().equals(String.valueOf(customData.get("orderId")))) mismatch("customData.orderId");
   }
 
