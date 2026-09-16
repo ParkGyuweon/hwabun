@@ -11,3 +11,4 @@ httpx>=0.27          # TestClient·bench_recommend
 openai>=1.60         # 처방 문장 생성 (GMS, Jira 220)
 confluent-kafka==2.15.0   # activity-events 구독 (Jira 226). kafka-python 은 레포 kafka/ 폴더와 이름 충돌
 pymysql==1.1.1            # dw MySQL user_trait_daily projection 읽기 (Jira 306). DW_MYSQL_HOST 없으면 import 안 함
+cryptography>=42          # pymysql 이 MySQL 8 기본 인증(caching_sha2_password) 에 요구. 없으면 dw 접속이 RuntimeError (Jira 339, 09-16 배포본 실측)
