@@ -1,4 +1,4 @@
-"""Read a completed user_trait_daily snapshot using the checked-in DW DDL.
+"""Read a completed DW Mart snapshot using the checked-in DW DDL.
 
 No MySQL/Spark dependency is needed to inspect the contract. PyArrow is imported
 only when reading Parquet. The loader never changes grain axes or fills NULLs.
@@ -15,6 +15,39 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 MART = "user_trait_daily"
 DEFAULT_DDL = ROOT / "contracts/dw/schema.sql"
+
+# Keep the default small enough for the first dashboard rehearsal. Optional
+# E4/E5 marts remain available through ``--marts`` without making a missing or
+# intentionally empty optional source block the core dashboard publication.
+DEFAULT_PROJECTION_MARTS = (
+    "user_trait_daily",
+    "brand_daily_kpi",
+    "product_daily_kpi",
+    "funnel_daily_kpi",
+    "brand_repurchase_daily",
+    "product_repurchase_daily",
+    "purchase_reason_daily",
+)
+
+PROJECTION_MARTS = (
+    *DEFAULT_PROJECTION_MARTS,
+    "persona_segment_daily_kpi",
+    "brand_price_band_daily_kpi",
+    "ingredient_weekly_interest",
+)
+
+MART_PARTITION_COLUMNS = {
+    "user_trait_daily": ("trait_date_kst",),
+    "brand_daily_kpi": ("event_date_kst",),
+    "product_daily_kpi": (),
+    "funnel_daily_kpi": (),
+    "brand_repurchase_daily": ("snapshot_date_kst",),
+    "product_repurchase_daily": ("snapshot_date_kst",),
+    "purchase_reason_daily": ("event_date_kst",),
+    "persona_segment_daily_kpi": ("event_date_kst",),
+    "brand_price_band_daily_kpi": ("event_date_kst",),
+    "ingredient_weekly_interest": ("interest_week_kst",),
+}
 
 
 class ProjectionError(ValueError):
@@ -76,6 +109,7 @@ class Contract:
     columns: tuple[Column, ...]
     grain: tuple[str, ...]
     create_sql: str
+    mart: str = MART
 
     @property
     def names(self):
@@ -83,24 +117,26 @@ class Contract:
 
     def create_staging_sql(self, database: str, staging: str) -> str:
         return self.create_sql.replace(
-            f"`dw`.`{MART}`", f"{identifier(database)}.{identifier(staging)}", 1
+            f"`dw`.`{self.mart}`", f"{identifier(database)}.{identifier(staging)}", 1
         )
 
 
-def load_contract(path: Path = DEFAULT_DDL) -> Contract:
+def load_contract(path: Path = DEFAULT_DDL, mart: str = MART) -> Contract:
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", mart):
+        raise ProjectionError("Invalid Mart identifier")
     sql = path.read_text(encoding="utf-8")
     match = re.search(
-        rf"CREATE TABLE `dw`\.`{MART}` \(\n(.*?)\n\) ENGINE=InnoDB[^;]*;",
+        rf"CREATE TABLE `dw`\.`{mart}` \(\n(.*?)\n\) ENGINE=InnoDB[^;]*;",
         sql, re.DOTALL,
     )
     if not match:
-        raise ProjectionError(f"Missing {MART} DDL")
+        raise ProjectionError(f"Missing {mart} DDL")
     definitions = re.findall(
         r"^  `([a-z][a-z0-9_]*)` ([A-Z]+(?:\([0-9,]+\))?) (NOT NULL|NULL)([^\n]*),$",
         match[1], re.MULTILINE,
     )
     columns = tuple(Column(n, t, null == "NULL") for n, t, null, _ in definitions if n != "dw_row_id")
-    index = re.search(rf"KEY `ix_{MART}__grain` \(([^)]+)\)", match[1])
+    index = re.search(rf"KEY `ix_{mart}__grain` \(([^)]+)\)", match[1])
     if not columns or not index or "PRIMARY KEY (`dw_row_id`)" not in match[1]:
         raise ProjectionError("DDL must contain surrogate PK and grain index")
     grain = tuple(re.findall(r"`([^`]+)`", index[1]))
@@ -110,12 +146,28 @@ def load_contract(path: Path = DEFAULT_DDL) -> Contract:
     spec = importlib.util.spec_from_file_location("dw_contract_rules", path.with_name("build_ddl.py"))
     rules = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rules)
-    if grain != tuple(rules.GRAINS[MART]):
+    try:
+        expected_grain = tuple(rules.GRAINS[mart])
+    except KeyError as error:
+        raise ProjectionError(f"Unknown Mart: {mart}") from error
+    if grain != expected_grain:
         raise ProjectionError("DDL grain differs from build_ddl.GRAINS")
     for column in columns:
         if column.nullable != rules.is_nullable(column.name, list(grain)):
             raise ProjectionError(f"DDL NULL policy differs: {column.name}")
-    return Contract(columns, grain, match[0])
+    return Contract(columns, grain, match[0], mart)
+
+
+def partition_columns_for(mart: str) -> tuple[str, ...]:
+    try:
+        return MART_PARTITION_COLUMNS[mart]
+    except KeyError as error:
+        raise ProjectionError(f"No partition contract for Mart: {mart}") from error
+
+
+def source_path_for(root: Path, mart: str) -> Path:
+    partition_columns_for(mart)
+    return Path(root) / mart
 
 
 def arrow_type(column: Column):
@@ -138,13 +190,18 @@ class ParquetSnapshot:
     ordinary concurrent writes before publication; it is not a filesystem lock.
     """
 
-    def __init__(self, path: Path, contract: Contract):
+    def __init__(self, path: Path, contract: Contract,
+                 partition_columns: tuple[str, ...] | None = None):
         import pyarrow as pa
         import pyarrow.dataset as ds
         import pyarrow.parquet as pq
 
         self.path = path.resolve()
         self.contract = contract
+        self.partition_columns = tuple(
+            partition_columns if partition_columns is not None
+            else partition_columns_for(contract.mart)
+        )
         self.manifest = self._manifest()
         files = sorted(self.path.rglob("*.parquet"))
         expected = {c.name: arrow_type(c) for c in contract.columns}
@@ -159,7 +216,7 @@ class ParquetSnapshot:
             for part in file.relative_to(self.path).parts[:-1]:
                 if "=" in part:
                     name, value = part.split("=", 1)
-                    if name != "trait_date_kst" or name in partitions:
+                    if name not in self.partition_columns or name in partitions:
                         raise ProjectionError("Unexpected partition layout")
                     if value != "__HIVE_DEFAULT_PARTITION__":
                         date.fromisoformat(value)
@@ -174,7 +231,36 @@ class ParquetSnapshot:
                                 and dtype.unit in {"ms", "us"} and dtype.tz in {None, "UTC"})
                 if dtype != target and not timestamp_ok:
                     raise ProjectionError(f"Parquet type differs from DDL: {name}")
-        partitioning = ds.partitioning(pa.schema([("trait_date_kst", pa.date32())]), flavor="hive")
+
+        layouts = {
+            (
+                frozenset(
+                    name.split("=", 1)[0]
+                    for part in file.relative_to(self.path).parts[:-1]
+                    if "=" in part
+                ),
+                frozenset(
+                    field.name
+                    for field in pq.ParquetFile(
+                        file, coerce_int96_timestamp_unit="us"
+                    ).schema_arrow
+                ),
+            )
+            for file in files
+        }
+        if len(layouts) != 1:
+            raise ProjectionError("Parquet files use inconsistent partition layouts")
+        partition_names = next(iter(layouts))[0]
+        if partition_names and partition_names != set(self.partition_columns):
+            raise ProjectionError("Parquet partition columns differ from Mart contract")
+
+        partitioning = (
+            ds.partitioning(
+                pa.schema([(name, pa.date32()) for name in self.partition_columns]),
+                flavor="hive",
+            )
+            if partition_names else None
+        )
         parquet_format = ds.ParquetFileFormat(
             read_options=ds.ParquetReadOptions(coerce_int96_timestamp_unit="us")
         )

@@ -106,11 +106,12 @@ docker compose exec -T spark-master bash -ec '
 EC2-1의 추천 데이터 Volume은 이 서버에 자동 공유되지 않는다. 신규 상품 입력 등은 별도
 동기화가 필요하며, 이 Compose가 상품 동기화를 수행하지는 않는다.
 
-## user_trait_daily MySQL 발행
+## DW Mart MySQL 발행
 
 Q4·Q5가 성공한 뒤 선택 profile `dw`의 `dw-projection`을 수동 실행한다.
-Parquet을 묶음으로 읽어 MySQL staging에 적재하고, 건수·NULL 축을 포함한 grain 중복·
-필수값을 검증한 뒤 조회 테이블을 교체한다. 일반 `up`은 이 Job을 실행하지 않는다.
+기본 실행은 `user_trait_daily`와 대시보드 핵심 Mart 6종의 Parquet을 묶음으로 읽어
+MySQL staging에 적재하고, 건수·NULL 축을 포함한 grain 중복·필수값을 검증한 뒤
+Mart별 조회 테이블을 교체한다. 일반 `up`은 이 Job을 실행하지 않는다.
 자세한 최초 DB 준비·계정 권한·추천 서버 연결·실패 복구는
 [DW projection 실행 안내](../../streaming/DW_PROJECTION.md)를 따른다.
 
@@ -120,9 +121,10 @@ docker compose --profile dw build dw-projection
 docker compose --profile dw run --rm dw-projection
 ```
 
-기본 입력은 `SPARK_DATA_PATH/marts/user_trait_daily`이고, 읽기 전용으로 마운트된다.
-현재 Job은 **user_trait_daily만** 옮긴다. 다른 Mart 발행·주기 실행은 아직 포함하지 않는다.
-Q4가 같은 입력 경로를 overwrite하는 동안에는 실행하지 않는다.
+기본 입력은 `SPARK_DATA_PATH/marts/<mart>`이고, 읽기 전용으로 마운트된다.
+발행 결과는 `/reports/dw-projection.json`에서 Mart별로 확인한다. E4·E5 Mart까지
+필요하면 `.env`의 `DW_PROJECTION_MARTS`에 추가한다. Q4가 같은 입력 경로를
+overwrite하는 동안에는 실행하지 않는다.
 
 MySQL 준비 전 추천 폴백 파일만 만들 때는 별도 출력 폴더를 바인드하고 JSONL 전용 모드로
 실행한다. 생성된 파일은 EC2-1 추천 컨테이너의 `/data/user_trait_snapshot.jsonl`로
@@ -133,6 +135,7 @@ sudo mkdir -p /opt/hwabun/export
 sudo docker compose --profile dw run --rm \
   -v /opt/hwabun/export:/export \
   dw-projection \
+  --mart user_trait_daily \
   --emit-jsonl /export/user_trait_snapshot.jsonl \
   --jsonl-only
 ```

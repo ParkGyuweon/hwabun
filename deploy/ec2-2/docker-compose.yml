@@ -193,15 +193,18 @@ services:
       DW_MYSQL_DB: ${DW_MYSQL_DB:-dw}
       DW_MYSQL_USER: ${DW_MYSQL_USER:-}
       DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
+      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily}
     volumes:
       - ${SPARK_DATA_PATH:-/opt/hwabun/data}:/data:ro
       - ../../contracts:/app/contracts:ro
       - dw-projection-reports:/reports
     command:
-      - --source
-      - /data/marts/user_trait_daily
+      - --marts
+      - ${DW_PROJECTION_MARTS:-user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily}
+      - --source-root
+      - /data/marts
       - --report-path
-      - /reports/user-trait-projection.json
+      - /reports/dw-projection.json
 
 volumes:
   kafka-data:

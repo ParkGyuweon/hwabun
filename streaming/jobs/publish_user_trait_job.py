@@ -1,4 +1,4 @@
-"""Publish one completed user_trait_daily snapshot to MySQL (DW contract §7).
+"""Publish completed DW Mart snapshots to MySQL (DW contract §7).
 
 Run after Q4/Q5, never concurrently with an overwrite of the input directory.
 This is a bounded Python transfer job, not another Spark calculation.
@@ -20,7 +20,8 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from streaming.jobs.dw_projection_source import (
-    DEFAULT_DDL, MART, Contract, ParquetSnapshot, ProjectionError, identifier, load_contract,
+    DEFAULT_DDL, MART, PROJECTION_MARTS, Contract,
+    ParquetSnapshot, ProjectionError, identifier, load_contract, source_path_for,
 )
 
 
@@ -172,7 +173,9 @@ class MysqlStore:
 
     @property
     def lock_name(self):
-        return "dw-publish-" + hashlib.sha256(f"{self.database}.{MART}".encode()).hexdigest()[:48]
+        return "dw-publish-" + hashlib.sha256(
+            f"{self.database}.{self.contract.mart}".encode()
+        ).hexdigest()[:48]
 
     def acquire(self):
         return self.scalar("SELECT GET_LOCK(%s, 0)", (self.lock_name,)) == 1
@@ -187,14 +190,14 @@ class MysqlStore:
     def check_target(self):
         engine = self.rows(
             "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s",
-            (self.database, MART),
+            (self.database, self.contract.mart),
         )
         if engine != (("InnoDB",),):
             raise ProjectionError("Initialize the serving table from contracts/dw/schema.sql (InnoDB)")
         columns = self.rows(
             "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA, COLLATION_NAME "
             "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION",
-            (self.database, MART),
+            (self.database, self.contract.mart),
         )
         expected = [("dw_row_id", "bigint", "NO", "auto_increment", None)] + [
             (c.name, c.sql_type.lower(), "YES" if c.nullable else "NO", "",
@@ -233,28 +236,33 @@ class MysqlStore:
     def prepare_swap(self):
         # A previous publication can have succeeded even when cleanup failed.
         # Remove that backup only after the NEW staging has passed validation.
-        self.execute(f"DROP TABLE IF EXISTS {self.table(MART + '__old')}")
+        self.execute(f"DROP TABLE IF EXISTS {self.table(self.contract.mart + '__old')}")
 
     def swap(self, staging):
         self.assert_lock()
-        self.execute(f"RENAME TABLE {self.table(MART)} TO {self.table(MART + '__old')}, "
-                     f"{self.table(staging)} TO {self.table(MART)}")
+        mart = self.contract.mart
+        self.execute(f"RENAME TABLE {self.table(mart)} TO {self.table(mart + '__old')}, "
+                     f"{self.table(staging)} TO {self.table(mart)}")
 
     def cleanup(self):
         # Called only after confirmed publication, while holding the same lock.
         names = self.rows("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s",
                           (self.database,))
+        mart = self.contract.mart
         for (name,) in names:
-            if name == MART + "__old" or re.fullmatch(MART + r"__stg_[0-9a-f]{16}", name):
+            if name == mart + "__old" or re.fullmatch(mart + r"__stg_[0-9a-f]{16}", name):
                 self.execute(f"DROP TABLE {self.table(name)}")
 
 
-def publish(source, store, config: Config, report: dict, run_id: str | None = None):
+def publish(source, store, config: Config, report: dict, run_id: str | None = None,
+            mart: str = MART):
     run_id = run_id or uuid4().hex[:16]
     if not re.fullmatch(r"[0-9a-f]{16}", run_id):
         raise ProjectionError("run_id must be 16 lowercase hexadecimal characters")
-    staging = f"{MART}__stg_{run_id}"
-    report.update(mart=MART, run_id=run_id, staging=staging, status="validating",
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", mart):
+        raise ProjectionError("Invalid Mart identifier")
+    staging = f"{mart}__stg_{run_id}"
+    report.update(mart=mart, run_id=run_id, staging=staging, status="validating",
                   source_rows=source.row_count, inserted_rows=0, published=False, warnings=[])
     acquired = False
     try:
@@ -298,9 +306,48 @@ def publish(source, store, config: Config, report: dict, run_id: str | None = No
     return report
 
 
+def _parse_marts(raw: str | None, single: str) -> tuple[str, ...]:
+    names = tuple(
+        name.strip() for name in (raw.split(",") if raw is not None else (single,))
+        if name.strip()
+    )
+    if not names:
+        raise ProjectionError("At least one Mart is required")
+    if len(set(names)) != len(names):
+        raise ProjectionError("Duplicate Mart in --marts")
+    unsupported = [name for name in names if name not in PROJECTION_MARTS]
+    if unsupported:
+        raise ProjectionError("Unsupported projection Mart: " + ", ".join(unsupported))
+    return names
+
+
+def _write_report(path: Path | None, rendered: str) -> int:
+    if path is None:
+        return 0
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(path.name + "." + uuid4().hex + ".tmp")
+        temp.write_text(rendered + "\n", encoding="utf-8")
+        temp.replace(path)
+    except OSError:
+        print("Report file write failed; publication status is in stdout", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=Path("data/marts/user_trait_daily"))
+    parser.add_argument(
+        "--source", type=Path,
+        help="Single Mart Parquet path; use --source-root for multiple Marts",
+    )
+    parser.add_argument("--source-root", type=Path, default=Path("data/marts"))
+    mart_group = parser.add_mutually_exclusive_group()
+    mart_group.add_argument("--mart", default=MART, help="Publish one Mart")
+    mart_group.add_argument(
+        "--marts",
+        help="Comma-separated Marts to publish in order; defaults to one user_trait_daily run",
+    )
     parser.add_argument("--ddl", type=Path, default=DEFAULT_DDL)
     parser.add_argument("--batch-size", type=int, default=1000)
     parser.add_argument("--allow-empty", action="store_true")
@@ -316,37 +363,76 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.jsonl_only and args.emit_jsonl is None:
         parser.error("--jsonl-only requires --emit-jsonl")
+    if args.source is not None and args.marts is not None:
+        parser.error("--source cannot be used with --marts")
+
     report = {"mart": MART, "status": "failed", "published": False}
+    current_report = report
     connection = None
     code = 0
     try:
-        contract = load_contract(args.ddl)
-        source = ParquetSnapshot(args.source, contract)
-        if args.emit_jsonl is not None:
-            rows = read_user_trait_snapshot(source, args.batch_size)
-            report.update(
-                jsonl_path=str(args.emit_jsonl),
-                jsonl_rows=write_user_trait_jsonl(rows, args.emit_jsonl, args.allow_empty),
-                jsonl_emitted=True,
-            )
-        if args.jsonl_only:
-            report.update(status="jsonl_emitted", published=False)
-        else:
+        marts = _parse_marts(args.marts, args.mart)
+        if args.emit_jsonl is not None and marts != (MART,):
+            raise ProjectionError("--emit-jsonl is supported only for user_trait_daily")
+
+        report = (
+            {"mart": marts[0], "status": "failed", "published": False}
+            if len(marts) == 1
+            else {"status": "failed", "published": False, "marts": {}}
+        )
+        current_report = report
+
+        if not args.jsonl_only:
             config = Config(host=os.getenv("DW_MYSQL_HOST", ""), user=os.getenv("DW_MYSQL_USER", ""),
                             password=os.getenv("DW_MYSQL_PASSWORD", ""),
                             port=int(os.getenv("DW_MYSQL_PORT", "3306")),
                             database=os.getenv("DW_MYSQL_DB", "dw"), batch_size=args.batch_size,
                             allow_empty=args.allow_empty, tls_ca=os.getenv("DW_MYSQL_SSL_CA") or None)
             connection = connect(config)
-            publish(source, MysqlStore(connection, config.database, contract), config, report)
+
+        for mart in marts:
+            current_report = report if len(marts) == 1 else {
+                "mart": mart, "status": "failed", "published": False,
+            }
+            contract = load_contract(args.ddl, mart)
+            source_path = args.source if args.source is not None else source_path_for(args.source_root, mart)
+            source = ParquetSnapshot(source_path, contract)
+            if args.emit_jsonl is not None:
+                rows = read_user_trait_snapshot(source, args.batch_size)
+                current_report.update(
+                    jsonl_path=str(args.emit_jsonl),
+                    jsonl_rows=write_user_trait_jsonl(rows, args.emit_jsonl, args.allow_empty),
+                    jsonl_emitted=True,
+                )
+            if args.jsonl_only:
+                current_report.update(status="jsonl_emitted", published=False)
+            else:
+                publish(
+                    source,
+                    MysqlStore(connection, config.database, contract),
+                    config,
+                    current_report,
+                    mart=mart,
+                )
+            if len(marts) > 1:
+                report["marts"][mart] = current_report
+
+        if len(marts) > 1:
+            report.update(status="jsonl_emitted" if args.jsonl_only else "published",
+                          published=False if args.jsonl_only else True)
     except Exception as error:
         # DB exception messages can contain values or connection details. Emit
         # only safe validation messages and numeric DB error codes.
-        report["error_type"] = type(error).__name__
+        target_report = current_report
+        target_report["error_type"] = type(error).__name__
         if isinstance(error, ProjectionError):
-            report["error"] = str(error)
+            target_report["error"] = str(error)
         elif error.args and isinstance(error.args[0], int):
-            report["db_error_code"] = error.args[0]
+            target_report["db_error_code"] = error.args[0]
+        if "marts" in report and target_report is not report:
+            mart = target_report.get("mart", "unknown")
+            report["marts"][mart] = target_report
+            report.update(status="failed", published=False)
         code = 1
     finally:
         if connection is not None:
@@ -356,15 +442,7 @@ def main(argv=None):
                 pass
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     print(rendered)
-    if args.report_path:
-        try:
-            args.report_path.parent.mkdir(parents=True, exist_ok=True)
-            temp = args.report_path.with_name(args.report_path.name + "." + uuid4().hex + ".tmp")
-            temp.write_text(rendered + "\n", encoding="utf-8")
-            temp.replace(args.report_path)
-        except OSError:
-            print("Report file write failed; publication status is in stdout", file=sys.stderr)
-            code = 1
+    code = max(code, _write_report(args.report_path, rendered))
     return code
 
 
