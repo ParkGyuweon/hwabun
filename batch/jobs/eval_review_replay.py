@@ -43,7 +43,7 @@ from eval_metadata import load as load_metadata              # noqa: E402
 from persona_feature import load as load_affinity            # noqa: E402
 from persona_split import select as select_split             # noqa: E402
 from product_encoder import Encoder, brand_key               # noqa: E402
-from ltr_features import LtrFeatures, load_ltr                # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, weighted_from_meta  # noqa: E402
 from recommender import (load_cooc, cf_bonus,
                         BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for)
@@ -146,11 +146,12 @@ def run_persona(persona, history, target, ctx):
         cand = np.ones(len(M), bool)
         cand[list(blocked)] = False
         pos, _neg = state.weights()
-        rows = [index[g] for g in pos if g in index] or [
-            index[g] for g in state.converted if g in index]
+        gs = [g for g in pos if g in index] or [g for g in state.converted if g in index]
+        rows = [index[g] for g in gs]
         if rows:
+            sw = [pos.get(g, 1.0) for g in gs]                          # 실제 이벤트 가중치 (Jira 322)
             scores = recommender.ltr.predict_proba(
-                recommender.ltr_feat.make(persona, rows, cand))[:, 1].astype(np.float32)
+                recommender.ltr_feat.make(persona, rows, cand, seed_weights=sw))[:, 1].astype(np.float32)
         top = served_top(scores, blocked, recommender)
         masked = scores.copy()
         for i in blocked:
@@ -223,7 +224,8 @@ def main():
                               cooc=cooc, supporters=supporters,
                               ltr=None if ltr is None else ltr[0],
                               ltr_feat=None if ltr is None else LtrFeatures(
-                                  encoder, M, prior, affinity, cooc, supporters))
+                                  encoder, M, prior, affinity, cooc, supporters,
+                                  weighted=weighted_from_meta(ltr[1])))
     ctx = (M, index, prior, affinity, recommender)
 
     # 홀드아웃은 페르소나 파일도 정본 파일도 따로다 (부록 Q)

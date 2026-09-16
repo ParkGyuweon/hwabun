@@ -32,7 +32,7 @@ BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from eval_metadata import load as load_metadata            # noqa: E402
-from ltr_features import LtrFeatures, load_ltr             # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, rating_weights, weighted_from_meta  # noqa: E402
 from persona_feature import load as load_affinity          # noqa: E402
 from persona_split import select as select_split           # noqa: E402
 from product_encoder import Encoder, brand_key             # noqa: E402
@@ -130,7 +130,8 @@ def evaluate(personas, V, prior, pop_rank, affinity, index, recommender,
         if ltr is not None:
             clf, F = ltr
             # 피처도 **후보 안에서** 만든다 (cf·cf_rank 가 후보에 의존한다)
-            sc = clf.predict_proba(F.make(p, si, cand))[:, 1]
+            sw = rating_weights(p, s[:-1]) if F.weighted else None       # Jira 322
+            sc = clf.predict_proba(F.make(p, si, cand, seed_weights=sw))[:, 1]
             x = np.where(cand, sc, -np.inf)
             order = [int(i) for i in np.argsort(-x)[:K * 3] if np.isfinite(x[i])]
             top = recommender.mmr(x, order, K, LAMBDA_MMR)
@@ -205,7 +206,10 @@ def main():
         clf_, meta_ = ltr
         print(f"학습 결합 켬 (트리 {meta_['n_trees']}개 · 학습 {meta_['split']} "
               f"{meta_['n_persona']:,}명 · 증강 {meta_['augment_fraction']:.0%})")
-        ltr = (clf_, LtrFeatures(e, V, prior, affinity, cooc, supporters))
+        ltr = (clf_, LtrFeatures(e, V, prior, affinity, cooc, supporters,
+                                 weighted=weighted_from_meta(meta_)))
+        if weighted_from_meta(meta_):
+            print("  가중 평균 코사인 모델 (cos_seed_w, Jira 322) — 시드 강도 = 평점")
     else:
         print("학습 결합 끔 — 선형 결합")
     # 홀드아웃은 페르소나 파일도 정본 파일도 따로다. test 를 소진했으므로

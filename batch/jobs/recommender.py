@@ -366,9 +366,9 @@ class Recommender:
         #   시작 실패자 구제율이 4.5% -> 0.4% 로 주저앉는 것을 확인했다.
         #   긍정 집합을 쓰면 9.7% 로 오히려 선형을 넘는다 (부록 T).
         pos, _ = state.weights()
-        rows = [self.idx[g] for g in pos if g in self.idx]
-        if not rows:
-            rows = [self.idx[g] for g in state.converted if g in self.idx]
+        gs = [g for g in pos if g in self.idx] or [g for g in state.converted if g in self.idx]
+        rows = [self.idx[g] for g in gs]
+        sw = [pos.get(g, 1.0) for g in gs]                    # 시드 강도 = 실제 이벤트 가중치 (Jira 322, weighted 모델만 씀)
         cand = np.ones(len(self.M), bool)
         if self.catalog is not None:
             cand[:] = False
@@ -382,7 +382,7 @@ class Recommender:
             if self.affinity is not None and persona is not None:
                 s = s + w2 * np.asarray(self.affinity(persona), float)
             return s
-        X = self.ltr_feat.make(persona, rows, cand)
+        X = self.ltr_feat.make(persona, rows, cand, seed_weights=sw)
         return self.ltr.predict_proba(X)[:, 1]
 
     def mmr(self, scores, order, k, lam):
