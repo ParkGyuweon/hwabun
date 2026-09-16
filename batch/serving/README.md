@@ -16,7 +16,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 - Windows 에서는 `localhost` 대신 **`127.0.0.1`** (IPv6 폴백으로 요청마다 2초).
 - `GMS_KEY` 는 `POST /api/prescription` 만 쓴다. 없으면 그 엔드포인트만 503, 추천은 전부 정상.
 - `KAFKA_BOOTSTRAP_SERVERS` 를 주면 `activity-events` 를 구독해 상태를 갱신한다 (없으면 `POST /api/events` 만).
-- `DW_MYSQL_HOST/USER/PASSWORD/DB` 또는 `USER_TRAIT_SNAPSHOT_PATH` 를 주면 응답 `long_term_trait` 가 채워진다 (둘 다 없으면 null, health `user_trait` 에 출처).
+- `DW_MYSQL_HOST/USER/PASSWORD/DB` 또는 `USER_TRAIT_SNAPSHOT_PATH` 를 주면 응답 `long_term_trait` 가 채워진다 (둘 다 없으면 null, health `user_trait` 에 출처). 신선도(Jira 319): health `age_days`·`stale`(`USER_TRAIT_STALE_DAYS` 2 초과), `USER_TRAIT_MAX_AGE_DAYS`(14) 넘으면 `long_term_trait` null.
 - `seed=review` 는 리뷰 시드를 상태로 쓰는 **시연용** (`state_source: review_seed`).
 
 ## 파일
@@ -29,7 +29,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 | `catalog_sync.py` | 쇼핑몰 `GET /api/products` 를 읽어 편입·갱신·중단 (Jira 222, `SHOP_BACKEND_URL`) |
 | `kafka_state.py` | `activity-events` 소비자 — 수동 commit·event_id dedupe·health (Jira 226/232, 로컬 실측 ~35,000건/초) |
 | `session_store.py` | 상태 이벤트 로그 append·재기동 시 재생 (Jira 224) |
-| `user_trait.py` | 장기 성향 `user_trait_daily` 조회 → 응답 `long_term_trait` (Jira 306). dw MySQL(`DW_MYSQL_HOST`) → 스냅샷 → null. 시작 적재·5분 재적재 |
+| `user_trait.py` | 장기 성향 `user_trait_daily` 조회 → 응답 `long_term_trait` (Jira 306). dw MySQL(`DW_MYSQL_HOST`) → 스냅샷 → null. 시작 적재·5분 재적재. 신선도 `age_days`·`stale`(2일)·TTL 14일 → null (Jira 319) |
 | `prescription.py` | 대시보드 처방 문장 v0.3 (Jira 220/225, GMS) |
 | `bench_recommend.py` | 응답 시간 측정 (p95 15ms 급) |
 | `e2e_smoke.py` | 로컬 E2E 스모크 24단계 (판매자→등록→동기화→추천→회원→주문→결제→마트 API). `BE`/`RS`/`FE` env 로 주소. 09-14 14/24, 실패는 전부 백엔드 요청 항목 (Jira 296) |
@@ -66,7 +66,7 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 cd batch/serving
 python -m unittest test_recommend_server      # 35
 python -m unittest test_banners               # 22   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
-python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 13·5·7·3·17·7 = 52
+python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 13·5·7·3·17·10 = 55
 python -m unittest test_live                  # 4    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
 ```
 테스트는 등록 상품 파일 복사본과 임시 세션 로그를 쓰므로 레포 파일을 건드리지 않는다. `test_prescription.test_live_once` 는 `RUN_LIVE`+`GMS_KEY` 가 있을 때만.

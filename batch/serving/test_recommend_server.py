@@ -26,11 +26,12 @@ os.environ["REGISTERED_PRODUCTS_PATH"] = _COPY
 os.environ.setdefault("SESSION_EVENTS_PATH", os.path.join(tempfile.mkdtemp(prefix="sess_"), "session_events.jsonl"))  # 세션 로그가 레포에 쌓이지 않게
 # 장기 성향 스냅샷 (Jira 306) — PC00001 만 5행. 다른 페르소나는 null 이어야 한다
 _TRAIT = os.path.join(_TMP, "user_trait_snapshot.jsonl")
+_WED = __import__("user_trait").today_kst().isoformat()   # 오늘 — 고정 날짜면 14일 뒤 TTL(Jira 319)에 걸려 깨진다
 with open(_TRAIT, "w", encoding="utf-8") as _f:
     for _t, _s, _p in (("price", 4.5, True), ("ingredient", 1.0, False), ("review", 0.0, False),
                        ("concern", 2.5, False), ("participate", 0.0, False)):
         _f.write(json.dumps({"user_id": "PC00001", "identity_scope": "persona", "trait": _t, "trait_score": _s,
-                             "is_primary_trait": _p, "window_end_date": "2026-09-13",
+                             "is_primary_trait": _p, "window_end_date": _WED,
                              "trait_policy_version": "user-trait-v2"}) + "\n")
 os.environ["USER_TRAIT_SNAPSHOT_PATH"] = _TRAIT
 
@@ -78,7 +79,7 @@ class TestLongTermTrait(unittest.TestCase):
         self.assertEqual(lt["price"], 4.5)
         self.assertEqual(lt["concern"], 2.5)
         self.assertEqual(lt["identity_scope"], "persona")
-        self.assertEqual(lt["window_end_date"], "2026-09-13")
+        self.assertEqual(lt["window_end_date"], _WED)
         self.assertEqual(lt["trait_policy_version"], "user-trait-v2")
         self.assertEqual(set(lt), {"price", "ingredient", "review", "concern", "participate",
                                    "primary", "window_end_date", "trait_policy_version", "identity_scope"})
@@ -89,6 +90,7 @@ class TestLongTermTrait(unittest.TestCase):
         h = client.get("/health").json()["user_trait"]
         self.assertTrue(str(h["source"]).startswith("snapshot:"))
         self.assertEqual(h["users"], 1)
+        self.assertEqual((h["age_days"], h["stale"], h["expired"], h["max_age_days"]), (0, False, False, 14))  # Jira 319
 
 
 class TestServer(unittest.TestCase):
