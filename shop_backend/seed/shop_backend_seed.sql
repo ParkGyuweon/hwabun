@@ -709,6 +709,35 @@ INSERT INTO product_variant (variant_id,product_id,sku_id,label,label_ko,size,si
 ('SB000007-V1','SB000007','SB000007','기본','기본','20ml',NULL,'32200','27400','/images/ssafy-beauty/SB000007-m1.webp',NULL,'ACTIVE','0'),
 ('SB000008-V1','SB000008','SB000008','기본','기본','1매 / 30g',NULL,'8000','6800','/images/ssafy-beauty/SB000008-m1.webp',NULL,'ACTIVE','0') ON DUPLICATE KEY UPDATE variant_id=VALUES(variant_id),product_id=VALUES(product_id),sku_id=VALUES(sku_id),label=VALUES(label),label_ko=VALUES(label_ko),size=VALUES(size),size_ko=VALUES(size_ko),price_krw=VALUES(price_krw),sale_price_krw=VALUES(sale_price_krw),image_url=VALUES(image_url),swatch_url=VALUES(swatch_url),status=VALUES(status),sort_order=VALUES(sort_order);
 
+-- 주문 불변식: 판매 중인 상품에는 최소 하나의 구매 단위(product_variant)가 있어야 한다.
+-- 수집 원천에 옵션이 없었던 상품은 build_seed.py가 이미 "기본" 옵션을 만들지만,
+-- 부분 시드/수동 상품 추가로 누락된 경우에도 이 덤프가 단일 옵션을 보완한다.
+-- 가격 원천이 없는 상품은 임의 가격을 만들지 않으며, ACTIVE 판매 대상으로 남겨서는 안 된다.
+INSERT INTO product_variant (
+ variant_id,product_id,sku_id,label,label_ko,size,size_ko,
+ price_krw,sale_price_krw,image_url,swatch_url,status,sort_order
+)
+SELECT
+ CONCAT(p.product_id, '-DEFAULT'),
+ p.product_id,
+ CONCAT('DEFAULT-', p.product_id),
+ 'Default',
+ '기본',
+ NULL,
+ p.size_ko,
+ ROUND(p.source_price_usd * 1340.86 / 100) * 100,
+ NULL,
+ p.primary_image_url,
+ NULL,
+ 'ACTIVE',
+ 0
+FROM product p
+WHERE p.status = 'ACTIVE'
+  AND p.source_price_usd > 0
+  AND NOT EXISTS (
+    SELECT 1 FROM product_variant v WHERE v.product_id = p.product_id
+  );
+
 INSERT INTO product_image (image_id,product_id,url,sort_order) VALUES
 ('P420652-I1','P420652','https://www.sephora.com/productimages/sku/s1966258-av-1202511121331491790800-zoom.jpg','0'),
 ('P420652-I2','P420652','https://www.sephora.com/productimages/sku/s1966258-av-2202511121331505930800-zoom.jpg','1'),

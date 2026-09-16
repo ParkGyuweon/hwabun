@@ -75,6 +75,22 @@ curl -I http://j15a306.p.ssafy.io
 curl -I https://j15a306.p.ssafy.io
 ```
 
+## MySQL 점검용 SSH 터널
+
+MySQL은 EC2의 loopback(`127.0.0.1:3306`)에만 열어 둔다. 보안 그룹에 3306 포트를
+추가하지 않는다. IntelliJ Database 도구에서는 MySQL host를 `127.0.0.1`, port를 `3306`으로
+두고 SSH tunnel을 켠 뒤 EC2의 `ubuntu` 계정과 private key를 지정한다.
+
+Compose 변경을 반영할 때는 다음처럼 MySQL만 다시 만든다.
+
+```bash
+cd /home/ubuntu/S15P21A306/deploy/ec2-1
+sudo docker compose up -d mysql
+sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
+```
+
+출력에 `127.0.0.1:3306->3306/tcp`가 보이면 정상이다.
+
 HTTP는 HTTPS로 리다이렉트되고, ACME 경로는 갱신을 위해 HTTP로 계속 제공된다.
 
 ## 4. 인증서 갱신

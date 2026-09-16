@@ -21,6 +21,10 @@ recommendation:
   url: ${RECOMMEND_URL:http://localhost:8300}
   timeout-ms: ${RECOMMEND_TIMEOUT_MS:300}
 
+portone:
+  api-url: ${PORTONE_API_URL:https://api.portone.io}
+  timeout-ms: ${PORTONE_TIMEOUT_MS:10000}
+
 management:
   metrics:
     tags:

@@ -9,3 +9,9 @@ scrape_configs:
       - targets: ["backend:8080"]
         labels:
           environment: ec2
+  - job_name: shop-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["shop-backend:8090"]
+        labels:
+          environment: ec2

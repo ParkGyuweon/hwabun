@@ -32,6 +32,18 @@ public class ShopOrder {
   @Column(name = "paid_at")
   private LocalDateTime paidAt;
 
+  @Column(name = "payment_id")
+  private String paymentId;
+
+  @Column(name = "payment_provider")
+  private String paymentProvider;
+
+  @Column(name = "paid_amount")
+  private BigDecimal paidAmount;
+
+  @Column(name = "created_at", nullable = false)
+  private LocalDateTime createdAt;
+
   protected ShopOrder() {}
 
   public ShopOrder(
@@ -46,6 +58,7 @@ public class ShopOrder {
     idempotencyKey = key;
     requestHash = hash;
     totalAmount = total;
+    createdAt = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
   }
 
   public String getId() {
@@ -70,6 +83,30 @@ public class ShopOrder {
 
   public Status getStatus() {
     return status;
+  }
+
+  public String getCurrency() {
+    return currency;
+  }
+
+  public LocalDateTime getPaidAt() {
+    return paidAt;
+  }
+
+  public String getPaymentId() {
+    return paymentId;
+  }
+
+  public String getPaymentProvider() {
+    return paymentProvider;
+  }
+
+  public BigDecimal getPaidAmount() {
+    return paidAmount;
+  }
+
+  public LocalDateTime getCreatedAt() {
+    return createdAt;
   }
 
   public void paid() {

@@ -51,6 +51,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             Map.entry("view_cart", "conversion"),
             Map.entry("begin_checkout", "conversion"),
             Map.entry("purchase", "conversion"),
+            Map.entry("payment_failed", "conversion"),
             Map.entry("purchase_reason_select", "validation"),
             Map.entry("rage_click", "friction"),
             Map.entry("dead_click", "friction")
@@ -87,8 +88,10 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             "page_view", "section_view", "section_dwell"
     );
     private static final Set<String> PURCHASE_EVENTS = Set.of(
-            "begin_checkout", "purchase", "purchase_reason_select"
+            "begin_checkout", "purchase", "payment_failed", "purchase_reason_select"
     );
+    private static final Set<String> PAYMENT_METHODS = Set.of("kakaopay", "card", "test");
+    private static final Set<String> ORDER_CHANNELS = Set.of("backend", "local");
     private static final Set<String> PURCHASE_REASONS = Set.of(
             "ingredient", "skin_fit", "reviews", "review_same_skin", "price",
             "brand_trust", "texture_finish", "clean_claim", "recommendation", "restock"
@@ -170,7 +173,12 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
         return switch (event.eventName()) {
             case "begin_checkout" -> validateItems(properties, context);
             case "purchase" -> requireText(properties, "order_id", context)
-                    & validateItems(properties, context);
+                    & validateItems(properties, context)
+                    & validateRequiredEnum(properties, "payment_method", PAYMENT_METHODS, context)
+                    & validateNonNegativeNumber(properties, "paid_value", context)
+                    & validateRequiredEnum(properties, "order_channel", ORDER_CHANNELS, context);
+            case "payment_failed" -> requireText(properties, "order_id", context)
+                    & validateOptionalEnum(properties, "payment_method", PAYMENT_METHODS, context);
             case "purchase_reason_select" -> requireText(properties, "order_id", context)
                     & validateReasons(properties, context);
             default -> true;
@@ -265,6 +273,68 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
         }
         add(context, "missing_required_property", "properties", field + "이 필요합니다.");
         return false;
+    }
+
+    private boolean validateRequiredEnum(
+            JsonNode properties,
+            String field,
+            Set<String> allowedValues,
+            ConstraintValidatorContext context
+    ) {
+        JsonNode value = properties.get(field);
+        if (value == null) {
+            add(context, "missing_required_property", "properties", field + "이 필요합니다.");
+            return false;
+        }
+        return validateEnumValue(value, field, allowedValues, context);
+    }
+
+    private boolean validateOptionalEnum(
+            JsonNode properties,
+            String field,
+            Set<String> allowedValues,
+            ConstraintValidatorContext context
+    ) {
+        JsonNode value = properties.get(field);
+        return value == null || validateEnumValue(value, field, allowedValues, context);
+    }
+
+    private boolean validateEnumValue(
+            JsonNode value,
+            String field,
+            Set<String> allowedValues,
+            ConstraintValidatorContext context
+    ) {
+        if (!isText(value)) {
+            add(context, "invalid_property_type", "properties", field + "은 비어 있지 않은 문자열이어야 합니다.");
+            return false;
+        }
+        if (!allowedValues.contains(value.textValue())) {
+            add(context, "invalid_property_enum", "properties", field + " 값이 계약 enum에 없습니다.");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean validateNonNegativeNumber(
+            JsonNode properties,
+            String field,
+            ConstraintValidatorContext context
+    ) {
+        JsonNode value = properties.get(field);
+        if (value == null) {
+            add(context, "missing_required_property", "properties", field + "이 필요합니다.");
+            return false;
+        }
+        if (!value.isNumber()) {
+            add(context, "invalid_property_type", "properties", field + "은 숫자여야 합니다.");
+            return false;
+        }
+        if (value.decimalValue().signum() < 0) {
+            add(context, "invalid_property_type", "properties", field + "은 0 이상이어야 합니다.");
+            return false;
+        }
+        return true;
     }
 
     private static boolean contains(JsonNode values, String value) {
