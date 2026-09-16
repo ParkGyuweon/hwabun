@@ -59,6 +59,16 @@ python simulator/agents/agent_runner.py --limit 10 \
 python simulator/agents/agent_runner.py --checkout --limit 1     --script click_product,add_to_cart,back_to_list,click_product,back_to_list,click_product,back_to_list,checkout
 ```
 
+## 정렬 문구는 중립 · 배너 대조군 `--no-banner` — Jira 326, 2026-09-16
+
+- 파일럿(20명 × 2조건)에서 `sort_list` 30회가 **전부 '가격 낮은순'** 이었다. 프롬프트가 "가격이 신경 쓰이면 가격 낮은순…" 예시를 든 탓.
+  예시를 빼고 네 정렬을 같은 무게로 나열, 허용 밖 보정 폴백도 무작위로 바꿨다. nano 는 예시 하나에 이렇게 끌린다.
+- `--no-banner`: 프론트는 배너를 그대로 그리지만 러너가 화면 텍스트에서 `[배너]` 줄을 빼고 `click_banner` 도 열지 않는다.
+  노출 A/B 의 대조군. 배너 노출 로그(`recommendation_impression`, `list_id=hero_banner`)는 두 조건 모두 프론트가 남긴다.
+- 파일럿 결과(배포 서버, 09-16): 배너를 본 20명 중 **6명 클릭(30%), 4명은 첫 화면에서**, 배너 상품 상세 4·찜 1·담기 1.
+  전체 담기는 85 vs 89 로 같고 찜은 34 vs 62(n=20, 잡음 범위). 클릭 이유는 전부 "새 브랜드 신상품". 데이터는 레포 밖(Research/banner-ab-20260916).
+- 배포 프론트에는 09-16 부터 포트원 키가 있어 `checkout` 이 카카오페이 창에서 멈춘다 → 프론트 `?pay=test` 스위치 요청 중. 그 전엔 배포본 실행은 결제 없이.
+
 ## 페르소나가 행동을 이끄는가 — `--prefer-category`
 
 09-07 100명 본실행에서 **담은 상품이 본인 리뷰 카테고리 안인 비율이 57%** 였는데,
