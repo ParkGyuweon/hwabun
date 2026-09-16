@@ -46,6 +46,8 @@ import behavior_weights as BW
 # 것과 맞춘다.
 CONVERT = {"add_to_cart", "quantity_change", "purchase"}
 UNDO = {"remove_from_cart"}
+# 주문 단위 이벤트 — product_id 대신 properties.items[] 를 싣는다 (계약 §6). observe 가 항목별로 펼친다 (Jira 320)
+ORDER_EVENTS = {"begin_checkout", "purchase"}
 
 # ── 부정 축의 강도 ─────────────────────────────────────────────────────
 # 미전환 상품의 부정 강도는 **관여도에 반비례**한다 (규칙 7).
@@ -108,10 +110,21 @@ class UserVector:
     # ── 이벤트 1건 ────────────────────────────────────────────────────────
     def observe(self, ev):
         g = ev.get("product_id")
-        if not g:
-            return                                        # 규칙 1
         name = ev["event_name"]
         pr = ev.get("properties") or {}
+        if not g:
+            # 주문 단위 이벤트 (Jira 320). 계약 §6 은 purchase·begin_checkout 을 product_id 없이
+            # properties.items[] 로 낸다 — 그대로 두면 규칙 1 에서 빠져 purchase 8.0 이 한 번도 안 적용됐다.
+            # 항목별 product_id 로 펼쳐 같은 가중치를 준다. quantity 는 안 본다 — 수량은 선호 강도가 아니다.
+            if name in ORDER_EVENTS:
+                seen = set()
+                for it in pr.get("items") or ():
+                    pid = (it or {}).get("product_id") if isinstance(it, dict) else None
+                    if pid and pid not in seen:
+                        seen.add(pid)
+                        self.observe({"event_name": name, "product_id": pid,
+                                      "properties": {k: v for k, v in pr.items() if k != "items"}})
+            return                                        # 규칙 1
 
         if name in UNDO:
             self.converted.discard(g)
