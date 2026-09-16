@@ -84,6 +84,13 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 | 금액 | decimal(18,2) | Y | `currency`와 함께 해석 |
 | `mart_processed_at` | timestamp | N | Mart 생성·갱신 시각 |
 
+**Persona Agent(PA)와 프로그램 생성(PC)은 `generator_type`으로 가른다.** 둘 다
+`actor_type = synthetic`이라 그 축으로는 갈리지 않는다. PA가 `agent_llm`,
+PC가 `python_batch`다. `actor_type`에 값을 더하지 않는 이유는 그 축이 모든 Mart의
+key에 있어서, enum이 바뀌면 전 Mart의 grain이 같이 바뀌기 때문이다.
+`generator_type`도 2026-09-16부터 모든 Mart의 key에 있으므로(Jira 324) 화면은
+이 축으로 PA를 걸러낼 수 있다.
+
 모든 비율은 `numerator / NULLIF(denominator, 0)`으로 계산한다. Kafka payload의
 `source`를 우선 사용하며 누락된 과거 데이터만 `synthetic → simulator`, 그 외
 `web`으로 보정한다.
@@ -433,12 +440,17 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
 | `variant_select_count`, `quick_look_close_open_detail_count` | bigint | N | 옵션 왕복과 퀵룩 → 상세 전환. 상품 진단용 |
+| `wishlist_count` | bigint | N | 찜 **추가** 수. `wishlist_toggle`의 `action = add`만 |
 | `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
 | `product_ctr`, `detail_entry_rate`, `add_to_cart_rate`, `purchase_rate`, `product_interest_score` | double | Y | 비율·관심도 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 `detail_view_sessions`는 상품 상세(`product_view`)와 Quick Look(`quick_look`) 중 하나
 이상을 연 고유 세션이다. 둘 다 연 세션도 한 번만 센다. §4.14와 같은 정의다.
+
+`wishlist_count`는 토글 횟수가 아니라 **추가 횟수**다. `wishlist_toggle` 하나가
+추가와 해제를 모두 싣기 때문에 가르지 않으면 관심 신호가 아니라 버튼을 누른
+횟수가 된다. `action`이 없는 옛 로그는 해제를 보낸 적이 없어 추가로 본다.
 
 `variant_select_count`와 `quick_look_close_open_detail_count`는 **세션이 아니라
 횟수**다. 같은 세션이 옵션을 다섯 번 고르면 5다 — 옵션 왕복이 많다는 것 자체가
@@ -504,11 +516,17 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | section/content/scenario/run만 Y | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
+| `co_visible_le2_dwell_ms_sum` | bigint | N | 겹쳐 보인 체류를 뺀 합계. 항상 `dwell_ms_sum` 이하 |
 | `section_view_count`, `section_view_sessions`, `dwell_ms_sum`, `accordion_expand_count`, `text_selection_count`, `text_copy_count`, `matched_ingredient_count`, `ingredient_view_sessions`, `review_view_sessions`, `product_view_sessions` | bigint | N | 콘텐츠 행동 집계 |
 | `avg_dwell_ms_per_session`, `ingredient_view_rate`, `review_view_rate`, `content_interest_score` | double | Y | 평균·비율·관심도 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 `dwell_ms_sum`은 `content_interest_fact`를 기본 원천으로 사용한다.
+
+`co_visible_le2_dwell_ms_sum`은 같은 원천의 같은 이름 컬럼을 그대로 합산한다.
+한 화면에 블록이 여러 개 보이면 같은 시간이 블록마다 중복 귀속되는데, 그 몫을
+걷어낸 값이다. 산출 규칙과 상한 2의 한계는 `processed-schema.md` §12에 있다 —
+**여기서 다시 거르지 않는다.** 두 곳에서 걸면 기준이 갈린다.
 `section_dwell_agg`와 동시에 합산하지 않는다. `content_interest_fact`가
 `section_dwell_agg`를 이미 병합한 결과라 둘을 더하면 같은 체류가 두 번 들어간다.
 
