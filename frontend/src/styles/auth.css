@@ -229,6 +229,20 @@
   background: var(--color-line-soft, #f1f3f5);
 }
 
+/*
+ * 화면 다른 곳(상품 상세의 "바로 구매")에서 로그인을 요구해 열렸을 때 그 이유.
+ * 왜 갑자기 로그인 창이 떴는지 모르면 닫아 버린다 (lib/loginPrompt).
+ */
+.auth-modal__reason {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-line-soft, #f1f3f5);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-soft, #6e6e73);
+}
+
 /* ---------- 대시보드·플랫폼 전체 화면 게이트 ---------- */
 .auth-gate {
   min-height: 100vh;

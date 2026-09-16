@@ -9,7 +9,16 @@ import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
 import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
-import { canCheckoutOnBackend, checkoutOnBackend, confirmBackendOrder, createBackendOrder, fetchBackendReviews } from './lib/shopApi';
+import {
+  canCheckoutOnBackend,
+  checkoutOnBackend,
+  clearBackendCart,
+  confirmBackendOrder,
+  createBackendOrder,
+  fetchBackendReviews,
+  hasMemberSession,
+} from './lib/shopApi';
+import { requestLogin } from './lib/loginPrompt';
 import {
   PAYMENT_FAILED_EVENT_ENABLED,
   PAYMENT_PROVIDER,
@@ -50,6 +59,13 @@ const personas = personasData as unknown as PersonaProfile[];
 
 /** 상세 페이지에서 유사·추천 자리에 올릴 개수 */
 const SIMILAR_SIZE = 6;
+
+/**
+ * 주문이 어디서 시작됐나. 주문 경로는 하나지만 **끝난 뒤 장바구니를 비울지**가 다르다.
+ *   `cart`     장바구니 확인 화면의 주문 버튼 → 장바구니를 비운다
+ *   `buy_now`  상품 상세의 "바로 구매" → 담아 둔 장바구니는 그대로 둔다
+ */
+type OrderOrigin = 'cart' | 'buy_now';
 
 /** 스크롤 복원을 기다려주는 최대 시간. 이미지 배치가 늦어도 이 안에는 자리를 잡는다 */
 const RESTORE_TIMEOUT_MS = 1500;
@@ -401,7 +417,7 @@ export default function App() {
    * 넣기로 했고(2026-09-14), properties 는 열린 객체라 먼저 실어도 거절되지 않는다.
    */
   const finishOrder = useCallback(
-    (placed: PlacedOrder) => {
+    (placed: PlacedOrder, origin: OrderOrigin = 'cart') => {
       track('purchase', {
         order_id: placed.orderId,
         items: placed.items,
@@ -416,9 +432,26 @@ export default function App() {
       });
       setPaymentError(null);
       setOrder(placed);
-      setCartItems([]);
-      // 다음 주문은 새 번호를 받는다
-      pendingOrderIdRef.current = null;
+      /*
+       * 장바구니는 **장바구니 주문일 때만** 비운다. "바로 구매" 는 담아 둔 것과 무관한 주문이라,
+       * 여기서 비우면 사용자가 모아 둔 장바구니가 산 적 없는 채로 사라진다.
+       * 같은 이유로 확인 단계의 주문 번호(`pendingOrderIdRef`)도 건드리지 않는다.
+       */
+      if (origin === 'cart') {
+        setCartItems([]);
+        // 다음 주문은 새 번호를 받는다
+        pendingOrderIdRef.current = null;
+      } else {
+        /*
+         * 완료 화면과 구매 이유 설문은 장바구니 화면 안에 산다. 바로 구매는 상품 상세에서 시작하므로
+         * 여기서 그 화면을 열어 주지 않으면 **주문이 끝났는지 알 수 없다** — 버튼만 잠깐 눌리고 만다.
+         *
+         * `view_cart` 는 남기지 않는다. 장바구니를 본 적이 없기 때문이다. 이걸 흘리면 GA4 퍼널의
+         * 장바구니 단계가 실제보다 커지고, "담기 → 장바구니 → 주문" 이탈률이 흐려진다.
+         */
+        window.history.pushState({ productId: null, cart: true }, '', '?cart=1');
+        setCartOpen(true);
+      }
     },
     [],
   );
@@ -431,11 +464,20 @@ export default function App() {
     }
   }, []);
 
-  const placeOrder = useCallback(async () => {
-    if (cartItems.length === 0 || paying) return;
-    const localOrderId = pendingOrderIdRef.current ?? createOrderId();
-    const items = toOrderItems(cartItems);
-    const { count, total, paid } = orderTotals(cartItems);
+  /**
+   * 주문 한 건을 끝까지 보낸다. 장바구니 주문과 "바로 구매" 가 **같은 함수**를 탄다.
+   *
+   * 둘의 차이는 두 가지뿐이라 인자로 받는다.
+   *   `source`  주문할 품목. 장바구니 주문은 장바구니 전부, 바로 구매는 그 상품 하나
+   *   `origin`  끝난 뒤 장바구니를 비울지 (`cart` 만 비운다 — 바로 구매는 담아 둔 걸 건드리지 않는다)
+   *
+   * 경로를 두 벌로 나누지 않은 이유는, 결제·확인·실패 처리가 전부 같아야 하기 때문이다. 한쪽만
+   * 고치면 "장바구니로는 되는데 바로 구매는 안 되는" 종류의 버그가 난다.
+   */
+  const submitOrder = useCallback(async (source: CartItem[], origin: OrderOrigin, localOrderId: string) => {
+    if (source.length === 0 || paying) return;
+    const items = toOrderItems(source);
+    const { count, total, paid } = orderTotals(source);
     setPaymentError(null);
 
     /**
@@ -443,11 +485,16 @@ export default function App() {
      * 서버 confirm, 없으면 예전처럼 /pay 로 PAID 표시. 그래야 피드백 API 의 "구매 이력" 조건이 성립한다.
      * 백엔드 주문으로 만들 수 없는 상품이나 비로그인 상태에서는 로컬 테스트 주문으로 우회하지 않고 실패를 표시한다.
      */
-    if (canCheckoutOnBackend(cartItems)) {
+    if (canCheckoutOnBackend(source)) {
+      /*
+       * 서버 장바구니는 주문 직전에만 채워지는 임시 자리인데, `POST /api/orders` 는 거기 든 것을 **전부**
+       * 주문한다. 담기까지 갔다가 실패한 시도가 남아 있으면 "이 상품만" 이 아니게 된다 (shopApi 주석).
+       */
+      if (origin === 'buy_now') await clearBackendCart();
       if (isPaymentEnabled()) {
         setPaying(true);
         try {
-          const created = await createBackendOrder(cartItems, localOrderId);
+          const created = await createBackendOrder(source, localOrderId);
           if (!created.ok) {
             failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay');
             return;
@@ -489,27 +536,78 @@ export default function App() {
             payment_method: 'kakaopay',
             payment_id: pay.paymentId,
             paid_at: confirmed.paidAt ?? new Date().toISOString(),
-          });
+          }, origin);
         } finally {
           setPaying(false);
         }
         return;
       }
 
-      const r = await checkoutOnBackend(cartItems, localOrderId);
+      const r = await checkoutOnBackend(source, localOrderId);
       if (r.ok) {
-        finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' });
+        finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' }, origin);
         return;
       }
       failPayment(localOrderId, `order_${r.status}`, `주문을 완료하지 못했습니다. ${r.reason}`, 'test');
       return;
     }
 
-    const message = cartItems.some((i) => !i.variant_id)
+    /*
+     * 서버 주문을 탈 수 없으면 **로컬 테스트 주문으로 우회하지 않고** 이유를 띄운다
+     * (백엔드 요청 2026-09-15 §5 · 이 브랜치의 결정을 그대로 따른다).
+     * 바로 구매도 같은 길이라 여기서 갈리지 않는다 — 막힌 이유는 origin 과 무관하다.
+     */
+    const message = source.some((i) => !i.variant_id)
       ? '백엔드에 등록되지 않은 상품은 결제할 수 없습니다.'
       : '결제하려면 고객 로그인이 필요합니다.';
     failPayment(localOrderId, 'backend_checkout_required', message, 'test');
-  }, [cartItems, paying, member, finishOrder, failPayment]);
+  }, [paying, member, finishOrder, failPayment]);
+
+  /** 장바구니 확인 화면의 주문 버튼. 주문 번호는 `beginCheckout` 이 만든 것을 그대로 쓴다 */
+  const placeOrder = useCallback(
+    () => submitOrder(cartItems, 'cart', pendingOrderIdRef.current ?? createOrderId()),
+    [submitOrder, cartItems],
+  );
+
+  /**
+   * 상품 상세의 "바로 구매". 장바구니를 거치지 않고 **이 상품 하나만** 주문한다.
+   *
+   * 로그인이 없으면 여기서 멈추고 로그인 모달을 띄운다. 백엔드가 비회원 주문을 받지 않기 때문이다 —
+   * `/api/cart/items` · `/api/orders` · `/pay` · `/confirm` 전부 `requireMember` 가 걸려 있다
+   * (`CommerceController`). 담아 두고 마지막에 막히는 것보다 여기서 말하는 게 낫다.
+   *
+   * 주문 번호는 매번 새로 만든다. `pendingOrderIdRef` 는 장바구니 확인 단계의 번호라 공유하면
+   * "확인까지 갔다가 안 산 사람" 집계가 섞인다.
+   */
+  const buyNow = useCallback(
+    async (item: CartItem) => {
+      if (paying) return;
+      if (!hasMemberSession()) {
+        /*
+         * 여기서는 이벤트를 남기지 않는다. 새 이름(`buy_now_blocked` 같은)은 계약
+         * (`event-schema.json` · 수집기 INTENTS)에 등록되기 전에는 `unregistered_event` 로 거절된다.
+         */
+        requestLogin('바로 구매는 고객 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
+        return;
+      }
+      const orderId = createOrderId();
+      const { total, paid } = orderTotals([item]);
+      /*
+       * 바로 구매도 퍼널을 전부 밟는다 — 담기(ProductSummary) → 여기 → purchase.
+       * 단계를 비우면 그 단계를 분모로 쓰는 비율이 1.0 을 넘는다 (ProductSummary.buyNow 주석).
+       */
+      track('begin_checkout', {
+        order_id: orderId,
+        items: toOrderItems([item]),
+        cart_value: Number(total.toFixed(2)),
+        paid_value: Number(paid.toFixed(2)),
+        currency: 'USD',
+        entry_source: 'buy_now',
+      });
+      await submitOrder([item], 'buy_now', orderId);
+    },
+    [paying, submitOrder],
+  );
 
   /**
    * 모바일 결제창(REDIRECTION)에서 돌아온 경우 — `/?order=…&pay=return`. 결제창을 열기 전에 둔 주문을 꺼내
@@ -804,6 +902,8 @@ export default function App() {
             persona={persona}
             onSelectProduct={openProduct}
             onAddToCart={addToCart}
+            onBuyNow={buyNow}
+            buying={paying}
           />
         </>
       ) : (

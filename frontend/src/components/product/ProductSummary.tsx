@@ -17,6 +17,10 @@ interface ProductSummaryProps {
   onVariantSelect: (variant: ProductVariant) => void;
   /** 실제 장바구니에 넣는다. 로그는 여기서 남기고 담기는 App 이 한다 */
   onAddToCart: (item: CartItem) => void;
+  /** 장바구니를 거치지 않고 이 상품 하나만 주문한다. 로그인 판단·주문은 App 이 한다 */
+  onBuyNow: (item: CartItem) => void;
+  /** 결제창이 떠 있거나 서버 확인 중 */
+  buying: boolean;
   /** 리뷰 섹션으로 스크롤 이동 */
   onReviewLinkClick: () => void;
 }
@@ -31,6 +35,8 @@ export default function ProductSummary({
   selectedSkuId,
   onVariantSelect,
   onAddToCart,
+  onBuyNow,
+  buying,
   onReviewLinkClick,
 }: ProductSummaryProps) {
   const [quantity, setQuantity] = useState(1);
@@ -55,9 +61,22 @@ export default function ProductSummary({
     track('wishlist_toggle', { product_id: product.product_id, action: next ? 'add' : 'remove' });
   };
 
-  const addToCart = () => {
-    // 실패했을 때 성공 로그가 나가지 않도록, 장바구니 API 가 붙으면 성공 응답 후에만 track 한다
-    setAddedAt(Date.now());
+  /** 지금 화면 상태(옵션·수량)로 만든 장바구니 품목. 담기와 바로 구매가 같은 값을 쓴다 */
+  const cartItem = (): CartItem => ({
+    product_id: product.product_id,
+    sku_id: selectedSkuId,
+    variant_label: product.variants.find((v) => v.sku_id === selectedSkuId)?.label ?? null,
+    brand_name: product.brand_name,
+    product_name: product.product_name,
+    image_url: product.image_url,
+    price_usd: product.price_usd,
+    sale_price_usd: product.sale_price_usd ?? null,
+    variant_id: variantIdOf(product, selectedSkuId),
+    quantity,
+  });
+
+  /** 담기 이벤트. 담기 버튼과 바로 구매가 같은 모양으로 남긴다 — `entry_source` 만 다르다 */
+  const trackAddToCart = (entrySource?: string) => {
     track('add_to_cart', {
       product_id: product.product_id,
       sku_id: selectedSkuId,
@@ -65,20 +84,38 @@ export default function ProductSummary({
       price_usd: product.price_usd,
       // 할인은 열린 속성으로 덧붙인다. price_usd 의 뜻(정가)은 그대로다
       ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
+      ...(entrySource ? { entry_source: entrySource } : {}),
     });
-    onAddToCart({
-      product_id: product.product_id,
-      sku_id: selectedSkuId,
-      variant_label:
-        product.variants.find((v) => v.sku_id === selectedSkuId)?.label ?? null,
-      brand_name: product.brand_name,
-      product_name: product.product_name,
-      image_url: product.image_url,
-      price_usd: product.price_usd,
-      sale_price_usd: product.sale_price_usd ?? null,
-      variant_id: variantIdOf(product, selectedSkuId),
-      quantity,
-    });
+  };
+
+  const addToCart = () => {
+    // 실패했을 때 성공 로그가 나가지 않도록, 장바구니 API 가 붙으면 성공 응답 후에만 track 한다
+    setAddedAt(Date.now());
+    trackAddToCart();
+    onAddToCart(cartItem());
+  };
+
+  /**
+   * 바로 구매 — 장바구니를 거치지 않고 이 상품 하나만 주문한다.
+   *
+   * **`add_to_cart` 를 먼저 남긴다. 장바구니에 담지는 않는다** (AI 파트 확정 2026-09-16).
+   *
+   * 처음에는 "담은 적이 없으니 담기 이벤트도 없다" 로 두었는데, 그러면 퍼널이 깨진다.
+   * `funnel_daily_kpi`(dw-schema §4.5)의 `cart_to_purchase_rate` 와 `dropoff_after_cart_rate` 가
+   * `add_to_cart_sessions` 를 분모로 쓰기 때문에, 담기 없이 구매만 있는 세션이 생기면 **분자가 분모를
+   * 넘는다** — Jira 277 에서 담기율이 1.0 을 넘었던 것과 같은 종류의 결함이다.
+   *
+   * 퍼널상 바로 구매는 담기 단계를 **건너뛴 것이 아니라 한 번에 통과한 것**이라, 단계를 비우는 쪽이
+   * 사실과 더 멀다. 새 이벤트 이름을 만들지 않은 것도 같은 이유다 — 계약에 등록되기 전까지는
+   * `unregistered_event` 로 거절되고, 등록해도 기존 퍼널 마트가 그 이름을 모른다.
+   *
+   * 구분은 `entry_source: 'buy_now'` 로 한다. `add_to_cart` 의 선택 속성으로 이미 계약에 있고
+   * (event-properties-schema §4), 퀵룩이 `'quick_look'` 으로 같은 자리를 쓰고 있다.
+   * 다만 **값 `buy_now` 는 §3.3 enum 에 아직 없다** — 데이터 파트에 추가 요청해 둔 상태다.
+   */
+  const buyNow = () => {
+    trackAddToCart('buy_now');
+    onBuyNow(cartItem());
   };
 
   return (
@@ -137,8 +174,22 @@ export default function ProductSummary({
           </button>
         </div>
 
-        <button type="button" className="btn btn--primary" data-log-action="add_to_cart" onClick={addToCart}>
+        <button type="button" className="btn btn--secondary" data-log-action="add_to_cart" onClick={addToCart}>
           Add to Basket
+        </button>
+
+        {/*
+          바로 구매. 비로그인이어도 **버튼은 보인다** — 누르면 App 이 로그인 모달을 띄운다.
+          숨기면 "이 가게는 바로 구매가 없다" 로 읽히고, 로그인해도 뭐가 달라지는지 알 수 없다.
+        */}
+        <button
+          type="button"
+          className="btn btn--primary"
+          data-log-action="buy_now"
+          disabled={buying}
+          onClick={buyNow}
+        >
+          {buying ? '주문 진행 중…' : '바로 구매'}
         </button>
 
         <button

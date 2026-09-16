@@ -32,6 +32,10 @@ interface ProductDetailPageProps {
   persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
   onAddToCart: (item: CartItem) => void;
+  /** 장바구니를 거치지 않고 이 상품 하나만 주문한다. 로그인 판단은 App 이 한다 */
+  onBuyNow: (item: CartItem) => void;
+  /** 결제창이 떠 있거나 서버 확인 중. 버튼 연타 방지 */
+  buying: boolean;
 }
 
 export default function ProductDetailPage({
@@ -42,6 +46,8 @@ export default function ProductDetailPage({
   persona,
   onSelectProduct,
   onAddToCart,
+  onBuyNow,
+  buying,
 }: ProductDetailPageProps) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [sort, setSort] = useState<ReviewSort>('recent');
@@ -109,6 +115,8 @@ export default function ProductDetailPage({
             selectedSkuId={selectedSkuId}
             onVariantSelect={setSelectedVariant}
             onAddToCart={onAddToCart}
+            onBuyNow={onBuyNow}
+            buying={buying}
             onReviewLinkClick={() => {
               track('review_expand', { product_id: product.product_id, target: 'jump_to_reviews' });
               reviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

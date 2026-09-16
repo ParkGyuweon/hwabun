@@ -330,6 +330,31 @@ export function canCheckoutOnBackend(items: CartItem[]): boolean {
 }
 
 /**
+ * 서버 장바구니를 비운다. **"바로 구매" 전에만 부른다.**
+ *
+ * `POST /api/orders` 는 요청 본문의 품목이 아니라 **서버 장바구니에 든 것 전부**를 주문한다
+ * (`CommerceController.order` — `cartItems.findByCartId`). 정상 주문은 끝나면 서버가 장바구니를
+ * 비우므로(`deleteByCartId`) 보통은 비어 있지만, 담기까지 갔다가 주문이 실패한 시도가 있으면
+ * 그 품목이 남는다. 그 상태에서 "이 상품만" 을 주문하면 남아 있던 것까지 같이 결제된다.
+ *
+ * 그래서 바로 구매는 **비우고 → 그 상품 하나만 담고 → 주문**한다. 화면의 장바구니(로컬 상태)는
+ * 건드리지 않는다 — 서버 장바구니는 주문 직전에만 채워지는 임시 자리다.
+ */
+export async function clearBackendCart(): Promise<void> {
+  try {
+    const res = await authFetch('MEMBER', '/api/cart');
+    if (!res.ok) return;
+    const body = (await res.json()) as { items?: Array<{ id?: string }> };
+    for (const item of body.items ?? []) {
+      if (!item.id) continue;
+      await authFetch('MEMBER', `/api/cart/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+    }
+  } catch {
+    /* 못 비웠으면 그대로 진행한다 — 주문이 거절되면 그 이유가 화면에 뜬다 */
+  }
+}
+
+/**
  * 서버 장바구니에 담고 → 주문 생성. 응답의 `totalAmount`(KRW) 가 결제 금액의 정본이다 (AI 정리 2026-09-14 §4).
  * 주문 번호 필드가 `id` 라 `orderId ?? id` 로 읽는다 (요청서 9-7).
  */

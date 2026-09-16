@@ -6,7 +6,8 @@
  *   2. PortOne.requestPayment(...)     → 카카오페이 결제창. PC 는 IFRAME, 모바일은 REDIRECTION (채널 정책, 우리가 못 고른다)
  *   3. POST /api/orders/{id}/confirm   → 서버가 포트원 조회 + 금액 대조 → PAID. **이 응답이 정본**이고 purchase 이벤트도 그 뒤에 남긴다
  *
- * 켜지는 조건: `VITE_PORTONE_STORE_ID` · `VITE_PORTONE_CHANNEL_KEY` 둘 다 있을 때. 둘은 공개 가능한 값이다.
+ * 켜지는 조건: `VITE_PORTONE_STORE_ID` · `VITE_PORTONE_CHANNEL_KEY` 둘 다 있고 **테스트 주문 스위치가
+ * 꺼져 있을 때** (자동화 브라우저가 아니고 `?pay=test` 도 없을 때).
  * API Secret 은 서버 전용이라 프론트에 없다. 키가 없으면 백엔드 테스트 주문(`/pay`)으로 간다 — 없는 기능을
  * 있는 것처럼 두지 않는다.
  *
@@ -18,8 +19,61 @@ import type { PaymentRequest, PaymentResponse } from '@portone/browser-sdk/v2';
 export const PORTONE_STORE_ID: string = (import.meta.env.VITE_PORTONE_STORE_ID as string | undefined) ?? '';
 export const PORTONE_CHANNEL_KEY: string = (import.meta.env.VITE_PORTONE_CHANNEL_KEY as string | undefined) ?? '';
 
-/** 결제 연동이 켜져 있나 (콘솔 값 둘 다 있음) */
+/**
+ * 에이전트용 테스트 주문 스위치 (AI 파트 요청 2026-09-16 · 방식 확정 (다) 2026-09-16).
+ *
+ * PA 러너(Playwright)는 카카오페이 창을 넘을 수 없다 — 카카오 로그인·QR 승인이 필요해 자동화가 막힌다.
+ * 그래서 배포본에서 에이전트는 `begin_checkout` 까지만 가고 `purchase` 가 안 남는다. 재구매 지표는
+ * "같은 사람·같은 상품·다른 주문 2건" 이라 에이전트가 배포본에서 주문을 **끝까지** 내야 마트에 잡힌다.
+ *
+ * **자동으로 켜지고, 주소로 덮어쓸 수 있다.**
+ *
+ * | 상태 | 판정 | 언제 |
+ * | --- | --- | --- |
+ * | 주소 `?pay=test` | 강제로 켬 (저장) | 사람이 에이전트 경로를 그대로 재현할 때 |
+ * | 주소 `?pay=live` (`?pay=off`) | 강제로 끔 (저장) | 러너 브라우저에서 결제창까지 눈으로 볼 때 |
+ * | 저장값 없음 | `navigator.webdriver` | 평소. **러너는 아무것도 안 바꿔도 켜진다** |
+ *
+ * 자동 판별을 기본으로 둔 이유는 둘이다. 러너가 URL 을 관리하지 않아도 되고, **사람은 켤 수 없다** —
+ * 일반 브라우저는 `navigator.webdriver` 가 참이 되지 않으므로 배포본에 두어도 결제 우회 통로가 열리지
+ * 않는다. `?dev=1`(`devtools.ts`)이 페르소나 선택기·로그 창을 켜는 것과 같은 신호·같은 방식이다.
+ *
+ * 저장값이 `live` 면 `webdriver` 여도 끈다. 강제가 자동보다 세다 — 그래야 러너 브라우저로 결제창을
+ * 확인할 길이 남는다.
+ *
+ * `pay=return` 은 건드리지 않는다. 모바일 결제창 복귀 쿼리라(`parsePaymentReturn`) 뜻이 다르고,
+ * 이 스위치가 켜지면 결제창 자체를 열지 않아 복귀도 없다.
+ *
+ * 일반 사용자 경로는 그대로다. 이 값이 하는 일은 **결제 키가 없던 때로 되돌리는 것뿐**이라 없는 기능을
+ * 있는 것처럼 만들지 않는다. 완료 화면 문구와 `purchase` 이벤트의 `payment_method` 는 지금처럼 `test` 로
+ * 남아 마트에서 카카오페이 주문과 구분된다.
+ */
+const PAY_MODE_KEY = 'hwabun.pay';
+
+/** 자동화 브라우저인가. Playwright 러너는 항상 참, 사람 브라우저는 절대 참이 되지 않는다 */
+const isAutomatedBrowser = (): boolean => typeof navigator !== 'undefined' && navigator.webdriver === true;
+
+export function isTestPayForced(): boolean {
+  if (typeof window === 'undefined') return false;
+  const q = new URLSearchParams(window.location.search).get('pay');
+  try {
+    if (q === 'test') window.localStorage.setItem(PAY_MODE_KEY, 'test');
+    if (q === 'live' || q === 'off') window.localStorage.setItem(PAY_MODE_KEY, 'live');
+    const saved = window.localStorage.getItem(PAY_MODE_KEY);
+    // 강제가 자동보다 세다. 저장값이 없을 때만 브라우저를 본다
+    if (saved === 'test') return true;
+    if (saved === 'live') return false;
+  } catch {
+    // 저장이 막힌 환경(사생활 보호 창 등)이면 주소와 브라우저만 본다
+    if (q === 'test') return true;
+    if (q === 'live' || q === 'off') return false;
+  }
+  return isAutomatedBrowser();
+}
+
+/** 결제 연동이 켜져 있나 (콘솔 값 둘 다 있음 · 테스트 주문 스위치가 꺼져 있음) */
 export function isPaymentEnabled(): boolean {
+  if (isTestPayForced()) return false;
   return PORTONE_STORE_ID.length > 0 && PORTONE_CHANNEL_KEY.length > 0;
 }
 
