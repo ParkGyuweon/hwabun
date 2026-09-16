@@ -427,6 +427,12 @@ Grain이 `order_id + reason`이므로 NULL-safe equality를 사용한다. 한 �
 
 ### 10.1 `review_event_fact`
 
+**현재 이 Fact를 읽는 Mart가 없다** (2026-09-16). 소비자로 예정됐던 구매자 리뷰
+Mart(S15P21A306-168)가 데이터 파트 범위에서 빠졌다 — 리뷰 원문과 분류 결과는
+`shop_backend`가 관리한다. 리뷰 **행동** 집계는 `dw-schema.md` §4.4·§4.19·§4.20에
+있고 그쪽은 이 Fact가 아니라 `content_interest_fact`·`sessionized_events`를 읽는다.
+산출은 유지한다 (`dw-schema.md` §2.1).
+
 입력은 `cleaned_events`의 리뷰 상세 행동이다. unique key는
 `event_id + product_id`다. `review_expand`는 `target`이 `review_text` 또는
 `jump_to_reviews`인 Event만 포함하며 `target=ingredients`는 리뷰 Fact에서 제외한다.

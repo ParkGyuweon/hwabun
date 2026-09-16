@@ -37,7 +37,7 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 | --- | --- | --- |
 | `cleaned_events` | `event_id` | 정상 Event 수와 실시간 통계 |
 | `product_event_fact` | `event_id + item_index + product_id` | 상품·추천·구매 집계 |
-| `review_event_fact` | `event_id + product_id` | 리뷰 펼침·필터·정렬·리뷰 영역 체류 상세 |
+| `review_event_fact` | `event_id + product_id` | 리뷰 펼침·필터·정렬·리뷰 영역 체류 상세. **현재 이 Fact를 읽는 Mart가 없다** — 아래 |
 | `search_event_fact` | `event_id` | 검색 집계 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 체류 검증·재집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 콘텐츠 관심 집계 |
@@ -48,6 +48,18 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 | `bad_events` | 격리 Event 1건 | Spark에서 관측한 오류 집계 |
 
 모든 Mart는 `event_id` 중복 제거가 끝난 Processed Dataset만 입력으로 사용한다.
+
+**`review_event_fact`는 소비자가 없는 Fact다** (2026-09-16). Q3가 만들고 Q5가
+검증하지만 읽는 Mart가 없다. 원래 소비자로 예정됐던 구매자 리뷰 Mart
+(S15P21A306-168)가 데이터 파트 범위에서 빠졌기 때문이다 — 리뷰 원문과 분류 결과는
+`shop_backend`가 관리하고 Spark는 리뷰 **행동 Event**만 집계한다. 그 집계는 이미
+§4.4 `review_view_sessions`·§4.19·§4.20 `review_filter_apply`에 들어가 있고,
+그쪽은 `review_event_fact`가 아니라 `content_interest_fact`와 `sessionized_events`를
+읽는다.
+
+**지우지 않고 두는 이유**는 이미 만들어져 있고 Q5가 검증하고 있어서, 되살리는
+비용이 두는 비용보다 크기 때문이다. 리뷰 행동을 따로 보는 Mart가 필요해지면
+재료가 이미 있다. **보호 장치나 소비 중인 입력으로 오해하지 않는다.**
 서로 다른 grain의 입력은 목표 Mart grain으로 각각 먼저 집계한 뒤 결합한다.
 `section_dwell_agg`와 `content_interest_fact`의 nullable `product_id`는 상품 목록의
 플랫폼 공통 섹션을 보존한다. 이 row는 플랫폼 탐색 분석용이며 상품 Dimension Join이나
