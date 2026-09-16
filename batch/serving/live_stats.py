@@ -157,7 +157,7 @@ li{border-bottom:1px solid var(--line)}
 <h1>HWABUN 추천 서버 — 실시간 처리 현황</h1>
 <div class="top"><div class="sub">1초마다 갱신 · <span id="kafka"></span></div>
 <div class="ctl" id="ctl"><label>초당 <select id="rate"><option>1000</option><option>2000</option><option selected>3000</option><option>5000</option><option>8000</option></select>건</label>
-<button id="start" class="btn">▶ 페르소나 9,900명 시작</button><button id="stop" class="btn stop" hidden>■ 정지</button><span class="k" id="demo"></span></div></div>
+<button id="start" class="btn">▶ 페르소나 시작</button><button id="stop" class="btn stop" hidden>■ 정지</button><span class="k" id="demo"></span></div></div>
 <div class="grid">
   <div class="card"><div class="k">초당 반영 이벤트</div><div class="v" id="eps">0<small>/s</small></div><div class="k" id="eps10"></div></div>
   <div class="card"><div class="k">누적 반영 이벤트</div><div class="v" id="total">0</div><div class="k" id="src"></div></div>
@@ -193,7 +193,7 @@ async function tick(){try{const r=await fetch('/live/stats',{cache:'no-store'});
  else{bars.innerHTML='';$('barnote').textContent=k?'아직 Kafka 로 들어온 이벤트가 없다':'Kafka 구독이 꺼져 있어 파티션 정보가 없다 (KAFKA_BOOTSTRAP_SERVERS)';}
  $('recent').innerHTML=(d.recent||[]).map(r=>'<li><span class="t">'+r.age_sec+'s 전</span><span>'+r.persona_id+'<span class="pill">'+(r.source==='kafka'?'P'+(r.partition==null?'?':r.partition):'직접')+'</span></span><span class="e">'+(r.events||[]).join(' · ')+'</span></li>').join('');
 }catch(e){$('kafka').innerHTML='<span class="off">서버 응답 없음</span>'}}
-function showDemo(d){const st=d&&d.demo;if(!st)return;const on=!!st.running;$('start').hidden=on;$('stop').hidden=!on;$('rate').disabled=on;
+function showDemo(d){const st=d&&d.demo;if(!st)return;const on=!!st.running;$('start').hidden=on;$('stop').hidden=!on;$('rate').disabled=on;if(st.limit)$('start').textContent='▶ 페르소나 '+fmt(st.limit)+'명 시작';
  if(!st.available){$('start').disabled=true;$('demo').textContent='이 서버엔 시연 스크립트가 없다 (로컬 체크아웃에서만)';return;}
  $('demo').textContent=on?('실행 중 · '+(st.last_line||'').replace('[demo] ','')):(st.exit_code==null?'':'끝남 · '+(st.last_line||'').replace('[demo] ',''));}
 $('start').onclick=async()=>{$('start').disabled=true;try{await fetch('/live/demo/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rate:+$('rate').value})});}finally{$('start').disabled=false;}tick();};
