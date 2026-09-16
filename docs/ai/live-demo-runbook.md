@@ -186,6 +186,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 - `.env` 의 `KAFKA_BOOTSTRAP_SERVERS` 가 EC2-1 자기 주소(`j15a306.p.ssafy.io:9092`)면 틀린 것 — 브로커는 EC2-2.
 - 다른 브랜치를 체크아웃한 상태로 로컬 서버를 재기동하면 `/live` 가 없는 옛 코드가 뜬다 (404).
 - **배포본 /live 시작 버튼이 404 `DEMO_UNAVAILABLE`** — 이미지에 `simulator/generator/demo_live.py` 가 없었다(09-16 발견, Jira 335 로 Dockerfile COPY + `recommend.Dockerfile.dockerignore` 예외 — 둘 다 있어야 빌드된다).
+- **dw 접속이 `'cryptography' package is required for ... caching_sha2_password`** — MySQL 8 기본 인증에 pymysql 이 cryptography 를 요구한다(09-16, 백엔드 CI 가 dw·계정·.env 를 채운 직후 발견). 서버 requirements 에 추가(Jira 339). 확인은 `/health.user_trait.source = dw_mysql:…`, `/pipeline` dw 칸 schema_exists.
 - **배포본 /live 시작이 `로그 생성 실패`** — 컨테이너 `mem_limit: 1g` 에서 9,900명 생성이 OOM(`OOMKilled=true`, 트레이스백 없이 죽는다). 335 후속으로 `DEMO_LIMIT=1000`·`mem_limit: 3g`·캐시 볼륨. 진단은 `/data/demo_live.log` 와 `docker inspect --format '{{.State.OOMKilled}}'`.
 - **시작 버튼은 배포 Kafka 로 진짜 이벤트를 보낸다** — EC2-2 `activity-events` → Spark raw sink → 마트까지 흐른다(generator_type=python_batch, 새 run_id). 데이터·인프라 파트와 시점을 맞추고 누른다.
 - **정지 뒤 다시 시작하면 화면이 안 움직인다** — 같은 캐시를 처음부터 다시 보내면 event_id 가 같아 소비자(`Dedupe` 최근 20만 건)가 전부 버린다(09-16 duplicates 74,068 실측). 335 후속으로 demo_live 가 `<캐시>.pos` 에 보낸 줄 수를 10초마다 적고 다음 시작은 거기서 이어 간다. 끝까지 가면 0. 처음부터 다시 보내려면 `POST /live/demo/start {"restart": true}` 또는 `--restart` — 이때는 컨테이너를 재기동해 중복 창을 비우는 게 맞다.
