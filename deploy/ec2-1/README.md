@@ -26,6 +26,25 @@ sudo mkdir -p /opt/hwabun/certbot/www/.well-known/acme-challenge
 `j15a306.p.ssafy.io`는 EC2-1 공인 IP를 가리켜야 하며 보안 그룹에서 80, 443 포트를
 허용해야 한다.
 
+추천 서버가 읽는 `dw`는 EC2-1의 `shop-backend-mysql` 안에 둔다. MySQL Compose가
+먼저 만든 `shop-backend-db` 네트워크에 추천 컨테이너를 연결하므로 `.env`의
+`DW_MYSQL_HOST=shop-backend-mysql`, `DW_MYSQL_PORT=3306`을 유지한다. 최초 기동
+순서는 다음과 같다.
+
+```bash
+cd ~/S15P21A306/shop_backend
+sudo docker compose -f docker-compose.mysql.yml up -d
+sudo docker network inspect shop-backend-db
+
+cd ~/S15P21A306/deploy/ec2-1
+sudo docker compose up -d --build
+```
+
+`shop-backend-db`가 없는 상태에서는 EC2-1 Compose가 external network 오류로 시작하지
+않는다. `dw` 스키마 생성과 `dw_reader` 계정 발급은
+[`streaming/DW_PROJECTION.md`](../../streaming/DW_PROJECTION.md)의 관리자 절차를
+따른다.
+
 ## 2. 최초 인증서 발급
 
 기본 Nginx 설정은 HTTPS 인증서 파일을 참조하므로, Compose를 처음 실행하기 전에

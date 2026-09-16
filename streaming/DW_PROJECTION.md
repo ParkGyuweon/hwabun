@@ -42,10 +42,22 @@ SHOW CREATE TABLE dw.user_trait_daily;
 - JDBC/MySQL 외부 포트 기본은 호스트 13306 → 컨테이너 3306이다. 실제 설정을 확인한다.
 - TCP 13306은 EC2-2 및 승인된 소비자 출발지에만 허용한다.
 
-같은 서버여도 추천 컨테이너는 기본적으로 MySQL의 `shop-backend-db` 네트워크에 없다.
-이번 설정은 **추천 컨테이너에서 접근 가능한 호스트 주소와 공개 포트**를 사용한다.
-`localhost`는 추천 컨테이너 자신이다. 별도로 같은 Docker 네트워크에 연결했을 때만
-`shop-backend-mysql:3306`을 사용할 수 있다.
+추천 컨테이너는 EC2-1 Compose에서 MySQL의 외부 `shop-backend-db` 네트워크에도
+연결한다. 따라서 EC2-1의 `deploy/ec2-1/.env`는 공개 포트가 아니라 Docker DNS를
+사용해 다음처럼 설정한다.
+
+```dotenv
+DW_MYSQL_HOST=shop-backend-mysql
+DW_MYSQL_PORT=3306
+DW_MYSQL_DB=dw
+DW_MYSQL_USER=dw_reader
+DW_MYSQL_PASSWORD=<조회 전용 계정 비밀번호>
+```
+
+`shop-backend-db`는 `shop_backend/docker-compose.mysql.yml`을 먼저 실행해야 생긴다.
+반대로 EC2-2의 발행 컨테이너는 다른 호스트에 있으므로 EC2-1의 사설 IP와 공개 포트
+`13306`으로 접근한다. `localhost`는 각 컨테이너 자신을 뜻하므로 어느 쪽에도 쓰지
+않는다.
 
 ## 발행 (EC2-2)
 

@@ -35,9 +35,9 @@ services:
       SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222). 비우면 안 함
       CATALOG_SYNC_INTERVAL_SEC: ${CATALOG_SYNC_INTERVAL_SEC:-300}
       NEW_BRAND_DAYS: ${NEW_BRAND_DAYS:-14}                 # 신규 브랜드 = 등록 후 N일 (Jira 247-b, 2026-09-11 결정)
-      # 장기 성향 long_term_trait (Jira 306). dw MySQL projection 이 생기면 DW_MYSQL_* 를 .env 에 채운다 (데이터 파트 09-22 확정 대기).
+      # 장기 성향 long_term_trait (Jira 306). EC2-1 shop-backend-mysql의 dw projection을 읽는다.
       # 비우면 /data/user_trait_snapshot.jsonl → 이미지 안 스냅샷 → 없으면 응답 null.
-      DW_MYSQL_HOST: ${DW_MYSQL_HOST:-}
+      DW_MYSQL_HOST: ${DW_MYSQL_HOST:-shop-backend-mysql}
       DW_MYSQL_PORT: ${DW_MYSQL_PORT:-3306}
       DW_MYSQL_USER: ${DW_MYSQL_USER:-}
       DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
@@ -48,6 +48,9 @@ services:
       NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
     volumes:
       - recommend-data:/data
+    networks:
+      - default
+      - shop-backend-db
     expose:
       - "8300"
     mem_limit: 1g
@@ -110,3 +113,11 @@ volumes:
   prometheus-data:
   grafana-data:
   recommend-data:
+
+networks:
+  # shop_backend/docker-compose.mysql.yml creates this named network.
+  # It must exist before this Compose project is started.
+  default:
+  shop-backend-db:
+    external: true
+    name: shop-backend-db
