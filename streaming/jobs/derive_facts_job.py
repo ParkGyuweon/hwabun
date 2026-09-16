@@ -524,6 +524,9 @@ def _product_event_fact(
         _prop(F.col("_properties"), "variants_viewed")
         .cast("int")
         .alias("variants_viewed"),
+        # 퀵룩을 왜 닫았는지. "상세로 넘어갔다"(open_detail)를 세려면 필요하다
+        # (dw-schema §4.1 quick_look_close_open_detail_count).
+        _prop(F.col("_properties"), "close_reason").alias("close_reason"),
         _prop(F.col("_properties"), "added_to_cart")
         .cast("boolean")
         .alias("added_to_cart"),

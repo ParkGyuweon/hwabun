@@ -47,6 +47,8 @@ DEFAULT_BEHAVIOR_CONVERSION_PATH = "data/marts/behavior_conversion_daily"
 DEFAULT_FRICTION_DAILY_PATH = "data/marts/friction_daily"
 DEFAULT_EXIT_DAILY_PATH = "data/marts/exit_daily"
 DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
+DEFAULT_PRODUCT_EXIT_DAILY_PATH = "data/marts/product_exit_daily"
+DEFAULT_SEGMENT_CONTENT_DAILY_PATH = "data/marts/segment_content_daily"
 DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
 DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -108,6 +110,8 @@ class ValidatePipelineConfig:
     friction_daily_path: str = DEFAULT_FRICTION_DAILY_PATH
     exit_daily_path: str = DEFAULT_EXIT_DAILY_PATH
     entry_source_daily_path: str = DEFAULT_ENTRY_SOURCE_DAILY_PATH
+    product_exit_daily_path: str = DEFAULT_PRODUCT_EXIT_DAILY_PATH
+    segment_content_daily_path: str = DEFAULT_SEGMENT_CONTENT_DAILY_PATH
     brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
     commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -152,6 +156,8 @@ class ValidatePipelineConfig:
             "friction_daily_path": self.friction_daily_path,
             "exit_daily_path": self.exit_daily_path,
             "entry_source_daily_path": self.entry_source_daily_path,
+            "product_exit_daily_path": self.product_exit_daily_path,
+            "segment_content_daily_path": self.segment_content_daily_path,
             "brand_cohort_path": self.brand_cohort_path,
             "commons_cohort_path": self.commons_cohort_path,
             "banner_daily_path": self.banner_daily_path,
@@ -304,6 +310,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("ENTRY_SOURCE_DAILY_PATH", DEFAULT_ENTRY_SOURCE_DAILY_PATH),
     )
     parser.add_argument(
+        "--product-exit-daily-path",
+        default=_env("PRODUCT_EXIT_DAILY_PATH", DEFAULT_PRODUCT_EXIT_DAILY_PATH),
+    )
+    parser.add_argument(
+        "--segment-content-daily-path",
+        default=_env(
+            "SEGMENT_CONTENT_DAILY_PATH", DEFAULT_SEGMENT_CONTENT_DAILY_PATH
+        ),
+    )
+    parser.add_argument(
         "--brand-cohort-path",
         default=_env("BRAND_COHORT_DIM_PATH", DEFAULT_BRAND_COHORT_PATH),
     )
@@ -368,6 +384,8 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         friction_daily_path=args.friction_daily_path,
         exit_daily_path=args.exit_daily_path,
         entry_source_daily_path=args.entry_source_daily_path,
+        product_exit_daily_path=args.product_exit_daily_path,
+        segment_content_daily_path=args.segment_content_daily_path,
         brand_cohort_path=args.brand_cohort_path,
         commons_cohort_path=args.commons_cohort_path,
         banner_daily_path=args.banner_daily_path,
@@ -595,6 +613,7 @@ def validate_frames(
     friction_daily = frames["friction_daily"]
     exit_daily = frames["exit_daily"]
     entry_source_daily = frames["entry_source_daily"]
+    product_exit_daily = frames["product_exit_daily"]
 
     counts = {
         "raw": raw.count(),
@@ -2425,6 +2444,153 @@ def validate_frames(
             f"unmatched_rows={unmatched}",
         ))
 
+    # ── 상품 진단·고객군 콘텐츠 (dw-schema §4.1·§4.24·§4.25) ─────────────
+    try:
+        from .build_marts_job import MISSING_SEGMENT_VALUES, _product_exit_daily
+    except ImportError:
+        from build_marts_job import MISSING_SEGMENT_VALUES, _product_exit_daily
+
+    counts["product_exit_daily"] = product_exit_daily.count()
+
+    checks.append(_check(
+        "product_exit_daily_grain_is_unique",
+        _duplicate_count(product_exit_daily, [
+            "event_date_kst", "brand_id", "product_id", "last_content_kind",
+            *EXECUTION_AXES,
+        ]) == 0,
+        "product_exit_daily grain=date+brand+product+last_content_kind+축",
+    ))
+
+    invalid_exit_points = product_exit_daily.where(
+        (F.col("exit_sessions") <= 0)
+        | F.col("last_content_kind").isNull()
+        | (F.length(F.trim(F.col("last_content_kind"))) == 0)
+        | F.col("product_id").isNull()
+        | F.col("brand_id").isNull()
+    ).count()
+    checks.append(_check(
+        "product_exit_daily_values_follow_contract",
+        invalid_exit_points == 0,
+        f"invalid_rows={invalid_exit_points}",
+    ))
+
+    # §4.24 — 세션·상품마다 이탈 지점이 하나다. 합산이 상세를 연 세션을 넘으면
+    # 한 세션이 두 지점에 들어갔다는 뜻이다.
+    exit_totals = product_exit_daily.groupBy(
+        "event_date_kst", "brand_id", "product_id", *EXECUTION_AXES
+    ).agg(F.sum("exit_sessions").cast("long").alias("_exit_sessions"))
+    detail_totals = exit_daily.select(
+        "event_date_kst", "brand_id", "product_id", *EXECUTION_AXES,
+        "detail_view_sessions",
+    )
+    exit_join_keys = ["event_date_kst", "brand_id", "product_id", *EXECUTION_AXES]
+    exit_condition = None
+    for column in exit_join_keys:
+        clause = exit_totals[column].eqNullSafe(detail_totals[column])
+        exit_condition = clause if exit_condition is None else exit_condition & clause
+    exit_over_detail = (
+        exit_totals.join(detail_totals, exit_condition, "inner")
+        .where(F.col("_exit_sessions") > F.col("detail_view_sessions"))
+        .count()
+    )
+    checks.append(_check(
+        "product_exit_sessions_do_not_exceed_detail_views",
+        exit_over_detail == 0,
+        f"invalid_rows={exit_over_detail}; 세션당 이탈 지점은 하나다",
+    ))
+
+    # §4.1 신규 컬럼. grain 은 위쪽 product_daily 검사가 이미 본다.
+    invalid_diagnostics = product_daily.where(
+        (F.col("variant_select_count") < 0)
+        | (F.col("quick_look_close_open_detail_count") < 0)
+        | (F.col("quick_look_close_open_detail_count") > F.col("quick_look_count"))
+    ).count()
+    checks.append(_check(
+        "product_daily_diagnostic_counts_are_bounded",
+        invalid_diagnostics == 0,
+        f"invalid_rows={invalid_diagnostics}; 퀵룩→상세 <= 퀵룩 횟수",
+    ))
+    checks.append(_check(
+        "product_event_fact_carries_close_reason",
+        "close_reason" in product_fact.columns,
+        "quick_look_close_open_detail_count 의 원천이다 (Q3 재실행 필요)",
+    ))
+
+    segment_content = frames.get("segment_content_daily")
+    if segment_content is None:
+        warnings.append({
+            "check": "segment_content_daily_is_absent",
+            "detail": "bridge_persona_segment 를 만든 실행에서만 생성된다",
+        })
+    else:
+        counts["segment_content_daily"] = segment_content.count()
+        checks.append(_check(
+            "segment_content_grain_is_unique",
+            _duplicate_count(segment_content, [
+                "event_date_kst", "brand_id", "skin_type", "content_kind",
+                *EXECUTION_AXES,
+            ]) == 0,
+            "segment_content_daily grain=date+brand+skin_type+content_kind+축",
+        ))
+
+        invalid_segment_content = segment_content.where(
+            (F.col("dwell_ms_sum") < 0)
+            | (F.col("dwell_sessions") < 0)
+            | (F.col("dwell_ms_sum") > F.col("segment_dwell_ms_sum"))
+            | F.col("skin_type").isNull()
+            | F.col("content_kind").isNull()
+            | (F.col("dwell_share").isNotNull()
+               & ~F.col("dwell_share").between(0.0, 1.0))
+            | ((F.col("segment_dwell_ms_sum") == 0)
+               & F.col("dwell_share").isNotNull())
+            | ((F.col("segment_dwell_ms_sum") > 0) & F.col("dwell_share").isNull())
+        ).count()
+        checks.append(_check(
+            "segment_content_values_follow_contract",
+            invalid_segment_content == 0,
+            f"invalid_rows={invalid_segment_content}; 분자 <= 분모 · 0~1 · 분모 0이면 NULL",
+        ))
+
+        # §4.25 — 한 피부 타입 안에서 share 합이 1 이다. 넘으면 분모가 어긋난 것이다.
+        share_sums = segment_content.groupBy(
+            "event_date_kst", "brand_id", "skin_type", *EXECUTION_AXES
+        ).agg(F.sum("dwell_share").alias("_total")).where(
+            F.col("_total") > F.lit(1.0) + F.lit(1e-6)
+        ).count()
+        checks.append(_check(
+            "segment_content_shares_do_not_exceed_one",
+            share_sums == 0,
+            f"invalid_groups={share_sums}",
+        ))
+
+        # §4.25 — 세그먼트를 모르는 세션은 들어오면 안 된다.
+        unknown_segments = segment_content.where(
+            F.col("skin_type").isin(*MISSING_SEGMENT_VALUES)
+        ).count()
+        checks.append(_check(
+            "segment_content_excludes_missing_segments",
+            unknown_segments == 0,
+            f"leaked_rows={unknown_segments}; notSureST 는 값이 아니라 결측이다",
+        ))
+
+    # 재계산 결정성. 시드 제외가 Mart 함수 안에 있는지를 잡는다.
+    # segment_content_daily 는 bridge 가 검증 Job 입력에 없어 여기서 재계산하지
+    # 못한다 — 시드 제외 경로는 단위 테스트가 고정한다.
+    diagnostic_rebuilt = {
+        "product_exit_daily": (product_exit_daily, _product_exit_daily(sessionized)),
+    }
+    for name, (stored, expected) in diagnostic_rebuilt.items():
+        columns = [c for c in stored.columns if c != "mart_processed_at"]
+        difference = (
+            expected.select(*columns).exceptAll(stored.select(*columns)).count()
+            + stored.select(*columns).exceptAll(expected.select(*columns)).count()
+        )
+        checks.append(_check(
+            f"{name}_is_deterministic_from_inputs",
+            difference == 0,
+            f"differing_rows={difference}; mart_processed_at excluded",
+        ))
+
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -2509,6 +2675,7 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "friction_daily": config.friction_daily_path,
         "exit_daily": config.exit_daily_path,
         "entry_source_daily": config.entry_source_daily_path,
+        "product_exit_daily": config.product_exit_daily_path,
     }
     frames = {
         name: spark.read.option("mergeSchema", "true").parquet(path)
@@ -2518,6 +2685,13 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         frames["persona_segment_daily"] = spark.read.option(
             "mergeSchema", "true"
         ).parquet(config.persona_segment_path)
+    except Exception:
+        # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
+        pass
+    try:
+        frames["segment_content_daily"] = spark.read.option(
+            "mergeSchema", "true"
+        ).parquet(config.segment_content_daily_path)
     except Exception:
         # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
         pass

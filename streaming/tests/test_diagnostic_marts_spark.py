@@ -1,0 +1,361 @@
+"""상품 진단·고객군 콘텐츠 Mart. 실데이터가 밟지 않는 경계를 고정한다.
+
+재생 데이터의 페르소나 1,000명이 전원 `combination` 이라 세그먼트 축이 한 칸만
+찬다. 여러 타입이 섞였을 때의 share 분모, persona 미귀속, section_dwell_agg 에
+is_seeded 가 없다는 함정은 여기서만 잡힌다.
+"""
+import unittest
+from datetime import date, datetime
+
+try:
+    from pyspark.sql import SparkSession
+except ImportError:
+    SparkSession = None
+
+from streaming.jobs.build_marts_job import (
+    MISSING_SEGMENT_VALUES,
+    OPEN_DETAIL_CLOSE_REASON,
+    _product_daily_kpi,
+    _product_exit_daily,
+    _segment_content_daily,
+    _seeded_session_ids,
+)
+
+
+SESSION_SCHEMA = (
+    "event_date_kst date, brand_id string, product_id string, session_id string, "
+    "event_id string, event_time timestamp, properties_json string, "
+    "actor_type string, source string, generator_type string, "
+    "scenario_id string, simulation_run_id string, is_seeded boolean"
+)
+
+DWELL_SCHEMA = (
+    "event_date_kst date, brand_id string, product_id string, session_id string, "
+    "persona_id string, content_kind string, dwell_ms_sum bigint, "
+    "actor_type string, source string, generator_type string, "
+    "scenario_id string, simulation_run_id string"
+)
+
+BRIDGE_SCHEMA = "persona_id string, segment_type string, segment_value string"
+
+FACT_SCHEMA = (
+    "event_date_kst date, brand_id string, product_id string, category_id string, "
+    "session_id string, user_id string, event_name string, close_reason string, "
+    "purchase_quantity int, order_id string, item_revenue decimal(18,2), "
+    "currency string, "
+    "actor_type string, source string, generator_type string, "
+    "scenario_id string, simulation_run_id string, is_seeded boolean"
+)
+
+
+@unittest.skipIf(SparkSession is None, "pyspark is available in the Spark image")
+class DiagnosticMartSparkTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.spark = (
+            SparkSession.builder.master("local[1]")
+            .appName("diagnostic-mart-test")
+            .config("spark.ui.enabled", "false")
+            .config("spark.sql.session.timeZone", "UTC")
+            .getOrCreate()
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.spark.stop()
+
+    # ── 픽스처 ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def _content(session, content_kind, second, event_id, product="P1", brand="B1",
+                 seeded=False):
+        properties = (
+            '{"content_kind": "%s"}' % content_kind if content_kind else "{}"
+        )
+        return (
+            date(2026, 9, 8), brand, product, session, event_id,
+            datetime(2026, 9, 8, 3, 0, second), properties,
+            "user", "web", None, None, None, seeded,
+        )
+
+    @staticmethod
+    def _dwell(session, persona, content_kind, dwell_ms, product="P1", brand="B1"):
+        return (
+            date(2026, 9, 8), brand, product, session, persona, content_kind, dwell_ms,
+            "user", "web", None, None, None,
+        )
+
+    @staticmethod
+    def _bridge(persona, skin_type):
+        return (persona, "skin_type", skin_type)
+
+    @staticmethod
+    def _fact(session, event_name, close_reason=None, product="P1", brand="B1",
+              seeded=False):
+        return (
+            date(2026, 9, 8), brand, product, "C1", session, "U-" + session,
+            event_name, close_reason, None, None, None, None,
+            "user", "web", None, None, None, seeded,
+        )
+
+    def _events(self, rows):
+        return self.spark.createDataFrame(rows, SESSION_SCHEMA)
+
+    def _dwells(self, rows):
+        return self.spark.createDataFrame(rows, DWELL_SCHEMA)
+
+    def _bridge_df(self, rows):
+        return self.spark.createDataFrame(rows, BRIDGE_SCHEMA)
+
+    def _facts(self, rows):
+        return self.spark.createDataFrame(rows, FACT_SCHEMA)
+
+    # ── product_daily_kpi 신규 컬럼 ────────────────────────────────────────
+    def test_open_detail_is_counted_from_close_reason(self):
+        """close_reason 은 product_event_fact 가 싣는다 (§4.1)."""
+        facts = self._facts([
+            self._fact("S1", "quick_look"),
+            self._fact("S1", "quick_look_close", OPEN_DETAIL_CLOSE_REASON),
+            self._fact("S2", "quick_look"),
+            self._fact("S2", "quick_look_close", "backdrop"),
+        ])
+
+        row = _product_daily_kpi(facts).collect()[0]
+
+        self.assertEqual(1, row["quick_look_close_open_detail_count"])
+        self.assertEqual(2, row["quick_look_count"])
+
+    def test_variant_select_counts_events_not_sessions(self):
+        """옵션 왕복이 많다는 것 자체가 진단 신호다 (§4.1)."""
+        facts = self._facts([
+            self._fact("S1", "variant_select"),
+            self._fact("S1", "variant_select"),
+            self._fact("S1", "variant_select"),
+        ])
+
+        row = _product_daily_kpi(facts).collect()[0]
+
+        self.assertEqual(3, row["variant_select_count"])
+
+    def test_diagnostic_columns_do_not_change_the_grain(self):
+        facts = self._facts([
+            self._fact("S1", "product_view"),
+            self._fact("S1", "variant_select"),
+            self._fact("S2", "quick_look_close", OPEN_DETAIL_CLOSE_REASON),
+        ])
+
+        result = _product_daily_kpi(facts)
+
+        self.assertEqual(1, result.count())
+
+    def test_seeded_events_do_not_reach_the_diagnostic_columns(self):
+        facts = self._facts([
+            self._fact("S1", "variant_select", seeded=True),
+            self._fact("S2", "variant_select"),
+        ])
+
+        row = _product_daily_kpi(facts).collect()[0]
+
+        self.assertEqual(1, row["variant_select_count"])
+
+    # ── product_exit_daily ────────────────────────────────────────────────
+    def test_last_content_event_decides_the_exit_point(self):
+        events = self._events([
+            self._content("S1", "user_review", 1, "E1"),
+            self._content("S1", "cta", 5, "E2"),
+        ])
+
+        rows = _product_exit_daily(events).collect()
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual("cta", rows[0]["last_content_kind"])
+        self.assertEqual(1, rows[0]["exit_sessions"])
+
+    def test_ties_break_on_event_id_ascending(self):
+        """규칙이 없으면 실행마다 판정이 흔들려 재계산 결정성이 깨진다 (§4.24)."""
+        events = self._events([
+            self._content("S1", "price", 5, "E9"),
+            self._content("S1", "cta", 5, "E1"),
+        ])
+
+        rows = _product_exit_daily(events).collect()
+
+        self.assertEqual("cta", rows[0]["last_content_kind"])
+
+    def test_one_exit_point_per_session_and_product(self):
+        """세션·상품마다 행이 하나다. 합산이 부풀지 않는 근거다 (§4.24)."""
+        events = self._events([
+            self._content("S1", "cta", 1, "E1", product="P1"),
+            self._content("S1", "price", 2, "E2", product="P1"),
+            self._content("S1", "cta", 3, "E3", product="P2"),
+        ])
+
+        rows = _product_exit_daily(events).collect()
+
+        self.assertEqual(2, sum(r["exit_sessions"] for r in rows))
+
+    def test_events_without_content_kind_are_ignored(self):
+        events = self._events([
+            self._content("S1", None, 9, "E9"),
+            self._content("S1", "cta", 1, "E1"),
+        ])
+
+        rows = _product_exit_daily(events).collect()
+
+        self.assertEqual("cta", rows[0]["last_content_kind"])
+
+    def test_seeded_sessions_are_excluded_from_exit_points(self):
+        events = self._events([
+            self._content("S1", "cta", 1, "E1", seeded=True),
+            self._content("S2", "price", 1, "E2"),
+        ])
+
+        rows = _product_exit_daily(events).collect()
+
+        self.assertEqual(["price"], [r["last_content_kind"] for r in rows])
+
+    def test_exit_grain_is_unique(self):
+        events = self._events([
+            self._content("S1", "cta", 1, "E1"),
+            self._content("S2", "cta", 1, "E2"),
+            self._content("S3", "price", 1, "E3"),
+        ])
+
+        result = _product_exit_daily(events)
+        key = [
+            "event_date_kst", "brand_id", "product_id", "last_content_kind",
+            "actor_type", "source", "generator_type", "scenario_id",
+            "simulation_run_id",
+        ]
+
+        self.assertEqual(result.count(), result.select(*key).distinct().count())
+
+    # ── segment_content_daily ─────────────────────────────────────────────
+    def test_share_denominator_is_the_skin_type_total(self):
+        """한 타입 안에서 share 합이 1 이다. 타입끼리 더하면 안 된다 (§4.25)."""
+        dwells = self._dwells([
+            self._dwell("S1", "PC-1", "user_review", 300),
+            self._dwell("S2", "PC-1", "ingredient_list", 100),
+            self._dwell("S3", "PC-2", "user_review", 50),
+        ])
+        bridge = self._bridge_df([
+            self._bridge("PC-1", "dry"), self._bridge("PC-2", "oily"),
+        ])
+        events = self._events([])
+
+        rows = {
+            (r["skin_type"], r["content_kind"]): r
+            for r in _segment_content_daily(dwells, events, bridge).collect()
+        }
+
+        self.assertEqual(0.75, rows[("dry", "user_review")]["dwell_share"])
+        self.assertEqual(0.25, rows[("dry", "ingredient_list")]["dwell_share"])
+        # 다른 타입은 자기 총합이 분모다
+        self.assertEqual(1.0, rows[("oily", "user_review")]["dwell_share"])
+
+    def test_shares_sum_to_one_within_a_skin_type(self):
+        dwells = self._dwells([
+            self._dwell("S1", "PC-1", "user_review", 300),
+            self._dwell("S2", "PC-1", "ingredient_list", 100),
+            self._dwell("S3", "PC-1", "cta", 100),
+        ])
+        bridge = self._bridge_df([self._bridge("PC-1", "dry")])
+
+        rows = _segment_content_daily(dwells, self._events([]), bridge).collect()
+
+        self.assertAlmostEqual(1.0, sum(r["dwell_share"] for r in rows))
+
+    def test_sessions_without_a_persona_are_not_attributed(self):
+        """임의 귀속은 없는 고객군을 만들어 낸다 (§4.25 · Jira 277 규칙)."""
+        dwells = self._dwells([
+            self._dwell("S1", None, "user_review", 100),
+            self._dwell("S2", "PC-1", "user_review", 100),
+        ])
+        bridge = self._bridge_df([self._bridge("PC-1", "dry")])
+
+        rows = _segment_content_daily(dwells, self._events([]), bridge).collect()
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual(100, rows[0]["dwell_ms_sum"])
+
+    def test_personas_missing_from_the_bridge_are_dropped(self):
+        dwells = self._dwells([
+            self._dwell("S1", "PC-UNKNOWN", "user_review", 100),
+            self._dwell("S2", "PC-1", "user_review", 100),
+        ])
+        bridge = self._bridge_df([self._bridge("PC-1", "dry")])
+
+        rows = _segment_content_daily(dwells, self._events([]), bridge).collect()
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual(["dry"], [r["skin_type"] for r in rows])
+
+    def test_missing_segment_values_are_not_a_segment(self):
+        """notSureST 는 값이 아니라 결측이다 (persona-schema.md §3)."""
+        dwells = self._dwells([
+            self._dwell("S1", "PC-1", "user_review", 100),
+            self._dwell("S2", "PC-2", "user_review", 100),
+        ])
+        bridge = self._bridge_df([
+            self._bridge("PC-1", "dry"),
+            self._bridge("PC-2", MISSING_SEGMENT_VALUES[0]),
+        ])
+
+        rows = _segment_content_daily(dwells, self._events([]), bridge).collect()
+
+        self.assertEqual(["dry"], [r["skin_type"] for r in rows])
+
+    def test_seeded_sessions_are_removed_without_an_is_seeded_column(self):
+        """section_dwell_agg 에는 is_seeded 가 없다. 세션 목록으로 빼야 한다.
+
+        재생 데이터에 시드 세션 행이 993건 있어, 빼지 않으면 조용히 섞인다.
+        """
+        dwells = self._dwells([
+            self._dwell("seed:run:PC-1:P1", "PC-1", "user_review", 900),
+            self._dwell("S2", "PC-1", "user_review", 100),
+        ])
+        bridge = self._bridge_df([self._bridge("PC-1", "dry")])
+        events = self._events([
+            self._content("seed:run:PC-1:P1", "user_review", 1, "E1", seeded=True),
+            self._content("S2", "user_review", 1, "E2"),
+        ])
+
+        self.assertNotIn("is_seeded", dwells.columns)
+
+        rows = _segment_content_daily(dwells, events, bridge).collect()
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual(100, rows[0]["dwell_ms_sum"])
+
+    def test_seeded_session_ids_come_from_the_flag_not_the_prefix(self):
+        """판정의 정본은 properties.seeded 다. session_id 접두는 파생이다 (§3.14)."""
+        events = self._events([
+            self._content("seed:looks-like-one", "cta", 1, "E1", seeded=False),
+            self._content("S2", "cta", 1, "E2", seeded=True),
+        ])
+
+        ids = [r["session_id"] for r in _seeded_session_ids(events).collect()]
+
+        self.assertEqual(["S2"], ids)
+
+    def test_segment_grain_is_unique(self):
+        dwells = self._dwells([
+            self._dwell("S1", "PC-1", "user_review", 100),
+            self._dwell("S2", "PC-1", "user_review", 100),
+            self._dwell("S3", "PC-2", "cta", 100),
+        ])
+        bridge = self._bridge_df([
+            self._bridge("PC-1", "dry"), self._bridge("PC-2", "oily"),
+        ])
+
+        result = _segment_content_daily(dwells, self._events([]), bridge)
+        key = [
+            "event_date_kst", "brand_id", "skin_type", "content_kind",
+            "actor_type", "source", "generator_type", "scenario_id",
+            "simulation_run_id",
+        ]
+
+        self.assertEqual(result.count(), result.select(*key).distinct().count())
+
+
+if __name__ == "__main__":
+    unittest.main()

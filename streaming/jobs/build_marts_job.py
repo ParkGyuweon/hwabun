@@ -55,6 +55,9 @@ DEFAULT_BEHAVIOR_CONVERSION_PATH = "data/marts/behavior_conversion_daily"
 DEFAULT_FRICTION_DAILY_PATH = "data/marts/friction_daily"
 DEFAULT_EXIT_DAILY_PATH = "data/marts/exit_daily"
 DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
+DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
+DEFAULT_PRODUCT_EXIT_DAILY_PATH = "data/marts/product_exit_daily"
+DEFAULT_SEGMENT_CONTENT_DAILY_PATH = "data/marts/segment_content_daily"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -129,6 +132,9 @@ class BuildMartsConfig:
     friction_daily_path: str = DEFAULT_FRICTION_DAILY_PATH
     exit_daily_path: str = DEFAULT_EXIT_DAILY_PATH
     entry_source_daily_path: str = DEFAULT_ENTRY_SOURCE_DAILY_PATH
+    section_dwell_path: str = DEFAULT_SECTION_DWELL_PATH
+    product_exit_daily_path: str = DEFAULT_PRODUCT_EXIT_DAILY_PATH
+    segment_content_daily_path: str = DEFAULT_SEGMENT_CONTENT_DAILY_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -176,6 +182,9 @@ class BuildMartsConfig:
             "friction_daily_path": self.friction_daily_path,
             "exit_daily_path": self.exit_daily_path,
             "entry_source_daily_path": self.entry_source_daily_path,
+            "section_dwell_path": self.section_dwell_path,
+            "product_exit_daily_path": self.product_exit_daily_path,
+            "segment_content_daily_path": self.segment_content_daily_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -378,6 +387,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="entry_source_daily output path",
     )
     parser.add_argument(
+        "--section-dwell-path",
+        default=_env("SECTION_DWELL_AGG_PATH", DEFAULT_SECTION_DWELL_PATH),
+        help="section_dwell_agg input path",
+    )
+    parser.add_argument(
+        "--product-exit-daily-path",
+        default=_env("PRODUCT_EXIT_DAILY_PATH", DEFAULT_PRODUCT_EXIT_DAILY_PATH),
+        help="product_exit_daily output path",
+    )
+    parser.add_argument(
+        "--segment-content-daily-path",
+        default=_env(
+            "SEGMENT_CONTENT_DAILY_PATH", DEFAULT_SEGMENT_CONTENT_DAILY_PATH
+        ),
+        help="segment_content_daily output path",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -452,6 +478,9 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         friction_daily_path=args.friction_daily_path,
         exit_daily_path=args.exit_daily_path,
         entry_source_daily_path=args.entry_source_daily_path,
+        section_dwell_path=args.section_dwell_path,
+        product_exit_daily_path=args.product_exit_daily_path,
+        segment_content_daily_path=args.segment_content_daily_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -722,6 +751,17 @@ def _product_daily_kpi(
         count_events("add_to_cart"),
         count_events("remove_from_cart"),
         count_events("purchase"),
+        # 옵션 왕복. 같은 상품을 여러 번 고르면 그만큼 센다 (§4.1).
+        count_events("variant_select"),
+        # 퀵룩에서 상세로 넘어간 횟수. close_reason 은 product_event_fact 가
+        # 싣는다 — 여기서 properties 를 다시 파싱하면 원천이 둘이 된다.
+        F.sum(
+            F.when(
+                (F.col("event_name") == F.lit("quick_look_close"))
+                & (F.col("close_reason") == F.lit(OPEN_DETAIL_CLOSE_REASON)),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+        ).cast("long").alias("quick_look_close_open_detail_count"),
         F.coalesce(
             F.sum(F.when(F.col("event_name") == "purchase", F.col("purchase_quantity"))),
             F.lit(0),
@@ -1823,6 +1863,146 @@ def _entry_source_daily(
         # product_view 만 분모로 두면 비율이 1.0 을 넘는다.
         "view_to_cart_rate",
         _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")),
+    )
+
+
+# 세션이 마지막으로 읽은 콘텐츠를 고르는 판정 재료.
+# exit_summary 로는 낼 수 없다 — last_content_kind 커버리지가 0% 라서(§4.22),
+# 콘텐츠 Event 의 마지막 시각으로 대신 정한다.
+EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
+
+# 퀵룩 창을 닫은 이유 중 "상세로 넘어갔다" 를 뜻하는 값
+# (event-properties-schema.md §3.5).
+OPEN_DETAIL_CLOSE_REASON = "open_detail"
+
+
+def _seeded_session_ids(sessionized_df: Any) -> Any:
+    """시드 세션 목록. ``is_seeded`` 가 없는 입력을 거르는 데 쓴다.
+
+    ``section_dwell_agg`` 에는 ``is_seeded`` 컬럼이 없어서 ``_observed_events`` 가
+    그대로 통과시킨다. 그런데 재생 데이터에 시드 세션 행이 993건 들어 있다.
+    판정의 정본은 ``properties.seeded`` 이므로(§3.14) ``session_id`` 접두사가 아니라
+    ``sessionized_events`` 의 플래그에서 세션 목록을 만들어 뺀다.
+    """
+
+    from pyspark.sql import functions as F
+
+    return sessionized_df.where(
+        F.coalesce(F.col("is_seeded"), F.lit(False))
+    ).select("session_id").distinct()
+
+
+def _product_exit_daily(sessionized_df: Any) -> Any:
+    """상품마다 어느 콘텐츠에서 손님이 떠났는가 (dw-schema.md §4.24).
+
+    ``exit_daily``(§4.22)와 다른 Mart 다. 그쪽은 "얼마나 빨리 나갔나"(체류 3초
+    미만)를 재고 이쪽은 "어디에서 멈췄나"를 잰다. 합칠 수 없는 이유는 원천이
+    다르기 때문이다 — ``exit_summary.last_content_kind`` 는 값이 실리지 않아
+    (실측 0/1,000) 여기서는 콘텐츠 Event 의 마지막 시각으로 판정한다.
+
+    같은 시각이면 ``event_id`` 사전순으로 고정한다. 규칙이 없으면 실행마다 판정이
+    흔들려 재계산 결정성이 깨진다.
+    """
+
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    content = _observed_events(sessionized_df).select(
+        "event_date_kst",
+        "brand_id",
+        "product_id",
+        *EXECUTION_AXES,
+        "session_id",
+        "event_time",
+        "event_id",
+        F.get_json_object("properties_json", "$.content_kind").alias(
+            "last_content_kind"
+        ),
+    ).where(
+        F.col("last_content_kind").isNotNull()
+        & (F.length(F.trim(F.col("last_content_kind"))) > 0)
+        & F.col("product_id").isNotNull()
+        & (F.length(F.trim(F.col("product_id"))) > 0)
+        & _valid_brand()
+    )
+
+    # 세션·상품마다 마지막 한 건만 남긴다. 그래서 세션당 이탈 지점이 하나다.
+    order = Window.partitionBy("session_id", "product_id").orderBy(
+        F.col("event_time").desc(), F.col("event_id").asc()
+    )
+    last = content.withColumn("_rank", F.row_number().over(order)).where(
+        F.col("_rank") == 1
+    )
+
+    key_columns = [
+        "event_date_kst", "brand_id", "product_id", "last_content_kind",
+        *EXECUTION_AXES,
+    ]
+    return last.groupBy(*key_columns).agg(
+        F.countDistinct("session_id").cast("long").alias("exit_sessions"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+
+
+def _segment_content_daily(
+    section_dwell_df: Any,
+    sessionized_df: Any,
+    bridge_df: Any,
+) -> Any:
+    """피부 타입별로 어떤 콘텐츠를 오래 보는가 (dw-schema.md §4.25).
+
+    ``dwell_share`` 의 분모는 **그 피부 타입의 같은 브랜드·일자 체류 총합**이다.
+    그래서 한 타입 안에서 share 를 더하면 1 이 된다. 타입끼리 더하면 안 된다 —
+    타입마다 모집단이 다르다.
+
+    ``persona_id`` 가 없는 세션은 어느 세그먼트에도 넣지 않는다. 임의 귀속은
+    없는 고객군을 만들어 내는 일이라, 빼는 쪽이 정직하다 (Jira 277 과 같은 규칙).
+    """
+
+    from pyspark.sql import functions as F
+
+    skin_types = bridge_df.where(
+        (F.col("segment_type") == F.lit("skin_type"))
+        & F.col("segment_value").isNotNull()
+        & (F.length(F.trim(F.col("segment_value"))) > 0)
+        & ~F.col("segment_value").isin(*MISSING_SEGMENT_VALUES)
+    ).select(
+        "persona_id", F.col("segment_value").alias("skin_type")
+    ).distinct()
+
+    # section_dwell_agg 에는 is_seeded 가 없다. 세션 목록으로 빼야 한다.
+    seeded = _seeded_session_ids(sessionized_df)
+
+    dwell = section_dwell_df.where(
+        F.col("persona_id").isNotNull()
+        & (F.length(F.trim(F.col("persona_id"))) > 0)
+        & F.col("content_kind").isNotNull()
+        & (F.length(F.trim(F.col("content_kind"))) > 0)
+        & _valid_brand()
+    ).join(seeded, ["session_id"], "left_anti").join(
+        # persona 가 bridge 에 없으면 세그먼트를 모르는 것이라 뺀다.
+        skin_types, ["persona_id"], "inner"
+    )
+
+    axes = list(EXECUTION_AXES)
+    key_columns = ["event_date_kst", "brand_id", "skin_type", "content_kind", *axes]
+    segment_key = ["event_date_kst", "brand_id", "skin_type", *axes]
+
+    per_content = dwell.groupBy(*key_columns).agg(
+        F.sum("dwell_ms_sum").cast("long").alias("dwell_ms_sum"),
+        F.countDistinct("session_id").cast("long").alias("dwell_sessions"),
+    )
+    totals = per_content.groupBy(*segment_key).agg(
+        F.sum("dwell_ms_sum").cast("long").alias("segment_dwell_ms_sum")
+    )
+    return (
+        _null_safe_join(per_content, totals, segment_key)
+        .withColumn(
+            "dwell_share",
+            _safe_ratio(F.col("dwell_ms_sum"), F.col("segment_dwell_ms_sum")),
+        )
+        .withColumn("mart_processed_at", F.current_timestamp())
     )
 
 
@@ -3036,6 +3216,7 @@ def build_mart_frames(
     price_bins: list[tuple[str, float | None]] | None = None,
     dim_brand_df: Any | None = None,
     content_interest_df: Any | None = None,
+    section_dwell_df: Any | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -3067,6 +3248,12 @@ def build_mart_frames(
     frames["entry_source_daily"] = _entry_source_daily(
         product_fact_df, funnel_session, time_zone
     )
+    frames["product_exit_daily"] = _product_exit_daily(sessionized_df)
+    if section_dwell_df is not None and persona_bridge_df is not None:
+        # 고객군 축은 bridge 를 만든 실행에서만 나온다.
+        frames["segment_content_daily"] = _segment_content_daily(
+            section_dwell_df, sessionized_df, persona_bridge_df
+        )
     if persona_bridge_df is not None:
         frames["persona_segment_daily_kpi"] = _persona_segment_daily_kpi(
             product_fact_df, persona_bridge_df, event_weights
@@ -3205,6 +3392,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     content_interest = spark.read.option("mergeSchema", "true").parquet(
         config.content_interest_path
     )
+    section_dwell = spark.read.option("mergeSchema", "true").parquet(
+        config.section_dwell_path
+    )
     persona_bridge = load_persona_segments(spark, config.persona_bridge_path)
     price_bins = load_price_bins(config.feature_vocab_path)
     frames = build_mart_frames(
@@ -3230,6 +3420,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         price_bins,
         dim_brand,
         content_interest,
+        section_dwell,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -3285,6 +3476,16 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     _write_mart(
         frames["entry_source_daily"],
         config.entry_source_daily_path,
+        "event_date_kst",
+    )
+    _write_mart(
+        frames["product_exit_daily"],
+        config.product_exit_daily_path,
+        "event_date_kst",
+    )
+    _write_mart(
+        frames["segment_content_daily"],
+        config.segment_content_daily_path,
         "event_date_kst",
     )
     _write_mart(

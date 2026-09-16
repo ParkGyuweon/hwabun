@@ -70,6 +70,8 @@ VARCHAR = {
     "secondary_category": 64,
     "section_id": 64,
     "entry_source": 64,
+    "last_content_kind": 64,
+    "skin_type": 64,
     "content_kind": 64,
     "event_name": 64,
     "segment_type": 64,
@@ -123,6 +125,8 @@ NOT_NULL_VALUES = {
     "min_sample_size",
     # 체류 합. 0 은 "머물지 않았다" 이지 "모른다" 가 아니다 (§4.4)
     "dwell_ms_sum",
+    # 세그먼트 체류 총합. dwell_ms_sum 의 합이라 항상 값이 있다 (§4.25)
+    "segment_dwell_ms_sum",
 }
 # 이름으로 판정할 수 없어 계약에서 직접 가져오는 것.
 NULLABLE_VALUES = {
@@ -190,6 +194,16 @@ GRAINS = {
     ],
     "ingredient_weekly_interest": [
         "interest_week_kst", "ingredient_id",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "product_exit_daily": [
+        "brand_id", "event_date_kst", "product_id", "last_content_kind",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "segment_content_daily": [
+        "brand_id", "event_date_kst", "skin_type", "content_kind",
         "actor_type", "source", "generator_type",
         "scenario_id", "simulation_run_id",
     ],

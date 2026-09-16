@@ -278,6 +278,8 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `friction_daily` | `event_date_kst + brand_id + product_id + section_id + content_kind + event_name + 실행 축` | 위치별 UI 마찰 Event·세션과 마찰률 |
 | `exit_daily` | `event_date_kst + brand_id + product_id + 실행 축` | 체류 3초 미만 조기 이탈 세션 비율 |
 | `entry_source_daily` | `event_date_kst + brand_id + entry_source + 실행 축` | 유입 경로별 상세·담기 전환 |
+| `product_exit_daily` | `event_date_kst + brand_id + product_id + last_content_kind + 실행 축` | 마지막으로 본 콘텐츠 기준 이탈 지점 |
+| `segment_content_daily` | `event_date_kst + brand_id + skin_type + content_kind + 실행 축` | 피부 타입별 콘텐츠 체류와 비중 |
 | `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
 
 재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품이 여러 개 있어도 구매는
@@ -311,6 +313,18 @@ E6 마트 3종은 **상세를 연 세션(상세 ∪ 퀵룩)** 을 공통 분모�
 그 세션이 상세를 연 상품 전부에 귀속하며, **상품 축으로 합산하면 세션이 부푼다.**
 `entry_source_daily`는 브랜드 단위라 `product_id`가 key에 없다 — `product_impression`에
 `entry_source`가 없어 노출 단계는 이 축으로 가를 수 없다.
+
+`product_exit_daily`는 `exit_daily`와 다른 Mart다. 그쪽은 "얼마나 빨리 나갔나",
+이쪽은 "어디에서 멈췄나"를 잰다. `exit_summary.last_content_kind`가 값을 싣지 않아
+(실측 0/1,000) 콘텐츠 Event의 마지막 시각으로 판정하며, 세션·상품마다 행이 하나다.
+
+`segment_content_daily`의 `dwell_share` 분모는 **그 피부 타입의 총합**이라 한 타입
+안에서만 합이 1이다. 입력 `section_dwell_agg`에 `is_seeded`가 없어
+`sessionized_events`에서 시드 세션 목록을 만들어 `session_id`로 뺀다 — 재생 데이터에
+시드 세션 행이 993건 있다.
+
+`product_daily_kpi`의 `quick_look_close_open_detail_count`는 `product_event_fact`의
+`close_reason` 컬럼에서 나온다. **Q3를 다시 돌려야 그 컬럼이 생긴다.**
 
 `banner_daily`는 `policy_version`을 key에 둬서 배너·정렬 정책 배포 전후를 같은 Mart에서
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고

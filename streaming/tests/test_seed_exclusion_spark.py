@@ -31,7 +31,8 @@ PRODUCT_FACT_DDL = (
     "cart_size_after int, unit_price decimal(18,2), order_value decimal(18,2), "
     "item_revenue decimal(18,2), cart_value decimal(18,2), currency string, "
     "cart_id string, order_id string, variants_viewed int, added_to_cart boolean, "
-    "wishlisted boolean, actor_type string, source string, category_id string, "
+    "wishlisted boolean, close_reason string, "
+    "actor_type string, source string, category_id string, "
     "brand_id string, event_date_kst date"
 )
 
