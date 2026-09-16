@@ -85,8 +85,10 @@ def main():
                     default=True, help="순열 중요도 계산을 건너뛴다 (빠름)")
     ap.add_argument("--max-iter", type=int, default=PARAMS["max_iter"],
                     help="트리 수 상한 (조기종료 기준). 2026-09-10 태그 제거 후 300 에 닿아 올려 본 값을 고른다")
-    ap.add_argument("--weighted", action="store_true",
-                    help="가중 평균 코사인 cos_seed_w 피처 추가 (Jira 322 실험). 시드 강도 = 리뷰 평점 → 이벤트 가중치")
+    ap.add_argument("--weighted", dest="weighted", action="store_true", default=True,
+                    help="가중 평균 코사인 cos_seed_w 피처 (기본 켬, Jira 322). 시드 강도 = 리뷰 평점 → 이벤트 가중치")
+    ap.add_argument("--no-weighted", dest="weighted", action="store_false",
+                    help="19피처 옛 모델 재현용")
     ap.add_argument("--seed", type=int, default=PARAMS["random_state"],
                     help="학습 난수(검증 분할·조기종료). 잡음 폭을 볼 때만 바꾼다. 정본은 0")
     a = ap.parse_args()
