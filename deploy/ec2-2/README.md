@@ -130,7 +130,7 @@ MySQL 준비 전 추천 폴백 파일만 만들 때는 별도 출력 폴더를 �
 
 ```bash
 sudo mkdir -p /opt/hwabun/export
-docker compose --profile dw run --rm \
+sudo docker compose --profile dw run --rm \
   -v /opt/hwabun/export:/export \
   dw-projection \
   --emit-jsonl /export/user_trait_snapshot.jsonl \
