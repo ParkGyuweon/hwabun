@@ -52,12 +52,10 @@ raw_events
    └─ canonical event → cleaned_events
       ├─ sessionized_events
       ├─ product_event_fact
-      ├─ search_event_fact
       ├─ purchase_fact
       ├─ purchase_reason_fact
       ├─ section_dwell_agg → content_interest_fact
-      ├─ funnel_session_fact
-      └─ persona_behavior_feature_delta
+      └─ funnel_session_fact
 ```
 
 Raw 저장 계약은 [`raw-event-schema.md`](../../contracts/raw-event-schema.md), 저장
@@ -157,10 +155,8 @@ Quick Look은 정규 Funnel 단계가 아니라 `product_impression` 이후의 �
 | 분석 목표 | 주 입력 Dataset |
 | --- | --- |
 | 상품·추천 CTR | `product_event_fact` |
-| 검색 후 상품 클릭 | `search_event_fact`, `product_event_fact` |
 | 상품 조회→장바구니→구매 | `funnel_session_fact` |
 | 성분·리뷰·콘텐츠 관심 | `section_dwell_agg`, `content_interest_fact` |
-| Persona 행동 Feature | `persona_behavior_feature_delta` |
 | 처리 실패·중복 감사 | `bad_events`, `duplicate_events` |
 
 행동 가중치의 실행 원본은 `frontend/src/types/log.ts`이며, Product/User Vector 결합은
@@ -182,13 +178,11 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 | `sessionized_events` | 통합 `session_id` 기준 세션 순서 복원과 통합 `dim_product`의 `brand_id` 조인을 수행 | 목표 late Event 규칙 검증 |
 | `product_event_fact` | item grain과 통합 `dim_product`의 `brand_id` 조인을 수행 | 실제 쇼핑몰 `brand_id`를 사용한 입점 상품 E2E 확인 |
 | `funnel_session_fact` | Q4에서 생성. tenant 필터·집계 축 없이 상품 세션 Funnel 산출 | Quick Look 분기 컬럼과 목표 Funnel 컬럼 보완 |
-| `search_event_fact` | 미구현 | Trigger와 원천 필드 확인 후 구현 |
 | `section_dwell_agg` | `dwell_ms` delta를 content grain으로 합산하고 `brand_id`를 보강 | nullable 상품 E2E 확인 |
 | `content_interest_fact` | 계약 §13.1 산식과 Front 가중치 원본 파싱을 반영 | vocab 정규화 연결과 E2E 확인 |
 | `dim_product` | seed `products_200.json`과 ACTIVE `registered_products.jsonl`을 union. 쇼핑몰 ACTIVE 상품 export를 `product_id`로 Join해 실제 `brand_id` 보강 | 카테고리 ID 등 전체 속성 보강 |
-| `persona_behavior_feature_delta` | 미구현 | 추천 계약 기준 delta 구현 |
-| `purchase_fact` | 미구현 | `items[]` explode와 `item_revenue` 파생 구현 |
-| `purchase_reason_fact` | 미구현 | `reasons[]` explode, 건너뛰기 row 보존 구현 |
+| `purchase_fact` | 구현 | `items[]` explode와 `item_revenue` 파생. 결제 축(`paid_value`·`payment_method`·`order_channel`) 포함 |
+| `purchase_reason_fact` | 구현 | `reasons[]` explode, 건너뛴 응답은 row를 남긴다 |
 
 현재 Q1~Q5는 주로 Parquet output을 사용한다. 기존 tenant 필터·집계 축·물리 partition
 의존성을 제거했으며, Fact/Mart는 `brand_id`를 조회 스냅샷으로 사용한다. 목표 저장

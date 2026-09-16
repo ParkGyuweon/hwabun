@@ -38,13 +38,11 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 | `cleaned_events` | `event_id` | 정상 Event 수와 실시간 통계 |
 | `product_event_fact` | `event_id + item_index + product_id` | 상품·추천·구매 집계 |
 | `review_event_fact` | `event_id + product_id` | 리뷰 펼침·필터·정렬·리뷰 영역 체류 상세. **현재 이 Fact를 읽는 Mart가 없다** — 아래 |
-| `search_event_fact` | `event_id` | 검색 집계 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 체류 검증·재집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 콘텐츠 관심 집계 |
 | `purchase_fact` | `order_id + product_id` | 행동 Event 기반 구매 전환·재구매 집계. 매출·정산에는 사용 금지 |
 | `purchase_reason_fact` | `order_id + reason` | 구매 이유 집계, 행동 추론 대조 |
 | `funnel_session_fact` | `session_id + product_id` | 단계 도달·이탈 집계 |
-| `persona_behavior_feature_delta` | `event_id + user_id + product_id` | Persona 관심도 집계 |
 | `bad_events` | 격리 Event 1건 | Spark에서 관측한 오류 집계 |
 
 모든 Mart는 `event_id` 중복 제거가 끝난 Processed Dataset만 입력으로 사용한다.
@@ -424,7 +422,7 @@ Mart에서 빼지 않는다. **대신 서빙에서 `actor_type`으로 가른다*
 
 ```text
 key = event_date_kst + brand_id + product_id + actor_type + source + generator_type + scenario_id + simulation_run_id
-input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_product
+input = product_event_fact, purchase_fact, dim_product
 ```
 
 | column | type | nullable | 설명 |
@@ -465,6 +463,12 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 
 ### 4.2 `recommendation_daily_kpi`
 
+**미구현이고 현재 소비자가 없다** (2026-09-16). 재료(`product_event_fact`)는 다
+있어 만들 수는 있지만 `dashboard-mart-api-spec.md`의 어느 엔드포인트도 읽지 않는다.
+추천 성과 중 화면이 쓰는 것은 `analytics_baseline`(§4.13)의 `recommendation_ctr`
+뿐이고, 그것은 배너 도입 전후를 비교하는 기준선 스냅샷이다. 일간 추이가 필요해지면
+그때 만든다.
+
 ```text
 key = event_date_kst + brand_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact
@@ -475,22 +479,6 @@ input = product_event_fact
 | key 전체 | 공통/string/int | `list_id`, `context_product_id`, scenario/run만 Y | 집계 축 |
 | `recommendation_impression_count`, `recommendation_click_count`, `unique_session_count` | bigint | N | 추천 성과 |
 | `recommendation_ctr` | double | Y | 클릭/노출 |
-| `mart_processed_at` | timestamp | N | 갱신 시각 |
-
-### 4.3 `search_daily_kpi`
-
-```text
-key = event_date_kst + search_query_hash + actor_type + source + generator_type + scenario_id + simulation_run_id
-input = search_event_fact, product_event_fact
-```
-
-| column | type | nullable | 설명 |
-| --- | --- | --- | --- |
-| key 전체 | 공통/string | scenario/run만 Y | 집계 축 |
-| `normalized_query` | string | Y | 저장 정책이 허용할 때만 보존 |
-| `search_count`, `search_session_count`, `zero_result_count`, `search_click_session_count`, `clicked_product_count` | bigint | N | 검색 성과 |
-| `avg_result_count`, `search_to_click_rate` | double | Y | 평균·전환율 |
-| `top_clicked_product_id` | string | Y | 최다 클릭 상품 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 ### 4.4 `content_daily_kpi`
@@ -635,7 +623,9 @@ Mart 구조는 그대로다.
 `py contracts/persona/build_persona_tables.py --sample PC:all`로 만든다. 없으면 이 Mart를
 만들지 않고 검증 Job은 경고만 남긴다.
 
-**계약에서 뺀 컬럼이 셋 있다.** `persona_behavior_feature_delta`도 input에서 뺐다.
+**계약에서 뺀 컬럼이 셋 있다.** `persona_behavior_feature_delta`도 input에서 뺐고,
+그 Fact는 2026-09-16에 계약에서 아예 지웠다 — 구현된 적이 없고 이 Mart 말고는
+읽으려던 곳도 없었다.
 
 | 뺀 것 | 이유 |
 | --- | --- |
@@ -699,20 +689,6 @@ input = product_event_fact, dim_product, contracts/product-feature-vocab.json
 합계가 무너지므로 별도 Mart로 낸다 — §4.26 `segment_price_band_daily_kpi`
 (S15P21A306-301).
 
-
-### 4.7 `scenario_daily_kpi`
-
-```text
-key = event_date_kst + scenario_id + simulation_run_id + actor_type + source + generator_type
-input = cleaned_events, product_event_fact, funnel_session_fact, content_interest_fact, persona_behavior_feature_delta
-```
-
-| column | type | nullable | 설명 |
-| --- | --- | --- | --- |
-| key 전체 | 공통/string | generator만 Y | synthetic 실행 비교 축 |
-| `event_count`, `session_count`, `persona_count`, `product_view_count`, `add_to_cart_count`, `purchase_count` | bigint | N | 실행 성과 |
-| `avg_event_count_per_session`, `avg_product_interest_score`, `avg_content_interest_score`, `view_to_cart_rate`, `view_to_purchase_rate` | double | Y | 평균·전환율 |
-| `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 ### 4.8 `ingredient_weekly_interest`
 
@@ -1454,6 +1430,10 @@ input = cleaned_events
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 ### 5.2 `realtime_bad_event_stats`
+
+**미구현이고 소비자가 없다** (2026-09-16). `bad_events`는 실제로 쌓이고 Q5가 건수를
+보고 있어 운영 지표로 쓸 여지는 있지만, 읽는 화면이 없다. §5.1과 같이 상시 구동
+Job이 필요하다.
 
 ```text
 key = event_minute_kst + error_stage + error_code + event_name + source + actor_type
