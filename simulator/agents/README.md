@@ -239,3 +239,7 @@ PA00001 로 기록됐습니다.
 - 화면이 비면 목록으로 되돌리는 방어가 있습니다. 원래는 프론트
   `AboutProduct.tsx` 크래시 때문이었고 **2026-09-02 고쳐졌습니다.** 방어는
   남겨 두었습니다 — 비었는데 계속 조작하면 로그가 조용히 망가집니다
+
+## 런처 `agent_launcher.py` (Jira 337)
+
+추천 서버 `/pipeline` 의 **▶ 에이전트 100명** 버튼이 부르는 로컬 HTTP 서버(127.0.0.1:8301, CORS 허용). `GMS_KEY` 가 있는 셸에서 `python simulator/agents/agent_launcher.py [--site https://j15a306.p.ssafy.io --workers 5]` 로 켠다. `POST /start {limit, checkout, workers, run_id}` → `agent_runner --url <site> --limit N --turns 25 --workers W --out data/launcher_<ts>.jsonl --simulation-run-id <run_id|demo-YYYYMMDD> --quiet [--checkout]`. `GET /status`, `POST /stop`. GMS_KEY 가 없으면 시작을 거절한다 — 런처를 켜는 것이 허락이다. 재구매를 보려면 같은 run_id 로 두 번(마트 grain).

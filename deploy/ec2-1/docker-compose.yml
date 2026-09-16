@@ -51,6 +51,9 @@ services:
       # 캐시는 볼륨에 두어 재배포해도 다시 만들지 않는다.
       DEMO_LIMIT: ${DEMO_LIMIT:-1000}
       DEMO_CACHE_DIR: /data/demo_cache
+      # /pipeline 화면 (Jira 337, 읽기만). Spark UI 는 EC2-2 가 127.0.0.1:18080 에만 열어 두어 개방 요청 뒤 .env 에
+      SPARK_MASTER_UI: ${SPARK_MASTER_UI:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
     volumes:
       - recommend-data:/data
     networks:
