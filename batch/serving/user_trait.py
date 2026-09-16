@@ -13,6 +13,13 @@
 행 스키마 (두 경로 모두 같다 — 사용자당 trait 5행):
   user_id · identity_scope(account|persona) · trait · trait_score · is_primary_trait · window_end_date · trait_policy_version
 `actor_type='user'` 로 이미 좁혀진 행만 온다고 가정한다 (합성 페르소나 행은 identity_scope=persona 로 구분).
+
+신선도 (Jira 319, 데이터 파트 합의 2026-09-16 — 마트 배치는 하루 1회):
+  * 관측  — `health()` 에 `window_end_date`(표 최댓값)·`age_days`(오늘 KST − 그 날짜)·`stale`
+             (`USER_TRAIT_STALE_DAYS`=2 초과). 배치가 안 돌았다는 것을 가장 먼저 아는 자리가 소비자라서 여기 둔다.
+  * 소비자 판단 — 응답 `window_end_date` 는 그대로 싣는다. 가중치를 낮출지는 프론트 몫.
+  * TTL   — `age_days` 가 `USER_TRAIT_MAX_AGE_DAYS`(=14) 를 넘으면 `get()` 은 None. 값을 믿으면 안 되는 선이고,
+             폴백은 프론트의 세션 성향. 0 이면 끈다.
 """
 from __future__ import annotations
 
@@ -21,6 +28,7 @@ import json
 import os
 import threading
 import time
+from datetime import date, datetime, timedelta, timezone
 
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
@@ -34,6 +42,25 @@ SCOPE_ORDER = ("account", "persona")
 DEFAULT_SNAPSHOTS = ("/data/user_trait_snapshot.jsonl",
                      os.path.join(ROOT, "batch", "ingest", "data", "serving", "user_trait_snapshot.jsonl"))
 RELOAD_SEC = int(os.environ.get("USER_TRAIT_RELOAD_SEC", "300") or 300)
+# 신선도 경계 (Jira 319). 배치 주기(1일)의 2배가 경보선, 관측 창의 일부(14일)가 TTL. 0 은 끔
+STALE_DAYS = int(os.environ.get("USER_TRAIT_STALE_DAYS", "2") or 0)
+MAX_AGE_DAYS = int(os.environ.get("USER_TRAIT_MAX_AGE_DAYS", "14") or 0)
+KST = timezone(timedelta(hours=9))
+
+
+def today_kst() -> date:
+    return datetime.now(KST).date()
+
+
+def age_days(window_end_date, today=None) -> int | None:
+    """오늘(KST) − window_end_date. 날짜가 없거나 형식이 아니면 None."""
+    if not window_end_date:
+        return None
+    try:
+        wed = date.fromisoformat(str(window_end_date)[:10])
+    except ValueError:
+        return None
+    return ((today or today_kst()) - wed).days
 
 # dw MySQL — 열 이름은 계약 dw-schema.md §4 그대로. 표가 다르게 만들어지면 DW_MYSQL_QUERY 로 SQL 을 통째로 바꾼다.
 DEFAULT_QUERY = (
@@ -120,7 +147,8 @@ def mysql_config_from_env(env=os.environ) -> dict | None:
 class UserTraitStore:
     """`get(user_id)` 하나가 인터페이스다. 어디서 읽었는지는 `health()` 로만 드러난다."""
 
-    def __init__(self, snapshot_paths=None, mysql=None, reload_sec=RELOAD_SEC, log=None):
+    def __init__(self, snapshot_paths=None, mysql=None, reload_sec=RELOAD_SEC, log=None,
+                 stale_days=STALE_DAYS, max_age_days=MAX_AGE_DAYS, today=None):
         env_path = os.environ.get("USER_TRAIT_SNAPSHOT_PATH")
         self.snapshot_paths = tuple(snapshot_paths) if snapshot_paths is not None \
             else ((env_path,) if env_path else DEFAULT_SNAPSHOTS)
@@ -133,6 +161,9 @@ class UserTraitStore:
         self.loaded_at = None
         self.error = None
         self.n_rows = 0
+        self.window_end_date = None            # 표 전체의 최댓값 — 마트가 마지막으로 본 날
+        self.stale_days, self.max_age_days = stale_days, max_age_days
+        self._today = today or today_kst       # 테스트에서 날짜를 고정할 수 있게
 
     # ── 적재 ─────────────────────────────────────────────────────────────
     def load(self) -> str | None:
@@ -157,13 +188,33 @@ class UserTraitStore:
                 self.table = aggregate(rows)
                 self.n_rows = len(rows)
                 self.source = source
+                self.window_end_date = max((d["window_end_date"] for d in self.table.values()
+                                            if d.get("window_end_date")), default=None)
             else:
-                self.table, self.n_rows, self.source = {}, 0, None
+                self.table, self.n_rows, self.source, self.window_end_date = {}, 0, None, None
             self.loaded_at = time.time()
             self.error = err
         if rows is not None:
-            self.log(f"[user-trait] {source} 에서 {self.n_rows}행 → 사용자 {len(self.table)}명")
+            age = self.age_days()
+            note = (f", window_end_date {self.window_end_date} ({age}일 전"
+                    + (", TTL 초과 → 응답 null" if self.expired() else ", stale" if self.stale() else "") + ")"
+                    if age is not None else "")
+            self.log(f"[user-trait] {source} 에서 {self.n_rows}행 → 사용자 {len(self.table)}명{note}")
         return self.source
+
+    # ── 신선도 (Jira 319) ─────────────────────────────────────────────────
+    def age_days(self) -> int | None:
+        return age_days(self.window_end_date, self._today())
+
+    def stale(self) -> bool | None:
+        """경보선. 날짜를 모르면 None."""
+        a = self.age_days()
+        return None if a is None else (self.stale_days > 0 and a > self.stale_days)
+
+    def expired(self) -> bool:
+        """TTL. 넘으면 get() 은 None. max_age_days 0 이면 절대 만료 안 함."""
+        a = self.age_days()
+        return a is not None and self.max_age_days > 0 and a > self.max_age_days
 
     def maybe_reload(self):
         if self.loaded_at is None or (self.reload_sec > 0 and time.time() - self.loaded_at >= self.reload_sec):
@@ -175,6 +226,8 @@ class UserTraitStore:
         if not user_id:
             return None
         self.maybe_reload()
+        if self.expired():
+            return None
         uid = str(user_id)
         with self._lock:
             for s in scopes:
@@ -187,4 +240,8 @@ class UserTraitStore:
         return {"source": self.source, "rows": self.n_rows, "users": len(self.table),
                 "loaded_at": (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(self.loaded_at))
                               if self.loaded_at else None),
-                "reload_sec": self.reload_sec, "error": self.error}
+                "reload_sec": self.reload_sec, "error": self.error,
+                # 신선도 (Jira 319) — Grafana 경보는 stale, 응답 null 전환은 expired
+                "window_end_date": self.window_end_date, "age_days": self.age_days(),
+                "stale": self.stale(), "stale_days": self.stale_days,
+                "expired": self.expired(), "max_age_days": self.max_age_days}
