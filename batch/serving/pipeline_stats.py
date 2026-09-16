@@ -344,7 +344,7 @@ async function tick(){try{const d=await (await fetch('/pipeline/stats',{cache:'n
  draw(A.series_60s);const k=d.kafka;$('hdr').innerHTML=k?('추천 소비자 '+(k.connected?'<span class=ok>연결</span>':'<span class=off>미연결</span>')+' · '+k.topic):'Kafka 구독 없음';
  $('recent').innerHTML=(L.recent||[]).slice(0,30).map(r=>{const c=r.persona_id.startsWith('PA')?'pa':(r.persona_id.startsWith('PC')?'':'re');return '<li><span class="t">'+r.age_sec+'s 전</span><span>'+r.persona_id+'<span class="pill '+c+'">'+(c==='pa'?'에이전트':c==='re'?'회원':'페르소나')+'</span></span><span class="t">'+(r.events||[]).join(' · ')+'</span></li>'}).join('');
  showDemo(d.demo);}catch(e){$('hdr').innerHTML='<span class=off>서버 응답 없음</span>'}}
-function showDemo(st){if(!st)return;const on=!!st.running;$('start').hidden=on;$('stop').hidden=!on;$('rate').disabled=on;if(!st.available){$('start').disabled=true;$('demo').textContent='시연 스크립트 없음';return}
+function showDemo(st){if(!st)return;const on=!!st.running;$('start').hidden=on;$('stop').hidden=!on;$('rate').disabled=on;if(st.limit)$('start').textContent='▶ 페르소나 '+fmt(st.limit)+'명 시작';if(!st.available){$('start').disabled=true;$('demo').textContent='시연 스크립트 없음';return}
  $('demo').textContent=on?('실행 중 · '+(st.last_line||'').replace('[demo] ','')):(st.exit_code==null?'':'끝남 · '+(st.last_line||'').replace('[demo] ',''))}
 $('start').onclick=async()=>{$('start').disabled=true;try{await fetch('/live/demo/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rate:+$('rate').value})})}finally{$('start').disabled=false}tick()};
 $('stop').onclick=async()=>{await fetch('/live/demo/stop',{method:'POST'});tick()};
