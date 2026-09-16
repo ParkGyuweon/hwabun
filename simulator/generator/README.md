@@ -91,6 +91,7 @@ python simulator/generator/gen_behavior_logs.py --post http://localhost:8080 --r
 |---|---|---|
 | `--limit N` | N명만 생성. 기본은 **stratum 비례 층화 추출** (Jira 318) — 파일이 stratum 순 정렬이라 앞에서 자르면 전원 `combination\|light\|3` 이 된다 | 전원 |
 | `--sample {stratified,head}` | `--limit` 표본 방식. `head` 는 파일 앞 N명(옛 동작) | `stratified` |
+| `--currency {USD,KRW}` | 이벤트 금액 통화 (Jira 303·334). `KRW` 면 `items.unit_price`·`cart_value`·`order_value`·`paid_value` 를 원화 정수(추천 인코더 `price_krw_of` 규칙, 100원 단위), `currency="KRW"`, 담기·빼기는 `price_usd` 대신 계약 선택 필드 `unit_price`+`currency`. 필드 이름 결정 전이라 기본은 USD | `USD` |
 | `--post URL` | 수집 API 베이스 URL. `/api/events` 는 자동으로 붙는다 | 없음 |
 | `--rps N` | 초당 이벤트 수 제한. 0 이면 제한 없음 | 0 |
 | `--out PATH` | jsonl 저장 경로 | `--post` 도 `--out` 도 없으면 `behavior_logs.jsonl` |

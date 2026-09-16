@@ -93,6 +93,18 @@ BEHAVIOR_HIDDEN = "hidden_preference"
 SCHEMA_VERSION = "0.2.0-draft"
 ENV = "simulation"
 DEFAULT_SCENARIO_ID = "normal_day"
+# 이벤트 금액 통화 (Jira 303, 데이터 파트 요청 09-16). 화면·카카오페이는 원화인데 이벤트만 달러였다.
+# 환산은 추천 인코더 `product_encoder.price_krw_of` 와 같은 규칙(price_krw 정본, 없으면 USD × 1340.86 을 100원 단위).
+# 필드 이름 결정(A/B)이 나기 전까지 기본은 USD 로 두고 `--currency KRW` 로 켠다.
+CURRENCY_USD, CURRENCY_KRW = "USD", "KRW"
+CURRENCY = CURRENCY_USD
+
+
+def money(item_price_usd, item_price_krw):
+    """이벤트에 실을 금액 — 통화 스위치대로. KRW 는 정수 원, USD 는 소수 2자리"""
+    if CURRENCY == CURRENCY_KRW:
+        return int(item_price_krw) if item_price_krw is not None else None
+    return round(float(item_price_usd), 2)
 DEFAULT_GENERATOR_TYPE = "python_batch"
 NOW = datetime(2026, 8, 28, 12, 0, 0)
 CHECKPOINT_MS = 15000                # 목록 체류 중 dwell 재발화 주기
@@ -855,6 +867,14 @@ def _pick_reasons(rng, restock):
     return picked
 
 
+def price_props(catalog, g):
+    """add_to_cart / remove_from_cart 의 가격 속성. 계약 §4.5 선택 필드 안에서 통화를 가른다 (Jira 303).
+    USD: price_usd (예전 그대로) · KRW: unit_price + currency="KRW" — 필드 이름을 새로 만들지 않는다"""
+    if CURRENCY == CURRENCY_KRW:
+        return {"unit_price": money(catalog[g]["price"], catalog[g].get("price_krw")), "currency": CURRENCY_KRW}
+    return {"price_usd": catalog[g]["price"]}
+
+
 def checkout(e, catalog, gids, rng, SC, quantities=None, restock=False):
     """cart 화면에서 결제까지. 돌려주는 것: 구매했으면 order_id, 실패·취소면 None.
 
@@ -863,7 +883,7 @@ def checkout(e, catalog, gids, rng, SC, quantities=None, restock=False):
     """
     quantities = quantities or {}
     items = [{"product_id": g, "quantity": int(quantities.get(g, 1)),
-              "unit_price": float(catalog[g]["price"])} for g in gids]
+              "unit_price": money(catalog[g]["price"], catalog[g].get("price_krw"))} for g in gids]
     order_value = round(sum(it["quantity"] * it["unit_price"] for it in items), 2)
     order_id = f"ord-{uuid.uuid4().hex[:16]}"
     methods, weights = zip(*SC["payment_methods"])
@@ -873,14 +893,18 @@ def checkout(e, catalog, gids, rng, SC, quantities=None, restock=False):
         e.new_page("cart")
         e.tick(); e.emit("page_view", navigation_source="in_app")
     e.tick(800, 5000)
-    e.emit("begin_checkout", items=items, cart_value=order_value, currency="USD")
+    e.emit("begin_checkout", items=items, cart_value=order_value, currency=CURRENCY)
     e.tick(3000, 20000)                      # 결제창
     if rng.random() < SC["p_payment_failed"]:
         e.emit("payment_failed", order_id=order_id, reason_code="user_cancel", payment_method=method)
         return None
-    paid = round(order_value * 0.9, 2) if rng.random() < SC["p_discount"] else order_value
+    if rng.random() < SC["p_discount"]:
+        paid = (int(round(order_value * 0.9 / 100) * 100) if CURRENCY == CURRENCY_KRW      # 원화는 100원 단위 할인
+                else round(order_value * 0.9, 2))
+    else:
+        paid = order_value
     e.emit("purchase", order_id=order_id, items=items, payment_method=method, paid_value=paid,
-           order_channel="backend", order_value=order_value, currency="USD")
+           order_channel="backend", order_value=order_value, currency=CURRENCY)
     e.tick(1500, 8000)
     if rng.random() < SC["p_reason_answer"]:
         reasons = _pick_reasons(rng, restock)
@@ -1086,7 +1110,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             is_seed=not repurchase,
         )
         e.new_page("product_detail")
-        e.emit("add_to_cart", g, quantity=1, price_usd=catalog[g]["price"],
+        e.emit("add_to_cart", g, quantity=1, **price_props(catalog, g),
                **({} if repurchase else {"seeded": True}))
         # 시드는 과거 구매다(리뷰를 썼다 = 샀다). 담기에서 끝내면 purchase_fact 가 비어 재구매 마트가 0 이 된다 (Jira 312)
         checkout(e, catalog, [g], rng, SC)
@@ -1112,7 +1136,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 is_seed=False,                  # 재구매는 비시드 (Jira 327)
             )
             re.new_page("product_detail")
-            re.emit("add_to_cart", g, quantity=1, price_usd=catalog[g]["price"])
+            re.emit("add_to_cart", g, quantity=1, **price_props(catalog, g))
             checkout(re, catalog, [g], rng, SC, restock=True)     # 재구매 = 두 번째 결제, 사유는 restock
 
     # 이탈 상품 — **노출**로 고른다. 취향으로 고르지 않는다.
@@ -1293,7 +1317,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
             if convert:
                 e.tick(); e.emit("add_to_cart", g, quantity=1,
-                                 price_usd=catalog[g]["price"], content_kind="cta")
+                                 **price_props(catalog, g), content_kind="cta")
         elif is_target:
             if rng.random() < SC["wishlist_p_target"]:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
@@ -1304,11 +1328,11 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                        content_kind="cta", action="add_to_cart",
                        dwell_ms=int(rng.integers(600, 9000)))
             e.tick(); e.emit("add_to_cart", g, quantity=1,
-                             price_usd=catalog[g]["price"], content_kind="cta")
+                             **price_props(catalog, g), content_kind="cta")
         elif regret is None and rng.random() < SC["p_cart_regret"]:
             # 충동적으로 담는다. 아래 장바구니 화면에서 도로 뺀다
             e.tick(); e.emit("add_to_cart", g, quantity=1,
-                             price_usd=catalog[g]["price"], content_kind="cta")
+                             **price_props(catalog, g), content_kind="cta")
             regret = g
         elif rng.random() < SC["wishlist_p_bounce"]:
             e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
@@ -1325,7 +1349,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         e.tick(300, 2000)
         e.emit("view_cart",
                item_count=len(cart), distinct_products=len(cart),
-               cart_value=round(sum(catalog[g]["price"] for g in cart), 2))
+               cart_value=(sum(money(catalog[g]["price"], catalog[g].get("price_krw")) for g in cart)
+                           if CURRENCY == CURRENCY_KRW else round(sum(catalog[g]["price"] for g in cart), 2)))
         # 수량 조절. 프론트는 entry_source="cart" 를 싣는다 (App.tsx)
         q = 1
         if rng.random() < SC["p_quantity_change"]:
@@ -1336,7 +1361,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             # 담았다 빼기. converted 에서 빠져 v_u- 로 넘어간다
             e.tick(800, 6000)
             e.emit("remove_from_cart", regret, quantity=1,
-                   price_usd=catalog[regret]["price"],
+                   **price_props(catalog, regret),
                    cart_size_after=len(cart) - 1)
         if buy:
             checkout(e, catalog, [target], rng, SC, quantities={target: q})
@@ -1391,6 +1416,20 @@ def sample_personas(P, limit, how=SAMPLE_STRATIFIED, seed=42, key="stratum"):
     return picked
 
 
+def _price_krw_of(p):
+    """추천 인코더의 환산 규칙을 그대로 쓴다. 인코더를 못 불러오면 같은 공식으로 대신한다"""
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
+        from product_encoder import price_krw_of
+        return price_krw_of(p)
+    except Exception:
+        krw = p.get("price_krw")
+        if krw is not None:
+            return float(krw)
+        usd = p.get("price_usd")
+        return None if usd is None else float(round(float(usd) * 1340.86 / 100) * 100)
+
+
 def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=True,
          scenario_id=DEFAULT_SCENARIO_ID, simulation_run_id=None,
          generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
@@ -1440,6 +1479,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
             "cat": p["secondary_category"],
             "name": p["product_name"],
             "price": p["price_usd"],
+            "price_krw": _price_krw_of(p),      # 어휘집 0.7 규칙 (Jira 302·303)
             # 배너 축 값 — highlights 의 첫 "Good for: X". 없으면 None
             "concern": next((h.split(":", 1)[1].strip() for h in (p.get("highlights") or [])
                              if h.startswith("Good for:")), None),
@@ -1590,6 +1630,9 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--currency", choices=(CURRENCY_USD, CURRENCY_KRW), default=CURRENCY_USD,
+                    help="이벤트 금액 통화 (Jira 303). KRW 면 unit_price·cart_value·paid_value 를 원화 정수로, "
+                         "add_to_cart 는 price_usd 대신 unit_price+currency. 기본 USD (계약 필드 이름 결정 전)")
     ap.add_argument("--sample", choices=(SAMPLE_STRATIFIED, SAMPLE_HEAD), default=SAMPLE_STRATIFIED,
                     help="--limit 표본 방식. stratified: stratum 비례 층화(기본, Jira 318). head: 파일 앞 N명(옛 동작)")
     ap.add_argument("--show", type=int, default=0)
@@ -1636,6 +1679,7 @@ if __name__ == "__main__":
     ap.add_argument("--hero", choices=("top", "new_brand"), default=BANNER_HERO,
                     help="추천 서버 히어로 정책 (Jira 237). 기본 new_brand = 화면과 같음")
     a = ap.parse_args()
+    CURRENCY = a.currency          # 모듈 전역 (여기는 __main__ 블록)
     BANNER_EVENTS = not a.no_banner_events      # 모듈 전역 (if __name__ 블록)
     if not a.out and not a.post:
         a.out = os.path.join(BD, "behavior_logs.jsonl")
