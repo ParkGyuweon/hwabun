@@ -121,6 +121,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 
 - 로그 캐시 `<DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl` (로컬 기본 `simulator/generator/.cache/`, gitignore). 9,900명 = 1,030만 건 · 6.9GB · 1분 · RSS 12GB,
   1,000명 = 71만 건 · 714MB · 21초 · RSS 1.2GB (09-16 실측). 없으면 첫 시작에 `gen_behavior_logs.py --limit <limit>` 으로 생성. 배포본은 1,000명, 볼륨 `/data/demo_cache` 라 재배포에도 남는다.
+- **배포본을 9,900명으로**: 컨테이너 안 생성은 OOM 이라 노트북에서 만든다 — `gen_behavior_logs.py --limit 9900 --out <grouped>` → `shuffle_sessions.py <grouped> <shuffled>`(페르소나별로 뭉친 파일을 세션 단위로 섞어 2분 안에 전원이 나타나게; 세션 안 순서는 그대로) → gzip → scp → 볼륨 `/data/demo_cache/demo_behavior_9900.jsonl` 에 gunzip → EC2 `.env` `DEMO_LIMIT=9900` → 컨테이너 재생성. 1,030만 건이라 초당 8,000 이면 21분, 3,000 이면 57분. 버튼 글자는 서버의 DEMO_LIMIT 을 읽어 바뀐다.
 - 상태에 영향 없는 이벤트(dwell 류 약 30%)는 소비자가 걸러 `filtered` 로 세고, 화면 카운터엔 반영분만 잡힌다.
 - 시연 전 `SESSION_EVENTS_PATH` 파일을 비우면 "상태가 바뀐 사용자" 가 0 에서 시작한다. 배포본은 볼륨 `/data/session_events.jsonl`.
 - 원천 200개는 카탈로그 동기화·재등록으로 바뀌지 않는다(308, `seed_kept`). 등록 상품은 SB 8개만이고 가격은 원화 그대로 구간에
