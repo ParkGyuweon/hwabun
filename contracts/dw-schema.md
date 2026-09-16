@@ -766,7 +766,7 @@ NULL과 0 이하 가격은 제외한다. 표본이 3개 미만이면 같은 통�
 
 ```text
 key = event_date_kst + brand_id + product_id + banner_type + banner_value + banner_slot
-      + trait_source + policy_version + actor_type + source + scenario_id + simulation_run_id
+      + trait_source + policy_version + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact
 ```
 
