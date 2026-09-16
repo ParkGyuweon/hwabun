@@ -80,11 +80,21 @@ export function VerdictBanner({
   );
 }
 
+/**
+ * 패널 하나.
+ *
+ * `fold` 를 주면 접힌 채로 시작한다. **결론은 펼쳐 두고 근거는 접는다** — 한 화면에 표가 네다섯 개
+ * 펼쳐져 있으면 무엇이 답이고 무엇이 뒷받침인지 구분이 안 된다. 접는 것은 숨기는 것과 다르다:
+ * 제목과 배지는 그대로 보이고 한 번 누르면 열린다. 무엇이 있는지는 알 수 있고 지금 안 볼 뿐이다.
+ *
+ * `<details>` 를 쓴다. 브라우저가 접기·펼치기·키보드·검색(Ctrl+F 로 접힌 내용도 찾힘)을 다 해준다.
+ */
 export function Panel({
   title,
   source,
   origin,
   aside,
+  fold,
   children,
 }: {
   title: string;
@@ -92,18 +102,34 @@ export function Panel({
   /** 내 로그만으로 나오나(`mine`), 다른 브랜드가 모여야 나오나(`shared`). 생략하면 배지를 안 단다 */
   origin?: DataOrigin;
   aside?: ReactNode;
+  /** 접은 채로 시작한다. 결론이 아니라 근거인 패널에만 준다 */
+  fold?: boolean;
   children: ReactNode;
 }) {
+  const cls = `panel${origin === 'shared' ? ' panel--shared' : ''}`;
+  const head = (
+    <>
+      <h2>{title}</h2>
+      {origin ? <OriginBadge kind={origin} /> : null}
+      {source ? <SourceBadge kind={source} /> : null}
+      {aside ? <div className="panel__aside">{aside}</div> : null}
+    </>
+  );
+
+  if (!fold) {
+    return (
+      <section className={cls}>
+        <header className="panel__head">{head}</header>
+        {children}
+      </section>
+    );
+  }
+
   return (
-    <section className={`panel${origin === 'shared' ? ' panel--shared' : ''}`}>
-      <header className="panel__head">
-        <h2>{title}</h2>
-        {origin ? <OriginBadge kind={origin} /> : null}
-        {source ? <SourceBadge kind={source} /> : null}
-        {aside ? <div className="panel__aside">{aside}</div> : null}
-      </header>
+    <details className={`${cls} panel--fold`}>
+      <summary className="panel__head">{head}</summary>
       {children}
-    </section>
+    </details>
   );
 }
 

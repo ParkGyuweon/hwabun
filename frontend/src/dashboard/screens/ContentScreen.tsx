@@ -150,7 +150,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         />
       </div>
 
-      <Panel title="콘텐츠 10종 전부" source={source.content} aside="내 브랜드 상품의 상세페이지 안만">
+      <Panel title="콘텐츠 10종 전부" source={source.content} fold aside="내 브랜드 상품의 상세페이지 안만">
         <p className="panel__lead">
           목록·장바구니 요소는 상세페이지에서 살지 말지 정하는 것과 무관해 빼고, <b>상세페이지 안에서 읽는 글 10종</b>만
           셌습니다.
@@ -246,7 +246,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)">
+        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} fold aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)">
           <BarList
             items={scrapedIngredients.map((i) => ({
               label: labelKo(i.name),
@@ -260,7 +260,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           </p>
         </Panel>
 
-        <Panel title="이 행동을 한 사람은 더 담나" source={source.behaviors} aside="한 방문 vs 안 한 방문">
+        <Panel title="이 행동을 한 사람은 더 담나" source={source.behaviors} fold aside="한 방문 vs 안 한 방문">
           <table className="table">
             <thead>
               <tr>

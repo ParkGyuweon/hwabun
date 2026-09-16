@@ -311,6 +311,66 @@ body {
   color: var(--ink-faint);
 }
 
+/* 긴 표의 "더 보기". 표 아래 왼쪽에 조용히 둔다 — 버튼이 표보다 눈에 띄면 안 된다 */
+.more-btn {
+  margin-top: 12px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.more-btn:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+/* ---------- 접는 패널 ---------- */
+
+/*
+ * 결론은 펼쳐 두고 근거는 접는다. 접는 것은 숨기는 것과 다르다 — 제목과 배지는 그대로 보이고
+ * 한 번 누르면 열린다. 무엇이 있는지는 알 수 있고 지금 안 볼 뿐이다.
+ */
+.panel--fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+/* 기본 삼각형을 지우고 우리 화살표를 왼쪽에 둔다 — 제목보다 앞에 와야 "열 수 있다" 가 먼저 읽힌다 */
+.panel--fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel--fold > summary::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 2px;
+  border-right: 1.5px solid var(--ink-faint);
+  border-bottom: 1.5px solid var(--ink-faint);
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.panel--fold[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* 접혀 있을 때는 아래 선이 필요 없다 — 가를 내용이 없다 */
+.panel--fold:not([open]) > summary {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.panel--fold > summary:hover h2 {
+  color: var(--ink);
+}
+
 /* ---------- KPI ---------- */
 
 /* ---------- 결론 한 줄 ---------- */
