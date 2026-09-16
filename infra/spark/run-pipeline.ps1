@@ -146,7 +146,10 @@ function Invoke-BatchPipeline {
         '--exit-daily-path', "$dataRoot/marts/exit_daily",
         '--entry-source-daily-path', "$dataRoot/marts/entry_source_daily",
         '--product-exit-daily-path', "$dataRoot/marts/product_exit_daily",
-        '--segment-content-daily-path', "$dataRoot/marts/segment_content_daily"
+        '--segment-content-daily-path', "$dataRoot/marts/segment_content_daily",
+        '--segment-price-band-path', "$dataRoot/marts/segment_price_band_daily_kpi",
+        '--cleaned-path', "$dataRoot/processed/cleaned_events",
+        '--event-daily-path', "$dataRoot/marts/event_daily"
     )
     if ($env:BASELINE_POLICY_VERSION -and $env:BASELINE_START_DATE -and $env:BASELINE_END_DATE) {
         $martArguments += @(
@@ -201,6 +204,8 @@ function Invoke-PipelineValidation {
         '--entry-source-daily-path', "$dataRoot/marts/entry_source_daily",
         '--product-exit-daily-path', "$dataRoot/marts/product_exit_daily",
         '--segment-content-daily-path', "$dataRoot/marts/segment_content_daily",
+        '--segment-price-band-path', "$dataRoot/marts/segment_price_band_daily_kpi",
+        '--event-daily-path', "$dataRoot/marts/event_daily",
         '--report-path', "$dataRoot/validation/pipeline-report.json",
         '--require-events'
     )

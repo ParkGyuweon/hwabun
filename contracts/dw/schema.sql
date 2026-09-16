@@ -237,6 +237,25 @@ CREATE TABLE `dw`.`entry_source_daily` (
   KEY `ix_entry_source_daily__grain` (`brand_id`, `event_date_kst`, `entry_source`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- event_daily
+CREATE TABLE `dw`.`event_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `event_name` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `event_count` BIGINT NOT NULL,
+  `unique_session_count` BIGINT NOT NULL,
+  `unique_user_count` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_event_daily__grain` (`brand_id`, `event_date_kst`, `event_name`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- exit_daily
 CREATE TABLE `dw`.`exit_daily` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,

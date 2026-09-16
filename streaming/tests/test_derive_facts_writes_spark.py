@@ -127,6 +127,8 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 entry_source_daily_path=supporting_path,
                 product_exit_daily_path=supporting_path,
                 segment_content_daily_path=supporting_path,
+                segment_price_band_path=supporting_path,
+                event_daily_path=supporting_path,
                 baseline_path=supporting_path,
             )
 

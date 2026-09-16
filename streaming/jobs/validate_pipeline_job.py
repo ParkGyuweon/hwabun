@@ -50,6 +50,7 @@ DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
 DEFAULT_PRODUCT_EXIT_DAILY_PATH = "data/marts/product_exit_daily"
 DEFAULT_SEGMENT_CONTENT_DAILY_PATH = "data/marts/segment_content_daily"
 DEFAULT_SEGMENT_PRICE_BAND_PATH = "data/marts/segment_price_band_daily_kpi"
+DEFAULT_EVENT_DAILY_PATH = "data/marts/event_daily"
 DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
 DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -114,6 +115,7 @@ class ValidatePipelineConfig:
     product_exit_daily_path: str = DEFAULT_PRODUCT_EXIT_DAILY_PATH
     segment_content_daily_path: str = DEFAULT_SEGMENT_CONTENT_DAILY_PATH
     segment_price_band_path: str = DEFAULT_SEGMENT_PRICE_BAND_PATH
+    event_daily_path: str = DEFAULT_EVENT_DAILY_PATH
     brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
     commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -161,6 +163,7 @@ class ValidatePipelineConfig:
             "product_exit_daily_path": self.product_exit_daily_path,
             "segment_content_daily_path": self.segment_content_daily_path,
             "segment_price_band_path": self.segment_price_band_path,
+            "event_daily_path": self.event_daily_path,
             "brand_cohort_path": self.brand_cohort_path,
             "commons_cohort_path": self.commons_cohort_path,
             "banner_daily_path": self.banner_daily_path,
@@ -323,6 +326,10 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--event-daily-path",
+        default=_env("EVENT_DAILY_PATH", DEFAULT_EVENT_DAILY_PATH),
+    )
+    parser.add_argument(
         "--segment-price-band-path",
         default=_env("SEGMENT_PRICE_BAND_PATH", DEFAULT_SEGMENT_PRICE_BAND_PATH),
     )
@@ -394,6 +401,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         product_exit_daily_path=args.product_exit_daily_path,
         segment_content_daily_path=args.segment_content_daily_path,
         segment_price_band_path=args.segment_price_band_path,
+        event_daily_path=args.event_daily_path,
         brand_cohort_path=args.brand_cohort_path,
         commons_cohort_path=args.commons_cohort_path,
         banner_daily_path=args.banner_daily_path,
@@ -622,6 +630,7 @@ def validate_frames(
     exit_daily = frames["exit_daily"]
     entry_source_daily = frames["entry_source_daily"]
     product_exit_daily = frames["product_exit_daily"]
+    event_daily = frames["event_daily"]
 
     counts = {
         "raw": raw.count(),
@@ -2695,6 +2704,74 @@ def validate_frames(
                 f"invalid_cells={over_parent}; 구간 세션 <= 세그먼트 세션 (§4.6)",
             ))
 
+    # ── Event 볼륨 (dw-schema §4.27) ──────────────────────────────────────
+    try:
+        from .build_marts_job import _event_daily, _observed_events
+    except ImportError:
+        from build_marts_job import _event_daily, _observed_events
+
+    counts["event_daily"] = event_daily.count()
+
+    checks.append(_check(
+        "event_daily_grain_is_unique",
+        _duplicate_count(event_daily, [
+            "event_date_kst", "brand_id", "event_name", *EXECUTION_AXES,
+        ]) == 0,
+        "event_daily grain=date+brand+event_name+축",
+    ))
+
+    invalid_event_daily = event_daily.where(
+        (F.col("event_count") <= 0)
+        | (F.col("unique_session_count") < 0)
+        | (F.col("unique_user_count") < 0)
+        | (F.col("unique_session_count") > F.col("event_count"))
+        | (F.col("unique_user_count") > F.col("event_count"))
+        | F.col("event_name").isNull()
+    ).count()
+    checks.append(_check(
+        "event_daily_counts_are_bounded",
+        invalid_event_daily == 0,
+        f"invalid_rows={invalid_event_daily}; 세션·사용자 <= Event 수",
+    ))
+
+    # §4.27 — Event 를 고르지 않고 전부 센다. 합이 어긋나면 어딘가에서 행이 빠진
+    # 것이다. brand_id 가 NULL 인 플랫폼 공통 Event 를 지우면 여기서 걸린다.
+    observed_events = _observed_events(cleaned).count()
+    volume_total = event_daily.agg(
+        F.sum("event_count").cast("long").alias("_total")
+    ).first()["_total"] or 0
+    checks.append(_check(
+        "event_daily_covers_every_observed_event",
+        observed_events == volume_total,
+        f"cleaned={observed_events} · event_daily={volume_total}",
+    ))
+
+    # §4.27 — 상품에 귀속되지 않는 Event 가 남아 있어야 한다. 재생 데이터에서
+    # 그것이 전체의 59% 다.
+    platform_rows = event_daily.where(F.col("brand_id").isNull()).count()
+    checks.append(_check(
+        "event_daily_keeps_platform_wide_events",
+        platform_rows > 0,
+        f"brand_id NULL 행={platform_rows}; 지우면 볼륨 진단이 성립하지 않는다",
+    ))
+
+    # 재계산 결정성. 시드 제외가 Mart 함수 안에 있는지를 잡는다.
+    columns = [c for c in event_daily.columns if c != "mart_processed_at"]
+    expected_event_daily = _event_daily(cleaned, dim_product)
+    difference = (
+        expected_event_daily.select(*columns).exceptAll(
+            event_daily.select(*columns)
+        ).count()
+        + event_daily.select(*columns).exceptAll(
+            expected_event_daily.select(*columns)
+        ).count()
+    )
+    checks.append(_check(
+        "event_daily_is_deterministic_from_inputs",
+        difference == 0,
+        f"differing_rows={difference}; mart_processed_at excluded",
+    ))
+
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -2780,6 +2857,7 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "exit_daily": config.exit_daily_path,
         "entry_source_daily": config.entry_source_daily_path,
         "product_exit_daily": config.product_exit_daily_path,
+        "event_daily": config.event_daily_path,
     }
     frames = {
         name: spark.read.option("mergeSchema", "true").parquet(path)

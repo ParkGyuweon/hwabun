@@ -281,6 +281,7 @@ spark-submit streaming/jobs/build_marts_job.py \
 | `product_exit_daily` | `event_date_kst + brand_id + product_id + last_content_kind + 실행 축` | 마지막으로 본 콘텐츠 기준 이탈 지점 |
 | `segment_content_daily` | `event_date_kst + brand_id + skin_type + content_kind + 실행 축` | 피부 타입별 콘텐츠 체류와 비중 |
 | `segment_price_band_daily_kpi` | `event_date_kst + brand_id + segment_type + segment_value + price_bin + currency + 실행 축` | 고객군 × 가격 밴드 담기율 (S5 히트맵) |
+| `event_daily` | `event_date_kst + brand_id + event_name + 실행 축` | 브랜드별 Event 볼륨. E6 event_volumes |
 | `analytics_baseline` | `baseline_policy_version + metric_name + brand_id + algorithm` | 배너·정렬 적용 전 추천 CTR과 교차 유입률 기준선 |
 
 재구매는 **서로 다른 `order_id`** 기준이다. 한 주문에 같은 상품이 여러 개 있어도 구매는
@@ -335,6 +336,14 @@ E6 마트 3종은 **상세를 연 세션(상세 ∪ 퀵룩)** 을 공통 분모�
 표본 미달 셀을 Mart가 지우지 않는다 — 화면이 `n<50`을 비우고 `n<200`을 흐리게 한다.
 `commons_cohort_weekly`의 억제와 다르다. 그쪽은 다른 브랜드에게 보이는 B층이고
 이것은 자기 브랜드만 보는 A층이다.
+
+`event_daily`는 다른 Mart와 달리 **Event를 고르지 않고 전부 센다.** "어제 로그가
+정상적으로 들어왔나"를 보는 진단 지표라서, `event_count`의 합이 `cleaned_events`의 관측
+Event 수와 정확히 같아야 한다 — Q5가 이것을 검사한다.
+
+**`brand_id`가 NULL인 행을 지우지 않는다.** `section_dwell`·`page_view`·`session_start`처럼
+상품에 귀속되지 않는 Event가 재생 데이터 기준 전체의 59%다. 지우면 볼륨 진단이 성립하지
+않고 합계 검사도 깨진다. 화면이 브랜드로 거르면 자연히 빠진다.
 
 `banner_daily`는 `policy_version`을 key에 둬서 배너·정렬 정책 배포 전후를 같은 Mart에서
 가른다. `cross_brand_daily`는 세션 단위 중복 제거가 기준이라 정책 버전으로 쪼개지 않고

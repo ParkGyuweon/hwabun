@@ -59,6 +59,8 @@ DEFAULT_SECTION_DWELL_PATH = "data/processed/section_dwell_agg"
 DEFAULT_PRODUCT_EXIT_DAILY_PATH = "data/marts/product_exit_daily"
 DEFAULT_SEGMENT_CONTENT_DAILY_PATH = "data/marts/segment_content_daily"
 DEFAULT_SEGMENT_PRICE_BAND_PATH = "data/marts/segment_price_band_daily_kpi"
+DEFAULT_CLEANED_PATH = "data/processed/cleaned_events"
+DEFAULT_EVENT_DAILY_PATH = "data/marts/event_daily"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -137,6 +139,8 @@ class BuildMartsConfig:
     product_exit_daily_path: str = DEFAULT_PRODUCT_EXIT_DAILY_PATH
     segment_content_daily_path: str = DEFAULT_SEGMENT_CONTENT_DAILY_PATH
     segment_price_band_path: str = DEFAULT_SEGMENT_PRICE_BAND_PATH
+    cleaned_path: str = DEFAULT_CLEANED_PATH
+    event_daily_path: str = DEFAULT_EVENT_DAILY_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -188,6 +192,8 @@ class BuildMartsConfig:
             "product_exit_daily_path": self.product_exit_daily_path,
             "segment_content_daily_path": self.segment_content_daily_path,
             "segment_price_band_path": self.segment_price_band_path,
+            "cleaned_path": self.cleaned_path,
+            "event_daily_path": self.event_daily_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -412,6 +418,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="segment_price_band_daily_kpi output path",
     )
     parser.add_argument(
+        "--cleaned-path",
+        default=_env("CLEANED_EVENTS_PATH", DEFAULT_CLEANED_PATH),
+        help="cleaned_events input path (event_daily)",
+    )
+    parser.add_argument(
+        "--event-daily-path",
+        default=_env("EVENT_DAILY_PATH", DEFAULT_EVENT_DAILY_PATH),
+        help="event_daily output path",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -490,6 +506,8 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         product_exit_daily_path=args.product_exit_daily_path,
         segment_content_daily_path=args.segment_content_daily_path,
         segment_price_band_path=args.segment_price_band_path,
+        cleaned_path=args.cleaned_path,
+        event_daily_path=args.event_daily_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -2109,6 +2127,59 @@ def _segment_price_band_daily_kpi(
     )
 
 
+
+def _event_daily(cleaned_df: Any, dim_product_df: Any) -> Any:
+    """브랜드별 Event 볼륨 (dw-schema.md §4.27).
+
+    E6 의 ``event_volumes`` 블록이 읽는다. "어제 로그가 정상적으로 들어왔나" 를 보는
+    진단 지표라, 다른 Mart 와 달리 **Event 를 고르지 않고 전부 센다.**
+
+    ``brand_id`` 는 ``dim_product`` 에서 보강한다. ``cleaned_events`` 에는 상품 차원이
+    붙기 전이라 브랜드가 없다.
+
+    **상품에 귀속되지 않는 Event 도 남긴다.** ``exit_summary``·``page_view``·
+    ``session_start`` 같은 플랫폼 공통 Event 는 ``brand_id`` 가 NULL 이고, 지우면
+    "어제 로그가 정상인가" 를 볼 수 없다. 화면이 브랜드로 거르면 자연히 빠지므로
+    Mart 가 미리 지울 이유가 없다. Q5 가 ``event_count`` 합을 ``cleaned_events`` 의
+    관측 Event 수와 대조하는데, 지우면 그 검사가 성립하지 않는다.
+
+    §5.1 ``realtime_event_stats`` 를 쓰지 않은 이유는 그 key 에 ``brand_id`` 가 없어
+    E6 의 "브랜드 필터 가능" 요구를 못 맞추기 때문이다. 그쪽은 운영 모니터링용
+    정의라 목적이 다르다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    # 볼륨 진단이라 관측 Event 만 센다 — 시드는 생성기가 주입한 표식이다.
+    events = _observed_events(cleaned_df)
+
+    # 상품에 안 붙는 Event 도 남겨야 하므로 left join 이다. inner 로 하면 플랫폼
+    # 공통 Event 가 통째로 사라진다.
+    catalog = dim_product_df.select(
+        F.col("product_id").alias("_dim_product_id"),
+        F.col("brand_id").alias("_brand_id"),
+    ).distinct()
+    joined = events.join(
+        catalog, F.col("product_id") == F.col("_dim_product_id"), "left"
+    )
+
+    key_columns = ["event_date_kst", "brand_id", "event_name", *EXECUTION_AXES]
+    return joined.select(
+        "event_date_kst",
+        F.col("_brand_id").alias("brand_id"),
+        "event_name",
+        *EXECUTION_AXES,
+        "session_id",
+        "user_id",
+    ).groupBy(*key_columns).agg(
+        F.count("*").cast("long").alias("event_count"),
+        F.countDistinct("session_id").cast("long").alias("unique_session_count"),
+        F.countDistinct("user_id").cast("long").alias("unique_user_count"),
+        F.current_timestamp().alias("mart_processed_at"),
+    )
+
+
 PAYMENT_METHODS = ("kakaopay", "card", "test")
 ORDER_CHANNELS = ("backend", "local")
 
@@ -3318,6 +3389,7 @@ def build_mart_frames(
     dim_brand_df: Any | None = None,
     content_interest_df: Any | None = None,
     section_dwell_df: Any | None = None,
+    cleaned_df: Any | None = None,
 ) -> dict[str, Any]:
     stage_events = _funnel_stage_events(sessionized_df, product_fact_df)
     funnel_session = _build_funnel_session_fact(stage_events, time_zone)
@@ -3350,6 +3422,9 @@ def build_mart_frames(
         product_fact_df, funnel_session, time_zone
     )
     frames["product_exit_daily"] = _product_exit_daily(sessionized_df)
+    if cleaned_df is not None and dim_product_df is not None:
+        # Event 볼륨은 정제 단계 전체를 센다. 다른 Mart 와 달리 Event 를 고르지 않는다.
+        frames["event_daily"] = _event_daily(cleaned_df, dim_product_df)
     if section_dwell_df is not None and persona_bridge_df is not None:
         # 고객군 축은 bridge 를 만든 실행에서만 나온다.
         frames["segment_content_daily"] = _segment_content_daily(
@@ -3502,6 +3577,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     section_dwell = spark.read.option("mergeSchema", "true").parquet(
         config.section_dwell_path
     )
+    cleaned = spark.read.option("mergeSchema", "true").parquet(
+        config.cleaned_path
+    )
     persona_bridge = load_persona_segments(spark, config.persona_bridge_path)
     price_bins = load_price_bins(config.feature_vocab_path)
     frames = build_mart_frames(
@@ -3528,6 +3606,7 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         dim_brand,
         content_interest,
         section_dwell,
+        cleaned,
     )
     _write_mart(
         frames["funnel_session_fact"],
@@ -3594,6 +3673,9 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
         frames["segment_content_daily"],
         config.segment_content_daily_path,
         "event_date_kst",
+    )
+    _write_mart(
+        frames["event_daily"], config.event_daily_path, "event_date_kst"
     )
     _write_mart(
         frames["segment_price_band_daily_kpi"],

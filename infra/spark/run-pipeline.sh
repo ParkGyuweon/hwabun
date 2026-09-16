@@ -82,6 +82,8 @@ validate_pipeline() {
     --entry-source-daily-path "$data_root/marts/entry_source_daily" \
     --product-exit-daily-path "$data_root/marts/product_exit_daily" \
     --segment-content-daily-path "$data_root/marts/segment_content_daily" \
+    --segment-price-band-path "$data_root/marts/segment_price_band_daily_kpi" \
+    --event-daily-path "$data_root/marts/event_daily" \
     --report-path "$data_root/validation/pipeline-report.json" \
     --require-events
 }
@@ -176,6 +178,9 @@ run_batch_pipeline() {
     --entry-source-daily-path "$data_root/marts/entry_source_daily"
     --product-exit-daily-path "$data_root/marts/product_exit_daily"
     --segment-content-daily-path "$data_root/marts/segment_content_daily"
+    --segment-price-band-path "$data_root/marts/segment_price_band_daily_kpi"
+    --cleaned-path "$data_root/processed/cleaned_events"
+    --event-daily-path "$data_root/marts/event_daily"
   )
   if [[ -n "${BASELINE_POLICY_VERSION:-}" && -n "${BASELINE_START_DATE:-}" && -n "${BASELINE_END_DATE:-}" ]]; then
     mart_args+=(
