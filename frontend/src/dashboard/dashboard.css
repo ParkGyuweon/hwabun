@@ -218,6 +218,47 @@ body {
   max-width: 280px;
 }
 
+/* ---------- 섹션 안 탭 ---------- */
+
+/*
+ * 왼쪽 메뉴가 "무엇을 묻나", 이 탭이 "그 질문의 어느 면인가" 다.
+ * 메뉴와 같은 무게로 그리면 어느 쪽이 상위인지 안 보여서, 탭은 밑줄만 쓰고 면을 칠하지 않는다.
+ */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: -6px 0 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink-faint);
+  padding: 9px 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tabs button:hover {
+  color: var(--ink);
+}
+
+.tabs button.is-active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--brand);
+}
+
+/* 분석 메뉴와 작업 메뉴 사이. 선 대신 빈칸으로 가른다 — 사이드바에 선이 이미 많다 */
+.sidebar__nav-gap {
+  height: 14px;
+}
+
 /* ---------- 패널·그리드 ---------- */
 
 .grid {
