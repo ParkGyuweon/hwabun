@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
     [ValidateSet('up', 'start-q1', 'stop-q1', 'run-batch', 'validate', 'status', 'down')]
-    [string]$Action = 'status'
+    [string]$Action = 'status',
+
+    # 시작 단계. Q2 는 cleaned_events 를 통째로 다시 만들어 오래 걸리므로,
+    # Fact·Mart 만 고쳤을 때 되돌릴 이유가 없다 (Jira 277 에서 81분을 버렸다).
+    [ValidateSet('q2', 'q3', 'q4')]
+    [string]$From = 'q2'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +29,16 @@ $dataRoot = if ($env:PIPELINE_DATA_ROOT) {
 $composeBaseArgs = @()
 if (Test-Path $sparkEnv) {
     $composeBaseArgs += @('--env-file', $sparkEnv)
+    # --env-file 은 compose 서비스 환경에만 닿는다. --commons-hash-salt 는 이
+    # 스크립트의 프로세스 환경을 읽으므로 여기서 따로 들여온다. 이미 설정돼
+    # 있으면 그쪽을 쓴다.
+    if (-not $env:COMMONS_HASH_SALT) {
+        $saltLine = Select-String -Path $sparkEnv -Pattern '^COMMONS_HASH_SALT=' |
+            Select-Object -Last 1
+        if ($saltLine) {
+            $env:COMMONS_HASH_SALT = $saltLine.Line -replace '^COMMONS_HASH_SALT=', ''
+        }
+    }
 }
 $composeBaseArgs += @('-f', $kafkaCompose, '-f', $sparkCompose)
 
@@ -56,12 +71,16 @@ function Invoke-SparkSubmit {
 }
 
 function Invoke-BatchPipeline {
-    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/clean_events_job.py' -JobArguments @(
-        '--input-path', "$dataRoot/raw_events",
-        '--cleaned-path', "$dataRoot/processed/cleaned_events",
-        '--bad-path', "$dataRoot/processed/bad_events",
-        '--duplicate-path', "$dataRoot/processed/duplicate_events"
-    )
+    param([string]$FromStage = 'q2')
+
+    if ($FromStage -eq 'q2') {
+        Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/clean_events_job.py' -JobArguments @(
+            '--input-path', "$dataRoot/raw_events",
+            '--cleaned-path', "$dataRoot/processed/cleaned_events",
+            '--bad-path', "$dataRoot/processed/bad_events",
+            '--duplicate-path', "$dataRoot/processed/duplicate_events"
+        )
+    }
     $deriveArguments = @(
         '--input-path', "$dataRoot/processed/cleaned_events",
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
@@ -83,7 +102,9 @@ function Invoke-BatchPipeline {
             '--registered-product-brand-path', $env:REGISTERED_PRODUCT_BRAND_PATH
         )
     }
-    Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/derive_facts_job.py' -JobArguments $deriveArguments
+    if ($FromStage -ne 'q4') {
+        Invoke-SparkSubmit -JobPath '/opt/project/streaming/jobs/derive_facts_job.py' -JobArguments $deriveArguments
+    }
     $martArguments = @(
         '--sessionized-path', "$dataRoot/processed/sessionized_events",
         '--product-fact-path', "$dataRoot/processed/product_event_fact",
@@ -115,7 +136,17 @@ function Invoke-BatchPipeline {
         '--behavior-weights-path', '/opt/project/frontend/src/types/log.ts',
         '--dim-brand-path', "$dataRoot/processed/dim_brand",
         '--brand-cohort-path', "$dataRoot/marts/brand_cohort_dim",
-        '--commons-cohort-path', "$dataRoot/marts/commons_cohort_weekly"
+        '--commons-cohort-path', "$dataRoot/marts/commons_cohort_weekly",
+        '--content-interest-path', "$dataRoot/processed/content_interest_fact",
+        '--section-dwell-path', "$dataRoot/processed/section_dwell_agg",
+        '--content-daily-path', "$dataRoot/marts/content_daily_kpi",
+        '--content-conversion-path', "$dataRoot/marts/content_conversion_daily",
+        '--behavior-conversion-path', "$dataRoot/marts/behavior_conversion_daily",
+        '--friction-daily-path', "$dataRoot/marts/friction_daily",
+        '--exit-daily-path', "$dataRoot/marts/exit_daily",
+        '--entry-source-daily-path', "$dataRoot/marts/entry_source_daily",
+        '--product-exit-daily-path', "$dataRoot/marts/product_exit_daily",
+        '--segment-content-daily-path', "$dataRoot/marts/segment_content_daily"
     )
     if ($env:BASELINE_POLICY_VERSION -and $env:BASELINE_START_DATE -and $env:BASELINE_END_DATE) {
         $martArguments += @(
@@ -162,6 +193,14 @@ function Invoke-PipelineValidation {
         '--user-trait-daily-path', "$dataRoot/marts/user_trait_daily",
         '--cross-brand-daily-path', "$dataRoot/marts/cross_brand_daily",
         '--baseline-path', "$dataRoot/marts/analytics_baseline",
+        '--content-daily-path', "$dataRoot/marts/content_daily_kpi",
+        '--content-conversion-path', "$dataRoot/marts/content_conversion_daily",
+        '--behavior-conversion-path', "$dataRoot/marts/behavior_conversion_daily",
+        '--friction-daily-path', "$dataRoot/marts/friction_daily",
+        '--exit-daily-path', "$dataRoot/marts/exit_daily",
+        '--entry-source-daily-path', "$dataRoot/marts/entry_source_daily",
+        '--product-exit-daily-path', "$dataRoot/marts/product_exit_daily",
+        '--segment-content-daily-path', "$dataRoot/marts/segment_content_daily",
         '--report-path', "$dataRoot/validation/pipeline-report.json",
         '--require-events'
     )
@@ -187,7 +226,7 @@ try {
             Invoke-Compose -Arguments @('--profile', 'streaming', 'stop', 'spark-raw-sink')
         }
         'run-batch' {
-            Invoke-BatchPipeline
+            Invoke-BatchPipeline -FromStage $From
         }
         'validate' {
             Invoke-PipelineValidation
