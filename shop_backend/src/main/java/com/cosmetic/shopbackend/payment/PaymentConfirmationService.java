@@ -25,20 +25,18 @@ public class PaymentConfirmationService {
   private final PortOneClient portOne;
   private final TransactionTemplate transactions;
   private final JdbcTemplate jdbc;
-  private final ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   public PaymentConfirmationService(
     ShopOrderRepository orders,
     PortOneClient portOne,
     PlatformTransactionManager transactionManager,
-    JdbcTemplate jdbc,
-    ObjectMapper objectMapper
+    JdbcTemplate jdbc
   ) {
     this.orders = orders;
     this.portOne = portOne;
     this.transactions = new TransactionTemplate(transactionManager);
     this.jdbc = jdbc;
-    this.objectMapper = objectMapper;
   }
 
   public Confirmation confirm(String orderId, String memberId, String paymentId) {
