@@ -379,6 +379,8 @@ source = dim_product, contracts/product-feature-vocab.json
 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily` | 제외 | 콘텐츠를 읽고 담았는지를 재는 지표. 시드는 조회 없이 담기를 내서 "콘텐츠를 안 봐도 담는다"를 만든다 |
 | `friction_daily` | 제외 | **부정 시드가 `scroll_backtrack`·`rage_click`을 직접 낸다**(§3.14). 재생 데이터의 `rage_click` 43건이 전부 시드라, 빼지 않으면 마찰이 생성기 산물로만 채워진다 |
 | `exit_daily`, `entry_source_daily` | 제외 | 이탈·유입 경로 전환. 퍼널과 같은 원칙 |
+| `product_exit_daily` | 제외 | 이탈 지점. 부정 시드는 담기 없는 조회를 내서 읽지 않은 콘텐츠를 이탈 지점으로 만든다 |
+| `segment_content_daily` | 제외 | **입력 `section_dwell_agg`에 `is_seeded`가 없다.** `sessionized_events`에서 시드 세션 목록을 만들어 `session_id`로 뺀다 |
 | `user_trait_daily` | **유지** | 장기 성향이 재려는 것이 바로 주입된 선호다. 서빙은 scope로 가른다 — 아래 |
 | `category_price_reference`, `brand_cohort_dim` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 | `commons_cohort_weekly` | 해당 없음 | 시드를 이미 뺀 `brand_daily_kpi`를 입력으로 쓴다 |
@@ -405,12 +407,20 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
+| `variant_select_count`, `quick_look_close_open_detail_count` | bigint | N | 옵션 왕복과 퀵룩 → 상세 전환. 상품 진단용 |
 | `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
 | `product_ctr`, `detail_entry_rate`, `add_to_cart_rate`, `purchase_rate`, `product_interest_score` | double | Y | 비율·관심도 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
 `detail_view_sessions`는 상품 상세(`product_view`)와 Quick Look(`quick_look`) 중 하나
 이상을 연 고유 세션이다. 둘 다 연 세션도 한 번만 센다. §4.14와 같은 정의다.
+
+`variant_select_count`와 `quick_look_close_open_detail_count`는 **세션이 아니라
+횟수**다. 같은 세션이 옵션을 다섯 번 고르면 5다 — 옵션 왕복이 많다는 것 자체가
+진단 신호라서 세션으로 접으면 뜻이 사라진다. `quick_look_close_open_detail_count`는
+`quick_look_close.close_reason = 'open_detail'`인 Event 수이고 `quick_look_count`를
+넘을 수 없다. `close_reason`은 `product_event_fact`가 싣는다 — Mart가 properties를
+다시 파싱하면 원천이 둘이 된다.
 
 **`add_to_cart_rate`와 `purchase_rate`의 분모는 `detail_view_sessions`다.**
 `product_view_sessions`를 분모로 두면 Quick Look에서 담은 세션이 분자에만 들어가
@@ -1207,6 +1217,77 @@ input = product_event_fact, funnel_session_fact
 
 담기 분모는 `detail_view_sessions`다(spec §6-6). Quick Look에서 담는 경로가 있어
 `product_view_sessions`만 분모로 두면 비율이 1.0을 넘는다.
+
+### 4.24 `product_exit_daily`
+
+```text
+key = event_date_kst + brand_id + product_id + last_content_kind + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = sessionized_events
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 이탈 지점 집계 축 |
+| `exit_sessions` | bigint | N | 그 콘텐츠를 마지막으로 보고 떠난 세션 수 |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**§4.22 `exit_daily`와 다른 Mart다.** 그쪽은 "얼마나 빨리 나갔나"(체류 3초 미만)를
+재고 이쪽은 "어디에서 멈췄나"를 잰다. 분모도 다르다 — `exit_daily`는 상세를 연 세션을
+분모로 비율을 내지만 이 Mart는 이탈 지점의 분포다.
+
+합칠 수 없는 이유는 원천이 다르기 때문이다. `exit_summary.last_content_kind`는 계약에
+선언돼 있지만 값이 실리지 않는다(실측 0/1,000). 그래서 이 Mart는 `exit_summary`가
+아니라 **콘텐츠 Event의 마지막 시각**으로 이탈 지점을 정한다.
+
+**세션·상품마다 행이 하나다.** 마지막 Event 한 건만 남기므로 한 세션이 같은 상품에서
+두 이탈 지점을 갖지 않는다. 따라서 `last_content_kind`로 합산하면 그 상품의 "콘텐츠를
+읽은 세션 수"가 되고, 상세를 연 세션 수를 넘지 않는다.
+
+같은 시각이면 `event_id` 사전순으로 고정한다. 규칙이 없으면 실행마다 판정이 흔들려
+재계산 결정성이 깨진다.
+
+`content_kind`는 `properties_json`에서 읽는다. `product_id`·`brand_id`가 없는 행은
+어느 상품의 이탈인지 알 수 없어 제외한다.
+
+### 4.25 `segment_content_daily`
+
+```text
+key = event_date_kst + brand_id + skin_type + content_kind + actor_type + source + generator_type + scenario_id + simulation_run_id
+input = section_dwell_agg, sessionized_events, bridge_persona_segment
+```
+
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | generator/scenario/run만 Y | 세그먼트 콘텐츠 축 |
+| `dwell_ms_sum` | bigint | N | 그 콘텐츠에 머문 시간 합 |
+| `dwell_sessions` | bigint | N | 그 콘텐츠를 본 고유 세션 수 |
+| `segment_dwell_ms_sum` | bigint | N | 분모. 그 피부 타입의 같은 브랜드·일자 체류 총합 |
+| `dwell_share` | double | Y | `dwell_ms_sum / segment_dwell_ms_sum` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
+**`dwell_share`의 분모는 그 피부 타입의 총합이다.** 한 타입 안에서 share를 더하면
+1이 되고, **타입끼리 더하면 안 된다** — 타입마다 모집단이 다르다. 분모를
+`segment_dwell_ms_sum`으로 같이 실어 화면이 share를 역산해 확인할 수 있게 한다.
+
+**`persona_id`가 없는 세션은 어느 세그먼트에도 넣지 않는다.** 임의 귀속은 없는
+고객군을 만들어 내는 일이라 빼는 쪽이 정직하다(§4.6과 같은 규칙). `bridge`에 없는
+persona도 같다. `notSureST`는 값이 아니라 결측이라 제외한다.
+
+**`section_dwell_agg`에는 `is_seeded`가 없다.** `_observed_events`는 그 컬럼이 없는
+입력을 그대로 통과시키므로, 이 Mart는 `sessionized_events`에서 시드 세션 목록을 만들어
+`session_id`로 뺀다. 재생 데이터에 시드 세션 행이 993건 있어 빼지 않으면 섞인다.
+판정의 정본은 `properties.seeded`이고 `session_id`의 `seed:` 접두는 파생이다(§3.14).
+
+MySQL projection에서 `content_kind`는 nullable로 선언된다. 이 Mart는 결측을 빼지만
+§4.4·§4.21의 같은 컬럼이 nullable이라, 생성기가 컬럼 이름으로 NULL 정책을 맞춘다
+(VARCHAR 길이와 같은 규칙 — §7.4). 값이 들어가지 않으므로 적재에 영향은 없다.
+
+`skin_tone`을 축에 넣지 않는다. E4 `top_content`가 타입 4행만 그린다
+(`dashboard-mart-api-spec.md` §3 E4). 교차 축이 필요해지면 §4.6처럼 별도 행으로 낸다.
+
+**현재 재생 데이터에서는 한 칸만 찬다.** 등장하는 persona 1,000명이 전원
+`combination`이다. 층화 표본 재생성(Jira 318)이 반영된 로그로 다시 돌려야 네 타입이
+모두 나온다. Mart 구조와 단위 테스트는 그와 무관하다.
 
 ## 5. 실시간 Mart 후보
 
