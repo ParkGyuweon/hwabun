@@ -101,7 +101,7 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner")
+           "sort_list", "checkout", "click_banner", "buy_now")
 # 목록 정렬 (Jira 321). 프론트 ProductListPage 의 SortKey 라벨 그대로 — 화면에 보이는 말로 고르게 한다
 SORT_KEYS = {"인기순": "popular", "평점 높은순": "rating", "가격 낮은순": "price_asc", "가격 높은순": "price_desc"}
 # 결제 (Jira 321). PA 100명은 shop_backend 시드에 회원으로 들어 있다 (docs/shop-backend-requests.md:125)
@@ -542,6 +542,8 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 상세 페이지를 충분히 봤다면 계속 스크롤하지 말고 add_to_cart 또는
   back_to_list 중 하나를 고르십시오.
 - **내 피부 타입에 맞고 가격대도 부담스럽지 않다면 add_to_cart 를 고르십시오.**
+- 상세에서 **지금 바로 사겠다는 마음이 확실하면 buy_now** 를 고르십시오. 장바구니를 거치지 않고 그 상품 하나를
+  바로 주문합니다. 조금이라도 고민되면 add_to_cart 로 담아 두십시오. 주문하면 오늘 쇼핑은 끝납니다.
   완벽한 상품을 찾을 때까지 미루지 마십시오 — 사람은 그렇게 쇼핑하지 않습니다.
 - 피부 타입이 안 맞거나, 불만이었던 상품과 비슷하거나, 가격이 부담스러우면
   back_to_list 를 고르십시오.
@@ -576,6 +578,7 @@ target 규칙
 - **상세에서 담거나 찜할 때: 지금 보고 있는 상품명을 적으십시오. null 로 두지 마십시오.**
 - sort_list 일 때: 정렬 이름을 그대로 적으십시오 (예: "가격 낮은순").
 - click_banner 일 때: 배너에 적힌 상품명을 적으십시오.
+- buy_now 일 때: 지금 보고 있는 상품명을 적으십시오.
 - 상품과 무관한 행동(scroll · back_to_list · leave · checkout)일 때만 null 입니다."""
 
 
@@ -990,6 +993,34 @@ def find_card(page, target):
     return best
 
 
+def _place_and_survey(page):
+    """주문 확인 단계 → 주문 완료(place_order) → 구매 사유 설문. checkout 과 buy_now 가 같이 쓴다 (Jira 321·333).
+    ?pay=test 자동 판별(프론트 09-16)로 러너는 결제창 없이 PAID 로 간다."""
+    place = page.locator('[data-log-action="place_order"]')
+    if not place.count() or not click_safe(place.first, page):
+        page.go_back(); page.wait_for_timeout(800)
+        return False
+    # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다
+    try:
+        page.locator('[data-log-section="purchase_survey"]').first.wait_for(timeout=15000)
+    except Exception:
+        return False                             # 결제까지 못 갔다 — purchase 이벤트도 없다
+    page.wait_for_timeout(random.randint(1200, 3000))       # 완료 화면을 읽는 시간
+    chips = page.locator('[data-log-action="purchase_reason_toggle"]')
+    if chips.count() and random.random() < SURVEY_ANSWER_P:
+        click_safe(chips.nth(random.randrange(chips.count())), page)
+        page.wait_for_timeout(500)
+        submit = page.locator(".survey .btn--primary")
+        if submit.count():
+            click_safe(submit.first, page)
+    else:
+        skip = page.locator(".survey__skip")
+        if skip.count():
+            click_safe(skip.first, page)
+    page.wait_for_timeout(800)
+    return True
+
+
 def norm_label(t):
     """LLM 이 적은 정렬 이름을 SORT_KEYS 의 키에 맞춘다 (공백·'으로'·'순으로' 따위 제거)"""
     t = str(t or "").replace(" ", "")
@@ -1154,29 +1185,18 @@ def do_action(page, act, target, scroll_center=None):
             page.go_back(); page.wait_for_timeout(800)
             return False
         page.wait_for_timeout(900)
-        place = page.locator('[data-log-action="place_order"]')
-        if not place.count() or not click_safe(place.first, page):
-            page.go_back(); page.wait_for_timeout(800)
+        return _place_and_survey(page)
+
+    if a == "buy_now":
+        # 상세의 바로구매 (프론트 09-16, data-log-action="buy_now"). 프론트가 add_to_cart → begin_checkout
+        # (entry_source=buy_now) 를 연속으로 남기고 주문 확인 단계로 간다. 그 뒤는 checkout 과 같은 꼬리 (Jira 333)
+        btn = page.locator('[data-log-action="buy_now"]')
+        if not btn.count():
+            return False                         # 상세가 아니거나 버튼이 아직 없는 프론트
+        if not click_safe(btn.first, page):
             return False
-        # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다
-        try:
-            page.locator('[data-log-section="purchase_survey"]').first.wait_for(timeout=15000)
-        except Exception:
-            return False                         # 결제까지 못 갔다 — purchase 이벤트도 없다
-        page.wait_for_timeout(random.randint(1200, 3000))   # 완료 화면을 읽는 시간
-        chips = page.locator('[data-log-action="purchase_reason_toggle"]')
-        if chips.count() and random.random() < SURVEY_ANSWER_P:
-            click_safe(chips.nth(random.randrange(chips.count())), page)
-            page.wait_for_timeout(500)
-            submit = page.locator(".survey .btn--primary")
-            if submit.count():
-                click_safe(submit.first, page)
-        else:
-            skip = page.locator(".survey__skip")
-            if skip.count():
-                click_safe(skip.first, page)
-        page.wait_for_timeout(800)
-        return True
+        page.wait_for_timeout(1000)
+        return _place_and_survey(page)
 
     if a == "click_product":
         card = find_card(page, target)
@@ -1268,6 +1288,10 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
         acts = ["back_to_list"]
         if not carted_here:
             acts.insert(0, "add_to_cart")     # 담기를 맨 앞에 둔다
+        # 바로구매 — 결제가 켜져 있고 상세를 몇 개는 본 뒤에만 (checkout 과 같은 문턱, Jira 333)
+        checkout_ok = CHECKOUT_ENABLED if checkout is None else checkout
+        if checkout_ok and n_details >= MIN_DETAILS_BEFORE_LEAVE:
+            acts.insert(1, "buy_now")
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
         # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
@@ -1525,7 +1549,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 tgt = first_unvisited(page, visited)
                 if tgt is None:                  # 누를 만한 새 상품이 없다
                     new_act = "leave" if "leave" in acts else acts[-1]
-            elif new_act in ("add_to_cart", "wishlist_toggle"):
+            elif new_act in ("add_to_cart", "wishlist_toggle", "buy_now"):
                 tgt = here or tgt                # 화면이 진실이다
             elif new_act == "remove_from_cart":
                 tgt = cart[-1] if cart else None
@@ -1585,7 +1609,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         failed += (not okd)
         if okd and act == "add_to_cart":
             carted += 1
-        if okd and act == "checkout":
+        if okd and act in ("checkout", "buy_now"):
             purchased += 1
         if okd and act == "click_banner":
             banner_clicks += 1
@@ -1594,9 +1618,9 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         if verbose:
             mark = "  " if okd else "! "
             print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
-        if okd and act == "checkout":
+        if okd and act in ("checkout", "buy_now"):
             if verbose:
-                print(f"    {turn:>2}. checkout 완료 — 장바구니 {len(cart)}개 주문. 오늘 쇼핑 끝")
+                print(f"    {turn:>2}. {act} 완료 — 주문. 오늘 쇼핑 끝")
             cart.clear()
             break                                # 주문하면 세션이 끝난다 (프롬프트와 같은 약속)
         if dry:
