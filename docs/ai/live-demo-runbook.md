@@ -132,8 +132,13 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
    서버 `hero_for` 가 그 순서를 먼저 본다(304). 시드에 가격 트레잇이 아직 없으면 히어로 상품 자신의 가격대를 쓰고
    `trait_source=coldstart` 로 적는다(307) — 그래서 **이 단계는 항상 가격 문구가 나온다.** 응답 `hero.hero_policy_version=hero-2026-09-15`.
 4. **담기 → 주문 → 결제 → 추천 갱신 확인 (Jira 320, 백엔드 결제 구현 뒤).** 로그인한 회원으로 SB 상품 하나를 담고 주문한다.
-   - 결제 경로는 둘. 프론트에 `VITE_PORTONE_*` 키가 있으면 카카오페이 테스트 창 → 백엔드 `/api/orders/{id}/confirm`(백엔드 구현 중, 09-16).
-     키가 없으면 `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문) — 오늘 dev 에서도 이 경로는 된다. 어느 쪽이든 `purchase` 이벤트 모양은 같다.
+   - 결제 경로는 둘. **배포 프론트에는 09-16 12:19 부터 포트원 공개 키가 들어가 있어 사람 시연은 카카오페이 테스트 창**
+     → 백엔드 `/api/orders/{id}/confirm`(백엔드 배포 브랜치에만 있음, dev 머지 확인 필요). 키가 없는 프론트(로컬)는
+     `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문). 어느 쪽이든 `purchase` 이벤트 모양은 같고 `payment_method` 만 다르다.
+   - **에이전트(PA) 결제는 배포본에서 결제창을 넘지 못한다** — 카카오 로그인·QR 승인은 자동화 불가. 프론트에 `?pay=test`
+     런타임 스위치를 요청했다(09-16, Downloads 요청서). 그 전까지 에이전트 `--checkout` 은 로컬 스택에서만. 배포본 에이전트 실행은 결제 없이.
+   - 에이전트 재구매: 재생 로그를 `--include-agents` 로 만들어 PA 100명의 과거 구매·재구매 쌍을 마트에 깔고(Jira 328), 시연 전 에이전트를
+     `--checkout` 으로 2회 돌리면 라이브 재구매가 잡힌다. 두 번째 실행은 첫 실행과 며칠 간격.
    - **로그인 없이 결제하면 화면에서 멈춘다** (서버 거절을 로컬 주문으로 덮지 않음, 백엔드 요청 09-15). 시나리오는 반드시 로그인 뒤.
    - 결제 뒤 목록: 산 상품은 "이미 반응한 상품 제외" 로 빠지고, `purchase` 8.0(담기 3.0 의 2.7배)이 그 상품 방향으로 벡터를 당겨
      같은 브랜드·유사 상품이 올라온다. 320 이전 이미지에서는 결제가 주문 단위(items[])라 추천에 **0 반영**이었다 — §0 에서 컨테이너가 320 이후인지 확인.
@@ -146,7 +151,13 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 
 ## 6. 함정
 
-- **백엔드 재배포가 추천을 되돌린다** — `ec2-1-deploy` 브랜치가 dev 보다 뒤면 그 코드로 이미지가 다시 빌드된다. 재배포 뒤 §0 어휘집 줄 확인.
+- **백엔드 재배포가 추천을 되돌린다** — `ec2-1-deploy` 브랜치가 dev 보다 뒤면 그 코드로 이미지가 다시 빌드된다(09-16 12:21 재발: 배포 브랜치 push →
+  Jenkins 가 `/home/ubuntu/S15P21A306/deploy-workspace` 에서 전 서비스 `up -d --build`, 추천이 09-15 이미지로). **판별법:**
+  `sudo docker inspect ec2-1-recommend-1 --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'` 가 `deploy-workspace` 면
+  백엔드 것, `dev-build` 면 우리 것. 복구는 `bash deploy/ec2-1/redeploy-local.sh` 한 줄. 근본 해결은 백엔드가 배포 브랜치에 dev 를 머지하는 것.
+- **EC2-1 MySQL 컨테이너 이름은 `ec2-1-mysql-1`** — compose 가 가정한 `shop-backend-mysql` 이 아니다. dw 읽기(§0 `user_trait.source`) 전에
+  `docker network connect shop-backend-db ec2-1-mysql-1` + `.env` 의 `DW_MYSQL_HOST` 조정, 또는 MySQL 재기동으로 이름을 맞춰야 한다.
+- **추천 서버 health 는 nginx 밖으로 안 나온다** — `/recommend/health` 는 SPA 가 받는다. 확인은 컨테이너 안 `python -c "urllib.request…"` (curl 없음).
 - **BuildKit 캐시** — 파일이 바뀌었는데도 전 레이어를 캐시로 재사용해 옛 이미지를 낸 적이 있다(09-15 11:00). 스크립트는 `--no-cache` 이고
   성공 판정은 vocab 이 아니라 `image latest==running OK` 다.
 - **볼륨은 이미지 갱신으로 안 바뀐다** — `/data/registered_products.jsonl` 에 옛 값·오염 행이 남는다. `reset-registered-local.sh`.
