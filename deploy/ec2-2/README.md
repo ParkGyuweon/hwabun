@@ -124,6 +124,23 @@ docker compose --profile dw run --rm dw-projection
 현재 Job은 **user_trait_daily만** 옮긴다. 다른 Mart 발행·주기 실행은 아직 포함하지 않는다.
 Q4가 같은 입력 경로를 overwrite하는 동안에는 실행하지 않는다.
 
+MySQL 준비 전 추천 폴백 파일만 만들 때는 별도 출력 폴더를 바인드하고 JSONL 전용 모드로
+실행한다. 생성된 파일은 EC2-1 추천 컨테이너의 `/data/user_trait_snapshot.jsonl`로
+전달해야 한다.
+
+```bash
+sudo mkdir -p /opt/hwabun/export
+docker compose --profile dw run --rm \
+  -v /opt/hwabun/export:/export \
+  dw-projection \
+  --emit-jsonl /export/user_trait_snapshot.jsonl \
+  --jsonl-only
+```
+
+`--jsonl-only`는 MySQL 연결 없이 최신 `trait_date_kst`와 `actor_type=user` 행을
+추천 서버의 7개 컬럼 형식으로 출력한다. 빈 결과와 소비자 grain 중복은 기존 파일을
+보호하기 위해 기본 거부한다.
+
 ## 데이터 보존과 재시작
 
 - Kafka 데이터: 기본 Named Volume `hwabun-ec2-2-kafka-data`.

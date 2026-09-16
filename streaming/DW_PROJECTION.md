@@ -81,6 +81,37 @@ sudo docker compose --profile dw run --rm dw-projection \
 의도가 확인된 경우에만** 위 명령에 `--allow-empty`를 추가한다. `_SUCCESS`만 있고
 스키마를 가진 Parquet 파일이 없는 경로는 정상적인 빈 결과로 인정하지 않는다.
 
+## 추천 폴백 JSONL
+
+MySQL 연결을 준비하기 전 시연용 최소 경로가 필요하면 같은 Job에서 추천 서버가 읽는
+7개 컬럼 JSONL을 생성한다. 최신 `trait_date_kst`의 `actor_type='user'` 행만 남기며,
+`identity_scope + user_id + trait`가 중복되면 임의의 실행 행을 고르지 않고 실패한다.
+출력은 임시 파일을 만든 뒤 rename하므로 기존 스냅샷을 부분 파일로 덮어쓰지 않는다.
+
+```bash
+sudo mkdir -p /opt/hwabun/export
+sudo docker compose --profile dw run --rm \
+  -v /opt/hwabun/export:/export \
+  dw-projection \
+  --emit-jsonl /export/user_trait_snapshot.jsonl \
+  --jsonl-only
+```
+
+`--jsonl-only`는 MySQL에 연결하지 않는다. MySQL 발행과 JSONL 생성을 한 번에 하려면
+`--jsonl-only`만 빼면 되며, 두 결과가 같은 Parquet 읽기·필터 경로를 사용한다.
+EC2-2의 `/opt/hwabun/export/user_trait_snapshot.jsonl`을 EC2-1로 전달한 뒤 추천
+컨테이너의 `/data/user_trait_snapshot.jsonl`에 임시 파일로 복사하고 `mv`로 교체한다.
+추천 서버는 기본 300초 주기로 재읽기 때문에 컨테이너 재시작은 필요하지 않다.
+
+```bash
+scp /opt/hwabun/export/user_trait_snapshot.jsonl \
+  ubuntu@<EC2-1-사설주소>:/tmp/user_trait_snapshot.jsonl
+sudo docker cp /tmp/user_trait_snapshot.jsonl \
+  ec2-1-recommend-1:/data/user_trait_snapshot.jsonl.tmp
+sudo docker exec ec2-1-recommend-1 \
+  mv /data/user_trait_snapshot.jsonl.tmp /data/user_trait_snapshot.jsonl
+```
+
 ## 추천 연결 (EC2-1)
 
 `deploy/ec2-1/.env`에 조회 전용 계정으로 `DW_MYSQL_HOST`, `DW_MYSQL_PORT`,
