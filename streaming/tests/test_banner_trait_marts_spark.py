@@ -11,6 +11,7 @@ except ImportError:
     F = None
 
 from streaming.jobs.build_marts_job import (
+    EXECUTION_AXES,
     _analytics_baseline,
     _banner_daily,
     _cross_brand_daily,
@@ -106,6 +107,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             "event_date_kst": date(2026, 9, 8),
             "actor_type": "user",
             "source": "web",
+            "generator_type": None,
             "scenario_id": None,
             "simulation_run_id": None,
         }
@@ -145,6 +147,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             "event_date_kst": date(2026, 9, 8),
             "actor_type": "user",
             "source": "web",
+            "generator_type": None,
             "scenario_id": None,
             "simulation_run_id": None,
         }
@@ -170,6 +173,94 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
 
         self.assertEqual(1, row["brand_view_sessions"])
         self.assertEqual(1, row["cross_brand_entry_sessions"])
+
+    def test_banner_daily_grain_carries_all_five_execution_axes(self):
+        """배너 Mart 도 같은 sweep 잔여분이었다 (Jira 324).
+
+        cross_brand_daily 와 상황이 같다 — 구현돼 있는데 4축으로 남아 있어
+        PC 로그와 PA 로그가 한 행에 합쳐진다.
+        """
+        now = datetime(2026, 9, 8, 1, 0, tzinfo=timezone.utc)
+        properties = json.dumps({
+            "banner_type": "concern", "banner_value": "Pores", "banner_slot": 1,
+            "trait_source": "explore", "policy_version": "banner_sort_v1",
+        })
+
+        def cleaned(event_id, generator_type):
+            frame = self.spark.createDataFrame(
+                [(event_id, "banner_impression", "session", "P1", properties)],
+                ["event_id", "event_name", "intent", "product_id", "properties_json"],
+            )
+            values = {
+                "event_time": now, "processed_at": now,
+                "event_date_kst": date(2026, 9, 8), "user_id": "U1",
+                "identity_scope": "persona", "is_seeded": False, "persona_id": None,
+                "scenario_id": None, "simulation_run_id": None,
+                "generator_type": generator_type, "session_id": "S-" + event_id,
+                "page_view_id": "PV1", "actor_type": "synthetic",
+                "source": "simulator",
+            }
+            for name, value in values.items():
+                frame = frame.withColumn(name, F.lit(value))
+            return frame
+
+        fact = _product_event_fact(
+            cleaned("pc", "python_batch").unionByName(cleaned("pa", "agent_llm")),
+            "Asia/Seoul",
+        )
+        result = _banner_daily(fact, {"Pores"})
+        by_type = {r["generator_type"]: r for r in result.collect()}
+
+        self.assertEqual({"python_batch", "agent_llm"}, set(by_type))
+        for generator_type, row in by_type.items():
+            with self.subTest(generator_type=generator_type):
+                self.assertEqual(1, row["impression_count"])
+        for axis in EXECUTION_AXES:
+            self.assertIn(axis, set(result.columns))
+
+    def test_generator_types_do_not_merge_into_one_row(self):
+        """PC 로그와 PA 로그가 한 행에 합쳐지면 안 된다 (Jira 324).
+
+        actor_type 은 둘 다 synthetic 이라 그것만으로는 구분이 안 된다
+        (dw-schema.md §2 · persona-schema.md §9). 커밋 82afffe 가 실행 축을
+        정리할 때 이 Mart 가 목록에서 빠져 4축으로 남아 있었다.
+        """
+        from pyspark.sql import functions as F
+
+        rows = [
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            ("b1", "S1", 2, "product_view", "P-B", "B", "{}"),
+        ]
+        batch = self._cross_brand_events(rows).withColumn(
+            "generator_type", F.lit("python_batch")
+        )
+        agent = self._cross_brand_events([
+            ("a2", "S2", 1, "product_view", "P-A", "A", "{}"),
+            ("b2", "S2", 2, "product_view", "P-B", "B", "{}"),
+        ]).withColumn("generator_type", F.lit("agent_llm"))
+
+        result = _cross_brand_daily(batch.unionByName(agent)).where(
+            "destination_brand_id = 'B'"
+        )
+        by_type = {r["generator_type"]: r for r in result.collect()}
+
+        self.assertEqual({"python_batch", "agent_llm"}, set(by_type))
+        for generator_type, row in by_type.items():
+            with self.subTest(generator_type=generator_type):
+                self.assertEqual(1, row["brand_view_sessions"])
+                self.assertEqual(1, row["cross_brand_entry_sessions"])
+
+    def test_grain_carries_all_five_execution_axes(self):
+        """grain 이 다른 Mart 와 같은 실행 축 5종이어야 한다 (Jira 324)."""
+        events = self._cross_brand_events([
+            ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
+            ("b1", "S1", 2, "product_view", "P-B", "B", "{}"),
+        ])
+
+        columns = set(_cross_brand_daily(events).columns)
+
+        for axis in EXECUTION_AXES:
+            self.assertIn(axis, columns)
 
     def test_click_on_another_product_is_not_attributed(self):
         """다른 상품의 클릭을 목적 상품 유입으로 귀속하면 안 된다."""
@@ -316,7 +407,8 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
         text_columns = [
             "event_id", "event_name", "product_id", "brand_id", "session_id",
             "banner_type", "banner_value", "trait_source", "policy_version",
-            "actor_type", "source", "scenario_id", "simulation_run_id",
+            "actor_type", "source", "generator_type", "scenario_id",
+            "simulation_run_id",
         ]
         schema = StructType(
             [StructField(name, StringType(), True) for name in text_columns]
@@ -330,7 +422,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
                 (
                     "e1", "product_view", "P1", "B1", "S1",
                     None, None, None, None,
-                    "user", "web", None, None,
+                    "user", "web", None, None, None,
                     None, date(2026, 9, 8),
                 )
             ],

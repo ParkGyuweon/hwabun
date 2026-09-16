@@ -1636,8 +1636,7 @@ def validate_frames(
 
     banner_grain = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
-        "banner_slot", "trait_source", "policy_version", "actor_type", "source",
-        "scenario_id", "simulation_run_id",
+        "banner_slot", "trait_source", "policy_version", *EXECUTION_AXES,
     ]
     checks.append(_check(
         "banner_daily_grain_is_unique",
@@ -1719,8 +1718,7 @@ def validate_frames(
     checks.append(_check(
         "cross_brand_daily_grain_is_unique",
         _duplicate_count(cross_brand_daily, [
-            "event_date_kst", "destination_brand_id", "actor_type", "source",
-            "scenario_id", "simulation_run_id",
+            "event_date_kst", "destination_brand_id", *EXECUTION_AXES,
         ]) == 0,
         "cross_brand_daily configured grain is unique",
     ))

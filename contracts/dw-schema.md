@@ -452,7 +452,7 @@ input = product_event_fact, purchase_fact, persona_behavior_feature_delta, dim_p
 ### 4.2 `recommendation_daily_kpi`
 
 ```text
-key = event_date_kst + brand_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + brand_id + recommendation_id + list_id + algorithm + product_id + context_product_id + position + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact
 ```
 
@@ -466,7 +466,7 @@ input = product_event_fact
 ### 4.3 `search_daily_kpi`
 
 ```text
-key = event_date_kst + search_query_hash + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + search_query_hash + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = search_event_fact, product_event_fact
 ```
 
@@ -766,7 +766,7 @@ NULL과 0 이하 가격은 제외한다. 표본이 3개 미만이면 같은 통�
 
 ```text
 key = event_date_kst + brand_id + product_id + banner_type + banner_value + banner_slot
-      + trait_source + policy_version + actor_type + source + scenario_id + simulation_run_id
+      + trait_source + policy_version + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = product_event_fact
 ```
 
@@ -820,7 +820,7 @@ Front는 세션 점수에 이 Mart 값을 ×0.5로 섞는다. Mart 점수를 그
 ### 4.12 `cross_brand_daily`
 
 ```text
-key = event_date_kst + destination_brand_id + actor_type + source + scenario_id + simulation_run_id
+key = event_date_kst + destination_brand_id + actor_type + source + generator_type + scenario_id + simulation_run_id
 input = sessionized_events
 ```
 
@@ -849,6 +849,17 @@ input = sessionized_events
 
 브랜드를 모르는 조회(`brand_id`가 NULL이거나 Dimension에 없는 상품)는 어느 브랜드에도
 귀속하지 않는다. 직전 상품이나 세션의 첫 상품으로 추정하지 않는다
+
+`generator_type`은 2026-09-16(Jira 324)에 grain에 들어갔다. 커밋 82afffe가 실행 축을
+정리할 때 구현된 Mart 7종만 갱신해 이 Mart가 4축으로 남아 있었고, PC(`python_batch`)와
+PA(`agent_llm`)의 교차 유입 세션이 한 행에 합쳐지고 있었다 — `actor_type`은 둘 다
+`synthetic`이라 구분이 안 된다(§2).
+
+**축을 늘려도 합계는 보존된다.** `generator_type`은 세션 속성이라 한 세션이 두 값을
+가질 수 없고, 따라서 셀이 갈려도 세션이 중복되지 않는다. 재생 데이터 실측에서
+`brand_view_sessions` 4,308 · `cross_brand_entry_sessions` 2,365가 변경 전후 같았다.
+이 Mart를 입력으로 쓰는 `analytics_baseline`(§4.13)이 축을 걷어내고 합산하므로
+중요한 성질이다.
 ([`event-attribution-contract.md`](./event-attribution-contract.md) §2).
 
 이 Mart만 실행 축에 `generator_type`이 없다. 대시보드 엔드포인트가 쓰지 않아 제외했다

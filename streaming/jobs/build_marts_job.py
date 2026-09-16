@@ -2871,10 +2871,11 @@ def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
     # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
     product_fact_df = _observed_events(product_fact_df)
 
+    # 실행 축 5종. cross_brand_daily 와 같은 이유로 generator_type 이 필요하다
+    # — 커밋 82afffe sweep 잔여분 (dw-schema.md §2, Jira 324).
     group_columns = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
-        "banner_slot", "trait_source", "policy_version", "actor_type", "source",
-        "scenario_id", "simulation_run_id",
+        "banner_slot", "trait_source", "policy_version", *EXECUTION_AXES,
     ]
     banners = product_fact_df.where(
         F.col("event_name").isin("banner_impression", "banner_click")
@@ -3047,10 +3048,7 @@ def _cross_brand_daily(sessionized_df: Any) -> Any:
             F.col("product_id").alias("destination_product_id"),
             F.col("event_order").alias("destination_event_order"),
             "event_date_kst",
-            "actor_type",
-            "source",
-            "scenario_id",
-            "simulation_run_id",
+            *EXECUTION_AXES,
             "_first_brand_id",
             F.get_json_object("properties_json", "$.recommendation_id").alias(
                 "view_recommendation_id"
@@ -3114,10 +3112,10 @@ def _cross_brand_daily(sessionized_df: Any) -> Any:
             F.coalesce(F.col("has_preceding_banner_click"), F.lit(False)),
         )
     )
-    group_columns = [
-        "event_date_kst", "destination_brand_id",
-        "actor_type", "source", "scenario_id", "simulation_run_id",
-    ]
+    # 실행 축 5종. generator_type 이 없으면 PC(python_batch)와 PA(agent_llm)의
+    # 교차 유입 세션이 한 행에 합쳐진다 — actor_type 은 둘 다 synthetic 이라
+    # 구분이 안 된다 (dw-schema.md §2 · persona-schema.md §9).
+    group_columns = ["event_date_kst", "destination_brand_id", *EXECUTION_AXES]
     result = entries.groupBy(*group_columns).agg(
         F.countDistinct("session_id").alias("brand_view_sessions"),
         F.countDistinct(F.when(F.col("_is_cross_brand"), F.col("session_id"))).alias("cross_brand_entry_sessions"),
