@@ -76,9 +76,10 @@ def parse(value: bytes | str) -> dict | None:
 
 class StateConsumer(threading.Thread):
     def __init__(self, engine, bootstrap, topic=TOPIC, group=GROUP, max_poll=500, poll_timeout=1.0,
-                 consumer_factory=None, log=print, dedupe_size=200_000):
+                 consumer_factory=None, log=print, dedupe_size=200_000, observer=None):
         super().__init__(daemon=True, name="kafka-state")
         self.engine = engine
+        self.observer = observer          # (persona_id, event_name) — 상태 필터·중복 제거 **전** 모든 메시지 (Jira 337 /pipeline)
         self.bootstrap, self.topic, self.group = bootstrap, topic, group
         self.max_poll, self.poll_timeout = int(max_poll), float(poll_timeout)
         self._broker_down = False
@@ -130,6 +131,12 @@ class StateConsumer(threading.Thread):
             if ev is None:
                 self.stats["invalid"] += 1
                 continue
+            obs = getattr(self, "observer", None)          # __new__ 로 만든 테스트 객체도 견딘다
+            if obs is not None:
+                try:
+                    obs(ev["persona_id"], ev["event_name"])
+                except Exception:
+                    pass                                       # 화면용 카운터가 상태 반영을 막으면 안 된다
             if self.state_names is not None and ev["event_name"] not in self.state_names:
                 self.stats["filtered"] += 1
                 continue
