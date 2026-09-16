@@ -72,6 +72,10 @@ public class ShopOrder {
     return status;
   }
 
+  public LocalDateTime getPaidAt() {
+    return paidAt;
+  }
+
   public void paid() {
     if (status == Status.CREATED) {
       status = Status.PAID;
