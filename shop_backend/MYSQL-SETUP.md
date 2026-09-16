@@ -8,7 +8,20 @@ docker compose -f docker-compose.mysql.yml up -d
 docker compose -f docker-compose.mysql.yml ps
 ```
 
-호스트 접속 주소는 `localhost:13306`입니다. 기본 정보는 database `shop_backend`, user `shop_backend`, password `shop_backend_dev`이며 root 비밀번호는 `shop_backend_root_dev`입니다.
+호스트 접속 주소는 `localhost:3306` 또는 `localhost:13306`입니다. 기본 정보는 database `shop_backend`, user `shop_backend`, password `shop_backend_dev`이며 root 비밀번호는 `shop_backend_root_dev`입니다.
+
+EC2 배포에서는 `SHOP_BACKEND_MYSQL_BIND_ADDRESS`를 EC2-1 사설 IP로 지정하고,
+EC2-2 Spark가 `EC2-1_PRIVATE_IP:13306`으로 DW를 적재하도록 합니다. `13306`은
+AWS 보안 그룹과 UFW에서 EC2-2 사설 IP에만 허용해야 합니다.
+
+EC2-1의 `.env` 예시:
+
+```dotenv
+SHOP_BACKEND_MYSQL_BIND_ADDRESS=172.26.8.48
+SHOP_BACKEND_MYSQL_PORT=13306
+```
+
+기본값은 `127.0.0.1`이므로 사설 IP를 지정하지 않으면 외부 EC2에서 접근할 수 없습니다.
 
 포트 충돌 시 다음처럼 변경할 수 있습니다.
 
@@ -39,6 +52,6 @@ docker exec shop-backend-mysql mysql -u shop_backend -pshop_backend_dev -D shop_
 docker logs shop-backend-mysql
 ```
 
-같은 Docker 네트워크에서 애플리케이션이 접속할 때는 `localhost:13306`이 아니라 `shop-backend-mysql:3306`을 사용합니다.
+같은 Docker 네트워크에서 애플리케이션이 접속할 때는 호스트 포트가 아니라 `shop-backend-mysql:3306`을 사용합니다.
 
 
