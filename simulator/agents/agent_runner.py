@@ -522,9 +522,9 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 목록 맨 위에 `[배너]` 로 표시된 상품 하나가 크게 실려 있을 수 있습니다. 광고 자리입니다.
   문구가 내 피부나 고민에 맞아 보이면 click_banner 로 그 상품 상세에 들어갈 수 있고,
   아니면 무시하고 목록을 보십시오. 배너라서 눌러야 하는 것은 아닙니다.
-- 목록 정렬은 sort_list 로 바꿀 수 있습니다 (인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
-  가격이 신경 쓰이면 가격 낮은순, 실패하고 싶지 않으면 평점 높은순처럼 **내 성향에 맞는 이유가
-  있을 때만** 한 번 바꾸십시오. 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
+- 목록 정렬은 sort_list 로 바꿀 수 있습니다. 선택지는 인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순
+  넷이고 어느 것도 기본으로 권하지 않습니다. **지금 화면의 순서가 내가 고르는 데 방해가 될 때만**
+  한 번 바꾸십시오. 바꾸지 않아도 됩니다. 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
@@ -1493,7 +1493,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             elif new_act == "remove_from_cart":
                 tgt = cart[-1] if cart else None
             elif new_act == "sort_list":
-                tgt = "가격 낮은순"
+                tgt = random.choice(list(SORT_KEYS))   # 보정 폴백도 한쪽으로 쏠리지 않게 (Jira 326)
             elif new_act == "click_banner":
                 tgt = None
             else:
