@@ -257,6 +257,11 @@ GRAINS = {
         "actor_type", "source", "generator_type",
         "scenario_id", "simulation_run_id",
     ],
+    "event_daily": [
+        "brand_id", "event_date_kst", "event_name",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
     "segment_price_band_daily_kpi": [
         "brand_id", "event_date_kst", "segment_type", "segment_value",
         "price_bin", "currency",
