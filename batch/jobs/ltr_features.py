@@ -42,7 +42,7 @@ def load_ltr(path=None):
     조용히 None 을 돌려주지 않는다. 부르는 쪽이 경고를 찍어야 한다 —
     조용히 꺼지면 "LTR 로 잰 수치" 가 사실은 선형 값이 된다.
     """
-    base = path or SERVING
+    base = path or os.environ.get("LTR_MODEL_DIR") or SERVING     # 실험 모델은 LTR_MODEL_DIR (Jira 322)
     model = os.path.join(base, "ltr_model.pkl")
     meta = os.path.join(base, "ltr_model_meta.json")
     if not (os.path.exists(model) and os.path.exists(meta)):
@@ -57,6 +57,39 @@ NAMES = (["cos_all", "affinity", "prior", "cf", "supporters",
 # 증강이 지우는 열 — "오늘 등록된 상품" 모양
 I_CF, I_SUP, I_CF_RANK = 3, 4, 9
 I_COS_BRAND = NAMES.index("cos_brand")
+
+# ── 가중 평균 코사인 (Jira 322 실험) ──────────────────────────────────────
+# cos_all 은 시드의 **단순 평균**이라 이벤트 가중치(3.0/8.0)가 순위에 닿지 않는다 (09-16 실측).
+# 가중 평균 벡터와의 코사인을 피처 하나로 더 싣는다. 학습 데이터(리뷰 이력)에는 이벤트가 없어
+# 평점을 강도로 삼는다 — 5점 = purchase, 4점 = add_to_cart, 그 아래 = product_view (log.ts 가중치).
+WEIGHTED_NAME = "cos_seed_w"
+RATING_EVENT = {5: "purchase", 4: "add_to_cart"}
+_RATING_W = None
+
+
+def rating_weights(persona, seed_ids):
+    """시드 상품별 가중치 — 그 사람이 그 상품에 남긴 최고 평점을 이벤트 가중치로. 리뷰가 없으면 add_to_cart."""
+    global _RATING_W
+    if _RATING_W is None:
+        import behavior_weights as BW
+        ev = BW.load()["event"]
+        _RATING_W = {r: float(ev.get(n, 1.0)) for r, n in RATING_EVENT.items()}
+        _RATING_W["default"] = float(ev.get("add_to_cart", 3.0))
+        _RATING_W["low"] = float(ev.get("product_view", 1.0))
+    best = {}
+    for r in (persona or {}).get("reviews") or ():
+        g = r.get("group_id")
+        if g in seed_ids:
+            best[g] = max(best.get(g, 0), int(r.get("rating") or 0))
+    out = []
+    for g in seed_ids:
+        rt = best.get(g)
+        out.append(_RATING_W["default"] if rt is None else _RATING_W.get(rt, _RATING_W["low"]))
+    return out
+
+
+def weighted_from_meta(meta) -> bool:
+    return bool(meta) and WEIGHTED_NAME in (meta.get("feature_names") or ())
 
 
 def block_matrices(enc, V):
@@ -91,7 +124,7 @@ def pop_rank_of(products, n_ref=None):
 
 
 class LtrFeatures:
-    def __init__(self, enc, V, prior, affinity, cooc, supporters, n_ref=None):
+    def __init__(self, enc, V, prior, affinity, cooc, supporters, n_ref=None, weighted=False):
         """n_ref: 순위 피처(pop_rank·cf_rank)의 분모. 학습 때는 상품 수와 같다.
         서빙에서 등록 상품을 붙일 때 원천 카탈로그 크기를 넘기면 기존 상품 피처가 보존된다"""
         self.V = np.asarray(V, np.float32)
@@ -107,10 +140,12 @@ class LtrFeatures:
         self.price = np.array([float(p.get("price_usd") or 0) for p in P], np.float32)
         self.pop_rank = pop_rank_of(P, self.n_ref)
         self.BM = block_matrices(enc, self.V)
-        self.names = list(NAMES)
+        self.weighted = bool(weighted)
+        self.names = list(NAMES) + ([WEIGHTED_NAME] if self.weighted else [])
 
-    def make(self, persona, seed_rows, cand=None):
-        """seed_rows: 시드 상품의 행 번호. cand: 후보 불리언 마스크 (없으면 전체)"""
+    def make(self, persona, seed_rows, cand=None, seed_weights=None):
+        """seed_rows: 시드 상품의 행 번호. cand: 후보 불리언 마스크 (없으면 전체).
+        seed_weights: 시드별 강도(이벤트 가중치). weighted 모델일 때만 쓰고, 없으면 cos_all 과 같다"""
         V, N = self.V, self.N
         si = list(seed_rows)
         mask = np.ones(N, bool) if cand is None else np.asarray(cand, bool)
@@ -118,6 +153,13 @@ class LtrFeatures:
         u = V[si].mean(0)
         nrm = np.linalg.norm(u)
         cos = V @ (u / nrm) if nrm > 1e-9 else np.zeros(N, np.float32)
+        cos_w = cos
+        if self.weighted and seed_weights is not None and len(seed_weights) == len(si):
+            w = np.asarray(seed_weights, np.float32)
+            if w.sum() > 0 and np.ptp(w) > 0:               # 전부 같으면 단순 평균과 같다
+                uw = (V[si] * (w / w.sum())[:, None]).sum(0)
+                nw = np.linalg.norm(uw)
+                cos_w = V @ (uw / nw) if nw > 1e-9 else cos
 
         at = (self.affinity(persona) if (self.affinity is not None and persona is not None)
               else np.zeros(N, np.float32))
@@ -150,6 +192,8 @@ class LtrFeatures:
             b = self.BM[nm][si].mean(0)
             n = np.linalg.norm(b)
             cols.append(self.BM[nm] @ (b / n) if n > 1e-9 else np.zeros(N, np.float32))
+        if self.weighted:
+            cols.append(np.asarray(cos_w, np.float32))
         return np.column_stack(cols).astype(np.float32)
 
 

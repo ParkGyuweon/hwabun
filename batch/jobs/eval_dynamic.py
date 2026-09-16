@@ -50,7 +50,7 @@ from product_encoder import Encoder, brand_key               # noqa: E402
 from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for,
                          load_cooc, cf_bonus, CF_BETA)
-from ltr_features import LtrFeatures, load_ltr             # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, weighted_from_meta  # noqa: E402
 from user_vector import UserVector                           # noqa: E402
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -153,15 +153,20 @@ def served_top(scores, blocked, recommender, k=K, lam_mmr=LAMBDA_MMR):
     return set(recommender.mmr(masked, order, k, lam_mmr))
 
 
+SEED_EVENT = "add_to_cart"
+
+
 def run_persona(persona, seeds, target, ctx, rng):
     """한 사람의 탐색을 돌리고 step 별 target 순위를 돌려준다"""
     (M, index, prior, affinity, hp, recommender, meta, brands, known,
      cooc, supporters) = ctx[:11]
     ltr = ctx[11] if len(ctx) > 11 else None
     state = UserVector()
-    # seed 는 이미 좋아한 상품이다. 전환으로 넣고 후보에서 뺀다
+    # seed 는 이미 좋아한 상품이다. 전환으로 넣고 후보에서 뺀다.
+    # 서빙(recommend_server.state_of)과 같은 이벤트로 넣는다 — 기본 add_to_cart(3.0).
+    # purchase(8.0) 는 "리뷰 이력 = 구매 이력" 실험 (Jira 320): 시드가 무거워지면 라이브 행동(3.0)이 상대적으로 약해진다
     for gid in seeds:
-        state.observe({"event_name": "add_to_cart", "product_id": gid,
+        state.observe({"event_name": SEED_EVENT, "product_id": gid,
                        "properties": {}})
     seed_idx = {index[g] for g in seeds}
     target_i = index[target]
@@ -178,11 +183,11 @@ def run_persona(persona, seeds, target, ctx, rng):
             # 시드는 **긍정 가중이 붙은 상품 전부**다 — 전환만 쓰면 점수가
             # 전환과 전환 사이에 한 발짝도 안 움직인다 (아래 ⚠ 참조)
             pos, _neg = state.weights()
-            cr = [index[g] for g in pos if g in index]
-            if not cr:
-                cr = [index[g] for g in state.converted if g in index]
+            gs = [g for g in pos if g in index] or [g for g in state.converted if g in index]
+            cr = [index[g] for g in gs]
             if cr:
-                return clf.predict_proba(F.make(persona, cr))[:, 1].astype(np.float32)
+                sw = [pos.get(g, 1.0) for g in gs]                  # 시드 강도 = 이벤트 가중치 (Jira 322)
+                return clf.predict_proba(F.make(persona, cr, seed_weights=sw))[:, 1].astype(np.float32)
         vp, vn = state.vectors(index, M)
         w1, w2, w3 = schedule_for(len(state.viewed))
         s = np.zeros(len(M), dtype=np.float32)
@@ -288,6 +293,8 @@ def main():
     ap.add_argument("--no-ltr", dest="ltr", action="store_false", default=True,
                     help="학습 결합을 끄고 선형 결합으로 돈다 (옛 수치 재현용)")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--seed-event", choices=("add_to_cart", "purchase"), default="add_to_cart",
+                    help="시드(리뷰 이력)를 넣는 이벤트. 서빙 기본 add_to_cart(3.0), purchase 는 8.0 (Jira 320 실험)")
     ap.add_argument("--noise-seed", type=int, default=0,
                     help="hidden preference 잡음 seed. 강건성 평가에서 바꿔 가며 돈다")
     ap.add_argument("--rng-seed", type=int, default=42, help="탐색 난수 seed")
@@ -299,6 +306,9 @@ def main():
     ap.add_argument("--pref-profile", choices=tuple(PROFILES), default="default",
                     help="hidden preference 가중치 조합. 강건성 평가에서 바꿔 가며 돈다")
     a = ap.parse_args()
+    global SEED_EVENT
+    SEED_EVENT = a.seed_event
+    print(f"시드 이벤트: {SEED_EVENT}")
 
     encoder = Encoder()
     M = np.asarray(encoder.matrix(), np.float32)
@@ -330,7 +340,8 @@ def main():
         print("⚠️ 학습 결합이 켜져 있는데 ltr_model.pkl 이 없습니다 — 선형으로 돕니다")
     elif a.ltr:
         print(f"학습 결합 켬 (트리 {ltr[1]['n_trees']}개)")
-        ltr = (ltr[0], LtrFeatures(encoder, M, prior, affinity, cooc, supporters))
+        ltr = (ltr[0], LtrFeatures(encoder, M, prior, affinity, cooc, supporters,
+                                   weighted=weighted_from_meta(ltr[1])))
     else:
         print("학습 결합 끔 — 선형 결합")
     ctx = (M, index, prior, affinity, hp, recommender, meta, brands, known,
