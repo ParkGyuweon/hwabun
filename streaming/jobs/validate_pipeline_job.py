@@ -44,6 +44,9 @@ DEFAULT_PRICE_BAND_PATH = "data/marts/brand_price_band_daily_kpi"
 DEFAULT_CONTENT_DAILY_PATH = "data/marts/content_daily_kpi"
 DEFAULT_CONTENT_CONVERSION_PATH = "data/marts/content_conversion_daily"
 DEFAULT_BEHAVIOR_CONVERSION_PATH = "data/marts/behavior_conversion_daily"
+DEFAULT_FRICTION_DAILY_PATH = "data/marts/friction_daily"
+DEFAULT_EXIT_DAILY_PATH = "data/marts/exit_daily"
+DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
 DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
 DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -102,6 +105,9 @@ class ValidatePipelineConfig:
     content_daily_path: str = DEFAULT_CONTENT_DAILY_PATH
     content_conversion_path: str = DEFAULT_CONTENT_CONVERSION_PATH
     behavior_conversion_path: str = DEFAULT_BEHAVIOR_CONVERSION_PATH
+    friction_daily_path: str = DEFAULT_FRICTION_DAILY_PATH
+    exit_daily_path: str = DEFAULT_EXIT_DAILY_PATH
+    entry_source_daily_path: str = DEFAULT_ENTRY_SOURCE_DAILY_PATH
     brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
     commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -143,6 +149,9 @@ class ValidatePipelineConfig:
             "content_daily_path": self.content_daily_path,
             "content_conversion_path": self.content_conversion_path,
             "behavior_conversion_path": self.behavior_conversion_path,
+            "friction_daily_path": self.friction_daily_path,
+            "exit_daily_path": self.exit_daily_path,
+            "entry_source_daily_path": self.entry_source_daily_path,
             "brand_cohort_path": self.brand_cohort_path,
             "commons_cohort_path": self.commons_cohort_path,
             "banner_daily_path": self.banner_daily_path,
@@ -283,6 +292,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=_env("BEHAVIOR_CONVERSION_DAILY_PATH", DEFAULT_BEHAVIOR_CONVERSION_PATH),
     )
     parser.add_argument(
+        "--friction-daily-path",
+        default=_env("FRICTION_DAILY_PATH", DEFAULT_FRICTION_DAILY_PATH),
+    )
+    parser.add_argument(
+        "--exit-daily-path",
+        default=_env("EXIT_DAILY_PATH", DEFAULT_EXIT_DAILY_PATH),
+    )
+    parser.add_argument(
+        "--entry-source-daily-path",
+        default=_env("ENTRY_SOURCE_DAILY_PATH", DEFAULT_ENTRY_SOURCE_DAILY_PATH),
+    )
+    parser.add_argument(
         "--brand-cohort-path",
         default=_env("BRAND_COHORT_DIM_PATH", DEFAULT_BRAND_COHORT_PATH),
     )
@@ -344,6 +365,9 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         content_daily_path=args.content_daily_path,
         content_conversion_path=args.content_conversion_path,
         behavior_conversion_path=args.behavior_conversion_path,
+        friction_daily_path=args.friction_daily_path,
+        exit_daily_path=args.exit_daily_path,
+        entry_source_daily_path=args.entry_source_daily_path,
         brand_cohort_path=args.brand_cohort_path,
         commons_cohort_path=args.commons_cohort_path,
         banner_daily_path=args.banner_daily_path,
@@ -568,6 +592,9 @@ def validate_frames(
     content_daily = frames["content_daily"]
     content_conversion = frames["content_conversion"]
     behavior_conversion = frames["behavior_conversion"]
+    friction_daily = frames["friction_daily"]
+    exit_daily = frames["exit_daily"]
+    entry_source_daily = frames["entry_source_daily"]
 
     counts = {
         "raw": raw.count(),
@@ -2238,6 +2265,166 @@ def validate_frames(
             f"differing_rows={difference}; mart_processed_at excluded",
         ))
 
+    # ── E6 마찰·이탈·유입 Mart (dw-schema §4.21·§4.22·§4.23) ──────────────
+    # 어휘는 Mart 가 정본이다. 여기에 복제하면 조용히 갈라진다.
+    try:
+        from .build_marts_job import (
+            ENTRY_SOURCES,
+            FRICTION_EVENTS,
+            _entry_source_daily,
+            _exit_daily,
+            _friction_daily,
+        )
+    except ImportError:
+        from build_marts_job import (
+            ENTRY_SOURCES,
+            FRICTION_EVENTS,
+            _entry_source_daily,
+            _exit_daily,
+            _friction_daily,
+        )
+
+    counts["friction_daily"] = friction_daily.count()
+    counts["exit_daily"] = exit_daily.count()
+    counts["entry_source_daily"] = entry_source_daily.count()
+
+    checks.append(_check(
+        "friction_daily_grain_is_unique",
+        _duplicate_count(friction_daily, [
+            "event_date_kst", "brand_id", "product_id", "section_id", "content_kind",
+            "event_name", *EXECUTION_AXES,
+        ]) == 0,
+        "friction_daily grain=date+brand+product+section+content_kind+event_name+축",
+    ))
+    checks.append(_check(
+        "exit_daily_grain_is_unique",
+        _duplicate_count(exit_daily, [
+            "event_date_kst", "brand_id", "product_id", *EXECUTION_AXES,
+        ]) == 0,
+        "exit_daily grain=date+brand+product+축",
+    ))
+    checks.append(_check(
+        "entry_source_daily_grain_is_unique",
+        _duplicate_count(entry_source_daily, [
+            "event_date_kst", "brand_id", "entry_source", *EXECUTION_AXES,
+        ]) == 0,
+        "entry_source_daily grain=date+brand+entry_source+축",
+    ))
+
+    invalid_friction = friction_daily.where(
+        ~F.col("event_name").isin(*FRICTION_EVENTS)
+        | (F.col("event_count") < 0)
+        | (F.col("friction_sessions") < 0)
+        | (F.col("friction_sessions") > F.col("event_count"))
+        | (F.col("friction_sessions") > F.col("detail_view_sessions"))
+        | (F.col("friction_rate").isNotNull()
+           & ~F.col("friction_rate").between(0.0, 1.0))
+        | ((F.col("detail_view_sessions") == 0) & F.col("friction_rate").isNotNull())
+        | ((F.col("detail_view_sessions") > 0) & F.col("friction_rate").isNull())
+        | F.col("product_id").isNull()
+        | F.col("brand_id").isNull()
+    ).count()
+    checks.append(_check(
+        "friction_daily_values_follow_contract",
+        invalid_friction == 0,
+        f"invalid_rows={invalid_friction}; 세션 <= Event · 세션 <= 분모 · 0~1 · 분모 0이면 NULL",
+    ))
+
+    # §4.21 — 마찰 Event 3종이 모든 위치에 행으로 있어야 한다. dead_click 이 0이라고
+    # 행이 사라지면 화면이 "0" 과 "집계 안 함" 을 구분할 수 없다.
+    missing_friction_events = friction_daily.groupBy(
+        "event_date_kst", "brand_id", "product_id", "section_id", "content_kind",
+        *EXECUTION_AXES,
+    ).agg(
+        F.countDistinct("event_name").alias("_events")
+    ).where(F.col("_events") != len(FRICTION_EVENTS)).count()
+    checks.append(_check(
+        "friction_daily_keeps_a_row_per_event",
+        missing_friction_events == 0,
+        f"invalid_groups={missing_friction_events}; 위치마다 Event {len(FRICTION_EVENTS)}종",
+    ))
+
+    invalid_exit = exit_daily.where(
+        (F.col("quick_exit_sessions") > F.col("exit_summary_sessions"))
+        | (F.col("exit_summary_sessions") > F.col("detail_view_sessions"))
+        | (F.col("detail_view_sessions") <= 0)
+        | (F.col("quick_exit_rate").isNotNull()
+           & ~F.col("quick_exit_rate").between(0.0, 1.0))
+        | F.col("quick_exit_rate").isNull()
+        | F.col("product_id").isNull()
+        | F.col("brand_id").isNull()
+    ).count()
+    checks.append(_check(
+        "exit_daily_values_follow_contract",
+        invalid_exit == 0,
+        f"invalid_rows={invalid_exit}; 조기이탈 <= 기록 <= 분모 · 0~1",
+    ))
+
+    invalid_entry = entry_source_daily.where(
+        ~F.col("entry_source").isin(*ENTRY_SOURCES)
+        | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+        | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+        | (F.col("detail_view_sessions") <= 0)
+        | (F.col("view_to_cart_rate").isNotNull()
+           & ~F.col("view_to_cart_rate").between(0.0, 1.0))
+        | F.col("view_to_cart_rate").isNull()
+        | F.col("brand_id").isNull()
+    ).count()
+    checks.append(_check(
+        "entry_source_daily_values_follow_contract",
+        invalid_entry == 0,
+        f"invalid_rows={invalid_entry}; 담기·조회 <= 상세 세션 · 어휘 · 0~1",
+    ))
+
+    # 재계산 결정성. 시드 제외가 Mart 함수 안에 있는지를 이 검사가 잡는다.
+    # friction 은 부정 시드가 직접 rage_click 을 내므로 특히 크게 갈린다 (§4.0).
+    e6_rebuilt = {
+        "friction_daily": (
+            friction_daily, _friction_daily(sessionized, funnel_session, time_zone)
+        ),
+        "exit_daily": (
+            exit_daily, _exit_daily(sessionized, funnel_session, time_zone)
+        ),
+        "entry_source_daily": (
+            entry_source_daily,
+            _entry_source_daily(product_fact, funnel_session, time_zone),
+        ),
+    }
+    for name, (stored, expected) in e6_rebuilt.items():
+        columns = [c for c in stored.columns if c != "mart_processed_at"]
+        difference = (
+            expected.select(*columns).exceptAll(stored.select(*columns)).count()
+            + stored.select(*columns).exceptAll(expected.select(*columns)).count()
+        )
+        checks.append(_check(
+            f"{name}_is_deterministic_from_inputs",
+            difference == 0,
+            f"differing_rows={difference}; mart_processed_at excluded",
+        ))
+
+    # product_id -> brand_id Dimension 매칭 (티켓 검증 항목).
+    for name, frame in (("friction_daily", friction_daily), ("exit_daily", exit_daily)):
+        unmatched = (
+            frame.select("product_id", "brand_id").distinct()
+            .join(
+                dim_product.select(
+                    "product_id", F.col("brand_id").alias("_dim_brand_id")
+                ),
+                ["product_id"],
+                "left",
+            )
+            .where(
+                F.col("_dim_brand_id").isNull()
+                | (F.col("brand_id") != F.col("_dim_brand_id"))
+            )
+            .count()
+        )
+        checks.append(_check(
+            f"{name}_brand_matches_dimension",
+            unmatched == 0,
+            f"unmatched_rows={unmatched}",
+        ))
+
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -2319,6 +2506,9 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         "content_daily": config.content_daily_path,
         "content_conversion": config.content_conversion_path,
         "behavior_conversion": config.behavior_conversion_path,
+        "friction_daily": config.friction_daily_path,
+        "exit_daily": config.exit_daily_path,
+        "entry_source_daily": config.entry_source_daily_path,
     }
     frames = {
         name: spark.read.option("mergeSchema", "true").parquet(path)
