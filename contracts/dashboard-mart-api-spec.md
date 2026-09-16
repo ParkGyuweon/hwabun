@@ -1,9 +1,14 @@
 # 브랜드 대시보드 마트 조회 API 계약 (백엔드 ↔ 프론트 · 데이터)
 
-> 상태: **초안 0.3 (2026-09-16, 프론트 작성).** 합의 전. 0.2.1 → 0.3: 데이터 파트가 §6 요청 마트를 **전부 만들었다**(이은솔, 09-14~16).
-> §5 를 실제 마트 목록으로 갈아 끼우고(마트 12종 신설 · 컬럼 3개 추가), 읽는 규칙(합산 금지 컬럼·`cart_lift`·0행 의미)을
-> 각 엔드포인트에 적었다. **E4 에 가격 블록과 코호트 배지를 더한다** — 후자는 §1-5 의 "코호트·중앙값 비교는 이 계약 범위 밖"
-> 선언을 뒤집는 결정이다(§1-5 참고). 조건부 블록 해제와 백엔드 구현 순서는 §8-5 에서 확인 중이다.
+> 상태: **초안 0.3.1 (2026-09-16, 프론트 작성).** 데이터 파트와 합의됨. 0.2.1 → 0.3: 데이터 파트가 §6 요청 마트를
+> **전부 만들었다**(이은솔, 09-14~16). §5 를 실제 마트 목록으로 갈아 끼우고(마트 12종 신설 · 컬럼 3개 추가), 읽는
+> 규칙(합산 금지 컬럼·`cart_lift`·0행 의미)을 각 엔드포인트에 적었다. **E4 에 가격 블록과 코호트 배지를 더한다** —
+> 후자는 §1-5 의 "코호트·중앙값 비교는 이 계약 범위 밖" 선언을 뒤집는 결정이다(§1-5 참고).
+>
+> 0.3 → 0.3.1 (데이터 파트 확인 09-16): `segment_price_band_daily_kpi` 행 수 1,176 확인 · `brand_cohort_dim` 을
+> **projection 대상으로** (백엔드가 `cohort_key` 를 알 수 없다는 지적이 맞았다) · 6-7 시드 제외 확인 완료 ·
+> `brand_hash` (B) 존치 확정 · 코호트 생존 브랜드 수 **31개(55%) 확정**(35개는 착수 전 추정이었다) ·
+> 억제 분해 R3 27행 / R1 9행. 남은 것은 조건부 블록 해제 순서뿐이고 백엔드까지 셋이 정한다(§8-5).
 >
 > 0.2 → 0.2.1: 데이터 235 E2E 결함 보고(이은솔, 09-11)를 반영 —
 > `view_to_cart_rate` 분모를 **`detail_view_sessions`(상세 조회 ∪ 퀵룩 세션)** 로, 퍼널 계열 마트에서 **seed 세션 제외**, `brand_daily_kpi` 행 수
@@ -125,7 +130,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 
 **0.3 에서 E2·E3·E4·E6 이 전부 "가능" 으로 올라갔다.** 데이터 파트가 §6 요청을 09-14~16 에 구현했다 (§5 표).
 `event_volumes` 하나만 재료가 없다 — `realtime_event_stats` · `event_daily` 둘 다 dw-schema §5 에 후보로만 있고 구현이
-없다 (§8-5).
+없다. 티켓은 등록됐고(`S15P21A306-323`) 우선순위는 가장 낮다. B-1·B-2 projection 갱신 뒤에 만든다 (§8-5).
 
 **단, "마트가 있다" 와 "엔드포인트가 있다" 는 다르다.** 이 표는 마트 쪽 재료를 말한다. 실제 해제는 백엔드가 그 블록을
 구현하고 MySQL projection 에 마트가 올라온 뒤다 — 순서는 §8-5 에서 정한다. 그때까지 응답은 계속 `null` 이고
@@ -360,7 +365,7 @@ cart_lift = content_conversion_daily.viewed_cart_rate / brand_daily_kpi.view_to_
 화면은 `is_suppressed` 면 배지 자리에 **"표본 부족"** 을 적고 숫자를 적지 않는다 (경계 문서 L166).
 
 **빈칸이 많을 것을 전제한다.** 재생 데이터에서 코호트 17개 중 브랜드 5개 이상인 것이 5개뿐이라 31/56 브랜드만
-배지를 보고 나머지 25개는 빈칸을 본다. 억제 51행 중 36행이고 그중 27행이 R3 다 — 상품 1~3개짜리 브랜드가 모인
+배지를 보고 나머지 25개는 빈칸을 본다. 억제 51행 중 36행이고 분해는 **R3 27행 · R1 9행**이다 — 상품 1~3개짜리 브랜드가 모인
 코호트라 한 브랜드가 조회 세션 절반을 넘기 쉽다. **규칙대로 동작하는 것이다.**
 
 `cohort` 자체가 `null` 인 경우가 둘 있다: 이 브랜드의 `cohort_key` 가 `null`(전 상품 가격 결측)이거나, 그 주
@@ -408,7 +413,7 @@ cart_lift = content_conversion_daily.viewed_cart_rate / brand_daily_kpi.view_to_
 | `by_location`, `counts` | `friction_daily` (dw-schema §4.21) | **마트 생김** (0.3) |
 | `quick_exit_rate` | `exit_daily` (dw-schema §4.22 · `exit_summary.dwell_ms < 3000` 세션 / 상세 세션) | **마트 생김** (0.3) |
 | `entry_source` | `entry_source_daily` (dw-schema §4.23) | **마트 생김** (0.3) |
-| `event_volumes` | `realtime_event_stats` 또는 `event_daily`. 브랜드 필터 가능해야 한다 | **재료 없음** — 둘 다 dw-schema §5 후보일 뿐 구현이 없다 (§8-5) |
+| `event_volumes` | `realtime_event_stats` 또는 `event_daily`. 브랜드 필터 가능해야 한다 | **재료 없음** — 티켓 `S15P21A306-323`. 우선순위 최하 (§8-5) |
 
 #### E6 을 읽을 때 틀리기 쉬운 것
 
@@ -492,7 +497,7 @@ key 는 `dw-schema.md` §4 그대로. **0.3 에서 마트 12종이 신설되고 
 | --- | --- | --- | --- | --- |
 | `persona_segment_daily_kpi` | 1,008 | §4.6 | E4 `by_segment`·`grid` | 전 컬럼. `product_id` 가 key 에 **없다** — 브랜드 grain |
 | `brand_price_band_daily_kpi` | 588 | §4.6-1 | E4 `price_bands` | 전 컬럼 |
-| `segment_price_band_daily_kpi` | — | §4.26 | E4 `segment_price_grid` (S5 히트맵) | 전 컬럼 |
+| `segment_price_band_daily_kpi` | 1,176 | §4.26 | E4 `segment_price_grid` (S5 히트맵) | 전 컬럼 |
 | `commons_cohort_weekly` | 51 | §4.18 | E4 `cohort` 배지 | 전 컬럼 |
 | `brand_cohort_dim` | 56 | §3.7 | E4 `cohort` — 내 `cohort_key` 조회 | `brand_id`, `cohort_key`, `product_count_band`, `dominant_price_bin` |
 | `content_daily_kpi` | 17,603 | §4.4 | E3 | 전 컬럼 |
@@ -507,10 +512,17 @@ key 는 `dw-schema.md` §4 그대로. **0.3 에서 마트 12종이 신설되고 
 `persona_segment_daily_kpi` 는 0.2.1 까지 이 표에 "마트가 생기면" 으로 적혀 있던 것이다. 이제 있다.
 **`product_id` 를 key 에서 뺀 것이 맞다** — 브랜드 단위 세션 수를 상품별로 합산하면 중복된다.
 
-`brand_cohort_dim` 은 브랜드 → 코호트 배정표다. 데이터 파트는 "대시보드가 `cohort_key` 만 알면 되고 그 값은 Backend
-가 브랜드 인가와 함께 넘긴다" 로 보고 projection 대상에서 뺐다 (dw-schema §7.2). **프론트는 어느 쪽이든 좋다** —
-백엔드가 `cohort_key` 를 어디서 얻든 E4 응답에 실려 오기만 하면 된다. 백엔드가 그 값을 갖고 있지 않다면 이 표만
-projection 하면 된다 (56행).
+`brand_cohort_dim` 은 브랜드 → 코호트 배정표다. **projection 대상이다** (데이터 파트 확정 09-16). 한때
+"`cohort_key` 는 Backend 가 브랜드 인가와 함께 넘긴다" 로 보고 대상에서 빠져 있었는데, 백엔드는 그 값을 알 수 없다 —
+Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가 아예 없다. 56행짜리 작은 표라 그대로 올린다.
+서버는 `brand_id` 로 이 표를 조회해 `cohort_key` 를 찾고, 그 값으로 `commons_cohort_weekly` 의 코호트 행을 고른다.
+
+**5-2 의 네 마트는 아직 MySQL 에 없다 (2026-09-16).** 전부 Parquet 에만 있고, B-1·B-2 확정에 따라 projection
+대상으로 올라가는 중이다 — `brand_price_band_daily_kpi` · `segment_price_band_daily_kpi` ·
+`commons_cohort_weekly` · `brand_cohort_dim`. 적재가 끝나기 전까지 E4 의 `price_bands`·`segment_price_grid`·
+`cohort` 는 `null` 이고 화면은 그 블록만 모의로 그린다. **E2 `diagnostics` 의 두 컬럼**
+(`variant_select_count`·`quick_look_close_open_detail_count`)은 마트에는 있지만 **Q3 재실행이 필요하다** —
+`close_reason` 을 Fact 에 새로 실어서, 다음 E2E 부터 값이 찬다.
 
 #### 5-3. projection 대상이 아닌 것
 
@@ -522,9 +534,9 @@ projection 하면 된다 (56행).
 
 ---
 
-## 6. 신규 마트·컬럼 요청 (데이터 파트) — **6-1 ~ 6-6 전부 처리됨 (0.3)**
+## 6. 신규 마트·컬럼 요청 (데이터 파트) — **전부 처리됨 (0.3)**
 
-> **상태 2026-09-16: 6-1·6-2·6-3·6-4·6-5·6-6 구현 완료, 6-7 확인 필요.** 아래 표는 무엇을 왜 요청했는지의 기록으로
+> **상태 2026-09-16: 6-1 ~ 6-7 전부 처리됐다.** 아래 표는 무엇을 왜 요청했는지의 기록으로
 > 남긴다. 실제로 만들어진 마트의 계약은 `dw-schema.md` §4 이고, 대시보드가 쓰는 컬럼은 §5-2 다. 두 곳이 갈라지면
 > dw-schema 가 정본이다.
 >
@@ -536,7 +548,7 @@ projection 하면 된다 (56행).
 > | 6-4 | 완료 | `persona_segment_daily_kpi` §4.6 (교차 축 포함) · `segment_content_daily` §4.25 |
 > | 6-5 | 완료 | `friction_daily` §4.21 · `exit_daily` §4.22 · `entry_source_daily` §4.23 |
 > | 6-6 | 완료 | `detail_view_sessions` 가 §4.1·§4.5·§4.6·§4.6-1·§4.14·§4.26 에 들어갔다 |
-> | 6-7 | **확인 필요** | 퍼널 계열은 시드 제외(§4.0)가 적용됐다. E7 재구매·구매사유 3종에도 같은 원칙이 걸렸는지, `properties.seeded` 가 `event-properties-schema.md` 에 적혔는지 (§8-6) |
+> | 6-7 | 완료 | E7 3종도 dw-schema §4.0 표에 "제외" 로 등재. `properties.seeded` 는 `event-properties-schema.md` §3.14 에 등재됐고 **"판정은 `properties.seeded` 를 정본으로 한다"** 까지 명시됐다 (`session_id` 의 `seed:` 접두는 파생) |
 
 조건부 블록을 채우려면 아래가 필요했다. 우선순위 순. 각 항목은 없어도 API 는 200 을 주고 블록만 `null` 이다.
 
@@ -597,14 +609,17 @@ projection 하면 된다 (56행).
    | E4 | `by_segment`·`grid` | `persona_segment_daily_kpi` |
    | E4 | `top_content` | `segment_content_daily` |
    | E4 | `price_bands`·`segment_price_grid` | `brand_price_band_daily_kpi`·`segment_price_band_daily_kpi` |
-   | E4 | `cohort` | `commons_cohort_weekly` (+ `brand_cohort_dim` 또는 백엔드가 아는 `cohort_key`) |
+   | E4 | `cohort` | `commons_cohort_weekly` + `brand_cohort_dim` (둘 다 projection 대상 · §5-2) |
    | E6 | `by_location`·`counts`·`quick_exit_rate`·`entry_source` | `friction_daily`·`exit_daily`·`entry_source_daily` |
-   | E6 | `event_volumes` | **재료 없음** — `realtime_event_stats`·`event_daily` 둘 다 미구현. 티켓이 필요한지부터 |
+   | E6 | `event_volumes` | **재료 없음** — 티켓 등록됨 (`S15P21A306-323`). 우선순위 최하 |
 
    프론트 입장은 **전부 해제**다. 블록이 `null` 이면 모의로 물러나므로 부분 해제도 안전하고, 배지가 섞인 상태를
-   이미 드러낸다 (§7). 다만 해제 순서는 백엔드 작업량과 시연 일정이 정하는 것이라 여기서 단정하지 않는다.
-6. **6-7 (시드 세션 제외)이 E7 마트까지 갔는지, `properties.seeded` 가 이벤트 계약에 적혔는지** (0.3 신설).
-   퍼널 계열은 dw-schema §4.0 으로 들어갔다. 재구매·구매사유 3종은 확인이 필요하다.
-7. **`brand_hash` 존치 여부** (0.3 신설 · 데이터 파트 확인 요청 09-16). 이 계약의 값에는 영향이 없다 —
+   이미 드러낸다 (§7). 순서는 백엔드 작업량과 시연 일정이 정하는 것이라 여기서 단정하지 않되, 프론트 의견은
+   **E3 → E2 `diagnostics` → E4 → E6** 이다 (데이터 파트 이견 없음, 09-16). E3 가 화면의 핵심(콘텐츠별 담기율 =
+   할 일 판정)이고 E6 은 실질 신호가 `scroll_backtrack` 하나라 마지막이어도 손해가 적다. E2 를 두 번째로 두면
+   `diagnostics` 두 컬럼의 Q3 재실행(§5-2)이 그 사이에 끝나 일정이 맞는다. 백엔드까지 셋이 한 번에 정한다.
+6. ~~6-7 (시드 세션 제외)~~ — **확인 완료 (09-16).** E7 3종도 dw-schema §4.0 표에 "제외" 로 등재됐고,
+   `properties.seeded` 는 `event-properties-schema.md` §3.14 에 **정본 판정 기준**으로 적혔다.
+7. ~~`brand_hash` 존치 여부~~ — **(B) 존치로 확정 (09-16).** 이 계약의 값에는 영향이 없다 —
    `commons_cohort_weekly` 가 내는 숫자는 어느 쪽이든 같고, E4 `cohort` 응답에도 해시가 실리지 않는다.
-   판단은 기획 문서 쪽이라 `docs/dashboard/collective-insight-data-boundary.md` §6-5 에서 다룬다.
+   근거는 `docs/dashboard/collective-insight-data-boundary.md` §6-5.
