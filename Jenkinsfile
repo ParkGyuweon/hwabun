@@ -22,6 +22,11 @@ pipeline {
             defaultValue: false,
             description: '배포 후 shop_backend_seed.sql을 MySQL에 적용합니다. 데이터 변경 작업이므로 필요할 때만 선택합니다.'
         )
+        booleanParam(
+            name: 'INIT_DW_SCHEMA',
+            defaultValue: false,
+            description: 'EC2-1 MySQL의 dw 스키마를 최초 1회 생성하고 EC2-2 Spark 전용 계정을 부여합니다. 기존 dw가 있으면 안전을 위해 중단합니다.'
+        )
     }
 
     stages {
@@ -196,6 +201,61 @@ pipeline {
                       --env-file /run/secrets/ec2-1.env \\
                       -f deploy/ec2-1/docker-compose.yml \\
                       up -d --build $services
+                '''
+            }
+        }
+
+        stage('DW 스키마 초기화') {
+            when {
+                allOf {
+                    expression { params.DEPLOY_TO_EC2 }
+                    expression { params.INIT_DW_SCHEMA }
+                }
+            }
+            steps {
+                sh '''
+                    set -eu
+                    test -f /run/secrets/ec2-1.env
+                    test -f contracts/dw/schema.sql
+                    # Jenkins 배포와 동일한 비밀 설정을 사용한다. 계정은 EC2-2 사설 IP에서만 허용한다.
+                    set -a
+                    . /run/secrets/ec2-1.env
+                    set +a
+                    : "${DW_MYSQL_USER:?Set DW_MYSQL_USER in /run/secrets/ec2-1.env}"
+                    : "${DW_MYSQL_PASSWORD:?Set DW_MYSQL_PASSWORD in /run/secrets/ec2-1.env}"
+                    : "${DW_MYSQL_CLIENT_HOST:?Set DW_MYSQL_CLIENT_HOST to EC2-2 private IP}"
+
+                    # schema.sql의 CREATE TABLE은 재실행용이 아니다. 이미 DB가 있으면 기존 데이터를 보호한다.
+                    if docker exec ec2-1-mysql-1 sh -c \
+                      'mysql -N -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '\''dw'\''"' \
+                      | grep -qx 'dw'; then
+                        echo 'dw 데이터베이스가 이미 있습니다. 기존 DW를 보호하기 위해 초기화를 중단합니다.' >&2
+                        exit 1
+                    fi
+
+                    docker cp contracts/dw/schema.sql ec2-1-mysql-1:/tmp/dw-schema.sql
+                    docker exec ec2-1-mysql-1 sh -c \
+                      'mysql -u root -p"$MYSQL_ROOT_PASSWORD" < /tmp/dw-schema.sql'
+                    docker exec ec2-1-mysql-1 rm -f /tmp/dw-schema.sql
+
+                    # SQL 파일은 실행 직후 삭제한다. 작은따옴표는 SQL 방식으로 이스케이프한다.
+                    sql_quote() { printf '%s' "$1" | sed "s/'/''/g"; }
+                    dw_user="$(sql_quote "$DW_MYSQL_USER")"
+                    dw_password="$(sql_quote "$DW_MYSQL_PASSWORD")"
+                    dw_host="$(sql_quote "$DW_MYSQL_CLIENT_HOST")"
+                    grant_sql="$(mktemp)"
+                    trap 'rm -f "$grant_sql"' EXIT
+                    chmod 600 "$grant_sql"
+                    cat > "$grant_sql" <<SQL
+CREATE USER IF NOT EXISTS '$dw_user'@'$dw_host' IDENTIFIED BY '$dw_password';
+ALTER USER '$dw_user'@'$dw_host' IDENTIFIED BY '$dw_password';
+GRANT ALL PRIVILEGES ON \`dw\`.* TO '$dw_user'@'$dw_host';
+FLUSH PRIVILEGES;
+SQL
+                    docker cp "$grant_sql" ec2-1-mysql-1:/tmp/dw-grant.sql
+                    docker exec ec2-1-mysql-1 sh -c \
+                      'mysql -u root -p"$MYSQL_ROOT_PASSWORD" < /tmp/dw-grant.sql'
+                    docker exec ec2-1-mysql-1 rm -f /tmp/dw-grant.sql
                 '''
             }
         }
