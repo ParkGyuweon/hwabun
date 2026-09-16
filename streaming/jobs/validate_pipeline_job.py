@@ -49,6 +49,7 @@ DEFAULT_EXIT_DAILY_PATH = "data/marts/exit_daily"
 DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
 DEFAULT_PRODUCT_EXIT_DAILY_PATH = "data/marts/product_exit_daily"
 DEFAULT_SEGMENT_CONTENT_DAILY_PATH = "data/marts/segment_content_daily"
+DEFAULT_SEGMENT_PRICE_BAND_PATH = "data/marts/segment_price_band_daily_kpi"
 DEFAULT_BRAND_COHORT_PATH = "data/marts/brand_cohort_dim"
 DEFAULT_COMMONS_COHORT_PATH = "data/marts/commons_cohort_weekly"
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
@@ -112,6 +113,7 @@ class ValidatePipelineConfig:
     entry_source_daily_path: str = DEFAULT_ENTRY_SOURCE_DAILY_PATH
     product_exit_daily_path: str = DEFAULT_PRODUCT_EXIT_DAILY_PATH
     segment_content_daily_path: str = DEFAULT_SEGMENT_CONTENT_DAILY_PATH
+    segment_price_band_path: str = DEFAULT_SEGMENT_PRICE_BAND_PATH
     brand_cohort_path: str = DEFAULT_BRAND_COHORT_PATH
     commons_cohort_path: str = DEFAULT_COMMONS_COHORT_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
@@ -158,6 +160,7 @@ class ValidatePipelineConfig:
             "entry_source_daily_path": self.entry_source_daily_path,
             "product_exit_daily_path": self.product_exit_daily_path,
             "segment_content_daily_path": self.segment_content_daily_path,
+            "segment_price_band_path": self.segment_price_band_path,
             "brand_cohort_path": self.brand_cohort_path,
             "commons_cohort_path": self.commons_cohort_path,
             "banner_daily_path": self.banner_daily_path,
@@ -320,6 +323,10 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--segment-price-band-path",
+        default=_env("SEGMENT_PRICE_BAND_PATH", DEFAULT_SEGMENT_PRICE_BAND_PATH),
+    )
+    parser.add_argument(
         "--brand-cohort-path",
         default=_env("BRAND_COHORT_DIM_PATH", DEFAULT_BRAND_COHORT_PATH),
     )
@@ -386,6 +393,7 @@ def parse_args(argv: list[str] | None = None) -> ValidatePipelineConfig:
         entry_source_daily_path=args.entry_source_daily_path,
         product_exit_daily_path=args.product_exit_daily_path,
         segment_content_daily_path=args.segment_content_daily_path,
+        segment_price_band_path=args.segment_price_band_path,
         brand_cohort_path=args.brand_cohort_path,
         commons_cohort_path=args.commons_cohort_path,
         banner_daily_path=args.banner_daily_path,
@@ -2589,6 +2597,104 @@ def validate_frames(
             f"differing_rows={difference}; mart_processed_at excluded",
         ))
 
+    # ── 고객군 × 가격 밴드 (dw-schema §4.26) ──────────────────────────────
+    segment_price_band = frames.get("segment_price_band")
+    if segment_price_band is None:
+        warnings.append({
+            "check": "segment_price_band_daily_is_absent",
+            "detail": "bridge_persona_segment 를 만든 실행에서만 생성된다",
+        })
+    else:
+        counts["segment_price_band_daily_kpi"] = segment_price_band.count()
+        s5_key = [
+            "event_date_kst", "brand_id", "segment_type", "segment_value",
+            "price_bin", "currency", *EXECUTION_AXES,
+        ]
+        checks.append(_check(
+            "segment_price_band_grain_is_unique",
+            _duplicate_count(segment_price_band, s5_key) == 0,
+            "segment_price_band_daily_kpi grain=date+brand+segment+price_bin+통화+축",
+        ))
+
+        # 교차 축은 내지 않는다 — 셀이 100개가 되어 표본이 무너진다 (§4.26).
+        checks.append(_check(
+            "segment_price_band_axes_are_registered",
+            segment_price_band.where(
+                ~F.col("segment_type").isin(*PERSONA_SEGMENT_TYPES)
+            ).count() == 0,
+            f"허용 축={sorted(PERSONA_SEGMENT_TYPES)}; 교차 축은 제외한다",
+        ))
+
+        invalid_s5 = segment_price_band.where(
+            (F.col("session_count") <= 0)
+            | (F.col("segment_user_count") <= 0)
+            | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
+            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
+            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
+            | (F.col("detail_view_sessions") > F.col("session_count"))
+            | (F.col("product_count") <= 0)
+            | F.col("segment_value").isNull()
+            | F.col("brand_id").isNull()
+            | (F.col("view_to_cart_rate").isNotNull()
+               & ~F.col("view_to_cart_rate").between(0.0, 1.0))
+            | (F.col("view_to_purchase_rate").isNotNull()
+               & ~F.col("view_to_purchase_rate").between(0.0, 1.0))
+            | ((F.col("detail_view_sessions") == 0)
+               & F.col("view_to_cart_rate").isNotNull())
+            | ((F.col("detail_view_sessions") > 0)
+               & F.col("view_to_cart_rate").isNull())
+        ).count()
+        checks.append(_check(
+            "segment_price_band_values_follow_contract",
+            invalid_s5 == 0,
+            f"invalid_rows={invalid_s5}; 분자 <= 분모 · 0~1 · 분모 0이면 NULL",
+        ))
+
+        # price_bin 은 어휘집에서 파생한 값이어야 한다. NULL 은 가격 결측 보존이다.
+        unknown_bins = (
+            segment_price_band.where(F.col("price_bin").isNotNull())
+            .select("price_bin").distinct()
+            .join(
+                price_band.where(F.col("price_bin").isNotNull())
+                .select("price_bin").distinct(),
+                ["price_bin"], "left_anti",
+            ).count()
+        ) if price_band is not None else 0
+        checks.append(_check(
+            "segment_price_band_bins_match_the_vocabulary",
+            unknown_bins == 0,
+            f"unknown_bins={unknown_bins}; §4.6-1 과 같은 구간이어야 한다",
+        ))
+
+        # §4.26 — 한 가격 구간의 세션은 그 세그먼트 세션의 부분집합이다.
+        # 구간을 걸쳐 더하면 세션이 중복되므로 합이 아니라 **최댓값**으로 본다.
+        if persona_segment is not None:
+            segment_key = [
+                "event_date_kst", "brand_id", "segment_type", "segment_value",
+                *EXECUTION_AXES,
+            ]
+            per_cell = segment_price_band.groupBy(*segment_key).agg(
+                F.max("detail_view_sessions").cast("long").alias("_bin_max")
+            )
+            parent = persona_segment.select(
+                *segment_key,
+                F.col("detail_view_sessions").alias("_segment_sessions"),
+            )
+            condition = None
+            for column in segment_key:
+                clause = per_cell[column].eqNullSafe(parent[column])
+                condition = clause if condition is None else condition & clause
+            over_parent = (
+                per_cell.join(parent, condition, "inner")
+                .where(F.col("_bin_max") > F.col("_segment_sessions"))
+                .count()
+            )
+            checks.append(_check(
+                "segment_price_band_cells_fit_inside_the_segment",
+                over_parent == 0,
+                f"invalid_cells={over_parent}; 구간 세션 <= 세그먼트 세션 (§4.6)",
+            ))
+
     baseline = frames.get("analytics_baseline")
     if baseline is None:
         # 기준선은 BASELINE_* 세 값을 준 실행에서만 나온다. 없다고 실패는 아니다.
@@ -2683,6 +2789,13 @@ def run(spark: Any, config: ValidatePipelineConfig) -> dict[str, Any]:
         frames["persona_segment_daily"] = spark.read.option(
             "mergeSchema", "true"
         ).parquet(config.persona_segment_path)
+    except Exception:
+        # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
+        pass
+    try:
+        frames["segment_price_band"] = spark.read.option(
+            "mergeSchema", "true"
+        ).parquet(config.segment_price_band_path)
     except Exception:
         # bridge_persona_segment 를 만들지 않은 실행에는 이 Mart 가 없다.
         pass
