@@ -213,6 +213,11 @@ python simulator/generator/build_persona_style.py
    금액은 이벤트 계약대로 USD, `order_channel=backend`, 결제수단은 kakaopay 60 / card 40 (`test` 는 시연 전용이라 안 씀).
    이게 없던 09-14 캐시로는 데이터 마트의 재구매·구매 사유 3종이 0 이었다.
 
+5. **재구매 쌍은 비시드** (Jira 327, 2026-09-16) — 같은 상품에 리뷰가 2건 이상인 상품의 첫 구매·restock 세션은 `seeded` 없이
+   `hist:{run}:{persona}:{product}` 세션으로 나간다. 데이터 마트 계약이 `is_seeded` 행을 빼기 때문에, 시드로 두면 재구매율이 영원히 0 이었다
+   (비시드 결제가 라이브 target 1건/사용자뿐). 1회 구매 시드는 `seeded=true` 그대로. 추천 서버는 `seeded` 를 안 본다.
+   1,000명 실측: 비시드 purchase 447→1,874, 재구매자 446명(64.5%, 원천에서 같은 상품 리뷰 2건+ 인 사람 60.6% 와 같은 수준).
+
 모든 synthetic Event의 `properties`에는 `scenario_id`, `simulation_run_id`,
 `generator_type`이 포함된다. 기본 시나리오는 `normal_day`, 생성 방식은
 `python_batch`이며, 실행 ID는 생략 시 UTC 시각을 기준으로 자동 생성한다.

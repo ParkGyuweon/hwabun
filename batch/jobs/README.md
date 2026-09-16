@@ -8,7 +8,7 @@
 | `user_vector.py` · `behavior_weights.py` | 행동 이벤트 → 사용자 벡터. 가중치의 단일 소스는 `frontend/src/types/log.ts` |
 | `persona_feature.py` | 속성 친화도 `AffinityTable` (`affinity_lift.csv`), 표기 정규화(`lightMedium→light`, `brunette→brown`, `Grey→gray`). 서버의 쿼리 속성 검증도 같은 표를 쓴다 |
 | `build_cooc.py` · `cf_bonus` | CF 동시발생. 홀드아웃 페르소나는 `personas_*.json` glob 으로 자동 제외 |
-| `ltr_features.py` | LTR 피처 19개 (`n_ref=200` 분모 고정 — 등록 상품이 늘어도 원천 순위가 안 흔들린다) |
+| `ltr_features.py` | LTR 피처 20개 — 19개 + 가중 평균 코사인 `cos_seed_w`(강도 = 서빙은 이벤트 가중치, 학습은 시드 평점, Jira 322 09-16; `weighted_from_meta` 로 모델 메타를 따라감) (`n_ref=200` 분모 고정 — 등록 상품이 늘어도 원천 순위가 안 흔들린다) |
 | `train_ltr.py` | HistGradientBoosting 학습 (`--seed`, `--max-iter 800`). 신규 상품 모양으로 학습 행 25% 증강 |
 | `recommender.py` | 점수(LTR 또는 선형 폴백)·MMR λ=0.8·전용 칸 `reserved`·`new_mask()`. LTR 시드 0 = `prior×0.70 + 친화도×0.30` (Jira 245) |
 | `hidden_preference.py` | 동적 평가용 — 추천 점수와 분리된 행동 생성 기준 |
