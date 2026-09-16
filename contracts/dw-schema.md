@@ -261,8 +261,29 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 어긋나지 않게 하기 위해서다. 두 곳이 갈리면 조용히 다른 구간이 된다.
 
 `source_price_usd`는 세포라 원천값 보존용이다. 정본이 아니므로 집계에 쓰지 않는다.
-행동 Event의 금액(`unit_price`·`cart_value`·`order_value`·`paid_value`)은 아직 USD다.
-그 전환은 별도 티켓(S15P21A306-303)이며, 이 Dimension만 먼저 옮겼다.
+
+**행동 Event의 금액은 통화가 전환되는 중이다** (S15P21A306-303). 생성기는
+`--currency KRW`로 원화를 낼 수 있고(Jira 334), 환산은 이 Dimension과 같은
+`price_krw_of` 규칙을 쓴다. 프론트는 아직 달러를 보낸다.
+
+**Fact·Mart는 금액을 환산하지 않는다.** 받은 값을 그대로 싣고 `currency`를 함께
+보존한다. Mart에서 다시 환산하면 환율이 또 한 곳에 생겨 화면과 갈라진다.
+`product_event_fact.unit_price`는 Event의 `unit_price`를 먼저 보고 없으면 예전
+이름 `price_usd`로 떨어진다 — 그래서 Event 필드 이름이 바뀌어도 Fact 컬럼은
+`unit_price` 하나로 유지된다.
+
+**통화가 섞이는 것은 grain이 막는다.** 금액을 합산하는 Mart는 전부 `actor_type`·
+`source`·`generator_type`을 key에 둬서, 프론트(`user`/`web`)와 생성기
+(`synthetic`/`simulator`) 행이 같은 칸에 들어가지 않는다. 그래도 같은 실행 축
+안에서 두 통화가 나오면 합계가 조용히 망가지므로 Q5가 혼합을 검사한다 —
+조회·담기 쪽은 `product_daily_currency_is_unambiguous`, 결제 쪽은
+`purchase_fact_currency_is_unambiguous`가 본다. 후자는 `purchase_fact`를 보는데,
+그 Fact가 §4.15·§4.16·§4.17 셋의 공통 입력이라 한 번 검사하면 셋이 다 덮인다.
+
+**현재 재생 데이터는 `currency`가 전부 NULL이다.** 2026-09-11 생성기가
+`add_to_cart`에 `price_usd`만 싣고 `currency`를 보내지 않았다. 원화 로그를 다시
+만들면 `unit_price` + `currency='KRW'`가 실린다. 그래서 통화 검사는 **NULL을
+통과시키고 값이 둘 이상일 때만 실패**한다 — 값이 없는 것과 섞인 것은 다르다.
 
 ### 3.3 `dim_persona_segment`
 
