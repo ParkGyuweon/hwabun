@@ -1,4 +1,4 @@
-# 실시간 시연 런북 — 페르소나 9,900명 트래픽 → Kafka 파티션 → 추천 상태 (Jira 295 · 311, 2026-09-15 갱신)
+# 실시간 시연 런북 — 페르소나 9,900명 트래픽 → Kafka 파티션 → 추천 상태 (Jira 295 · 311 · 320, 2026-09-16 갱신)
 
 시연에서 보이려는 것 두 가지. ① 트래픽이 쏟아져도 **분산 처리**된다 — Kafka 파티션 3개가 이벤트를 나눠 받고 추천 서버가
 초 단위로 상태에 반영한다. ② **개인화가 즉시 움직인다** — 신규 회원이 SSAFY Beauty 상품 하나에 좋아요를 누르면 목록이 바뀌고,
@@ -21,12 +21,13 @@ ssh -i ~/Downloads/J15A306T.pem ubuntu@j15a306.p.ssafy.io \
 | 값 | 기대 | 어긋나면 |
 |---|---|---|
 | `products` / `registered_products` / `new_brand_rule.new_now` | 208 / 8 / 8 | 원천 200개가 등록 상품으로 바뀐 것(308 이전 이미지) → 재배포 + `reset-registered-local.sh` |
-| `kafka_state.connected` | true, `broker_errors` 안 늘어남 | 브로커 미기동 또는 `.env` 호스트 오류(EC2-1 자기 주소면 틀림). 인프라 |
+| `kafka_state.connected` | true, `broker_errors` 안 늘어남 (09-15 17:40 부터 EC2-2 브로커 `j15a306a.p.ssafy.io:9092` 에 연결됨) | 브로커 미기동 또는 `.env` 호스트 오류(EC2-1 자기 주소면 틀림). 인프라 |
 | `sessions.personas_in_memory` | 시연 트래픽 뒤 > 0 | 이벤트가 안 들어옴 = Kafka. `--http` 보험(§2-B) |
 | `catalog_sync.last` | `replaced 0 · seed_kept 200 · added/unchanged 8` | `replaced` 가 크면 옛 이미지 |
-| `user_trait.source` | dw 연결 전엔 null (정상) | dw 붙으면 `dw_mysql:…` |
+| `user_trait.source` | dw 연결 전엔 null (정상 — 적재 Job 이 아직 없어 세 경로 전부 없음, 09-16) | dw 붙으면 `dw_mysql:…`, `age_days` ≤ 2 (319) |
 | 컨테이너 어휘집 | `vocab 0.7 [0, 26000, 46000, 66000, 105000]` | 백엔드 재배포가 옛 브랜치로 되돌린 것(§6) |
 | 응답 `hero.hero_policy_version` | `hero-2026-09-15` | 307 이전 이미지 |
+| `prescription.enabled` / `key_present` / `llm_calls` | 시연 직전 true / true, 끝나면 false 로 | GMS 과금은 처방 요청에서만 난다(배치·Kafka 아님). 켜기·끄기: 컨테이너 안 `curl -X POST 127.0.0.1:8300/api/prescription/llm -H 'content-type: application/json' -d '{"enabled":false}'` (Jira 325). GMS_KEY 는 EC2-1 `deploy/ec2-1/.env` 에만 있다(레포 아님, 09-16 투입) |
 
 컨테이너 버전과 코드 존재는 재배포 스크립트 끝 줄이 찍어 준다: `image latest==running OK` · `code: user_trait.py`.
 
@@ -120,8 +121,8 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 `kafka_state.connected=true` 가 전제다.
 
 1. **새 회원 가입, 피부 프로필 입력** → 첫 화면은 콜드스타트 추천 + 프로필 세그먼트 히어로.
-   - 09-15 기준 조건: **피부 타입을 꼭 입력한다.** 프로필이 비어 있으면 프론트가 추천을 스위처 페르소나(PA00001)로 요청해 좋아요와
-     추천 상태가 어긋난다. 프론트가 폴백을 없앤 브랜치(`S15P21A306-fe-member-recommend-identity`)는 **아직 dev 미머지** — 머지되면 이 조건은 사라진다.
+   - 프론트의 회원 귀속 수정(`fe-member-recommend-identity`)이 09-15 17:16 dev 에 머지돼 로그인 회원은 회원 id 로 추천을 받는다.
+     피부 타입은 그래도 입력한다 — 콜드스타트 추천과 세그먼트 히어로가 그 값으로 나온다.
 2. **히어로 `SB000001 제로 포어 토닝 패드` 클릭 → 좋아요 → 목록 복귀.**
    - 결과(09-14): 1·2위가 `딥 비타C 캡슐 세럼`·`콜라겐 젤리 크림`, 히어로는 `딥 비타C 세럼` 으로 바뀜 (SB 3개 top10). 새로고침 뒤에도 같음.
    - 더 극적: 상세에서 `PDRN 콜라겐 젤리 겔 마스크` 좋아요 → SB 6개 top10.
@@ -130,7 +131,15 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 3. **가격대 상품만 몇 개 훑기(퀵룩·상세) → 히어로 배너가 가격 문구로.** 프론트 세션 성향이 `axes=price_bin,…` 을 보내고
    서버 `hero_for` 가 그 순서를 먼저 본다(304). 시드에 가격 트레잇이 아직 없으면 히어로 상품 자신의 가격대를 쓰고
    `trait_source=coldstart` 로 적는다(307) — 그래서 **이 단계는 항상 가격 문구가 나온다.** 응답 `hero.hero_policy_version=hero-2026-09-15`.
-4. **판매자로 전환 → 대시보드.** 방금 행동은 마트가 돌아야 지표에 들어간다(일 배치). 라이브 시연에서 대시보드는
+4. **담기 → 주문 → 결제 → 추천 갱신 확인 (Jira 320, 백엔드 결제 구현 뒤).** 로그인한 회원으로 SB 상품 하나를 담고 주문한다.
+   - 결제 경로는 둘. 프론트에 `VITE_PORTONE_*` 키가 있으면 카카오페이 테스트 창 → 백엔드 `/api/orders/{id}/confirm`(백엔드 구현 중, 09-16).
+     키가 없으면 `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문) — 오늘 dev 에서도 이 경로는 된다. 어느 쪽이든 `purchase` 이벤트 모양은 같다.
+   - **로그인 없이 결제하면 화면에서 멈춘다** (서버 거절을 로컬 주문으로 덮지 않음, 백엔드 요청 09-15). 시나리오는 반드시 로그인 뒤.
+   - 결제 뒤 목록: 산 상품은 "이미 반응한 상품 제외" 로 빠지고, `purchase` 8.0(담기 3.0 의 2.7배)이 그 상품 방향으로 벡터를 당겨
+     같은 브랜드·유사 상품이 올라온다. 320 이전 이미지에서는 결제가 주문 단위(items[])라 추천에 **0 반영**이었다 — §0 에서 컨테이너가 320 이후인지 확인.
+   - 결제 실패 연출은 하지 않는다 — `payment_failed` 가 수집기에 등록돼 있지 않아 프론트 스위치가 꺼져 있다.
+   - 재구매율은 추천 화면이 아니라 대시보드 지표다(마트 `brand_repurchase_daily`, 일 배치). 라이브 결제 1건은 그날 배치 뒤에야 들어간다.
+5. **판매자로 전환 → 대시보드.** 방금 행동은 마트가 돌아야 지표에 들어간다(일 배치). 라이브 시연에서 대시보드는
    미리 채운 마트/스냅샷으로 보여주는 것이 기본(09-15 회의 안건). AI 처방 문장은 `GMS_KEY` 가 있어야 LLM 문장, 없으면 규칙표 문장.
 - `long_term_trait`(지난 방문 성향)는 dw `user_trait_daily` 가 붙기 전까지 응답에 `null` 이다 — 새 세션은 콜드스타트로 시작하는 게 지금은 정상.
 - 백엔드 프록시는 `hero`·`axes`·가입 속성 4개를 전부 통과시킨다(09-14 머지) — 09-14 판의 "hero 통과 요청" 은 끝났다.
