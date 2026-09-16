@@ -1,0 +1,63 @@
+/*
+ * Pretendard — 한글 본문·제목 글꼴.
+ *
+ * **이름만 적혀 있고 실제로는 안 쓰이고 있었다.** `index.css`·`dashboard.css`·`apple.css` 의 font stack 에
+ * `'Pretendard'` 가 들어 있었지만 웹폰트를 불러오는 곳이 없어서, 사용자 PC 에 설치돼 있지 않으면 그냥
+ * 다음 후보로 넘어갔다 — Windows 는 `Malgun Gothic`, Mac 은 `-apple-system`(SF) 이다. 그래서 같은 화면이
+ * OS 마다 다르게 보였고, 40px 제목처럼 큰 글자에서 차이가 특히 컸다.
+ *
+ * **Variable 한 벌만 싣는다.** 무게 45~920 을 한 파일이 덮어서, Regular·SemiBold·Bold 를 따로 받는 것보다
+ * 오히려 작다 (static 3벌 ≈ 3MB vs variable 1벌 2MB). 화면이 쓰는 무게가 400·500·600·700 네 가지라
+ * 정적 파일로 가면 네 번 받아야 한다.
+ *
+ * **자체 호스팅한다.** CDN 을 물면 시연 중 외부 장애가 화면 글꼴을 바꾼다. `public/fonts/` 에 두면
+ * nginx 가 같이 내보내고 우리 도메인 안에서 끝난다.
+ *
+ * `font-display: swap` — 폰트가 늦어도 글자는 먼저 보인다. 2MB 라 첫 방문에 한 박자 늦을 수 있는데,
+ * 안 보이는 것보다 낫다. 두 번째 방문부터는 캐시다.
+ */
+@font-face {
+  font-family: 'Pretendard Variable';
+  src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * 이 프로젝트가 쓰는 글꼴 스택. 세 CSS(`index.css` 쇼핑몰 · `dashboard.css` 대시보드 ·
+ * `apple.css` 시각 레이어)가 각자 적어 두면 조용히 갈라지므로 여기 한 벌만 둔다.
+ *
+ * Pretendard 를 **맨 앞**에 놓는다. 예전 스택은 `-apple-system` 이 앞이라 Mac 에서는 Pretendard 가
+ * 있어도 SF 가 이겼다. 우리가 정한 글꼴이 OS 보다 뒤에 있으면 정한 의미가 없다.
+ */
+:root {
+  --font-sans:
+    'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Segoe UI', 'Malgun Gothic', sans-serif;
+}
+
+/*
+ * 큰 글자 전용 조정.
+ *
+ * Pretendard 는 큰 크기에서 자간이 넉넉한 편이라, 제목을 그대로 두면 한글이 흩어져 보인다.
+ * 크기가 커질수록 자간을 좁히는 것은 활자 조판의 기본이고(광학 크기 보정), 이미 각 제목 규칙이
+ * `letter-spacing: -0.02em` 안팎을 갖고 있어 그 값을 한 곳에서 정리한다.
+ *
+ * 무게는 600(SemiBold)을 쓴다. 700 은 한글에서 획이 뭉치고, 500 은 40px 에서 힘이 빠진다.
+ */
+.type-display,
+.dash-main h1,
+.list__promo-head h2,
+.summary__name,
+.pdp__section-title,
+.cart__title,
+.review-summary__score {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  /* 큰 글자는 줄간격이 넓으면 문단이 아니라 목록처럼 읽힌다 */
+  line-height: 1.18;
+  /* 숫자가 섞인 제목(가격·점수)에서 폭이 흔들리지 않게 */
+  font-variant-numeric: tabular-nums;
+}

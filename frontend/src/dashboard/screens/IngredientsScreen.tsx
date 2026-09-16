@@ -61,7 +61,7 @@ export default function IngredientsScreen({
         <p className="verdict__sample">{source.ingredients === 'real' ? '관심은 마트 실측 (플랫폼 전체) · 보유는 전성분 실측' : '관심은 모의 · 보유는 전성분 실측'}</p>
       </section>
 
-      <Panel title="성분 갭 표" source={source.ingredients} aside={`관심 순 ${ingredientGap.length}종 · 갭 행 위`}>
+      <Panel title="성분 갭 표" origin="shared" source={source.ingredients} aside={`관심 순 ${ingredientGap.length}종 · 갭 행 위`}>
         <div className="table-wrap">
           <table className="fbx-table gap-table">
             <thead>
@@ -122,7 +122,7 @@ export default function IngredientsScreen({
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="내 상품 성분 띠" source="real" aside="앞쪽일수록 함량 높음">
+        <Panel title="내 상품 성분 띠" origin="mine" source="real" aside="앞쪽일수록 함량 높음">
           <div className="scope scope--inline">
             <label className="scope__field">
               <span className="scope__label">상품</span>
@@ -165,7 +165,7 @@ export default function IngredientsScreen({
           ) : null}
         </Panel>
 
-        <Panel title="주의 성분" source="real" aside={`${product.product_name} · 플랫폼 ${catalogProducts.length}개 대비`}>
+        <Panel title="주의 성분" origin="shared" source="real" aside={`${product.product_name} · 플랫폼 ${catalogProducts.length}개 대비`}>
           <table className="fbx-table">
             <thead>
               <tr>

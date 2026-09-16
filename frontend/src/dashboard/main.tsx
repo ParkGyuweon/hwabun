@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import DashboardApp from './DashboardApp';
 import AuthGate from '../components/auth/AuthGate';
+// 글꼴 정본 (--font-sans). dashboard.css 의 --font 가 이 값을 받으므로 먼저 와야 한다
+import '../styles/pretendard.css';
 import './dashboard.css';
 import './dashboard-themes.css';
 // 시각 레이어. 컴포넌트·테마 다음에 와야 한다

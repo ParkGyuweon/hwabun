@@ -15,6 +15,41 @@ export function SourceBadge({ kind }: { kind: 'real' | 'mock' }) {
 }
 
 /**
+ * 이 숫자가 **어디까지 모아서 나온 것인가.** 배지의 축이 `SourceBadge` 와 다르다 — 그쪽은
+ * "진짜 값이냐(실측/모의)" 이고 이쪽은 "누구의 데이터로 만들었냐" 다. 둘은 독립이라 나란히 붙는다.
+ *
+ * | | 뜻 | 색 |
+ * | --- | --- | --- |
+ * | `mine` | 내 브랜드 로그만으로 나온다. 우리 서비스가 없어도 내 로그만 있으면 알 수 있는 것 | 연두 (`--brand`) |
+ * | `shared` | **다른 브랜드가 함께 내놔야 존재한다.** 혼자서는 어떤 방법으로도 못 얻는 것 | 핑크 (`--accent`) |
+ *
+ * 층 정의는 `docs/dashboard/collective-insight-data-boundary.md` §1 그대로다 — `mine` 이 A층,
+ * `shared` 가 B(내 상대 위치)·C(커먼즈)층이다.
+ *
+ * **이 배지가 이 서비스의 값어치를 그대로 보여준다.** 지금 화면의 대부분은 연두이고 핑크는 몇 개뿐인데,
+ * 그 몇 개가 "가입해야만 보이는 것" 이다. 드물어서 눈에 띄는 편이 낫다 — 전부 핑크로 칠하면 아무 뜻도
+ * 없어진다. 그래서 **정말로 다른 브랜드 데이터가 섞인 값에만 붙인다.**
+ */
+export type DataOrigin = 'mine' | 'shared';
+
+const ORIGIN_TEXT: Record<DataOrigin, { label: string; title: string }> = {
+  mine: { label: '내 데이터', title: '내 브랜드 로그만으로 나온 값입니다' },
+  shared: {
+    label: '전체 브랜드',
+    title: '참여 브랜드가 함께 내놓아야 나오는 값입니다. 내 데이터만으로는 만들 수 없습니다',
+  },
+};
+
+export function OriginBadge({ kind }: { kind: DataOrigin }) {
+  const t = ORIGIN_TEXT[kind];
+  return (
+    <span className={`badge badge--origin badge--${kind}`} title={t.title}>
+      {t.label}
+    </span>
+  );
+}
+
+/**
  * 화면 맨 위에 놓는 한 문장.
  *
  * 5초 테스트는 화면을 잠깐 보여주고 가린 뒤 "무엇을 봤고 다음에 무엇을 할지" 를
@@ -48,18 +83,22 @@ export function VerdictBanner({
 export function Panel({
   title,
   source,
+  origin,
   aside,
   children,
 }: {
   title: string;
   source?: 'real' | 'mock';
+  /** 내 로그만으로 나오나(`mine`), 다른 브랜드가 모여야 나오나(`shared`). 생략하면 배지를 안 단다 */
+  origin?: DataOrigin;
   aside?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="panel">
+    <section className={`panel${origin === 'shared' ? ' panel--shared' : ''}`}>
       <header className="panel__head">
         <h2>{title}</h2>
+        {origin ? <OriginBadge kind={origin} /> : null}
         {source ? <SourceBadge kind={source} /> : null}
         {aside ? <div className="panel__aside">{aside}</div> : null}
       </header>
@@ -73,16 +112,19 @@ export function Kpi({
   value,
   sub,
   source,
+  origin,
 }: {
   label: string;
   value: string;
   sub?: string;
   source?: 'real' | 'mock';
+  origin?: DataOrigin;
 }) {
   return (
-    <div className="kpi">
+    <div className={`kpi${origin === 'shared' ? ' kpi--shared' : ''}`}>
       <p className="kpi__label">
         {label}
+        {origin ? <OriginBadge kind={origin} /> : null}
         {source ? <SourceBadge kind={source} /> : null}
       </p>
       <p className="kpi__value">{value}</p>
