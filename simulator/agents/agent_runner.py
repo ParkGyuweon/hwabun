@@ -481,6 +481,19 @@ def shopping_style(pid):
     return ", ".join(parts)
 
 
+def sort_makes_sense(pid):
+    """정렬로 표현되는 성향(가격·평점)이 있는 사람만 정렬 선택지를 받는다 (Jira 331, 2차).
+
+    1차 실측(20명): 가격 성향은 전부 가격순, 평점 성향은 3명 중 2명이 평점순을 골랐지만, 성분·순함 성향이나
+    성향 없는 사람도 11/15 가 가격순으로 몰렸다 — 정렬로 표현할 수 없는 성향이라 LLM 이 빈자리를 가격으로 채운다.
+    그래서 프롬프트로 부탁하지 않고 코드가 선택지를 좁힌다 (allowed_actions 의 원칙과 같다)."""
+    global _STYLE
+    if _STYLE is None:
+        shopping_style(pid)
+    st = _STYLE.get(pid) or {}
+    return st.get("price", 0) >= STYLE_MIN or st.get("review_lean", 0) >= STYLE_MIN
+
+
 def profile_text(p):
     """페르소나 레코드 -> LLM 에게 줄 자기소개
 
@@ -561,7 +574,8 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 목록 정렬은 sort_list 로 바꿀 수 있습니다 (인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
   **정렬은 내 쇼핑 성향으로 고르십시오.** 가격을 따지는 사람이면 가격 낮은순, 리뷰와 평점을 먼저 보는
   사람이면 평점 높은순, 남들이 많이 사는 것을 믿는 사람이면 인기순입니다. 성향에 맞는 정렬이 지금 화면
-  순서(기본 인기순)와 같으면 바꾸지 마십시오. 한 세션에 한 번이고, 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
+  순서(기본 인기순)와 같으면 바꾸지 마십시오. 성분이나 순함을 따지는 것은 정렬로 알 수 없으니 상세에서 확인하십시오.
+  한 세션에 한 번이고, 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
@@ -1256,7 +1270,7 @@ def has_unvisited_in_list(page, visited):
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
                     n_details=0, has_unvisited=True, cart_over=False,
-                    sorted_once=False, checkout=None, has_banner=False):
+                    sorted_once=False, checkout=None, has_banner=False, sort_ok=True):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -1294,8 +1308,8 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     # **leave 를 일찍 열지 않는다.** 시작 위치를 흩으면서 목록 아래쪽에서 출발하는
     # 사람이 생겼는데, 화면에 "목록 끝" 이 보이면 첫 턴부터 나가버렸다.
     # 상세를 몇 개는 보고 나서, 그리고 화면에 새 상품이 없을 때만 나갈 수 있다
-    # 정렬은 목록에서 한 번만. 매 턴 열어두면 정렬만 바꾸며 도망친다 (Jira 321)
-    if not sorted_once:
+    # 정렬은 목록에서 한 번만, 그리고 정렬로 표현되는 성향(가격·평점)이 있는 사람에게만 (Jira 321·331)
+    if not sorted_once and sort_ok:
         acts.append("sort_list")
     # 결제는 담은 것이 있고 상세를 몇 개는 본 뒤에만. leave 와 같은 문턱이다 —
     # 담자마자 사게 두면 "담고 안 산 사람" 이 사라져 전환 신호의 대조군이 없어진다
@@ -1451,7 +1465,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                                cart_over=any(
                                    budget is not None and v > budget
                                    for v in cart_prices.values()),
-                               sorted_once=sorted_once,
+                               sorted_once=sorted_once, sort_ok=sort_makes_sense(persona["persona_id"]),
                                has_banner=(kind == "list" and bool(read_banner(page))))
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
