@@ -5,7 +5,10 @@ services:
     hostname: shop-backend-mysql
     restart: unless-stopped
     ports:
-      - "${SHOP_BACKEND_MYSQL_PORT:-13306}:3306"
+      # Keep the host-local MySQL port for Spring/maintenance connections.
+      - "127.0.0.1:3306:3306"
+      # EC2-2 Spark DW projection connects through the EC2-1 private interface.
+      - "${SHOP_BACKEND_MYSQL_BIND_ADDRESS:-127.0.0.1}:${SHOP_BACKEND_MYSQL_PORT:-13306}:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${SHOP_BACKEND_MYSQL_ROOT_PASSWORD:-shop_backend_root_dev}
       MYSQL_DATABASE: ${SHOP_BACKEND_MYSQL_DATABASE:-shop_backend}
