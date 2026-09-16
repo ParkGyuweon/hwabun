@@ -11,8 +11,9 @@
 무엇을 하는가
     1. 추천 서버(`--recommend`, 기본 http://127.0.0.1:8300)가 떠 있는지 `/health` 로 확인한다.
     2. Kafka(`--bootstrap`, 기본 127.0.0.1:9092)에 붙을 수 있는지 본다. 못 붙으면 `--http` 로 물러난다(경고 출력).
-    3. 9,900명 로그가 캐시(`simulator/generator/.cache/demo_behavior_9900.jsonl`)에 없으면 `gen_behavior_logs.py --limit 9900`
-       으로 만든다 (약 1,030만 건 · 6.9GB · 1분). 있으면 그대로 쓴다.
+    3. 로그가 캐시(`<DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl`, 기본 `simulator/generator/.cache/`)에 없으면
+       `gen_behavior_logs.py --limit <limit>` 으로 만든다 (9,900명: 약 1,030만 건 · 6.9GB · 1분 · RSS 12GB). 있으면 그대로 쓴다.
+       배포 컨테이너는 `DEMO_LIMIT=1000`(71만 건 · 714MB · 20초 · RSS 1.2GB) 으로 돈다 — 1GB 한도에서 9,900명은 OOM.
     4. 로그를 **key = session_id** 로 Kafka `activity-events` 에 초당 `--rate` 건씩 넣는다 — 수집기(backend/)와 같은 규칙이라
        파티션 3개로 갈라지고, 추천 서버 소비자가 읽어 상태에 반영한다. 그 사이 `/api/recommend` 도 초당 2~3번 불러
        응답 시간 칸을 살린다.
@@ -41,7 +42,15 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(HERE, ".cache", "demo_behavior_9900.jsonl")
+# 페르소나 수·캐시 위치는 환경변수로도 준다 (Jira 335). 생성기는 페르소나 1명당 RSS 약 1.2MB · 파일 0.7MB 를 쓰므로
+# 9,900명은 RSS 약 12GB · 6.9GB 파일 — 노트북에선 되지만 배포 컨테이너(mem_limit)에서는 OOM 으로 죽는다(09-16 실측).
+# 배포 compose 는 DEMO_LIMIT=1000(RSS 1.2GB · 714MB · 21초), DEMO_CACHE_DIR=/data/demo_cache(볼륨, 재배포에도 남는다).
+DEFAULT_LIMIT = int(os.environ.get("DEMO_LIMIT", "9900"))
+CACHE_DIR = os.environ.get("DEMO_CACHE_DIR") or os.path.join(HERE, ".cache")
+
+
+def cache_path(limit):
+    return os.path.join(CACHE_DIR, f"demo_behavior_{limit}.jsonl")
 
 
 def http_json(url, body=None, timeout=20):
@@ -66,12 +75,14 @@ def ensure_log(limit, path):
         print(f"[demo] 로그 캐시 사용: {path} ({os.path.getsize(path)/1e9:.1f}GB)")
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    print(f"[demo] 로그 생성 중: {limit:,}명 → {path}  (약 1분)")
+    print(f"[demo] 로그 생성 중: {limit:,}명 → {path}  (1,000명 약 20초 · 9,900명 약 1분, RSS 약 {limit*1.2/1000:.1f}GB)", flush=True)
     cmd = [sys.executable, os.path.join(HERE, "gen_behavior_logs.py"), "--limit", str(limit), "--out", path]
     env = dict(os.environ, PYTHONUTF8="1")
     r = subprocess.run(cmd, env=env)
     if r.returncode != 0 or not os.path.exists(path):
-        raise SystemExit("로그 생성 실패")
+        oom = r.returncode in (-9, 137)          # 컨테이너 mem_limit 에 걸려 죽은 것
+        hint = " — 메모리 부족: DEMO_LIMIT 을 줄이거나 mem_limit 을 올리십시오" if oom else ""
+        raise SystemExit(f"로그 생성 실패 (exit {r.returncode}){hint}")
     return path
 
 
@@ -192,9 +203,9 @@ def main():
     ap.add_argument("--bootstrap", default="127.0.0.1:9092")
     ap.add_argument("--topic", default="activity-events")
     ap.add_argument("--rate", type=int, default=3000, help="초당 이벤트 수 (기본 3,000)")
-    ap.add_argument("--limit", type=int, default=9900, help="페르소나 수")
+    ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"페르소나 수 (기본 {DEFAULT_LIMIT:,} = env DEMO_LIMIT)")
     ap.add_argument("--max-events", type=int, default=0, help="이만큼만 보내고 멈춘다 (0 = 전부, 9,900명은 약 1,030만 건)")
-    ap.add_argument("--log", default=CACHE, help="행동 로그 경로 (없으면 생성)")
+    ap.add_argument("--log", default=None, help="행동 로그 경로 (기본 <DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl, 없으면 생성)")
     ap.add_argument("--http", action="store_true", help="Kafka 대신 추천 서버 POST /api/events 로 직접")
     ap.add_argument("--no-ticker", action="store_true", help="/api/recommend 를 같이 부르지 않는다")
     a = ap.parse_args()
@@ -211,7 +222,7 @@ def main():
     if use_kafka and not kafka_state:
         print("[demo] 경고: 추천 서버가 KAFKA_BOOTSTRAP_SERVERS 없이 떠 있다 — Kafka 에 넣어도 서버가 읽지 않는다. "
               "서버를 KAFKA_BOOTSTRAP_SERVERS 로 다시 띄우거나 --http 를 쓰십시오")
-    path = ensure_log(a.limit, a.log)
+    path = ensure_log(a.limit, a.log or cache_path(a.limit))
     print(f"[demo] 보기: {a.recommend}/live   (경로: {'Kafka ' + a.bootstrap + ' → 파티션 3 → 소비자' if use_kafka else 'HTTP 직접'} · {a.rate:,}건/초)")
 
     ticker = None
