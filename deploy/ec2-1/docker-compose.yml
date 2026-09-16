@@ -58,9 +58,12 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    # 외부 공개 금지. EC2 localhost로만 열어 IntelliJ SSH 터널에서만 접근한다.
+    # 로컬 관리·SSH 터널용 포트는 계속 loopback에만 둔다.
     ports:
       - "127.0.0.1:3306:3306"
+      # EC2-2 Spark/DW 작업은 EC2-1 사설망 주소의 13306으로만 접속한다.
+      # 기본값도 loopback이므로 .env에서 사설 IP를 명시하기 전에는 외부에 열리지 않는다.
+      - "${SHOP_BACKEND_MYSQL_BIND_ADDRESS:-127.0.0.1}:${SHOP_BACKEND_MYSQL_PORT:-13306}:3306"
     mem_limit: 1g
 
   # 추천 추론 서버 (AI, 계약 §5). 백엔드가 RECOMMEND_URL=http://recommend:8300 으로 프록시한다.
