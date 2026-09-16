@@ -1719,8 +1719,7 @@ def validate_frames(
     checks.append(_check(
         "cross_brand_daily_grain_is_unique",
         _duplicate_count(cross_brand_daily, [
-            "event_date_kst", "destination_brand_id", "actor_type", "source",
-            "scenario_id", "simulation_run_id",
+            "event_date_kst", "destination_brand_id", *EXECUTION_AXES,
         ]) == 0,
         "cross_brand_daily configured grain is unique",
     ))
