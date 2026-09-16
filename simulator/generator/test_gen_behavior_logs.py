@@ -238,6 +238,22 @@ class CheckoutTest(unittest.TestCase):
         oid = checkout(e, self.catalog, ["P1", "P2"], e.rng, sc, quantities={"P2": 2})
         return events, oid
 
+    def test_seed_flag_follows_emitter_not_checkout(self):
+        """Jira 327 — 재구매 쌍은 seeded 없는 Emitter 로 낸다. 결제 이벤트의 seeded 는 Emitter 가 정한다"""
+        for is_seed in (True, False):
+            events = []
+            e = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0), np.random.default_rng(3), self.context,
+                        session_id=("seed:" if is_seed else "hist:") + "run:PC00001:P1", is_seed=is_seed)
+            e.new_page("product_detail")
+            e.emit("add_to_cart", "P1", quantity=1, price_usd=24.0)
+            checkout(e, self.catalog, ["P1"], e.rng, {**SCENARIO, "p_payment_failed": 0.0}, restock=not is_seed)
+            pu = next(x for x in events if x["event_name"] == "purchase")
+            self.assertEqual(pu["properties"].get("seeded") is True, is_seed)
+            self.assertTrue(all((x["properties"].get("seeded") is True) == is_seed for x in events))
+            if not is_seed:
+                rs = next(x for x in events if x["event_name"] == "purchase_reason_select")
+                self.assertEqual("restock", rs["properties"]["reasons"][0])   # 재구매 사유가 앞
+
     def test_purchase_path_has_required_properties_and_passes_contract(self):
         events, oid = self._run(1, p_payment_failed=0.0, p_reason_answer=1.0)
         names = [x["event_name"] for x in events]

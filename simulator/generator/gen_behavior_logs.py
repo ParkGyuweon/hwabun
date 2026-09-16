@@ -126,6 +126,11 @@ class SimulationContext:
                 raise ValueError(f"{name} must be a non-empty string")
 
 
+def history_session_id(context, persona_id, product_id):
+    """비시드 과거 구매 세션 id (Jira 327). 재구매 쌍은 마트가 실제 주문으로 세야 하므로 seed: 접두를 안 쓴다"""
+    return f"hist:{context.simulation_run_id}:{persona_id}:{product_id}"
+
+
 def seed_session_id(context, persona_id, product_id):
     """Build a seed session key that cannot merge personas or products."""
 
@@ -1066,18 +1071,23 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
 
     for i, g in enumerate(seeds):
         first_at = base + timedelta(days=step * (len(neg) + i))
+        # 재구매 쌍(같은 상품 리뷰 2건+)은 **시드 표시 없이** 낸다 (Jira 327). 마트 계약이 is_seeded 행을
+        # 빼기 때문에 시드로 두면 재구매율이 영원히 0 이다. 추천 서버는 seeded 를 안 보므로 상태는 같다.
+        # 날짜는 그대로 과거(85일 창 안)라 마트의 90일 재구매 창에 첫 구매·재구매가 함께 든다.
+        repurchase = n_reviews_of.get(g, 1) >= 2
+        sid = (history_session_id if repurchase else seed_session_id)(context, p["persona_id"], g)
         e = Emitter(
             sink,
             p["persona_id"],
             first_at,
             rng,
             context,
-            session_id=seed_session_id(context, p["persona_id"], g),
-            is_seed=True,
+            session_id=sid,
+            is_seed=not repurchase,
         )
         e.new_page("product_detail")
-        e.emit("add_to_cart", g, seeded=True, quantity=1,
-               price_usd=catalog[g]["price"])
+        e.emit("add_to_cart", g, quantity=1, price_usd=catalog[g]["price"],
+               **({} if repurchase else {"seeded": True}))
         # 시드는 과거 구매다(리뷰를 썼다 = 샀다). 담기에서 끝내면 purchase_fact 가 비어 재구매 마트가 0 이 된다 (Jira 312)
         checkout(e, catalog, [g], rng, SC)
 
@@ -1098,13 +1108,11 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 at,
                 rng,
                 context,
-                session_id=seed_session_id(context, p["persona_id"],
-                                           f"{g}#restock{k}"),
-                is_seed=True,
+                session_id=history_session_id(context, p["persona_id"], f"{g}#restock{k}"),
+                is_seed=False,                  # 재구매는 비시드 (Jira 327)
             )
             re.new_page("product_detail")
-            re.emit("add_to_cart", g, seeded=True, quantity=1,
-                    price_usd=catalog[g]["price"])
+            re.emit("add_to_cart", g, quantity=1, price_usd=catalog[g]["price"])
             checkout(re, catalog, [g], rng, SC, restock=True)     # 재구매 = 두 번째 결제, 사유는 restock
 
     # 이탈 상품 — **노출**로 고른다. 취향으로 고르지 않는다.
