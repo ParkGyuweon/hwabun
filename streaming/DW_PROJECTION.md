@@ -42,10 +42,22 @@ SHOW CREATE TABLE dw.user_trait_daily;
 - JDBC/MySQL 외부 포트 기본은 호스트 13306 → 컨테이너 3306이다. 실제 설정을 확인한다.
 - TCP 13306은 EC2-2 및 승인된 소비자 출발지에만 허용한다.
 
-같은 서버여도 추천 컨테이너는 기본적으로 MySQL의 `shop-backend-db` 네트워크에 없다.
-이번 설정은 **추천 컨테이너에서 접근 가능한 호스트 주소와 공개 포트**를 사용한다.
-`localhost`는 추천 컨테이너 자신이다. 별도로 같은 Docker 네트워크에 연결했을 때만
-`shop-backend-mysql:3306`을 사용할 수 있다.
+추천 컨테이너는 EC2-1 Compose에서 MySQL의 외부 `shop-backend-db` 네트워크에도
+연결한다. 따라서 EC2-1의 `deploy/ec2-1/.env`는 공개 포트가 아니라 Docker DNS를
+사용해 다음처럼 설정한다.
+
+```dotenv
+DW_MYSQL_HOST=shop-backend-mysql
+DW_MYSQL_PORT=3306
+DW_MYSQL_DB=dw
+DW_MYSQL_USER=dw_reader
+DW_MYSQL_PASSWORD=<조회 전용 계정 비밀번호>
+```
+
+`shop-backend-db`는 `shop_backend/docker-compose.mysql.yml`을 먼저 실행해야 생긴다.
+반대로 EC2-2의 발행 컨테이너는 다른 호스트에 있으므로 EC2-1의 사설 IP와 공개 포트
+`13306`으로 접근한다. `localhost`는 각 컨테이너 자신을 뜻하므로 어느 쪽에도 쓰지
+않는다.
 
 ## 발행 (EC2-2)
 
@@ -80,6 +92,37 @@ sudo docker compose --profile dw run --rm dw-projection \
 기본적으로 0행은 발행을 막아 기존 조회 결과를 보존한다. **정상적인 빈 결과로 교체할
 의도가 확인된 경우에만** 위 명령에 `--allow-empty`를 추가한다. `_SUCCESS`만 있고
 스키마를 가진 Parquet 파일이 없는 경로는 정상적인 빈 결과로 인정하지 않는다.
+
+## 추천 폴백 JSONL
+
+MySQL 연결을 준비하기 전 시연용 최소 경로가 필요하면 같은 Job에서 추천 서버가 읽는
+7개 컬럼 JSONL을 생성한다. 최신 `trait_date_kst`의 `actor_type='user'` 행만 남기며,
+`identity_scope + user_id + trait`가 중복되면 임의의 실행 행을 고르지 않고 실패한다.
+출력은 임시 파일을 만든 뒤 rename하므로 기존 스냅샷을 부분 파일로 덮어쓰지 않는다.
+
+```bash
+sudo mkdir -p /opt/hwabun/export
+sudo docker compose --profile dw run --rm \
+  -v /opt/hwabun/export:/export \
+  dw-projection \
+  --emit-jsonl /export/user_trait_snapshot.jsonl \
+  --jsonl-only
+```
+
+`--jsonl-only`는 MySQL에 연결하지 않는다. MySQL 발행과 JSONL 생성을 한 번에 하려면
+`--jsonl-only`만 빼면 되며, 두 결과가 같은 Parquet 읽기·필터 경로를 사용한다.
+EC2-2의 `/opt/hwabun/export/user_trait_snapshot.jsonl`을 EC2-1로 전달한 뒤 추천
+컨테이너의 `/data/user_trait_snapshot.jsonl`에 임시 파일로 복사하고 `mv`로 교체한다.
+추천 서버는 기본 300초 주기로 재읽기 때문에 컨테이너 재시작은 필요하지 않다.
+
+```bash
+scp /opt/hwabun/export/user_trait_snapshot.jsonl \
+  ubuntu@<EC2-1-사설주소>:/tmp/user_trait_snapshot.jsonl
+sudo docker cp /tmp/user_trait_snapshot.jsonl \
+  ec2-1-recommend-1:/data/user_trait_snapshot.jsonl.tmp
+sudo docker exec ec2-1-recommend-1 \
+  mv /data/user_trait_snapshot.jsonl.tmp /data/user_trait_snapshot.jsonl
+```
 
 ## 추천 연결 (EC2-1)
 

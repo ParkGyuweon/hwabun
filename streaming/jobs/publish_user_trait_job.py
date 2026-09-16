@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
+from datetime import date, datetime
 import hashlib
 import json
 import os
@@ -42,6 +43,95 @@ class Config:
             raise ProjectionError("Invalid MySQL host/port")
         if not 1 <= self.batch_size <= 10000:
             raise ProjectionError("batch_size must be 1..10000")
+
+
+SNAPSHOT_FIELDS = (
+    "user_id", "identity_scope", "trait", "trait_score", "is_primary_trait",
+    "window_end_date", "trait_policy_version",
+)
+
+
+def read_user_trait_snapshot(source: ParquetSnapshot, batch_size: int) -> list[dict]:
+    """Read the latest real-user trait rows in the recommendation snapshot shape.
+
+    The DW Mart keeps execution/source axes for auditability. Recommendation only
+    consumes the latest date and ``actor_type='user'`` rows, so the export applies
+    the same boundary and rejects duplicate consumer grains instead of silently
+    choosing an arbitrary source/run row.
+    """
+    names = tuple(source.contract.names)
+    required = ("trait_date_kst", "actor_type", *SNAPSHOT_FIELDS)
+    missing = set(required) - set(names)
+    if missing:
+        raise ProjectionError("DW contract is missing snapshot columns")
+    index = {name: names.index(name) for name in required}
+
+    latest_date = None
+    for batch in source.batches(batch_size):
+        for row in batch:
+            if row[index["actor_type"]] != "user":
+                continue
+            row_date = row[index["trait_date_kst"]]
+            if latest_date is None or row_date > latest_date:
+                latest_date = row_date
+
+    if latest_date is None:
+        return []
+
+    rows = []
+    seen = set()
+    for batch in source.batches(batch_size):
+        for row in batch:
+            if (row[index["actor_type"]] != "user"
+                    or row[index["trait_date_kst"]] != latest_date):
+                continue
+            item = {
+                name: _json_value(name, row[index[name]])
+                for name in SNAPSHOT_FIELDS
+            }
+            key = (item["identity_scope"], item["user_id"], item["trait"])
+            if key in seen:
+                raise ProjectionError("Snapshot has duplicate consumer grain")
+            seen.add(key)
+            rows.append(item)
+
+    source.assert_unchanged()
+    rows.sort(key=lambda item: (
+        item["identity_scope"], item["user_id"], item["trait"],
+    ))
+    return rows
+
+
+def _json_value(name: str, value):
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if name == "is_primary_trait":
+        return bool(value)
+    return value
+
+
+def write_user_trait_jsonl(rows: list[dict], path: Path, allow_empty: bool = False) -> int:
+    """Atomically publish recommendation's seven-column JSONL snapshot."""
+    if not rows and not allow_empty:
+        raise ProjectionError("Empty snapshot blocked; use --allow-empty only for an intentional empty export")
+    path = Path(path)
+    if path.exists() and path.is_dir():
+        raise ProjectionError("JSONL output path is a directory")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as output:
+            for row in rows:
+                output.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+                output.write("\n")
+        temporary.replace(path)
+    except Exception:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    return len(rows)
 
 
 def connect(config: Config):
@@ -214,21 +304,41 @@ def main(argv=None):
     parser.add_argument("--ddl", type=Path, default=DEFAULT_DDL)
     parser.add_argument("--batch-size", type=int, default=1000)
     parser.add_argument("--allow-empty", action="store_true")
+    parser.add_argument(
+        "--emit-jsonl", type=Path,
+        help="Write the latest actor_type=user rows in recommendation snapshot format",
+    )
+    parser.add_argument(
+        "--jsonl-only", action="store_true",
+        help="Emit JSONL without connecting to MySQL; requires --emit-jsonl",
+    )
     parser.add_argument("--report-path", type=Path)
     args = parser.parse_args(argv)
+    if args.jsonl_only and args.emit_jsonl is None:
+        parser.error("--jsonl-only requires --emit-jsonl")
     report = {"mart": MART, "status": "failed", "published": False}
     connection = None
     code = 0
     try:
-        config = Config(host=os.getenv("DW_MYSQL_HOST", ""), user=os.getenv("DW_MYSQL_USER", ""),
-                        password=os.getenv("DW_MYSQL_PASSWORD", ""),
-                        port=int(os.getenv("DW_MYSQL_PORT", "3306")),
-                        database=os.getenv("DW_MYSQL_DB", "dw"), batch_size=args.batch_size,
-                        allow_empty=args.allow_empty, tls_ca=os.getenv("DW_MYSQL_SSL_CA") or None)
         contract = load_contract(args.ddl)
         source = ParquetSnapshot(args.source, contract)
-        connection = connect(config)
-        publish(source, MysqlStore(connection, config.database, contract), config, report)
+        if args.emit_jsonl is not None:
+            rows = read_user_trait_snapshot(source, args.batch_size)
+            report.update(
+                jsonl_path=str(args.emit_jsonl),
+                jsonl_rows=write_user_trait_jsonl(rows, args.emit_jsonl, args.allow_empty),
+                jsonl_emitted=True,
+            )
+        if args.jsonl_only:
+            report.update(status="jsonl_emitted", published=False)
+        else:
+            config = Config(host=os.getenv("DW_MYSQL_HOST", ""), user=os.getenv("DW_MYSQL_USER", ""),
+                            password=os.getenv("DW_MYSQL_PASSWORD", ""),
+                            port=int(os.getenv("DW_MYSQL_PORT", "3306")),
+                            database=os.getenv("DW_MYSQL_DB", "dw"), batch_size=args.batch_size,
+                            allow_empty=args.allow_empty, tls_ca=os.getenv("DW_MYSQL_SSL_CA") or None)
+            connection = connect(config)
+            publish(source, MysqlStore(connection, config.database, contract), config, report)
     except Exception as error:
         # DB exception messages can contain values or connection details. Emit
         # only safe validation messages and numeric DB error codes.
