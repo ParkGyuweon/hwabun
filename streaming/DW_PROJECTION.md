@@ -1,20 +1,21 @@
-# user_trait_daily → MySQL dw
+# DW Mart → MySQL dw
 
-`jobs/publish_user_trait_job.py`는 Spark가 완료한 Parquet을 PyArrow로 최대 1,000행씩
-읽는 독립 Python Job이다. Spark 재집계나 JDBC 연결이 필요하지 않다. 현재 발행 대상은
-`user_trait_daily` 하나다. DDL·grain·NULL 정책은 `contracts/dw/schema.sql`과
+`jobs/publish_user_trait_job.py`는 Spark가 완료한 Mart Parquet을 PyArrow로 최대 1,000행씩
+읽는 독립 Python Job이다. Spark 재집계나 JDBC 연결이 필요하지 않다. 기본 발행 대상은
+추천 서버의 `user_trait_daily`와 대시보드 핵심 Mart 6종이다. E4·E5 Mart 3종은
+`--marts`로 선택할 수 있다. DDL·grain·NULL 정책은 `contracts/dw/schema.sql`과
 `build_ddl.py`에서 읽고 수정하지 않는다.
 
 ## 실행 순서
 
 1. EC2-2에서 Q2~Q4를 실행하고 Q5 검증을 통과시킨다.
-2. 해당 Parquet을 덮어쓰는 배치가 없는 상태에서 projection을 실행한다.
-3. 실행별 staging 적재·검증을 모두 통과하면 하나의 `RENAME TABLE`로 발행한다.
-4. 추천 서버가 다음 reload에서 조회한다. 기본 reload 간격은 300초다.
+2. 해당 Mart Parquet을 덮어쓰는 배치가 없는 상태에서 projection을 실행한다.
+3. Mart별 staging 적재·검증을 통과하면 각 조회 테이블을 하나의 `RENAME TABLE`로 발행한다.
+4. 추천 서버와 Dashboard API가 다음 조회에서 MySQL projection을 사용한다.
 
 `_SUCCESS`와 각 파일의 경로·크기·수정 시각으로 입력 변경을 검사한다. 이것은 배치와의
 공유 잠금이 아니므로 **같은 입력의 overwrite와 projection을 동시에 실행하면 안 된다.**
-별도 run 디렉터리를 완료 후 보존하고 그 경로를 `--source`로 전달하는 것을 권장한다.
+별도 run 디렉터리를 완료 후 보존하고 그 경로를 `--source-root`로 전달하는 것을 권장한다.
 Q1의 Raw 수집은 계속 실행할 수 있다.
 
 ## 최초 MySQL 준비 (EC2-1, 관리자)
@@ -77,15 +78,32 @@ sudo docker compose --profile dw build dw-projection
 sudo docker compose --profile dw run --rm dw-projection
 ```
 
-stdout의 `status=published`, `published=true`와 `source_rows=inserted_rows`를 확인한다.
-JSON 보고서는 `dw-projection-reports` Volume의 `/reports/user-trait-projection.json`에도 남는다.
+기본 실행은 `user_trait_daily`와 대시보드 핵심 Mart 6종을 순서대로 발행한다.
+stdout의 전체 `status=published`, 각 Mart의 `published=true`와
+`source_rows=inserted_rows`를 확인한다. JSON 보고서는 `dw-projection-reports` Volume의
+`/reports/dw-projection.json`에도 Mart별로 남는다.
 실행마다 같은 보고서 파일이 갱신되므로 이력 보존이 필요하면 별도 파일명을 지정한다.
+
+E4·E5 Mart까지 함께 발행하려면 EC2-2 `.env`에 `DW_PROJECTION_MARTS`를 추가한다.
+
+```dotenv
+DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,ingredient_weekly_interest
+```
+
+특정 Mart 하나만 재발행할 때는 다음처럼 실행한다.
+
+```bash
+sudo docker compose --profile dw run --rm dw-projection \
+  --mart brand_daily_kpi \
+  --source /data/marts/brand_daily_kpi \
+  --report-path /reports/brand-daily-projection.json
+```
 
 완료된 특정 run 디렉터리를 발행할 때:
 
 ```bash
 sudo docker compose --profile dw run --rm dw-projection \
-  --source /data/<run>/marts/user_trait_daily \
+  --source-root /data/<run>/marts \
   --report-path /reports/user-trait-<run>.json
 ```
 
@@ -105,6 +123,7 @@ sudo mkdir -p /opt/hwabun/export
 sudo docker compose --profile dw run --rm \
   -v /opt/hwabun/export:/export \
   dw-projection \
+  --mart user_trait_daily \
   --emit-jsonl /export/user_trait_snapshot.jsonl \
   --jsonl-only
 ```
@@ -168,7 +187,7 @@ Python 3.12 환경에서:
 
 ```bash
 python -m pip install -r streaming/requirements-dw.txt
-python -m unittest streaming.tests.test_dw_projection_source streaming.tests.test_dw_projection_publish
+python -m unittest streaming.tests.test_dw_projection_source streaming.tests.test_dw_projection_publish streaming.tests.test_dw_projection_marts
 python -m unittest discover -s contracts/dw -p test_build_ddl.py
 ```
 
