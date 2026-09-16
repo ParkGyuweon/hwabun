@@ -527,6 +527,9 @@ def _product_event_fact(
         # 퀵룩을 왜 닫았는지. "상세로 넘어갔다"(open_detail)를 세려면 필요하다
         # (dw-schema §4.1 quick_look_close_open_detail_count).
         _prop(F.col("_properties"), "close_reason").alias("close_reason"),
+        # 찜은 토글이라 추가와 해제가 같은 Event 다. 가르지 않으면
+        # wishlist_count 가 "관심"이 아니라 "누른 횟수"가 된다 (§4.1).
+        _prop(F.col("_properties"), "action").alias("action"),
         _prop(F.col("_properties"), "added_to_cart")
         .cast("boolean")
         .alias("added_to_cart"),
@@ -966,6 +969,11 @@ def _build_dim_brand(dim_product_df: Any, commons_hash_salt: str) -> Any:
     )
 
 
+# 겹쳐 보인 체류로 보지 않는 동시 노출 블록 수의 상한.
+# 값의 뜻은 생성기·프론트가 정한다 — 재생 데이터에서는 한 섹션에서 펼친
+# 블록 수라서 2 가 나오지 않고 사실상 1 만 걸린다 (Jira 338).
+CO_VISIBLE_CLEAN_MAX = 2
+
 CONTENT_GROUP_COLUMNS = (
     "event_date_kst",
     "session_id",
@@ -1057,6 +1065,17 @@ def _section_dwell_agg(
     )
     grouped = events.groupBy(*CONTENT_GROUP_COLUMNS).agg(
         F.coalesce(F.sum("_dwell_ms"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
+        # 겹쳐 보인 체류를 뺀 합계. 한 화면에 블록이 여러 개 보이면 같은
+        # 시간이 블록마다 중복 귀속되므로, 귀속이 깨끗한 몫만 따로 센다
+        # (dashboard-mart-api-spec §354). NULL 은 "깨끗했다"고 볼 근거가
+        # 없어서 빼고, 건당으로 거른다 — 그룹 최댓값으로 거르면 큰 값
+        # 하나 때문에 그룹 전체가 빠진다.
+        F.coalesce(
+            F.sum(
+                F.when(F.col("co_visible_blocks") <= F.lit(CO_VISIBLE_CLEAN_MAX), F.col("_dwell_ms"))
+            ),
+            F.lit(0),
+        ).cast("long").alias("co_visible_le2_dwell_ms_sum"),
         F.count(F.lit(1)).cast("long").alias("dwell_event_count"),
         F.max("co_visible_blocks").cast("int").alias("max_co_visible_blocks"),
         F.min("event_time").alias("first_seen_at"),
@@ -1160,7 +1179,7 @@ def _content_interest_fact(
         keys,
         section_dwell_df,
         CONTENT_GROUP_COLUMNS,
-        ("dwell_ms_sum",),
+        ("dwell_ms_sum", "co_visible_le2_dwell_ms_sum"),
     )
     result = _null_safe_left_join(
         result,
@@ -1181,6 +1200,10 @@ def _content_interest_fact(
         result.withColumn("view_count", F.coalesce(F.col("view_count"), F.lit(0)).cast("long"))
         .withColumn(
             "dwell_ms_sum", F.coalesce(F.col("dwell_ms_sum"), F.lit(0)).cast("long")
+        )
+        .withColumn(
+            "co_visible_le2_dwell_ms_sum",
+            F.coalesce(F.col("co_visible_le2_dwell_ms_sum"), F.lit(0)).cast("long"),
         )
         .withColumn(
             "accordion_expand_count",

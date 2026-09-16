@@ -323,6 +323,8 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `cart_id` | string | Y | 장바구니 ID |
 | `order_id` | string | Y | 주문 ID |
 | `variants_viewed` | int | Y | Quick Look 옵션 조회 수 |
+| `close_reason` | string | Y | Quick Look 닫힘 사유. `open_detail`이면 상세로 넘어갔다 |
+| `action` | string | Y | 토글 Event의 방향. `wishlist_toggle`은 `add`·`remove` |
 | `added_to_cart` | boolean | Y | Quick Look 장바구니 행동 |
 | `wishlisted` | boolean | Y | Quick Look 찜 행동 |
 | `actor_type` | string | N | 사용자 유형 |
@@ -485,6 +487,7 @@ Mart(S15P21A306-168)가 데이터 파트 범위에서 빠졌다 — 리뷰 원�
 | `category_id` | string | Y | 상품 Dimension |
 | `brand_id` | string | Y | 상품 Dimension |
 | `dwell_ms_sum` | long | N | delta `dwell_ms` 합계 |
+| `co_visible_le2_dwell_ms_sum` | long | N | `co_visible_blocks <= 2`인 Event만 합산. 아래 참고 |
 | `dwell_event_count` | long | N | 합산 Event 수 |
 | `max_co_visible_blocks` | int | Y | 동시 노출 블록 최댓값 |
 | `first_seen_at` | timestamp | N | 최초 dwell 시각 |
@@ -492,6 +495,21 @@ Mart(S15P21A306-168)가 데이터 파트 범위에서 빠졌다 — 리뷰 원�
 | `processed_at` | timestamp | N | 처리 시각 |
 | `actor_type` | string | N | 사용자 유형 |
 | `source` | string | N | 유입 경로 |
+
+**`co_visible_le2_dwell_ms_sum`은 귀속이 깨끗한 체류만 센다.** 한 화면에 콘텐츠
+블록이 여러 개 보이면 같은 시간이 블록마다 중복으로 귀속된다. 그 몫을 걷어낸
+합계다. 항상 `dwell_ms_sum` 이하이며, 두 값을 나란히 둬서 화면이 총량과 순수
+귀속을 비교할 수 있게 한다 (`dashboard-mart-api-spec.md` §354).
+
+**건당으로 거른다.** 같은 grain 안에서도 Event마다 `co_visible_blocks`가 다르므로,
+`max_co_visible_blocks`로 거르면 큰 값 하나 때문에 그룹 전체가 빠진다. `NULL`은
+제외한다 — 값이 없으면 겹치지 않았다고 볼 근거가 없다.
+
+**상한 2의 의미는 `co_visible_blocks`를 싣는 쪽이 정한다.** 계약은 타입만 정하고
+값의 뜻은 정하지 않았다. 2026-09-16 재생 데이터에서 생성기는 "그 섹션에서 펼친
+블록 수"를 싣는데(`gen_behavior_logs.py:631`), 그래서 값이 1·3·4·6·9만 나오고 2가
+없다 — 상한 2가 사실상 1만 통과시킨다. 상품 귀속 `section_dwell` 1,416건 중
+167건(11.8%)이다. 값의 정의가 바뀌면 이 상한도 다시 본다.
 
 ## 13. `content_interest_fact`
 
@@ -517,6 +535,7 @@ Mart(S15P21A306-168)가 데이터 파트 범위에서 빠졌다 — 리뷰 원�
 | `brand_id` | string | Y | 상품 Dimension |
 | `view_count` | long | N | section/content 조회 수 |
 | `dwell_ms_sum` | long | N | 체류시간 합계 |
+| `co_visible_le2_dwell_ms_sum` | long | N | §12에서 그대로 실어 온 겹침 제외 합계 |
 | `accordion_expand_count` | long | N | 펼침 수 |
 | `review_filter_count` | long | N | 리뷰 필터 수 |
 | `text_select_count` | long | N | 텍스트 선택 수 |

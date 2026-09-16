@@ -2205,6 +2205,10 @@ def validate_frames(
         | (F.col("section_view_sessions") < 0)
         | (F.col("dwell_ms_sum") < 0)
         | (F.col("matched_ingredient_count") < 0)
+        # 겹침을 걷어낸 몫이라 총합을 넘을 수 없다. 넘으면 두 컬럼이
+        # 서로 다른 모집단을 세고 있다는 뜻이다 (§4.4).
+        | (F.col("co_visible_le2_dwell_ms_sum") < 0)
+        | (F.col("co_visible_le2_dwell_ms_sum") > F.col("dwell_ms_sum"))
         # 분자는 분모 모집단으로 제한돼 있다 (§4.4)
         | (F.col("ingredient_view_sessions") > F.col("product_view_sessions"))
         | (F.col("review_view_sessions") > F.col("product_view_sessions"))
@@ -2212,7 +2216,7 @@ def validate_frames(
     checks.append(_check(
         "content_daily_counts_are_bounded",
         invalid_content_counts == 0,
-        f"invalid_rows={invalid_content_counts}; 세션 <= 조회수 · 열람 <= 상품 조회 세션",
+        f"invalid_rows={invalid_content_counts}; 세션 <= 조회수 · 열람 <= 상품 조회 세션 · 겹침 제외 체류 <= 체류 합계",
     ))
 
     invalid_content_rates = content_daily.where(
@@ -2546,6 +2550,7 @@ def validate_frames(
     # §4.1 신규 컬럼. grain 은 위쪽 product_daily 검사가 이미 본다.
     invalid_diagnostics = product_daily.where(
         (F.col("variant_select_count") < 0)
+        | (F.col("wishlist_count") < 0)
         | (F.col("quick_look_close_open_detail_count") < 0)
         | (F.col("quick_look_close_open_detail_count") > F.col("quick_look_count"))
     ).count()
@@ -2558,6 +2563,16 @@ def validate_frames(
         "product_event_fact_carries_close_reason",
         "close_reason" in product_fact.columns,
         "quick_look_close_open_detail_count 의 원천이다 (Q3 재실행 필요)",
+    ))
+    checks.append(_check(
+        "product_event_fact_carries_action",
+        "action" in product_fact.columns,
+        "wishlist_count 가 찜 추가와 해제를 가르는 근거다 (Q3 재실행 필요)",
+    ))
+    checks.append(_check(
+        "content_interest_fact_carries_co_visible_sum",
+        "co_visible_le2_dwell_ms_sum" in content_interest.columns,
+        "content_daily_kpi 의 겹침 제외 체류 원천이다 (Q3 재실행 필요)",
     ))
 
     segment_content = frames.get("segment_content_daily")

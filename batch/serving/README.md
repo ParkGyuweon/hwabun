@@ -51,6 +51,8 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 
 상단 오른쪽 **▶ 페르소나 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다. 인원은 env `DEMO_LIMIT`(로컬 기본 9,900, 배포 compose 1,000 — 컨테이너 메모리 때문), 캐시는 `DEMO_CACHE_DIR`(배포 볼륨 `/data/demo_cache`). 09-16 부터 Docker 이미지에도 들어 있다(Jira 335). 절차 정본은 `docs/ai/live-demo-runbook.md`.
 
+`GET /pipeline` · `/pipeline/stats` (Jira 337, `pipeline_stats.py`): 사이트 활동(PC/PA/실사용자) → Kafka 파티션(브로커 워터마크·committed·lag) → Spark(`SPARK_MASTER_UI`) → dw 마트 7개(`DW_MYSQL_*`) → 대시보드(`DASHBOARD_URL`) 를 한 화면에. 다른 파트 자원은 읽기만. 소비자에 `observer` 훅(필터 전 모든 메시지)이 붙는다. 에이전트 버튼은 노트북 런처 `simulator/agents/agent_launcher.py`(8301) 로 간다. 런북 §2-1.
+
 `GET /live/stats` 가 같은 숫자를 JSON 으로 준다(`events.series_60s`·`partitions`·`recent`…). 인증은 없다 — 추천 서버는
 내부 네트워크 전용이고, 시연에서 밖에 보이려면 nginx 에 `/live` 를 `recommend:8300` 으로 여는 한 줄이 필요하다(배포 README).
 운영 지표의 정본은 수집기 Prometheus 메트릭이고, 이 페이지는 시연·디버그용이다.
