@@ -152,6 +152,8 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # Jenkins sh의 기본 xtrace가 비밀 파일 값을 콘솔에 출력하지 않게 한다.
+                    set +x
                     test -f /run/secrets/ec2-1.env
 
                     # merge 커밋은 diff-tree 기본 동작이 변경 파일을 비워 둔다. 그러면
