@@ -6,6 +6,11 @@ pipeline {
         }
     }
 
+    environment {
+        // Git 작업공간과 분리된 EC2-1 운영 환경 파일을 배포와 DW 초기화에 사용한다.
+        EC2_ENV_FILE = '/home/ubuntu/S15P21A306/deploy/ec2-1/.env'
+    }
+
     options {
         timestamps()
         disableConcurrentBuilds()
@@ -152,7 +157,7 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    test -f /run/secrets/ec2-1.env
+                    test -f "$EC2_ENV_FILE"
 
                     # merge 커밋은 diff-tree 기본 동작이 변경 파일을 비워 둔다. 그러면
                     # 수동 배포가 "변경된 서비스 없음"으로 끝나므로, 첫 부모 대비 diff를
@@ -198,7 +203,7 @@ pipeline {
                     echo "변경된 서비스만 배포합니다:$services"
                     docker compose \\
                       -p ec2-1 \\
-                      --env-file /run/secrets/ec2-1.env \\
+                      --env-file "$EC2_ENV_FILE" \\
                       -f deploy/ec2-1/docker-compose.yml \\
                       up -d --build $services
                 '''
@@ -217,16 +222,16 @@ pipeline {
                     set -eu
                     # Jenkins sh의 기본 xtrace가 비밀 파일 값을 콘솔에 출력하지 않게 한다.
                     set +x
-                    test -f /run/secrets/ec2-1.env
+                    test -f "$EC2_ENV_FILE"
                     test -f contracts/dw/schema.sql
                     # 추천 서버 읽기 계정과 EC2-2 Spark 쓰기 계정을 분리한다.
                     set -a
-                    . /run/secrets/ec2-1.env
+                    . "$EC2_ENV_FILE"
                     set +a
-                    : "${DW_MYSQL_USER:?Set DW_MYSQL_USER in /run/secrets/ec2-1.env}"
-                    : "${DW_MYSQL_PASSWORD:?Set DW_MYSQL_PASSWORD in /run/secrets/ec2-1.env}"
-                    : "${DW_MYSQL_WRITER_USER:?Set DW_MYSQL_WRITER_USER in /run/secrets/ec2-1.env}"
-                    : "${DW_MYSQL_WRITER_PASSWORD:?Set DW_MYSQL_WRITER_PASSWORD in /run/secrets/ec2-1.env}"
+                    : "${DW_MYSQL_USER:?Set DW_MYSQL_USER in EC2_ENV_FILE}"
+                    : "${DW_MYSQL_PASSWORD:?Set DW_MYSQL_PASSWORD in EC2_ENV_FILE}"
+                    : "${DW_MYSQL_WRITER_USER:?Set DW_MYSQL_WRITER_USER in EC2_ENV_FILE}"
+                    : "${DW_MYSQL_WRITER_PASSWORD:?Set DW_MYSQL_WRITER_PASSWORD in EC2_ENV_FILE}"
                     : "${DW_MYSQL_WRITER_HOST:?Set DW_MYSQL_WRITER_HOST to EC2-2 private IP}"
 
                     # schema.sql의 CREATE TABLE은 재실행용이 아니다. 이미 DB가 있으면 기존 데이터를 보호한다.
