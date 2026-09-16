@@ -32,6 +32,7 @@ SESSION_SCHEMA = (
 DWELL_SCHEMA = (
     "event_date_kst date, brand_id string, product_id string, session_id string, "
     "persona_id string, content_kind string, dwell_ms_sum bigint, "
+    "co_visible_le2_dwell_ms_sum bigint, "
     "actor_type string, source string, generator_type string, "
     "scenario_id string, simulation_run_id string"
 )
@@ -41,6 +42,7 @@ BRIDGE_SCHEMA = "persona_id string, segment_type string, segment_value string"
 FACT_SCHEMA = (
     "event_date_kst date, brand_id string, product_id string, category_id string, "
     "session_id string, user_id string, event_name string, close_reason string, "
+    "action string, "
     "purchase_quantity int, order_id string, item_revenue decimal(18,2), "
     "currency string, "
     "actor_type string, source string, generator_type string, "
@@ -78,9 +80,11 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         )
 
     @staticmethod
-    def _dwell(session, persona, content_kind, dwell_ms, product="P1", brand="B1"):
+    def _dwell(session, persona, content_kind, dwell_ms, product="P1", brand="B1",
+               clean_dwell_ms=None):
         return (
             date(2026, 9, 8), brand, product, session, persona, content_kind, dwell_ms,
+            dwell_ms if clean_dwell_ms is None else clean_dwell_ms,
             "user", "web", None, None, None,
         )
 
@@ -90,10 +94,10 @@ class DiagnosticMartSparkTest(unittest.TestCase):
 
     @staticmethod
     def _fact(session, event_name, close_reason=None, product="P1", brand="B1",
-              seeded=False):
+              seeded=False, action=None):
         return (
             date(2026, 9, 8), brand, product, "C1", session, "U-" + session,
-            event_name, close_reason, None, None, None, None,
+            event_name, close_reason, action, None, None, None, None,
             "user", "web", None, None, None, seeded,
         )
 
@@ -355,6 +359,55 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         ]
 
         self.assertEqual(result.count(), result.select(*key).distinct().count())
+
+
+    # ── 찜 수 (Jira 338) ───────────────────────────────────────────────
+    def test_wishlist_count_counts_adds_not_toggles(self):
+        """찜은 토글이라 추가와 해제가 같은 Event 다.
+
+        해제까지 세면 관심 신호가 아니라 버튼을 누른 횟수가 된다 (§4.1).
+        """
+        facts = self._facts([
+            self._fact("S1", "wishlist_toggle", action="add"),
+            self._fact("S1", "wishlist_toggle", action="remove"),
+            self._fact("S2", "wishlist_toggle", action="add"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(2, row["wishlist_count"])
+
+    def test_wishlist_count_treats_missing_action_as_an_add(self):
+        """action 없이 쌓인 옛 로그는 해제를 보낸 적이 없다 (§4.1)."""
+        facts = self._facts([
+            self._fact("S1", "wishlist_toggle"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["wishlist_count"])
+
+    def test_wishlist_count_counts_events_not_sessions(self):
+        """같은 세션이 두 상품을 찜하면 2 다. 진단 신호라 Event 수다 (§4.1)."""
+        facts = self._facts([
+            self._fact("S1", "wishlist_toggle", action="add"),
+            self._fact("S1", "wishlist_toggle", action="add"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(2, row["wishlist_count"])
+
+    def test_seeded_wishlist_events_are_excluded(self):
+        """시드는 관측이 아니다 (§4.0)."""
+        facts = self._facts([
+            self._fact("S1", "wishlist_toggle", action="add"),
+            self._fact("S2", "wishlist_toggle", action="add", seeded=True),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["wishlist_count"])
 
 
 if __name__ == "__main__":

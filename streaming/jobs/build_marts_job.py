@@ -780,6 +780,17 @@ def _product_daily_kpi(
         count_events("purchase"),
         # 옵션 왕복. 같은 상품을 여러 번 고르면 그만큼 센다 (§4.1).
         count_events("variant_select"),
+        # 찜은 토글이라 같은 Event 가 추가와 해제를 모두 싣는다. 관심을
+        # 재는 지표라서 추가만 센다 (§4.1). action 이 없는 옛 로그는
+        # 해제를 보낸 적이 없어 추가로 본다.
+        F.sum(
+            F.when(
+                (F.col("event_name") == F.lit("wishlist_toggle"))
+                & F.coalesce(F.col("action"), F.lit(WISHLIST_ADD_ACTION))
+                .eqNullSafe(F.lit(WISHLIST_ADD_ACTION)),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+        ).cast("long").alias("wishlist_count"),
         # 퀵룩에서 상세로 넘어간 횟수. close_reason 은 product_event_fact 가
         # 싣는다 — 여기서 properties 를 다시 파싱하면 원천이 둘이 된다.
         F.sum(
@@ -1440,6 +1451,10 @@ def _content_daily_kpi(
         # 합이 NULL 이 되는 경우(모든 입력이 NULL)를 0 으로 맞춘다. 체류 0 은
         # "머물지 않았다" 이지 "모른다" 가 아니라서 계약이 N 으로 선언했다.
         F.coalesce(F.sum("dwell_ms_sum"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
+        # 겹쳐 보인 체류를 뺀 몫. 같은 시간이 블록마다 중복 귀속된 것을
+        # 걷어낸 값이라 항상 dwell_ms_sum 이하다 (§4.4).
+        F.coalesce(F.sum("co_visible_le2_dwell_ms_sum"), F.lit(0))
+        .cast("long").alias("co_visible_le2_dwell_ms_sum"),
         F.sum("accordion_expand_count").cast("long").alias("accordion_expand_count"),
         F.sum("text_select_count").cast("long").alias("text_selection_count"),
         F.sum("text_copy_count").cast("long").alias("text_copy_count"),
@@ -1900,6 +1915,9 @@ EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
 
 # 퀵룩 창을 닫은 이유 중 "상세로 넘어갔다" 를 뜻하는 값
 # (event-properties-schema.md §3.5).
+# 찜 토글에서 "추가" 를 뜻하는 action 값 (event-properties-schema §4.5).
+WISHLIST_ADD_ACTION = "add"
+
 OPEN_DETAIL_CLOSE_REASON = "open_detail"
 
 
