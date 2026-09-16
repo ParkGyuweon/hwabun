@@ -164,6 +164,8 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 - `Found orphan containers` 경고는 정상(백엔드 compose 의 shop-backend·mysql). `--remove-orphans` 금지.
 - `.env` 의 `KAFKA_BOOTSTRAP_SERVERS` 가 EC2-1 자기 주소(`j15a306.p.ssafy.io:9092`)면 틀린 것 — 브로커는 EC2-2.
 - 다른 브랜치를 체크아웃한 상태로 로컬 서버를 재기동하면 `/live` 가 없는 옛 코드가 뜬다 (404).
+- **배포본 /live 시작 버튼이 404 `DEMO_UNAVAILABLE`** — 이미지에 `simulator/generator/demo_live.py` 가 없었다(09-16 발견, Jira 335 로 Dockerfile 에 COPY 추가). 재배포 뒤 첫 시작은 캐시 생성 1분. 캐시는 컨테이너 안이라 재배포하면 다시 만든다.
+- **배포본 /live 는 nginx 밖으로 안 열려 있다** — 추천 8300 은 컨테이너 안에서만. 보려면 `ssh -N -i ~/Downloads/J15A306T.pem -L 8300:<추천 컨테이너 IP>:8300 ubuntu@j15a306.p.ssafy.io` 뒤 `http://localhost:8300/live`. 컨테이너 IP 는 `sudo docker inspect ec2-1-recommend-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`. 고정 주소는 백엔드 nginx `location /live` 요청.
 - Windows 는 `localhost` 가 IPv6 폴백으로 2초 — 주소는 전부 `127.0.0.1`.
 - Kafka 없이도 `--http` 로 돌아가지만 파티션 칸이 비어 "분산" 은 안 보인다(§2-B).
 

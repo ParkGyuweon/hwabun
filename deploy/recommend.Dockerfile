@@ -51,6 +51,11 @@ COPY simulator/personas/data/personas_9900.json \
      simulator/personas/data/personas_holdout_b.json \
                             /app/simulator/personas/data/
 COPY frontend/src/types/log.ts /app/frontend/src/types/log.ts
+# /live 시연 구동 (Jira 295·335): 시작 버튼이 demo_live.py 를 자식 프로세스로 띄우고, 캐시가 없으면
+# gen_behavior_logs.py 로 9,900명 로그를 만든다. 이 파일들이 없어 배포본에서 404 DEMO_UNAVAILABLE 이었다(09-16).
+COPY simulator/generator/demo_live.py      simulator/generator/gen_behavior_logs.py      simulator/generator/recommend_client.py                             /app/simulator/generator/
+COPY simulator/personas/data/persona_style.json /app/simulator/personas/data/persona_style.json
+COPY frontend/src/mocks/products.sample.json      frontend/src/mocks/products.ssafy-beauty.json                             /app/frontend/src/mocks/
 COPY simulator/feedback/banned_terms.py /app/simulator/feedback/banned_terms.py
 COPY deploy/recommend-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && mkdir -p /data
