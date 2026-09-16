@@ -317,6 +317,16 @@ export interface MartQuery {
   /** 최근 N일. 계약의 from/to 로 바꿔 보낸다 (to = 어제 KST) */
   days: number;
   actorType?: ActorType;
+  /**
+   * PA(에이전트)와 PC(배치 생성)를 가르는 축 (계약 0.3.1 · §1-2).
+   *
+   * `actorType` 으로는 못 가른다 — 데이터 파트 확인(09-11)대로 PA 도 전부 `synthetic` 이다.
+   * `actor_type` enum 에 값을 더하면 기존 모든 마트의 grain 이 바뀌어서, 대신 이미 갈려 있는
+   * `generator_type` 을 쓴다 (데이터 파트 결정 09-16 · Jira 324 에서 모든 마트 key 에 들어갔다).
+   *
+   * 기본은 `all`. PA 로그는 정성 축이라 정량 지표에서 빼고 싶을 때만 쓴다 (명세 §0-1).
+   */
+  generatorType?: string;
 }
 
 /** KST 기준 어제까지 N일. 계약 §1-2 기본과 같지만 명시적으로 보낸다 */
@@ -332,7 +342,13 @@ export function rangeOf(days: number): { from: string; to: string } {
 
 async function getMart<T extends MartEnvelope>(path: string, q: MartQuery): Promise<T | null> {
   const { from, to } = rangeOf(q.days);
-  const params = new URLSearchParams({ brandId: q.brandId, from, to, actorType: q.actorType ?? 'all' });
+  const params = new URLSearchParams({
+    brandId: q.brandId,
+    from,
+    to,
+    actorType: q.actorType ?? 'all',
+    generatorType: q.generatorType ?? 'all',
+  });
   try {
     const res = await authFetch('SELLER', `/api/seller/dashboard/${path}?${params.toString()}`);
     if (!res.ok) {
