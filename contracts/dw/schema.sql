@@ -175,6 +175,69 @@ CREATE TABLE `dw`.`content_daily_kpi` (
   KEY `ix_content_daily_kpi__grain` (`brand_id`, `event_date_kst`, `product_id`, `section_id`, `content_kind`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- entry_source_daily
+CREATE TABLE `dw`.`entry_source_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `entry_source` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `product_view_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `add_to_cart_sessions` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `view_to_cart_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_entry_source_daily__grain` (`brand_id`, `event_date_kst`, `entry_source`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- exit_daily
+CREATE TABLE `dw`.`exit_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `exit_summary_sessions` BIGINT NOT NULL,
+  `quick_exit_sessions` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `quick_exit_rate` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_exit_daily__grain` (`brand_id`, `event_date_kst`, `product_id`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- friction_daily
+CREATE TABLE `dw`.`friction_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `brand_id` VARCHAR(64) NULL,
+  `event_date_kst` DATE NOT NULL,
+  `product_id` VARCHAR(64) NOT NULL,
+  `section_id` VARCHAR(64) NULL,
+  `content_kind` VARCHAR(64) NULL,
+  `event_name` VARCHAR(64) NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `event_count` BIGINT NOT NULL,
+  `friction_sessions` BIGINT NOT NULL,
+  `detail_view_sessions` BIGINT NOT NULL,
+  `friction_rate` DOUBLE NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_friction_daily__grain` (`brand_id`, `event_date_kst`, `product_id`, `section_id`, `content_kind`, `event_name`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- funnel_daily_kpi
 CREATE TABLE `dw`.`funnel_daily_kpi` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
