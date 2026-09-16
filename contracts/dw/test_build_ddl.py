@@ -19,6 +19,7 @@ from build_ddl import (  # noqa: E402
     EXCLUDED_COLUMNS,
     GRAINS,
     PARQUET_ONLY,
+    NOT_NULL_KEYS_BY_MART,
     NULLABLE_KEYS,
     SURROGATE_KEY,
     TYPE_MAP,
@@ -102,8 +103,8 @@ class GrainTest(unittest.TestCase):
 
         분류되지 않은 Mart 가 남으면 "빠뜨린 것"과 "일부러 뺀 것"을 구분할 수 없다.
         """
-        self.assertEqual(18, len(GRAINS))
-        self.assertEqual(7, len(PARQUET_ONLY))
+        self.assertEqual(21, len(GRAINS))
+        self.assertEqual(4, len(PARQUET_ONLY))
         self.assertEqual(set(), set(GRAINS) & set(PARQUET_ONLY))
 
     def test_parquet_only_marts_carry_a_reason(self):
@@ -123,6 +124,33 @@ class GrainTest(unittest.TestCase):
                 continue
             with self.subTest(mart=mart):
                 self.assertEqual("brand_id", grain[0])
+
+    def test_dimension_grain_is_not_null_even_when_the_name_is(self):
+        """같은 brand_id 라도 Dimension 의 grain 이면 NULL 일 수 없다 (§3.7).
+
+        Fact 파생 Mart 에서는 상품 미귀속 때문에 NULL 이 가능해 NULLABLE_KEYS 에
+        들어 있다. 이름으로만 판정하면 56행짜리 배정표가 대리키를 달고 유일성을
+        잃는다 — 백엔드가 brand_id 로 한 행을 찾는 표다.
+        """
+        self.assertIn("brand_id", NULLABLE_KEYS)
+        self.assertTrue(is_nullable("brand_id", ["brand_id"], "brand_daily_kpi"))
+        self.assertFalse(is_nullable("brand_id", ["brand_id"], "brand_cohort_dim"))
+
+    def test_dimension_uses_a_real_primary_key(self):
+        """grain 이 NULL 이 아니면 대리키를 달지 않는다."""
+        table = render_table("brand_cohort_dim", [
+            ("brand_id", "string", True),
+            ("mart_processed_at", "timestamp", False),
+        ])
+
+        self.assertIn("PRIMARY KEY (`brand_id`)", table)
+        self.assertNotIn(SURROGATE_KEY, table)
+
+    def test_not_null_overrides_name_the_mart_they_apply_to(self):
+        """예외는 Mart 를 명시해야 다른 Mart 에 번지지 않는다."""
+        for mart in NOT_NULL_KEYS_BY_MART:
+            with self.subTest(mart=mart):
+                self.assertIn(mart, GRAINS)
 
     def test_non_range_marts_lead_with_their_own_access_key(self):
         """브랜드 기간 조회가 아닌 Mart 는 선두가 다르다 (§7.6)."""
