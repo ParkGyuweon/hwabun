@@ -98,6 +98,25 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
   **파티션 칸은 비고 수집기·Spark·마트에는 아무것도 안 들어간다.** "분산"은 이 모드로는 못 보여준다. 시연 3일 전까지 Kafka 가
   안 붙으면 이 모드로 리허설하고, 발표에서는 분산 부분을 로컬 실측(§4)으로 대신한다.
 
+## 2-1. 파이프라인 화면 `/pipeline` (Jira 337, 09-16)
+
+`/live` 가 "추천 상태에 반영됐다" 는 마지막 층을 깊게 보는 화면이라면, `/pipeline` 은 다섯 층을 얕게 이어 본다 —
+**① 사이트 활동(페르소나 PC / 에이전트 PA / 실사용자) → ② Kafka 파티션(브로커 끝 오프셋·소비 위치·lag) → ③ Spark(워커·실행 앱) → ④ dw 마트 7개(행 수·갱신) → ⑤ 대시보드(상태 반영·링크)**.
+리허설(09-17)에서 로그가 어디까지 흘렀는지 짚는 용도. 다른 파트 자원은 전부 읽기만 한다. 접근은 `/live` 와 같다(컨테이너 8300, 터널).
+
+| 칸 | 출처 | 지금(09-16) | 켜려면 |
+| --- | --- | --- | --- |
+| ① 활동 | Kafka 소비자가 받은 모든 메시지(상태 필터 전) | 됨 | — |
+| ② Kafka | 같은 group 의 두 번째 Consumer(구독 안 함)로 워터마크·committed | 됨 | — |
+| ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **대기** — EC2-2 가 마스터 UI 를 `127.0.0.1:18080` 에만 바인딩 | 민우님: EC2-1 사설 IP 에 18080 개방(보안그룹 + compose ports) → `.env` `SPARK_MASTER_UI=http://<EC2-2 사설 IP>:18080` |
+| ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **대기** — dw 스키마·reader 없음 | 백엔드 ①② 뒤 `.env` |
+| ⑤ 대시보드 | `DASHBOARD_URL` 링크 | 링크만 | 백엔드 API 6개 뒤 숫자 |
+
+버튼 둘. **▶ 페르소나 시작**은 `/live` 와 같은 `POST /live/demo/start`(1,000명·이어 보내기). **▶ 에이전트 100명**은 발표 노트북의 런처
+`python simulator/agents/agent_launcher.py`(127.0.0.1:8301, GMS_KEY 있는 셸에서)로 가서 `agent_runner --url <배포 사이트> --limit 100 --checkout --workers 5 --simulation-run-id demo-<날짜>` 를 띄운다.
+런처를 켜는 것이 곧 GMS 허락이다(1명 약 9 크레딧, 100명 약 900). 런처 주소는 화면 오른쪽 위 칸(브라우저에 기억).
+에이전트 로그는 진짜 브라우저 → 프론트 로거 → 수집기 → Kafka 로 페르소나와 같은 길을 가서 ① 의 PA 줄에 잡힌다.
+
 ## 3. 데이터
 
 - 로그 캐시 `<DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl` (로컬 기본 `simulator/generator/.cache/`, gitignore). 9,900명 = 1,030만 건 · 6.9GB · 1분 · RSS 12GB,
