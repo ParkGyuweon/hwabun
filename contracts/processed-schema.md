@@ -52,6 +52,11 @@ Join 시점 스냅샷으로 보존한다.
 
 ## 3. Dataset 카탈로그
 
+**§11과 §15는 비어 있다.** 각각 `search_event_fact`와
+`persona_behavior_feature_delta`였는데 2026-09-16에 지웠다 — 구현된 적이 없고
+읽으려던 곳도 없어졌다. 번호를 다시 매기지 않는 이유는 다른 문서 일곱 곳이
+뒤 절들을 번호로 가리키고 있어서다.
+
 | Dataset | Layer | Grain / Unique key | Partition | 현재 `dev` |
 | --- | --- | --- | --- | --- |
 | `bad_events` | Error | Kafka 물리 좌표 1건 | `bad_recorded_date` | 구현, 목표 컬럼 보완 필요 |
