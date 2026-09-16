@@ -25,7 +25,8 @@ from streaming.jobs.build_marts_job import (
 CONTENT_SCHEMA = (
     "event_date_kst date, brand_id string, product_id string, category_id string, "
     "section_id string, content_kind string, session_id string, "
-    "view_count bigint, dwell_ms_sum bigint, accordion_expand_count bigint, "
+    "view_count bigint, dwell_ms_sum bigint, co_visible_le2_dwell_ms_sum bigint, "
+    "accordion_expand_count bigint, "
     "text_select_count bigint, text_copy_count bigint, "
     "matched_ingredients array<string>, content_interest_score double, "
     "actor_type string, source string, generator_type string, "
@@ -85,10 +86,14 @@ class ContentMartSparkTest(unittest.TestCase):
     # ── 픽스처 ─────────────────────────────────────────────────────────────
     @staticmethod
     def _content(session, content_kind, product="P1", brand="B1",
-                 section="details", dwell=1000, seeded=False, views=1):
+                 section="details", dwell=1000, seeded=False, views=1,
+                 clean_dwell=None):
+        # clean_dwell 을 안 주면 전액이 겹침 없는 체류다. 대부분의 테스트가
+        # 겹침을 다루지 않으므로 그쪽 기대값을 흔들지 않는다.
         return (
             date(2026, 9, 8), brand, product, "C1", section, content_kind, session,
-            views, dwell, 0, 0, 0, ["retinol"], 1.5,
+            views, dwell, dwell if clean_dwell is None else clean_dwell,
+            0, 0, 0, ["retinol"], 1.5,
             "user", "web", None, None, None, seeded,
         )
 
@@ -424,6 +429,48 @@ class ContentMartSparkTest(unittest.TestCase):
         ]
 
         self.assertEqual(result.count(), result.select(*key).distinct().count())
+
+
+    # ── 겹침 제외 체류 (Jira 338) ──────────────────────────────────────
+    def test_co_visible_sum_is_aggregated_alongside_the_total(self):
+        """총합과 겹침 제외 합계를 나란히 낸다. 총합을 대체하지 않는다 (§4.4)."""
+        content = self._content_df([
+            self._content("S1", "ingredient", dwell=1000, clean_dwell=400),
+            self._content("S2", "ingredient", dwell=500, clean_dwell=500),
+        ])
+        funnel = self._funnel_df([self._session("S1"), self._session("S2")])
+
+        row = _content_daily_kpi(content, funnel, "Asia/Seoul").first()
+
+        self.assertEqual(1500, row["dwell_ms_sum"])
+        self.assertEqual(900, row["co_visible_le2_dwell_ms_sum"])
+
+    def test_co_visible_sum_never_exceeds_the_total(self):
+        """겹침을 걷어낸 몫이라 총합을 넘을 수 없다. Q5 가 보는 불변식이다."""
+        content = self._content_df([
+            self._content("S1", "ingredient", dwell=1000, clean_dwell=0),
+        ])
+        funnel = self._funnel_df([self._session("S1")])
+
+        row = _content_daily_kpi(content, funnel, "Asia/Seoul").first()
+
+        self.assertEqual(0, row["co_visible_le2_dwell_ms_sum"])
+        self.assertLessEqual(
+            row["co_visible_le2_dwell_ms_sum"], row["dwell_ms_sum"]
+        )
+
+    def test_seeded_content_is_excluded_from_the_co_visible_sum(self):
+        """시드는 관측이 아니다. 새 컬럼도 같은 규칙을 따라야 한다 (§4.0)."""
+        content = self._content_df([
+            self._content("S1", "ingredient", dwell=1000, clean_dwell=1000),
+            self._content("S2", "ingredient", dwell=800, clean_dwell=800,
+                          seeded=True),
+        ])
+        funnel = self._funnel_df([self._session("S1")])
+
+        row = _content_daily_kpi(content, funnel, "Asia/Seoul").first()
+
+        self.assertEqual(1000, row["co_visible_le2_dwell_ms_sum"])
 
 
 if __name__ == "__main__":
