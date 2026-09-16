@@ -3,7 +3,7 @@
 **PC 페르소나 9,900명**의 탐색 행동을 만들어 **파일로 저장**하거나
 **수집 API 로 바로 전송**한다.
 
-PA(LLM 에이전트) 100명은 기본으로 **생성하지 않는다** (`--include-agents` 필요). `--include-agents` 를 주면 `--limit` 이 있어도 PA 100명 **전원**이 들어간다(Jira 328) — 에이전트가 라이브에서 재구매하려면 마트에 그 사람의 과거 구매·재구매 쌍(327)이 있어야 한다. 데이터 파트 재생은 이 옵션을 켜고, /live 시연 캐시(demo_live)는 PA 제외 그대로.
+PA(LLM 에이전트) 100명은 기본으로 **생성하지 않는다** (`--include-agents` 필요). `--include-agents` 를 주면 `--limit` 이 있어도 PA 100명 **전원**이 들어간다(Jira 328). **데이터 파트 재생에는 넣지 않는다** (09-16 철회): 마트 grain 에 `generator_type`·`simulation_run_id` 가 있어 생성기가 깐 PA 이력(python_batch)과 러너의 라이브 결제(agent_llm)는 같은 사람의 재구매로 묶이지 않고, 한 run 에 persona_source 가 섞여 persona-schema §10.1 과 어긋난다. 에이전트 재구매는 러너를 같은 `--simulation-run-id` 로 2회 이상 돌려 Parquet 에서 본다. 옵션은 로컬 실험용으로만 남긴다.
 PA 는 대표 정량 지표에 합치지 않는 **별도의 정성 검증 축**이다
 (docs/ai/evaluation-framework.md 5절). 두 집단을 합쳐 하나의 성능처럼 보고하지 않는다.
 
