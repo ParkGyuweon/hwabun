@@ -52,6 +52,9 @@ DEFAULT_CONTENT_INTEREST_PATH = "data/processed/content_interest_fact"
 DEFAULT_CONTENT_DAILY_PATH = "data/marts/content_daily_kpi"
 DEFAULT_CONTENT_CONVERSION_PATH = "data/marts/content_conversion_daily"
 DEFAULT_BEHAVIOR_CONVERSION_PATH = "data/marts/behavior_conversion_daily"
+DEFAULT_FRICTION_DAILY_PATH = "data/marts/friction_daily"
+DEFAULT_EXIT_DAILY_PATH = "data/marts/exit_daily"
+DEFAULT_ENTRY_SOURCE_DAILY_PATH = "data/marts/entry_source_daily"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
 #   py contracts/persona/build_persona_tables.py --sample PC:all
 DEFAULT_PERSONA_BRIDGE_PATH = (
@@ -123,6 +126,9 @@ class BuildMartsConfig:
     content_daily_path: str = DEFAULT_CONTENT_DAILY_PATH
     content_conversion_path: str = DEFAULT_CONTENT_CONVERSION_PATH
     behavior_conversion_path: str = DEFAULT_BEHAVIOR_CONVERSION_PATH
+    friction_daily_path: str = DEFAULT_FRICTION_DAILY_PATH
+    exit_daily_path: str = DEFAULT_EXIT_DAILY_PATH
+    entry_source_daily_path: str = DEFAULT_ENTRY_SOURCE_DAILY_PATH
     persona_bridge_path: str = DEFAULT_PERSONA_BRIDGE_PATH
     banner_daily_path: str = DEFAULT_BANNER_DAILY_PATH
     user_trait_daily_path: str = DEFAULT_USER_TRAIT_DAILY_PATH
@@ -167,6 +173,9 @@ class BuildMartsConfig:
             "content_daily_path": self.content_daily_path,
             "content_conversion_path": self.content_conversion_path,
             "behavior_conversion_path": self.behavior_conversion_path,
+            "friction_daily_path": self.friction_daily_path,
+            "exit_daily_path": self.exit_daily_path,
+            "entry_source_daily_path": self.entry_source_daily_path,
             "persona_bridge_path": self.persona_bridge_path,
             "banner_daily_path": self.banner_daily_path,
             "user_trait_daily_path": self.user_trait_daily_path,
@@ -354,6 +363,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="behavior_conversion_daily output path",
     )
     parser.add_argument(
+        "--friction-daily-path",
+        default=_env("FRICTION_DAILY_PATH", DEFAULT_FRICTION_DAILY_PATH),
+        help="friction_daily output path",
+    )
+    parser.add_argument(
+        "--exit-daily-path",
+        default=_env("EXIT_DAILY_PATH", DEFAULT_EXIT_DAILY_PATH),
+        help="exit_daily output path",
+    )
+    parser.add_argument(
+        "--entry-source-daily-path",
+        default=_env("ENTRY_SOURCE_DAILY_PATH", DEFAULT_ENTRY_SOURCE_DAILY_PATH),
+        help="entry_source_daily output path",
+    )
+    parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
         help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
@@ -425,6 +449,9 @@ def parse_args(argv: list[str] | None = None) -> BuildMartsConfig:
         content_daily_path=args.content_daily_path,
         content_conversion_path=args.content_conversion_path,
         behavior_conversion_path=args.behavior_conversion_path,
+        friction_daily_path=args.friction_daily_path,
+        exit_daily_path=args.exit_daily_path,
+        entry_source_daily_path=args.entry_source_daily_path,
         persona_bridge_path=args.persona_bridge_path,
         banner_daily_path=args.banner_daily_path,
         user_trait_daily_path=args.user_trait_daily_path,
@@ -1532,6 +1559,272 @@ def _behavior_conversion_daily(
             _safe_ratio(F.col("not_done_cart_sessions"), F.col("not_done_sessions")),
         )
     )
+
+# E6 "막히는 곳" 화면이 읽는 UI 마찰 Event (dashboard-mart-api-spec.md §3 E6).
+#
+# 재생 데이터 실측: scroll_backtrack 2,018건(시드 135) · rage_click 43건(**전부 시드**) ·
+# dead_click 0건. 시드를 빼면 실질 신호는 scroll_backtrack 하나다. 그래도 세 Event 를
+# 모두 목록에 두는 이유는, 0 인 것과 집계하지 않는 것이 다르기 때문이다 — 화면이
+# "이 브랜드에는 dead_click 이 없다" 를 적는다 (spec §3 E6).
+FRICTION_EVENTS = ("rage_click", "dead_click", "scroll_backtrack")
+
+# 조기 이탈 판정 기준. spec §3 E6 의 quick_exit_rate 정의다.
+QUICK_EXIT_MS = 3000
+
+# 진입 경로 어휘 (event-properties-schema.md §3.3). Mart 는 이 값만 낸다 —
+# 새 경로가 생기면 어휘집을 먼저 고친다.
+ENTRY_SOURCES = (
+    "list_grid", "promo_pick", "similar_products", "quick_look", "cart", "breadcrumb",
+)
+
+# 진입 경로를 싣는 Event. product_impression 에는 entry_source 가 없어
+# (재생 데이터 100,625건 중 0건) 노출 단계는 이 축으로 가를 수 없다.
+ENTRY_SOURCE_EVENTS = ("product_click", "quick_look")
+
+
+def _detail_view_sessions(funnel_session_df: Any, time_zone: str) -> Any:
+    """상세를 연 세션. E6 세 Mart 가 공유하는 분모다 (spec §6-6).
+
+    상세는 ``product_view`` 와 ``quick_look`` 의 **합집합**이다. Quick Look 에서
+    바로 담을 수 있어서 ``product_view`` 만 분모로 두면 분자와 모집단이 어긋나
+    비율이 1.0 을 넘는다 (Jira 235·277).
+
+    ``funnel_session_fact`` 에 ``first_detail_view_at`` 이 없으므로 두 시각 중
+    이른 쪽을 쓴다. ``funnel_date_kst`` 는 퍼널 첫 단계(대개 노출)의 날짜라
+    상세를 연 날과 어긋난다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # least 는 NULL 을 건너뛴다. 둘 중 하나만 있어도 그 값이 나온다.
+    detail_at = F.least(
+        F.col("first_product_view_at"), F.col("first_quick_look_at")
+    )
+    return funnel_session_df.where(
+        F.col("reached_detail_view") & _valid_brand()
+    ).select(
+        F.to_date(F.from_utc_timestamp(detail_at, time_zone)).alias("event_date_kst"),
+        "brand_id",
+        "product_id",
+        *EXECUTION_AXES,
+        "session_id",
+        F.col("reached_product_view").alias("_reached_product_view"),
+        F.col("reached_add_to_cart").alias("_reached_cart"),
+    )
+
+
+def _friction_daily(
+    sessionized_df: Any,
+    funnel_session_df: Any,
+    time_zone: str,
+) -> Any:
+    """화면 어디에서 막히는가 (dw-schema.md §4.21).
+
+    **상품 선호와 분리한다.** "이 상품이 별로다" 가 아니라 "이 화면이 불편하다" 를
+    재는 지표다. 그래서 전환 Mart 와 grain 을 따로 두고 분모만 공유한다.
+
+    ``event_name`` 을 grain 에 두는 롱 포맷이다. 마찰 Event 를 나중에 더해도 grain 이
+    바뀌지 않고, E6 의 ``by_location`` 이 ``section_id`` + ``event_name`` 을 그대로
+    읽는다. ``counts`` 는 ``event_name`` 으로 합산해 만든다.
+
+    입력이 ``sessionized_events`` 인 이유는 세 Event 가 ``product_event_fact`` 에
+    없고, ``cleaned_events`` 는 ``brand_id`` 가 비어 있기 때문이다(실측 0%).
+    ``section_id``·``content_kind`` 는 ``properties_json`` 에 있다.
+    """
+
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
+    # 부정 시드가 scroll_backtrack·rage_click 을 내므로 여기서는 특히 크게 갈린다
+    # (event-properties-schema.md §3.14).
+    events = _observed_events(sessionized_df).where(
+        F.col("event_name").isin(*FRICTION_EVENTS)
+        & F.col("product_id").isNotNull()
+        & (F.length(F.trim(F.col("product_id"))) > 0)
+        & _valid_brand()
+    ).select(
+        "event_date_kst",
+        "brand_id",
+        "product_id",
+        F.get_json_object("properties_json", "$.section_id").alias("section_id"),
+        F.get_json_object("properties_json", "$.content_kind").alias("content_kind"),
+        *EXECUTION_AXES,
+        "event_name",
+        "session_id",
+    )
+
+    axes = list(EXECUTION_AXES)
+    product_key = ["event_date_kst", "brand_id", "product_id", *axes]
+    key_columns = [
+        "event_date_kst", "brand_id", "product_id", "section_id", "content_kind",
+        *axes, "event_name",
+    ]
+
+    observed = events.groupBy(*key_columns).agg(
+        F.count("*").cast("long").alias("event_count"),
+        F.countDistinct("session_id").cast("long").alias("friction_sessions"),
+    )
+
+    # 마찰이 한 건도 없는 Event 도 행을 남긴다. dead_click 은 생성기가 만들지 않아
+    # 항상 0 인데, 행이 없으면 화면이 "0 이다" 와 "안 본다" 를 구분할 수 없다.
+    locations = events.select(
+        *product_key, "section_id", "content_kind"
+    ).distinct()
+    names = locations.sparkSession.createDataFrame(
+        [(name,) for name in FRICTION_EVENTS], "event_name string"
+    )
+    skeleton = locations.crossJoin(F.broadcast(names))
+
+    filled = _null_safe_join(skeleton, observed, key_columns).select(
+        *key_columns,
+        F.coalesce(F.col("event_count"), F.lit(0).cast("long")).alias("event_count"),
+        F.coalesce(F.col("friction_sessions"), F.lit(0).cast("long")).alias(
+            "friction_sessions"
+        ),
+    )
+
+    # 분모는 그 상품의 상세를 연 세션이다 (§6-6). 마찰은 상세 안에서 일어난다.
+    denominators = _detail_view_sessions(funnel_session_df, time_zone).groupBy(
+        *product_key
+    ).agg(F.countDistinct("session_id").cast("long").alias("detail_view_sessions"))
+
+    return (
+        _null_safe_join(filled, denominators, product_key)
+        .withColumn(
+            "detail_view_sessions",
+            F.coalesce(F.col("detail_view_sessions"), F.lit(0).cast("long")),
+        )
+        .withColumn(
+            "friction_rate",
+            _safe_ratio(F.col("friction_sessions"), F.col("detail_view_sessions")),
+        )
+        .withColumn("mart_processed_at", F.current_timestamp())
+    )
+
+
+def _exit_daily(
+    sessionized_df: Any,
+    funnel_session_df: Any,
+    time_zone: str,
+) -> Any:
+    """세션이 얼마나 빨리 나갔는가 (dw-schema.md §4.22).
+
+    ``exit_summary`` 는 **세션 단위 Event** 라 ``product_id``·``brand_id`` 가 없다
+    (실측 0건). 그래서 그 세션이 상세를 연 상품 **전부**에 귀속한다. 세션 하나가
+    상품 셋을 봤으면 세 행에 들어간다 — **상품 축으로 합산하면 세션이 부푼다.**
+
+    ``exit_summary.last_content_kind`` 로 이탈 지점을 가르는 방식은 쓸 수 없다.
+    계약에 선언돼 있지만 재생 데이터 1,000건 중 **0건**만 값을 싣는다. 콘텐츠별
+    이탈 지점은 콘텐츠 Event 의 마지막 시각으로 따로 낸다 (spec §6-3 product_exit_daily, 후속).
+
+    세션에 ``exit_summary`` 가 여럿이면 **가장 긴** 체류로 판정한다. 어느 페이지에도
+    오래 머물지 않았을 때만 조기 이탈이다 — 최솟값을 쓰면 오래 머문 세션도 짧은
+    페이지 하나 때문에 조기 이탈이 된다.
+    """
+
+    from pyspark.sql import functions as F
+
+    exits = _observed_events(sessionized_df).where(
+        F.col("event_name") == F.lit("exit_summary")
+    ).groupBy("session_id").agg(
+        F.max(
+            F.get_json_object("properties_json", "$.dwell_ms").cast("long")
+        ).alias("_dwell_ms")
+    ).withColumn(
+        "_is_quick_exit", F.col("_dwell_ms") < F.lit(QUICK_EXIT_MS)
+    )
+
+    axes = list(EXECUTION_AXES)
+    key_columns = ["event_date_kst", "brand_id", "product_id", *axes]
+
+    sessions = _detail_view_sessions(funnel_session_df, time_zone).select(
+        *key_columns, "session_id"
+    ).distinct()
+
+    joined = sessions.join(exits, ["session_id"], "left")
+    return joined.groupBy(*key_columns).agg(
+        F.countDistinct("session_id").cast("long").alias("detail_view_sessions"),
+        F.countDistinct(
+            F.when(F.col("_dwell_ms").isNotNull(), F.col("session_id"))
+        ).cast("long").alias("exit_summary_sessions"),
+        F.countDistinct(
+            F.when(F.col("_is_quick_exit"), F.col("session_id"))
+        ).cast("long").alias("quick_exit_sessions"),
+        F.current_timestamp().alias("mart_processed_at"),
+    ).withColumn(
+        # 분모는 상세를 연 세션 전체다. exit_summary 가 없는 세션은 "빨리 나가지
+        # 않았다" 가 아니라 "기록이 없다" 라서 exit_summary_sessions 를 따로 낸다 —
+        # 두 값이 크게 다르면 수집 누락이다.
+        "quick_exit_rate",
+        _safe_ratio(F.col("quick_exit_sessions"), F.col("detail_view_sessions")),
+    )
+
+
+def _entry_source_daily(
+    product_fact_df: Any,
+    funnel_session_df: Any,
+    time_zone: str,
+) -> Any:
+    """어느 경로로 들어온 손님이 잘 담는가 (dw-schema.md §4.23).
+
+    grain 에 ``product_id`` 를 두지 않는다. E6 는 브랜드 단위 수치를 그리는데 상품
+    단위 세션 수는 브랜드로 합산할 수 없다 — 한 세션이 같은 브랜드 상품 여럿을 보면
+    상품 수만큼 부푼다 (§4.6 과 같은 이유).
+
+    **``entry_source`` 축으로도 합산하면 안 된다.** 한 세션이 상품 A 는 목록에서,
+    상품 B 는 유사 상품에서 열면 두 행에 모두 들어간다.
+
+    노출 단계는 이 축으로 가를 수 없다. ``product_impression`` 에 ``entry_source``
+    가 없다 (재생 데이터 100,625건 중 0건). 그래서 ``detail_entry_rate`` 를 내지
+    않고 ``product_view_sessions`` 를 대신 싣는다 — spec §3 E6 가 요구하는 형태다.
+    """
+
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    # 시드 Event 제외는 Mart 정의의 일부다.
+    entries = _observed_events(product_fact_df).where(
+        F.col("event_name").isin(*ENTRY_SOURCE_EVENTS)
+        & F.col("entry_source").isin(*ENTRY_SOURCES)
+        & F.col("product_id").isNotNull()
+        & _valid_brand()
+    )
+
+    # 한 세션이 같은 상품에 여러 경로로 들어올 수 있다 (실측 21,555쌍 중 249쌍).
+    # **첫 진입**을 그 세션의 경로로 본다. 동률이면 event_id 사전순 — 규칙이 없으면
+    # 실행마다 판정이 흔들려 재계산 결정성이 깨진다.
+    order = Window.partitionBy("session_id", "product_id").orderBy(
+        F.col("event_time").asc(), F.col("event_id").asc()
+    )
+    first_entry = (
+        entries.withColumn("_rank", F.row_number().over(order))
+        .where(F.col("_rank") == 1)
+        .select("session_id", "product_id", "entry_source")
+    )
+
+    axes = list(EXECUTION_AXES)
+    key_columns = ["event_date_kst", "brand_id", "entry_source", *axes]
+
+    sessions = _detail_view_sessions(funnel_session_df, time_zone).join(
+        first_entry, ["session_id", "product_id"], "inner"
+    )
+
+    return sessions.groupBy(*key_columns).agg(
+        F.countDistinct(
+            F.when(F.col("_reached_product_view"), F.col("session_id"))
+        ).cast("long").alias("product_view_sessions"),
+        F.countDistinct("session_id").cast("long").alias("detail_view_sessions"),
+        F.countDistinct(
+            F.when(F.col("_reached_cart"), F.col("session_id"))
+        ).cast("long").alias("add_to_cart_sessions"),
+        F.current_timestamp().alias("mart_processed_at"),
+    ).withColumn(
+        # 담기 분모는 상세를 연 세션이다 (§6-6). Quick Look 에서 담는 경로가 있어
+        # product_view 만 분모로 두면 비율이 1.0 을 넘는다.
+        "view_to_cart_rate",
+        _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")),
+    )
+
 
 PAYMENT_METHODS = ("kakaopay", "card", "test")
 ORDER_CHANNELS = ("backend", "local")
@@ -2766,6 +3059,14 @@ def build_mart_frames(
         frames["behavior_conversion_daily"] = _behavior_conversion_daily(
             sessionized_df, funnel_session, time_zone
         )
+    # E6 는 상세를 연 세션(product_view ∪ quick_look)을 공통 분모로 쓴다.
+    frames["friction_daily"] = _friction_daily(
+        sessionized_df, funnel_session, time_zone
+    )
+    frames["exit_daily"] = _exit_daily(sessionized_df, funnel_session, time_zone)
+    frames["entry_source_daily"] = _entry_source_daily(
+        product_fact_df, funnel_session, time_zone
+    )
     if persona_bridge_df is not None:
         frames["persona_segment_daily_kpi"] = _persona_segment_daily_kpi(
             product_fact_df, persona_bridge_df, event_weights
@@ -2973,6 +3274,17 @@ def run(spark: Any, config: BuildMartsConfig) -> None:
     _write_mart(
         frames["behavior_conversion_daily"],
         config.behavior_conversion_path,
+        "event_date_kst",
+    )
+    _write_mart(
+        frames["friction_daily"], config.friction_daily_path, "event_date_kst"
+    )
+    _write_mart(
+        frames["exit_daily"], config.exit_daily_path, "event_date_kst"
+    )
+    _write_mart(
+        frames["entry_source_daily"],
+        config.entry_source_daily_path,
         "event_date_kst",
     )
     _write_mart(
