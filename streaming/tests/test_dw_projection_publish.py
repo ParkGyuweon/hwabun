@@ -14,7 +14,9 @@ class PublishTests(unittest.TestCase):
             unsafe=True,
         )
         self.source.batches.return_value = iter([[("row-1",)], [("row-2",)]])
-        self.store = Mock(spec=MysqlStore)
+        # MysqlStore.assert_lock 도 mock 의 assert 접두 가드에 걸린다. Python 3.8 은
+        # spec 에 선언돼 있어도 막으므로 source 와 같이 unsafe 를 준다.
+        self.store = Mock(spec=MysqlStore, unsafe=True)
         self.store.acquire.return_value = True
         self.report = {}
 
