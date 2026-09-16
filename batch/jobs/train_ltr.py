@@ -39,7 +39,7 @@ sys.path.insert(0, BD)
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from eval_metadata import load as load_metadata          # noqa: E402
-from ltr_features import LtrFeatures, augment_new_product  # noqa: E402
+from ltr_features import LtrFeatures, augment_new_product, rating_weights  # noqa: E402
 from persona_feature import load as load_affinity        # noqa: E402
 from product_encoder import Encoder                      # noqa: E402
 from recommender import load_cooc                        # noqa: E402
@@ -67,10 +67,11 @@ def training_rows(index):
         p = profiles.get(r["persona_id"])
         if p is None:
             continue
-        seeds = [index[g] for g in r["seed_product_ids"] if g in index]
+        sid = [g for g in r["seed_product_ids"] if g in index]
+        seeds = [index[g] for g in sid]
         t = r["target_product_id"]
         if seeds and t in index:
-            out.append((p, seeds, index[t]))
+            out.append((p, seeds, index[t], sid))
     return out
 
 
@@ -84,6 +85,10 @@ def main():
                     default=True, help="순열 중요도 계산을 건너뛴다 (빠름)")
     ap.add_argument("--max-iter", type=int, default=PARAMS["max_iter"],
                     help="트리 수 상한 (조기종료 기준). 2026-09-10 태그 제거 후 300 에 닿아 올려 본 값을 고른다")
+    ap.add_argument("--weighted", dest="weighted", action="store_true", default=True,
+                    help="가중 평균 코사인 cos_seed_w 피처 (기본 켬, Jira 322). 시드 강도 = 리뷰 평점 → 이벤트 가중치")
+    ap.add_argument("--no-weighted", dest="weighted", action="store_false",
+                    help="19피처 옛 모델 재현용")
     ap.add_argument("--seed", type=int, default=PARAMS["random_state"],
                     help="학습 난수(검증 분할·조기종료). 잡음 폭을 볼 때만 바꾼다. 정본은 0")
     a = ap.parse_args()
@@ -106,15 +111,17 @@ def main():
             "  이것 없이 학습하면 모델이 통째로 다른 것이 됩니다.\n"
             "  `python batch/jobs/build_cooc.py` 를 먼저 도십시오.")
 
-    F = LtrFeatures(enc, V, prior, affinity, cooc, supporters)
+    F = LtrFeatures(enc, V, prior, affinity, cooc, supporters, weighted=a.weighted)
     rows = training_rows(index)
+    if a.weighted:
+        log(f"가중 평균 코사인 켬 — 피처 {len(F.names)}개 (cos_seed_w 추가, 강도 = 평점→이벤트 가중치)")
     log(f"train {len(rows):,}명 · 음성 {a.neg}개씩 -> 약 {len(rows)*(a.neg+1):,}행")
 
     rng = np.random.default_rng(7)
     N = len(V)
     X, y = [], []
-    for persona, si, ti in rows:
-        M = F.make(persona, si)
+    for persona, si, ti, sid in rows:
+        M = F.make(persona, si, seed_weights=rating_weights(persona, sid) if a.weighted else None)
         pool = np.setdiff1d(np.arange(N), np.array(si + [ti]))
         neg = rng.choice(pool, size=min(a.neg, len(pool)), replace=False)
         X.append(M[[ti]]); y.append(1)

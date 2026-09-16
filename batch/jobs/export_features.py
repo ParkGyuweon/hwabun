@@ -29,7 +29,7 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 sys.path.insert(0, BD)
 from persona_feature import AFFINITY_CSV, ATTRS, load as load_affinity  # noqa: E402
 from product_encoder import Encoder, brand_key                          # noqa: E402
-from ltr_features import LtrFeatures, load_ltr                         # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, weighted_from_meta      # noqa: E402
 from recommender import (BRAND_W, CF_BETA, LAMBDA, SCHEDULE,            # noqa: E402
                         cf_bonus, load_cooc,
                          brand_match, schedule_for)
@@ -108,7 +108,8 @@ def export_golden(e, matrix, prior, affinity, index, personas, path, n_persona):
     print("  골든 " + ("CF 가점 포함" if cooc is not None else
                        "**CF 없이** (item_cooc.npz 가 없다)"))
     feat = (None if ltr is None
-            else LtrFeatures(e, matrix, prior, affinity, cooc, supporters))
+            else LtrFeatures(e, matrix, prior, affinity, cooc, supporters,
+                             weighted=weighted_from_meta(ltr[1])))
     cases = []
     for p in personas:
         seeds = []

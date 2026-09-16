@@ -50,7 +50,7 @@ from product_encoder import Encoder, brand_key               # noqa: E402
 from recommender import (BRAND_W, LAMBDA, LAMBDA_MMR,        # noqa: E402
                          Recommender, brand_match, schedule_for,
                          load_cooc, cf_bonus, CF_BETA)
-from ltr_features import LtrFeatures, load_ltr             # noqa: E402
+from ltr_features import LtrFeatures, load_ltr, weighted_from_meta  # noqa: E402
 from user_vector import UserVector                           # noqa: E402
 
 PERSONAS = os.path.join(ROOT, "simulator", "personas", "data", "personas_9900.json")
@@ -178,11 +178,11 @@ def run_persona(persona, seeds, target, ctx, rng):
             # 시드는 **긍정 가중이 붙은 상품 전부**다 — 전환만 쓰면 점수가
             # 전환과 전환 사이에 한 발짝도 안 움직인다 (아래 ⚠ 참조)
             pos, _neg = state.weights()
-            cr = [index[g] for g in pos if g in index]
-            if not cr:
-                cr = [index[g] for g in state.converted if g in index]
+            gs = [g for g in pos if g in index] or [g for g in state.converted if g in index]
+            cr = [index[g] for g in gs]
             if cr:
-                return clf.predict_proba(F.make(persona, cr))[:, 1].astype(np.float32)
+                sw = [pos.get(g, 1.0) for g in gs]                  # 시드 강도 = 이벤트 가중치 (Jira 322)
+                return clf.predict_proba(F.make(persona, cr, seed_weights=sw))[:, 1].astype(np.float32)
         vp, vn = state.vectors(index, M)
         w1, w2, w3 = schedule_for(len(state.viewed))
         s = np.zeros(len(M), dtype=np.float32)
@@ -330,7 +330,8 @@ def main():
         print("⚠️ 학습 결합이 켜져 있는데 ltr_model.pkl 이 없습니다 — 선형으로 돕니다")
     elif a.ltr:
         print(f"학습 결합 켬 (트리 {ltr[1]['n_trees']}개)")
-        ltr = (ltr[0], LtrFeatures(encoder, M, prior, affinity, cooc, supporters))
+        ltr = (ltr[0], LtrFeatures(encoder, M, prior, affinity, cooc, supporters,
+                                   weighted=weighted_from_meta(ltr[1])))
     else:
         print("학습 결합 끔 — 선형 결합")
     ctx = (M, index, prior, affinity, hp, recommender, meta, brands, known,
