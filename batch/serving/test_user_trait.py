@@ -5,12 +5,14 @@
   * identity_scope: account 가 persona 보다 먼저
   * 스냅샷이 없으면 get() 은 None 이고 서버는 그대로 돈다
   * dw MySQL 이 죽어 있으면 스냅샷으로 폴백하고 health.error 에 남는다
+  * 신선도 (Jira 319): age_days 가 stale_days 를 넘으면 health.stale, max_age_days 를 넘으면 get() 은 None
 """
 import json
 import os
 import sys
 import tempfile
 import unittest
+from datetime import date
 
 BD = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BD)
@@ -67,8 +69,12 @@ class TestStore(unittest.TestCase):
             for r in rows:
                 f.write(json.dumps(r) + "\n")
 
+    def _store(self, **kw):
+        kw.setdefault("today", lambda: date(2026, 9, 14))          # 스냅샷 window_end_date 는 2026-09-13
+        return ut.UserTraitStore(snapshot_paths=(self.path,), mysql=None, reload_sec=0, log=lambda m: None, **kw)
+
     def test_get_and_scope_order(self):
-        st = ut.UserTraitStore(snapshot_paths=(self.path,), mysql=None, reload_sec=0, log=lambda m: None)
+        st = self._store()
         self.assertTrue(st.load().startswith("snapshot:"))
         self.assertEqual(st.get("PC00001")["primary"], "price")
         self.assertEqual(st.get("1001")["identity_scope"], "account")
@@ -77,6 +83,29 @@ class TestStore(unittest.TestCase):
         self.assertIsNone(st.get(None))
         h = st.health()
         self.assertEqual((h["rows"], h["users"]), (4, 3))
+        self.assertEqual((h["window_end_date"], h["age_days"], h["stale"], h["expired"]), ("2026-09-13", 1, False, False))
+
+    def test_stale_flag_but_still_served(self):
+        st = self._store(today=lambda: date(2026, 9, 16))           # 3일 — 배치 두 번 빠짐
+        st.load()
+        h = st.health()
+        self.assertEqual((h["age_days"], h["stale"], h["expired"]), (3, True, False))
+        self.assertEqual(st.get("PC00001")["window_end_date"], "2026-09-13")   # 값은 그대로 나간다
+
+    def test_ttl_expired_returns_none(self):
+        st = self._store(today=lambda: date(2026, 9, 28))           # 15일 > 14
+        st.load()
+        self.assertTrue(st.health()["expired"])
+        self.assertIsNone(st.get("PC00001"))
+        self.assertEqual(st.health()["users"], 3)                    # 표는 남아 있다. 배치가 돌면 바로 살아난다
+        off = self._store(today=lambda: date(2026, 9, 28), max_age_days=0)
+        off.load()
+        self.assertEqual(off.get("PC00001")["primary"], "price")     # 0 이면 TTL 끔
+
+    def test_age_days_handles_missing_or_bad_dates(self):
+        self.assertIsNone(ut.age_days(None))
+        self.assertIsNone(ut.age_days("not-a-date"))
+        self.assertEqual(ut.age_days("2026-09-13T00:00:00", date(2026, 9, 15)), 2)
 
     def test_no_snapshot_means_none_not_crash(self):
         st = ut.UserTraitStore(snapshot_paths=(os.path.join(self.tmp, "missing.jsonl"),), mysql=None,
