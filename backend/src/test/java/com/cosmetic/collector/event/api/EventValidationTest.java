@@ -295,6 +295,44 @@ class EventValidationTest {
     }
 
     @Test
+    void validatesPurchasePaymentPropertiesAndAllowsOmittedConfirmFields() throws Exception {
+        ActivityEvent validDemoPurchase = new ActivityEvent(
+                "0.2.0-draft", "evt-demo-purchase", "purchase", "conversion",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-001","items":[{"product_id":"product-001","quantity":1,"unit_price":10}],
+                         "payment_method":"test","paid_value":0,"order_channel":"local"}
+                        """)
+        );
+        ActivityEvent invalidPaymentProperties = new ActivityEvent(
+                "0.2.0-draft", "evt-invalid-payment", "purchase", "conversion",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 2,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-002","items":[{"product_id":"product-001","quantity":1,"unit_price":10}],
+                         "payment_method":"bank","paid_value":-1,"order_channel":"remote"}
+                        """)
+        );
+
+        assertThat(validator.validate(validDemoPurchase)).isEmpty();
+        assertThat(validator.validate(invalidPaymentProperties))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("properties");
+    }
+
+    @Test
+    void acceptsPaymentFailedWithoutProductOrPaymentMethod() throws Exception {
+        ActivityEvent paymentFailed = new ActivityEvent(
+                "0.2.0-draft", "evt-payment-failed", "payment_failed", "conversion",
+                Instant.parse("2026-08-27T14:30:00Z"), null, "session-001", "page-view-001", 1,
+                "cart", null, "user", "local", objectMapper.readTree("""
+                        {"order_id":"order-001","reason_code":"USER_CANCEL"}
+                        """)
+        );
+
+        assertThat(validator.validate(paymentFailed)).isEmpty();
+    }
+
+    @Test
     void permitsNewlyActivatedEventsWhenPurchasePropertiesMeetTheCollectorPolicy() {
         List<ActivityEvent> events = List.of(
                 event("navigation_click", "session"),
@@ -344,6 +382,11 @@ class EventValidationTest {
         }
         if ("purchase".equals(eventName) || "purchase_reason_select".equals(eventName)) {
             properties.put("order_id", "order-001");
+        }
+        if ("purchase".equals(eventName)) {
+            properties.put("payment_method", "test");
+            properties.put("paid_value", 10);
+            properties.put("order_channel", "local");
         }
         if ("purchase_reason_select".equals(eventName)) {
             properties.putArray("reasons").add("ingredient");
