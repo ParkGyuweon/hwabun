@@ -39,6 +39,23 @@ python simulator/agents/agent_runner.py --limit 10 \
 프론트(`localhost:5173`)가 떠 있어야 합니다. `--post http://localhost:8080` 을 주면
 파일 대신 수집 API 로 보냅니다.
 
+## 주문(checkout)·목록 정렬(sort_list) — Jira 321, 2026-09-16
+
+행동 목록에 `checkout` 과 `sort_list` 가 있다. 이전 PA 100명 실행은 purchase 0건 · sort_change 0건이었다.
+
+- `--checkout` 을 주면 스위처 대신 **PA 회원으로 로그인**한다 (`{pid}@persona.hwabun.local` / `hwabun1234`,
+  shop_backend 시드). 로그인이 없으면 프론트가 서버 주문을 `!member` 로 막아 결제까지 못 간다.
+- `checkout` 은 장바구니 → 주문하기 → 주문 완료 → 구매 사유 설문(응답 70% · 건너뛰기 30%, 생성기와 같은 값)을
+  한 동선으로 누르고 **세션을 끝낸다**. 담은 것이 1개 이상이고 상세를 3개 이상 본 뒤에만 열린다 (leave 와 같은 문턱).
+- 전제: 프론트에 결제 키(`VITE_PORTONE_*`)가 **없어야** 한다. 키가 있으면 카카오페이 창이 떠서 에이전트가 넘지 못한다.
+  키 없는 프론트는 `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문)가 되고 `purchase` 이벤트 모양은 같다.
+- `sort_list` 는 세션당 한 번, target 은 화면의 정렬 이름(인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
+
+```bash
+# 배선 확인 (LLM 0회) — 프론트 5173 + shop_backend 8090 이 떠 있어야 한다
+python simulator/agents/agent_runner.py --checkout --limit 1     --script click_product,add_to_cart,back_to_list,click_product,back_to_list,click_product,back_to_list,checkout
+```
+
 ## 페르소나가 행동을 이끄는가 — `--prefer-category`
 
 09-07 100명 본실행에서 **담은 상품이 본인 리뷰 카테고리 안인 비율이 57%** 였는데,

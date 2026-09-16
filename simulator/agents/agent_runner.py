@@ -100,7 +100,15 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
-           "wishlist_toggle", "remove_from_cart", "back_to_list", "leave")
+           "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
+           "sort_list", "checkout")
+# 목록 정렬 (Jira 321). 프론트 ProductListPage 의 SortKey 라벨 그대로 — 화면에 보이는 말로 고르게 한다
+SORT_KEYS = {"인기순": "popular", "평점 높은순": "rating", "가격 낮은순": "price_asc", "가격 높은순": "price_desc"}
+# 결제 (Jira 321). PA 100명은 shop_backend 시드에 회원으로 들어 있다 (docs/shop-backend-requests.md:125)
+MEMBER_EMAIL = "{pid}@persona.hwabun.local"
+MEMBER_PASSWORD = "hwabun1234"
+CHECKOUT_ENABLED = False      # --checkout 으로 켠다. 켜면 회원 로그인으로 들어가고 checkout 행동이 열린다
+SURVEY_ANSWER_P = 0.7         # 구매 사유 설문 응답률 — 생성기(gen_behavior_logs)와 같은 값
 
 # 행동을 세 개 더 연 이유
 #   5개(click_product/scroll/add_to_cart/back_to_list/leave)만으로는 프론트가 정의한
@@ -479,8 +487,10 @@ def profile_text(p):
 SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민하는 사람입니다.
 
 오늘 목표는 관심 있는 스킨케어 제품을 살펴보고, 마음에 드는 제품이 있으면
-장바구니에 담는 것입니다. 반드시 사야 하는 것은 아니지만, 충분히 살펴본
-상품은 계속 미루지 말고 담거나 목록으로 돌아가야 합니다.
+장바구니에 담고, 담은 것 중 정말 살 것이 있으면 주문까지 끝내는 것입니다.
+반드시 사야 하는 것은 아니지만, 충분히 살펴본 상품은 계속 미루지 말고
+담거나 목록으로 돌아가야 하고, 담아 둔 것이 마음에 남아 있으면 checkout 으로
+주문을 마치십시오. 주문하면 오늘 쇼핑은 끝납니다.
 
 [당신이 누구인가]
 {profile}
@@ -505,6 +515,12 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 장바구니에는 각 상품의 가격이 적혀 있고, 평소 가격대를 넘는 것에는 그 사실이
   함께 적힙니다. 넘는다고 못 사는 것은 아닙니다 — 다만 합계가 부담스러워졌거나
   마음이 식었다면 remove_from_cart 로 빼십시오. 그대로 두어도 됩니다.
+- **장바구니에 담은 것이 있고 더 볼 상품이 없거나 살 마음이 섰으면 checkout 으로
+  주문을 마치십시오.** 합계가 익숙한 가격대를 크게 넘으면 먼저 빼고 주문하십시오.
+  담기만 하고 나가는 것(leave)도 사람이 하는 일이니 억지로 사지는 마십시오.
+- 목록 정렬은 sort_list 로 바꿀 수 있습니다 (인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
+  가격이 신경 쓰이면 가격 낮은순, 실패하고 싶지 않으면 평점 높은순처럼 **내 성향에 맞는 이유가
+  있을 때만** 한 번 바꾸십시오. 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
@@ -517,7 +533,8 @@ action 은 **이번 턴에 고를 수 있는 행동**으로 제시된 것 중에
 target 규칙
 - 목록에서 상품을 고를 때: 그 줄에 적힌 상품명을 그대로 적으십시오.
 - **상세에서 담거나 찜할 때: 지금 보고 있는 상품명을 적으십시오. null 로 두지 마십시오.**
-- 상품과 무관한 행동(scroll · back_to_list · leave)일 때만 null 입니다."""
+- sort_list 일 때: 정렬 이름을 그대로 적으십시오 (예: "가격 낮은순").
+- 상품과 무관한 행동(scroll · back_to_list · leave · checkout)일 때만 null 입니다."""
 
 
 # ============================================================================
@@ -901,6 +918,15 @@ def find_card(page, target):
     return best
 
 
+def norm_label(t):
+    """LLM 이 적은 정렬 이름을 SORT_KEYS 의 키에 맞춘다 (공백·'으로'·'순으로' 따위 제거)"""
+    t = str(t or "").replace(" ", "")
+    for suf in ("으로", "로", "정렬"):
+        if t.endswith(suf):
+            t = t[: -len(suf)]
+    return t
+
+
 def do_action(page, act, target, scroll_center=None):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
@@ -1013,6 +1039,59 @@ def do_action(page, act, target, scroll_center=None):
         page.wait_for_timeout(900)
         return ok
 
+    if a == "sort_list":
+        # 프론트 <select> 하나다. 라벨로 받아 SortKey 로 바꾼다. 모르는 말이면 가격 낮은순 —
+        # 정렬을 바꾸고 싶다는 뜻은 분명하고, 가격이 이 프롬프트가 가장 자주 든 이유다
+        key = SORT_KEYS.get(norm_label(target), "price_asc")
+        sel = page.locator(".list__sort select")
+        if not sel.count():
+            return False                         # 상세 화면에는 정렬이 없다
+        try:
+            sel.first.select_option(key)
+        except Exception:
+            return False
+        page.wait_for_timeout(900)
+        page.evaluate("() => window.scrollTo(0, 0)")   # 정렬이 바뀌면 위에서부터 다시 본다
+        return True
+
+    if a == "checkout":
+        # 장바구니 → 주문하기(begin_checkout) → 주문 완료(place_order) → 구매 사유 설문.
+        # 한 동선이라 코드가 묶어서 실행한다. 프론트가 결제 키(VITE_PORTONE_*) 없이 떠 있으면
+        # /api/orders/{id}/pay 로 PAID 가 되고, 키가 있으면 카카오페이 창이 떠서 여기서 멈춘다 —
+        # 에이전트는 결제창을 못 넘기므로 러너는 키 없는 프론트를 전제한다 (런북 §5-4)
+        basket = page.locator('[data-log-action="view_cart"]')
+        if not basket.count() or not click_safe(basket.first, page):
+            return False
+        page.wait_for_timeout(1000)
+        begin = page.locator('[data-log-action="begin_checkout"]')
+        if not begin.count() or not click_safe(begin.first, page):
+            page.go_back(); page.wait_for_timeout(800)
+            return False
+        page.wait_for_timeout(900)
+        place = page.locator('[data-log-action="place_order"]')
+        if not place.count() or not click_safe(place.first, page):
+            page.go_back(); page.wait_for_timeout(800)
+            return False
+        # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다
+        try:
+            page.locator('[data-log-section="purchase_survey"]').first.wait_for(timeout=15000)
+        except Exception:
+            return False                         # 결제까지 못 갔다 — purchase 이벤트도 없다
+        page.wait_for_timeout(random.randint(1200, 3000))   # 완료 화면을 읽는 시간
+        chips = page.locator('[data-log-action="purchase_reason_toggle"]')
+        if chips.count() and random.random() < SURVEY_ANSWER_P:
+            click_safe(chips.nth(random.randrange(chips.count())), page)
+            page.wait_for_timeout(500)
+            submit = page.locator(".survey .btn--primary")
+            if submit.count():
+                click_safe(submit.first, page)
+        else:
+            skip = page.locator(".survey__skip")
+            if skip.count():
+                click_safe(skip.first, page)
+        page.wait_for_timeout(800)
+        return True
+
     if a == "click_product":
         card = find_card(page, target)
         if card is None:
@@ -1090,7 +1169,8 @@ def has_unvisited_in_list(page, visited):
 
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
-                    n_details=0, has_unvisited=True, cart_over=False):
+                    n_details=0, has_unvisited=True, cart_over=False,
+                    sorted_once=False, checkout=None):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -1126,6 +1206,14 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     # **leave 를 일찍 열지 않는다.** 시작 위치를 흩으면서 목록 아래쪽에서 출발하는
     # 사람이 생겼는데, 화면에 "목록 끝" 이 보이면 첫 턴부터 나가버렸다.
     # 상세를 몇 개는 보고 나서, 그리고 화면에 새 상품이 없을 때만 나갈 수 있다
+    # 정렬은 목록에서 한 번만. 매 턴 열어두면 정렬만 바꾸며 도망친다 (Jira 321)
+    if not sorted_once:
+        acts.append("sort_list")
+    # 결제는 담은 것이 있고 상세를 몇 개는 본 뒤에만. leave 와 같은 문턱이다 —
+    # 담자마자 사게 두면 "담고 안 산 사람" 이 사라져 전환 신호의 대조군이 없어진다
+    checkout = CHECKOUT_ENABLED if checkout is None else checkout
+    if checkout and cart_size >= 1 and n_details >= MIN_DETAILS_BEFORE_LEAVE:
+        acts.append("checkout")
     if n_details >= MIN_DETAILS_BEFORE_LEAVE or not has_unvisited:
         acts.append("leave")
     return acts
@@ -1226,7 +1314,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         category_rule = ""
     system = SYSTEM_TMPL.format(profile=profile_text(persona), category_rule=category_rule,
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
-    calls, done, failed, carted = 0, 0, 0, 0
+    calls, done, failed, carted, purchased = 0, 0, 0, 0, 0
+    sorted_once = False      # 목록 정렬은 세션당 한 번 (Jira 321)
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
@@ -1273,7 +1362,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                                has_unvisited=has_unvisited,
                                cart_over=any(
                                    budget is not None and v > budget
-                                   for v in cart_prices.values()))
+                                   for v in cart_prices.values()),
+                               sorted_once=sorted_once)
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -1350,6 +1440,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 tgt = here or tgt                # 화면이 진실이다
             elif new_act == "remove_from_cart":
                 tgt = cart[-1] if cart else None
+            elif new_act == "sort_list":
+                tgt = "가격 낮은순"
             else:
                 tgt = None
             if verbose:
@@ -1396,18 +1488,27 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             if gone in cart:
                 cart.remove(gone)
                 cart_prices.pop(gone, None)
+        if okd and act == "sort_list":
+            sorted_once = True
         done += okd
         failed += (not okd)
         if okd and act == "add_to_cart":
             carted += 1
+        if okd and act == "checkout":
+            purchased += 1
         if decisions is not None:
             decisions.write(persona["persona_id"], turn, kind, acts, obj, act, tgt, okd)
         if verbose:
             mark = "  " if okd else "! "
             print(f"    {turn:>2}.{mark}{act:<14} {str(tgt)[:30]:<32} {(obj.get('reason') or '')[:40]}")
+        if okd and act == "checkout":
+            if verbose:
+                print(f"    {turn:>2}. checkout 완료 — 장바구니 {len(cart)}개 주문. 오늘 쇼핑 끝")
+            cart.clear()
+            break                                # 주문하면 세션이 끝난다 (프롬프트와 같은 약속)
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
-    return dict(calls=calls, done=done, failed=failed, carted=carted, broken=broken)
+    return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased, broken=broken)
 
 
 # ============================================================================
@@ -1449,6 +1550,8 @@ def run_parallel(a):
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
         argv += ["--script", a.script]
+    if a.checkout:
+        argv.append("--checkout")
 
     print(f"워커 {n}개로 나눠 실행합니다 (Playwright sync API 가 스레드 안전하지"
           f" 않아 프로세스로 분리)")
@@ -1542,6 +1645,8 @@ def main():
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
+    ap.add_argument("--checkout", action="store_true",
+                    help="PA 회원으로 로그인하고 checkout(주문) 행동을 연다 (Jira 321). 결제 키 없는 프론트 전제")
     ap.add_argument("--script", default=None,
                     help="LLM 대신 정해진 행동 순서를 실행한다 (크레딧 0). "
                          "예) click_product,wishlist_toggle,add_to_cart,back_to_list")
@@ -1555,6 +1660,8 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
+    global CHECKOUT_ENABLED
+    CHECKOUT_ENABLED = bool(a.checkout)
     global PREFER_CATEGORY, PREFER_STRICT, PREFER_FILTER
     PREFER_FILTER = a.prefer_filter
     PREFER_STRICT = a.prefer_strict
@@ -1634,7 +1741,7 @@ def main():
         print(f"판단 근거 {dec_path}")
 
     from playwright.sync_api import sync_playwright
-    tot = dict(calls=0, done=0, failed=0, carted=0, broken=0)
+    tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, broken=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -1684,7 +1791,11 @@ def main():
             # 러너는 아직 화면을 먼저 열고 고르는 순서라 게이트를 그대로 둔다 —
             # 게이트는 배치 전송으로 섞여 오는 남의 이벤트도 같이 막는다.
             # 러너가 `?persona=` 로 바로 들어가게 바꾸는 것은 별건이다.
-            if not switch_persona(page, p["persona_id"]):
+            # --checkout 이면 회원 로그인이 신원이다. 로그인이 안 되면 스위처로 물러나되 주문은 못 한다
+            logged_in = CHECKOUT_ENABLED and login_member(page, p["persona_id"])
+            if CHECKOUT_ENABLED and not logged_in:
+                print(f"  {p['persona_id']}  회원 로그인 실패 — 스위처로 진행 (주문은 서버가 막는다)")
+            if not logged_in and not switch_persona(page, p["persona_id"]):
                 print(f"  {p['persona_id']}  페르소나 전환 실패 — 건너뜀")
                 ctx.close()
                 continue
@@ -1708,7 +1819,7 @@ def main():
     dt = time.time() - t0
     print()
     print("=" * 60)
-    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건")
+    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건")
     if tot.get("broken"):
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회"
               f" — AboutProduct.tsx 크래시는 2026-09-02 고쳐졌으므로 다른 원인입니다")
@@ -1976,6 +2087,27 @@ class LogSink:
             self.queue.put(None)
             self.worker.join(timeout=self.timeout + 10)
         self.f.close()
+
+
+def login_member(page, persona_id):
+    """PA 회원으로 로그인한다 (Jira 321). 로그인하면 프론트가 로그의 persona_id 를 회원 id 로 쓰고
+    (fe 09-15), 서버 주문(/api/orders)이 가능해진다 — 스위처만으로는 `!member` 에서 주문이 막힌다."""
+    try:
+        if page.locator(".account__btn--me").count():
+            return True                          # 이미 로그인돼 있다
+        btn = page.locator(".account__btn--login")
+        if not btn.count():
+            return False
+        btn.first.click()
+        page.wait_for_timeout(600)
+        page.locator("form.auth input[name=email]").fill(MEMBER_EMAIL.format(pid=persona_id.lower()))
+        page.locator("form.auth input[name=password]").fill(MEMBER_PASSWORD)
+        page.locator("form.auth button[type=submit]").click()
+        page.locator(".account__btn--me").first.wait_for(timeout=8000)
+        page.wait_for_timeout(700)
+        return True
+    except Exception:
+        return False
 
 
 def switch_persona(page, persona_id):
