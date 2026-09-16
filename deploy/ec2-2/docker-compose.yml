@@ -179,8 +179,33 @@ services:
         condition: service_healthy
     volumes: *spark-volumes
 
+  # Explicit one-shot publication after Q4/Q5; ordinary up does not run this.
+  dw-projection:
+    profiles: [dw]
+    build:
+      context: ../../streaming
+      dockerfile: Dockerfile.dw
+    restart: "no"
+    logging: *logging
+    environment:
+      DW_MYSQL_HOST: ${DW_MYSQL_HOST:-}
+      DW_MYSQL_PORT: ${DW_MYSQL_PORT:-13306}
+      DW_MYSQL_DB: ${DW_MYSQL_DB:-dw}
+      DW_MYSQL_USER: ${DW_MYSQL_USER:-}
+      DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
+    volumes:
+      - ${SPARK_DATA_PATH:-/opt/hwabun/data}:/data:ro
+      - ../../contracts:/app/contracts:ro
+      - dw-projection-reports:/reports
+    command:
+      - --source
+      - /data/marts/user_trait_daily
+      - --report-path
+      - /reports/user-trait-projection.json
+
 volumes:
   kafka-data:
     name: ${KAFKA_DATA_VOLUME:-hwabun-ec2-2-kafka-data}
   spark-events:
   spark-ivy-cache:
+  dw-projection-reports:

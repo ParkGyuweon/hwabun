@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY requirements-dw.txt /app/requirements-dw.txt
+RUN pip install --no-cache-dir -r /app/requirements-dw.txt
+COPY jobs/ /app/streaming/jobs/
+RUN useradd --uid 10001 --create-home projection \
+    && mkdir -p /reports \
+    && chown projection:projection /reports
+USER projection
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["python", "-m", "streaming.jobs.publish_user_trait_job"]
