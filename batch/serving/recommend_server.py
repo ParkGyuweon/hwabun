@@ -661,6 +661,7 @@ class DemoStart(BaseModel):
     rate: int = 3000
     max_events: int = 0
     http: bool = False
+    restart: bool = False       # true 면 파일 처음부터. 기본은 지난 정지 자리에서 이어 보낸다 (중복 event_id 는 소비자가 버림)
 
 
 @app.post("/live/demo/start")
@@ -680,6 +681,8 @@ def live_demo_start(req: DemoStart):
         args += ["--max-events", str(int(req.max_events))]
     if req.http:
         args += ["--http"]
+    if req.restart:
+        args += ["--restart"]
     if KAFKA_BOOTSTRAP:
         args += ["--bootstrap", KAFKA_BOOTSTRAP]
     env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
