@@ -125,6 +125,8 @@ class DeriveFactsWriteSparkTest(unittest.TestCase):
                 friction_daily_path=supporting_path,
                 exit_daily_path=supporting_path,
                 entry_source_daily_path=supporting_path,
+                product_exit_daily_path=supporting_path,
+                segment_content_daily_path=supporting_path,
                 baseline_path=supporting_path,
             )
 
