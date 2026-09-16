@@ -2,7 +2,7 @@
 
 HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)과 인사이트 대시보드.
 
-기준일 2026-09-15
+기준일 2026-09-16
 
 ## 1. 시스템 아키텍처
 
@@ -38,6 +38,8 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 
 [ 운영 · deploy/ec2-1 ]  docker compose(백엔드 ec2-1-deploy 브랜치, dev 를 pull 해 올림) — shop-backend(8090) · mysql · backend(8080) · recommend(8300) · nginx(443) · Prometheus · Grafana
                         09-15 17:40 실측: 전부 기동, recommend 는 dev 최신(어휘집 0.7) · 수집기·추천 모두 EC2-2 Kafka 연결 · .env 에 GMS_KEY·DW_MYSQL_* 은 비어 있음
+                        09-16 12:35 실측: recommend ltr_trees 239(20피처) · kafka connected · personas_in_memory 4(실이벤트 반영 확인) · GMS_KEY 투입, 처방 LLM 스위치 off
+                        · DW_MYSQL_* 은 계정 대기(적재 Job 은 dev 에 있음, 첫 실행 전) · 12:21 백엔드 Jenkins 가 추천을 09-15 이미지로 되돌려 재배포로 복구(런북 §6)
 ```
 
 ---
@@ -55,10 +57,10 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
 | 스트리밍 | Spark Structured Streaming | 3.5.6 | `streaming/` Q1~Q5. 출력 Parquet. 로컬은 `infra/spark/` compose |
 | 추천 · AI | Python · NumPy · scikit-learn | 3.13 · 2.2.6 · 1.7.0 | 상품 벡터 148차원 · 페르소나 속성 친화도 · CF 동시발생 · 학습 결합(HistGradientBoosting 239 트리 · 20피처, 2026-09-16). sklearn 버전은 모델 pickle 과 고정 |
 | | FastAPI · uvicorn · pydantic | 0.141 · 0.52 · 2.13 | **추천 추론 서버** `batch/serving/` (8300, 내부 전용). 추천·배너·상품 등록·처방 문장. `deploy/recommend.Dockerfile` |
-| | OpenAI SDK → GMS | gpt-4.1-mini | 대시보드 처방 문장 (`POST /api/prescription`, 온도 0·JSON 스키마 강제). 키 없으면 이 엔드포인트만 503 |
+| | OpenAI SDK → GMS | gpt-4.1-mini | 대시보드 처방 문장 (`POST /api/prescription`, 온도 0·JSON 스키마 강제). 키 없거나 `PRESCRIPTION_LLM=off`/`POST /api/prescription/llm` 로 끄면 503 → 프론트 규칙표 문장 (Jira 325) |
 | | sentence-transformers | — | 리뷰·상품 텍스트 임베딩 (GPU, 배치 산출물용). 정확도 목적 리뷰 임베딩은 기각 |
-| 시뮬레이터 | Python 생성기 | — | PC 9,900명 합성 로그 · 배너 이벤트 · 피드백 시연 데이터 |
-| | Playwright (Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | PA 100명이 실제 브라우저를 조작. `--local-model` 로 Qwen2.5 도 가능 |
+| 시뮬레이터 | Python 생성기 | — | PC 9,900명 합성 로그 · 배너 이벤트 · 결제(begin_checkout→purchase→사유, Jira 312) · 재구매 쌍은 비시드(Jira 327) · `--limit` 층화 표본(Jira 318) · `--include-agents` 로 PA 이력(Jira 328) · 피드백 시연 데이터 |
+| | Playwright (Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | PA 100명이 실제 브라우저를 조작. 09-16 부터 주문(`--checkout`, PA 회원 로그인)·정렬·배너 클릭 행동(Jira 321·326). `--local-model` 로 Qwen2.5 도 가능 |
 | 운영 | Docker Compose · nginx · certbot | — | EC2-1 (`deploy/ec2-1/`, 백엔드 ec2-1-deploy): shop-backend · mysql · backend · recommend · nginx(HTTPS) · Prometheus · Grafana. 09-15 실측 전부 기동, Kafka 는 EC2-2 브로커에 연결됨. 추천 재배포는 `deploy/ec2-1/redeploy-local.sh` 한 줄(Jira 305·309) |
 | | Prometheus · Grafana | 3.5.0 · 12.1.0 | `monitoring/` 대시보드 2종(backend-overview · collector-validation) 프로비저닝 |
 | 데이터 | Sephora 리뷰 데이터셋 | — | 리뷰 844,865건 · 상품 200개(+등록 8) · 페르소나 12,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
@@ -196,11 +198,11 @@ S15P21A306/
 │   ├── jobs/
 │       ├── product_encoder.py           상품 → 148차원 콘텐츠 벡터 인코더
 │       ├── behavior_weights.py          `frontend/src/types/log.ts` 를 직접 읽는 행동 가중치 로더
-│       ├── user_vector.py               이벤트 → v_u⁺ / v_u⁻ 집계
+│       ├── user_vector.py               이벤트 → v_u⁺ / v_u⁻ 집계. purchase·begin_checkout 은 주문 단위라 items[] 를 상품별로 펼친다 (Jira 320)
 │       ├── build_user_vectors.py        Spark 산출물·JSONL → 사용자 벡터 상태 (Redis 형태)
 │       ├── persona_feature.py           페르소나 속성 → 상품별 친화도 (200,)
 │       ├── recommender.py               점수 계산·노출 정책·MMR·신규 브랜드 전용 칸(reserved)
-│       ├── ltr_features.py             ★ 학습 결합 피처 19개 — 학습과 서빙이 같은 코드
+│       ├── ltr_features.py             ★ 학습 결합 피처 20개(09-16 가중 평균 코사인 cos_seed_w 추가, Jira 322) — 학습과 서빙이 같은 코드
 │       ├── train_ltr.py                 학습 결합 모델 학습 (train 5,954명)
 │       ├── build_cooc.py                아이템-아이템 동시발생 (CF 입력, 누출 차단)
 │       ├── export_features.py           서빙용 산출물 + 순위 대조 기준 생성
@@ -217,9 +219,9 @@ S15P21A306/
 │       ├── eval_cbf_flow.py            로그 -> 상태 -> 점수 -> 정책 -> MMR 전 구간 검증
 │       ├── eval_registered_brand_share.py  등록 상품이 같은 브랜드를 얼마나 끌어오나 — 크기 맞춘 원천 브랜드와 대조 (Jira 217)
 │       ├── concern_from_reviews.py · explore_choice.py
-│       └── test_*.py                    단위 테스트 12개 파일·98건 (피처·산출물·사용자 벡터·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
+│       └── test_*.py                    단위 테스트 13개 파일·102건 (피처·산출물·사용자 벡터(주문 items[] 펼침)·MMR·전용 칸·배너 축·cold start·백엔드 테이블·eval_metadata)
 │   └── serving/                     ★ 추천 추론 서버 — 계약 §5·§5-2 참조 구현 (Jira 206·214·216), 포트 8300
-│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products · POST /api/prescription · POST /api/events · /health
+│       ├── recommend_server.py          FastAPI: GET /api/recommend(items · hero · banners) · POST/DELETE /api/products · POST /api/prescription · GET/POST /api/prescription/llm(LLM 스위치) · POST /api/events · /health
 │       ├── banners.py                   §5-1 hero·배너 조립 — 축 값(session/profile/coldstart)·reason 단일 key (Jira 218). 현행 화면은 히어로 1칸 hero=top|new_brand (Jira 237)
 │       ├── prescription.py              대시보드 처방 문장 POST /api/prescription — 규격 v0.3(insert_after·_text·from 6화면)·JSON 스키마 강제·자동 거부 11·금지어 계약·저장 (Jira 220·225)
 │       ├── catalog_sync.py              쇼핑몰 백엔드(8090) ACTIVE 상품 → 카탈로그 편입·갱신·중단. POST /api/catalog/sync · 주기 실행 (Jira 222)

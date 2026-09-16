@@ -12,18 +12,19 @@
 >
 > | 축 | CBF 단독 | CBF + CF | **현행 (LTR)** |
 > |---|---:|---:|---:|
-> | 오프라인 Recall@10 | 23.39% | 38.15 / 39.25% | **42.15 / 43.15%** |
-> | 리뷰 순차 재생 | 22.63% | — | **42.15 / 43.15%** |
-> | 동적 Start / Ever HR@10 (holdout_a) | 23.39 / 28.97% | 37.4 / 40.55% | **42.75 / 49.35%** (b: 43.10 / 49.35%) |
+> | 오프라인 Recall@10 | 23.39% | 38.15 / 39.25% | **43.80 / 42.45%** (09-16 20피처; 09-10 19피처 42.15 / 43.15) |
+> | 리뷰 순차 재생 | 22.63% | — | **43.25 / 42.50%** |
+> | 동적 Start / Ever HR@10 (holdout_a) | 23.39 / 28.97% | 37.4 / 40.55% | **43.45 / 48.70%** (b: 42.60 / 48.65%) |
 > | 최다 브랜드 칸 수 (09-07 측정) | 5.92칸 | 4.43칸 | **2.62칸** |
 > | 10칸 전부 한 브랜드 (09-07 측정) | 9.8% | 3.6% | **0.1%** |
 >
 > **두 값은 `holdout_a / holdout_b` 입니다.** `test` 는 소진돼 대표 지표에 쓰지
 > 않습니다 (`evaluation-framework.md` 부록 Q). CBF 단독 열만 옛 `test` 값입니다.
 >
-> **대표 지표는 `Recall@10 = 42.15%` (holdout_a 2,000명, 학습 난수 0)** 이고, 확인 집합
-> `holdout_b` 에서 43.15% 입니다. 선형 대비 **+4.00%p [+2.22, +5.65]** ·
-> **+3.80%p [+2.02, +5.45]** 로 두 집합 다 CI 가 0 을 제외합니다. 학습 난수만 바꿔도
+> **대표 지표는 `Recall@10 = 43.80%` (holdout_a 2,000명, 20피처 seed1, 2026-09-16 Jira 322)** 이고, 확인 집합
+> `holdout_b` 에서 42.45% 입니다. 선형 대비 **+5.65%p [+4.00, +7.28]** ·
+> **+3.10%p [+1.45, +4.63]** 로 두 집합 다 CI 가 0 을 제외합니다. 09-10 의 19피처 모델(42.15 / 43.15)과는
+> 학습 난수 폭 안에서 같고, 이벤트 가중치가 순위에 닿게 하는 **정합성**으로 바꿨습니다 (`evaluation-framework.md` 09-16 블록). 학습 난수만 바꿔도
 > a 42.15~43.00 · b 42.40~43.15 로 움직이므로 1%p 안의 차이는 변경 효과로 읽지 않습니다(부록 W).
 > (2026-09-10 갱신 — highlights 성분 태그를 벡터에서 뺀 뒤(부록 V) 동의어 4건을 복구한 값(부록 W). 09-07 의
 > 43.95 / 43.20% 는 계약 §3.1 과 어긋난 인코더의 값이었다.)
@@ -42,14 +43,15 @@
 추천 점수를 구성하는 요소의 **입력 → 처리 → 출력 스키마 → 저장소 → 소비처**를 정의합니다.
 
 ```
-score(u, i) = model.predict_proba(피처 19개)      <- Learning to Rank (§4-2)
+score(u, i) = model.predict_proba(피처 20개)      <- Learning to Rank (§4-2)
 ```
 
 **결합을 사람이 정하지 않고 학습합니다** (2026-09-07 채택). 아래 항들은 없어지지
 않고 **모델의 피처로 들어갑니다.**
 
 ```
-피처 19개 = cos(v_u⁺, v_i)         <- Product Vector, User Behavior Vector
+피처 20개 = cos(v_u⁺, v_i)         <- Product Vector, User Behavior Vector
+            cos_seed_w(v_u⁺ 가중, v_i) <- 이벤트 가중치(3.0/8.0)가 순위에 닿는 자리 (09-16)
             attr_affinity(u, i)     <- Attribute Affinity (§3)
             prior(i)                <- Product Prior (§4)
             cf, cf_rank, supporters <- Item Co-occurrence (§4-1)
@@ -797,7 +799,7 @@ PC 9,900 · PA 100 · 홀드아웃까지 **14,000명**. 파일이 늘 때마다 
 **학습은 `eval_metadata` 의 `train` 분할 5,954명에서만** 합니다. valid·test·홀드아웃은
 한 명도 들어가지 않습니다. 재현: `python batch/jobs/train_ltr.py`
 
-### 피처 19개
+### 피처 20개
 
 구현은 `batch/jobs/ltr_features.py` 하나입니다 — **학습과 서빙이 같은 코드를
 씁니다.** 따로 구현하면 에러 없이 순위만 조금씩 틀립니다.
@@ -815,6 +817,7 @@ PC 9,900 · PA 100 · 홀드아웃까지 **14,000명**. 파일이 늘 때마다 
 | 8 | `pop_rank` | 인기 순위 0~1 |
 | **9** | **`cf_rank`** | **후보 안에서 CF 를 정렬한 등수 0~1** |
 | 10~18 | `cos_{블록}` | 블록별 코사인 9개 (어휘집 `ORDER` 순서 그대로) |
+| **19** | **`cos_seed_w`** | 시드의 **가중 평균** 벡터 대비 코사인 (2026-09-16, Jira 322). 강도는 서빙에서 `state.weights()` 의 이벤트 가중치, 학습에서 시드 리뷰 평점(5→purchase 8.0 · 4→add_to_cart 3.0 · 그 아래 product_view 1.0). 가중치가 전부 같으면 `cos_all` 과 같다. 모델 메타 `feature_names` 에 이 이름이 있을 때만 만든다(`weighted_from_meta`) — 옛 19피처 모델과 호환 |
 
 **9번이 가장 중요한 피처입니다.**
 
@@ -960,7 +963,7 @@ GET /api/recommend?persona_id={id}&size=10
 3. (선형일 때만) v_u⁺ = positive_u_sum / positive_w_sum   (positive_w_sum = 0이면 생략)
                  v_u⁻ = negative_u_sum / negative_w_sum   (negative_w_sum = 0이면 생략)
 4. scores = **학습 결합 모델 추론**                        ← 2026-09-07 채택 (§4-2)
-             X = 피처 19개 x 후보 200개  (positive 집합이 시드)
+             X = 피처 20개 x 후보 200개  (positive 집합이 시드, 시드 강도 = 이벤트 가중치)
              scores = model.predict_proba(X)[:, 1]
 5. 노출 정책 적용 (아래)
 6. MMR 다양성 보정 (λ_mmr = 0.8, 후보 풀 상위 30개 — λ_mmr 은 점수 쪽 계수라 클수록 약하게 걸리고 1.0 이면 끈 것과 같음)
@@ -977,7 +980,7 @@ GET /api/recommend?persona_id={id}&size=10
 
 > **참조 구현 (2026-09-08, Jira 206) — `batch/serving/recommend_server.py`** (FastAPI).
 > 위 1~7 을 파이썬으로 그대로 돈다. 백엔드 `RankingService` 는 아직 없으므로 **백엔드가
-> 이 서버를 프록시하는 형태**를 권한다 — 모델이 sklearn pickle 이고 피처 19개를 자바로 다시
+> 이 서버를 프록시하는 형태**를 권한다 — 모델이 sklearn pickle 이고 피처 20개를 자바로 다시
 > 짜면 순위가 조용히 어긋난다. ONNX 로 가더라도 이 서버가 대조 기준이다.
 >
 > | | |
@@ -1182,7 +1185,7 @@ Spark 정본을 우회하는 것이 아니라 Spark 가 맡지 않는 시간 단
 | 재기동 | committed offset 부터 이어 읽음. `auto.offset.reset=latest` 는 group 에 offset 이 없는 첫 기동에만 | "최신부터" 는 첫 기동의 선택일 뿐이다 |
 | 중복 | `event_id` LRU 20만 건 | 계약상 같은 event_id 가 Kafka 에 여러 번 올 수 있다(Processed 에서 제거). 우리는 그 전 단계를 읽는다 |
 | 검사 | `schema_version` 앞자리 · `persona_id·event_name·event_id` 필수 · 상태 이벤트만 | 수집 서버가 계약 검증을 이미 했다. 여기서는 최소만 |
-| 관측 | `/health.kafka_state`: `alive · connected · lag · last_processed_at · processed · duplicates · filtered · invalid · last_error` | 스레드는 장애 경계가 아니다 — consumer 가 죽어도 API 는 산다. 그래서 상태를 드러낸다 |
+| 관측 | `/health.kafka_state`: `alive · connected · lag · last_processed_at · processed · duplicates · filtered · invalid · last_error`. 같은 health 에 `user_trait`(source · rows · window_end_date · age_days · stale · expired, Jira 319) · `prescription`(enabled · key_present · llm_calls · cache_hits, Jira 325) · `ltr_trees` | 스레드는 장애 경계가 아니다 — consumer 가 죽어도 API 는 산다. 그래서 상태를 드러낸다 |
 | 제한 | **단일 replica.** Kafka key 가 `session_id` 라 같은 persona 가 여러 파티션에 흩어진다 | 소비자를 여러 대 두면 상태가 갈린다. 확장은 별도 `recommend-state-updater` → Redis (운영 단계) |
 
 **배포 전 검증(데이터 팀 요구):** 2,000 TPS 에서 lag 증가율 · API p95/p99 · 재시작·중복·rebalance·Kafka 단절. 로컬에 Kafka 가 없어 가짜 consumer 로 로직만 검증했고, 실측은 EC2 또는 데이터 로컬 Kafka 에서 한다.
