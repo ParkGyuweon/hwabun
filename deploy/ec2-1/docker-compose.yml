@@ -103,6 +103,11 @@ services:
     build:
       context: ../..
       dockerfile: deploy/nginx.Dockerfile
+      # Vite는 정적 번들 빌드 시점에 공개 결제 식별자를 주입한다.
+      # PortOne Secret은 절대 프론트 빌드에 전달하지 않는다.
+      args:
+        VITE_PORTONE_STORE_ID: ${VITE_PORTONE_STORE_ID:-}
+        VITE_PORTONE_CHANNEL_KEY: ${VITE_PORTONE_CHANNEL_KEY:-}
     restart: unless-stopped
     depends_on:
       - backend
