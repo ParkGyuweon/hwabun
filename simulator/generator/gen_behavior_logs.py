@@ -1461,7 +1461,9 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
     if include_agents:
         A = json.load(open(os.path.join(PERSONA_DIR, "personas_100_agent.json"),
                            encoding="utf-8"))
-    people = (P + A) if not limit else (sample_personas(P, limit, how=sample) + A[:2])
+    # --include-agents 면 --limit 이 있어도 PA 100명 전원 (Jira 328). 에이전트가 라이브에서 재구매하려면
+    # 마트에 그 사람의 과거 구매·재구매 쌍(327)이 있어야 한다 — 2명만 넣던 옛 동작은 맛보기용이었다
+    people = (P + A) if not limit else (sample_personas(P, limit, how=sample) + A)
     log(f"페르소나 PC {len(P):,}명" + (f" + 에이전트 PA {len(A)}명" if A else " (PA 제외)")
         + f" -> 대상 {len(people):,}명" + (f" ({sample} 표본)" if limit else ""))
     if limit:
