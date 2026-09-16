@@ -323,10 +323,14 @@ def budget_of(p):
            if r.get("product_id") in tab]
     if not own:
         return None
+    # 어휘집 0.7 부터 경계가 **원화**다 (Jira 302). prices() 는 달러라 경계를 달러로 되돌려 비교·반환한다.
+    # 이걸 안 하면 "익숙한 가격대 34,862,400원" 같은 값이 프롬프트에 찍히고(won() 이 환율을 두 번 곱함),
+    # 장바구니 초과 판정이 영원히 거짓이 된다 (09-16 발견, Jira 331)
     top = max(own)
     for edge in price_bin_edges()[1:]:
-        if top < edge:
-            return float(edge)
+        edge_usd = float(edge) / KRW_PER_USD if edge > 1000 else float(edge)
+        if top < edge_usd:
+            return edge_usd
     return None
 
 
@@ -446,6 +450,37 @@ def _in_pref(pid):
     return bool(CURRENT_PREF) and categories().get(pid) in CURRENT_PREF
 
 
+STYLE_FILE = os.path.join(ROOT, "simulator", "personas", "data", "persona_style.json")
+_STYLE = None
+STYLE_MIN = 0.6          # 이 값 이상이면 "그걸 따지는 사람" 으로 적는다 (PA 100명 기준 각 축 약 30명)
+
+
+def shopping_style(pid):
+    """persona_style.json(리뷰 텍스트에서 산출한 성향 축) → 프롬프트 한 줄 (Jira 331).
+
+    정렬을 LLM 에게 맡기니 100명 실행에서 38/38 이 '가격 낮은순' 이었다 — 화면에 가격표만 보이기 때문.
+    실제 사용자는 자기 성향으로 정렬을 고른다. 그 성향은 데이터에 이미 있으니 그대로 알려 준다."""
+    global _STYLE
+    if _STYLE is None:
+        try:
+            _STYLE = json.load(open(STYLE_FILE, encoding="utf-8"))
+        except Exception:
+            _STYLE = {}
+    st = _STYLE.get(pid) or {}
+    parts = []
+    if st.get("price", 0) >= STYLE_MIN:
+        parts.append("가격을 많이 따진다")
+    if st.get("review_lean", 0) >= STYLE_MIN:
+        parts.append("리뷰와 평점을 먼저 본다")
+    if st.get("ingredient", 0) >= STYLE_MIN:
+        parts.append("성분표를 본다")
+    if st.get("sensitivity", 0) >= STYLE_MIN:
+        parts.append("자극에 민감해 순한 것을 찾는다")
+    if not parts:
+        return "특별히 따지는 것은 없고 남들이 많이 사는 것을 믿는 편이다"
+    return ", ".join(parts)
+
+
 def profile_text(p):
     """페르소나 레코드 -> LLM 에게 줄 자기소개
 
@@ -480,7 +515,8 @@ def profile_text(p):
         if pref:
             cat_line = f"\n- 주로 사 온 종류: {', '.join(pref[:3])}"
     return (f"- 피부 타입: {TYPE_KR.get(p['skin_type'], p['skin_type'])}\n"
-            f"- 피부 톤: {TONE_KR.get(p['skin_tone'], p['skin_tone'])}"
+            f"- 피부 톤: {TONE_KR.get(p['skin_tone'], p['skin_tone'])}\n"
+            f"- 쇼핑 성향: {shopping_style(p['persona_id'])}"
             f"{price_line}{cat_line}\n"
             f"- 지금까지 산 것:\n    " + "\n    ".join(bought[-8:]))
 
@@ -522,9 +558,10 @@ SYSTEM_TMPL = """당신은 화장품 쇼핑몰에서 실제로 구매를 고민�
 - 목록 맨 위에 `[배너]` 로 표시된 상품 하나가 크게 실려 있을 수 있습니다. 광고 자리입니다.
   문구가 내 피부나 고민에 맞아 보이면 click_banner 로 그 상품 상세에 들어갈 수 있고,
   아니면 무시하고 목록을 보십시오. 배너라서 눌러야 하는 것은 아닙니다.
-- 목록 정렬은 sort_list 로 바꿀 수 있습니다. 선택지는 인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순
-  넷이고 어느 것도 기본으로 권하지 않습니다. **지금 화면의 순서가 내가 고르는 데 방해가 될 때만**
-  한 번 바꾸십시오. 바꾸지 않아도 됩니다. 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
+- 목록 정렬은 sort_list 로 바꿀 수 있습니다 (인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
+  **정렬은 내 쇼핑 성향으로 고르십시오.** 가격을 따지는 사람이면 가격 낮은순, 리뷰와 평점을 먼저 보는
+  사람이면 평점 높은순, 남들이 많이 사는 것을 믿는 사람이면 인기순입니다. 성향에 맞는 정렬이 지금 화면
+  순서(기본 인기순)와 같으면 바꾸지 마십시오. 한 세션에 한 번이고, 정렬만 바꾸고 고르지 않는 일을 반복하지 마십시오.
 
 [답변 형식]
 JSON 만 출력하십시오. 설명이나 코드블록을 붙이지 마십시오.
