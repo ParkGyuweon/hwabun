@@ -20,6 +20,7 @@
   "properties": {
     "sku_id": "SKU342-01",
     "quantity": 1,
-    "price_usd": 32
+    "unit_price": 42900,
+    "currency": "KRW"
   }
 }

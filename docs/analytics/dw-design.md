@@ -68,8 +68,7 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 상품 분석 | 상품별 관심과 전환 | `product_daily_kpi`, `recommendation_daily_kpi`, `dim_product` |
 | 사용자 행동 | 단계별 도달과 이탈 | `funnel_daily_kpi` |
 | 리뷰·성분 | 콘텐츠 열람·체류·관심 | `content_daily_kpi`, `dim_product` |
-| 검색 | 검색량, 결과 품질, 클릭 전환 | `search_daily_kpi` |
-| Persona·Scenario | 고객군·실행별 행동 차이 | `persona_segment_daily_kpi`, `scenario_daily_kpi`, Simulation Dimension |
+| Persona·Scenario | 고객군·실행별 행동 차이 | `persona_segment_daily_kpi`, `segment_price_band_daily_kpi`, Simulation Dimension |
 
 노출률, 실제 구매율, 추천 성과, 콘텐츠 관심도 등 어떤 지표를 최종 채택하더라도
 서로 다른 Processed grain을 먼저 목표 grain으로 집계한 뒤 결합하고, Delta Mart를
@@ -87,7 +86,6 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | 장바구니→구매 | `purchase_sessions / add_to_cart_sessions` | `funnel_daily_kpi` |
 | 성분·리뷰 열람률 | 각 콘텐츠 열람 세션 / 상품 조회 세션 | `content_daily_kpi` |
 | 단계별 이탈률 | `1 - next_step_sessions / current_step_sessions` | `funnel_daily_kpi` |
-| 검색→클릭 | `search_click_session_count / search_session_count` | `search_daily_kpi` |
 | 평균 체류시간 | `dwell_ms_sum / section_view_sessions` | `content_daily_kpi` |
 | 콘텐츠 관심도 | `processed-schema.md` §13.1 | `content_daily_kpi` |
 | 상품 관심도 | `Σ EVENT_WEIGHT x 발생 수` | `product_daily_kpi` |

@@ -1377,6 +1377,35 @@ def validate_frames(
         f"mixed_currency_groups={mixed_currency_groups}",
     ))
 
+    # 금액을 합산하는 나머지 Mart 도 같은 규칙을 지켜야 한다 (dw-schema §3.2).
+    # purchase_fact 는 재구매·구매 이유 Mart 셋의 공통 입력이라 여기서 한 번 본다.
+    # NULL 은 통과시킨다 — 값이 없는 것과 섞인 것은 다르다. 2026-09-11 생성기가
+    # currency 를 보내지 않아 현재 재생 데이터는 전부 NULL 이다.
+    purchase_currency_groups = (
+        purchase_fact.where(
+            F.col("currency").isNotNull()
+            & ~F.coalesce(F.col("is_seeded"), F.lit(False))
+        )
+        .groupBy("event_date_kst", "brand_id", *EXECUTION_AXES)
+        .agg(F.countDistinct("currency").alias("_currencies"))
+        .where(F.col("_currencies") > 1)
+        .count()
+    )
+    checks.append(_check(
+        "purchase_fact_currency_is_unambiguous",
+        purchase_currency_groups == 0,
+        f"mixed_currency_groups={purchase_currency_groups}; paid_value·order_value·item_revenue 합이 두 통화를 더하면 안 된다",
+    ))
+
+    # 통화가 실리기 시작했는지 보이게 남긴다. 검사는 아니고 관측값이다 —
+    # 원화 전환(303) 이 실제로 파이프라인까지 닿았는지 리포트에서 확인한다.
+    counts["purchase_fact_rows_with_currency"] = purchase_fact.where(
+        F.col("currency").isNotNull()
+    ).count()
+    counts["product_fact_rows_with_currency"] = product_fact.where(
+        F.col("currency").isNotNull()
+    ).count()
+
     # product_daily_kpi · funnel_daily_kpi 재계산 결정성. 두 Mart 에만 없었다.
     # 235 에서 시드 필터를 Mart 함수 밖(호출부)에 뒀다가 brand_daily 가 542행
     # 어긋났던 것과 같은 함정을 잡는다.

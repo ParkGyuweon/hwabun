@@ -52,6 +52,11 @@ Join 시점 스냅샷으로 보존한다.
 
 ## 3. Dataset 카탈로그
 
+**§11과 §15는 비어 있다.** 각각 `search_event_fact`와
+`persona_behavior_feature_delta`였는데 2026-09-16에 지웠다 — 구현된 적이 없고
+읽으려던 곳도 없어졌다. 번호를 다시 매기지 않는 이유는 다른 문서 일곱 곳이
+뒤 절들을 번호로 가리키고 있어서다.
+
 | Dataset | Layer | Grain / Unique key | Partition | 현재 `dev` |
 | --- | --- | --- | --- | --- |
 | `bad_events` | Error | Kafka 물리 좌표 1건 | `bad_recorded_date` | 구현, 목표 컬럼 보완 필요 |
@@ -60,13 +65,11 @@ Join 시점 스냅샷으로 보존한다.
 | `sessionized_events` | Processed Base | `event_id` | `event_date_kst` | 구현, 통합몰 세션 순서·seed Dimension 조인 동기화 대기 |
 | `product_event_fact` | Processed Fact | `event_id + item_index + product_id` | `event_date_kst` | 구현, seed Dimension Join |
 | `review_event_fact` | Processed Fact | `event_id + product_id` | `event_date_kst` | 구현, 리뷰 상세 행동 및 Dimension Join |
-| `search_event_fact` | Processed Fact | `event_id` | `event_date_kst` | 미구현 |
 | `section_dwell_agg` | Processed Aggregate | section dwell grain | `event_date_kst` | 구현, delta 합산 |
 | `content_interest_fact` | Processed Fact | content interest grain | `event_date_kst` | 구현, 산식·가중치 연결 |
 | `purchase_fact` | Processed Fact | `order_id + product_id` | `event_date_kst` | 구현 |
 | `purchase_reason_fact` | Processed Fact | `order_id + reason` | `event_date_kst` | 구현, 설문 건너뛰기 NULL reason 보존 |
 | `funnel_session_fact` | Processed Fact | `session_id + product_id` | `funnel_date_kst` | 구현, 목표 컬럼 보완 필요 |
-| `persona_behavior_feature_delta` | Feature Input | `event_id + user_id + product_id` | `event_date_kst` | 미구현 |
 | `dim_brand` | Dimension | `brand_id` | 없음 | seed 상품 기준 projection 구현 |
 | `dim_product` | Dimension | `product_id` | 없음 | seed 원천과 ACTIVE 등록 상품 union 구현. 등록 상품 `brand_id`는 쇼핑몰 상품 export로 보강 |
 
@@ -467,31 +470,6 @@ Mart(S15P21A306-168)가 데이터 파트 범위에서 빠졌다 — 리뷰 원�
 두 Event의 `recommendation_id`, `list_id`, `algorithm`, `position`은 검증 Job에서
 필수값으로 검사한다.
 
-## 11. `search_event_fact`
-
-입력은 `cleaned_events`의 `search` Event이며 unique key는 `event_id`다.
-
-| column | type | nullable | source / rule |
-| --- | --- | --- | --- |
-| `event_id` | string | N | Unique key |
-| `event_date_kst` | date | N | Partition |
-| `search_id` | string | Y | 검색 1회 ID |
-| `event_time` | timestamp | N | 검색 시각 |
-| `processed_at` | timestamp | N | 처리 시각 |
-| `user_id` | string | Y | 분석 사용자 ID |
-| `identity_scope` | string | N | `persona`, `account`, `session` |
-| `persona_id` | string | Y | Persona ID |
-| `scenario_id` | string | Y | synthetic 실행 축 |
-| `simulation_run_id` | string | Y | synthetic 실행 축 |
-| `generator_type` | string | Y | synthetic 생성 방식 |
-| `session_id` | string | N | 세션 ID |
-| `page_view_id` | string | N | 페이지 방문 ID |
-| `search_query` | string | Y | 정규화 검색어, 원문 정책 적용 |
-| `search_query_hash` | string | Y | 정규화 검색어 hash |
-| `result_count` | int | Y | 검색 결과 수 |
-| `actor_type` | string | N | 사용자 유형 |
-| `source` | string | N | 유입 경로 |
-
 ## 12. `section_dwell_agg`
 
 입력은 `cleaned_events`의 `section_dwell` Event다.
@@ -661,37 +639,6 @@ Quick Look과 상품 상세를 둘 다 열었으면 `first_quick_look_at`과
 `quick_look_close_reason`·`quick_look_dwell_ms`·`quick_look_variants_viewed`는 아직
 만들지 않는다. 닫힘 사유와 체류는 `quick_look_close` Event에 있으므로 필요해지면
 같은 Fact에 붙인다.
-
-## 15. `persona_behavior_feature_delta`
-
-입력은 상품과 연결되는 `cleaned_events`다. unique key는
-`event_id + user_id + product_id`다. `user_id`가 NULL인 Web Event는 사용자 Feature
-갱신 대상에서 제외한다.
-
-| column | type | nullable | source / rule |
-| --- | --- | --- | --- |
-| `event_id` | string | N | Unique key |
-| `event_date_kst` | date | N | Partition |
-| `user_id` | string | N | Feature 대상 사용자 |
-| `product_id` | string | N | Feature 대상 상품 |
-| `persona_id` | string | Y | Persona ID |
-| `scenario_id` | string | Y | synthetic 실행 축 |
-| `simulation_run_id` | string | Y | synthetic 실행 축 |
-| `generator_type` | string | Y | synthetic 생성 방식 |
-| `category_id` | string | Y | 상품 Dimension |
-| `brand_id` | string | Y | 상품 Dimension |
-| `event_name` | string | N | Event 이름 |
-| `event_time` | timestamp | N | 발생 시각 |
-| `processed_at` | timestamp | N | 처리 시각 |
-| `event_weight` | double | N | 행동 가중치 |
-| `decay_weight` | double | N | 시간 감쇠 |
-| `final_weight` | double | N | `event_weight * decay_weight` |
-| `actor_type` | string | N | 사용자 유형 |
-| `source` | string | N | 유입 경로 |
-
-가중치 값과 Product/User Vector 결합 방식은
-`../docs/analytics/spark-processing-design.md` 및 추천 계약을 따른다. 이 Dataset은
-Vector 자체를 저장하지 않는다.
 
 ## 16. `dim_brand`
 

@@ -384,8 +384,9 @@ bash infra/spark/run-pipeline.sh run-batch
 정보 확인 단계는 성분/리뷰 Section·Content, Accordion 펼침, 리뷰 필터/상세,
 매칭 성분·키워드가 있는 텍스트 선택/복사 Event로 파생한다. 상품 매출은
 `purchase`의 `item_revenue`만 합산한다. `product_interest_score`는
-`persona_behavior_feature_delta` 연결 전까지 NULL로 두어 단순 Event count를
-최종 관심도 점수로 오해하지 않도록 했다.
+`frontend/src/types/log.ts`의 `EVENT_WEIGHT`를 원본으로 삼아 Event 가중합으로
+낸다. 가중치를 주지 않고 부르면 NULL이다 — 단순 Event count를 관심도 점수로
+오해하지 않게 하기 위해서다.
 
 Q4도 전체 snapshot `overwrite` 방식의 MVP다. 실제 운영에서는 입력 변경 범위와
 Mart 재계산 범위를 함께 관리하는 증분 전략을 추가한다.

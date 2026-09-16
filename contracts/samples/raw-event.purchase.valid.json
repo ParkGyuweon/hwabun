@@ -23,17 +23,17 @@
         {
           "product_id": "P420652",
           "quantity": 1,
-          "unit_price": 24.0
+          "unit_price": 32200
         },
         {
           "product_id": "P54509",
           "quantity": 2,
-          "unit_price": 47.5,
+          "unit_price": 63700,
           "sku_id": "1974565"
         }
       ],
-      "cart_value": 119.0,
-      "currency": "USD"
+      "cart_value": 159600,
+      "currency": "KRW"
     }
   },
   {
@@ -86,19 +86,19 @@
         {
           "product_id": "P420652",
           "quantity": 1,
-          "unit_price": 24.0
+          "unit_price": 32200
         },
         {
           "product_id": "P54509",
           "quantity": 2,
-          "unit_price": 47.5,
+          "unit_price": 63700,
           "sku_id": "1974565"
         }
       ],
-      "order_value": 119.0,
-      "currency": "USD",
+      "order_value": 159600,
+      "currency": "KRW",
       "payment_method": "kakaopay",
-      "paid_value": 107.1,
+      "paid_value": 143600,
       "order_channel": "backend",
       "pg_provider": "portone",
       "payment_id": "hwabun-ORD-20260903-0001",

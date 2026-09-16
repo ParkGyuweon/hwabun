@@ -39,11 +39,12 @@ class EventMappingConsistencyTest(unittest.TestCase):
             event["properties"] = {
                 "order_id": "ORD-20260903-0001",
                 "items": [
-                    {"product_id": "P342", "quantity": 1, "unit_price": 24.0}
+                    {"product_id": "P342", "quantity": 1, "unit_price": 32200}
                 ],
                 "payment_method": "kakaopay",
-                "paid_value": 24.0,
+                "paid_value": 32200,
                 "order_channel": "backend",
+                "currency": "KRW",
             }
         if case["event_name"] == "payment_failed":
             event["properties"] = {
