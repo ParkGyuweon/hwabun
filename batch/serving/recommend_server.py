@@ -665,7 +665,8 @@ class DemoStart(BaseModel):
 
 @app.post("/live/demo/start")
 def live_demo_start(req: DemoStart):
-    """9,900명 로그 되감기 시작 — 로컬 시연 전용. Docker 이미지에는 simulator/ 가 없어 404 가 된다"""
+    """페르소나 로그 되감기 시작. 인원은 env DEMO_LIMIT(기본 9,900 · 배포 compose 1,000), 캐시는 DEMO_CACHE_DIR (Jira 295·335).
+    demo_live.py 가 이미지에 없으면 404 DEMO_UNAVAILABLE"""
     if not os.path.exists(_DEMO_SCRIPT):
         raise HTTPException(404, {"code": "DEMO_UNAVAILABLE", "path": _DEMO_SCRIPT})
     if _demo_status()["running"]:
