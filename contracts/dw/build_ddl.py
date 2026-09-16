@@ -67,6 +67,9 @@ VARCHAR = {
     "label_ko": 128,
     "banner_value": 128,          # 어휘집 원문. 실데이터 미실측
     "metric_name": 64,
+    "cohort_key": 64,               # "{product_count_band}|{price_bin}"
+    "product_count_band": 32,
+    "brand_hash": 64,               # sha256 앞 16자
     "secondary_category": 64,
     "section_id": 64,
     "entry_source": 64,
@@ -110,6 +113,13 @@ NULLABLE_KEYS = {
     "section_id",           # §4.4 섹션을 모르는 콘텐츠 Event 가 있다
     "content_kind",         # §4.4
 }
+# 이름만으로는 판정할 수 없는 예외. 같은 `brand_id` 라도 Fact 파생 Mart 에서는
+# 상품 미귀속 때문에 NULL 이 가능하지만, 브랜드 Dimension 의 grain 이면 NULL 일 수
+# 없다. 이 표에 있는 Mart 는 대리키 없이 PRIMARY KEY 를 그대로 쓴다.
+NOT_NULL_KEYS_BY_MART = {
+    "brand_cohort_dim": {"brand_id"},   # §3.7 grain/key = brand_id
+}
+
 # 비 key 인데도 NOT NULL 인 컬럼.
 #   numerator·denominator 는 분모를 나중에 다시 검증하려고 저장하는 값이라
 #   비어 있으면 저장할 이유가 없다 (§4.13).
@@ -127,6 +137,17 @@ NOT_NULL_VALUES = {
     "dwell_ms_sum",
     # 세그먼트 체류 총합. dwell_ms_sum 의 합이라 항상 값이 있다 (§4.25)
     "segment_dwell_ms_sum",
+    # 코호트 억제 판정과 임계값. Mart 가 매 행에 계산해 넣는다 (§4.18)
+    "is_dominated",
+    "is_suppressed",
+    "dominance_ratio",
+    "min_brand_count",
+    "window_start_date",
+    "window_end_date",
+    # 코호트 배정표의 값 (§3.7)
+    "brand_hash",
+    "product_count_band",
+    "commons_participating",
 }
 # 이름으로 판정할 수 없어 계약에서 직접 가져오는 것.
 NULLABLE_VALUES = {
@@ -134,8 +155,6 @@ NULLABLE_VALUES = {
     "currency",
     "banner_value",         # new_brand 배너만 NULL
     "label_ko",
-    "window_start_date",
-    "window_end_date",
 }
 
 
@@ -238,6 +257,18 @@ GRAINS = {
         "actor_type", "source", "generator_type",
         "scenario_id", "simulation_run_id",
     ],
+    "segment_price_band_daily_kpi": [
+        "brand_id", "event_date_kst", "segment_type", "segment_value",
+        "price_bin", "currency",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    "brand_cohort_dim": ["brand_id"],
+    "commons_cohort_weekly": [
+        "cohort_key", "snapshot_week_kst", "metric_name",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
     "user_trait_daily": [
         "user_id", "trait_date_kst", "trait", "identity_scope",
         "actor_type", "source", "scenario_id", "simulation_run_id",
@@ -264,14 +295,6 @@ EXCLUDED_COLUMNS = {
 # 여기에도 GRAINS 에도 없는 Mart 가 나오면 생성기가 실패한다 — 새 Mart 가 생겼는데
 # projection 여부를 아무도 판단하지 않은 상태이기 때문이다.
 PARQUET_ONLY = {
-    "brand_cohort_dim":
-        "브랜드 → 코호트 배정표다. 대시보드는 cohort_key 만 알면 되고 그 값은 "
-        "Backend 가 브랜드 인가와 함께 넘긴다",
-    "segment_price_band_daily_kpi":
-        "E4 응답에 가격 블록을 넣을지 프론트와 합의 전이다 (dashboard-mart-api-spec.md §5). 합의되면 GRAINS 로 옮긴다",
-    "commons_cohort_weekly":
-        "소비자가 아직 없다. E4 에 코호트 배지를 넣을지 프론트와 합의 전이다 "
-        "(dashboard-mart-api-spec.md §1-5). 합의되면 GRAINS 로 옮긴다",
     "banner_daily": "읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다",
     "cross_brand_daily": "읽는 엔드포인트가 없다",
     "category_price_reference": "카탈로그 파생 참조표다. Event 를 읽지 않고 브랜드 축도 없다",
@@ -292,12 +315,14 @@ def mysql_type(name: str, spark_type: str) -> str:
     return TYPE_MAP[spark_type]
 
 
-def is_nullable(name: str, grain: list[str]) -> bool:
+def is_nullable(name: str, grain: list[str], mart: str | None = None) -> bool:
     if name in NOT_NULL_VALUES:
         return False
     if name in NULLABLE_VALUES:
         return True
     if name in grain:
+        if name in NOT_NULL_KEYS_BY_MART.get(mart or "", ()):
+            return False
         return name in NULLABLE_KEYS
     # count 는 0 이 "없음"이지 "모름"이 아니다. 비율·점수는 분모 0 이면 NULL 이다.
     return not name.endswith("_count") and not name.endswith("_sessions")
@@ -310,7 +335,13 @@ def render_table(mart: str, columns: list[tuple[str, str, bool]]) -> str:
     if missing:
         raise ValueError(f"{mart}: grain 컬럼이 Mart 에 없다 {missing}")
 
-    needs_surrogate = any(column in NULLABLE_KEYS for column in grain)
+    # grain 은 NULLABLE_KEYS 만 본다. NULLABLE_VALUES(예: currency)는 값 컬럼
+    # 규칙이라 grain 판정에 섞이면 안 된다.
+    needs_surrogate = any(
+        column in NULLABLE_KEYS
+        and column not in NOT_NULL_KEYS_BY_MART.get(mart, ())
+        for column in grain
+    )
     lines = [f"CREATE TABLE `{SCHEMA}`.`{mart}` ("]
     if needs_surrogate:
         lines.append(f"  `{SURROGATE_KEY}` BIGINT NOT NULL AUTO_INCREMENT,")
@@ -321,7 +352,7 @@ def render_table(mart: str, columns: list[tuple[str, str, bool]]) -> str:
     ]
     for name in ordered:
         spark_type = next(t for n, t, _ in columns if n == name)
-        null = "NULL" if is_nullable(name, grain) else "NOT NULL"
+        null = "NULL" if is_nullable(name, grain, mart) else "NOT NULL"
         lines.append(f"  `{name}` {mysql_type(name, spark_type)} {null},")
     if needs_surrogate:
         lines.append(f"  PRIMARY KEY (`{SURROGATE_KEY}`),")

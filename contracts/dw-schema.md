@@ -37,7 +37,7 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 | --- | --- | --- |
 | `cleaned_events` | `event_id` | 정상 Event 수와 실시간 통계 |
 | `product_event_fact` | `event_id + item_index + product_id` | 상품·추천·구매 집계 |
-| `review_event_fact` | `event_id + product_id` | 리뷰 펼침·필터·정렬·리뷰 영역 체류 상세 |
+| `review_event_fact` | `event_id + product_id` | 리뷰 펼침·필터·정렬·리뷰 영역 체류 상세. **현재 이 Fact를 읽는 Mart가 없다** — 아래 |
 | `search_event_fact` | `event_id` | 검색 집계 |
 | `section_dwell_agg` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 체류 검증·재집계 |
 | `content_interest_fact` | `session_id + page_view_id + product_id + section_id + content_kind + content_ref` | 콘텐츠 관심 집계 |
@@ -48,6 +48,18 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 | `bad_events` | 격리 Event 1건 | Spark에서 관측한 오류 집계 |
 
 모든 Mart는 `event_id` 중복 제거가 끝난 Processed Dataset만 입력으로 사용한다.
+
+**`review_event_fact`는 소비자가 없는 Fact다** (2026-09-16). Q3가 만들고 Q5가
+검증하지만 읽는 Mart가 없다. 원래 소비자로 예정됐던 구매자 리뷰 Mart
+(S15P21A306-168)가 데이터 파트 범위에서 빠졌기 때문이다 — 리뷰 원문과 분류 결과는
+`shop_backend`가 관리하고 Spark는 리뷰 **행동 Event**만 집계한다. 그 집계는 이미
+§4.4 `review_view_sessions`·§4.19·§4.20 `review_filter_apply`에 들어가 있고,
+그쪽은 `review_event_fact`가 아니라 `content_interest_fact`와 `sessionized_events`를
+읽는다.
+
+**지우지 않고 두는 이유**는 이미 만들어져 있고 Q5가 검증하고 있어서, 되살리는
+비용이 두는 비용보다 크기 때문이다. 리뷰 행동을 따로 보는 Mart가 필요해지면
+재료가 이미 있다. **보호 장치나 소비 중인 입력으로 오해하지 않는다.**
 서로 다른 grain의 입력은 목표 Mart grain으로 각각 먼저 집계한 뒤 결합한다.
 `section_dwell_agg`와 `content_interest_fact`의 nullable `product_id`는 상품 목록의
 플랫폼 공통 섹션을 보존한다. 이 row는 플랫폼 탐색 분석용이며 상품 Dimension Join이나
@@ -349,8 +361,9 @@ source = dim_product, contracts/product-feature-vocab.json
 
 **카테고리를 축에 넣지 않는다.** 3축으로 가면 R1(브랜드 5 미만 억제)에서 56개 중 21개
 (37%)만 살아남아, 억제 규칙이 이 기능의 대상인 소규모 브랜드를 정확히 지운다. 2축이면
-35개(62%)다. `dominant_secondary_category`는 화면 설명용으로 남기되 `cohort_key`에는
-넣지 않는다.
+**31개(55%)다** — 구현 후 실측값이고, 3축의 21개는 착수 전 추정이다. 코호트 17개 중
+브랜드 5개 이상인 것이 5개이고 그 코호트에 속한 브랜드가 31개다.
+`dominant_secondary_category`는 화면 설명용으로 남기되 `cohort_key`에는 넣지 않는다.
 
 가격 구간은 [`product-feature-vocab.json`](./product-feature-vocab.json)의
 `price_bin_edges`를 읽는다. 숫자를 여기에 복제하지 않는다 — 추천 CBF 피처·배너 축·상품
@@ -1488,26 +1501,36 @@ Q5(`validate_pipeline_job`)가 이미 같은 불변식을 Parquet 단계에서 �
 | --- | --- | --- |
 | 1 | `user_trait_daily` | 추천 서버 `long_term_trait` (Jira 306) |
 | 2 | `brand_daily_kpi`, `product_daily_kpi`, `funnel_daily_kpi` | Dashboard E1·E2 |
-| 3 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi` | Dashboard E4 |
+| 3 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi` | Dashboard E4 `by_segment`·`grid`·`price_bands`·`segment_price_grid` |
+| 3-1 | `brand_cohort_dim`, `commons_cohort_weekly` | Dashboard E4 `cohort` |
 | 4 | `ingredient_weekly_interest` | Dashboard E5 |
 | 5 | `brand_repurchase_daily`, `product_repurchase_daily`, `purchase_reason_daily` | Dashboard E7 |
 
-`brand_price_band_daily_kpi`의 소비자는 **아직 합의 전이다.** E4 응답에 가격 블록을
-더해 달라고 프론트에 요청한 상태이고(§4.6-1), 합의가 되지 않으면 이 Mart도
-Parquet에만 둔다.
+**E4의 네 블록은 2026-09-16에 합의됐다** (프론트 계약 0.3). `price_bands`·
+`segment_price_grid`·`cohort` 세 블록을 넣기로 하면서 `brand_price_band_daily_kpi`·
+`segment_price_band_daily_kpi`·`brand_cohort_dim`·`commons_cohort_weekly`가
+projection 대상이 됐다.
+
+`cohort` 블록은 표 두 개를 함께 쓴다. 서버가 `brand_cohort_dim`에서 그 브랜드의
+`cohort_key`를 찾고, 그 값으로 `commons_cohort_weekly`의 코호트 행을 고른다.
+**`brand_cohort_dim` 없이는 `commons_cohort_weekly`를 읽을 수 없다** — 코호트 행에
+브랜드 식별자가 없기 때문이다(§4.18 R5).
 
 MySQL로 옮기지 않는 Mart와 그 이유다.
 
 | Mart | 이유 |
 | --- | --- |
-| `brand_cohort_dim` | 브랜드 → 코호트 배정표다. 대시보드는 `cohort_key`만 알면 되고 그 값은 Backend가 브랜드 인가와 함께 넘긴다 |
-| `commons_cohort_weekly` | **소비자가 아직 없다.** E4에 코호트 배지를 넣을지 프론트와 합의 전이다 (`dashboard-mart-api-spec.md` §1-5가 "코호트·중앙값 비교는 이 계약 범위 밖"). 합의되면 여기로 옮긴다 |
 | `banner_daily` | 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다 |
 | `cross_brand_daily` | 읽는 엔드포인트가 없다 |
 | `category_price_reference` | 카탈로그 파생 참조표다. Event를 읽지 않고 브랜드 축도 없다 |
 | `analytics_baseline` | 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다 |
 
 소비자가 생기면 DDL 생성기의 `GRAINS`에 한 줄 더하고 다시 돌린다.
+
+**`brand_cohort_dim`을 뺐던 근거는 틀렸다.** "`cohort_key`는 Backend가 브랜드
+인가와 함께 넘긴다"고 적었으나, 이 Mart가 Parquet에만 있어 **Backend가 그 값을 알
+경로가 없었다.** 검증하지 않은 추정이었고 프론트 검토에서 드러났다(2026-09-16).
+제외 사유를 적을 때는 그 소비자가 실제로 다른 경로를 갖고 있는지 확인한다.
 
 ### 7.2.1 projection에서 빼는 컬럼
 
