@@ -11,8 +11,9 @@
 무엇을 하는가
     1. 추천 서버(`--recommend`, 기본 http://127.0.0.1:8300)가 떠 있는지 `/health` 로 확인한다.
     2. Kafka(`--bootstrap`, 기본 127.0.0.1:9092)에 붙을 수 있는지 본다. 못 붙으면 `--http` 로 물러난다(경고 출력).
-    3. 9,900명 로그가 캐시(`simulator/generator/.cache/demo_behavior_9900.jsonl`)에 없으면 `gen_behavior_logs.py --limit 9900`
-       으로 만든다 (약 1,030만 건 · 6.9GB · 1분). 있으면 그대로 쓴다.
+    3. 로그가 캐시(`<DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl`, 기본 `simulator/generator/.cache/`)에 없으면
+       `gen_behavior_logs.py --limit <limit>` 으로 만든다 (9,900명: 약 1,030만 건 · 6.9GB · 1분 · RSS 12GB). 있으면 그대로 쓴다.
+       배포 컨테이너는 `DEMO_LIMIT=1000`(71만 건 · 714MB · 20초 · RSS 1.2GB) 으로 돈다 — 1GB 한도에서 9,900명은 OOM.
     4. 로그를 **key = session_id** 로 Kafka `activity-events` 에 초당 `--rate` 건씩 넣는다 — 수집기(backend/)와 같은 규칙이라
        파티션 3개로 갈라지고, 추천 서버 소비자가 읽어 상태에 반영한다. 그 사이 `/api/recommend` 도 초당 2~3번 불러
        응답 시간 칸을 살린다.
@@ -41,7 +42,46 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(HERE, ".cache", "demo_behavior_9900.jsonl")
+# 페르소나 수·캐시 위치는 환경변수로도 준다 (Jira 335). 생성기는 페르소나 1명당 RSS 약 1.2MB · 파일 0.7MB 를 쓰므로
+# 9,900명은 RSS 약 12GB · 6.9GB 파일 — 노트북에선 되지만 배포 컨테이너(mem_limit)에서는 OOM 으로 죽는다(09-16 실측).
+# 배포 compose 는 DEMO_LIMIT=1000(RSS 1.2GB · 714MB · 21초), DEMO_CACHE_DIR=/data/demo_cache(볼륨, 재배포에도 남는다).
+DEFAULT_LIMIT = int(os.environ.get("DEMO_LIMIT", "9900"))
+CACHE_DIR = os.environ.get("DEMO_CACHE_DIR") or os.path.join(HERE, ".cache")
+
+
+def cache_path(limit):
+    return os.path.join(CACHE_DIR, f"demo_behavior_{limit}.jsonl")
+
+
+def pos_path(log_path):
+    return log_path + ".pos"
+
+
+def load_pos(log_path):
+    """지난 실행이 보낸 줄 수. 정지 뒤 다시 시작하면 여기서 이어 간다 (Jira 335).
+
+    같은 파일을 처음부터 다시 보내면 event_id 가 같아 소비자(kafka_state.Dedupe, 최근 20만 건)가 전부 중복으로 버리고
+    화면은 안 움직인다 — 09-16 배포본에서 정지·재시작 뒤 duplicates 74,068 로 실측. 파일 끝까지 가면 0 으로 돌아간다."""
+    try:
+        with open(pos_path(log_path), encoding="utf-8") as f:
+            return max(0, int(f.read().strip() or 0))
+    except Exception:
+        return 0
+
+
+def save_pos(log_path, n):
+    try:
+        with open(pos_path(log_path), "w", encoding="utf-8") as f:
+            f.write(str(n))
+    except Exception:
+        pass
+
+
+def skip_lines(f, n):
+    for _ in range(n):
+        if not f.readline():
+            return False
+    return True
 
 
 def http_json(url, body=None, timeout=20):
@@ -66,12 +106,14 @@ def ensure_log(limit, path):
         print(f"[demo] 로그 캐시 사용: {path} ({os.path.getsize(path)/1e9:.1f}GB)")
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    print(f"[demo] 로그 생성 중: {limit:,}명 → {path}  (약 1분)")
+    print(f"[demo] 로그 생성 중: {limit:,}명 → {path}  (1,000명 약 20초 · 9,900명 약 1분, RSS 약 {limit*1.2/1000:.1f}GB)", flush=True)
     cmd = [sys.executable, os.path.join(HERE, "gen_behavior_logs.py"), "--limit", str(limit), "--out", path]
     env = dict(os.environ, PYTHONUTF8="1")
     r = subprocess.run(cmd, env=env)
     if r.returncode != 0 or not os.path.exists(path):
-        raise SystemExit("로그 생성 실패")
+        oom = r.returncode in (-9, 137)          # 컨테이너 mem_limit 에 걸려 죽은 것
+        hint = " — 메모리 부족: DEMO_LIMIT 을 줄이거나 mem_limit 을 올리십시오" if oom else ""
+        raise SystemExit(f"로그 생성 실패 (exit {r.returncode}){hint}")
     return path
 
 
@@ -91,7 +133,7 @@ class Ticker(threading.Thread):
             self.stop.wait(0.4)
 
 
-def stream_kafka(path, bootstrap, topic, rate, max_events):
+def stream_kafka(path, bootstrap, topic, rate, max_events, skip=0):
     from confluent_kafka import Producer
     p = Producer({"bootstrap.servers": bootstrap, "linger.ms": 20, "batch.num.messages": 2000,
                   "queue.buffering.max.messages": 500000, "compression.type": "lz4"})
@@ -100,8 +142,9 @@ def stream_kafka(path, bootstrap, topic, rate, max_events):
     def on_delivery(err, _msg):
         if err is not None:
             failed[0] += 1
-    t0 = time.time(); n = 0; last = t0
+    t0 = time.time(); n = 0; last = t0; done = False
     with open(path, encoding="utf-8") as f:
+        skip_lines(f, skip)
         for line in f:
             line = line.strip()
             if not line:
@@ -125,14 +168,18 @@ def stream_kafka(path, bootstrap, topic, rate, max_events):
                 time.sleep(min(0.05, target - now))
             if now - last >= 10:
                 last = now
-                print(f"[demo] Kafka 로 {n:,}건 · 실패 {failed[0]} · {n/(now-t0):,.0f}건/초", flush=True)
+                save_pos(path, skip + n)
+                print(f"[demo] Kafka 로 {n:,}건 (파일 위치 {skip + n:,}) · 실패 {failed[0]} · {n/(now-t0):,.0f}건/초", flush=True)
             if max_events and n >= max_events:
                 break
+        else:
+            done = True
     p.flush(60)
+    save_pos(path, 0 if done else skip + n)
     return n, failed[0]
 
 
-def stream_http(path, base, rate, max_events, batch=50):
+def stream_http(path, base, rate, max_events, batch=50, skip=0):
     """Kafka 없이 추천 서버에 직접. 이벤트 모양은 /api/events 의 {persona_id, events[]}"""
     import queue
     q = queue.Queue(maxsize=200); ok = [0]; fail = [0]; lock = threading.Lock()
@@ -153,8 +200,9 @@ def stream_http(path, base, rate, max_events, batch=50):
     ths = [threading.Thread(target=worker, daemon=True) for _ in range(6)]
     for t in ths:
         t.start()
-    t0 = time.time(); n = 0; last = t0; cur = None; buf = []
+    t0 = time.time(); n = 0; last = t0; cur = None; buf = []; done = False
     with open(path, encoding="utf-8") as f:
+        skip_lines(f, skip)
         for line in f:
             try:
                 d = json.loads(line)
@@ -174,9 +222,13 @@ def stream_http(path, base, rate, max_events, batch=50):
                 time.sleep(min(0.05, target - now))
             if now - last >= 10:
                 last = now
-                print(f"[demo] HTTP 로 {n:,}건 읽음 · 반영 {ok[0]:,} · 실패 {fail[0]:,} · {n/(now-t0):,.0f}건/초", flush=True)
+                save_pos(path, skip + n)
+                print(f"[demo] HTTP 로 {n:,}건 읽음 (파일 위치 {skip + n:,}) · 반영 {ok[0]:,} · 실패 {fail[0]:,} · {n/(now-t0):,.0f}건/초", flush=True)
             if max_events and n >= max_events:
                 break
+        else:
+            done = True
+    save_pos(path, 0 if done else skip + n)
     if buf:
         q.put((cur, buf))
     for _ in ths:
@@ -192,11 +244,14 @@ def main():
     ap.add_argument("--bootstrap", default="127.0.0.1:9092")
     ap.add_argument("--topic", default="activity-events")
     ap.add_argument("--rate", type=int, default=3000, help="초당 이벤트 수 (기본 3,000)")
-    ap.add_argument("--limit", type=int, default=9900, help="페르소나 수")
+    ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"페르소나 수 (기본 {DEFAULT_LIMIT:,} = env DEMO_LIMIT)")
     ap.add_argument("--max-events", type=int, default=0, help="이만큼만 보내고 멈춘다 (0 = 전부, 9,900명은 약 1,030만 건)")
-    ap.add_argument("--log", default=CACHE, help="행동 로그 경로 (없으면 생성)")
+    ap.add_argument("--log", default=None, help="행동 로그 경로 (기본 <DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl, 없으면 생성)")
     ap.add_argument("--http", action="store_true", help="Kafka 대신 추천 서버 POST /api/events 로 직접")
     ap.add_argument("--no-ticker", action="store_true", help="/api/recommend 를 같이 부르지 않는다")
+    ap.add_argument("--restart", action="store_true",
+                    help="지난 실행이 멈춘 자리(<log>.pos)를 무시하고 처음부터. 기본은 이어서 보낸다 — 처음부터 다시 보내면 "
+                         "소비자가 event_id 중복으로 다 버린다")
     a = ap.parse_args()
 
     try:
@@ -211,7 +266,10 @@ def main():
     if use_kafka and not kafka_state:
         print("[demo] 경고: 추천 서버가 KAFKA_BOOTSTRAP_SERVERS 없이 떠 있다 — Kafka 에 넣어도 서버가 읽지 않는다. "
               "서버를 KAFKA_BOOTSTRAP_SERVERS 로 다시 띄우거나 --http 를 쓰십시오")
-    path = ensure_log(a.limit, a.log)
+    path = ensure_log(a.limit, a.log or cache_path(a.limit))
+    skip = 0 if a.restart else load_pos(path)
+    if skip:
+        print(f"[demo] 지난 실행이 멈춘 {skip:,}번째 줄부터 이어 보낸다 (처음부터는 --restart)", flush=True)
     print(f"[demo] 보기: {a.recommend}/live   (경로: {'Kafka ' + a.bootstrap + ' → 파티션 3 → 소비자' if use_kafka else 'HTTP 직접'} · {a.rate:,}건/초)")
 
     ticker = None
@@ -220,9 +278,9 @@ def main():
     t0 = time.time()
     try:
         if use_kafka:
-            n, failed = stream_kafka(path, a.bootstrap, a.topic, a.rate, a.max_events)
+            n, failed = stream_kafka(path, a.bootstrap, a.topic, a.rate, a.max_events, skip=skip)
         else:
-            n, failed = stream_http(path, a.recommend, a.rate, a.max_events)
+            n, failed = stream_http(path, a.recommend, a.rate, a.max_events, skip=skip)
     except KeyboardInterrupt:
         print("\n[demo] 중단"); n, failed = 0, 0
     finally:

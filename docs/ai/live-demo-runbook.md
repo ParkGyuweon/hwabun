@@ -81,7 +81,8 @@ bash deploy/ec2-1/reset-registered-local.sh
 - `/live` 를 밖에서 보려면 nginx 에 `location = /live` · `location /live/` → `http://recommend:8300` 한 블록 (백엔드 몫). 없으면
   `ssh -L 8300:127.0.0.1:8300 …` 터널로 발표 노트북에서 `http://127.0.0.1:8300/live`. 단 컨테이너 8300 은 호스트에 안 열려 있으니
   터널 대상은 `docker exec` 로 컨테이너 IP 를 확인해 잡는다(`sudo docker inspect ec2-1-recommend-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`).
-- 배포 이미지엔 `simulator/` 가 없어 `/live` 의 시작 버튼은 비활성이다. 트래픽은 **EC2 호스트의 dev 워크트리**에서 돌린다:
+- 배포본 `/live` 의 시작 버튼은 **1,000명**을 돌린다(compose `DEMO_LIMIT=1000`, 캐시 볼륨 `/data/demo_cache`, 09-16 Jira 335).
+  생성기가 페르소나 1명당 RSS 1.2MB 라 9,900명(12GB)은 컨테이너에서 OOM 으로 죽는다(실측). 9,900명이 꼭 필요하면 **EC2 호스트의 dev 워크트리**에서 돌린다:
 
 ```bash
 # EC2-1 안. dev 워크트리는 redeploy 가 /home/ubuntu/dev-build 에 만들어 둔다. 디스크 292GB 여유, 파이썬 3.12
@@ -89,7 +90,7 @@ cd /home/ubuntu/dev-build
 python3 -c "import numpy" || pip3 install --user numpy            # 로그 생성기(gen_behavior_logs)만 numpy 를 쓴다. demo_live 는 표준 라이브러리
 PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
   --recommend http://<recommend 컨테이너 IP>:8300 --bootstrap <EC2-2 IP>:9092
-# 캐시(simulator/generator/.cache/demo_behavior_9900.jsonl, 6.9GB)가 없으면 첫 실행이 1분쯤 생성한다
+# 캐시(simulator/generator/.cache/demo_behavior_9900.jsonl, 6.9GB)가 없으면 첫 실행이 1분쯤 생성한다 (호스트 RAM 15.7GB 중 12GB 필요 — 다른 컨테이너 상태를 먼저 본다)
 ```
 
 - **Kafka 가 없을 때의 보험**: `demo_live.py` 는 `--bootstrap` 포트가 닫혀 있으면 스스로 `--http` 로 물러나 추천 서버
@@ -99,8 +100,8 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 
 ## 3. 데이터
 
-- 9,900명 로그 캐시 `simulator/generator/.cache/demo_behavior_9900.jsonl` — 1,030만 건 · 6.9GB · gitignore. 없으면 첫 시작에
-  `gen_behavior_logs.py --limit 9900` 으로 1분 생성.
+- 로그 캐시 `<DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl` (로컬 기본 `simulator/generator/.cache/`, gitignore). 9,900명 = 1,030만 건 · 6.9GB · 1분 · RSS 12GB,
+  1,000명 = 71만 건 · 714MB · 21초 · RSS 1.2GB (09-16 실측). 없으면 첫 시작에 `gen_behavior_logs.py --limit <limit>` 으로 생성. 배포본은 1,000명, 볼륨 `/data/demo_cache` 라 재배포에도 남는다.
 - 상태에 영향 없는 이벤트(dwell 류 약 30%)는 소비자가 걸러 `filtered` 로 세고, 화면 카운터엔 반영분만 잡힌다.
 - 시연 전 `SESSION_EVENTS_PATH` 파일을 비우면 "상태가 바뀐 사용자" 가 0 에서 시작한다. 배포본은 볼륨 `/data/session_events.jsonl`.
 - 원천 200개는 카탈로그 동기화·재등록으로 바뀌지 않는다(308, `seed_kept`). 등록 상품은 SB 8개만이고 가격은 원화 그대로 구간에
@@ -164,7 +165,10 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 - `Found orphan containers` 경고는 정상(백엔드 compose 의 shop-backend·mysql). `--remove-orphans` 금지.
 - `.env` 의 `KAFKA_BOOTSTRAP_SERVERS` 가 EC2-1 자기 주소(`j15a306.p.ssafy.io:9092`)면 틀린 것 — 브로커는 EC2-2.
 - 다른 브랜치를 체크아웃한 상태로 로컬 서버를 재기동하면 `/live` 가 없는 옛 코드가 뜬다 (404).
-- **배포본 /live 시작 버튼이 404 `DEMO_UNAVAILABLE`** — 이미지에 `simulator/generator/demo_live.py` 가 없었다(09-16 발견, Jira 335 로 Dockerfile 에 COPY 추가). 재배포 뒤 첫 시작은 캐시 생성 1분. 캐시는 컨테이너 안이라 재배포하면 다시 만든다.
+- **배포본 /live 시작 버튼이 404 `DEMO_UNAVAILABLE`** — 이미지에 `simulator/generator/demo_live.py` 가 없었다(09-16 발견, Jira 335 로 Dockerfile COPY + `recommend.Dockerfile.dockerignore` 예외 — 둘 다 있어야 빌드된다).
+- **배포본 /live 시작이 `로그 생성 실패`** — 컨테이너 `mem_limit: 1g` 에서 9,900명 생성이 OOM(`OOMKilled=true`, 트레이스백 없이 죽는다). 335 후속으로 `DEMO_LIMIT=1000`·`mem_limit: 3g`·캐시 볼륨. 진단은 `/data/demo_live.log` 와 `docker inspect --format '{{.State.OOMKilled}}'`.
+- **시작 버튼은 배포 Kafka 로 진짜 이벤트를 보낸다** — EC2-2 `activity-events` → Spark raw sink → 마트까지 흐른다(generator_type=python_batch, 새 run_id). 데이터·인프라 파트와 시점을 맞추고 누른다.
+- **정지 뒤 다시 시작하면 화면이 안 움직인다** — 같은 캐시를 처음부터 다시 보내면 event_id 가 같아 소비자(`Dedupe` 최근 20만 건)가 전부 버린다(09-16 duplicates 74,068 실측). 335 후속으로 demo_live 가 `<캐시>.pos` 에 보낸 줄 수를 10초마다 적고 다음 시작은 거기서 이어 간다. 끝까지 가면 0. 처음부터 다시 보내려면 `POST /live/demo/start {"restart": true}` 또는 `--restart` — 이때는 컨테이너를 재기동해 중복 창을 비우는 게 맞다.
 - **배포본 /live 는 nginx 밖으로 안 열려 있다** — 추천 8300 은 컨테이너 안에서만. 보려면 `ssh -N -i ~/Downloads/J15A306T.pem -L 8300:<추천 컨테이너 IP>:8300 ubuntu@j15a306.p.ssafy.io` 뒤 `http://localhost:8300/live`. 컨테이너 IP 는 `sudo docker inspect ec2-1-recommend-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`. 고정 주소는 백엔드 nginx `location /live` 요청.
 - Windows 는 `localhost` 가 IPv6 폴백으로 2초 — 주소는 전부 `127.0.0.1`.
 - Kafka 없이도 `--http` 로 돌아가지만 파티션 칸이 비어 "분산" 은 안 보인다(§2-B).
