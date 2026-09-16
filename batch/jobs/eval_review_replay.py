@@ -78,6 +78,11 @@ def split_history(persona, index):
     return history, target
 
 
+# 긍정 리뷰를 어떤 전환 이벤트로 재생하나 (Jira 320 실험). 리뷰 이력은 구매 이력이라
+# `purchase`(8.0) 가 뜻에 맞지만, 지금까지의 수치는 전부 `add_to_cart`(3.0) 로 재생한 값이다.
+POSITIVE_EVENT = "add_to_cart"
+
+
 def events_for(review):
     """리뷰 한 건 -> 이벤트. 부족한 UI 이벤트만 보강한다"""
     gid = review["group_id"]
@@ -94,7 +99,7 @@ def events_for(review):
         out += [ev("section_dwell", section_id=s, dwell_ms=8000) for s in SECTIONS]
         out.append(ev("scroll_depth", depth_percent=100))
         out.append(ev("wishlist_toggle", action="add"))
-        out.append(ev("add_to_cart"))    # 리뷰를 썼다는 것은 샀다는 뜻이다
+        out.append(ev(POSITIVE_EVENT))   # 리뷰를 썼다는 것은 샀다는 뜻이다
     elif rating > NEGATIVE:
         out += [ev("section_dwell", section_id=s, dwell_ms=4000)
                 for s in SECTIONS[:2]]
@@ -195,7 +200,12 @@ def main():
                                         "holdout_a", "holdout_b"),
                     default="valid")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--positive-event", choices=("add_to_cart", "purchase"), default="add_to_cart",
+                    help="긍정 리뷰를 재생할 전환 이벤트. purchase 는 log.ts 가중치 8.0 (Jira 320 실험)")
     a = ap.parse_args()
+    global POSITIVE_EVENT
+    POSITIVE_EVENT = a.positive_event
+    print(f"긍정 리뷰 재생 이벤트: {POSITIVE_EVENT}")
 
     encoder = Encoder()
     M = np.asarray(encoder.matrix(), np.float32)
