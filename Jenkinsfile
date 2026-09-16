@@ -113,6 +113,33 @@ pipeline {
             }
         }
 
+        stage('MySQL 스키마 마이그레이션') {
+            when {
+                expression { params.DEPLOY_TO_EC2 }
+            }
+            steps {
+                sh '''
+                    set -eu
+                    # 모든 migration은 멱등 SQL이므로 커밋 diff와 무관하게 재적용한다.
+                    # 이전 커밋에 포함된 migration이 아직 EC2에 적용되지 않은 경우도 보장한다.
+                    migrations="$(find shop_backend/migrations -maxdepth 1 -type f -name '*.sql' | sort || true)"
+                    if [ -z "$migrations" ]; then
+                        echo '적용할 MySQL 마이그레이션이 없습니다.'
+                        exit 0
+                    fi
+
+                    printf '%s\n' "$migrations" | sort | while IFS= read -r migration; do
+                        target="/tmp/$(basename "$migration")"
+                        echo "MySQL migration 적용: $migration"
+                        docker cp "$migration" "ec2-1-mysql-1:$target"
+                        docker exec ec2-1-mysql-1 sh -c \
+                          'mysql -u root -p"$MYSQL_ROOT_PASSWORD" shop_backend < '"$target"
+                        docker exec ec2-1-mysql-1 rm -f "$target"
+                    done
+                '''
+            }
+        }
+
         stage('EC2 배포') {
             when {
                 expression { params.DEPLOY_TO_EC2 }

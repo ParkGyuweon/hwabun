@@ -7,7 +7,7 @@
  *   3. POST /api/orders/{id}/confirm   → 서버가 포트원 조회 + 금액 대조 → PAID. **이 응답이 정본**이고 purchase 이벤트도 그 뒤에 남긴다
  *
  * 켜지는 조건: `VITE_PORTONE_STORE_ID` · `VITE_PORTONE_CHANNEL_KEY` 둘 다 있을 때. 둘은 공개 가능한 값이다.
- * API Secret 은 서버 전용이라 프론트에 없다. 키가 없으면 지금까지의 테스트 주문(`/pay` · 로컬)으로 간다 — 없는 기능을
+ * API Secret 은 서버 전용이라 프론트에 없다. 키가 없으면 백엔드 테스트 주문(`/pay`)으로 간다 — 없는 기능을
  * 있는 것처럼 두지 않는다.
  *
  * 금액은 **서버가 준 KRW 정수만** 넘긴다. 표시가(달러 × 1,340.86)와 1원 차이가 나도 결제는 서버 값이고, 서버가 confirm 에서
@@ -78,6 +78,7 @@ export async function requestKakaoPay(input: KakaoPayInput): Promise<PaymentResu
     currency: 'CURRENCY_KRW',
     // 카카오페이는 EASY_PAY 고정. easyPayProvider 는 채널이 정해 무시된다
     payMethod: 'EASY_PAY',
+    customData: { orderId: input.orderId },
     customer: input.customer,
     redirectUrl: paymentReturnUrl(input.orderId),
   };

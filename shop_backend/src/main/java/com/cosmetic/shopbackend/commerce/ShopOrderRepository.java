@@ -8,11 +8,27 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, String> {
   Optional<ShopOrder> findByMemberIdAndIdempotencyKey(String m, String k);
   List<ShopOrder> findByMemberIdOrderByIdDesc(String m);
 
-  // native UPDATE 뒤 1차 캐시에 남아 있던 CREATED 엔티티를 다시 응답하지 않도록 한다.
-  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(
-    value = "update shop_order set status='PAID', paid_at=CURRENT_TIMESTAMP(6) where order_id=:id and member_id=:memberId and status='CREATED'",
+    value = "update shop_order set status='PAID', paid_at=:paidAt, payment_provider='INTERNAL_TEST', paid_amount=total_amount where order_id=:id and member_id=:memberId and status='CREATED'",
     nativeQuery = true
   )
-  int markPaid(@Param("id") String id, @Param("memberId") String memberId);
+  int markPaid(
+    @Param("id") String id,
+    @Param("memberId") String memberId,
+    @Param("paidAt") java.time.LocalDateTime paidAt
+  );
+
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+    value = "update shop_order set status='PAID', paid_at=:paidAt, payment_id=:paymentId, payment_provider='PORTONE_TEST', paid_amount=:paidAmount where order_id=:id and member_id=:memberId and status='CREATED'",
+    nativeQuery = true
+  )
+  int markVerifiedPaid(
+    @Param("id") String id,
+    @Param("memberId") String memberId,
+    @Param("paymentId") String paymentId,
+    @Param("paidAmount") java.math.BigDecimal paidAmount,
+    @Param("paidAt") java.time.LocalDateTime paidAt
+  );
 }

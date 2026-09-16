@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,7 +43,7 @@ public class CommerceController {
   private final ShopOrderRepository orders;
   private final OrderItemRepository orderItems;
   private final BrandRepository brands;
-  private final PortOnePaymentVerifier portOnePayments;
+  private final JdbcTemplate jdbc;
 
   public CommerceController(
     CartRepository carts,
@@ -52,7 +53,7 @@ public class CommerceController {
     ShopOrderRepository orders,
     OrderItemRepository orderItems,
     BrandRepository brands,
-    PortOnePaymentVerifier portOnePayments
+    JdbcTemplate jdbc
   ) {
     this.carts = carts;
     this.cartItems = cartItems;
@@ -61,14 +62,56 @@ public class CommerceController {
     this.orders = orders;
     this.orderItems = orderItems;
     this.brands = brands;
-    this.portOnePayments = portOnePayments;
+    this.jdbc = jdbc;
   }
 
   public record CartRequest(String variantId, int quantity) {}
 
   public record OrderRequest(String idempotencyKey) {}
 
-  public record ConfirmRequest(String paymentId) {}
+  public record OrderResponse(
+    String orderId,
+    String status,
+    BigDecimal totalAmount,
+    BigDecimal paidAmount,
+    String currency,
+    String paymentId,
+    String paymentProvider,
+    java.time.LocalDateTime paidAt,
+    java.time.LocalDateTime createdAt,
+    int itemCount
+  ) {}
+
+  @GetMapping("/orders")
+  public List<OrderResponse> orders(@AuthenticationPrincipal ShopPrincipal actor) {
+    requireMember(actor);
+    return jdbc.query(
+      """
+      select o.order_id,o.status,o.total_amount,o.paid_amount,o.currency,
+             o.payment_id,o.payment_provider,o.paid_at,o.created_at,
+             coalesce(sum(oi.quantity),0) item_count
+      from shop_order o
+      left join order_item oi on oi.order_id=o.order_id
+      where o.member_id=? and o.status='PAID'
+      group by o.order_id,o.status,o.total_amount,o.paid_amount,o.currency,
+               o.payment_id,o.payment_provider,o.paid_at,o.created_at
+      order by o.created_at desc
+      """,
+      (rs, rowNum) -> new OrderResponse(
+        rs.getString("order_id"),
+        rs.getString("status"),
+        rs.getBigDecimal("total_amount"),
+        rs.getBigDecimal("paid_amount"),
+        rs.getString("currency"),
+        rs.getString("payment_id"),
+        rs.getString("payment_provider"),
+        rs.getTimestamp("paid_at") == null ? null : rs.getTimestamp("paid_at").toLocalDateTime(),
+        rs.getTimestamp("created_at").toLocalDateTime(),
+        rs.getInt("item_count")
+      ),
+      actor.accountId()
+    );
+  }
 
   @GetMapping("/cart")
   public Map<String, Object> view(
@@ -165,7 +208,7 @@ public class CommerceController {
           "idempotency key reused with different cart"
         );
       }
-      return ResponseEntity.ok(existing.get());
+      return ResponseEntity.ok(orderView(existing.get()));
     }
 
     Cart cart = cart(actor.accountId());
@@ -225,7 +268,7 @@ public class CommerceController {
     );
     orderItems.saveAll(snapshots);
     cartItems.deleteByCartId(cart.getId());
-    return ResponseEntity.status(HttpStatus.CREATED).body(order);
+    return ResponseEntity.status(HttpStatus.CREATED).body(orderView(order));
   }
 
   @PostMapping("/orders/{id}/pay")
@@ -239,65 +282,31 @@ public class CommerceController {
     if (
       order.isEmpty() || !order.get().getMemberId().equals(actor.accountId())
     ) return ResponseEntity.notFound().build();
-    orders.markPaid(id, actor.accountId());
-    return ResponseEntity.ok(orders.findById(id).orElseThrow());
+    orders.markPaid(
+      id,
+      actor.accountId(),
+      java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul"))
+    );
+    return ResponseEntity.ok(orderView(orders.findById(id).orElseThrow()));
   }
 
-  /**
-   * 포트원 SDK 완료 콜백 뒤에 호출한다. paymentId를 단순히 받는 것만으로는
-   * 결제로 인정하지 않고, 포트원 서버 조회에서 PAID 상태와 주문 금액까지
-   * 대조한 뒤에만 주문을 PAID로 변경한다.
-   */
-  @PostMapping("/orders/{id}/confirm")
-  @Transactional
-  public ResponseEntity<?> confirm(
-    @AuthenticationPrincipal ShopPrincipal actor,
-    @PathVariable String id,
-    @RequestBody ConfirmRequest request
-  ) {
-    requireMember(actor);
-    ShopOrder order = orders
-      .findById(id)
-      .filter(found -> found.getMemberId().equals(actor.accountId()))
-      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-    if (request.paymentId() == null || request.paymentId().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "paymentId required");
-    }
-
-    // 프론트가 주문 생성 후 정하는 paymentId 형식이다. 다른 주문의 결제를
-    // 같은 금액이라는 이유만으로 이 주문에 붙일 수 없게 주문 번호와 묶는다.
-    String expectedPaymentId = "hwabun-" + id;
-    if (!expectedPaymentId.equals(request.paymentId())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "paymentId does not match order");
-    }
-
-    PortOnePaymentVerifier.VerifiedPayment payment = portOnePayments.verify(
-      request.paymentId()
-    );
-    if (!request.paymentId().equals(payment.id())) {
-      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "paymentId mismatch");
-    }
-    if (!"PAID".equals(payment.status())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "payment is not paid");
-    }
-    if (!"KRW".equals(payment.currency())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "payment currency mismatch");
-    }
-    if (order.getTotalAmount().compareTo(payment.totalAmount()) != 0) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "payment amount mismatch");
-    }
-
-    orders.markPaid(id, actor.accountId());
-    ShopOrder paid = orders.findById(id).orElseThrow();
-    return ResponseEntity.ok(
-      Map.of(
-        "orderId",
-        paid.getId(),
-        "status",
-        paid.getStatus(),
-        "paidAt",
-        paid.getPaidAt()
-      )
+  private OrderResponse orderView(ShopOrder order) {
+    int itemCount = orderItems
+      .findByOrderId(order.getId())
+      .stream()
+      .mapToInt(OrderItem::getQuantity)
+      .sum();
+    return new OrderResponse(
+      order.getId(),
+      order.getStatus().name(),
+      order.getTotalAmount(),
+      order.getPaidAmount(),
+      order.getCurrency(),
+      order.getPaymentId(),
+      order.getPaymentProvider(),
+      order.getPaidAt(),
+      order.getCreatedAt(),
+      itemCount
     );
   }
 
