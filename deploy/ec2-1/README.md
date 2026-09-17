@@ -120,6 +120,9 @@ sudo docker compose exec -T nginx nginx -s reload
 > (`redeploy-recommend-from-dev.sh`). EC2 레포에 GitLab 자격증명이 없어 fetch 는 로컬 레지스트리의 `GITLAB_TOKEN`(scope api)을
 > 첫 줄로 흘려 보내 그 한 번에만 쓴다 — 어디에도 저장되지 않는다. 끝에 `/health` 와 어휘집 버전이 찍히면 성공.
 > 예전 bundle→scp 절차(09-11)는 더 쓰지 않는다.
+>
+> **같은 폴더의 다른 한 줄들 (09-17):** `reset-registered-local.sh`(등록 상품 8개 되돌리기) · `reset-demo-local.sh`(시연 상태 초기화 — 기본 dry-run, `--apply` 로 demo_live 정지·session_events·demo_live.log 비우기·`.pos` 삭제·재기동, Jira 347) · `build-verbose-local.sh`.
+> **.env 에 AI 가 넣는 키 (09-17 실측값):** `DEMO_LIMIT=9900` · `DEMO_CURRENCY=KRW` · `SPARK_MASTER_UI=http://j15a306a.p.ssafy.io:18080` · `DASHBOARD_URL=https://j15a306.p.ssafy.io/dashboard.html` · `USER_TRAIT_MAX_AGE_DAYS=60`(시연용, 뒤에 14). env 만 바뀌면 재빌드 없이 `docker compose --env-file .env up -d --no-deps recommend`.
 
 `recommend` 서비스는 파이썬 FastAPI 추천 서버다 (`deploy/recommend.Dockerfile`, 계약
 `contracts/recommendation-io-spec.md` §5). 모델·페르소나·산출물이 이미지 안에 들어가고,

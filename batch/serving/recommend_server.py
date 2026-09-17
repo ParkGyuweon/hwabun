@@ -679,7 +679,8 @@ class DemoStart(BaseModel):
 
 @app.post("/live/demo/start")
 def live_demo_start(req: DemoStart):
-    """페르소나 로그 되감기 시작. 인원은 env DEMO_LIMIT(기본 9,900 · 배포 compose 1,000), 캐시는 DEMO_CACHE_DIR (Jira 295·335).
+    """페르소나 로그 되감기 시작. 인원은 env DEMO_LIMIT(기본 9,900 · compose 기본 1,000 · EC2-1 .env 9,900 + 노트북 캐시), 통화 DEMO_CURRENCY(KRW),
+    캐시는 DEMO_CACHE_DIR (Jira 295·335·341).
     demo_live.py 가 이미지에 없으면 404 DEMO_UNAVAILABLE"""
     if not os.path.exists(_DEMO_SCRIPT):
         raise HTTPException(404, {"code": "DEMO_UNAVAILABLE", "path": _DEMO_SCRIPT})
