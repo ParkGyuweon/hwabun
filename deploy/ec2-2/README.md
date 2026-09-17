@@ -113,6 +113,15 @@ Q2~Q5가 순서대로 성공한 뒤 같은 실행에서 `dw-projection`까지 �
 Parquet Mart와 MySQL `dw`가 함께 갱신된다. Q1 Raw Sink는 계속 실행되고, 배치는 동시에
 두 번 실행되지 않도록 lock을 사용한다.
 
+Q3의 Commons `brand_hash`를 만들려면 EC2-2의 gitignore된 `.env`에
+`COMMONS_HASH_SALT`를 **비어 있지 않은 고정 값**으로 설정해야 한다. 이 값은 저장소에
+커밋하지 않고, 한 번 정한 뒤 바꾸지 않는다. 설정 후 `spark-master`와 `spark-worker`를
+재생성해 컨테이너에 반영한다. 배치 시작 시 Master에 값이 없으면 Q2 실행 전에 중단한다.
+
+```bash
+sudo docker compose up -d --no-build spark-master spark-worker
+```
+
 처음 한 번만 EC2-2 호스트에 timer를 설치한다.
 
 ```bash
@@ -132,9 +141,15 @@ sudo systemctl start hwabun-daily-batch.service
 sudo journalctl -u hwabun-daily-batch.service -n 100 --no-pager
 ```
 
-기본 실행 시각은 EC2 호스트의 시간 기준 매일 03:00이다. 다른 시각이 필요하면
-`hwabun-daily-batch.timer`의 `OnCalendar`를 수정한 뒤 `daemon-reload`와 timer 재시작을
-수행한다.
+기본 실행 시각은 호스트 시간대와 무관하게 매일 **03:00 KST**(전날 18:00 UTC)이다.
+Q1 Raw Sink가 1코어를 쓰므로 Worker가 기본 2코어라면 배치의 `spark.cores.max=2`는
+상한일 뿐 실제로는 1코어만 남을 수 있다. Q1을 유지하면서 배치에 2코어를 주려면
+EC2 자원을 확인하고 `SPARK_WORKER_CORES`를 최소 3으로 설정해야 한다. Q5는 현재 전체
+결정성 검사를 수행하므로 완료까지 시간이 걸릴 수 있다.
+
+timer나 service 파일을 수정한 뒤에는 다시 `/etc/systemd/system/`에 복사하고
+`sudo systemctl daemon-reload` 및 `sudo systemctl restart hwabun-daily-batch.timer`를
+실행한다.
 
 결과는 `/opt/hwabun/data/processed`, `/opt/hwabun/data/marts`,
 `/opt/hwabun/data/validation/pipeline-report.json`에서 확인한다.

@@ -2,9 +2,8 @@
 Description=Run HWABUN daily Spark mart batch
 
 [Timer]
-# The time uses the EC2 host timezone. Set the host timezone before enabling
-# this timer if the batch must run at a specific local time.
-OnCalendar=*-*-* 03:00:00
+# 18:00 UTC is 03:00 KST on the following day, regardless of host timezone.
+OnCalendar=*-*-* 18:00:00 UTC
 Persistent=true
 Unit=hwabun-daily-batch.service
 
