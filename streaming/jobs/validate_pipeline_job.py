@@ -1298,7 +1298,11 @@ def validate_frames(
         | (F.col("detail_view_sessions") > F.col("session_count"))
         | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
         | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
-        | (F.col("product_click_count") > F.col("product_impression_count"))
+        # 분모는 두 노출의 합이다. 추천 카드 클릭도 product_click 이라
+        # product_impression 만 보면 1 을 넘는다 (§4.1, 프론트 확인 2026-09-17).
+        | (F.col("product_click_count") > F.col("impression_count"))
+        | (F.col("impression_count")
+           != F.col("product_impression_count") + F.col("recommendation_impression_count"))
         | (F.col("purchase_count") > F.col("purchase_quantity"))
     ).count()
     checks.append(_check(
@@ -1320,8 +1324,8 @@ def validate_frames(
         ]) == 1
     ).count()
     invalid_product_denominators = product_daily.where(
-        ((F.col("product_impression_count") == 0) & F.col("product_ctr").isNotNull())
-        | ((F.col("product_impression_count") == 0)
+        ((F.col("impression_count") == 0) & F.col("product_ctr").isNotNull())
+        | ((F.col("impression_count") == 0)
            & F.col("detail_entry_rate").isNotNull())
         | ((F.col("detail_view_sessions") == 0) & F.col("add_to_cart_rate").isNotNull())
         | ((F.col("detail_view_sessions") == 0) & F.col("purchase_rate").isNotNull())
