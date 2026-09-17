@@ -255,5 +255,28 @@ class PriceBandMartSparkTest(unittest.TestCase):
         self.assertEqual(1, mart.first()["detail_view_sessions"])
 
 
+    # ── 노출 분모 (Jira 336) ───────────────────────────────────────────
+    def test_impression_sessions_count_all_three_surfaces(self):
+        """노출 Event 는 셋이다 (§4.1). 추천·배너로만 노출된 세션도 분모다.
+
+        product_impression 만 세면 그 세션이 분모에서 빠져 detail_entry_rate 가
+        1 을 넘는다 — 104만 건 실행에서 같은 계열 Mart 가 그렇게 걸렸다.
+        """
+        facts = self._facts([
+            self._event("P-mid", "S1", "recommendation_impression"),
+            self._event("P-mid", "S1", "product_view"),
+            self._event("P-mid", "S2", "banner_impression"),
+            self._event("P-mid", "S2", "product_view"),
+        ])
+        dim = self._dim([("P-mid", Decimal("50000.00"), "KRW")])
+
+        row = _brand_price_band_daily_kpi(facts, dim, self.bins).first()
+
+        # product_impression 이 0 인데도 두 세션 다 노출로 잡혀야 한다
+        self.assertEqual(2, row["impression_sessions"])
+        self.assertEqual(2, row["detail_view_sessions"])
+        self.assertLessEqual(row["detail_entry_rate"], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -223,5 +223,43 @@ class PersonaSegmentMartSparkTest(unittest.TestCase):
         self.assertEqual(2.5, row["avg_interest_score"])
 
 
+    # ── 노출 분모 (Jira 336 · 104만 건에서 6행 실패한 자리) ────────────
+    def test_impression_sessions_count_all_three_surfaces(self):
+        """노출 Event 는 셋이다 (§4.1).
+
+        product_impression 만 세면 추천·배너로만 노출된 세션이 분모에서 빠져
+        detail_entry_rate 가 1 을 넘는다. 이 Mart 는 grain 이 잘아(세그먼트 ×
+        브랜드) 세션 한 건만 어긋나도 바로 드러난다.
+        """
+        facts = self._facts([
+            self._event("PC1", "S1", "recommendation_impression"),
+            self._event("PC1", "S1", "product_view"),
+            self._event("PC2", "S2", "banner_impression"),
+            self._event("PC2", "S2", "product_view"),
+        ])
+        bridge = self._bridge([
+            ("PC1", "skin_type", "dry"), ("PC2", "skin_type", "dry"),
+        ])
+
+        row = self._row(_persona_segment_daily_kpi(facts, bridge), "skin_type", "dry")
+
+        # product_impression 이 0 인데도 두 세션 다 노출로 잡혀야 한다
+        self.assertEqual(2, row["impression_sessions"])
+        self.assertEqual(2, row["detail_view_sessions"])
+        self.assertEqual(1.0, row["detail_entry_rate"])
+
+    def test_detail_entry_rate_never_exceeds_one(self):
+        """분모가 좁으면 1 을 넘는다. Q5 의 persona_segment_rates 가 보는 값이다."""
+        facts = self._facts([
+            self._event("PC1", "S1", "recommendation_impression"),
+            self._event("PC1", "S1", "product_view"),
+        ])
+        bridge = self._bridge([("PC1", "skin_type", "dry")])
+
+        row = self._row(_persona_segment_daily_kpi(facts, bridge), "skin_type", "dry")
+
+        self.assertLessEqual(row["detail_entry_rate"], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()
