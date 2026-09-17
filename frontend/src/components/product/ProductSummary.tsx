@@ -17,8 +17,12 @@ interface ProductSummaryProps {
   onVariantSelect: (variant: ProductVariant) => void;
   /** 실제 장바구니에 넣는다. 로그는 여기서 남기고 담기는 App 이 한다 */
   onAddToCart: (item: CartItem) => void;
-  /** 장바구니를 거치지 않고 이 상품 하나만 주문한다. 로그인 판단·주문은 App 이 한다 */
-  onBuyNow: (item: CartItem) => void;
+  /**
+   * 장바구니를 거치지 않고 이 상품 하나만 주문한다. 로그인 판단·주문은 App 이 한다.
+   * `addToCartProps` 는 App 이 로그인 확인을 **통과한 뒤에** 남길 `add_to_cart` 의 속성이다 — 여기서 먼저 찍으면
+   * 로그인 모달만 보고 끝난 클릭이 장바구니 전환으로 집계된다 (리뷰 !286).
+   */
+  onBuyNow: (item: CartItem, addToCartProps: Record<string, unknown>) => void;
   /** 결제창이 떠 있거나 서버 확인 중 */
   buying: boolean;
   /** 리뷰 섹션으로 스크롤 이동 */
@@ -75,23 +79,21 @@ export default function ProductSummary({
     quantity,
   });
 
-  /** 담기 이벤트. 담기 버튼과 바로 구매가 같은 모양으로 남긴다 — `entry_source` 만 다르다 */
-  const trackAddToCart = (entrySource?: string) => {
-    track('add_to_cart', {
-      product_id: product.product_id,
-      sku_id: selectedSkuId,
-      quantity,
-      price_usd: product.price_usd,
-      // 할인은 열린 속성으로 덧붙인다. price_usd 의 뜻(정가)은 그대로다
-      ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
-      ...(entrySource ? { entry_source: entrySource } : {}),
-    });
-  };
+  /** 담기 이벤트 속성. 담기 버튼과 바로 구매가 같은 모양으로 남긴다 — `entry_source` 만 다르다 */
+  const addToCartProps = (entrySource?: string): Record<string, unknown> => ({
+    product_id: product.product_id,
+    sku_id: selectedSkuId,
+    quantity,
+    price_usd: product.price_usd,
+    // 할인은 열린 속성으로 덧붙인다. price_usd 의 뜻(정가)은 그대로다
+    ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
+    ...(entrySource ? { entry_source: entrySource } : {}),
+  });
 
   const addToCart = () => {
     // 실패했을 때 성공 로그가 나가지 않도록, 장바구니 API 가 붙으면 성공 응답 후에만 track 한다
     setAddedAt(Date.now());
-    trackAddToCart();
+    track('add_to_cart', addToCartProps());
     onAddToCart(cartItem());
   };
 
@@ -99,6 +101,8 @@ export default function ProductSummary({
    * 바로 구매 — 장바구니를 거치지 않고 이 상품 하나만 주문한다.
    *
    * **`add_to_cart` 를 먼저 남긴다. 장바구니에 담지는 않는다** (AI 파트 확정 2026-09-16).
+   * 단, 찍는 자리는 여기가 아니라 App 이다 — 비로그인이면 App 이 로그인 모달만 열고 끝나는데, 그 클릭까지
+   * 담기로 남기면 `add_to_cart_sessions` 와 장바구니 이탈률이 부풀어 오른다 (리뷰 !286). 속성만 만들어 넘긴다.
    *
    * 처음에는 "담은 적이 없으니 담기 이벤트도 없다" 로 두었는데, 그러면 퍼널이 깨진다.
    * `funnel_daily_kpi`(dw-schema §4.5)의 `cart_to_purchase_rate` 와 `dropoff_after_cart_rate` 가
@@ -114,8 +118,7 @@ export default function ProductSummary({
    * 다만 **값 `buy_now` 는 §3.3 enum 에 아직 없다** — 데이터 파트에 추가 요청해 둔 상태다.
    */
   const buyNow = () => {
-    trackAddToCart('buy_now');
-    onBuyNow(cartItem());
+    onBuyNow(cartItem(), addToCartProps('buy_now'));
   };
 
   return (

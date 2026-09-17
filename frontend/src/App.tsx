@@ -456,7 +456,7 @@ export default function App() {
     [],
   );
 
-  /** 결제 실패·취소. 장바구니는 그대로, 화면에 이유를 적고 이벤트는 계약 등록 뒤에만 */
+  /** 결제 실패·취소. 장바구니는 그대로 두고 화면에 이유를 적고 `payment_failed` 를 남긴다 */
   const failPayment = useCallback((orderId: string, code: string, message: string, method: PaymentMethod) => {
     setPaymentError(message);
     if (PAYMENT_FAILED_EVENT_ENABLED) {
@@ -595,7 +595,7 @@ export default function App() {
    * "확인까지 갔다가 안 산 사람" 집계가 섞인다.
    */
   const buyNow = useCallback(
-    async (item: CartItem) => {
+    async (item: CartItem, addToCartProps: Record<string, unknown>) => {
       if (paying) return;
       if (!hasMemberSession()) {
         /*
@@ -608,9 +608,13 @@ export default function App() {
       const orderId = createOrderId();
       const { total, paid } = orderTotals([item]);
       /*
-       * 바로 구매도 퍼널을 전부 밟는다 — 담기(ProductSummary) → 여기 → purchase.
+       * 바로 구매도 퍼널을 전부 밟는다 — add_to_cart → begin_checkout → purchase.
        * 단계를 비우면 그 단계를 분모로 쓰는 비율이 1.0 을 넘는다 (ProductSummary.buyNow 주석).
+       *
+       * `add_to_cart` 는 **로그인 확인을 통과한 여기서** 남긴다. 위에서 모달만 열고 끝난 클릭은 담기도
+       * 결제도 아니므로 아무 이벤트도 남기지 않는다 (리뷰 !286). 속성 모양은 담기 버튼과 같다 (ProductSummary).
        */
+      track('add_to_cart', addToCartProps);
       track('begin_checkout', {
         order_id: orderId,
         items: toOrderItems([item]),

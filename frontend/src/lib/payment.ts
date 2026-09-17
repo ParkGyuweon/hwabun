@@ -82,10 +82,14 @@ export const PAYMENT_PROVIDER = 'portone' as const;
 export type PaymentMethod = 'kakaopay' | 'card' | 'test';
 
 /**
- * `payment_failed` 이벤트 스위치. 계약(event-properties-schema §6 · event-schema.json)과 수집기 INTENTS 에 등록되기 전에
- * 보내면 `unregistered_event` 로 거절된다 (데이터·AI 파트가 넣기로 함, 2026-09-14). 등록되면 true 로.
+ * `payment_failed` 이벤트 스위치.
+ *
+ * 계약 등록 전에는 `unregistered_event` 로 거절돼서 꺼 두었다 (2026-09-14). 지금은 계약(event-properties-schema
+ * §2.5·§4.5 · event-schema.json enum)과 수집기 `EventContractValidator` INTENTS, Spark `clean_events_job` INTENTS 에
+ * 모두 `payment_failed → conversion` 이 있다 (2026-09-17 확인). 꺼진 채로 두면 결제 실패·취소, 바로 구매의
+ * 장바구니 정리 실패, 비로그인 결제 시도가 하나도 남지 않아 전환 이탈의 마지막 칸이 비어 보인다.
  */
-export const PAYMENT_FAILED_EVENT_ENABLED = false;
+export const PAYMENT_FAILED_EVENT_ENABLED = true;
 
 /** 포트원 paymentId. 주문 1건당 고유 — 중복 결제 방지 키 */
 export const paymentIdFor = (orderId: string): string => `hwabun-${orderId}`;

@@ -32,8 +32,8 @@ interface ProductDetailPageProps {
   persona: PersonaProfile | null;
   onSelectProduct: (productId: string) => void;
   onAddToCart: (item: CartItem) => void;
-  /** 장바구니를 거치지 않고 이 상품 하나만 주문한다. 로그인 판단은 App 이 한다 */
-  onBuyNow: (item: CartItem) => void;
+  /** 장바구니를 거치지 않고 이 상품 하나만 주문한다. 로그인 판단과 `add_to_cart` 기록은 App 이 한다 */
+  onBuyNow: (item: CartItem, addToCartProps: Record<string, unknown>) => void;
   /** 결제창이 떠 있거나 서버 확인 중. 버튼 연타 방지 */
   buying: boolean;
 }
