@@ -60,7 +60,7 @@ export default function SegmentsScreen() {
             label="최고 전환 고객군"
             value={best.type === 'combination' ? `복합성 · ${TONE_KO[best.tone]}` : `${SKIN_TYPE_KO[best.type]} · ${TONE_KO[best.tone]}`}
             sub={`담기율 ${fmt.pct(best.cartRate)} · n=${fmt.int(best.sessions)}`}
-            source="mock"
+            source="none"
           />
         ) : (
           <Kpi label="최고 전환 고객군" value="-" sub="표본 50 이상인 칸이 없습니다" source={source.grid} />

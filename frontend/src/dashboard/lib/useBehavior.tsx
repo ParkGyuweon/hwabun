@@ -9,7 +9,7 @@
  */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Product } from '../../types/product';
-import { type BehaviorMetrics, mockBehavior } from './behavior';
+import { type BehaviorMetrics, emptyBehavior } from './behavior';
 import { fetchMartBundle, type MartBundle } from './martApi';
 import { fromMart } from './martAdapter';
 import { catalogProducts } from './metrics';
@@ -67,10 +67,10 @@ export function BehaviorProvider({
   const martState: MartState = !key ? 'idle' : bundle ? (anyPayload(bundle) ? 'ready' : 'unavailable') : 'loading';
 
   const metrics = useMemo(() => {
-    const mock = mockBehavior(days);
-    if (!bundle || !anyPayload(bundle)) return mock;
+    const base = emptyBehavior();
+    if (!bundle || !anyPayload(bundle)) return base;
     const mine: Product[] = brandName ? catalogProducts.filter((p) => p.brand_name === brandName) : [];
-    return fromMart(bundle, mock, mine);
+    return fromMart(bundle, base, mine);
   }, [bundle, days, brandName]);
 
   const value = useMemo(() => ({ metrics, martState, days }), [metrics, martState, days]);
@@ -91,4 +91,4 @@ export function useMartState(): MartState {
   return useContext(Ctx)?.martState ?? 'idle';
 }
 
-const FALLBACK = mockBehavior(14);
+const FALLBACK = emptyBehavior();
