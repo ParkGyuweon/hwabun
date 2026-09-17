@@ -312,6 +312,18 @@ export type CheckoutResult = { ok: true; orderId: string; status: string } | Api
 export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null } | ApiFailure;
 export type ConfirmResult = { ok: true; orderId: string; status: string; paidAt: string | null } | ApiFailure;
 
+/** 주문에 든 품목. 리뷰를 쓰려면 `orderItemId` 가 필요하다 */
+export interface BackendOrderItem {
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  variantLabel: string | null;
+  quantity: number;
+  lineAmount: number;
+  /** 이미 리뷰를 쓴 품목. 한 품목에 리뷰는 하나다 (서버가 409 로 막는다) */
+  reviewed: boolean;
+}
+
 export interface BackendOrder {
   orderId: string;
   status: string;
@@ -323,6 +335,8 @@ export interface BackendOrder {
   paidAt: string | null;
   createdAt: string;
   itemCount: number;
+  /** 옛 서버(품목을 안 주는 판본)와도 돌아야 해서 없으면 빈 배열 */
+  items: BackendOrderItem[];
 }
 
 export type OrderListResult = { ok: true; orders: BackendOrder[] } | ApiFailure;
@@ -334,7 +348,37 @@ export async function fetchBackendOrders(): Promise<OrderListResult> {
     const res = await authFetch('MEMBER', '/api/orders');
     if (!res.ok) return fail(res);
     const rows = (await res.json()) as BackendOrder[];
-    return { ok: true, orders: Array.isArray(rows) ? rows : [] };
+    if (!Array.isArray(rows)) return { ok: true, orders: [] };
+    // 품목을 안 주는 옛 서버와도 돌아야 한다 — 없으면 빈 배열로 채워 화면이 `undefined` 를 훑지 않게 한다
+    return { ok: true, orders: rows.map((o) => ({ ...o, items: Array.isArray(o.items) ? o.items : [] })) };
+  } catch {
+    return offline();
+  }
+}
+
+export type ReviewSubmitResult = { ok: true; reviewId: string } | ApiFailure;
+
+/**
+ * `POST /api/reviews` — 산 사람만 쓸 수 있다. 서버가 그 `orderItemId` 가 이 회원의 결제 완료 주문인지
+ * 직접 확인하고, 아니면 403 이다. 이미 쓴 품목이면 409.
+ */
+export async function submitReview(input: {
+  orderItemId: string;
+  rating: number;
+  isRecommended: boolean | null;
+  title: string | null;
+  body: string;
+}): Promise<ReviewSubmitResult> {
+  if (!hasMemberSession()) return { ok: false, status: 401, reason: '고객 로그인이 없습니다' };
+  try {
+    const res = await authFetch('MEMBER', '/api/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return fail(res);
+    const body = (await res.json()) as { reviewId?: string };
+    return { ok: true, reviewId: String(body.reviewId ?? '') };
   } catch {
     return offline();
   }
