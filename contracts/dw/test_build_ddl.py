@@ -264,15 +264,22 @@ class GeneratedSchemaTest(unittest.TestCase):
             with self.subTest(mart=mart):
                 self.assertIn("DEFAULT CHARSET=utf8mb4", block)
 
-    def test_zero_row_marts_are_marked_unverified(self):
-        """생성기가 purchase 를 만들지 않아 재구매 계열이 0행이다."""
+    def test_purchase_marts_are_no_longer_unverified(self):
+        """재구매 계열이 실데이터로 검증됐다 (Jira 336, 2026-09-17).
+
+        생성기가 purchase 를 만들지 않던 시절에는 0행이라 "실데이터 미검증"
+        주석이 붙었다. 327·345·349 로 구매 이력 세션이 생기면서 104만 건
+        실행에서 163·52·1,778 행이 나왔다. 주석이 다시 붙으면 생성기가
+        구매를 못 만들고 있다는 뜻이라 여기서 잡는다.
+        """
         for mart in (
             "product_repurchase_daily",
             "brand_repurchase_daily",
             "purchase_reason_daily",
         ):
             with self.subTest(mart=mart):
-                self.assertIn(f"-- {mart}  -- 실데이터 미검증", self.sql)
+                self.assertNotIn(f"-- {mart}  -- 실데이터 미검증", self.sql)
+                self.assertIn("CREATE TABLE `dw`.`%s`" % mart, self.sql)
 
 
 if __name__ == "__main__":

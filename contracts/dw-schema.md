@@ -453,6 +453,37 @@ source·실행 축이 다른 행이 여럿이면 소비자가 `window_end_date` 
 하나를 고르고 그 수를 관측값으로 남긴다. MySQL projection이 `actor_type`·`contributing_event_count`를
 포함한 전체 컬럼을 싣는 이유도 이것이다 (§7.2.1).
 
+#### 4.0.1 `hist:` 세션 — 시드가 아닌 과거 구매
+
+생성기는 재구매 마트를 채우려고 **과거 구매 이력 세션**을 따로 만든다. `session_id`가
+`hist:{run}:{persona}:{product}` 형태이고, restock은 `#restock{n}`이 붙는다
+(`gen_behavior_logs.py` `history_session_id`).
+
+**이 세션은 `is_seeded=false`다** (2026-09-16, Jira 327). 시드로 두면 위 표의 제외
+규칙에 걸려 `product_repurchase_daily`·`brand_repurchase_daily`·`purchase_reason_daily`가
+다시 0행이 되기 때문이다. 데이터 파트 요청으로 그렇게 정했다.
+
+**그래서 이 세션도 퍼널 불변식을 지켜야 한다.** 관측으로 세는 이상 `상세 조회 ≥ 담기 ≥
+구매`가 성립해야 한다. 2026-09-17 스모크에서 이 전제가 깨져 있는 것이 드러났다 — 당시
+`hist:` 세션은 `page_view`·`add_to_cart`·`begin_checkout`·`purchase`·
+`purchase_reason_select`만 내고 **`product_view`를 내지 않았다.** 상세를 열지 않고 담고
+산 것이 되어 `add_to_cart_sessions > detail_view_sessions`가 됐다.
+
+| 실측 (페르소나 20명, 21,258 Event) | |
+| --- | --- |
+| `hist:` 세션 | 26개 · Event 129건 |
+| 비시드 `purchase` 중 `hist:` 비중 | 25 / 36 (69%) |
+| 불변식이 깨진 Mart | `funnel_daily_kpi` 26 · `brand_daily_kpi` 24 · `product_daily_kpi` 28 · `persona_segment_daily_kpi` 74 · `brand_price_band_daily_kpi` 26 · `segment_price_band_daily_kpi` 52 |
+
+**Mart에서 `hist:`를 걸러내는 방식은 쓰지 않는다.** 걸러내면 재구매 마트가 0으로
+돌아가 327이 되돌아간다. 이력 세션이 최소 퍼널(`product_view` → `add_to_cart` →
+`purchase`)을 갖추는 것이 정본이고, 그 책임은 생성기에 있다.
+
+Q5의 `*_counts_are_bounded` 계열이 이것을 검사한다. 이력 세션을 새로 만들거나 형태를
+바꿀 때 이 검사가 먼저 걸린다 — 생성기 쪽 자가검사는 properties 층만 보므로 퍼널
+불변식은 여기서만 걸린다.
+
+
 ### 4.1 `product_daily_kpi`
 
 ```text
@@ -465,6 +496,9 @@ input = product_event_fact, purchase_fact, dim_product
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
+| `recommendation_impression_count` | bigint | N | 유사 상품·맞춤 기획전 카드 노출 |
+| `banner_impression_count` | bigint | N | 히어로 배너 카드 노출 |
+| `impression_count` | bigint | N | 세 노출의 합. `product_ctr`·`detail_entry_rate`의 분모 |
 | `variant_select_count`, `quick_look_close_open_detail_count` | bigint | N | 옵션 왕복과 퀵룩 → 상세 전환. 상품 진단용 |
 | `wishlist_count` | bigint | N | 찜 **추가** 수. `wishlist_toggle`의 `action = add`만 |
 | `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
@@ -491,10 +525,46 @@ input = product_event_fact, purchase_fact, dim_product
 1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 235에서 고쳤는데 상품 Mart가
 빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다 (Jira 277).
 
-`product_ctr`와 `detail_entry_rate`의 분모는 `product_impression_count`로 **Event 수**다.
+`product_ctr`와 `detail_entry_rate`의 분모는 `impression_count`로 **Event 수**다.
 세션 수가 아니다. 노출 대비 클릭·상세 진입은 노출 하나하나를 모수로 보는 지표이고,
 이름이 §4.14의 `detail_entry_rate`(세션 기준)와 같지만 분모가 다르다. 두 Mart의 값을
 같은 지표로 나란히 놓지 않는다.
+
+**노출 Event는 셋이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
+하나에 노출 Event를 정확히 하나만 낸다.
+
+| 자리 | 노출 Event |
+| --- | --- |
+| 목록 그리드 | `product_impression` |
+| 유사 상품 · 로그인 사용자의 맞춤 기획전 | `recommendation_impression` |
+| 히어로 배너 | `banner_impression` (프론트 !305) |
+
+**클릭은 어느 자리에서든 `product_click`**이다. 추천 카드는 `recommendation_click`을,
+배너는 `banner_click`을 하나 더 낼 뿐이다. 그래서 `product_click_count`에 맞는 분모는
+세 노출의 합이고, 하나라도 빼면 그 경로의 클릭이 분자에만 들어가 비율이 1을 넘는다 —
+2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
+
+**`product_view_count`는 뒤로가기 재조회를 뺀다.** 프론트는 상세에서 뒤로 갔다
+돌아오면 `product_view`를 다시 내는데(`navigation_source="history_back"`, 프론트
+확인 2026-09-17) 그것은 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
+`detail_entry_rate`가 1을 넘을 수 있다. **세션 기준 지표(`product_view_sessions`
+등)에는 영향이 없다** — 같은 세션이라 `countDistinct`가 한 번만 센다.
+
+**노출 판정 기준이 서로 다르다.** 목록은 hold 300ms, 추천은 1000ms다. 합쳐 쓰는 이상
+두 기준이 한 분모에 섞인다는 것을 알고 읽어야 한다. 기준을 맞추는 것은 프론트 몫이고,
+Mart는 받은 Event를 셀 뿐이다.
+
+**`entry_source`로는 추천발 클릭을 가려낼 수 없다.** 맞춤 기획전(`promo_pick`)은
+비로그인이면 `product_impression`, 로그인이면 `recommendation_impression`을 내는데
+클릭의 `entry_source`는 둘 다 `promo_pick`이다. 히어로 배너 클릭도 같다. 그래서
+분자를 좁히는 방식(추천발 클릭 제외)은 성립하지 않는다.
+
+같은 이유로 **퍼널 계열 Mart의 `impression_sessions`도 세 노출을 함께 센다** —
+`funnel_daily_kpi`·`brand_daily_kpi`·`persona_segment_daily_kpi`·
+`brand_price_band_daily_kpi` 넷이다. 한 곳이라도 `product_impression`만 세면
+추천·배너로만 노출된 세션이 분모에서 빠져 비율이 1을 넘는다
+(§4.5 `funnel_session_fact`의 `reached_impression`). 세션 기준 `detail_entry_rate`가
+1을 넘던 것이 이것 때문이었다.
 
 `currency`는 key가 아니라 대표값 하나다. Event의 `currency`는 담기·결제 Event에만 붙고
 조회 Event에는 없어서, key에 올리면 통화 없는 조회 행과 결제 행이 갈려 세션 집계가
@@ -558,6 +628,12 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 세션, `review_view_sessions`는 `user_review`·`review_stats`·`review_filter`인 세션을
 센다. 둘의 합집합이 §4.14가 쓰는 `INFORMATION_CONTENT_KINDS`와 같다.
 
+**그 종류에 해당하지 않는 행은 NULL이 아니라 0이다.** `cta`·`price`·`product_image`
+같은 `content_kind` 행은 성분·리뷰 집계에 짝이 없어 조인 결과가 NULL이 되는데,
+계약이 이 둘을 `N`으로 선언했으므로 0으로 채운다. "그 콘텐츠 종류가 아니라
+성분 열람이 0"이 맞는 뜻이고, NULL로 두면 `ingredient_view_rate`도 NULL이 되어
+"분모가 0"과 구분되지 않는다. 2026-09-17 재생 데이터에서 193행이 이 상태였다.
+
 **두 분자는 분모의 모집단으로 제한한다.** 상품 조회 세션에 없는 콘텐츠 열람 세션은
 세지 않는다 — Quick Look으로 상세를 연 세션이 그렇게 될 수 있고, 제한하지 않으면
 `ingredient_view_rate`가 1.0을 넘는다. 분자와 분모가 같은 모집단이어야 한다는 것은
@@ -583,6 +659,7 @@ input = funnel_session_fact, dim_product
 | key 전체 | 공통/string | scenario/run만 Y | `funnel_date_kst`는 최초 Funnel 진입일 기준 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `impression_sessions`, `click_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
+| `click_through_detail_sessions` | bigint | N | 클릭하고 상세로 간 세션. `click_to_view_rate`의 분자 |
 | `impression_to_click_rate`, `click_to_view_rate`, `view_to_information_rate`, `view_to_cart_rate`, `cart_to_purchase_rate`, `view_to_purchase_rate`, `dropoff_after_impression_rate`, `dropoff_after_view_rate`, `dropoff_after_cart_rate` | double | Y | 전환·이탈률 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
@@ -598,6 +675,7 @@ input = funnel_session_fact, dim_product
 | `quick_look_sessions` | 비배타 | Quick Look을 쓴 세션. 상품 상세도 열었든 아니든 센다 |
 | `quick_look_cart_sessions` | 비배타 | 그중 `add_to_cart`까지 간 세션 |
 | `direct_click_sessions` | **배타** | Quick Look 없이 상품 상세로 직행한 세션. 둘 다 열었으면 **먼저 일어난 쪽**으로 귀속한다 |
+| `click_through_detail_sessions` | 부분집합 | 위 중 **클릭도 한** 세션. `direct_click_sessions` 이하 |
 | `direct_click_cart_sessions` | **배타** | 그중 `add_to_cart`까지 간 세션 |
 
 `quick_look_sessions`를 배타로 바꾸면 안 된다. `product_daily_kpi.quick_look_sessions`와
@@ -613,6 +691,19 @@ Quick Look 선진입 세션 + direct_click_sessions = detail_view_sessions
 진입 경로는 `funnel_session_fact.detail_entry_path`(`quick_look` · `direct_click` · NULL)에
 있다. Quick Look 선진입 세션 수는 소비자가 없어 Mart 컬럼으로 두지 않고 검증 Job이
 그 Fact에서 직접 세어 위 등식을 확인한다.
+
+**`click_to_view_rate`의 분자는 `click_through_detail_sessions`다** (2026-09-17 프론트
+확정). 분모가 `click_sessions`이므로 분자도 "클릭한 세션"으로 좁혀야 1을 넘지 않는다.
+화면 라벨은 "클릭 → 상세(클릭 경유)"로 조건부임을 드러낸다.
+
+**`detail_entry_path = 'direct_click'`만으로는 부족하다.** 그 값은 "Quick Look 없이
+상세로 갔나"라서 클릭을 요구하지 않는다. 클릭 없이 상세를 여는 경로가 있으면
+분자가 분모를 넘는다 — 104만 건 재생에서 `hist:` 이력 세션 1,493개가 그랬고,
+`direct_click_sessions`를 그대로 분자로 쓰면 849행이 1을 넘었다. 그래서
+`reached_click`과 **AND**로 묶는다.
+
+`product_view_sessions`를 분자로 쓰던 것이 원래 문제였다. 상세 도달 세션 전부를
+세니 클릭 안 한 세션이 분자에만 들어갔다.
 
 ### 4.6 `persona_segment_daily_kpi`
 
@@ -861,6 +952,17 @@ key = event_date_kst + destination_brand_id + actor_type + source + generator_ty
 input = sessionized_events
 ```
 
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | scenario/run만 Y | 집계 축. 출발 브랜드는 두지 않는다 |
+| `brand_view_sessions` | bigint | N | 그 브랜드 상품을 조회한 세션. 모든 비율의 분모 |
+| `cross_brand_entry_sessions` | bigint | N | 그중 세션 첫 브랜드와 다른 브랜드로 넘어온 세션 |
+| `recommendation_cross_brand_entry_sessions` | bigint | N | 위 중 추천 귀속 |
+| `banner_cross_brand_entry_sessions` | bigint | N | 위 중 배너 귀속. 추천과 겹칠 수 있다 |
+| `cross_brand_entry_rate`, `recommendation_cross_brand_entry_rate`, `banner_cross_brand_entry_rate` | double | Y | 분모는 셋 다 `brand_view_sessions` |
+| `recommendation_share_of_cross_brand_entries`, `banner_share_of_cross_brand_entries` | double | Y | 분모는 `cross_brand_entry_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
 `sessionized_events.event_order`로 정렬한 `product_view`만 사용하며, 세션 최초 브랜드와
 목적 브랜드가 다를 때 교차 유입으로 판정한다. Front의 `cross_brand` boolean은 입력으로
 사용하지 않고, 한 세션의 같은 목적 브랜드는 각 지표에서 한 번만 센다.
@@ -898,9 +1000,6 @@ PA(`agent_llm`)의 교차 유입 세션이 한 행에 합쳐지고 있었다 —
 이 Mart를 입력으로 쓰는 `analytics_baseline`(§4.13)이 축을 걷어내고 합산하므로
 중요한 성질이다.
 ([`event-attribution-contract.md`](./event-attribution-contract.md) §2).
-
-이 Mart만 실행 축에 `generator_type`이 없다. 대시보드 엔드포인트가 쓰지 않아 제외했다
-(프론트 확인 2026-09-14). 필요해지면 다른 Mart와 같은 방식으로 추가한다.
 
 ### 4.13 `analytics_baseline`
 

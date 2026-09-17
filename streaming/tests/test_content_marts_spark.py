@@ -473,5 +473,24 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(1000, row["co_visible_le2_dwell_ms_sum"])
 
 
+    # ── 성분·리뷰 세션의 0 채우기 (Jira 336) ───────────────────────────
+    def test_non_matching_content_kinds_report_zero_not_null(self):
+        """cta·price 같은 행은 성분 집계에 짝이 없어 조인이 NULL 을 낸다.
+
+        계약이 N 으로 선언했고, "그 종류가 아니라 성분 열람이 0" 이 맞는
+        뜻이다. NULL 로 두면 rate 도 NULL 이 되어 분모 0 과 구분되지 않는다
+        (§4.4). 104만 건 재생에서 193행이 이 상태였다.
+        """
+        content = self._content_df([self._content("S1", "cta")])
+        funnel = self._funnel_df([self._session("S1")])
+
+        row = _content_daily_kpi(content, funnel, "Asia/Seoul").first()
+
+        self.assertEqual("cta", row["content_kind"])
+        self.assertEqual(0, row["ingredient_view_sessions"])
+        self.assertEqual(0, row["review_view_sessions"])
+        self.assertEqual(0.0, row["ingredient_view_rate"])
+
+
 if __name__ == "__main__":
     unittest.main()

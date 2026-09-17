@@ -657,6 +657,68 @@ class EventValidatorTest(unittest.TestCase):
             self.validate_values([mixed_names]).errors, "$.properties"
         )
 
+    def test_view_cart_requires_a_currency(self) -> None:
+        """생성기가 실제로 내는 모양 그대로 고정한다.
+
+        2026-09-16 기준 생성기는 view_cart 에 item_count · distinct_products ·
+        cart_value 만 싣고 currency 를 빠뜨린다 (gen_behavior_logs.py:1350).
+        cart_value 가 금액인데 통화가 없으면 어느 단위인지 알 수 없다
+        (dw-schema.md §3.2). 생성기가 고쳐진 뒤 다시 빠지면 여기서 걸린다.
+        """
+        generator_shape = copy.deepcopy(self.user_event)
+        generator_shape.update({
+            "event_name": "view_cart",
+            "intent": "conversion",
+            "product_id": None,
+        })
+        generator_shape["properties"] = {
+            "item_count": 2,
+            "distinct_products": 2,
+            "cart_value": 75100,
+        }
+        self.assert_has_error(
+            self.validate_values([generator_shape]).errors, "$.properties"
+        )
+
+        fixed = copy.deepcopy(generator_shape)
+        fixed["properties"]["currency"] = "KRW"
+        self.assertEqual([], self.validate_values([fixed]).errors)
+
+    def test_view_cart_rejects_a_non_krw_currency(self) -> None:
+        """정본 통화는 원화다. 생성기 USD 모드 출력이 섞이면 걸러야 한다."""
+        event = copy.deepcopy(self.user_event)
+        event.update({
+            "event_name": "view_cart",
+            "intent": "conversion",
+            "product_id": None,
+        })
+        event["properties"] = {
+            "item_count": 1,
+            "distinct_products": 1,
+            "cart_value": 56.0,
+            "currency": "USD",
+        }
+
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+    def test_begin_checkout_requires_a_currency(self) -> None:
+        """view_cart 와 같은 규칙이다. items[].unit_price 도 원화다."""
+        event = copy.deepcopy(self.user_event)
+        event.update({
+            "event_name": "begin_checkout",
+            "intent": "conversion",
+            "product_id": None,
+        })
+        event["properties"] = {
+            "items": [{"product_id": "P1", "quantity": 1, "unit_price": 42900}],
+            "cart_value": 42900,
+        }
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+        fixed = copy.deepcopy(event)
+        fixed["properties"]["currency"] = "KRW"
+        self.assertEqual([], self.validate_values([fixed]).errors)
+
     def test_deprecated_price_usd_is_accepted_for_legacy_cart_events(self) -> None:
         legacy = copy.deepcopy(self.user_event)
         legacy["properties"] = {"quantity": 1, "price_usd": 32}

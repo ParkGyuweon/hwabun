@@ -385,14 +385,24 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `remove_from_cart` | `quantity: integer`, `cart_size_after: integer` | `sku_id: string`, `reason: string`, `cart_value: number`, `unit_price: number`, `currency: string`, `price_usd: number` (**deprecated**) |
 | `view_cart` | `item_count: integer`, `distinct_products: integer`, `cart_value: number`, `currency: string` | `navigation_source: string` |
 | `quantity_change` | `quantity: integer` | `sku_id: string`, `entry_source: string` |
-| `begin_checkout` | `items: object[]`, `currency: string` | `cart_value: number` |
-| `purchase` | `order_id: string`, `items: object[]`, `payment_method: string`, `paid_value: number`, `order_channel: string`, `currency: string` | `order_value: number`, `pg_provider: string`, `payment_id: string`, `paid_at: string` |
-| `payment_failed` | `order_id: string` | `reason_code: string`, `payment_method: string` |
+| `begin_checkout` | `items: object[]`, `currency: string` | `cart_value: number`, `client_order_id: string` |
+| `purchase` | `order_id: string`, `items: object[]`, `payment_method: string`, `paid_value: number`, `order_channel: string`, `currency: string` | `order_value: number`, `client_order_id: string`, `pg_provider: string`, `payment_id: string`, `paid_at: string` |
+| `payment_failed` | `order_id: string` | `reason_code: string`, `payment_method: string`, `client_order_id: string` |
 | `purchase_reason_select` | `order_id: string`, `reasons: string[]` | `primary_reason: string`, `free_text_kind: string`, `skipped: boolean` |
 | `variant_select` | `sku_id: string`, `label: string` | `previous_sku_id: string`, `variant_group: string`, `variant_kind: string` |
 | `hover_dwell` | `dwell_ms: integer`, `action: string\|null` | `section_id: string`, `content_kind: string` |
 | `rage_click` | `click_count: integer` | `action: string\|null`, `section_id: string`, `content_kind: string` |
 | `dead_click` | `target_tag: string\|null` | `section_id: string`, `content_kind: string` |
+
+**`client_order_id`는 프론트가 만드는 주문 번호다** (2026-09-17, 프론트 !304).
+`purchase.order_id`는 서버가 발급하는 UUID라 `begin_checkout` 시점에는 아직 없다.
+그래서 두 Event를 이어 붙일 키가 없었고, **"확인까지 갔다가 안 산 세션"**을 셀 수
+없었다. 이 값은 세 Event(`begin_checkout`·`purchase`·`payment_failed`)에 같은 값으로
+실려 그 조인을 가능하게 한다.
+
+**서버 `order_id`를 대체하지 않는다.** 정산·주문 조회의 정본은 여전히 `order_id`이고,
+`client_order_id`는 **행동 분석에서 한 주문 흐름을 잇는 용도**다. 프론트가 만드는 값이라
+서버 주문과 1:1이 보장되지 않는다 — 결제창을 닫았다 다시 열면 새 값이 나올 수 있다.
 
 **금액의 정본 통화는 원화이고 이름은 `unit_price`로 확정했다** (S15P21A306-303,
 2026-09-16 프론트 합의). 신규 Producer는 담기·빼기에 `unit_price`와

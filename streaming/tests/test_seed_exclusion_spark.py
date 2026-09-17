@@ -31,7 +31,7 @@ PRODUCT_FACT_DDL = (
     "cart_size_after int, unit_price decimal(18,2), order_value decimal(18,2), "
     "item_revenue decimal(18,2), cart_value decimal(18,2), currency string, "
     "cart_id string, order_id string, variants_viewed int, added_to_cart boolean, "
-    "wishlisted boolean, close_reason string, action string, "
+    "wishlisted boolean, close_reason string, action string, navigation_source string, "
     "actor_type string, source string, category_id string, "
     "brand_id string, event_date_kst date"
 )
@@ -268,6 +268,18 @@ class SeedExclusionSparkTest(unittest.TestCase):
             funnel["detail_view_sessions"],
             funnel["quick_look_sessions"] + funnel["direct_click_sessions"],
         )
+
+        # click_to_view_rate 의 분자는 분모의 부분집합이다 (§4.5).
+        # direct_click 은 "퀵룩 없이 상세로 갔나" 라서 클릭을 요구하지 않는다 —
+        # 클릭 없이 상세를 연 세션(hist: 이력 등)이 있으면 분자가 분모를 넘는다.
+        self.assertLessEqual(
+            funnel["click_through_detail_sessions"], funnel["click_sessions"]
+        )
+        self.assertLessEqual(
+            funnel["click_through_detail_sessions"], funnel["direct_click_sessions"]
+        )
+        if funnel["click_to_view_rate"] is not None:
+            self.assertLessEqual(funnel["click_to_view_rate"], 1.0)
 
     def test_seed_rows_stay_out_of_the_funnel_fact(self):
         product_fact = self._product_fact(

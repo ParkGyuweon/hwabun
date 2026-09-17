@@ -163,6 +163,61 @@ class BrandKpiMartsSparkTest(unittest.TestCase):
         self.assertEqual(1, row["product_view_sessions"])
         self.assertEqual(1, row["detail_view_sessions"])
 
+    def test_impression_sessions_count_all_three_surfaces(self):
+        """노출 Event 는 셋이다 (§4.1). product_impression 만 세면 추천·배너로만
+
+        노출된 세션이 분모에서 빠져 detail_entry_rate 가 1 을 넘는다.
+        104만 건 실행에서 persona_segment 가 이것으로 6행 실패했다.
+        """
+        event_date = date(2026, 9, 8)
+        product_fact = self.spark.createDataFrame(
+            [
+                (event_date, "A", "user", "web", None, None, None, "S1", "U1", "P1", "recommendation_impression"),
+                (event_date, "A", "user", "web", None, None, None, "S1", "U1", "P1", "product_view"),
+                (event_date, "A", "user", "web", None, None, None, "S2", "U2", "P2", "banner_impression"),
+                (event_date, "A", "user", "web", None, None, None, "S2", "U2", "P2", "product_view"),
+            ],
+            "event_date_kst date, brand_id string, actor_type string, source string, generator_type string, "
+            "scenario_id string, simulation_run_id string, session_id string, "
+            "user_id string, product_id string, event_name string",
+        )
+        funnel_session = self.spark.createDataFrame(
+            [],
+            "brand_id string, actor_type string, source string, generator_type string, scenario_id string, "
+            "simulation_run_id string, session_id string, user_id string, product_id string, "
+            "first_information_view_at timestamp",
+        )
+
+        row = _brand_daily_kpi(product_fact, funnel_session, "Asia/Seoul").first()
+
+        # product_impression 이 0 인데도 두 세션 다 노출로 잡혀야 한다
+        self.assertEqual(2, row["impression_sessions"])
+        self.assertEqual(2, row["detail_view_sessions"])
+        self.assertEqual(1.0, row["detail_entry_rate"])
+
+    def test_detail_entry_rate_never_exceeds_one_on_recommendation_entry(self):
+        """추천으로만 들어온 세션도 분모에 있어야 비율이 1 을 안 넘는다."""
+        event_date = date(2026, 9, 8)
+        product_fact = self.spark.createDataFrame(
+            [
+                (event_date, "A", "user", "web", None, None, None, "S1", "U1", "P1", "recommendation_impression"),
+                (event_date, "A", "user", "web", None, None, None, "S1", "U1", "P1", "product_view"),
+            ],
+            "event_date_kst date, brand_id string, actor_type string, source string, generator_type string, "
+            "scenario_id string, simulation_run_id string, session_id string, "
+            "user_id string, product_id string, event_name string",
+        )
+        funnel_session = self.spark.createDataFrame(
+            [],
+            "brand_id string, actor_type string, source string, generator_type string, scenario_id string, "
+            "simulation_run_id string, session_id string, user_id string, product_id string, "
+            "first_information_view_at timestamp",
+        )
+
+        row = _brand_daily_kpi(product_fact, funnel_session, "Asia/Seoul").first()
+
+        self.assertLessEqual(row["detail_entry_rate"], 1.0)
+
     def test_same_brand_splits_by_date_and_execution_axes(self):
         """실사용자와 합성 로그, 서로 다른 일자가 한 행으로 섞이면 안 된다."""
         product_fact, funnel_session = self._facts()
@@ -246,7 +301,7 @@ PRODUCT_FACT_SCHEMA = (
     "actor_type string, source string, generator_type string, scenario_id string, "
     "simulation_run_id string, session_id string, user_id string, event_name string, "
     "order_id string, purchase_quantity int, item_revenue decimal(18,2), currency string, "
-    "close_reason string, action string"
+    "close_reason string, action string, navigation_source string"
 )
 
 
@@ -276,7 +331,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
         return (
             date(2026, 9, day), product, "CAT1", "A", "user", "web",
             None, None, None, session, user, event_name, None, None, None, None,
-            None, action,
+            None, action, None,
         )
 
     def test_quick_look_cart_counts_against_detail_view_sessions(self):
@@ -327,7 +382,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
             self._event("S1", "U1", "quick_look"),
             (
                 date(2026, 9, 8), "P1", "CAT1", "A", "user", "web", None, None, None,
-                "S1", "U1", "purchase", "O1", 1, None, None, None, None,
+                "S1", "U1", "purchase", "O1", 1, None, None, None, None, None,
             ),
             self._event("S2", "U2", "product_view"),
         ])

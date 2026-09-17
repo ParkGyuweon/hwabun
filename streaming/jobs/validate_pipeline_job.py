@@ -1187,6 +1187,19 @@ def validate_frames(
         f"unbalanced_rows={unbalanced_entry_paths}; "
         "quick_look 선진입 + direct_click = detail_view",
     ))
+
+    # click_to_view_rate 의 분자는 분모의 부분집합이라야 한다 (§4.5).
+    # direct_click 만으로 세면 클릭 없이 상세를 연 세션이 분자에만 들어간다.
+    invalid_click_through = funnel_daily.where(
+        (F.col("click_through_detail_sessions") > F.col("click_sessions"))
+        | (F.col("click_through_detail_sessions") > F.col("direct_click_sessions"))
+        | (F.col("click_through_detail_sessions") < 0)
+    ).count()
+    checks.append(_check(
+        "funnel_click_through_is_a_subset_of_clicks",
+        invalid_click_through == 0,
+        f"invalid_rows={invalid_click_through}; 클릭하고 상세로 간 세션 <= 클릭 세션 · direct_click 세션",
+    ))
     funnel_rate_columns = [
         "impression_to_click_rate", "click_to_view_rate", "view_to_information_rate",
         "view_to_cart_rate", "cart_to_purchase_rate", "view_to_purchase_rate",
@@ -1298,7 +1311,13 @@ def validate_frames(
         | (F.col("detail_view_sessions") > F.col("session_count"))
         | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
         | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
-        | (F.col("product_click_count") > F.col("product_impression_count"))
+        # 분모는 두 노출의 합이다. 추천 카드 클릭도 product_click 이라
+        # product_impression 만 보면 1 을 넘는다 (§4.1, 프론트 확인 2026-09-17).
+        | (F.col("product_click_count") > F.col("impression_count"))
+        | (F.col("impression_count")
+           != F.col("product_impression_count")
+           + F.col("recommendation_impression_count")
+           + F.col("banner_impression_count"))
         | (F.col("purchase_count") > F.col("purchase_quantity"))
     ).count()
     checks.append(_check(
@@ -1320,8 +1339,8 @@ def validate_frames(
         ]) == 1
     ).count()
     invalid_product_denominators = product_daily.where(
-        ((F.col("product_impression_count") == 0) & F.col("product_ctr").isNotNull())
-        | ((F.col("product_impression_count") == 0)
+        ((F.col("impression_count") == 0) & F.col("product_ctr").isNotNull())
+        | ((F.col("impression_count") == 0)
            & F.col("detail_entry_rate").isNotNull())
         | ((F.col("detail_view_sessions") == 0) & F.col("add_to_cart_rate").isNotNull())
         | ((F.col("detail_view_sessions") == 0) & F.col("purchase_rate").isNotNull())

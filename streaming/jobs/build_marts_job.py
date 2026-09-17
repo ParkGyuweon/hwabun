@@ -83,8 +83,21 @@ DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 # Quick Look은 목록에서 상세를 여는 경로다. 화면에 있는 정상 동선이고 여기서 바로
 # 장바구니에 담을 수 있어서, 퍼널에서 빼면 담기 세션이 조회 세션보다 많아진다
 # (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
-FUNNEL_PRODUCT_EVENTS = (
+# 노출 Event 는 셋이다. 프론트는 카드 하나에 하나만 내는데, 목록 그리드는
+# product_impression, 유사상품·맞춤 기획전은 recommendation_impression,
+# 히어로 배너는 banner_impression 이다 (프론트 !305, 2026-09-17).
+# **클릭은 어느 목록이든 product_click 을 낸다** — 배너도 banner_click 뒤에
+# product_click 을 함께 낸다 (gen_behavior_logs.py:1289). 그래서 분자에 맞는
+# 분모는 세 노출의 합이다. 하나라도 빼면 그 경로의 클릭이 분자에만 들어가
+# 비율이 1 을 넘는다 (§4.1).
+IMPRESSION_EVENTS = (
     "product_impression",
+    "recommendation_impression",
+    "banner_impression",
+)
+
+FUNNEL_PRODUCT_EVENTS = (
+    *IMPRESSION_EVENTS,
     "product_click",
     "quick_look",
     "product_view",
@@ -633,9 +646,9 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     ).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
-        F.min(F.when(F.col("event_name") == "product_impression", F.col("event_time"))).alias(
-            "first_impression_at"
-        ),
+        F.min(
+            F.when(F.col("event_name").isin(*IMPRESSION_EVENTS), F.col("event_time"))
+        ).alias("first_impression_at"),
         F.min(F.when(F.col("event_name") == "product_click", F.col("event_time"))).alias(
             "first_click_at"
         ),
@@ -772,9 +785,25 @@ def _product_daily_kpi(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         count_events("product_impression"),
+        # 추천·배너 카드의 노출. product_click 이 여기서도 나오므로 CTR 분모에
+        # 함께 들어간다. 컬럼을 따로 두는 이유는 노출 판정 기준이 달라서다
+        # — 목록은 hold 300ms, 추천은 1000ms (§4.1).
+        count_events("recommendation_impression"),
+        count_events("banner_impression"),
         count_events("product_click"),
         count_events("quick_look"),
-        count_events("product_view"),
+        # 뒤로가기 재조회를 뺀 새 진입만 센다 (§4.1). detail_entry_rate 의
+        # 분자라, 재조회를 포함하면 노출보다 조회가 많아질 수 있다.
+        F.sum(
+            F.when(
+                (F.col("event_name") == F.lit("product_view"))
+                & ~F.coalesce(
+                    F.col("navigation_source") == F.lit(HISTORY_BACK_NAVIGATION),
+                    F.lit(False),
+                ),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+        ).cast("long").alias("product_view_count"),
         count_events("add_to_cart"),
         count_events("remove_from_cart"),
         count_events("purchase"),
@@ -860,8 +889,18 @@ def _product_daily_kpi(
             F.col("purchase_count_distinct_order"),
         )
         .drop("purchase_count_distinct_order")
-        .withColumn("product_ctr", _safe_ratio(F.col("product_click_count"), F.col("product_impression_count")))
-        .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("product_impression_count")))
+        # 분모는 두 노출의 합이다. product_impression 만 쓰면 추천 카드에서 온
+        # 클릭이 분자에만 들어가 비율이 1 을 넘는다 (§4.1).
+        .withColumn(
+            "impression_count",
+            (
+                F.col("product_impression_count")
+                + F.col("recommendation_impression_count")
+                + F.col("banner_impression_count")
+            ).cast("long"),
+        )
+        .withColumn("product_ctr", _safe_ratio(F.col("product_click_count"), F.col("impression_count")))
+        .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("impression_count")))
         .withColumn("add_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
         .withColumn("purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")))
     )
@@ -891,6 +930,17 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
                 & F.col("reached_add_to_cart")
             ).cast("int")
         ).cast("long").alias("direct_click_cart_sessions"),
+        # "클릭한 세션 중 상세로 간 세션". direct_click 만으로는 부족하다 —
+        # 그 값은 "퀵룩 없이 상세로 갔나" 라서 클릭을 요구하지 않는다.
+        # hist: 이력 세션처럼 클릭 없이 상세를 여는 경로가 있어 분자가 분모를
+        # 넘는다 (104만 건 재생에서 1,493 세션 · 849행). 둘을 AND 해야
+        # click_to_view_rate 가 1 을 넘지 않는다 (§4.5, 프론트 확정 2026-09-17).
+        F.sum(
+            (
+                F.col("reached_click")
+                & (F.col("detail_entry_path") == F.lit("direct_click"))
+            ).cast("int")
+        ).cast("long").alias("click_through_detail_sessions"),
         F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
         F.sum(F.col("reached_product_view").cast("int")).cast("long").alias("product_view_sessions"),
         F.sum(F.col("reached_information_view").cast("int")).cast("long").alias("information_view_sessions"),
@@ -901,7 +951,12 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     )
     return (
         result.withColumn("impression_to_click_rate", _safe_ratio(F.col("click_sessions"), F.col("impression_sessions")))
-        .withColumn("click_to_view_rate", _safe_ratio(F.col("product_view_sessions"), F.col("click_sessions")))
+        # 분자는 "클릭하고 상세로 간 세션" 이다. product_view_sessions 를 쓰면
+        # 클릭 없이 상세에 도달한 세션이 분자에만 들어가 1 을 넘는다.
+        .withColumn(
+            "click_to_view_rate",
+            _safe_ratio(F.col("click_through_detail_sessions"), F.col("click_sessions")),
+        )
         .withColumn("view_to_information_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
         # 전환 분모는 상세를 연 세션이다. Quick Look에서 담거나 사는 경로가 있어서
         # product_view만 분모로 두면 분자와 모집단이 어긋나 비율이 1.0을 넘는다.
@@ -950,7 +1005,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     product_events = product_fact_df.where(
         valid_brand
         & F.col("event_name").isin(
-            "product_impression", "product_click", "product_view",
+            # 노출 세 Event 를 다 들여야 한다. 여기서 빠지면 아래 _impression
+            # 판정을 고쳐도 그 행이 애초에 안 들어온다 (§4.1).
+            *IMPRESSION_EVENTS,
+            "product_click", "product_view",
             "quick_look", "add_to_cart",
         )
     ).select(
@@ -958,7 +1016,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "session_id",
         "user_id",
         "product_id",
-        (F.col("event_name") == "product_impression").alias("_impression"),
+        # 노출은 세 Event 다 (IMPRESSION_EVENTS, §4.1). product_impression 만
+        # 세면 추천·배너로만 노출된 세션이 분모에서 빠져 detail_entry_rate 가
+        # 1 을 넘는다 — 104만 건 실행에서 persona_segment 가 그렇게 걸렸다.
+        F.col("event_name").isin(*IMPRESSION_EVENTS).alias("_impression"),
         (F.col("event_name") == "product_click").alias("_click"),
         (F.col("event_name") == "product_view").alias("_product_view"),
         (F.col("event_name") == "quick_look").alias("_quick_look"),
@@ -1196,7 +1257,10 @@ def _persona_segment_daily_kpi(
     aggregations = [
         F.countDistinct("user_id").cast("long").alias("segment_user_count"),
         F.countDistinct("session_id").cast("long").alias("session_count"),
-        stage_sessions(F.col("event_name") == "product_impression", "impression_sessions"),
+        # 노출 세 Event 를 함께 센다 (§4.1). 분모가 좁으면 비율이 1 을 넘는다.
+        stage_sessions(
+            F.col("event_name").isin(*IMPRESSION_EVENTS), "impression_sessions"
+        ),
         stage_sessions(F.col("event_name") == "quick_look", "quick_look_sessions"),
         stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
         stage_sessions(is_detail, "detail_view_sessions"),
@@ -1338,7 +1402,10 @@ def _brand_price_band_daily_kpi(
     result = events.groupBy(*key_columns).agg(
         F.countDistinct("session_id").cast("long").alias("session_count"),
         F.countDistinct("user_id").cast("long").alias("unique_user_count"),
-        stage_sessions(F.col("event_name") == "product_impression", "impression_sessions"),
+        # 노출 세 Event 를 함께 센다 (§4.1). 분모가 좁으면 비율이 1 을 넘는다.
+        stage_sessions(
+            F.col("event_name").isin(*IMPRESSION_EVENTS), "impression_sessions"
+        ),
         stage_sessions(F.col("event_name") == "quick_look", "quick_look_sessions"),
         stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
         stage_sessions(is_detail, "detail_view_sessions"),
@@ -1508,6 +1575,17 @@ def _content_daily_kpi(
         result.withColumn(
             "product_view_sessions",
             F.coalesce(F.col("product_view_sessions"), F.lit(0).cast("long")),
+        )
+        # 성분·리뷰가 아닌 content_kind 행(cta·price·product_image …)은 조인에
+        # 짝이 없어 NULL 이 된다. 계약이 N 으로 선언했고, "그 콘텐츠 종류가
+        # 아니라 성분 열람이 0" 이 맞는 뜻이다 (§4.4).
+        .withColumn(
+            "ingredient_view_sessions",
+            F.coalesce(F.col("ingredient_view_sessions"), F.lit(0).cast("long")),
+        )
+        .withColumn(
+            "review_view_sessions",
+            F.coalesce(F.col("review_view_sessions"), F.lit(0).cast("long")),
         )
         .withColumn(
             "avg_dwell_ms_per_session",
@@ -1915,6 +1993,11 @@ EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
 
 # 퀵룩 창을 닫은 이유 중 "상세로 넘어갔다" 를 뜻하는 값
 # (event-properties-schema.md §3.5).
+# 뒤로가기 재조회. 새 진입이 아니라 같은 상세를 다시 연 것이라 건수 집계에서
+# 뺀다 (프론트 확정 2026-09-17). 세션 dedup 지표에는 영향이 없다 — 어차피
+# 같은 세션이라 countDistinct 가 한 번만 센다.
+HISTORY_BACK_NAVIGATION = "history_back"
+
 # 찜 토글에서 "추가" 를 뜻하는 action 값 (event-properties-schema §4.5).
 WISHLIST_ADD_ACTION = "add"
 

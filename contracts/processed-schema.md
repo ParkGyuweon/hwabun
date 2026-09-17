@@ -330,6 +330,7 @@ Backend metric 또는 후속 별도 error sink의 책임이다.
 | `variants_viewed` | int | Y | Quick Look 옵션 조회 수 |
 | `close_reason` | string | Y | Quick Look 닫힘 사유. `open_detail`이면 상세로 넘어갔다 |
 | `action` | string | Y | 토글 Event의 방향. `wishlist_toggle`은 `add`·`remove` |
+| `navigation_source` | string | Y | 화면 진입 경로. `history_back`이면 뒤로가기 재조회다 |
 | `added_to_cart` | boolean | Y | Quick Look 장바구니 행동 |
 | `wishlisted` | boolean | Y | Quick Look 찜 행동 |
 | `actor_type` | string | N | 사용자 유형 |

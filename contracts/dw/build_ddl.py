@@ -135,6 +135,9 @@ NOT_NULL_VALUES = {
     "min_sample_size",
     # 체류 합. 0 은 "머물지 않았다" 이지 "모른다" 가 아니다 (§4.4)
     "dwell_ms_sum",
+    # 겹침 제외 체류 합. 같은 이유로 0 이지 NULL 이 아니다. 이름이 _count·
+    # _sessions 로 끝나지 않아 기본 규칙(:329)이 NULL 로 판정하므로 여기 적는다 (§4.4)
+    "co_visible_le2_dwell_ms_sum",
     # 세그먼트 체류 총합. dwell_ms_sum 의 합이라 항상 값이 있다 (§4.25)
     "segment_dwell_ms_sum",
     # 코호트 억제 판정과 임계값. Mart 가 매 행에 계산해 넣는다 (§4.18)
@@ -371,7 +374,7 @@ def build(schemas: dict) -> str:
         "-- MySQL `dw` projection 스키마",
         "--",
         "-- 생성물이다. 직접 고치지 않는다.",
-        "--   py contracts/dw/build_ddl.py --marts data/e2e-235/marts",
+        "--   py contracts/dw/build_ddl.py --marts <실행 루트>/marts",
         "--",
         "-- 타입 매핑 · VARCHAR 길이 · NULL 정책 · PRIMARY KEY 순서의 정본은",
         "-- contracts/dw-schema.md §7 이다. 값을 바꾸려면 계약을 먼저 고친다.",
