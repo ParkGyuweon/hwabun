@@ -559,7 +559,10 @@ Mart는 받은 Event를 셀 뿐이다.
 클릭의 `entry_source`는 둘 다 `promo_pick`이다. 히어로 배너 클릭도 같다. 그래서
 분자를 좁히는 방식(추천발 클릭 제외)은 성립하지 않는다.
 
-같은 이유로 **퍼널 계열 Mart의 `impression_sessions`도 두 노출을 함께 센다**
+같은 이유로 **퍼널 계열 Mart의 `impression_sessions`도 세 노출을 함께 센다** —
+`funnel_daily_kpi`·`brand_daily_kpi`·`persona_segment_daily_kpi`·
+`brand_price_band_daily_kpi` 넷이다. 한 곳이라도 `product_impression`만 세면
+추천·배너로만 노출된 세션이 분모에서 빠져 비율이 1을 넘는다
 (§4.5 `funnel_session_fact`의 `reached_impression`). 세션 기준 `detail_entry_rate`가
 1을 넘던 것이 이것 때문이었다.
 
