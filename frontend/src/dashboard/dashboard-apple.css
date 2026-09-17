@@ -1305,3 +1305,15 @@ table.data td.is-warn {
     margin-bottom: 10px;
   }
 }
+
+/* 결론 배너: 전체 브랜드 종합은 핑크 그라데이션 + 왼쪽 띠. 내 것(연두)과 한눈에 갈려야 한다 */
+.verdict--mine {
+  border-left: 5px solid var(--brand);
+}
+
+.verdict--shared {
+  border-left: 5px solid var(--accent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), rgba(255, 255, 255, 0) 58%),
+    var(--panel);
+}

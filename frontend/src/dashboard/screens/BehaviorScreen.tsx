@@ -1,4 +1,4 @@
-import { BarList, Funnel, Kpi, Panel } from '../components';
+import { BarList, Funnel, Kpi, OriginBadge, Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
 
@@ -24,8 +24,10 @@ export default function BehaviorScreen() {
   return (
     <div className="stack">
       {worst ? (
-        <section className="verdict">
-          <p className="verdict__eyebrow">고객이 가장 많이 막힌 자리</p>
+        <section className="verdict verdict--mine">
+          <p className="verdict__eyebrow">
+            고객이 가장 많이 막힌 자리 <OriginBadge kind="mine" />
+          </p>
           <h2 className="verdict__headline">
             {worst.where}에서 {worst.ko}
           </h2>
