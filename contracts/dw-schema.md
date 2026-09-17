@@ -643,6 +643,7 @@ input = funnel_session_fact, dim_product
 | key 전체 | 공통/string | scenario/run만 Y | `funnel_date_kst`는 최초 Funnel 진입일 기준 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `impression_sessions`, `click_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `direct_click_sessions`, `direct_click_cart_sessions`, `detail_view_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `checkout_sessions`, `purchase_sessions` | bigint | N | 단계 도달 세션 |
+| `click_through_detail_sessions` | bigint | N | 클릭하고 상세로 간 세션. `click_to_view_rate`의 분자 |
 | `impression_to_click_rate`, `click_to_view_rate`, `view_to_information_rate`, `view_to_cart_rate`, `cart_to_purchase_rate`, `view_to_purchase_rate`, `dropoff_after_impression_rate`, `dropoff_after_view_rate`, `dropoff_after_cart_rate` | double | Y | 전환·이탈률 |
 | `mart_processed_at` | timestamp | N | 갱신 시각 |
 
@@ -658,6 +659,7 @@ input = funnel_session_fact, dim_product
 | `quick_look_sessions` | 비배타 | Quick Look을 쓴 세션. 상품 상세도 열었든 아니든 센다 |
 | `quick_look_cart_sessions` | 비배타 | 그중 `add_to_cart`까지 간 세션 |
 | `direct_click_sessions` | **배타** | Quick Look 없이 상품 상세로 직행한 세션. 둘 다 열었으면 **먼저 일어난 쪽**으로 귀속한다 |
+| `click_through_detail_sessions` | 부분집합 | 위 중 **클릭도 한** 세션. `direct_click_sessions` 이하 |
 | `direct_click_cart_sessions` | **배타** | 그중 `add_to_cart`까지 간 세션 |
 
 `quick_look_sessions`를 배타로 바꾸면 안 된다. `product_daily_kpi.quick_look_sessions`와
@@ -673,6 +675,19 @@ Quick Look 선진입 세션 + direct_click_sessions = detail_view_sessions
 진입 경로는 `funnel_session_fact.detail_entry_path`(`quick_look` · `direct_click` · NULL)에
 있다. Quick Look 선진입 세션 수는 소비자가 없어 Mart 컬럼으로 두지 않고 검증 Job이
 그 Fact에서 직접 세어 위 등식을 확인한다.
+
+**`click_to_view_rate`의 분자는 `click_through_detail_sessions`다** (2026-09-17 프론트
+확정). 분모가 `click_sessions`이므로 분자도 "클릭한 세션"으로 좁혀야 1을 넘지 않는다.
+화면 라벨은 "클릭 → 상세(클릭 경유)"로 조건부임을 드러낸다.
+
+**`detail_entry_path = 'direct_click'`만으로는 부족하다.** 그 값은 "Quick Look 없이
+상세로 갔나"라서 클릭을 요구하지 않는다. 클릭 없이 상세를 여는 경로가 있으면
+분자가 분모를 넘는다 — 104만 건 재생에서 `hist:` 이력 세션 1,493개가 그랬고,
+`direct_click_sessions`를 그대로 분자로 쓰면 849행이 1을 넘었다. 그래서
+`reached_click`과 **AND**로 묶는다.
+
+`product_view_sessions`를 분자로 쓰던 것이 원래 문제였다. 상세 도달 세션 전부를
+세니 클릭 안 한 세션이 분자에만 들어갔다.
 
 ### 4.6 `persona_segment_daily_kpi`
 
