@@ -104,7 +104,7 @@ from catalog_registry import (Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
-from live_stats import LiveStats, LIVE_HTML                            # noqa: E402  (Jira 295 실시간 현황)
+from live_stats import LiveStats, LIVE_HTML                            # noqa: E402  (Jira 295 실시간 현황), log_tail
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
@@ -660,15 +660,7 @@ def _demo_status():
     tail = ""
     try:
         if _demo["log"] and os.path.exists(_demo["log"]):
-            with open(_demo["log"], "rb") as f:
-                f.seek(0, 2); n = f.tell(); f.seek(max(0, n - 400))
-                raw = f.read()
-                try:
-                    txt = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    txt = raw.decode("cp949", "replace")          # Windows 콘솔 인코딩으로 남은 옛 줄
-                lines = txt.strip().splitlines()
-                tail = lines[-1] if lines else ""
+            tail = log_tail(_demo["log"])                          # UTF-8 글자 중간 절단에 안전 (Jira 344)
     except Exception:
         tail = ""
     return {"available": os.path.exists(_DEMO_SCRIPT), "running": running,
