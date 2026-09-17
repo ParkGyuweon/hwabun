@@ -1,10 +1,11 @@
 # DW Mart → MySQL dw
 
 `jobs/publish_user_trait_job.py`는 Spark가 완료한 Mart Parquet을 PyArrow로 최대 1,000행씩
-읽는 독립 Python Job이다. Spark 재집계나 JDBC 연결이 필요하지 않다. 기본 발행 대상은
-추천 서버의 `user_trait_daily`와 대시보드 핵심 Mart 6종이다. E4·E5 Mart 3종은
-`--marts`로 선택할 수 있다. DDL·grain·NULL 정책은 `contracts/dw/schema.sql`과
-`build_ddl.py`에서 읽고 수정하지 않는다.
+읽는 독립 Python Job이다. Spark 재집계나 JDBC 연결이 필요하지 않다. 현재 projection
+allowlist는 `contracts/dw/schema.sql`의 22개 DW Mart와 맞춰져 있으며, `--marts`로
+발행 대상을 선택한다. EC2-2 Compose의 기본 실행은 첫 리허설을 위해 추천·대시보드 핵심
+7종만 사용한다. DDL·grain·NULL 정책은 `contracts/dw/schema.sql`과 `build_ddl.py`에서
+읽고 수정하지 않는다.
 
 ## 실행 순서
 
@@ -87,10 +88,10 @@ Mart 사이의 `RENAME TABLE`은 하나의 트랜잭션으로 묶지 않는다. 
 앞에서 성공한 Mart만 새 값으로 발행될 수 있으므로, 보고서의 실패 Mart만 원인 해결 후
 재실행한다.
 
-E4·E5 Mart까지 함께 발행하려면 EC2-2 `.env`에 `DW_PROJECTION_MARTS`를 추가한다.
+전체 DW Mart를 함께 발행하려면 EC2-2 `.env`에 `DW_PROJECTION_MARTS`를 설정한다.
 
 ```dotenv
-DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,ingredient_weekly_interest
+DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily
 ```
 
 특정 Mart 하나만 재발행할 때는 다음처럼 실행한다.
