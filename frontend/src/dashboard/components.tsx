@@ -70,8 +70,10 @@ export function VerdictBanner({
   sampleSize: number;
 }) {
   return (
-    <section className="verdict">
-      <p className="verdict__eyebrow">지금 손봐야 할 것</p>
+    <section className="verdict verdict--mine">
+      <p className="verdict__eyebrow">
+        지금 손봐야 할 것 <OriginBadge kind="mine" />
+      </p>
       <h2 className="verdict__headline">{headline}</h2>
       <p className="verdict__reason">{reason}</p>
       <p className="verdict__action">{action}</p>

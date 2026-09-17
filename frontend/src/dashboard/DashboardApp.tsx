@@ -8,7 +8,7 @@ import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import FeedbackScreen from './screens/FeedbackScreen';
-import { MotifLine } from './components';
+import { MotifLine, OriginBadge } from './components';
 import { DEMO_BRAND } from '../mocks/products';
 import { SCOPE_LABEL } from './lib/scope';
 import type { ScopeKind } from './lib/scope';
@@ -278,6 +278,11 @@ export default function DashboardApp() {
             </div>
           ) : null}
           <MartNote />
+          {/* 결론 색 범례. 연두 = 내 브랜드 데이터만, 핑크 = 플랫폼 전체(다른 브랜드 포함) 종합 (components DataOrigin) */}
+          <p className="sidebar__legend" aria-label="결론 색 범례">
+            <OriginBadge kind="mine" />
+            <OriginBadge kind="shared" />
+          </p>
         </div>
       </aside>
 

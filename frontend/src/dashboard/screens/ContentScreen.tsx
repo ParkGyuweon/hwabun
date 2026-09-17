@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Actions, BarList, Kpi, Panel, Scatter } from '../components';
+import { Actions, BarList, Kpi, OriginBadge, Panel, Scatter } from '../components';
 import { fmt } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
 import { usePrescriptions } from '../lib/prescriptionApi';
@@ -95,8 +95,10 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
 
   return (
     <div className="stack">
-      <section className="verdict">
-        <p className="verdict__eyebrow">이 화면이 말하는 것</p>
+      <section className="verdict verdict--mine">
+        <p className="verdict__eyebrow">
+          이 화면이 말하는 것 <OriginBadge kind="mine" />
+        </p>
         <h2 className="verdict__headline">
           {firstUp ? `${firstUp.ko}를 위로 올리고, ` : ''}
           {firstFix ? `${firstFix.ko}을 손보세요` : '지금 순서를 그대로 두세요'}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Panel } from '../components';
+import { OriginBadge, Panel } from '../components';
 import { MINOR_WEIGHT, catalogProducts, cautionPrevalence, fmt, ingredientStats, ingredientWeights, products } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
 import { labelKo } from '../../lib/formLabels';
@@ -50,8 +50,11 @@ export default function IngredientsScreen({
 
   return (
     <div className="stack">
-      <section className="verdict">
-        <p className="verdict__eyebrow">찾는데 없는 성분</p>
+            {/* 관심 순위는 플랫폼 전체 값(E5 에 brand 축 없음). 보유 판정만 내 전성분이다 → 전체 종합(핑크) */}
+      <section className="verdict verdict--shared">
+        <p className="verdict__eyebrow">
+          찾는데 없는 성분 <OriginBadge kind="shared" />
+        </p>
         <h2 className="verdict__headline">
           {gaps.length === 0
             ? '관심 상위 10 성분을 모두 갖고 있습니다'

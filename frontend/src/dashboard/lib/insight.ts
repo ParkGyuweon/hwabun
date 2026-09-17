@@ -13,11 +13,19 @@
  * 입력은 행동 지표 묶음(BehaviorMetrics)이다. 모의든 마트든 같은 모양이라 규칙은 하나다.
  */
 import { labelKo } from '../../lib/formLabels';
+import type { DataOrigin } from '../components';
 import type { BehaviorMetrics, FunnelStep } from './behavior';
 import { SKIN_TYPE_KO, fmt } from './metrics';
 
 export interface Insight {
   id: string;
+  /**
+   * 이 결론의 **근거가 어디서 왔나** (`components.tsx` DataOrigin 과 같은 축).
+   *   mine    내 브랜드 상품의 행동·리뷰·피드백만으로 낸 것 (경계 문서 A층) → 연두
+   *   shared  플랫폼 전체(다른 브랜드 포함)를 종합해 낸 것 (B·C층) → 핑크
+   * "고객이 찾는 성분" 은 내 고객이 아니라 플랫폼 전체 고객의 관심이다. 같은 색으로 놓으면 내 가게 이야기로 읽힌다.
+   */
+  origin: DataOrigin;
   /** 어느 화면으로 가면 근거가 있나 */
   screen: 'content' | 'segments' | 'ingredients' | 'products' | 'behavior';
   headline: string;
@@ -94,6 +102,7 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
             : '결정 근거가 부족할 가능성';
       out.push({
         id: `content-weak-${c.kind}`,
+        origin: 'mine',
         screen: 'content',
         headline: `오래 보지만 담기로 이어지지 않는 콘텐츠: ${c.ko}`,
         reasons: [
@@ -116,6 +125,7 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
       const dev = Math.min(1, (c.conversionLift - 1) / 1.5);
       out.push({
         id: `content-strong-${c.kind}`,
+        origin: 'mine',
         screen: 'content',
         headline: `짧게 보지만 담기를 ${c.conversionLift.toFixed(1)}배 올리는 콘텐츠: ${c.ko}`,
         reasons: [
@@ -143,6 +153,7 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
       const top = segmentTopContent.find((s) => s.type === best.type);
       out.push({
         id: 'segment-gap',
+        origin: 'mine',
         screen: 'segments',
         headline: `${name(best)} 고객이 가장 많이 담습니다`,
         reasons: [
@@ -165,6 +176,8 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
     const n = gaps.reduce((s, g) => s + g.scrapeCount, 0) * 10; // 드래그 수 → 세션 근사
     out.push({
       id: 'ingredient-gap',
+      // 성분 관심은 ingredient_weekly_interest — brand 축이 없는 플랫폼 전체 값 (마트 계약 E5)
+      origin: 'shared',
       screen: 'ingredients',
       headline: `고객이 찾는데 내 라인에 없는 성분: ${gaps.map((g) => labelKo(g.name)).join('·')}`,
       reasons: gaps.map((g) => `${labelKo(g.name)}: 관심 ${g.rank}위, 드래그 ${fmt.int(g.scrapeCount)}회, 보유 상품 0`),
@@ -182,6 +195,7 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
     const leak = leakVerdict(standardFunnel);
     out.push({
       id: 'funnel-leak',
+      origin: 'mine',
       screen: 'products',
       headline: leak.headline,
       reasons: [leak.reason],
