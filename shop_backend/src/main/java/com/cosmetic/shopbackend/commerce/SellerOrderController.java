@@ -153,10 +153,19 @@ public class SellerOrderController {
     if (count == null || count == 0) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand access denied");
   }
 
-  /** 시각은 문자열로 보낸다. 직렬화 설정에 따라 숫자가 되면 화면이 날짜를 잘라 쓰다가 깨진다 */
+  /**
+   * 시각은 문자열로 보낸다. 직렬화 설정에 따라 숫자가 되면 화면이 날짜를 잘라 쓰다가 깨진다.
+   *
+   * 초를 명시적인 형식으로 고정한다. `LocalDateTime.toString()` 은 초가 정각(0초)이면 그 자리를
+   * 통째로 생략한다 — "14:02:11" 은 그대로 나오지만 "14:02:00" 은 "14:02" 가 되어 응답 모양이
+   * 레코드마다 달라진다. 화면이 초까지 보여줘야 해서 형식을 고정해 항상 같은 길이로 낸다.
+   */
+  private static final java.time.format.DateTimeFormatter TIMESTAMP_FORMAT =
+    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
   private static String text(Object value) {
     if (value == null) return null;
-    if (value instanceof java.sql.Timestamp timestamp) return timestamp.toLocalDateTime().toString();
+    if (value instanceof java.sql.Timestamp timestamp) return timestamp.toLocalDateTime().format(TIMESTAMP_FORMAT);
     return String.valueOf(value);
   }
 
