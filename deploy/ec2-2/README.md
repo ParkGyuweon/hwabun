@@ -108,25 +108,33 @@ EC2-1에서 실제 행동 이벤트를 전송한 뒤 Raw Parquet이 생성되는
 기본 호스트 경로는 `/opt/hwabun/data/raw_events`이다. Kafka 프로세스가 healthy라는 것만으로
 EC2-1 → Kafka → Spark 적재가 검증된 것은 아니다.
 
-아래 명령은 `deploy/ec2-2`에서 실행한다. 첫 실패에서 종료하며, 배치는 동시에 두 번 실행하지 않는다.
-모든 Job은 `/opt/project`를 작업 디렉터리로 사용하여 기존 기본 경로를 동일하게 해석한다.
+아래 배치는 `deploy/ec2-2/hwabun-daily-batch.timer`가 하루 한 번 실행한다.
+Q2~Q5가 순서대로 성공한 뒤 같은 실행에서 `dw-projection`까지 이어서 수행하므로,
+Parquet Mart와 MySQL `dw`가 함께 갱신된다. Q1 Raw Sink는 계속 실행되고, 배치는 동시에
+두 번 실행되지 않도록 lock을 사용한다.
+
+처음 한 번만 EC2-2 호스트에 timer를 설치한다.
 
 ```bash
-docker compose exec -T spark-master bash -ec '
-  for job in clean_events_job derive_facts_job build_marts_job validate_pipeline_job; do
-    args=()
-    if [ "$job" = validate_pipeline_job ]; then
-      args=(--require-events --report-path /opt/project/data/validation/pipeline-report.json)
-    fi
-    /opt/spark/bin/spark-submit \
-      --master spark://spark-master:7077 --deploy-mode client \
-      --conf spark.driver.host=spark-master \
-      --conf spark.driver.bindAddress=0.0.0.0 \
-      --conf spark.cores.max=1 \
-      /opt/project/streaming/jobs/${job}.py "${args[@]}"
-  done
-'
+cd ~/S15P21A306/deploy/ec2-2
+sudo docker compose --profile dw build dw-projection
+sudo cp hwabun-daily-batch.service /etc/systemd/system/
+sudo cp hwabun-daily-batch.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hwabun-daily-batch.timer
+systemctl list-timers hwabun-daily-batch.timer
 ```
+
+즉시 한 번 실행해 보거나 시연 직전에 수동 실행할 때는 같은 service를 호출한다.
+
+```bash
+sudo systemctl start hwabun-daily-batch.service
+sudo journalctl -u hwabun-daily-batch.service -n 100 --no-pager
+```
+
+기본 실행 시각은 EC2 호스트의 시간 기준 매일 03:00이다. 다른 시각이 필요하면
+`hwabun-daily-batch.timer`의 `OnCalendar`를 수정한 뒤 `daemon-reload`와 timer 재시작을
+수행한다.
 
 결과는 `/opt/hwabun/data/processed`, `/opt/hwabun/data/marts`,
 `/opt/hwabun/data/validation/pipeline-report.json`에서 확인한다.
@@ -139,7 +147,8 @@ EC2-1의 추천 데이터 Volume은 이 서버에 자동 공유되지 않는다.
 
 ## DW Mart MySQL 발행
 
-Q4·Q5가 성공한 뒤 선택 profile `dw`의 `dw-projection`을 수동 실행한다.
+자동 배치를 사용하면 Q4·Q5 성공 뒤 선택 profile `dw`의 `dw-projection`이 자동 실행된다.
+수동으로 projection만 다시 실행할 수도 있다.
 기본 실행은 `user_trait_daily`와 대시보드 핵심 Mart 6종의 Parquet을 묶음으로 읽어
 MySQL staging에 적재하고, 건수·NULL 축을 포함한 grain 중복·필수값을 검증한 뒤
 Mart별 조회 테이블을 교체한다. 일반 `up`은 이 Job을 실행하지 않는다.
