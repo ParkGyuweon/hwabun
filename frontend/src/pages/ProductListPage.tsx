@@ -136,6 +136,7 @@ export default function ProductListPage({
 }: ProductListPageProps) {
   const [sort, setSort] = useState<SortKey>('popular');
   const [concern, setConcern] = useState('all');
+  const [brand, setBrand] = useState('all');
   const [price, setPrice] = useState<PriceKey>('all');
   const [page, setPage] = useState(1);
   /**
@@ -157,6 +158,25 @@ export default function ProductListPage({
       if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [products]);
+
+  /**
+   * 브랜드 필터 후보. 상품 수가 많은 브랜드부터 — 카테고리 탭·고민 셀렉트와 같은 규칙이다.
+   *
+   * 브랜드를 따로 고르는 자리가 필요한 이유는 이 쇼핑몰이 여러 브랜드를 한 목록에 섞어 놓기 때문이다.
+   * 등록 브랜드 상품이 세포라 200개 사이에 흩어져 있어서, 브랜드로 좁히지 못하면 "이 브랜드가 무엇을
+   * 파는가" 를 볼 방법이 없다.
+   *
+   * 여기서 특정 브랜드를 위로 끌어올리지 않는다. 목록 순서를 손대면 교차 브랜드 발견이 죽는다
+   * (exposure-role.md) — 그건 정렬·추천이 할 일이지 필터 후보 목록이 할 일이 아니다.
+   */
+  const brands = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      const name = p.brand_name;
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [products]);
 
   /** 고민 필터 후보. "Good for:" 에서 파생된 값만 존재한다 (156/200) */
@@ -269,6 +289,7 @@ export default function ProductListPage({
     const list = products.filter((p) => {
       if (category !== 'all' && p.category[1] !== category) return false;
       if (concern !== 'all' && !p.skincare_concerns.includes(concern)) return false;
+      if (brand !== 'all' && p.brand_name !== brand) return false;
       return band.test(p);
     });
 
@@ -294,7 +315,7 @@ export default function ProductListPage({
         sorted.sort((a, b) => popularKey(a) - popularKey(b));
     }
     return sorted;
-  }, [products, category, concern, price, sort]);
+  }, [products, category, concern, brand, price, sort]);
 
   /**
    * 한 페이지는 줄을 꽉 채운다. 열 수가 3이면 24, 5면 20. 남는 게 열 수보다 적어도 한 줄은 그린다.
@@ -322,7 +343,7 @@ export default function ProductListPage({
    * 필터를 바꾸면 목록 길이와 내용이 달라지므로 스크롤 도달 깊이와 섹션 노출을
    * 처음부터 다시 세야 한다.
    */
-  const pageViewKey = `list:${category}|${concern}|${price}|${sort}`;
+  const pageViewKey = `list:${category}|${concern}|${brand}|${price}|${sort}`;
 
   /**
    * 상세 페이지와 같은 훅을 붙인다.
@@ -593,6 +614,24 @@ export default function ProductListPage({
                 {concerns.map(([name, count]) => (
                   <option key={name} value={name}>
                     {concernKo(name)} ({count})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              브랜드
+              <select
+                value={brand}
+                onChange={(event) => {
+                  setBrand(event.target.value);
+                  applyFilter('brand', event.target.value);
+                }}
+              >
+                <option value="all">전체</option>
+                {brands.map(([name, count]) => (
+                  <option key={name} value={name}>
+                    {name} ({count})
                   </option>
                 ))}
               </select>

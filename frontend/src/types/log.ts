@@ -165,7 +165,9 @@ export type FilterKind =
   /** 고민 셀렉트. 값은 'all' 또는 skincare_concerns 의 값 */
   | 'concern'
   /** 가격대 버튼. 값은 all · under30k · 30k-70k · 70k-130k · over130k (원화 기준, 2026-09-10) */
-  | 'price';
+  | 'price'
+  /** 브랜드 셀렉트. 값은 'all' 또는 brand_name 그대로 (2026-09-17) */
+  | 'brand';
 
 export type LogContentKind =
   | 'product_image'

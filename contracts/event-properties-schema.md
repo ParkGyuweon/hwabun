@@ -200,10 +200,14 @@ Event.product_id
 
 ### 3.8 `filter_kind`
 
-`category`, `concern`, `price`
+`category`, `concern`, `brand`, `price`
 
 Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `FilterKind` union이
 단일 출처다. Generator도 `category`를 사용한다.
+
+`brand`는 2026-09-17에 추가했다. 값은 `all` 또는 `brand_name` 그대로다. 쇼핑몰 목록이
+여러 브랜드를 한 화면에 섞어 놓아서, 브랜드로 좁히는 자리가 없으면 등록 브랜드의 상품을
+모아 볼 방법이 없다. Generator는 아직 이 값을 내지 않는다.
 
 기피 성분 필터(`ingredient_exclude`)와 피부 타입 필터(`skin_type`)는 화면이 아직
 없으므로 등록하지 않는다. 구현되지 않은 값을 미리 넣으면 이 표가 "무엇을 내보내는가"가
