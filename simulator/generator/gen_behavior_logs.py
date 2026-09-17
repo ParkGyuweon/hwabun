@@ -284,6 +284,9 @@ SCENARIO = {
     # 대시보드에서 "다시 온 사람" 을 셀 수 없다.
     "visit_weights": (0.35, 0.40, 0.25),   # 1회 / 2회 / 3회
     "revisit_window_days": 5,              # 최근 이 기간 안에 나눠 담는다
+    # 상세를 보고 목록으로 돌아갔다가 같은 상품을 다시 여는 비율 (Jira 350).
+    # 새 진입이 아니라 재조회라 마트가 건수 집계에서 빼야 하고, 그 제외 로직을 재려면 로그에 있어야 한다.
+    "p_history_back": 0.06,
 
     # 재구매 (S2) — 같은 상품에 리뷰가 2건 이상이면 재구매로 본다.
     # 실측: 9,900명 중 60.6% 가 해당하고 리뷰 간격 중앙값이 264일이다.
@@ -1366,6 +1369,20 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             regret = g
         elif rng.random() < SC["wishlist_p_bounce"]:
             e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+
+        # ── 뒤로가기 재조회 (Jira 350, 데이터·프론트 요청) ──────────────────
+        # 목록으로 돌아갔다가 같은 상품을 다시 연다. 프론트도 이때 product_view 를 다시 남긴다.
+        # **새 진입이 아니라 재조회다** — 마트는 건수 집계에서 빼야 하고, 그 제외 로직을 검증하려면
+        # 로그에 이 모양이 있어야 한다. 계약 §3.4 의 navigation_source 4종 중 history_back 이 이 자리다.
+        # 목표 상품에는 걸지 않는다 — 마지막에 와야 하고 전환이 붙어 있다.
+        if not is_target and rng.random() < SC["p_history_back"]:
+            e.new_page("product_list")
+            e.tick(200, 900)
+            e.emit("page_view", navigation_source="history_back")   # 목록 복귀
+            e.tick(300, 1500)
+            # 다시 상세로. page_view·product_view 둘 다 history_back 이다 (§3.4: 같은 진입은 같은 값)
+            visit_detail(e, g, catalog[g], rec_ids, rng, depth_target=25,
+                         engaged=False, entry_source="history_back", SC=SC)
 
     # ── 장바구니 화면 ────────────────────────────────────────────────────
     # 프론트는 헤더 장바구니를 누를 때 view_cart 를 남긴다 (App.tsx openCart).
