@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,6 +45,22 @@ public class CommerceController {
   private final OrderItemRepository orderItems;
   private final BrandRepository brands;
   private final JdbcTemplate jdbc;
+
+  /**
+   * 결제 없이 PAID 로 표시하는 테스트 주문(`POST /orders/{id}/pay`)을 허용할 회원 ID 접두.
+   *
+   * 이 경로는 원래 결제 연동이 없던 시절의 길인데, 지금은 **에이전트 러너 전용**이다. PA 러너
+   * (Playwright)는 카카오페이 창을 넘을 수 없어(카카오 로그인·QR 승인) 이 길로 주문을 끝내고,
+   * 그래야 재구매 지표("같은 사람·같은 상품·다른 주문 2건")가 잡힌다.
+   *
+   * **프론트의 `?pay=test`·`navigator.webdriver` 판정은 보호 장치가 아니다.** 로그인한 사람이면
+   * 누구나 토큰으로 이 엔드포인트를 직접 부를 수 있다. 실제 차단은 여기서 한다.
+   *
+   * 값은 러너 계정의 `member_id` 접두다 (`PA00001`~`PA00100`, 시드 `shop_backend_seed.sql`).
+   * 빈 값으로 두면 제한하지 않는다 — 로컬 개발처럼 결제 키가 없는 환경에서 막히면 안 된다.
+   */
+  @Value("${shop.test-pay.allowed-member-prefix:}")
+  private String testPayAllowedMemberPrefix;
 
   public CommerceController(
     CartRepository carts,
@@ -278,6 +295,7 @@ public class CommerceController {
     @PathVariable String id
   ) {
     requireMember(actor);
+    requireTestPayAllowed(actor);
     Optional<ShopOrder> order = orders.findById(id);
     if (
       order.isEmpty() || !order.get().getMemberId().equals(actor.accountId())
@@ -330,6 +348,26 @@ public class CommerceController {
           .map(brand -> brand.getStatus() == BrandStatus.ACTIVE)
           .orElse(false)
       );
+  }
+
+  /**
+   * 테스트 주문(`/pay`)을 부를 수 있는 계정인가.
+   *
+   * 접두가 비어 있으면 제한하지 않는다. 설정한 환경(배포 EC2)에서는 그 접두로 시작하는 회원만
+   * 통과하고 나머지는 403 이다 — 조용히 실패시키지 않고 이유를 준다. 프론트는 이 응답을
+   * "주문에 실패했습니다" 로 화면에 그대로 띄우므로 사용자가 막힌 것을 안다.
+   */
+  private void requireTestPayAllowed(ShopPrincipal actor) {
+    String prefix = testPayAllowedMemberPrefix == null
+      ? ""
+      : testPayAllowedMemberPrefix.trim();
+    if (prefix.isEmpty()) return;
+    if (
+      actor.accountId() == null || !actor.accountId().startsWith(prefix)
+    ) throw new ResponseStatusException(
+      HttpStatus.FORBIDDEN,
+      "test payment is limited to agent runner accounts"
+    );
   }
 
   private void requireMember(ShopPrincipal actor) {

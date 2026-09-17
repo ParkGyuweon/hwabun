@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useBackdropClose } from '../../hooks/useBackdropClose';
+import { clearLoginPrompt, useLoginPrompt } from '../../lib/loginPrompt';
 import AuthForm from './AuthForm';
 import MyPage from '../account/MyPage';
 import '../../styles/auth.css';
@@ -18,14 +18,31 @@ export default function AccountMenu() {
   const [open, setOpen] = useState(false);
   const [mypage, setMypage] = useState(false);
 
+  /*
+   * 화면 다른 곳(상품 상세의 "바로 구매")에서 로그인을 요청하면 여기서 연다.
+   * 로그인 폼을 두 벌 만들지 않기 위해서다 — 가입·에러 문구가 조용히 갈라진다 (lib/loginPrompt).
+   */
+  const promptReason = useLoginPrompt();
+  const modalOpen = open || (promptReason !== null && session === null);
+
+  const close = () => {
+    setOpen(false);
+    clearLoginPrompt();
+  };
+
   useEffect(() => {
-    if (!open) return;
+    if (!modalOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [modalOpen]);
+
+  // 로그인이 되면 요청 사유는 역할을 다했다. 남겨 두면 로그아웃할 때 모달이 혼자 열린다
+  useEffect(() => {
+    if (session) clearLoginPrompt();
+  }, [session]);
 
   if (session) {
     return (
@@ -39,22 +56,31 @@ export default function AccountMenu() {
     );
   }
 
-  // 드래그로 글자를 긁다 배경에서 손을 떼도 닫히지 않게 — 배경에서 눌렀다 뗀 클릭만 닫는다
-  const backdrop = useBackdropClose(() => setOpen(false));
-
   return (
     <>
       <button type="button" className="account__btn account__btn--login" onClick={() => setOpen(true)}>
         로그인
       </button>
       {/* body 로 포털 — 헤더의 backdrop-filter 가 fixed 기준을 헤더로 바꿔 카드가 잘린다 (MyPage 주석) */}
-      {open ? createPortal(
-        <div className="auth-modal" role="presentation" {...backdrop}>
-          <div className="auth-modal__card" role="dialog" aria-modal="true" aria-label="로그인">
-            <button type="button" className="auth-modal__close" aria-label="닫기" onClick={() => setOpen(false)}>
+      {modalOpen ? createPortal(
+        <div className="auth-modal" role="presentation" onClick={close}>
+          <div
+            className="auth-modal__card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="로그인"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" className="auth-modal__close" aria-label="닫기" onClick={close}>
               ×
             </button>
-            <AuthForm role="MEMBER" onSuccess={() => setOpen(false)} />
+            {/* 왜 갑자기 로그인 창이 떴는지 적는다. 모르면 그냥 닫아 버린다 */}
+            {promptReason ? (
+              <p className="auth-modal__reason" role="status">
+                {promptReason}
+              </p>
+            ) : null}
+            <AuthForm role="MEMBER" onSuccess={close} />
             {/* 브랜드 담당자는 다른 진입점(dashboard.html, SELLER 세션). 같은 모달에 모드를 섞지 않는다 */}
             <p className="auth__hint auth__hint--alt">
               브랜드 담당자이신가요?{' '}

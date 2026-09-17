@@ -9,9 +9,68 @@ services:
       ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
       ACTIVITY_EVENTS_PARTITIONS: ${ACTIVITY_EVENTS_PARTITIONS:-3}
       CREATE_ACTIVITY_EVENTS_TOPIC: "false"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in .env}
+      SHOP_BACKEND_JWT_SECRET: ${SHOP_BACKEND_JWT_SECRET:?Set SHOP_BACKEND_JWT_SECRET in .env}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
     expose:
       - "8080"
+    mem_limit: 1g
+
+  shop-backend:
+    build:
+      context: ../..
+      dockerfile: deploy/shop_backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8090"
+      SHOP_BACKEND_JWT_SECRET: ${SHOP_BACKEND_JWT_SECRET:?Set SHOP_BACKEND_JWT_SECRET in .env}
+      SHOP_BACKEND_JWT_EXPIRATION_MS: ${SHOP_BACKEND_JWT_EXPIRATION_MS:-900000}
+      SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+      SHOP_BACKEND_MYSQL_USER: ${MYSQL_USER:-shop_backend}
+      SHOP_BACKEND_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      DASHBOARD_MART_MYSQL_URL: jdbc:mysql://${DW_MYSQL_HOST:-mysql}:${DW_MYSQL_PORT:-3306}/${DW_MYSQL_DB:-dw}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+      DW_MYSQL_USER: ${DW_MYSQL_USER:-}
+      DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
+      PORTONE_API_SECRET: ${PORTONE_API_SECRET:?Set PORTONE_API_SECRET in .env}
+      PORTONE_API_URL: ${PORTONE_API_URL:-https://api.portone.io}
+      PORTONE_TIMEOUT_MS: ${PORTONE_TIMEOUT_MS:-10000}
+      RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-ec2}
+      # 결제 없이 PAID 로 표시하는 테스트 주문(/api/orders/{id}/pay)을 부를 수 있는 회원 ID 접두.
+      # 에이전트 러너 계정(PA00001~PA00100, 시드 shop_backend_seed.sql)만 허용한다.
+      # 프론트의 ?pay=test 판정은 보호 장치가 아니라 러너 분기일 뿐이라 실제 차단은 서버가 한다.
+      TEST_PAY_ALLOWED_MEMBER_PREFIX: ${TEST_PAY_ALLOWED_MEMBER_PREFIX:-PA}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "8090"
+    mem_limit: 1g
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-shop_backend}
+      MYSQL_USER: ${MYSQL_USER:-shop_backend}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../../shop_backend/mysql-erd.sql:/docker-entrypoint-initdb.d/001-mysql-erd.sql:ro
+      - ../../shop_backend/seed/shop_backend_seed.sql:/docker-entrypoint-initdb.d/002-shop-backend-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    # 로컬 관리·SSH 터널용 포트는 계속 loopback에만 둔다.
+    ports:
+      - "127.0.0.1:3306:3306"
+      # EC2-2 Spark/DW 작업은 EC2-1 사설망 주소의 13306으로만 접속한다.
+      # 기본값도 loopback이므로 .env에서 사설 IP를 명시하기 전에는 외부에 열리지 않는다.
+      - "${SHOP_BACKEND_MYSQL_BIND_ADDRESS:-127.0.0.1}:${SHOP_BACKEND_MYSQL_PORT:-13306}:3306"
     mem_limit: 1g
 
   # 추천 추론 서버 (AI, 계약 §5). 백엔드가 RECOMMEND_URL=http://recommend:8300 으로 프록시한다.
@@ -32,49 +91,45 @@ services:
       ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
       RECOMMEND_STATE_GROUP: recommend-state-v1          # Spark 와 다른 consumer group — 같은 이벤트를 독립적으로 읽는다
       GMS_KEY: ${GMS_KEY:-}                      # 처방 문장 생성 (없으면 /api/prescription 만 503)
-      SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222). 비우면 안 함
+      SHOP_BACKEND_URL: ${SHOP_BACKEND_URL:-http://shop-backend:8090}    # 쇼핑몰 백엔드 카탈로그 동기화 (Jira 222)
       CATALOG_SYNC_INTERVAL_SEC: ${CATALOG_SYNC_INTERVAL_SEC:-300}
       NEW_BRAND_DAYS: ${NEW_BRAND_DAYS:-14}                 # 신규 브랜드 = 등록 후 N일 (Jira 247-b, 2026-09-11 결정)
-      # 장기 성향 long_term_trait (Jira 306). EC2-1 shop-backend-mysql의 dw projection을 읽는다.
+      # 장기 성향 long_term_trait (Jira 306). dw MySQL projection 이 생기면 DW_MYSQL_* 를 .env 에 채운다 (데이터 파트 09-22 확정 대기).
       # 비우면 /data/user_trait_snapshot.jsonl → 이미지 안 스냅샷 → 없으면 응답 null.
-      DW_MYSQL_HOST: ${DW_MYSQL_HOST:-shop-backend-mysql}
+      DW_MYSQL_HOST: ${DW_MYSQL_HOST:-}
       DW_MYSQL_PORT: ${DW_MYSQL_PORT:-3306}
       DW_MYSQL_USER: ${DW_MYSQL_USER:-}
       DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
       DW_MYSQL_DB: ${DW_MYSQL_DB:-dw}
-      # /pipeline 은 EC2-2 projection 과 같은 22종을 기본으로 본다. 빈 값이면 서버 기본 목록 사용.
-      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-}
       USER_TRAIT_RELOAD_SEC: ${USER_TRAIT_RELOAD_SEC:-300}
-      PRESCRIPTION_LLM: ${PRESCRIPTION_LLM:-on}                # 처방 LLM(GMS 과금) 스위치. off 면 규칙표 문장. 런타임 토글 POST /api/prescription/llm (Jira 325)
-      USER_TRAIT_STALE_DAYS: ${USER_TRAIT_STALE_DAYS:-2}        # health.stale 경보선 (Jira 319)
-      USER_TRAIT_MAX_AGE_DAYS: ${USER_TRAIT_MAX_AGE_DAYS:-14}   # 넘으면 long_term_trait null
-      NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
-      # /live 시작 버튼(Jira 295·335): 생성기가 페르소나 1명당 RSS 1.2MB 라 9,900명은 12GB — 컨테이너에선 1,000명(1.2GB·714MB·20초).
-      # 캐시는 볼륨에 두어 재배포해도 다시 만들지 않는다.
+      USER_TRAIT_STALE_DAYS: ${USER_TRAIT_STALE_DAYS:-2}
+      USER_TRAIT_MAX_AGE_DAYS: ${USER_TRAIT_MAX_AGE_DAYS:-14}
+      PRESCRIPTION_LLM: ${PRESCRIPTION_LLM:-on}
       DEMO_LIMIT: ${DEMO_LIMIT:-1000}
       DEMO_CACHE_DIR: /data/demo_cache
-      # 생성 로그 통화(Jira 341). 사이트가 원화(302)·계약이 KRW 고정(303)이라 KRW. 캐시 파일명에 통화가 붙는다(demo_behavior_<limit>_KRW.jsonl).
       DEMO_CURRENCY: ${DEMO_CURRENCY:-KRW}
-      # /pipeline 화면 (Jira 337, 읽기만). Spark 마스터 UI 는 09-17 !297 로 열림 — .env 에 SPARK_MASTER_UI=http://<EC2-2 호스트>:18080
-      # (공개 호스트명 j15a306a.p.ssafy.io, Kafka 와 같은 값. 사설 IP 는 무응답). DASHBOARD_URL 은 대시보드 주소가 오면
       SPARK_MASTER_UI: ${SPARK_MASTER_UI:-}
       DASHBOARD_URL: ${DASHBOARD_URL:-}
+      NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
     volumes:
       - recommend-data:/data
-    networks:
-      - default
-      - shop-backend-db
     expose:
       - "8300"
-    mem_limit: 3g          # 1g 였다 — /live 첫 시작의 1,000명 생성(RSS 1.2GB)이 서버(0.5GB)와 함께 들어가야 한다 (09-16 OOM 실측)
+    mem_limit: 3g
 
   nginx:
     build:
       context: ../..
       dockerfile: deploy/nginx.Dockerfile
+      # Vite는 정적 번들 빌드 시점에 공개 결제 식별자를 주입한다.
+      # PortOne Secret은 절대 프론트 빌드에 전달하지 않는다.
+      args:
+        VITE_PORTONE_STORE_ID: ${VITE_PORTONE_STORE_ID:-}
+        VITE_PORTONE_CHANNEL_KEY: ${VITE_PORTONE_CHANNEL_KEY:-}
     restart: unless-stopped
     depends_on:
       - backend
+      - shop-backend
     ports:
       - "80:80"
       - "443:443"
@@ -103,6 +158,8 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
+    ports:
+      - "127.0.0.1:9090:9090"
     mem_limit: 512m
 
   grafana:
@@ -127,11 +184,3 @@ volumes:
   grafana-data:
   recommend-data:
   mysql-data:
-
-networks:
-  # shop_backend/docker-compose.mysql.yml creates this named network.
-  # It must exist before this Compose project is started.
-  default:
-  shop-backend-db:
-    external: true
-    name: shop-backend-db
