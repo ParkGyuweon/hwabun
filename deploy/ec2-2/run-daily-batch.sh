@@ -5,7 +5,7 @@ set -Eeuo pipefail
 # Q1 stays running as a Compose service. This job rebuilds Q2~Q5 outputs and
 # publishes the completed marts to MySQL through the dw projection container.
 
-repo_root="${HWABUN_REPO_ROOT:-/opt/hwabun/S15P21A306}"
+repo_root="${HWABUN_REPO_ROOT:-/home/ubuntu/S15P21A306}"
 compose_dir="$repo_root/deploy/ec2-2"
 lock_path="${DAILY_BATCH_LOCK_PATH:-/opt/hwabun/data/.hwabun-daily-batch.lock}"
 
@@ -40,6 +40,13 @@ echo "starting Spark services"
 wait_for_service spark-master 8080
 wait_for_service spark-worker 8081
 
+if ! "${compose[@]}" exec -T spark-master bash -ec '
+  test -n "${COMMONS_HASH_SALT//[[:space:]]/}"
+'; then
+  echo "COMMONS_HASH_SALT is missing in spark-master; set it in .env and recreate spark-master before running Q2~Q5" >&2
+  exit 1
+fi
+
 echo "running Q2~Q5"
 "${compose[@]}" exec -T spark-master bash -ec '
   set -Eeuo pipefail
@@ -53,7 +60,7 @@ echo "running Q2~Q5"
       --deploy-mode client \
       --conf spark.driver.host=spark-master \
       --conf spark.driver.bindAddress=0.0.0.0 \
-      --conf spark.cores.max=1 \
+      --conf spark.cores.max=2 \
       /opt/project/streaming/jobs/${job}.py "${args[@]}"
   done
 '
