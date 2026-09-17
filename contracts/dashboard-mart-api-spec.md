@@ -66,7 +66,7 @@
 | `brandId` | Y | — | shop_backend `brand.brand_id`. `dw.dim_brand.brand_id` 와 **같은 값**이다 (`dw-schema.md` §3-1 "source = Backend 브랜드 등록 정보"). 서버는 별도 매핑 없이 그대로 마트를 필터한다 |
 | `from` | N | `to` − 13일 | KST 일자 `YYYY-MM-DD`. 포함 |
 | `to` | N | 어제 (KST) | KST 일자. 포함. 오늘은 마트가 아직 없다 |
-| `actorType` | N | `all` | `all` · `web` · `synthetic`. `all` 은 두 actor_type 합산. 마트 key 의 `actor_type` 을 필터한다 |
+| `actorType` | N | `all` | `all` · `user` · `synthetic`. `all` 은 두 actor_type 합산. 마트 key 의 `actor_type` 을 그대로 필터한다. **`web` 은 `user` 의 예전 이름이다** — 받아서 `user` 로 바꿔 처리하고, 새 호출은 `user` 를 쓴다 (§8-2) |
 | `generatorType` | N | `all` | **0.3.1 추가.** PA(에이전트)와 PC(배치 생성)를 가르는 축. 마트 key 의 `generator_type` 을 필터한다. PA 로그는 정성 축이라(명세 §0-1) 정량 지표에서 빼고 싶을 때 쓴다 — `actorType` 으로는 못 가른다 (§8-1) |
 
 `source`·`scenario_id`·`simulation_run_id` 축은 **전부 합산**한다. 대시보드는 실행 단위를 구분하지 않는다.
@@ -469,7 +469,7 @@ cart_lift = content_conversion_daily.viewed_cart_rate / brand_daily_kpi.view_to_
 | --- | --- | --- |
 | 400 | `{"error":"bad_range"}` | `from > to`, 날짜 형식 오류 |
 | 400 | `{"error":"range_too_long"}` | 92일 초과 |
-| 400 | `{"error":"bad_actor_type"}` | `all`·`web`·`synthetic` 외 |
+| 400 | `{"error":"bad_actor_type"}` | `all`·`user`·`synthetic`·`web`(예전 이름) 외 |
 | 401 | `{"error":"unauthorized"}` | 토큰 없음·만료. `/error` permitAll 이 안 돼 있으면 400 도 이걸로 바뀌니 먼저 고친다 (`docs/shop-backend-requests.md` 1번) |
 | 403 | `{"error":"forbidden"}` | SELLER 아님, 또는 남의 brandId |
 | 503 | `{"error":"mart_unavailable","mart":"..."}` | projection 테이블 없음 |
