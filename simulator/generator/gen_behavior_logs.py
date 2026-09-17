@@ -106,7 +106,40 @@ def money(item_price_usd, item_price_krw):
         return int(item_price_krw) if item_price_krw is not None else None
     return round(float(item_price_usd), 2)
 DEFAULT_GENERATOR_TYPE = "python_batch"
-NOW = datetime(2026, 8, 28, 12, 0, 0)
+def _resolve_now():
+    """생성기 기준 시각. 모든 이벤트 시각이 여기서 거꾸로 뻗어 나간다 (window_days 만큼).
+
+    기본은 고정 상수다 — 평가용 로그가 재현돼야 하기 때문이다. 같은 씨앗으로 같은 파일이 나와야
+    홀드아웃 비교가 성립한다.
+
+    시연 로그는 사정이 다르다. 고정 시각으로 만들면 마트가 그 시점(2026-06-04~08-28)에 쌓이는데,
+    대시보드 기본 조회창은 "어제까지 14일" 이라 영영 안 걸린다. 배치가 다 성공해도 화면이 빈다.
+    그래서 시연 캐시를 만들 때만 `GEN_NOW` 로 오늘을 준다 — 로그 85일치가 통째로 따라와
+    최근 14일에 날짜별 데이터가 생긴다.
+
+        GEN_NOW=today                 오늘 12:00 (KST 자정 넘김을 피하려 정오)
+        GEN_NOW=2026-09-17            그 날 12:00
+        GEN_NOW=2026-09-17T09:30:00   분까지
+
+    주의: 이 값을 바꾸면 **같은 씨앗이라도 다른 파일**이 나온다. 평가 데이터셋을 다시 만들 때는
+    주지 말 것.
+    """
+    raw = (os.environ.get("GEN_NOW") or "").strip()
+    if not raw:
+        return datetime(2026, 8, 28, 12, 0, 0)
+    if raw.lower() == "today":
+        t = datetime.now()
+        return datetime(t.year, t.month, t.day, 12, 0, 0)
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            d = datetime.strptime(raw, fmt)
+            return d if fmt != "%Y-%m-%d" else d.replace(hour=12)
+        except ValueError:
+            continue
+    raise SystemExit(f"GEN_NOW 형식이 아닙니다: {raw!r} (today · 2026-09-17 · 2026-09-17T09:30:00)")
+
+
+NOW = _resolve_now()
 CHECKPOINT_MS = 15000                # 목록 체류 중 dwell 재발화 주기
 LIST_IMPRESSION_HOLD_MS = 300
 RECOMMENDATION_IMPRESSION_HOLD_MS = 1000
