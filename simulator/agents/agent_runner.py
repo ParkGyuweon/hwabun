@@ -102,6 +102,14 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
            "sort_list", "checkout", "click_banner", "buy_now")
+# 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
+# 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
+FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
+                 "용기·포장": "packaging", "가격": "value"}
+FEEDBACK_MAX_CHARS = 280
+# 피드백은 **산 사람만** 남길 수 있다 (FeedbackController.purchased). 그런데 주문하면 세션이
+# 끝나므로(프롬프트 약속) 행동 목록으로는 차례가 오지 않는다. 주문 직후 한 단계로 붙인다.
+FEEDBACK_AFTER_ORDER_P = 0.6
 # 목록 정렬 (Jira 321). 프론트 ProductListPage 의 SortKey 라벨 그대로 — 화면에 보이는 말로 고르게 한다
 SORT_KEYS = {"인기순": "popular", "평점 높은순": "rating", "가격 낮은순": "price_asc", "가격 높은순": "price_desc"}
 # 결제 (Jira 321). PA 100명은 shop_backend 시드에 회원으로 들어 있다 (docs/shop-backend-requests.md:125)
@@ -1030,6 +1038,62 @@ def norm_label(t):
     return t
 
 
+def write_feedback(page, client, persona, product_name, cache_on, dry):
+    """상품 상세의 "이 제품에 의견 남기기" 에 페르소나가 직접 글을 써서 보낸다.
+
+    **미리 써 둔 문장을 고르지 않고 그 자리에서 쓴다.** 그래야 그 사람이 실제로 산 상품과
+    피부 타입·고민이 글에 묻어난다 — 판매자 화면의 값어치가 여기서 갈린다 (사용자 결정 09-17).
+
+    축은 계약 고정 목록이다. 지어내면 백엔드가 400 을 준다. 화면 라벨로 고르게 하고
+    FEEDBACK_AXES 로 되옮긴다.
+
+    돌려주는 것: 보냈으면 (축 id, 글), 못 보냈으면 None.
+    """
+    panel = page.locator(".feedback")
+    if panel.count() == 0:
+        return None
+    try:
+        panel.first.scroll_into_view_if_needed(timeout=4000)
+    except Exception:
+        return None
+
+    labels = list(FEEDBACK_AXES)
+    concerns = ", ".join(persona.get("concerns") or []) or "없음"
+    sys_p = ("너는 화장품을 산 소비자다. 방금 쓴 제품에 대해 브랜드 사장님에게 의견을 남긴다. "
+             "광고 문구가 아니라 실제로 써 본 사람의 말투로, 구체적인 한 가지를 짚어서 쓴다. "
+             'JSON 만 답한다: {"axis": "<보기 중 하나>", "body": "<한국어 2~3문장>"}')
+    usr_p = NL.join([
+        "제품: %s" % product_name,
+        "피부 타입: %s · 피부 톤: %s · 고민: %s" % (
+            persona.get("skin_type") or "모름",
+            persona.get("skin_tone") or "모름",
+            concerns),
+        "고를 수 있는 주제: %s" % " / ".join(labels),
+        "본문은 %d자 이내." % FEEDBACK_MAX_CHARS,
+    ])
+    obj = ask(client, sys_p, usr_p, cache_on, dry)
+    if not obj:
+        return None
+    label = str(obj.get("axis") or "").strip()
+    body = str(obj.get("body") or "").strip()[:FEEDBACK_MAX_CHARS]
+    if label not in FEEDBACK_AXES or len(body) < 10:
+        return None
+
+    try:
+        panel.locator('button[aria-label="%s"]' % label).first.click(timeout=4000)
+        page.wait_for_timeout(random.randint(200, 700))
+        page.fill("#feedback-body", body, timeout=4000)
+        page.wait_for_timeout(random.randint(400, 1500))     # 쓰고 잠깐 읽어 보는 시간
+        btn = panel.locator("button.feedback__submit").first
+        if btn.is_disabled():
+            return None
+        btn.click(timeout=4000)
+        page.wait_for_timeout(random.randint(600, 1600))
+    except Exception:
+        return None
+    return FEEDBACK_AXES[label], body
+
+
 def do_action(page, act, target, scroll_center=None):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
@@ -1431,6 +1495,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
+    last_detail = None       # (주소, 상품명) — 주문 뒤 피드백을 남기러 돌아갈 곳
     cart_prices = {}         # 담은 상품의 화면 가격. 부담 판단에 쓴다
     budget = budget_of(persona)   # 이 사람이 실제로 내 본 최고가
     # 내려보는 폭의 사람별 중심값. **전용 스트림에서 뽑는다** — 기본 스트림을
@@ -1440,6 +1505,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     wished = set()           # 찜한 상품. 상품당 한 번만 열어준다
     peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
+    feedbacks = 0            # 산 뒤에 남긴 의견 수
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
     broken = 0
@@ -1461,6 +1527,8 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             # target 을 틀리게 쓰거나 빠뜨리면 중복 방지가 통째로 무력해진다
             if here and here not in visited:
                 visited.append(here)
+            if here:
+                last_detail = (page.url, here)   # 주문 뒤 돌아갈 상세
         # 이미 담은 상품을 또 담게 두면 같은 전환이 중복으로 쌓인다
         carted_here = any(norm(c) and (norm(c) in norm(here) or norm(here) in norm(c))
                           for c in cart)
@@ -1621,11 +1689,30 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         if okd and act in ("checkout", "buy_now"):
             if verbose:
                 print(f"    {turn:>2}. {act} 완료 — 주문. 오늘 쇼핑 끝")
+            # ── 산 뒤에 의견 남기기 ────────────────────────────────────────
+            # 피드백은 산 사람만 쓸 수 있는데(FeedbackController.purchased) 주문하면 세션이
+            # 끝난다. 그래서 행동이 아니라 주문 직후 단계로 둔다. 글은 **미리 써 둔 것을
+            # 고르지 않고 LLM 이 그 자리에서 쓴다** — 그 사람이 실제로 산 상품과 피부 타입이
+            # 글에 묻어나야 판매자 화면이 값어치가 있다 (사용자 결정 09-17).
+            if client and last_detail and random.random() < FEEDBACK_AFTER_ORDER_P:
+                url, name = last_detail
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                    page.wait_for_timeout(random.randint(600, 1800))
+                    got = write_feedback(page, client, persona, name, cache_on, dry)
+                except Exception:
+                    got = None
+                if got:
+                    calls += 1
+                    feedbacks += 1
+                    if verbose:
+                        print(f"        의견 남김 [{got[0]}] {got[1][:40]}")
             cart.clear()
             break                                # 주문하면 세션이 끝난다 (프롬프트와 같은 약속)
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
     return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased,
+                feedbacks=feedbacks,
                 banner_clicks=banner_clicks, broken=broken)
 
 
