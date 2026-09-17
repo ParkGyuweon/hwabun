@@ -11,8 +11,11 @@
 무엇을 하는가
     1. 추천 서버(`--recommend`, 기본 http://127.0.0.1:8300)가 떠 있는지 `/health` 로 확인한다.
     2. Kafka(`--bootstrap`, 기본 127.0.0.1:9092)에 붙을 수 있는지 본다. 못 붙으면 `--http` 로 물러난다(경고 출력).
-    3. 로그가 캐시(`<DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl`, 기본 `simulator/generator/.cache/`)에 없으면
-       `gen_behavior_logs.py --limit <limit>` 으로 만든다 (9,900명: 약 1,030만 건 · 6.9GB · 1분 · RSS 12GB). 있으면 그대로 쓴다.
+    3. 로그가 캐시(`<DEMO_CACHE_DIR>/demo_behavior_<limit>_<currency>.jsonl`, 기본 `simulator/generator/.cache/`)에 없으면
+       `gen_behavior_logs.py --limit <limit> --currency <currency>` 으로 만든다 (9,900명: 약 1,030만 건 · 6.9GB · 1분 · RSS 12GB).
+       있으면 그대로 쓴다. 통화는 env `DEMO_CURRENCY`(기본 KRW) — 사이트가 원화(Jira 302)이고 계약이 purchase·view_cart 의
+       currency 를 KRW 로 고정(Jira 303)해서, 달러 로그를 섞으면 Q5 `purchase_fact_currency_is_unambiguous` 가 깨진다(Jira 341).
+       파일명에 통화가 들어가서 옛 `demo_behavior_<limit>.jsonl`(USD) 캐시는 다시 쓰지 않는다.
        배포 컨테이너는 `DEMO_LIMIT=1000`(71만 건 · 714MB · 20초 · RSS 1.2GB) 으로 돈다 — 1GB 한도에서 9,900명은 OOM.
     4. 로그를 **key = session_id** 로 Kafka `activity-events` 에 초당 `--rate` 건씩 넣는다 — 수집기(backend/)와 같은 규칙이라
        파티션 3개로 갈라지고, 추천 서버 소비자가 읽어 상태에 반영한다. 그 사이 `/api/recommend` 도 초당 2~3번 불러
@@ -47,10 +50,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 배포 compose 는 DEMO_LIMIT=1000(RSS 1.2GB · 714MB · 21초), DEMO_CACHE_DIR=/data/demo_cache(볼륨, 재배포에도 남는다).
 DEFAULT_LIMIT = int(os.environ.get("DEMO_LIMIT", "9900"))
 CACHE_DIR = os.environ.get("DEMO_CACHE_DIR") or os.path.join(HERE, ".cache")
+# 생성기 통화(Jira 341). 생성기 기본은 USD(평가용 로그 호환, Jira 334)지만 시연 로그는 사이트·계약과 같은 KRW 여야 한다.
+CURRENCIES = ("USD", "KRW")
+DEFAULT_CURRENCY = os.environ.get("DEMO_CURRENCY", "KRW").upper()
 
 
-def cache_path(limit):
-    return os.path.join(CACHE_DIR, f"demo_behavior_{limit}.jsonl")
+def cache_path(limit, currency=DEFAULT_CURRENCY):
+    return os.path.join(CACHE_DIR, f"demo_behavior_{limit}_{currency}.jsonl")
 
 
 def pos_path(log_path):
@@ -101,13 +107,20 @@ def port_open(hostport, timeout=2.0):
         return False
 
 
-def ensure_log(limit, path):
+def generator_cmd(limit, path, currency=DEFAULT_CURRENCY):
+    if currency not in CURRENCIES:
+        raise SystemExit(f"DEMO_CURRENCY 는 {'/'.join(CURRENCIES)} 중 하나: {currency!r}")
+    return [sys.executable, os.path.join(HERE, "gen_behavior_logs.py"),
+            "--limit", str(limit), "--currency", currency, "--out", path]
+
+
+def ensure_log(limit, path, currency=DEFAULT_CURRENCY):
     if os.path.exists(path) and os.path.getsize(path) > 0:
         print(f"[demo] 로그 캐시 사용: {path} ({os.path.getsize(path)/1e9:.1f}GB)")
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    print(f"[demo] 로그 생성 중: {limit:,}명 → {path}  (1,000명 약 20초 · 9,900명 약 1분, RSS 약 {limit*1.2/1000:.1f}GB)", flush=True)
-    cmd = [sys.executable, os.path.join(HERE, "gen_behavior_logs.py"), "--limit", str(limit), "--out", path]
+    print(f"[demo] 로그 생성 중: {limit:,}명 · {currency} → {path}  (1,000명 약 20초 · 9,900명 약 1분, RSS 약 {limit*1.2/1000:.1f}GB)", flush=True)
+    cmd = generator_cmd(limit, path, currency)
     env = dict(os.environ, PYTHONUTF8="1")
     r = subprocess.run(cmd, env=env)
     if r.returncode != 0 or not os.path.exists(path):
@@ -246,7 +259,9 @@ def main():
     ap.add_argument("--rate", type=int, default=3000, help="초당 이벤트 수 (기본 3,000)")
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"페르소나 수 (기본 {DEFAULT_LIMIT:,} = env DEMO_LIMIT)")
     ap.add_argument("--max-events", type=int, default=0, help="이만큼만 보내고 멈춘다 (0 = 전부, 9,900명은 약 1,030만 건)")
-    ap.add_argument("--log", default=None, help="행동 로그 경로 (기본 <DEMO_CACHE_DIR>/demo_behavior_<limit>.jsonl, 없으면 생성)")
+    ap.add_argument("--currency", choices=CURRENCIES, default=DEFAULT_CURRENCY,
+                    help=f"생성 로그 통화 (기본 {DEFAULT_CURRENCY} = env DEMO_CURRENCY). 사이트·계약이 KRW 라 시연은 KRW (Jira 341)")
+    ap.add_argument("--log", default=None, help="행동 로그 경로 (기본 <DEMO_CACHE_DIR>/demo_behavior_<limit>_<currency>.jsonl, 없으면 생성)")
     ap.add_argument("--http", action="store_true", help="Kafka 대신 추천 서버 POST /api/events 로 직접")
     ap.add_argument("--no-ticker", action="store_true", help="/api/recommend 를 같이 부르지 않는다")
     ap.add_argument("--restart", action="store_true",
@@ -266,7 +281,7 @@ def main():
     if use_kafka and not kafka_state:
         print("[demo] 경고: 추천 서버가 KAFKA_BOOTSTRAP_SERVERS 없이 떠 있다 — Kafka 에 넣어도 서버가 읽지 않는다. "
               "서버를 KAFKA_BOOTSTRAP_SERVERS 로 다시 띄우거나 --http 를 쓰십시오")
-    path = ensure_log(a.limit, a.log or cache_path(a.limit))
+    path = ensure_log(a.limit, a.log or cache_path(a.limit, a.currency), a.currency)
     skip = 0 if a.restart else load_pos(path)
     if skip:
         print(f"[demo] 지난 실행이 멈춘 {skip:,}번째 줄부터 이어 보낸다 (처음부터는 --restart)", flush=True)

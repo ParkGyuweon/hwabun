@@ -51,6 +51,8 @@ services:
       # 캐시는 볼륨에 두어 재배포해도 다시 만들지 않는다.
       DEMO_LIMIT: ${DEMO_LIMIT:-1000}
       DEMO_CACHE_DIR: /data/demo_cache
+      # 생성 로그 통화(Jira 341). 사이트가 원화(302)·계약이 KRW 고정(303)이라 KRW. 캐시 파일명에 통화가 붙는다(demo_behavior_<limit>_KRW.jsonl).
+      DEMO_CURRENCY: ${DEMO_CURRENCY:-KRW}
       # /pipeline 화면 (Jira 337, 읽기만). Spark UI 는 EC2-2 가 127.0.0.1:18080 에만 열어 두어 개방 요청 뒤 .env 에
       SPARK_MASTER_UI: ${SPARK_MASTER_UI:-}
       DASHBOARD_URL: ${DASHBOARD_URL:-}
