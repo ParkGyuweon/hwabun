@@ -108,6 +108,13 @@ def money(item_price_usd, item_price_krw):
         return int(item_price_krw) if item_price_krw is not None else None
     return round(float(item_price_usd), 2)
 DEFAULT_GENERATOR_TYPE = "python_batch"
+# occurred_at 은 UTC 로 나간다 (`...Z`). 프론트도 `new Date().toISOString()` 로 UTC 를 싣고,
+# 원천이 그대로 event_time 에 넣은 뒤 정제가 `from_utc_timestamp(event_time, KST)` 로 되돌린다.
+# 예전에는 한국 시각에 `Z` 만 붙여서 **9시간 미래**가 됐고, 정오 넘는 이벤트가 다음 날로 넘어갔다
+# (09-17 GEN_NOW=today 로 드러남). 사람이 주는 기준 시각은 한국 시각으로 읽고 여기서 UTC 로 바꾼다.
+KST_OFFSET = timedelta(hours=9)
+
+
 def _resolve_now():
     """생성기 기준 시각. 모든 이벤트 시각이 여기서 거꾸로 뻗어 나간다 (window_days 만큼).
 
@@ -128,14 +135,18 @@ def _resolve_now():
     """
     raw = (os.environ.get("GEN_NOW") or "").strip()
     if not raw:
+        # 평가용 로그의 재현성을 위해 **바뀌지 않는다**. 예전부터 이 값이었고, 같은 씨앗이면 같은 파일이
+        # 나와야 홀드아웃 비교가 성립한다. UTC 로 읽히지만 08-28 은 아무도 오늘과 비교하지 않는다.
         return datetime(2026, 8, 28, 12, 0, 0)
     if raw.lower() == "today":
+        # 한국 기준 오늘 정오를 UTC 로. occurred_at 은 UTC 로 나가야 한다 (아래 KST_OFFSET 설명)
         t = datetime.now()
-        return datetime(t.year, t.month, t.day, 12, 0, 0)
+        return datetime(t.year, t.month, t.day, 12, 0, 0) - KST_OFFSET
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
         try:
             d = datetime.strptime(raw, fmt)
-            return d if fmt != "%Y-%m-%d" else d.replace(hour=12)
+            # 사람이 주는 값은 한국 시각으로 읽는다. 안에서는 UTC 로 돈다
+            return (d if fmt != "%Y-%m-%d" else d.replace(hour=12)) - KST_OFFSET
         except ValueError:
             continue
     raise SystemExit(f"GEN_NOW 형식이 아닙니다: {raw!r} (today · 2026-09-17 · 2026-09-17T09:30:00)")

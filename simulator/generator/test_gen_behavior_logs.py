@@ -449,19 +449,31 @@ class ResolveNowTest(unittest.TestCase):
         os.environ["GEN_NOW"] = ""
         self.assertEqual(datetime(2026, 8, 28, 12, 0, 0), gen._resolve_now())
 
-    def test_today_is_noon_of_today(self):
-        """KST 자정을 넘겨 날짜가 밀리지 않게 정오로 둔다"""
+    def test_today_is_noon_kst_expressed_in_utc(self):
+        """사람이 주는 값은 한국 시각, 안에서는 UTC.
+
+        occurred_at 이 `...Z` 로 나가므로 UTC 여야 한다. 예전에는 한국 시각에 Z 만 붙여
+        **9시간 미래**가 됐고, 정오 넘는 이벤트가 다음 날로 넘어갔다 (09-17)."""
         os.environ["GEN_NOW"] = "today"
         got = gen._resolve_now()
         now = datetime.now()
-        self.assertEqual((now.year, now.month, now.day, 12, 0, 0),
-                         (got.year, got.month, got.day, got.hour, got.minute, got.second))
+        self.assertEqual(datetime(now.year, now.month, now.day, 12, 0, 0),
+                         got + gen.KST_OFFSET, "KST 로 되돌리면 오늘 정오여야 한다")
 
-    def test_explicit_dates(self):
+    def test_explicit_dates_are_read_as_kst(self):
         os.environ["GEN_NOW"] = "2026-09-17"
-        self.assertEqual(datetime(2026, 9, 17, 12, 0, 0), gen._resolve_now())
+        self.assertEqual(datetime(2026, 9, 17, 12, 0, 0), gen._resolve_now() + gen.KST_OFFSET)
         os.environ["GEN_NOW"] = "2026-09-17T09:30:00"
-        self.assertEqual(datetime(2026, 9, 17, 9, 30, 0), gen._resolve_now())
+        self.assertEqual(datetime(2026, 9, 17, 9, 30, 0), gen._resolve_now() + gen.KST_OFFSET)
+
+    def test_generated_events_do_not_land_in_the_future(self):
+        """GEN_NOW=today 로 만든 로그를 KST 로 되돌렸을 때 **내일**이 나오면 안 된다"""
+        os.environ["GEN_NOW"] = "today"
+        now = gen._resolve_now()
+        last_kst = now + gen.KST_OFFSET
+        today = datetime.now()
+        self.assertLessEqual(last_kst.date(), today.date(),
+                             "기준 시각이 오늘을 넘으면 모든 이벤트가 미래가 된다")
 
     def test_bad_value_stops_instead_of_guessing(self):
         os.environ["GEN_NOW"] = "어제"
