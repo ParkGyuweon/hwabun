@@ -201,3 +201,22 @@ $('stop').onclick=async()=>{await fetch('/live/demo/stop',{method:'POST'});tick(
 tick();setInterval(tick,1000);
 </script></body></html>
 """
+
+
+def log_tail(path, nbytes=400):
+    """로그 파일의 마지막 줄 (Jira 344).
+
+    끝에서 nbytes 만 읽되, 그 경계는 UTF-8 한글(3바이트) 중간에 걸릴 수 있다. 예전 코드는 그때
+    UnicodeDecodeError 를 cp949 폴백으로 받아 꼬리 전체가 "蹂닿린" 꼴로 깨졌다. 잘린 첫 조각(첫 줄바꿈 이전)을
+    버리고 UTF-8 로만 읽는다 — demo_live 는 컨테이너에서 PYTHONIOENCODING=utf-8 로 쓰므로 다른 인코딩은 없다."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2); n = f.tell(); start = max(0, n - nbytes); f.seek(start)
+            raw = f.read()
+    except OSError:
+        return ""
+    if start > 0 and b"\n" in raw:
+        raw = raw.split(b"\n", 1)[1]                   # 앞의 잘린 조각은 버린다 (마지막 줄만 쓴다)
+    lines = [ln for ln in raw.decode("utf-8", "replace").splitlines() if ln.strip()]
+    return lines[-1].strip() if lines else ""
+
