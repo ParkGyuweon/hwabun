@@ -1,7 +1,7 @@
 -- MySQL `dw` projection 스키마
 --
 -- 생성물이다. 직접 고치지 않는다.
---   py contracts/dw/build_ddl.py --marts data/e2e-235/marts
+--   py contracts/dw/build_ddl.py --marts <실행 루트>/marts
 --
 -- 타입 매핑 · VARCHAR 길이 · NULL 정책 · PRIMARY KEY 순서의 정본은
 -- contracts/dw-schema.md §7 이다. 값을 바꾸려면 계약을 먼저 고친다.
@@ -105,7 +105,7 @@ CREATE TABLE `dw`.`brand_price_band_daily_kpi` (
   KEY `ix_brand_price_band_daily_kpi__grain` (`brand_id`, `event_date_kst`, `price_bin`, `currency`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- brand_repurchase_daily  -- 실데이터 미검증 (재생에서 0행)
+-- brand_repurchase_daily
 CREATE TABLE `dw`.`brand_repurchase_daily` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
   `brand_id` VARCHAR(64) NULL,
@@ -201,6 +201,7 @@ CREATE TABLE `dw`.`content_daily_kpi` (
   `section_view_count` BIGINT NOT NULL,
   `section_view_sessions` BIGINT NOT NULL,
   `dwell_ms_sum` BIGINT NOT NULL,
+  `co_visible_le2_dwell_ms_sum` BIGINT NOT NULL,
   `accordion_expand_count` BIGINT NOT NULL,
   `text_selection_count` BIGINT NOT NULL,
   `text_copy_count` BIGINT NOT NULL,
@@ -317,6 +318,7 @@ CREATE TABLE `dw`.`funnel_daily_kpi` (
   `quick_look_cart_sessions` BIGINT NOT NULL,
   `direct_click_sessions` BIGINT NOT NULL,
   `direct_click_cart_sessions` BIGINT NOT NULL,
+  `click_through_detail_sessions` BIGINT NOT NULL,
   `detail_view_sessions` BIGINT NOT NULL,
   `product_view_sessions` BIGINT NOT NULL,
   `information_view_sessions` BIGINT NOT NULL,
@@ -403,6 +405,8 @@ CREATE TABLE `dw`.`product_daily_kpi` (
   `simulation_run_id` VARCHAR(64) NULL,
   `category_id` VARCHAR(64) NULL,
   `product_impression_count` BIGINT NOT NULL,
+  `recommendation_impression_count` BIGINT NOT NULL,
+  `banner_impression_count` BIGINT NOT NULL,
   `product_click_count` BIGINT NOT NULL,
   `quick_look_count` BIGINT NOT NULL,
   `product_view_count` BIGINT NOT NULL,
@@ -410,6 +414,7 @@ CREATE TABLE `dw`.`product_daily_kpi` (
   `remove_from_cart_count` BIGINT NOT NULL,
   `purchase_count` BIGINT NOT NULL,
   `variant_select_count` BIGINT NOT NULL,
+  `wishlist_count` BIGINT NOT NULL,
   `quick_look_close_open_detail_count` BIGINT NOT NULL,
   `purchase_quantity` BIGINT NULL,
   `quick_look_sessions` BIGINT NOT NULL,
@@ -422,6 +427,7 @@ CREATE TABLE `dw`.`product_daily_kpi` (
   `session_count` BIGINT NOT NULL,
   `mart_processed_at` DATETIME(3) NOT NULL,
   `product_interest_score` DOUBLE NULL,
+  `impression_count` BIGINT NOT NULL,
   `product_ctr` DOUBLE NULL,
   `detail_entry_rate` DOUBLE NULL,
   `add_to_cart_rate` DOUBLE NULL,
@@ -448,7 +454,7 @@ CREATE TABLE `dw`.`product_exit_daily` (
   KEY `ix_product_exit_daily__grain` (`brand_id`, `event_date_kst`, `product_id`, `last_content_kind`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- product_repurchase_daily  -- 실데이터 미검증 (재생에서 0행)
+-- product_repurchase_daily
 CREATE TABLE `dw`.`product_repurchase_daily` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
   `brand_id` VARCHAR(64) NULL,
@@ -478,7 +484,7 @@ CREATE TABLE `dw`.`product_repurchase_daily` (
   KEY `ix_product_repurchase_daily__grain` (`brand_id`, `snapshot_date_kst`, `product_id`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- purchase_reason_daily  -- 실데이터 미검증 (재생에서 0행)
+-- purchase_reason_daily
 CREATE TABLE `dw`.`purchase_reason_daily` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
   `brand_id` VARCHAR(64) NULL,
