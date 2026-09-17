@@ -496,6 +496,8 @@ input = product_event_fact, purchase_fact, dim_product
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
+| `recommendation_impression_count` | bigint | N | 추천·배너 카드 노출. 목록 노출과 판정 기준이 다르다 |
+| `impression_count` | bigint | N | 두 노출의 합. `product_ctr`·`detail_entry_rate`의 분모 |
 | `variant_select_count`, `quick_look_close_open_detail_count` | bigint | N | 옵션 왕복과 퀵룩 → 상세 전환. 상품 진단용 |
 | `wishlist_count` | bigint | N | 찜 **추가** 수. `wishlist_toggle`의 `action = add`만 |
 | `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
@@ -522,10 +524,31 @@ input = product_event_fact, purchase_fact, dim_product
 1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 235에서 고쳤는데 상품 Mart가
 빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다 (Jira 277).
 
-`product_ctr`와 `detail_entry_rate`의 분모는 `product_impression_count`로 **Event 수**다.
+`product_ctr`와 `detail_entry_rate`의 분모는 `impression_count`로 **Event 수**다.
 세션 수가 아니다. 노출 대비 클릭·상세 진입은 노출 하나하나를 모수로 보는 지표이고,
 이름이 §4.14의 `detail_entry_rate`(세션 기준)와 같지만 분모가 다르다. 두 Mart의 값을
 같은 지표로 나란히 놓지 않는다.
+
+**노출 Event는 둘이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
+하나에 노출 Event를 정확히 하나만 낸다 — 목록 그리드는 `product_impression`,
+유사 상품·히어로 배너·로그인 사용자의 맞춤 기획전은 `recommendation_impression`이다.
+**클릭은 어느 목록에서든 `product_click`**이고 추천 카드면 `recommendation_click`을
+하나 더 낸다. 그래서 `product_click_count`에 맞는 분모는 두 노출의 합이다.
+`product_impression_count`만 쓰면 추천 카드에서 온 클릭이 분자에만 들어가 비율이
+1을 넘는다 — 2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
+
+**노출 판정 기준이 서로 다르다.** 목록은 hold 300ms, 추천은 1000ms다. 합쳐 쓰는 이상
+두 기준이 한 분모에 섞인다는 것을 알고 읽어야 한다. 기준을 맞추는 것은 프론트 몫이고,
+Mart는 받은 Event를 셀 뿐이다.
+
+**`entry_source`로는 추천발 클릭을 가려낼 수 없다.** 맞춤 기획전(`promo_pick`)은
+비로그인이면 `product_impression`, 로그인이면 `recommendation_impression`을 내는데
+클릭의 `entry_source`는 둘 다 `promo_pick`이다. 히어로 배너 클릭도 같다. 그래서
+분자를 좁히는 방식(추천발 클릭 제외)은 성립하지 않는다.
+
+같은 이유로 **퍼널 계열 Mart의 `impression_sessions`도 두 노출을 함께 센다**
+(§4.5 `funnel_session_fact`의 `reached_impression`). 세션 기준 `detail_entry_rate`가
+1을 넘던 것이 이것 때문이었다.
 
 `currency`는 key가 아니라 대표값 하나다. Event의 `currency`는 담기·결제 Event에만 붙고
 조회 Event에는 없어서, key에 올리면 통화 없는 조회 행과 결제 행이 갈려 세션 집계가
@@ -588,6 +611,12 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 `ingredient_view_sessions`는 `content_kind`가 `ingredient_list`·`ingredient_callout`인
 세션, `review_view_sessions`는 `user_review`·`review_stats`·`review_filter`인 세션을
 센다. 둘의 합집합이 §4.14가 쓰는 `INFORMATION_CONTENT_KINDS`와 같다.
+
+**그 종류에 해당하지 않는 행은 NULL이 아니라 0이다.** `cta`·`price`·`product_image`
+같은 `content_kind` 행은 성분·리뷰 집계에 짝이 없어 조인 결과가 NULL이 되는데,
+계약이 이 둘을 `N`으로 선언했으므로 0으로 채운다. "그 콘텐츠 종류가 아니라
+성분 열람이 0"이 맞는 뜻이고, NULL로 두면 `ingredient_view_rate`도 NULL이 되어
+"분모가 0"과 구분되지 않는다. 2026-09-17 재생 데이터에서 193행이 이 상태였다.
 
 **두 분자는 분모의 모집단으로 제한한다.** 상품 조회 세션에 없는 콘텐츠 열람 세션은
 세지 않는다 — Quick Look으로 상세를 연 세션이 그렇게 될 수 있고, 제한하지 않으면
