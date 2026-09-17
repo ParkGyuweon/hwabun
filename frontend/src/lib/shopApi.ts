@@ -339,18 +339,37 @@ export function canCheckoutOnBackend(items: CartItem[]): boolean {
  *
  * 그래서 바로 구매는 **비우고 → 그 상품 하나만 담고 → 주문**한다. 화면의 장바구니(로컬 상태)는
  * 건드리지 않는다 — 서버 장바구니는 주문 직전에만 채워지는 임시 자리다.
+ *
+ * **실패를 삼키지 않는다** (백엔드 리뷰 2026-09-17). 조회나 삭제 하나라도 실패한 뒤 주문을 계속하면
+ * **서버에 남아 있던 기존 상품까지 같이 결제된다.** "이 상품만" 이라고 적힌 버튼이 다른 것도 사는
+ * 셈이라, 호출부가 결과를 보고 멈출 수 있게 성공·실패를 돌려준다. 삭제 응답도 하나하나 확인한다.
  */
-export async function clearBackendCart(): Promise<void> {
+export type ClearCartResult = { ok: true; removed: number } | ApiFailure;
+
+export async function clearBackendCart(): Promise<ClearCartResult> {
   try {
     const res = await authFetch('MEMBER', '/api/cart');
-    if (!res.ok) return;
+    if (!res.ok) return fail(res);
     const body = (await res.json()) as { items?: Array<{ id?: string }> };
-    for (const item of body.items ?? []) {
-      if (!item.id) continue;
-      await authFetch('MEMBER', `/api/cart/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+    const items = body.items ?? [];
+    let removed = 0;
+    for (const item of items) {
+      /*
+       * id 가 없으면 지울 방법이 없다. "없는 셈 치고 넘어가면" 그 품목이 그대로 주문에 실린다 —
+       * 비우지 못한 것을 비웠다고 보고하는 셈이라 여기서 멈춘다.
+       */
+      if (!item.id) {
+        return { ok: false, status: 0, reason: '장바구니 항목에 id 가 없어 비울 수 없습니다' };
+      }
+      const del = await authFetch('MEMBER', `/api/cart/items/${encodeURIComponent(item.id)}`, {
+        method: 'DELETE',
+      });
+      if (!del.ok) return fail(del);
+      removed += 1;
     }
+    return { ok: true, removed };
   } catch {
-    /* 못 비웠으면 그대로 진행한다 — 주문이 거절되면 그 이유가 화면에 뜬다 */
+    return offline();
   }
 }
 

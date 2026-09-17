@@ -489,8 +489,23 @@ export default function App() {
       /*
        * 서버 장바구니는 주문 직전에만 채워지는 임시 자리인데, `POST /api/orders` 는 거기 든 것을 **전부**
        * 주문한다. 담기까지 갔다가 실패한 시도가 남아 있으면 "이 상품만" 이 아니게 된다 (shopApi 주석).
+       *
+       * **못 비웠으면 주문하지 않는다** (백엔드 리뷰 2026-09-17). 비우기가 실패한 채로 진행하면 남아
+       * 있던 상품까지 같이 결제된다 — "이 상품만" 이라고 적힌 버튼이 다른 것도 사는 셈이다.
+       * 조용히 덮지 않고 멈춘 이유를 화면에 띄운다. 사용자는 장바구니를 직접 비우고 다시 누르면 된다.
        */
-      if (origin === 'buy_now') await clearBackendCart();
+      if (origin === 'buy_now') {
+        const cleared = await clearBackendCart();
+        if (!cleared.ok) {
+          failPayment(
+            localOrderId,
+            `cart_clear_${cleared.status}`,
+            `장바구니를 정리하지 못해 바로 구매를 멈췄습니다. ${cleared.reason} 장바구니에서 주문해 주세요.`,
+            isPaymentEnabled() ? 'kakaopay' : 'test',
+          );
+          return;
+        }
+      }
       if (isPaymentEnabled()) {
         setPaying(true);
         try {
