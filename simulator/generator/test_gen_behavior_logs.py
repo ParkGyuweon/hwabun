@@ -308,6 +308,41 @@ if __name__ == "__main__":
 
 
 @unittest.skipIf(np is None, "numpy is required for the simulator generator")
+class ViewCartCurrencyTest(unittest.TestCase):
+    """Jira 340 — view_cart 도 currency 를 싣는다 (계약 §3.2: 금액은 currency 와 함께 해석한다).
+
+    계약 303 이 view_cart.currency 를 필수로 올렸는데 생성기만 빠져 있었다. begin_checkout·purchase 처럼
+    `checkout()` 단위 함수가 아니라 페르소나 동선 안에서 나오는 이벤트라 CLI 를 그대로 돌려 확인한다
+    (--limit 20 이면 1초 안, view_cart 18건).
+    """
+
+    def _run(self, currency):
+        import json, os, subprocess, sys, tempfile
+        here = os.path.dirname(os.path.abspath(__file__))
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "behavior_logs.jsonl")
+            r = subprocess.run([sys.executable, os.path.join(here, "gen_behavior_logs.py"),
+                                "--limit", "20", "--currency", currency, "--out", out],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+            self.assertEqual(0, r.returncode, r.stderr[-2000:])
+            with open(out, encoding="utf-8") as f:
+                return [json.loads(ln) for ln in f if ln.strip()]
+
+    def test_view_cart_carries_currency_in_both_modes(self):
+        for currency, value_type in (("USD", float), ("KRW", int)):
+            with self.subTest(currency=currency):
+                events = self._run(currency)
+                money_events = [x for x in events if x["event_name"] in ("view_cart", "begin_checkout", "purchase")]
+                view_cart = [x for x in money_events if x["event_name"] == "view_cart"]
+                self.assertGreater(len(view_cart), 0)
+                for x in money_events:                       # 금액을 싣는 세 이벤트가 같은 통화를 쓴다
+                    self.assertEqual(currency, x["properties"].get("currency"), x["event_name"])
+                for x in view_cart:
+                    self.assertIsInstance(x["properties"]["cart_value"], value_type)
+
+
+@unittest.skipIf(np is None, "numpy is required for the simulator generator")
 class SamplePersonasTest(unittest.TestCase):
     """--limit 층화 추출 (Jira 318). 파일이 stratum 순 정렬이라 앞에서 자르면 한 층만 남는다."""
 
