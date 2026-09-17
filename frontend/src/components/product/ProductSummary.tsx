@@ -8,6 +8,7 @@ import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
 import { setWished, useWished } from '../../lib/wishlist';
 import type { Product, ProductVariant } from '../../types/product';
+import { MAX_CART_QUANTITY } from '../../types/cart';
 import type { CartItem } from '../../types/cart';
 
 interface ProductSummaryProps {
@@ -49,7 +50,7 @@ export default function ProductSummary({
   const [addedAt, setAddedAt] = useState<number | null>(null);
 
   const changeQuantity = (next: number) => {
-    const clamped = Math.min(99, Math.max(1, next));
+    const clamped = Math.min(MAX_CART_QUANTITY, Math.max(1, next));
     if (clamped === quantity) return;
     setQuantity(clamped);
     track('quantity_change', { product_id: product.product_id, quantity: clamped });
