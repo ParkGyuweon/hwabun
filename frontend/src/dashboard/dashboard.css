@@ -764,29 +764,112 @@ table.data tr:hover td {
   font-weight: 600;
 }
 
+/*
+ * 좁은 화면 — 사이드바를 위쪽 가로 막대로 눕힌다.
+ *
+ * 눕히기만 하고 **안쪽 규칙을 안 바꿔서 글자가 한 자씩 세로로 쪼개졌다.** 세로 메뉴는 폭이
+ * 232px 로 정해져 있어 줄바꿈이 없었는데, 가로로 눕히면 flex 항목이 내용보다 좁게 줄어들 수
+ * 있고 한글은 아무 데서나 줄이 바뀐다. 그래서 "상세 콘텐츠" 가 다섯 줄이 됐다.
+ *
+ * 고치는 규칙 셋.
+ *   1. 가로 막대의 모든 글자는 줄바꿈 금지 + 줄어들지 않게 (nowrap · flex-shrink: 0)
+ *   2. 세로 배치 전용 장식은 숨긴다 — 가로로 두면 자리만 먹고 뜻이 없다
+ *   3. 가로 스크롤은 사이드바 **안에서만**. 페이지 전체가 밀리면 안 된다
+ */
 @media (max-width: 900px) {
+  /* 화면 전체가 가로로 밀리는 것부터 막는다. 표·차트는 각자 안에서 스크롤한다 */
   .console {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
   }
 
-  .sidebar {
+  /* `.console .sidebar` — 시각 레이어(dashboard-apple.css)가 나중에 로드돼 여백을 덮는다 */
+  .console .sidebar {
     position: static;
     height: auto;
     flex-direction: row;
     align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
     overflow-x: auto;
+    /* 세로 스크롤바가 생기면 막대가 두꺼워진다 */
+    overflow-y: hidden;
+    /* 항목이 아래로 접히면 막대가 아니라 덩어리가 된다 */
+    flex-wrap: nowrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* 가로 막대 안의 모든 칸 — 내용보다 좁아지지 않는다. 이게 한 자씩 쪼개지던 원인이다 */
+  .sidebar > *,
+  .sidebar__nav button {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .sidebar__nav {
     flex-direction: row;
+    gap: 4px;
   }
 
-  .sidebar__foot {
+  /* 메뉴와 작업 사이의 빈칸은 세로일 때만 뜻이 있다 */
+  .sidebar__nav-gap {
+    display: none;
+  }
+
+  .sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+  }
+
+  /*
+   * 좁은 막대에서 자리를 못 버는 것들. 로고·브랜드 이름·메뉴가 먼저다.
+   *   motif   세로 여백을 채우던 장식
+   *   shop    쇼핑몰 바로가기 — 메뉴에서 밀려나면 안 보이나 마나다
+   *   foot    마트 갱신 시각·로그아웃
+   *
+   * **선택자를 `.sidebar` 로 한 단계 감쌌다.** `dashboard-themes.css` 가 이 파일 다음에 로드되면서
+   * `.sidebar__shop { display: flex }` 로 덮어써, 클래스 하나짜리 규칙으로는 졌다.
+   * 브랜드 이름은 숨기지 않는다 — 어느 브랜드를 보는지가 숫자의 뜻을 바꾼다.
+   */
+  .sidebar .motif,
+  .sidebar .sidebar__shop,
+  .sidebar .sidebar__foot {
+    display: none;
+  }
+
+  /* 브랜드 선택은 남긴다. 어느 브랜드를 보는지가 숫자의 뜻을 바꾼다 */
+  .sidebar__brand-select {
+    margin: 0;
+    max-width: 180px;
+  }
+
+  .sidebar .sidebar__brand-create,
+  .sidebar .sidebar__brand-note {
     display: none;
   }
 
   .main {
-    padding: 20px;
+    padding: 20px 16px 48px;
+    /* max-width 가 1240px 이라 좁은 화면에서 넘칠 수 있다 */
+    max-width: 100%;
+  }
+
+  .main__head h1 {
+    font-size: 22px;
+  }
+
+  /* 탭도 넘치면 안에서 스크롤한다 */
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 }
 
