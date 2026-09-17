@@ -1350,7 +1350,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
         e.emit("view_cart",
                item_count=len(cart), distinct_products=len(cart),
                cart_value=(sum(money(catalog[g]["price"], catalog[g].get("price_krw")) for g in cart)
-                           if CURRENCY == CURRENCY_KRW else round(sum(catalog[g]["price"] for g in cart), 2)))
+                           if CURRENCY == CURRENCY_KRW else round(sum(catalog[g]["price"] for g in cart), 2)),
+               currency=CURRENCY)   # 계약 §3.2: 금액은 currency 와 함께 (Jira 303·340)
         # 수량 조절. 프론트는 entry_source="cart" 를 싣는다 (App.tsx)
         q = 1
         if rng.random() < SC["p_quantity_change"]:
