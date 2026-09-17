@@ -25,7 +25,18 @@ interface Stored {
 }
 
 const SEED: SeedRow[] = (seedJson as { rows: SeedRow[] }).rows;
+const SEED_IDS = new Set(SEED.map((r) => r.feedback_id));
 const EMPTY: Stored = { overrides: {}, local: [] };
+
+/** 번들 샘플 파일에서 온 행인가. 대시보드가 "실측/시드" 배지를 가르는 기준 */
+export const isSeedFeedback = (f: Pick<Feedback, 'feedback_id'>): boolean => SEED_IDS.has(f.feedback_id);
+
+/**
+ * 목록의 출처 배지. 백엔드에서 받았거나 이 사이트에서 쓴 글이 한 건이라도 있으면 `real`,
+ * 전부 번들 샘플이면 `seed`. 샘플 30건을 "실측" 이라 부르면 사장님이 진짜 고객 글로 읽는다
+ */
+export const feedbackSource = (list: Pick<Feedback, 'feedback_id'>[]): 'real' | 'seed' =>
+  list.some((f) => !isSeedFeedback(f)) ? 'real' : 'seed';
 
 const listeners = new Set<() => void>();
 let stored: Stored | null = null;

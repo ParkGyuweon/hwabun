@@ -5,7 +5,7 @@ import { OriginBadge, Panel } from '../components';
 import { feedbackProducts as products } from '../lib/metrics';
 import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
-import { feedbackForBrand, updateFeedback } from '../../lib/feedbackStore';
+import { feedbackForBrand, feedbackSource, updateFeedback } from '../../lib/feedbackStore';
 import { findAdTerms } from '../../lib/adTerms';
 import { skinTypeLabel, humanizeAttribute } from '../../lib/format';
 import {
@@ -72,9 +72,40 @@ export default function FeedbackScreen() {
     return [...remote.filter((f) => !seen.has(f.feedback_id)), ...local];
   }, [all, remote]);
 
+  /** 배지. 백엔드 행이나 이 사이트에서 쓴 글이 있으면 실측, 전부 번들 샘플이면 시드 */
+  const source = useMemo(() => feedbackSource(mine), [mine]);
+
   const [axis, setAxis] = useState<AxisFilter>('all');
   const [category, setCategory] = useState<string | null>(null);
   const [productId, setProductId] = useState<string>('all');
+
+  /**
+   * 상품별 묶음 (1차 상품 → 2차 카테고리). 사장님은 "어느 제품이 문제냐" 부터 묻는다.
+   * 축·카테고리 필터와 무관하게 브랜드 전체(`mine`)로 만든다 — 상품 목록 자체가 필터라서.
+   * 카테고리 칩은 언급 수 많은 순, 한 글에 라벨이 둘이면 두 칩에 각 1
+   */
+  const byProduct = useMemo(() => {
+    const m = new Map<string, Feedback[]>();
+    for (const f of mine) m.set(f.product_id, [...(m.get(f.product_id) ?? []), f]);
+    return [...m.entries()]
+      .map(([id, list]) => {
+        const cats = new Map<string, number>();
+        let pending = 0;
+        for (const f of list) {
+          const labels = labelsOf(f);
+          if (labels.length === 0) pending += 1;
+          for (const l of labels) cats.set(l.category_id, (cats.get(l.category_id) ?? 0) + 1);
+        }
+        return {
+          id,
+          list,
+          fresh: list.filter((f) => f.status === 'new').length,
+          cats: [...cats.entries()].sort((a, b) => b[1] - a[1]),
+          pending,
+        };
+      })
+      .sort((a, b) => b.list.length - a.list.length);
+  }, [mine]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
 
@@ -147,7 +178,13 @@ export default function FeedbackScreen() {
     if (top.length === 0) return null;
     const [first, second] = top;
     const has = (f: Feedback, id: string) => labelsOf(f).some((l) => l.category_id === id);
-    const firstProducts = new Set(mine.filter((f) => has(f, first[0])).map((f) => f.product_id)).size;
+    const firstProductIds = [...new Set(mine.filter((f) => has(f, first[0])).map((f) => f.product_id))];
+    const firstProducts = firstProductIds.length;
+    // 상품 이름을 문장에 넣는다. "상품 5개" 만으로는 사장님이 어느 제품인지 모른다
+    const named = (ids: string[]) => {
+      const name = (id: string) => products.find((p) => p.product_id === id)?.product_name ?? id;
+      return ids.length <= 2 ? ids.map(name).join(' · ') : `${name(ids[0])} 외 ${ids.length - 1}개`;
+    };
     const routes = [...new Set(top.slice(0, 2).map(([id]) => mine.find((f) => has(f, id))?.axis_id ?? ''))]
       .map((a) => ROUTE[a])
       .filter(Boolean);
@@ -157,8 +194,8 @@ export default function FeedbackScreen() {
         : `${categoryLabel(first[0])} 언급 ${first[1]}`,
       reason:
         first[1] >= 5 && firstProducts >= 2
-          ? `${categoryLabel(first[0])}: 상품 ${firstProducts}개에서 반복. 한 상품 문제가 아닙니다.`
-          : `${categoryLabel(first[0])}: 상품 ${firstProducts}개.`,
+          ? `${categoryLabel(first[0])}: ${named(firstProductIds)}에서 반복. 한 상품 문제가 아닙니다.`
+          : `${categoryLabel(first[0])}: ${named(firstProductIds)}.`,
       routes,
     };
   }, [mine]);
@@ -212,7 +249,72 @@ export default function FeedbackScreen() {
         </section>
       ) : null}
 
-      <Panel title="축별 건수" source="real" aside={`${scoped.length}건`}>
+      <Panel title="상품별" source={source} aside="상품을 누르면 그 상품만, 카테고리를 누르면 그 상품의 그 불만만">
+        {byProduct.length === 0 ? (
+          <p className="fbx-empty">아직 없습니다. 쇼핑몰 상품 페이지에서 들어온 글이 여기 쌓입니다.</p>
+        ) : (
+          <ul className="fbx-products">
+            {byProduct.map((p) => {
+              const active = productId === p.id;
+              return (
+                <li key={p.id} className={`fbx-product${active ? ' is-active' : ''}`}>
+                  <button
+                    type="button"
+                    className="fbx-product__head"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setProductId(active ? 'all' : p.id);
+                      setCategory(null);
+                    }}
+                  >
+                    <span className="fbx-product__name">{productName(p.id)}</span>
+                    <span className="fbx-product__n">
+                      <b>{p.list.length}</b>건
+                      {p.fresh > 0 ? <span className="fbx-table__new">새 {p.fresh}</span> : null}
+                    </span>
+                  </button>
+                  <div className="fbx-product__cats">
+                    {p.cats.map(([id, n]) => {
+                      const on = active && category === id;
+                      const route = ROUTE[p.list.find((f) => labelsOf(f).some((l) => l.category_id === id))?.axis_id ?? ''];
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          className={`fbx-cat${on ? ' is-active' : ''}`}
+                          title={route ? `담당 · ${route.label}` : undefined}
+                          onClick={() => {
+                            setProductId(p.id);
+                            setAxis('all');
+                            setCategory(on ? null : id);
+                          }}
+                        >
+                          {categoryLabel(id)} <span className="fbx-cat__n">{n}</span>
+                        </button>
+                      );
+                    })}
+                    {p.pending > 0 ? (
+                      <button
+                        type="button"
+                        className={`fbx-cat fbx-cat--pending${active && category === PENDING ? ' is-active' : ''}`}
+                        onClick={() => {
+                          setProductId(p.id);
+                          setAxis('all');
+                          setCategory(active && category === PENDING ? null : PENDING);
+                        }}
+                      >
+                        분류 대기 <span className="fbx-cat__n">{p.pending}</span>
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title="축별 건수" source={source} fold aside={`${scoped.length}건`}>
         <div className="fbx-axes">
           <div className="fbx-stack" aria-hidden="true">
             {FEEDBACK_INPUT_AXES.map((a) => {
@@ -263,7 +365,7 @@ export default function FeedbackScreen() {
         </div>
       </Panel>
 
-      <Panel title={`${axisLabelOf(axis)} · 카테고리`} source="real" aside="행을 누르면 원문만 추립니다">
+      <Panel title={`${axisLabelOf(axis)} · 카테고리`} source={source} fold aside="행을 누르면 원문만 추립니다">
         {categories.length === 0 ? (
           <p className="fbx-empty">아직 없습니다. 쇼핑몰 상품 페이지에서 들어온 글이 여기 쌓입니다.</p>
         ) : (
@@ -326,9 +428,12 @@ export default function FeedbackScreen() {
       </Panel>
 
       {rows.length > 0 ? (
-        <Panel title="원문" source="real" fold aside={`${rows.length}건`}>
+        <Panel title="원문" source={source} fold aside={`${rows.length}건`}>
           <div className="fbx-inbox__head">
-            <h3>{category ? (category === PENDING ? '분류 대기' : categoryLabel(category)) : axisLabelOf(axis)}</h3>
+            <h3>
+              {productId !== 'all' ? `${productName(productId)} · ` : ''}
+              {category ? (category === PENDING ? '분류 대기' : categoryLabel(category)) : axisLabelOf(axis)}
+            </h3>
             <small>반영했으면 한 줄 남기세요. 고객 화면에 그대로 갑니다.</small>
             {category ? (
               <button type="button" className="fbx-inbox__reset" onClick={() => setCategory(null)}>
