@@ -339,7 +339,7 @@ export default function DashboardApp() {
 
         {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
-        {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} days={days} /> : null}
+        {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} days={days} /> : null}
         {screen === 'content' ? <ContentScreen brandName={brand?.name || SCOPE_LABEL.behavior.brand} /> : null}
         {screen === 'segments' ? <SegmentsScreen /> : null}
         {screen === 'behavior' ? <BehaviorScreen /> : null}
