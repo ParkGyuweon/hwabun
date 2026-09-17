@@ -449,6 +449,37 @@ Mart에서 빼지 않는다. **대신 서빙에서 `actor_type`으로 가른다*
 합성 Persona 행이 실회원 응답에 섞인다. MySQL projection이 `actor_type`을 포함한
 전체 컬럼을 싣는 이유도 이것이다 (§7.2.1).
 
+#### 4.0.1 `hist:` 세션 — 시드가 아닌 과거 구매
+
+생성기는 재구매 마트를 채우려고 **과거 구매 이력 세션**을 따로 만든다. `session_id`가
+`hist:{run}:{persona}:{product}` 형태이고, restock은 `#restock{n}`이 붙는다
+(`gen_behavior_logs.py` `history_session_id`).
+
+**이 세션은 `is_seeded=false`다** (2026-09-16, Jira 327). 시드로 두면 위 표의 제외
+규칙에 걸려 `product_repurchase_daily`·`brand_repurchase_daily`·`purchase_reason_daily`가
+다시 0행이 되기 때문이다. 데이터 파트 요청으로 그렇게 정했다.
+
+**그래서 이 세션도 퍼널 불변식을 지켜야 한다.** 관측으로 세는 이상 `상세 조회 ≥ 담기 ≥
+구매`가 성립해야 한다. 2026-09-17 스모크에서 이 전제가 깨져 있는 것이 드러났다 — 당시
+`hist:` 세션은 `page_view`·`add_to_cart`·`begin_checkout`·`purchase`·
+`purchase_reason_select`만 내고 **`product_view`를 내지 않았다.** 상세를 열지 않고 담고
+산 것이 되어 `add_to_cart_sessions > detail_view_sessions`가 됐다.
+
+| 실측 (페르소나 20명, 21,258 Event) | |
+| --- | --- |
+| `hist:` 세션 | 26개 · Event 129건 |
+| 비시드 `purchase` 중 `hist:` 비중 | 25 / 36 (69%) |
+| 불변식이 깨진 Mart | `funnel_daily_kpi` 26 · `brand_daily_kpi` 24 · `product_daily_kpi` 28 · `persona_segment_daily_kpi` 74 · `brand_price_band_daily_kpi` 26 · `segment_price_band_daily_kpi` 52 |
+
+**Mart에서 `hist:`를 걸러내는 방식은 쓰지 않는다.** 걸러내면 재구매 마트가 0으로
+돌아가 327이 되돌아간다. 이력 세션이 최소 퍼널(`product_view` → `add_to_cart` →
+`purchase`)을 갖추는 것이 정본이고, 그 책임은 생성기에 있다.
+
+Q5의 `*_counts_are_bounded` 계열이 이것을 검사한다. 이력 세션을 새로 만들거나 형태를
+바꿀 때 이 검사가 먼저 걸린다 — 생성기 쪽 자가검사는 properties 층만 보므로 퍼널
+불변식은 여기서만 걸린다.
+
+
 ### 4.1 `product_daily_kpi`
 
 ```text
