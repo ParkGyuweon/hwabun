@@ -354,7 +354,7 @@ class ViewCartCurrencyTest(unittest.TestCase):
                                               f"(entry_source: {sorted({x['properties'].get('entry_source') for x in missing})})")
 
     def test_history_sessions_open_detail_before_cart_but_seed_sessions_do_not(self):
-        """Jira 345 — hist:(재구매 쌍) 세션은 view→cart→purchase 최소 퍼널을 갖고, seed: 긍정 시드는 계약대로 조회 없이 담기만"""
+        """Jira 345·349 — hist:(재구매 쌍) 세션은 노출→조회→담기→구매 최소 퍼널을 갖고, seed: 긍정 시드는 계약대로 조회 없이 담기만"""
         events = self._run("KRW")
         by_sid = {}
         for x in events:
@@ -369,13 +369,28 @@ class ViewCartCurrencyTest(unittest.TestCase):
             with self.subTest(sid=sid):
                 self.assertIn("product_view", names)
                 self.assertLess(names.index("product_view"), names.index("add_to_cart"))
-                pv = v[names.index("product_view")]; pg = v[names.index("page_view")]
-                self.assertEqual("session_start", pv["properties"]["navigation_source"])
-                self.assertEqual(pv["properties"]["navigation_source"], pg["properties"]["navigation_source"])
-                self.assertEqual(pv["page_view_id"], pg["page_view_id"])      # 같은 상세 진입
+                # Jira 349 — 노출이 조회보다 앞서야 퍼널 단계가 노출→조회로 귀속된다
+                self.assertIn("product_impression", names)
+                self.assertLess(names.index("product_impression"), names.index("product_view"))
+                imp = v[names.index("product_impression")]["properties"]
+                for k in ("list_id", "position", "hold_ms", "visible_ratio"):
+                    self.assertIn(k, imp)                     # 계약 필수 4종
+                pv = v[names.index("product_view")]
+                pages = [x for x in v if x["event_name"] == "page_view"]
+                # 상세 진입 page_view = product_view 와 같은 page_view_id (결제 단계에도 page_view 가 있어 위치로 찾지 않는다)
+                detail_pg = [x for x in pages if x["page_view_id"] == pv["page_view_id"]]
+                self.assertEqual(1, len(detail_pg), "상세 진입 page_view 가 정확히 하나여야 한다")
+                self.assertEqual("in_app", pv["properties"]["navigation_source"])
+                self.assertEqual(pv["properties"]["navigation_source"],
+                                 detail_pg[0]["properties"]["navigation_source"])   # 계약 §3.4
+                self.assertEqual("session_start", pages[0]["properties"]["navigation_source"])
+                # 노출은 상세가 아니라 목록 페이지에서 난다
+                self.assertNotEqual(v[names.index("product_impression")]["page_view_id"], pv["page_view_id"])
         for sid, v in seed_pos.items():
             with self.subTest(sid=sid):
-                self.assertNotIn("product_view", [x["event_name"] for x in v])
+                seed_names = [x["event_name"] for x in v]
+                self.assertNotIn("product_view", seed_names)
+                self.assertNotIn("product_impression", seed_names)
 
 
 @unittest.skipIf(np is None, "numpy is required for the simulator generator")

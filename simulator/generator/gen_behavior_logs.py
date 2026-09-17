@@ -150,17 +150,28 @@ def seed_session_id(context, persona_id, product_id):
 
 
 def history_detail_entry(e, g):
-    """hist: 과거 구매 세션의 상세 진입 — page_view + product_view (Jira 345).
+    """hist: 과거 구매 세션의 상세 진입 — 목록 노출부터 조회까지 (Jira 345·349).
 
-    hist: 세션은 마트가 실제 주문으로 세는데(327), 상세 조회 없이 담고 사면 마트에서
-    add_to_cart_sessions > detail_view_sessions 가 되어 퍼널·브랜드·상품·고객군·가격대 마트의 불변식이 깨진다
-    (데이터 336 스모크: 5종 230행). 프론트 상세 진입과 같이 page_view 직후 product_view 를 같은 page 에 남긴다.
-    세션 첫 page_view 라 navigation_source 는 session_start (계약 §3.4), product_view 도 같은 값.
+    hist: 세션은 마트가 실제 주문으로 세는데(327), 이 앞단이 없으면 마트 불변식이 두 번 깨진다.
+      * 상세 조회가 없으면  add_to_cart_sessions > detail_view_sessions   (345 에서 product_view 로 해소)
+      * 노출이 없으면       impression_sessions=0 인데 detail_view_sessions=1 → detail_entry_rate > 1
+        (349. 데이터 336 본 실행에서 노출 없이 상세 도달한 (세션,상품) 1,493건 = hist: 세션 수)
+
+    그래서 목록에서 카드를 보고(노출) 상세로 들어간 흐름을 만든다 — 노출 → 조회 → 담기 → 구매.
+    퍼널 단계 귀속이 `event_time` 순서로 정해지므로 **노출이 조회보다 앞서야 한다**.
+    navigation_source 는 계약 §3.4 — 세션 첫 page_view 는 session_start, 상세 진입은 in_app 이고
+    같은 상세 진입의 product_view 는 그 page_view 와 같은 값이어야 한다.
     시드(seed:) 세션은 여기 오지 않는다 — 계약대로 "긍정 시드는 조회 없이 add_to_cart 만" 이고 마트는 seeded 를 뺀다."""
+    e.new_page("product_list")
+    e.emit("page_view", navigation_source="session_start")   # 목록 페이지라 product_id 는 싣지 않는다
+    e.tick(20, 120)
+    e.emit("product_impression", g, position=1, list_id="list_grid",
+           hold_ms=LIST_IMPRESSION_HOLD_MS, visible_ratio=IMPRESSION_VISIBLE_RATIO)
+    e.tick(200, 900)
     e.new_page("product_detail")
-    e.emit("page_view", g, navigation_source="session_start")
+    e.emit("page_view", g, navigation_source="in_app")
     e.tick(300, 1200)
-    e.emit("product_view", g, navigation_source="session_start")
+    e.emit("product_view", g, navigation_source="in_app")
     e.tick(500, 3000)
 
 # ══════════════════════════════════════════════════════════════════════════
