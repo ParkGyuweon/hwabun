@@ -199,7 +199,11 @@ class MysqlStore:
             "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION",
             (self.database, self.contract.mart),
         )
-        expected = [("dw_row_id", "bigint", "NO", "auto_increment", None)] + [
+        expected = (
+            [("dw_row_id", "bigint", "NO", "auto_increment", None)]
+            if self.contract.uses_surrogate_key
+            else []
+        ) + [
             (c.name, c.sql_type.lower(), "YES" if c.nullable else "NO", "",
              "utf8mb4_0900_ai_ci" if c.sql_type.startswith("VARCHAR") else None)
             for c in self.contract.columns

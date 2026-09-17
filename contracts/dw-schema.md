@@ -1558,25 +1558,20 @@ Q5(`validate_pipeline_job`)가 이미 같은 불변식을 Parquet 단계에서 �
 
 ### 7.2 projection 대상과 적재 순서
 
-**Parquet을 읽을 수 없는 소비자가 있는 Mart만 MySQL로 옮긴다.** 지금 그런 소비자는
-둘뿐이다.
+현재 MySQL `dw` projection 대상은 `contracts/dw/schema.sql`에 정의된 22개 Mart다.
+Spark가 만든 Parquet이 기준 저장소이고, `publish_user_trait_job.py`가 선택된 Mart를
+staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 첫 리허설을
+위해 7개 핵심 Mart만 발행하며, 전체 목록은 `DW_PROJECTION_MARTS` 또는 `--marts`로
+선택한다.
 
-1. **Dashboard API** — Spark는 잡을 띄우는 데만 수 초라 조회를 받을 수 없다.
-2. **추천 서버** — EC2-1에 있고 Parquet은 EC2-2에 있다. 파일을 읽을 수 없다
-   (`deploy/ec2-2/README`: "EC2-1의 추천 데이터 Volume은 이 서버에 자동
-   공유되지 않는다").
-
-나머지는 Parquet에만 둔다. 소비자가 없는데 테이블을 만들면 적재 Job이 옮길 대상만
-늘고, 스키마가 바뀔 때 고칠 곳도 는다.
-
-| 순서 | Mart | 소비자 |
-| --- | --- | --- |
-| 1 | `user_trait_daily` | 추천 서버 `long_term_trait` (Jira 306) |
-| 2 | `brand_daily_kpi`, `product_daily_kpi`, `funnel_daily_kpi` | Dashboard E1·E2 |
-| 3 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi` | Dashboard E4 `by_segment`·`grid`·`price_bands`·`segment_price_grid` |
-| 3-1 | `brand_cohort_dim`, `commons_cohort_weekly` | Dashboard E4 `cohort` |
-| 4 | `ingredient_weekly_interest` | Dashboard E5 |
-| 5 | `brand_repurchase_daily`, `product_repurchase_daily`, `purchase_reason_daily` | Dashboard E7 |
+| 그룹 | Mart |
+| --- | --- |
+| 추천 | `user_trait_daily` |
+| 핵심 대시보드 | `brand_daily_kpi`, `product_daily_kpi`, `funnel_daily_kpi` |
+| 재구매·구매 이유 | `brand_repurchase_daily`, `product_repurchase_daily`, `purchase_reason_daily` |
+| 세그먼트·가격·코호트 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi`, `brand_cohort_dim`, `commons_cohort_weekly` |
+| 성분·이탈·유입 | `ingredient_weekly_interest`, `product_exit_daily`, `segment_content_daily`, `friction_daily`, `exit_daily`, `entry_source_daily` |
+| 콘텐츠·이벤트 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily`, `event_daily` |
 
 **E4의 네 블록은 2026-09-16에 합의됐다** (프론트 계약 0.3). `price_bands`·
 `segment_price_grid`·`cohort` 세 블록을 넣기로 하면서 `brand_price_band_daily_kpi`·
@@ -1588,7 +1583,7 @@ projection 대상이 됐다.
 **`brand_cohort_dim` 없이는 `commons_cohort_weekly`를 읽을 수 없다** — 코호트 행에
 브랜드 식별자가 없기 때문이다(§4.18 R5).
 
-MySQL로 옮기지 않는 Mart와 그 이유다.
+다음 4개 Mart는 현재도 MySQL projection 대상이 아니라 Parquet에만 둔다.
 
 | Mart | 이유 |
 | --- | --- |
@@ -1597,7 +1592,8 @@ MySQL로 옮기지 않는 Mart와 그 이유다.
 | `category_price_reference` | 카탈로그 파생 참조표다. Event를 읽지 않고 브랜드 축도 없다 |
 | `analytics_baseline` | 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다 |
 
-소비자가 생기면 DDL 생성기의 `GRAINS`에 한 줄 더하고 다시 돌린다.
+소비자가 생기거나 저장 정책이 바뀌면 `PARQUET_ONLY`와 `GRAINS`를 함께 검토하고
+DDL을 다시 생성한다.
 
 **`brand_cohort_dim`을 뺐던 근거는 틀렸다.** "`cohort_key`는 Backend가 브랜드
 인가와 함께 넘긴다"고 적었으나, 이 Mart가 Parquet에만 있어 **Backend가 그 값을 알
@@ -1702,9 +1698,10 @@ DDL로 가능하지만 줄이는 것은 데이터 손실이므로, 애매하면 
 NULL을 넣지 못한다. UNIQUE KEY도 답이 아니다 — NULL을 서로 다른 값으로 보므로
 `(brand_id=NULL, …)` 행이 몇 개든 중복으로 잡히지 않는다.
 
-그래서 **대리키를 PRIMARY KEY로 두고 grain은 보조 인덱스로 둔다.** projection 대상
-10종이 전부 여기 해당한다 — 모든 Mart가 grain에 실행 축을 갖기 때문이다. 실행 축 없이
-카탈로그에서만 파생하는 Mart가 생기면 그때는 복합 PRIMARY KEY를 쓸 수 있다.
+그래서 nullable grain 축을 가진 21종은 **대리키를 PRIMARY KEY로 두고 grain은 보조
+인덱스로 둔다.** `brand_cohort_dim`은 `brand_id`가 NOT NULL인 브랜드 Dimension이라
+`brand_id`를 직접 PRIMARY KEY로 쓴다. 실행 축 없이 카탈로그에서만 파생하는 다른 Mart가
+생기면 그때도 nullable 여부에 따라 복합 PRIMARY KEY 또는 대리키를 선택한다.
 
 **따라서 grain 유일성은 DB가 지켜주지 않는다. 적재 Job이 §7.1의 키 중복 검증으로
 막는다.** 이 검증을 건너뛰면 중복 행이 조용히 쌓이고 대시보드 합계가 부풀어 오른다.

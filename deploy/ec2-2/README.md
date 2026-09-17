@@ -122,9 +122,9 @@ docker compose --profile dw run --rm dw-projection
 ```
 
 기본 입력은 `SPARK_DATA_PATH/marts/<mart>`이고, 읽기 전용으로 마운트된다.
-발행 결과는 `/reports/dw-projection.json`에서 Mart별로 확인한다. E4·E5 Mart까지
-필요하면 `.env`의 `DW_PROJECTION_MARTS`에 추가한다. Q4가 같은 입력 경로를
-overwrite하는 동안에는 실행하지 않는다.
+발행 결과는 `/reports/dw-projection.json`에서 Mart별로 확인한다. 전체 DW Mart를 발행할
+때는 `streaming/DW_PROJECTION.md`의 22개 목록을 `.env`의 `DW_PROJECTION_MARTS`에
+설정한다. Q4가 같은 입력 경로를 overwrite하는 동안에는 실행하지 않는다.
 
 MySQL 준비 전 추천 폴백 파일만 만들 때는 별도 출력 폴더를 바인드하고 JSONL 전용 모드로
 실행한다. 생성된 파일은 EC2-1 추천 컨테이너의 `/data/user_trait_snapshot.jsonl`로

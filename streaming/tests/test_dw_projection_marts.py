@@ -16,11 +16,14 @@ from streaming.jobs.publish_user_trait_job import main
 
 class MartContractTests(unittest.TestCase):
     def test_default_targets_cover_recommendation_and_dashboard_core(self):
+        self.assertEqual(22, len(DEFAULT_PROJECTION_MARTS))
+        self.assertEqual(22, len(set(DEFAULT_PROJECTION_MARTS)))
         self.assertEqual(MART, DEFAULT_PROJECTION_MARTS[0])
         self.assertIn("brand_daily_kpi", DEFAULT_PROJECTION_MARTS)
         self.assertIn("product_daily_kpi", DEFAULT_PROJECTION_MARTS)
         self.assertIn("funnel_daily_kpi", DEFAULT_PROJECTION_MARTS)
         self.assertIn("purchase_reason_daily", DEFAULT_PROJECTION_MARTS)
+        self.assertIn("event_daily", DEFAULT_PROJECTION_MARTS)
 
     def test_all_contract_projection_targets_have_partition_rules(self):
         for mart in PROJECTION_MARTS:
@@ -28,6 +31,17 @@ class MartContractTests(unittest.TestCase):
                 contract = load_contract(mart=mart)
                 self.assertEqual(mart, contract.mart)
                 self.assertTrue(set(partition_columns_for(mart)) <= set(contract.names))
+
+    def test_e4_projection_targets_use_their_contract_partitions(self):
+        self.assertEqual(
+            ("event_date_kst",),
+            partition_columns_for("segment_price_band_daily_kpi"),
+        )
+        self.assertEqual((), partition_columns_for("brand_cohort_dim"))
+        self.assertEqual(
+            ("snapshot_week_kst",),
+            partition_columns_for("commons_cohort_weekly"),
+        )
 
     def test_source_path_is_rooted_by_mart(self):
         self.assertEqual(
