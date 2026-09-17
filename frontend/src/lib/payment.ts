@@ -177,6 +177,8 @@ const PENDING_KEY = 'bloom.payment.pending.v1';
 
 export interface PendingPayment {
   orderId: string;
+  /** begin_checkout 이 실은 프론트 주문 번호. 복귀 뒤 purchase 의 client_order_id 로 이어진다 */
+  clientOrderId?: string;
   items: Array<{ product_id: string; quantity: number; unit_price: number; sku_id?: string }>;
   count: number;
   total: number;

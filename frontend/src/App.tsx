@@ -186,6 +186,8 @@ export default function App() {
    * ref 인 이유는 이 값이 화면을 바꾸지 않기 때문이다.
    */
   const pendingOrderIdRef = useRef<string | null>(null);
+  /** 그 번호를 만들 때의 장바구니 내용. 내용이 바뀌었는데 같은 번호(=멱등키)로 주문하면 서버가 409 를 준다 */
+  const pendingOrderSigRef = useRef<string>('');
 
   /**
    * 화면별로 마지막 스크롤 위치를 기억한다.
@@ -392,14 +394,24 @@ export default function App() {
    */
   const beginCheckout = useCallback(() => {
     if (cartItems.length === 0) return;
-    const orderId = pendingOrderIdRef.current ?? createOrderId();
+    /*
+     * 장바구니 내용(상품·옵션·수량)이 그대로면 같은 번호, 바뀌었으면 새 번호. 이 번호가 서버 `idempotencyKey` 라서
+     * 내용이 다른데 같은 키로 보내면 409 "idempotency key reused" 가 온다 (계약 대조 2026-09-17 #3).
+     */
+    const sig = JSON.stringify(toOrderItems(cartItems));
+    const orderId = pendingOrderIdRef.current !== null && pendingOrderSigRef.current === sig ? pendingOrderIdRef.current : createOrderId();
     pendingOrderIdRef.current = orderId;
+    pendingOrderSigRef.current = sig;
 
     const { total, paid } = orderTotals(cartItems);
     track('begin_checkout', {
-      // 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다.
-      // 이게 없으면 "확인까지 갔다가 안 산 사람" 을 purchase 와 이어 셀 수 없다
+      /*
+       * 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다 — "확인까지 갔다가 안 산 사람" 을 세기 위해서다.
+       * 다만 이 값은 **프론트 번호**다. purchase.order_id 는 서버가 발급한 번호라 둘이 다르다 (서버는 이 값을
+       * idempotencyKey 로만 받는다). 그래서 둘 다 `client_order_id` 에 프론트 번호를 같이 실어 조인 키를 하나 둔다.
+       */
       order_id: orderId,
+      client_order_id: orderId,
       items: toOrderItems(cartItems),
       cart_value: Number(total.toFixed(2)),
       // 할인 적용 합계. cart_value(정가)의 뜻은 그대로 두고 덧붙인다
@@ -412,7 +424,8 @@ export default function App() {
   const cancelCheckout = useCallback(() => {}, []);
 
   /**
-   * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다 — begin_checkout 과 같은 order_id.
+   * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다.
+   * `order_id` 는 서버 주문 번호(백엔드 원장과 대조용)이고, begin_checkout 과의 조인은 `client_order_id`(프론트 번호)로 한다.
    * 결제 정보(payment_method · pg_provider · payment_id · paid_at)는 properties 에 덧붙인다. 계약 §6 필드 추가는 데이터 파트가
    * 넣기로 했고(2026-09-14), properties 는 열린 객체라 먼저 실어도 거절되지 않는다.
    */
@@ -420,6 +433,7 @@ export default function App() {
     (placed: PlacedOrder, origin: OrderOrigin = 'cart') => {
       track('purchase', {
         order_id: placed.orderId,
+        ...(placed.clientOrderId ? { client_order_id: placed.clientOrderId } : {}),
         items: placed.items,
         order_value: Number(placed.total.toFixed(2)),
         paid_value: Number(placed.paid.toFixed(2)),
@@ -457,10 +471,16 @@ export default function App() {
   );
 
   /** 결제 실패·취소. 장바구니는 그대로 두고 화면에 이유를 적고 `payment_failed` 를 남긴다 */
-  const failPayment = useCallback((orderId: string, code: string, message: string, method: PaymentMethod) => {
+  const failPayment = useCallback((orderId: string, code: string, message: string, method: PaymentMethod, clientOrderId?: string) => {
     setPaymentError(message);
     if (PAYMENT_FAILED_EVENT_ENABLED) {
-      track('payment_failed', { order_id: orderId, reason_code: code, payment_method: method });
+      track('payment_failed', {
+        order_id: orderId,
+        // begin_checkout(프론트 번호)과 이어 세기 위한 키. 서버 주문을 만들기 전에 실패하면 order_id 자체가 프론트 번호다
+        ...(clientOrderId && clientOrderId !== orderId ? { client_order_id: clientOrderId } : {}),
+        reason_code: code,
+        payment_method: method,
+      });
     }
   }, []);
 
@@ -487,21 +507,23 @@ export default function App() {
      */
     if (canCheckoutOnBackend(source)) {
       /*
-       * 서버 장바구니는 주문 직전에만 채워지는 임시 자리인데, `POST /api/orders` 는 거기 든 것을 **전부**
-       * 주문한다. 담기까지 갔다가 실패한 시도가 남아 있으면 "이 상품만" 이 아니게 된다 (shopApi 주석).
+       * 서버 장바구니는 주문 직전에만 채워지는 임시 자리인데, `POST /api/orders` 는 요청 본문이 아니라 거기 든 것을
+       * **전부** 주문한다 (CommerceController). 그래서 **어느 경로든** 주문 직전에 서버 카트를 비우고 이번 품목만 담는다.
+       * 전에는 바로 구매만 비웠는데, 장바구니 주문도 앞선 시도가 실패해 남은 항목(품절 409 뒤의 잔여물, 결제 실패 뒤
+       * 다시 담은 중복)이 다음 주문에 섞여 화면 합계와 다른 금액이 결제될 수 있었다 (계약 대조 2026-09-17 #2·#3).
        *
        * **못 비웠으면 주문하지 않는다** (백엔드 리뷰 2026-09-17). 비우기가 실패한 채로 진행하면 남아
-       * 있던 상품까지 같이 결제된다 — "이 상품만" 이라고 적힌 버튼이 다른 것도 사는 셈이다.
-       * 조용히 덮지 않고 멈춘 이유를 화면에 띄운다. 사용자는 장바구니를 직접 비우고 다시 누르면 된다.
+       * 있던 상품까지 같이 결제된다. 조용히 덮지 않고 멈춘 이유를 화면에 띄운다.
        */
-      if (origin === 'buy_now') {
+      {
         const cleared = await clearBackendCart();
         if (!cleared.ok) {
           failPayment(
             localOrderId,
             `cart_clear_${cleared.status}`,
-            `장바구니를 정리하지 못해 바로 구매를 멈췄습니다. ${cleared.reason} 장바구니에서 주문해 주세요.`,
+            `서버 장바구니를 정리하지 못해 주문을 멈췄습니다. ${cleared.reason} 잠시 뒤 다시 시도해 주세요.`,
             isPaymentEnabled() ? 'kakaopay' : 'test',
+            localOrderId,
           );
           return;
         }
@@ -511,15 +533,15 @@ export default function App() {
         try {
           const created = await createBackendOrder(source, localOrderId);
           if (!created.ok) {
-            failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay');
+            failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay', localOrderId);
             return;
           }
           if (created.totalAmountKrw === null) {
-            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay');
+            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay', localOrderId);
             return;
           }
           // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
-          savePendingPayment({ orderId: created.orderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
+          savePendingPayment({ orderId: created.orderId, clientOrderId: localOrderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
           const pay = await requestKakaoPay({
             orderId: created.orderId,
             totalAmountKrw: created.totalAmountKrw,
@@ -531,17 +553,18 @@ export default function App() {
           });
           if (!pay.ok) {
             clearPendingPayment();
-            failPayment(created.orderId, pay.code, pay.message, 'kakaopay');
+            failPayment(created.orderId, pay.code, pay.message, 'kakaopay', localOrderId);
             return;
           }
           const confirmed = await confirmBackendOrder(created.orderId, pay.paymentId);
           clearPendingPayment();
           if (!confirmed.ok) {
-            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay');
+            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', localOrderId);
             return;
           }
           finishOrder({
             orderId: created.orderId,
+            clientOrderId: localOrderId,
             items,
             count,
             total,
@@ -560,10 +583,10 @@ export default function App() {
 
       const r = await checkoutOnBackend(source, localOrderId);
       if (r.ok) {
-        finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' }, origin);
+        finishOrder({ orderId: r.orderId, clientOrderId: localOrderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' }, origin);
         return;
       }
-      failPayment(localOrderId, `order_${r.status}`, `주문을 완료하지 못했습니다. ${r.reason}`, 'test');
+      failPayment(localOrderId, `order_${r.status}`, `주문을 완료하지 못했습니다. ${r.reason}`, 'test', localOrderId);
       return;
     }
 
@@ -575,7 +598,7 @@ export default function App() {
     const message = source.some((i) => !i.variant_id)
       ? '백엔드에 등록되지 않은 상품은 결제할 수 없습니다.'
       : '결제하려면 고객 로그인이 필요합니다.';
-    failPayment(localOrderId, 'backend_checkout_required', message, 'test');
+    failPayment(localOrderId, 'backend_checkout_required', message, 'test', localOrderId);
   }, [paying, member, finishOrder, failPayment]);
 
   /** 장바구니 확인 화면의 주문 버튼. 주문 번호는 `beginCheckout` 이 만든 것을 그대로 쓴다 */
@@ -617,6 +640,7 @@ export default function App() {
       track('add_to_cart', addToCartProps);
       track('begin_checkout', {
         order_id: orderId,
+        client_order_id: orderId,
         items: toOrderItems([item]),
         cart_value: Number(total.toFixed(2)),
         paid_value: Number(paid.toFixed(2)),
@@ -639,7 +663,7 @@ export default function App() {
     window.history.replaceState({ productId: null, cart: true }, '', '?cart=1');
     setCartOpen(true);
     if (ret.code || !ret.paymentId) {
-      failPayment(ret.orderId, ret.code ?? 'no_payment_id', ret.message ?? '결제가 완료되지 않았습니다.', 'kakaopay');
+      failPayment(ret.orderId, ret.code ?? 'no_payment_id', ret.message ?? '결제가 완료되지 않았습니다.', 'kakaopay', pending?.clientOrderId);
       return;
     }
     if (!pending) {
@@ -649,11 +673,12 @@ export default function App() {
     const paymentId = ret.paymentId;
     void confirmBackendOrder(pending.orderId, paymentId).then((confirmed) => {
       if (!confirmed.ok) {
-        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay');
+        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', pending.clientOrderId);
         return;
       }
       finishOrder({
         orderId: pending.orderId,
+        clientOrderId: pending.clientOrderId,
         items: pending.items,
         count: pending.count,
         total: pending.total,
