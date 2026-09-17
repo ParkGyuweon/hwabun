@@ -10,7 +10,7 @@ import { rankInsights } from '../lib/insight';
 import { useBehavior } from '../lib/useBehavior';
 import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
-import { feedbackForBrand } from '../../lib/feedbackStore';
+import { feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
 
 /**
@@ -158,7 +158,7 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
           label="피드백 최다 언급"
           value={fbTop ? categoryLabel(fbTop[0]) : '없음'}
           sub={fbTop ? `언급 ${fbTop[1]} · ${FEEDBACK_BRAND} ${fb.length}건` : ''}
-          source="real"
+          source={feedbackSource(fb)}
         />
       </div>
 

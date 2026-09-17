@@ -7,10 +7,29 @@ import type { ReactNode } from 'react';
  * 인라인 SVG 와 div 로 충분하고, 흑백 단색이라 라이브러리 테마 싸움도 없다.
  */
 
-/** 값의 출처. 모의값은 반드시 표시한다. 검토자가 진짜 수치로 착각하면 안 된다 */
-export function SourceBadge({ kind }: { kind: 'real' | 'mock' }) {
+/**
+ * 값의 출처. 모의값은 반드시 표시한다. 검토자가 진짜 수치로 착각하면 안 된다.
+ *
+ * | | 뜻 |
+ * | --- | --- |
+ * | `real` | 백엔드·마트에서 받았거나 이 사이트에서 실제로 생긴 값 |
+ * | `seed` | 번들에 든 샘플 파일. 백엔드에 행이 아직 없어서 파일로 보여 주는 것 — 진짜 고객 글이 아니다 |
+ * | `mock` | 화면 모양을 위해 만든 값. 이 브랜드와 무관하다 |
+ */
+export type SourceKind = 'real' | 'seed' | 'mock';
+
+const SOURCE_TEXT: Record<SourceKind, { label: string; title: string }> = {
+  real: { label: '실측', title: '백엔드에서 받은 값입니다' },
+  seed: { label: '시드', title: '백엔드에 아직 행이 없어 번들 샘플 파일로 보여 줍니다. 진짜 고객 글이 아닙니다' },
+  mock: { label: '모의', title: '화면 모양을 위한 값입니다. 이 브랜드 데이터가 아닙니다' },
+};
+
+export function SourceBadge({ kind }: { kind: SourceKind }) {
+  const t = SOURCE_TEXT[kind];
   return (
-    <span className={`badge badge--${kind}`}>{kind === 'real' ? '실측' : '모의'}</span>
+    <span className={`badge badge--${kind}`} title={t.title}>
+      {t.label}
+    </span>
   );
 }
 
@@ -100,7 +119,7 @@ export function Panel({
   children,
 }: {
   title: string;
-  source?: 'real' | 'mock';
+  source?: SourceKind;
   /** 내 로그만으로 나오나(`mine`), 다른 브랜드가 모여야 나오나(`shared`). 생략하면 배지를 안 단다 */
   origin?: DataOrigin;
   aside?: ReactNode;
@@ -145,7 +164,7 @@ export function Kpi({
   label: string;
   value: string;
   sub?: string;
-  source?: 'real' | 'mock';
+  source?: SourceKind;
   origin?: DataOrigin;
 }) {
   return (
