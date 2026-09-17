@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 MART = "user_trait_daily"
 DEFAULT_DDL = ROOT / "contracts/dw/schema.sql"
 
-# Keep the default small enough for the first dashboard rehearsal. Optional
-# E4/E5 marts remain available through ``--marts`` without making a missing or
-# intentionally empty optional source block the core dashboard publication.
+# Keep the checked-in projection allowlist aligned with the DW DDL. The EC2-2
+# Compose still passes the seven core Marts by default for the first rehearsal;
+# callers can select any of these Marts with ``--marts``.
 DEFAULT_PROJECTION_MARTS = (
     "user_trait_daily",
     "brand_daily_kpi",
@@ -27,14 +27,24 @@ DEFAULT_PROJECTION_MARTS = (
     "brand_repurchase_daily",
     "product_repurchase_daily",
     "purchase_reason_daily",
-)
-
-PROJECTION_MARTS = (
-    *DEFAULT_PROJECTION_MARTS,
     "persona_segment_daily_kpi",
     "brand_price_band_daily_kpi",
+    "segment_price_band_daily_kpi",
+    "brand_cohort_dim",
+    "commons_cohort_weekly",
     "ingredient_weekly_interest",
+    "product_exit_daily",
+    "segment_content_daily",
+    "friction_daily",
+    "exit_daily",
+    "entry_source_daily",
+    "content_daily_kpi",
+    "content_conversion_daily",
+    "behavior_conversion_daily",
+    "event_daily",
 )
+
+PROJECTION_MARTS = DEFAULT_PROJECTION_MARTS
 
 MART_PARTITION_COLUMNS = {
     "user_trait_daily": ("trait_date_kst",),
@@ -46,7 +56,19 @@ MART_PARTITION_COLUMNS = {
     "purchase_reason_daily": ("event_date_kst",),
     "persona_segment_daily_kpi": ("event_date_kst",),
     "brand_price_band_daily_kpi": ("event_date_kst",),
+    "segment_price_band_daily_kpi": ("event_date_kst",),
+    "brand_cohort_dim": (),
+    "commons_cohort_weekly": ("snapshot_week_kst",),
     "ingredient_weekly_interest": ("interest_week_kst",),
+    "product_exit_daily": ("event_date_kst",),
+    "segment_content_daily": ("event_date_kst",),
+    "friction_daily": ("event_date_kst",),
+    "exit_daily": ("event_date_kst",),
+    "entry_source_daily": ("event_date_kst",),
+    "content_daily_kpi": ("event_date_kst",),
+    "content_conversion_daily": ("event_date_kst",),
+    "behavior_conversion_daily": ("event_date_kst",),
+    "event_daily": ("event_date_kst",),
 }
 
 
@@ -110,6 +132,7 @@ class Contract:
     grain: tuple[str, ...]
     create_sql: str
     mart: str = MART
+    uses_surrogate_key: bool = True
 
     @property
     def names(self):
@@ -136,10 +159,17 @@ def load_contract(path: Path = DEFAULT_DDL, mart: str = MART) -> Contract:
         match[1], re.MULTILINE,
     )
     columns = tuple(Column(n, t, null == "NULL") for n, t, null, _ in definitions if n != "dw_row_id")
+    surrogate = "PRIMARY KEY (`dw_row_id`)" in match[1]
     index = re.search(rf"KEY `ix_{mart}__grain` \(([^)]+)\)", match[1])
-    if not columns or not index or "PRIMARY KEY (`dw_row_id`)" not in match[1]:
-        raise ProjectionError("DDL must contain surrogate PK and grain index")
-    grain = tuple(re.findall(r"`([^`]+)`", index[1]))
+    if surrogate:
+        if not index:
+            raise ProjectionError("DDL with surrogate PK must contain a grain index")
+        grain = tuple(re.findall(r"`([^`]+)`", index[1]))
+    else:
+        primary = re.search(r"PRIMARY KEY \(([^)]+)\)", match[1])
+        if not primary:
+            raise ProjectionError("DDL must contain a primary key")
+        grain = tuple(re.findall(r"`([^`]+)`", primary[1]))
     if len(set(c.name for c in columns)) != len(columns) or not set(grain) <= {c.name for c in columns}:
         raise ProjectionError("Malformed DDL columns/grain")
     # Reuse the data team's policy without editing their generator or schema.
@@ -153,9 +183,9 @@ def load_contract(path: Path = DEFAULT_DDL, mart: str = MART) -> Contract:
     if grain != expected_grain:
         raise ProjectionError("DDL grain differs from build_ddl.GRAINS")
     for column in columns:
-        if column.nullable != rules.is_nullable(column.name, list(grain)):
+        if column.nullable != rules.is_nullable(column.name, list(grain), mart):
             raise ProjectionError(f"DDL NULL policy differs: {column.name}")
-    return Contract(columns, grain, match[0], mart)
+    return Contract(columns, grain, match[0], mart, uses_surrogate_key=surrogate)
 
 
 def partition_columns_for(mart: str) -> tuple[str, ...]:
