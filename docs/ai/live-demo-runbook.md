@@ -126,6 +126,9 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 - **배포본을 9,900명으로**: 컨테이너 안 생성은 OOM 이라 노트북에서 만든다 — `gen_behavior_logs.py --limit 9900 --currency KRW --out <grouped>` → `shuffle_sessions.py <grouped> <shuffled>`(페르소나별로 뭉친 파일을 세션 단위로 섞어 2분 안에 전원이 나타나게; 세션 안 순서는 그대로) → gzip → scp → 볼륨 `/data/demo_cache/demo_behavior_9900_KRW.jsonl` 에 gunzip → EC2 `.env` `DEMO_LIMIT=9900` → 컨테이너 재생성. 1,030만 건이라 초당 8,000 이면 21분, 3,000 이면 57분. 버튼 글자는 서버의 DEMO_LIMIT 을 읽어 바뀐다.
 - 상태에 영향 없는 이벤트(dwell 류 약 30%)는 소비자가 걸러 `filtered` 로 세고, 화면 카운터엔 반영분만 잡힌다.
 - 시연 전 `SESSION_EVENTS_PATH` 파일을 비우면 "상태가 바뀐 사용자" 가 0 에서 시작한다. 배포본은 볼륨 `/data/session_events.jsonl`.
+- **리허설·시연 직전 초기화 ③ (09-17 Jira 347)**: `bash deploy/ec2-1/reset-demo-local.sh` 가 dry-run 으로 현재 값(session_events 줄 수, .pos, /live 카운터)을 보여주고,
+  `--apply` 면 demo_live 정지 → `/data/session_events.jsonl`·`/data/demo_live.log` 비우기 → `/data/demo_cache/*.pos` 삭제 → 컨테이너 재기동(메모리 세션·중복 창·카운터 0) 순으로 돈다.
+  캐시 .jsonl 은 남긴다. **민우님 ① dw 마트 ② raw 초기화와 같은 시각에** 돌리고, ①②③ 뒤에 /live 시작 버튼을 누른다(합의서 `시연_리허설_뒤_마트_초기화_합의요청_0916`).
 - 원천 200개는 카탈로그 동기화·재등록으로 바뀌지 않는다(308, `seed_kept`). 등록 상품은 SB 8개만이고 가격은 원화 그대로 구간에
   들어간다(302, 경계 26,000 / 46,000 / 66,000 / 105,000).
 
