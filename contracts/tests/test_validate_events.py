@@ -561,10 +561,11 @@ class EventValidatorTest(unittest.TestCase):
         })
         properties: dict[str, object] = {
             "order_id": "ORD-1",
-            "items": [{"product_id": "P1", "quantity": 1, "unit_price": 24.0}],
+            "items": [{"product_id": "P1", "quantity": 1, "unit_price": 32200}],
             "payment_method": "kakaopay",
-            "paid_value": 24.0,
+            "paid_value": 32200,
             "order_channel": "backend",
+            "currency": "KRW",
         }
         properties.update(overrides)
         event["properties"] = properties
@@ -588,8 +589,8 @@ class EventValidatorTest(unittest.TestCase):
         self.assertEqual([], self.validate_values([event]).errors)
 
     def test_purchase_requires_each_payment_field(self) -> None:
-        """셋 중 하나라도 빠지면 거부한다. 없으면 결제수단·실결제액 축이 통째로 빈다."""
-        for missing in ("payment_method", "paid_value", "order_channel"):
+        """필수 결제 필드가 빠지면 거부한다. 없으면 결제수단·실결제액 축이 통째로 빈다."""
+        for missing in ("payment_method", "paid_value", "order_channel", "currency"):
             event = self.purchase_event()
             del event["properties"][missing]
             with self.subTest(missing=missing):
@@ -629,6 +630,38 @@ class EventValidatorTest(unittest.TestCase):
         event = self.purchase_event(paid_value=-1)
 
         self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+    def test_purchase_requires_krw_currency(self) -> None:
+        event = self.purchase_event(currency="USD")
+
+        self.assert_has_error(self.validate_values([event]).errors, "$.properties")
+
+    def test_cart_price_uses_unit_price_and_krw_as_a_pair(self) -> None:
+        canonical = copy.deepcopy(self.user_event)
+        canonical["properties"] = {
+            "quantity": 1,
+            "unit_price": 42900,
+            "currency": "KRW",
+        }
+        self.assertEqual([], self.validate_values([canonical]).errors)
+
+        missing_currency = copy.deepcopy(canonical)
+        del missing_currency["properties"]["currency"]
+        self.assert_has_error(
+            self.validate_values([missing_currency]).errors, "$.properties"
+        )
+
+        mixed_names = copy.deepcopy(canonical)
+        mixed_names["properties"]["price_usd"] = 32
+        self.assert_has_error(
+            self.validate_values([mixed_names]).errors, "$.properties"
+        )
+
+    def test_deprecated_price_usd_is_accepted_for_legacy_cart_events(self) -> None:
+        legacy = copy.deepcopy(self.user_event)
+        legacy["properties"] = {"quantity": 1, "price_usd": 32}
+
+        self.assertEqual([], self.validate_values([legacy]).errors)
 
     def test_payment_failed_requires_order_id(self) -> None:
         """주문 단위 Event 라 order_id 가 없으면 실패를 어느 주문에 붙일지 알 수 없다."""
