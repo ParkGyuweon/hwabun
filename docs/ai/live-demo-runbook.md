@@ -108,7 +108,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 | --- | --- | --- | --- |
 | ① 활동 | Kafka 소비자가 받은 모든 메시지(상태 필터 전) | 됨 | — |
 | ② Kafka | 같은 group 의 두 번째 Consumer(구독 안 함)로 워터마크·committed | 됨 | — |
-| ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **대기** — EC2-2 가 마스터 UI 를 `127.0.0.1:18080` 에만 바인딩 | 민우님: EC2-1 사설 IP 에 18080 개방(보안그룹 + compose ports) → `.env` `SPARK_MASTER_UI=http://<EC2-2 사설 IP>:18080` |
+| ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **동작 (09-17 14:00)** — 민우님 !297 로 EC2-2 가 `SPARK_MASTER_UI_BIND_IP` 로 마스터 UI 를 열었고, EC2-1 `.env` `SPARK_MASTER_UI=http://j15a306a.p.ssafy.io:18080`(Kafka 와 같은 공개 호스트명 — 사설 IP 172.26.1.194 는 무응답) · 실측 워커 1 · 코어 2 · ALIVE | `/json` 은 `/json/` 로 302 하지만 urllib 이 따라간다. 컨테이너 재생성만(재빌드 없음) |
 | ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **대기** — dw 스키마·reader 없음 | 백엔드 ①② 뒤 `.env` |
 | ⑤ 대시보드 | `DASHBOARD_URL` 링크 | 링크만 | 백엔드 API 6개 뒤 숫자 |
 
