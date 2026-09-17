@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
+import OrdersScreen from './screens/OrdersScreen';
 import ProductsScreen from './screens/ProductsScreen';
 import BehaviorScreen from './screens/BehaviorScreen';
 import ContentScreen from './screens/ContentScreen';
@@ -25,6 +26,7 @@ import { BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
 type ScreenKey =
   | 'overview'
   | 'products'
+  | 'orders'
   | 'content'
   | 'segments'
   | 'behavior'
@@ -43,7 +45,7 @@ type ScreenKey =
  *
  * 묶되 화면은 합치지 않는다. 한 섹션 안에서 탭으로 가른다 — 한 화면에 전부 쏟으면 줄인 의미가 없다.
  */
-type SectionKey = 'overview' | 'detail' | 'products' | 'customers' | 'voice' | 'market' | 'register';
+type SectionKey = 'overview' | 'detail' | 'products' | 'orders' | 'customers' | 'voice' | 'market' | 'register';
 
 interface ScreenDef {
   section: SectionKey;
@@ -71,6 +73,10 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
   products: {
     section: 'products', tab: '상품', scope: 'behavior',
     title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점',
+  },
+  orders: {
+    section: 'orders', tab: '주문', scope: 'feedback',
+    title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 원장 그대로',
   },
   segments: {
     section: 'customers', tab: '고객군', scope: 'behavior',
@@ -107,6 +113,8 @@ const SECTIONS: Array<{ key: SectionKey; label: string; screens: ScreenKey[] }> 
   { key: 'overview', label: '요약', screens: ['overview'] },
   { key: 'detail', label: '상세페이지', screens: ['content', 'behavior'] },
   { key: 'products', label: '상품', screens: ['products'] },
+  // 주문은 행동 마트가 아니라 쇼핑몰 원장을 읽는다. DW 적재와 무관하게 값이 찬다
+  { key: 'orders', label: '주문', screens: ['orders'] },
   { key: 'customers', label: '고객', screens: ['segments'] },
   { key: 'voice', label: '고객의 말', screens: ['reviews', 'feedback'] },
   { key: 'market', label: '시장', screens: ['ingredients'] },
@@ -331,6 +339,7 @@ export default function DashboardApp() {
 
         {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
+        {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} days={days} /> : null}
         {screen === 'content' ? <ContentScreen brandName={brand?.name || SCOPE_LABEL.behavior.brand} /> : null}
         {screen === 'segments' ? <SegmentsScreen /> : null}
         {screen === 'behavior' ? <BehaviorScreen /> : null}

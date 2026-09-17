@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
 import { Panel } from '../components';
 import { fmt } from '../lib/metrics';
-import { listBackendProducts } from '../../lib/shopApi';
+import { useBrandProducts } from '../lib/useBrandProducts';
 import { toKrw } from '../../lib/localize';
-import type { Product } from '../../types/product';
 
 /**
  * 내가 등록한 상품 — 썸네일과 함께 쭉 훑는 목록.
@@ -18,32 +16,7 @@ import type { Product } from '../../types/product';
  * 읽기 때문이다. 없으면 없다고, 못 읽으면 못 읽었다고 적는 편이 언제나 낫다.
  */
 export default function MyProducts({ brandId, brandName }: { brandId: string | null; brandName: string | null }) {
-  const [rows, setRows] = useState<Product[] | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    void listBackendProducts().then((all) => {
-      if (!alive) return;
-      if (all === null) {
-        setFailed(true);
-        return;
-      }
-      setRows(all);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  /**
-   * 내 상품 고르기. 백엔드가 준 `backend_brand_id` 가 정본이고, 그게 비어 있으면 브랜드 이름으로 맞춘다
-   * (등록 직후 동기화 시차). 둘 다 안 맞으면 내 상품이 아니다.
-   */
-  const list = useMemo(() => {
-    if (rows === null) return null;
-    return rows.filter((p) => (brandId && p.backend_brand_id === brandId) || (brandName && p.brand_name === brandName));
-  }, [rows, brandId, brandName]);
+  const { products: list, failed } = useBrandProducts(brandId, brandName);
 
   if (failed) {
     return (
