@@ -1005,7 +1005,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
     product_events = product_fact_df.where(
         valid_brand
         & F.col("event_name").isin(
-            "product_impression", "product_click", "product_view",
+            # 노출 세 Event 를 다 들여야 한다. 여기서 빠지면 아래 _impression
+            # 판정을 고쳐도 그 행이 애초에 안 들어온다 (§4.1).
+            *IMPRESSION_EVENTS,
+            "product_click", "product_view",
             "quick_look", "add_to_cart",
         )
     ).select(
@@ -1013,7 +1016,10 @@ def _brand_daily_kpi(product_fact_df: Any, funnel_session_df: Any, time_zone: st
         "session_id",
         "user_id",
         "product_id",
-        (F.col("event_name") == "product_impression").alias("_impression"),
+        # 노출은 세 Event 다 (IMPRESSION_EVENTS, §4.1). product_impression 만
+        # 세면 추천·배너로만 노출된 세션이 분모에서 빠져 detail_entry_rate 가
+        # 1 을 넘는다 — 104만 건 실행에서 persona_segment 가 그렇게 걸렸다.
+        F.col("event_name").isin(*IMPRESSION_EVENTS).alias("_impression"),
         (F.col("event_name") == "product_click").alias("_click"),
         (F.col("event_name") == "product_view").alias("_product_view"),
         (F.col("event_name") == "quick_look").alias("_quick_look"),
@@ -1251,7 +1257,10 @@ def _persona_segment_daily_kpi(
     aggregations = [
         F.countDistinct("user_id").cast("long").alias("segment_user_count"),
         F.countDistinct("session_id").cast("long").alias("session_count"),
-        stage_sessions(F.col("event_name") == "product_impression", "impression_sessions"),
+        # 노출 세 Event 를 함께 센다 (§4.1). 분모가 좁으면 비율이 1 을 넘는다.
+        stage_sessions(
+            F.col("event_name").isin(*IMPRESSION_EVENTS), "impression_sessions"
+        ),
         stage_sessions(F.col("event_name") == "quick_look", "quick_look_sessions"),
         stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
         stage_sessions(is_detail, "detail_view_sessions"),
@@ -1393,7 +1402,10 @@ def _brand_price_band_daily_kpi(
     result = events.groupBy(*key_columns).agg(
         F.countDistinct("session_id").cast("long").alias("session_count"),
         F.countDistinct("user_id").cast("long").alias("unique_user_count"),
-        stage_sessions(F.col("event_name") == "product_impression", "impression_sessions"),
+        # 노출 세 Event 를 함께 센다 (§4.1). 분모가 좁으면 비율이 1 을 넘는다.
+        stage_sessions(
+            F.col("event_name").isin(*IMPRESSION_EVENTS), "impression_sessions"
+        ),
         stage_sessions(F.col("event_name") == "quick_look", "quick_look_sessions"),
         stage_sessions(F.col("event_name") == "product_view", "product_view_sessions"),
         stage_sessions(is_detail, "detail_view_sessions"),
