@@ -269,6 +269,18 @@ class SeedExclusionSparkTest(unittest.TestCase):
             funnel["quick_look_sessions"] + funnel["direct_click_sessions"],
         )
 
+        # click_to_view_rate 의 분자는 분모의 부분집합이다 (§4.5).
+        # direct_click 은 "퀵룩 없이 상세로 갔나" 라서 클릭을 요구하지 않는다 —
+        # 클릭 없이 상세를 연 세션(hist: 이력 등)이 있으면 분자가 분모를 넘는다.
+        self.assertLessEqual(
+            funnel["click_through_detail_sessions"], funnel["click_sessions"]
+        )
+        self.assertLessEqual(
+            funnel["click_through_detail_sessions"], funnel["direct_click_sessions"]
+        )
+        if funnel["click_to_view_rate"] is not None:
+            self.assertLessEqual(funnel["click_to_view_rate"], 1.0)
+
     def test_seed_rows_stay_out_of_the_funnel_fact(self):
         product_fact = self._product_fact(
             [
