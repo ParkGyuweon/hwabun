@@ -907,6 +907,17 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
                 & F.col("reached_add_to_cart")
             ).cast("int")
         ).cast("long").alias("direct_click_cart_sessions"),
+        # "클릭한 세션 중 상세로 간 세션". direct_click 만으로는 부족하다 —
+        # 그 값은 "퀵룩 없이 상세로 갔나" 라서 클릭을 요구하지 않는다.
+        # hist: 이력 세션처럼 클릭 없이 상세를 여는 경로가 있어 분자가 분모를
+        # 넘는다 (104만 건 재생에서 1,493 세션 · 849행). 둘을 AND 해야
+        # click_to_view_rate 가 1 을 넘지 않는다 (§4.5, 프론트 확정 2026-09-17).
+        F.sum(
+            (
+                F.col("reached_click")
+                & (F.col("detail_entry_path") == F.lit("direct_click"))
+            ).cast("int")
+        ).cast("long").alias("click_through_detail_sessions"),
         F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
         F.sum(F.col("reached_product_view").cast("int")).cast("long").alias("product_view_sessions"),
         F.sum(F.col("reached_information_view").cast("int")).cast("long").alias("information_view_sessions"),
@@ -917,7 +928,12 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     )
     return (
         result.withColumn("impression_to_click_rate", _safe_ratio(F.col("click_sessions"), F.col("impression_sessions")))
-        .withColumn("click_to_view_rate", _safe_ratio(F.col("product_view_sessions"), F.col("click_sessions")))
+        # 분자는 "클릭하고 상세로 간 세션" 이다. product_view_sessions 를 쓰면
+        # 클릭 없이 상세에 도달한 세션이 분자에만 들어가 1 을 넘는다.
+        .withColumn(
+            "click_to_view_rate",
+            _safe_ratio(F.col("click_through_detail_sessions"), F.col("click_sessions")),
+        )
         .withColumn("view_to_information_rate", _safe_ratio(F.col("information_view_sessions"), F.col("product_view_sessions")))
         # 전환 분모는 상세를 연 세션이다. Quick Look에서 담거나 사는 경로가 있어서
         # product_view만 분모로 두면 분자와 모집단이 어긋나 비율이 1.0을 넘는다.
