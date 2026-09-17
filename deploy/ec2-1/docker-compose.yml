@@ -42,6 +42,8 @@ services:
       DW_MYSQL_USER: ${DW_MYSQL_USER:-}
       DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
       DW_MYSQL_DB: ${DW_MYSQL_DB:-dw}
+      # /pipeline 은 EC2-2 projection 과 같은 22종을 기본으로 본다. 빈 값이면 서버 기본 목록 사용.
+      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-}
       USER_TRAIT_RELOAD_SEC: ${USER_TRAIT_RELOAD_SEC:-300}
       PRESCRIPTION_LLM: ${PRESCRIPTION_LLM:-on}                # 처방 LLM(GMS 과금) 스위치. off 면 규칙표 문장. 런타임 토글 POST /api/prescription/llm (Jira 325)
       USER_TRAIT_STALE_DAYS: ${USER_TRAIT_STALE_DAYS:-2}        # health.stale 경보선 (Jira 319)
