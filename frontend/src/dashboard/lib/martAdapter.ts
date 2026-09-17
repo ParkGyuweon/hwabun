@@ -2,15 +2,16 @@
  * 마트 API 응답 → 화면 모양 (BehaviorMetrics).
  *
  * 규칙 세 가지.
- *   1. 응답이 없거나 `coverage: none` 이면 그 블록은 **모의 그대로** 두고 source 도 'mock' 으로 남긴다.
- *   2. 응답이 있으면 채운 블록만 'real'. 조건부 블록(계약 §3 의 null 가능)은 따로 판정한다.
+ *   1. **마트에 닿지 못했을 때만**(응답이 null) 그 블록을 모의로 둔다. 200 으로 답했으면 0 건이어도 그 답이
+ *      정본이고 배지는 '실측' 이다 — 진짜 브랜드에 남의 숫자를 보여 주지 않는다.
+ *   2. 응답 안에서 `null` 인 조건부 블록(계약 §3)은 따로 판정한다.
  *   3. 마트 컬럼 이름은 여기서만 화면 이름으로 바뀐다. 화면 코드에 snake_case 가 새지 않게.
  *
  * 브랜드 중앙값·병목 같은 파생 판단은 여기서 한다 (계약 E2: "병목은 프론트가 계산").
  */
 import type { Product } from '../../types/product';
-import type { EventName } from '../../types/log';
-import { EVENT_WEIGHT } from '../../types/log';
+import type { EventName, IntentClass } from '../../types/log';
+import { EVENT_INTENT, EVENT_WEIGHT } from '../../types/log';
 import type {
   ContentPayload,
   FrictionPayload,
@@ -22,7 +23,6 @@ import type {
   PurchasePayload,
   SegmentsPayload,
 } from './martApi';
-import { hasRows } from './martApi';
 import type { BehaviorMetrics, BehaviorSource, Overview, Repurchase, SegmentTop } from './behavior';
 import { buildIngredientGap, canonicalIngredient } from './behavior';
 import type { ContentAttention, ProductMetrics } from './metrics';
@@ -310,12 +310,40 @@ function toFriction(p: FrictionPayload, mock: BehaviorMetrics) {
   return {
     byLocation,
     counts: p.counts ?? mock.frictionCounts,
-    quickExit: p.quick_exit_rate ?? mock.quickExitRate,
+    // 마트가 답했는데 비율이 없으면 "판정할 세션이 없었다" 는 뜻이다. 모의 이탈률을 끼워 넣지 않는다
+    quickExit: p.quick_exit_rate ?? 0,
     entry,
     volumes,
     frictionReal: Boolean(p.by_location || p.counts),
     entryReal: Boolean(p.entry_source),
   };
+}
+
+/**
+ * "고객이 지나온 단계" — 이벤트 건수를 의미(intent)별로 접는다.
+ *
+ * 마트에 단계 축이 따로 없다. 그런데 이벤트 하나하나의 의미는 `EVENT_INTENT` 가 이미 정하고 있고
+ * (로거가 envelope 의 `intent` 를 그 표로 채운다), `event_daily` 가 브랜드별 이벤트 건수를 준다.
+ * 둘을 곱하면 이 화면이 필요한 다섯 칸이 나온다 — 지어낼 필요가 없다.
+ *
+ * 망설임(hesitation)·막힘(friction)·세션 경계(session)는 단계가 아니라 빼고, 막힘은 옆 패널이 따로 센다.
+ */
+const INTENT_STEPS: Array<{ label: IntentClass; ko: string }> = [
+  { label: 'exposure', ko: '노출' },
+  { label: 'interest', ko: '열람' },
+  { label: 'comparison', ko: '비교' },
+  { label: 'validation', ko: '확인' },
+  { label: 'conversion', ko: '전환' },
+];
+
+function toIntentFunnel(volumes: Array<{ event_name: string; event_count: number }>): Array<{ label: string; ko: string; value: number }> {
+  const totals = new Map<IntentClass, number>();
+  for (const v of volumes) {
+    const intent = EVENT_INTENT[v.event_name as EventName];
+    if (!intent) continue;
+    totals.set(intent, (totals.get(intent) ?? 0) + v.event_count);
+  }
+  return INTENT_STEPS.map((s) => ({ label: s.label, ko: s.ko, value: totals.get(s.label) ?? 0 }));
 }
 
 function toRepurchase(p: PurchasePayload): Repurchase | null {
@@ -348,24 +376,33 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
   const src: BehaviorSource = { ...mock.source };
   let out: BehaviorMetrics = { ...mock };
 
-  const ov = hasRows(bundle.overview) ? bundle.overview : null;
-  const pr = hasRows(bundle.products) ? bundle.products : null;
-  const ct = hasRows(bundle.content) ? bundle.content : null;
-  const sg = hasRows(bundle.segments) ? bundle.segments : null;
-  const ig = hasRows(bundle.ingredients) ? bundle.ingredients : null;
-  const fr = hasRows(bundle.friction) ? bundle.friction : null;
-  const pu = hasRows(bundle.purchase) ? bundle.purchase : null;
+  /**
+   * **서버가 답했으면 그 답이 정본이다. 0 건이어도 그렇다.**
+   *
+   * 예전에는 `coverage: none`(= 이 브랜드 행이 0건)을 모의로 덮었다. 시연 브랜드는 로그가 없으니 화면이 비면
+   * 안 된다는 이유였는데, SSAFY Beauty 는 진짜 브랜드다. 진짜 브랜드 사장님에게 남의 숫자를 "우리 브랜드" 로
+   * 보여 주는 것이 화면이 비는 것보다 나쁘다 — 그 숫자를 보고 재고를 잡고 기획을 건다.
+   *
+   * 그래서 모의로 물러나는 경우를 하나로 줄인다: **마트에 닿지 못했을 때만**(401·403·5xx·네트워크 →
+   * 응답이 `null`). 200 으로 답했으면 0 을 0 으로 그리고 배지는 "실측" 이다.
+   */
+  const ov = bundle.overview;
+  const pr = bundle.products;
+  const ct = bundle.content;
+  const sg = bundle.segments;
+  const ig = bundle.ingredients;
+  const fr = bundle.friction;
+  const pu = bundle.purchase;
 
   // E2 먼저. 개요의 퀵룩 합계와 성분 보유 판정에 상품이 필요하다
   let quickLooks = mock.overview.quickLooks;
   if (pr) {
     const { rows, diagnostics } = toProducts(pr, mock.productMetrics);
-    if (rows.length > 0) {
-      out = { ...out, productMetrics: rows };
-      src.products = 'real';
-      src.diagnostics = diagnostics ? 'real' : 'mock';
-      quickLooks = rows.reduce((s, r) => s + r.quickLooks, 0);
-    }
+    // 행이 0 개여도 그대로 쓴다. "아직 아무도 안 봤다" 는 사실이고, 모의 상품 목록으로 덮으면 사실이 사라진다
+    out = { ...out, productMetrics: rows };
+    src.products = 'real';
+    src.diagnostics = diagnostics ? 'real' : 'mock';
+    quickLooks = rows.reduce((s, r) => s + r.quickLooks, 0);
   }
 
   // E6 (개요의 이탈률에 quick_exit 를 쓴다)
@@ -382,6 +419,7 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
     };
     src.friction = f.frictionReal ? 'real' : 'mock';
     src.entry = f.entryReal ? 'real' : 'mock';
+    if (fr.event_volumes) out = { ...out, intentFunnel: toIntentFunnel(fr.event_volumes) };
     bounce = fr.quick_exit_rate;
   }
 
@@ -413,12 +451,10 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
   // E3
   if (ct) {
     const { rows, lift } = toContent(ct, mock.contentAttention);
-    if (rows.length > 0) {
-      out = { ...out, contentAttention: rows };
-      src.content = 'real';
-      src.contentLift = lift ? 'real' : 'mock';
-    }
-    if (ct.behaviors && ct.behaviors.length > 0) {
+    out = { ...out, contentAttention: rows };
+    src.content = 'real';
+    src.contentLift = lift ? 'real' : 'mock';
+    if (ct.behaviors) {
       out = {
         ...out,
         /**
@@ -440,22 +476,23 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
 
   // E4
   if (sg) {
-    const s = toSegments(sg, mock.segmentMatrix, mock.segmentTopContent);
+    const s = toSegments(sg, [], []);
     out = {
       ...out,
-      segmentByType: s.byType,
+      segmentByType: s.byType ?? [],
+      // 격자·상위 콘텐츠가 비어 있는 것도 답이다. 모의 히트맵으로 덮으면 없는 고객군이 있는 것처럼 보인다
       segmentMatrix: s.matrix,
       segmentTopContent: s.top,
-      sameSkinFilterRate: s.sameSkin ?? mock.sameSkinFilterRate,
+      sameSkinFilterRate: s.sameSkin ?? 0,
     };
-    src.segments = s.byType ? 'real' : 'mock';
-    src.grid = s.grid ? 'real' : 'mock';
-    src.topContent = s.topReal ? 'real' : 'mock';
+    src.segments = 'real';
+    src.grid = 'real';
+    src.topContent = 'real';
   }
 
   // E5
-  if (ig && ig.by_ingredient.length > 0) {
-    const ver = ig.by_ingredient[0].vocab_version;
+  if (ig) {
+    const ver = ig.by_ingredient[0]?.vocab_version;
     if (import.meta.env.DEV && ver && ver !== '0.4') console.info(`[mart] ingredient vocab_version ${ver} (프론트 어휘집 0.4)`);
     const gapProducts = brandProducts && brandProducts.length > 0 ? brandProducts : out.productMetrics.map((m) => m.product);
     out = {
