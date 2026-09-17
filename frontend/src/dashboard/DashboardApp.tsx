@@ -18,6 +18,10 @@ import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/bra
 import type { BrandsState } from '../lib/brands';
 import { BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
 
+/**
+ * 화면 하나. **이름을 바꾸지 않았다** — `insight.ts`·`prescription.ts` 가 "이 인사이트는 어느 화면으로
+ * 가라" 를 이 키로 적어 두고 `onGo` 로 넘긴다. 메뉴를 묶으면서 키까지 갈면 그 연결이 전부 끊긴다.
+ */
 type ScreenKey =
   | 'overview'
   | 'products'
@@ -29,31 +33,91 @@ type ScreenKey =
   | 'register'
   | 'feedback';
 
-/** 화면이 어느 데이터 스코프를 보나 (lib/scope.ts). 피드백·등록만 SSAFY Beauty, 나머지는 행동·리뷰 브랜드 */
-const SCREEN_SCOPE: Record<ScreenKey, ScopeKind> = {
-  overview: 'behavior',
-  content: 'behavior',
-  segments: 'behavior',
-  ingredients: 'behavior',
-  products: 'behavior',
-  reviews: 'behavior',
-  behavior: 'behavior',
-  feedback: 'feedback',
-  register: 'feedback',
+/**
+ * 왼쪽 메뉴 한 칸. 화면 9개를 **브랜드가 묻는 질문 6개**로 묶는다.
+ *
+ * 예전 메뉴는 데이터 종류로 나뉘어 있었다 — 상세 콘텐츠·고객군·성분·상품·피드백·리뷰·막히는 곳.
+ * 아홉 개가 한 줄로 늘어서 있으면 어디부터 봐야 할지가 안 보이고, 실제로는 같은 질문의 두 면인
+ * 것들이 따로 떨어져 있었다. 상세페이지에서 **무엇을 읽나**(콘텐츠)와 **어디서 막히나**(마찰)는
+ * 나란히 놓아야 뜻이 통하고, **공개 리뷰**와 **우리가 받은 피드백**은 둘 다 고객이 쓴 글이다.
+ *
+ * 묶되 화면은 합치지 않는다. 한 섹션 안에서 탭으로 가른다 — 한 화면에 전부 쏟으면 줄인 의미가 없다.
+ */
+type SectionKey = 'overview' | 'detail' | 'products' | 'customers' | 'voice' | 'market' | 'register';
+
+interface ScreenDef {
+  section: SectionKey;
+  /** 섹션 안 탭 이름. 탭이 하나뿐인 섹션은 안 쓴다 */
+  tab: string;
+  title: string;
+  desc: string;
+  /** 어느 데이터 스코프를 보나 (lib/scope.ts). 피드백·등록만 SSAFY Beauty */
+  scope: ScopeKind;
+}
+
+const SCREENS: Record<ScreenKey, ScreenDef> = {
+  overview: {
+    section: 'overview', tab: '요약', scope: 'behavior',
+    title: '지금 손봐야 할 것', desc: '오늘 하나만 고친다면 이것입니다',
+  },
+  content: {
+    section: 'detail', tab: '무엇을 보고 사나', scope: 'behavior',
+    title: '무엇을 보고 사나', desc: '상세페이지의 어떤 글이 고객을 담게 만드나',
+  },
+  behavior: {
+    section: 'detail', tab: '어디서 막히나', scope: 'behavior',
+    title: '막히는 곳', desc: '고객이 화면에서 헤매는 자리 · 상품이 싫다는 뜻이 아닙니다',
+  },
+  products: {
+    section: 'products', tab: '상품', scope: 'behavior',
+    title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점',
+  },
+  segments: {
+    section: 'customers', tab: '고객군', scope: 'behavior',
+    title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지',
+  },
+  reviews: {
+    section: 'voice', tab: '공개 리뷰', scope: 'behavior',
+    title: '공개 리뷰', desc: '피부 타입에 따라 갈리는 평가와 자극 언급',
+  },
+  feedback: {
+    section: 'voice', tab: '받은 피드백', scope: 'feedback',
+    title: '고객이 고쳐 달라는 것', desc: '고객이 직접 고른 축과 그 안의 이유',
+  },
+  ingredients: {
+    section: 'market', tab: '성분', scope: 'behavior',
+    title: '고객이 찾는 성분', desc: '많이 찾는데 내 상품에는 없는 성분',
+  },
+  register: {
+    section: 'register', tab: '상품 등록', scope: 'feedback',
+    title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기',
+  },
 };
 
-const SCREENS: Array<{ key: ScreenKey; label: string; title: string; desc: string }> = [
-  // 순서 = 브랜드가 결정하는 순서 (명세 §1). 범용 지표와 화면 문제는 뒤로
-  { key: 'overview', label: '요약', title: '지금 손봐야 할 것', desc: '오늘 하나만 고친다면 이것입니다' },
-  { key: 'content', label: '상세 콘텐츠', title: '무엇을 보고 사나', desc: '상세페이지의 어떤 글이 고객을 담게 만드나' },
-  { key: 'segments', label: '고객군', title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지' },
-  { key: 'ingredients', label: '성분', title: '고객이 찾는 성분', desc: '많이 찾는데 내 상품에는 없는 성분' },
-  { key: 'products', label: '상품', title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점' },
-  { key: 'feedback', label: '고객 피드백', title: '고객이 고쳐 달라는 것', desc: '고객이 직접 고른 축과 그 안의 이유' },
-  { key: 'reviews', label: '리뷰', title: '공개 리뷰', desc: '피부 타입에 따라 갈리는 평가와 자극 언급' },
-  { key: 'behavior', label: '막히는 곳', title: '막히는 곳', desc: '고객이 화면에서 헤매는 자리 · 상품이 싫다는 뜻이 아닙니다' },
-  { key: 'register', label: '상품 등록', title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기' },
+/**
+ * 메뉴 순서 = 브랜드가 결정을 내리는 순서 (명세 §1).
+ *
+ * `시장` 만 성격이 다르다. 나머지 다섯은 **내 로그**를 보는 자리이고, 시장은 **여러 브랜드가 모여야
+ * 나오는 자리**다 (components.tsx `OriginBadge`). 그래서 맨 아래 따로 떼어 두고 이름도 "성분" 이
+ * 아니라 "시장" 으로 둔다 — 앞으로 코호트 비교가 붙는 자리이기도 하다.
+ *
+ * `상품 등록` 은 분석이 아니라 작업이라 메뉴에서 한 번 더 갈라 놓는다.
+ */
+const SECTIONS: Array<{ key: SectionKey; label: string; screens: ScreenKey[] }> = [
+  { key: 'overview', label: '요약', screens: ['overview'] },
+  { key: 'detail', label: '상세페이지', screens: ['content', 'behavior'] },
+  { key: 'products', label: '상품', screens: ['products'] },
+  { key: 'customers', label: '고객', screens: ['segments'] },
+  { key: 'voice', label: '고객의 말', screens: ['reviews', 'feedback'] },
+  { key: 'market', label: '시장', screens: ['ingredients'] },
 ];
+
+/** 분석 메뉴와 성격이 달라 아래 따로 둔다 */
+const WORK_SECTIONS: Array<{ key: SectionKey; label: string; screens: ScreenKey[] }> = [
+  { key: 'register', label: '상품 등록', screens: ['register'] },
+];
+
+const ALL_SECTIONS = [...SECTIONS, ...WORK_SECTIONS];
 
 /**
  * HWABUN · 참여 브랜드(소상공인) 담당자용 대시보드 v0.2.
@@ -102,7 +166,9 @@ export default function DashboardApp() {
   /** 리뷰·성분 화면이 공유하는 상품 선택 */
   const [productId, setProductId] = useState<string | null>(null);
 
-  const active = SCREENS.find((s) => s.key === screen) ?? SCREENS[0];
+  const active = SCREENS[screen];
+  /** 지금 열린 섹션. 화면 키 하나만 상태로 두고 섹션은 거기서 끌어낸다 — 둘을 따로 두면 어긋난다 */
+  const activeSection = ALL_SECTIONS.find((sec) => sec.key === active.section) ?? ALL_SECTIONS[0];
 
   return (
     /*
@@ -163,14 +229,28 @@ export default function DashboardApp() {
         <MotifLine variant="divider" compact />
 
         <nav className="sidebar__nav" aria-label="대시보드 화면">
-          {SCREENS.map((s) => (
+          {SECTIONS.map((sec) => (
             <button
-              key={s.key}
+              key={sec.key}
               type="button"
-              className={s.key === screen ? 'is-active' : ''}
-              onClick={() => setScreen(s.key)}
+              className={sec.key === active.section ? 'is-active' : ''}
+              /* 섹션을 누르면 그 안 첫 화면으로 간다. 이미 그 섹션이면 탭 선택을 유지한다 */
+              onClick={() => setScreen((cur) => (SCREENS[cur].section === sec.key ? cur : sec.screens[0]))}
             >
-              {s.label}
+              {sec.label}
+            </button>
+          ))}
+
+          {/* 분석이 아니라 작업. 선 하나로 갈라 둔다 */}
+          <span className="sidebar__nav-gap" aria-hidden="true" />
+          {WORK_SECTIONS.map((sec) => (
+            <button
+              key={sec.key}
+              type="button"
+              className={sec.key === active.section ? 'is-active' : ''}
+              onClick={() => setScreen(sec.screens[0])}
+            >
+              {sec.label}
             </button>
           ))}
         </nav>
@@ -206,7 +286,7 @@ export default function DashboardApp() {
           <h1>{active.title}</h1>
           <p>{active.desc}</p>
           {/* 어느 브랜드 데이터인지 항상 적는다. 스코프가 둘이라 이게 없으면 숫자를 잘못 읽는다 */}
-          <ScopeNote scope={SCREEN_SCOPE[active.key]} brandName={brand?.name ?? null} />
+          <ScopeNote scope={active.scope} brandName={brand?.name ?? null} />
 
           <div className="main__controls">
             {screen === 'overview' ? (
@@ -222,6 +302,27 @@ export default function DashboardApp() {
             ) : null}
           </div>
         </header>
+
+        {/*
+          섹션 안의 탭. 화면이 하나뿐인 섹션에는 안 그린다 — 선택지가 하나인 탭은 공간만 먹는다.
+          왼쪽 메뉴가 "무엇을 묻나", 이 탭이 "그 질문의 어느 면인가" 다.
+        */}
+        {activeSection.screens.length > 1 ? (
+          <div className="tabs" role="tablist" aria-label={`${activeSection.label} 화면`}>
+            {activeSection.screens.map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={key === screen}
+                className={key === screen ? 'is-active' : ''}
+                onClick={() => setScreen(key)}
+              >
+                {SCREENS[key].tab}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen /> : null}

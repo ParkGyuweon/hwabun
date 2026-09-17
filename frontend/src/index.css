@@ -1,3 +1,4 @@
+@import './styles/pretendard.css';
 @import './styles/ad-banner.css';
 @import './styles/price.css';
 
@@ -58,8 +59,7 @@
 
   --page-max: 1200px;
 
-  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Helvetica Neue', Helvetica, Arial,
-    'Malgun Gothic', sans-serif;
+  font-family: var(--font-sans);
   color: var(--color-ink);
   background: var(--color-surface);
 }

@@ -205,7 +205,7 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
             sub={overview.bounceRate === null ? '마트에 이탈률이 없습니다. 3초 이탈이 오면 여기에 씁니다' : '추가 행동 없이 이탈'}
           />
         </div>
-        <Panel title="관심도 TOP 5" source={source.products} aside="행동 가중 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)">
+        <Panel title="관심도 TOP 5" source={source.products} fold aside="행동 가중 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)">
           <BarList
             items={productMetrics.slice(0, 5).map((p) => ({
               label: p.product.product_name,

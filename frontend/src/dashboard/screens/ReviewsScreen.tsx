@@ -138,7 +138,7 @@ export default function ReviewsScreen({
         </div>
       </Panel>
 
-      <Panel title="자극·트러블 언급 상위 상품" source="real" aside="언급 비율 합 기준">
+      <Panel title="자극·트러블 언급 상위 상품" source="real" fold aside="언급 비율 합 기준">
         <div className="table-wrap">
           <table className="data">
             <thead>

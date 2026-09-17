@@ -324,7 +324,7 @@ export default function FeedbackScreen() {
       </Panel>
 
       {rows.length > 0 ? (
-        <Panel title="원문" source="real" aside={`${rows.length}건`}>
+        <Panel title="원문" source="real" fold aside={`${rows.length}건`}>
           <div className="fbx-inbox__head">
             <h3>{category ? (category === PENDING ? '분류 대기' : categoryLabel(category)) : axisLabelOf(axis)}</h3>
             <small>반영했으면 한 줄 남기세요. 고객 화면에 그대로 갑니다.</small>

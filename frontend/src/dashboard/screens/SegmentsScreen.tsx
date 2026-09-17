@@ -113,7 +113,7 @@ export default function SegmentsScreen() {
         ) : null}
       </Panel>
 
-      <Panel title="고객군별 가장 오래 본 콘텐츠" source={source.topContent} aside="③ 콘텐츠 주목도를 고객군으로 쪼갠 것">
+      <Panel title="고객군별 가장 오래 본 콘텐츠" source={source.topContent} fold aside="③ 콘텐츠 주목도를 고객군으로 쪼갠 것">
         <table className="table">
           <thead>
             <tr>
