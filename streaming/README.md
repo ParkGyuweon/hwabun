@@ -433,30 +433,87 @@ K01~K16 시나리오에서 예상 Event ID·Kafka 좌표·정본 ID를 먼저 �
 현재 저장소에는 Spark progress를 Prometheus로 변환하는 Exporter가 없으므로
 Spark 지표를 수집했다고 주장하지 않는다.
 
-## gzip 행동 로그 재생
+## 행동 로그 생성과 재생
 
-`streaming/tools/replay_collector.py`는 `.jsonl.gz`를 한 줄씩 읽어 Collector 상한인
-100건 이하로 전송한다. 429/502/503과 전송 오류는 지수 백오프로 재시도하며,
-최종 보고서의 `accepted + rejected + abandoned = total`을 검사한다. 202 부분 수락은
-건수와 거부 코드로 따로 기록한다. 503은 일부 Kafka ACK 뒤에도 발생할 수 있으므로
-전체 배치를 재시도하고, Q2의 `event_id` 중복 제거를 최종 멱등성 경계로 둔다.
+### 1. 로그 생성
+
+생성기 입력은 전부 저장소 안에 있다. EC2에서 받아올 필요 없이 로컬에서 만든다.
+
+| 입력 | 위치 |
+| --- | --- |
+| 페르소나 PC 9,900 · PA 100 · 성향 | `simulator/personas/data/` |
+| 상품 카탈로그 200 | `batch/ingest/data/products_200.json` |
+| 등록 상품 · 시연 상품 | `batch/ingest/data/serving/registered_products.jsonl`, `frontend/src/mocks/` |
+
+```bash
+py -3 simulator/generator/gen_behavior_logs.py \
+  --limit 1000 --currency KRW \
+  --scenario-id normal_day --simulation-run-id e2e_336 \
+  --out data/replay/behavior_logs_e2e_336.jsonl
+```
+
+`--currency KRW`가 금액의 정본 형식이다 (`dw-schema.md` §3.2). 붙이지 않으면 기본이
+USD라 `add_to_cart`가 deprecated 입력인 `price_usd`를 싣고, `view_cart`·
+`begin_checkout`·`purchase`의 `currency`가 `"KRW"`가 아니어서 계약 검사에 걸린다.
+
+`--limit`은 페르소나 수다. 1,000명이 약 104만 Event · 635MB다 (2026-09-11 실측).
+표본은 기본이 층화(`--sample stratified`)라 적은 수로도 stratum 분포가 유지된다.
+`--include-agents`는 PA 100명을 넣는 스위치인데, PA는 정성 축이라 정량 지표 실행에는
+넣지 않는다.
+
+### 2. Collector를 거쳐야 하는 이유
+
+**생성기 출력을 Kafka에 직접 넣으면 Q2가 전량 격리한다.** 생성기가 내지 않고
+Collector만 찍는 필수 필드가 둘 있다.
+
+| 필드 | 누가 넣나 |
+| --- | --- |
+| `received_at` | Collector — `KafkaEventPublisher.java`의 `clock.instant()` |
+| `event_index` | Collector — 배치 안에서의 순번 |
+
+둘 다 Q2의 판정에 쓰인다. `received_at`은 `REQUIRED_FIELDS`(`clean_events_job.py:129`)
+이자 `timestamp_ok`·`timestamp_format_ok`의 대상이고, `event_index`는
+`event_index_ok`(`:288`)가 non-null과 0 이상을 요구한다. 없으면 모든 Event가
+`bad_events`로 간다.
+
+`kafka_cluster_id`·`kafka_topic`·`kafka_partition`·`kafka_offset` 넷도 필수지만
+이쪽은 Q1이 Kafka 메타데이터에서 읽으므로 payload에 없어도 된다. `source`는
+생성기가 안 싣지만 Q2가 `actor_type`으로 보정한다(`:272`).
+
+과거 로그를 재생하면 `received_at`이 "지금"이라 `latency_ms`가 크게 나온다. Q5에
+지연 상한 검사가 없으므로 검증에는 영향이 없고, 값은 기록만 된다.
+
+### 3. Collector 재생
+
+`streaming/tools/replay_collector.py`는 `.jsonl` 또는 `.jsonl.gz`를 한 줄씩 읽어
+Collector 상한인 100건 이하로 전송한다. 429/502/503과 전송 오류는 지수 백오프로
+재시도하며, 최종 보고서의 `accepted + rejected + abandoned = total`을 검사한다.
+202 부분 수락은 건수와 거부 코드로 따로 기록한다. 503은 일부 Kafka ACK 뒤에도
+발생할 수 있으므로 전체 배치를 재시도하고, Q2의 `event_id` 중복 제거를 최종
+멱등성 경계로 둔다.
 
 전송 전 파일 검증:
 
 ```bash
-python -m streaming.tools.replay_collector behavior_logs_recommend_1000.jsonl.gz \
+py -3 -m streaming.tools.replay_collector data/replay/behavior_logs_e2e_336.jsonl \
   --inspect-only \
-  --expected-sha256 A8BA04CBDA5B66ED2333160406453C7D7A5F66BF5D8E1E3BBAE3B5EA20E0CF6C \
-  --report-path data/validation/recommend-log-inspection.json
+  --report-path data/validation/e2e-336-inspection.json
 ```
+
+`--expected-sha256`을 주면 파일이 만든 그대로인지 함께 본다. 다른 사람이 만든
+로그를 받아 돌릴 때 쓴다.
 
 Collector 재생:
 
 ```bash
-python -m streaming.tools.replay_collector behavior_logs_recommend_1000.jsonl.gz \
+py -3 -m streaming.tools.replay_collector data/replay/behavior_logs_e2e_336.jsonl \
   --url http://localhost:8080/api/events --batch-size 100 \
-  --report-path data/validation/recommend-log-replay.json
+  --report-path data/validation/e2e-336-replay.json
 ```
+
+보고서의 `accepted`가 생성 로그의 Event 수와 같아야 한다. 다르면 Q1을 시작하기
+전에 원인을 본다 — 적재가 덜 된 채로 Mart를 만들면 어느 단계에서 샜는지
+Q5로는 구분되지 않는다.
 
 기존 적재 결과와 섞지 않고 검증하려면 Q1 시작 전에 Raw와 checkpoint, Q2~Q5의
 공통 루트를 함께 분리한다. `run-pipeline.ps1`과 `run-pipeline.sh`는
@@ -476,7 +533,7 @@ $env:ACTIVITY_EVENTS_TOPIC='activity-events-validation'
 ./infra/spark/run-pipeline.ps1 start-q1
 ```
 
-### 실행 순서
+#### 실행 순서
 
 Collector는 compose에 없다. Host에서 따로 띄우고, Q1과 **같은 Topic**을 준다.
 `SHOP_BACKEND_JWT_SECRET`이 없으면 Collector가 기동 자체를 못 한다(32자 이상).
@@ -488,13 +545,19 @@ $env:ACTIVITY_EVENTS_TOPIC='activity-events-validation'
 cd backend; ./gradlew.bat bootRun
 ```
 
-1. `run-pipeline.ps1 up` — Kafka·Spark
-2. Topic 생성 (위 이름으로)
-3. `run-pipeline.ps1 start-q1`
-4. Collector 기동
-5. `replay_collector.py`로 재생
-6. Q1이 빈 배치에 도달하면 `run-pipeline.ps1 stop-q1`
-7. `run-pipeline.ps1 run-batch` — Q2~Q5
+1. `gen_behavior_logs.py`로 로그 생성 (§1)
+2. `run-pipeline.ps1 up` — Kafka·Spark
+3. Topic 생성 (위 이름으로)
+4. `run-pipeline.ps1 start-q1`
+5. Collector 기동
+6. `replay_collector.py`로 재생 (§3)
+7. Q1이 빈 배치에 도달하면 `run-pipeline.ps1 stop-q1`
+8. `run-pipeline.ps1 run-batch` — Q2~Q5
+9. `build_ddl.py --marts <루트>/marts`로 `contracts/dw/schema.sql` 재생성
+
+9번을 빠뜨리면 Mart에 컬럼이 늘어도 MySQL 테이블 정의가 따라오지 않는다.
+`schema.sql`은 Mart Parquet에서 컬럼을 읽는 생성물이라 실행이 끝나야 뽑힌다.
+`--check`를 주면 파일을 고치지 않고 차이만 본다.
 
 > **Windows에서는 `run-pipeline.ps1`을 쓴다.** Git Bash로 `run-pipeline.sh`를 돌리면
 > 컨테이너 안 경로(`/opt/spark/bin/spark-submit`)를 Windows 경로로 바꿔 버려 실패하고,
