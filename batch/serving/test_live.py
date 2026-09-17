@@ -66,6 +66,26 @@ class LogTailUnit(unittest.TestCase):
         self.assertEqual("", log_tail(self._write([]), 400))
         self.assertEqual("", log_tail(os.path.join(HERE, "no-such.log"), 400))
 
+    def test_demo_status_reads_the_log_through_log_tail(self):
+        """09-17 — 화면이 부르는 것은 log_tail 이 아니라 recommend_server._demo_status 였다.
+
+        344 로 log_tail 을 고쳤는데 _demo_status 안에 같은 코드가 따로 남아 cp949 폴백을 쓰고 있었고,
+        배포본 /pipeline 의 상태 줄이 "蹂닿린" 꼴로 깨져 나갔다. 두 경로가 갈리지 않게 고정한다."""
+        import recommend_server as rs
+        last = "[demo] Kafka 로 90,003건 (파일 위치 1,110,024) · 실패 0 · 3,000건/초"
+        filler = "[demo] 보기: http://127.0.0.1:8300/live (경로: Kafka → 파티션 3 → 소비자)"
+        for pad in range(0, 3):
+            path = self._write([filler + "가" * (40 + pad)] * 6 + [last])
+            saved = dict(rs._demo)
+            rs._demo.update({"proc": None, "log": path, "started_at": None, "args": None})
+            try:
+                got = rs._demo_status()["last_line"]
+            finally:
+                rs._demo.clear(); rs._demo.update(saved)
+            with self.subTest(pad=pad):
+                self.assertEqual(last, got)
+                self.assertNotIn("�", got)
+
 
 class LiveEndpoints(unittest.TestCase):
     @classmethod

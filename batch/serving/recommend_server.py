@@ -104,7 +104,7 @@ from catalog_registry import (Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx                                               # noqa: E402
-from live_stats import LiveStats, LIVE_HTML                            # noqa: E402  (Jira 295 실시간 현황)
+from live_stats import LiveStats, LIVE_HTML, log_tail                  # noqa: E402  (Jira 295 실시간 현황)
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
@@ -657,20 +657,11 @@ _demo = {"proc": None, "started_at": None, "args": None, "log": None}
 def _demo_status():
     p = _demo["proc"]
     running = p is not None and p.poll() is None
-    tail = ""
-    try:
-        if _demo["log"] and os.path.exists(_demo["log"]):
-            with open(_demo["log"], "rb") as f:
-                f.seek(0, 2); n = f.tell(); f.seek(max(0, n - 400))
-                raw = f.read()
-                try:
-                    txt = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    txt = raw.decode("cp949", "replace")          # Windows 콘솔 인코딩으로 남은 옛 줄
-                lines = txt.strip().splitlines()
-                tail = lines[-1] if lines else ""
-    except Exception:
-        tail = ""
+    # 꼬리 읽기는 live_stats.log_tail 하나로 모은다 (Jira 344).
+    # 예전에는 여기에 같은 코드가 따로 있었고 cp949 폴백이 남아 있었다. 끝에서 400바이트를 자르면
+    # 그 경계가 UTF-8 한글(3바이트) 중간에 걸리는데, 그때 UnicodeDecodeError 를 cp949 로 받아
+    # **꼬리 전체가 "蹂닿린" 꼴로 깨져** 화면에 나갔다 (09-17 배포본 실측).
+    tail = log_tail(_demo["log"]) if _demo["log"] else ""
     return {"available": os.path.exists(_DEMO_SCRIPT), "running": running,
             "exit_code": (None if running or p is None else p.returncode),
             "started_at": _demo["started_at"], "args": _demo["args"], "last_line": tail,
