@@ -3,6 +3,7 @@ import { Kpi, Panel } from '../components';
 import { EXIT_HINT, STEP_KO, fmt } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
+import MyProducts from './MyProducts';
 
 type SortKey = 'interest' | 'cartRate' | 'remove' | 'variant';
 
@@ -21,7 +22,7 @@ function repurchaseCell(r: { buyerCount: number; rate: number | null } | undefin
   return `${fmt.pct(r.rate, 0)} (${r.buyerCount}명)`;
 }
 
-export default function ProductsScreen() {
+export default function ProductsScreen({ brandId, brandName }: { brandId: string | null; brandName: string | null }) {
   const { productMetrics, repurchase, source } = useBehavior();
   const showRepurchase = source.purchase === 'real' && repurchase !== null;
   const [sort, setSort] = useState<SortKey>('interest');
@@ -52,6 +53,8 @@ export default function ProductsScreen() {
 
   return (
     <div className="stack">
+      {/* 등록 정보라 마트와 무관하다. 행동 로그가 없는 브랜드도 여기서는 자기 상품을 본다 */}
+      <MyProducts brandId={brandId} brandName={brandName} />
       <div className="grid grid--kpi">
         <Kpi
           label="가장 많이 막히는 단계"
