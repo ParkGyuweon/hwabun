@@ -101,15 +101,20 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner", "buy_now")
+           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback")
 # 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
 # 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
 FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
                  "용기·포장": "packaging", "가격": "value"}
 FEEDBACK_MAX_CHARS = 280
-# 피드백은 **산 사람만** 남길 수 있다 (FeedbackController.purchased). 그런데 주문하면 세션이
-# 끝나므로(프롬프트 약속) 행동 목록으로는 차례가 오지 않는다. 주문 직후 한 단계로 붙인다.
+# 피드백은 구매와 무관하다 (사용자 결정 09-17). 안 산 사람의 의견이 판매자에게는 더 아플 때가
+# 많다. 그래서 둘러보는 중에도 남길 수 있게 행동 목록에 둔다.
+#   ⚠ 백엔드가 아직 구매자만 받으면(FeedbackController.purchased) 403 이 되어 조용히 실패한다.
+#     그 제한을 푸는 것은 백엔드 몫이고, 여기는 풀린 뒤를 전제한다.
+# 주문 직후에도 한 번 더 기회를 준다 — 사고 나서 쓰는 것이 가장 자연스러운 자리다.
 FEEDBACK_AFTER_ORDER_P = 0.6
+# 상세를 충분히 본 뒤에만 연다. 들어가자마자 의견부터 쓰는 사람은 없다.
+FEEDBACK_MIN_SCROLL_PCT = 40
 # 목록 정렬 (Jira 321). 프론트 ProductListPage 의 SortKey 라벨 그대로 — 화면에 보이는 말로 고르게 한다
 SORT_KEYS = {"인기순": "popular", "평점 높은순": "rating", "가격 낮은순": "price_asc", "가격 높은순": "price_desc"}
 # 결제 (Jira 321). PA 100명은 shop_backend 시드에 회원으로 들어 있다 (docs/shop-backend-requests.md:125)
@@ -1340,7 +1345,8 @@ def has_unvisited_in_list(page, visited):
 def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
                     n_details=0, has_unvisited=True, cart_over=False,
-                    sorted_once=False, checkout=None, has_banner=False):
+                    sorted_once=False, checkout=None, has_banner=False,
+                    feedback_here=False):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -1361,6 +1367,10 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
         # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
         if not wished_here:
             acts.append("wishlist_toggle")
+        # 의견 남기기 — 구매와 무관하다. 다만 상세를 충분히 본 뒤에만 열고 상품당 한 번만 연다.
+        # 백엔드가 같은 상품·같은 축 중복을 409 로 막으므로 두 번 열어도 실패한다.
+        if not feedback_here and pct >= FEEDBACK_MIN_SCROLL_PCT:
+            acts.append("write_feedback")
         return acts
     # 목록 화면: 끝까지 내려왔고 더 불러올 것도 없으면 scroll 은 무의미하다.
     # 다만 "더 보기" 가 남아 있으면 바닥이어도 내릴 값어치가 있다 (scroll 이
@@ -1496,6 +1506,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
     visited, cart = [], []   # 이미 본 상품 / 담은 상품
     last_detail = None       # (주소, 상품명) — 주문 뒤 피드백을 남기러 돌아갈 곳
+    feedback_done = set()    # 의견을 남긴 상품. 같은 상품·같은 축은 백엔드가 409 로 막는다
     cart_prices = {}         # 담은 상품의 화면 가격. 부담 판단에 쓴다
     budget = budget_of(persona)   # 이 사람이 실제로 내 본 최고가
     # 내려보는 폭의 사람별 중심값. **전용 스트림에서 뽑는다** — 기본 스트림을
@@ -1544,7 +1555,10 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                                    budget is not None and v > budget
                                    for v in cart_prices.values()),
                                sorted_once=sorted_once,
-                               has_banner=(kind == "list" and bool(read_banner(page))))
+                               has_banner=(kind == "list" and bool(read_banner(page))),
+                               feedback_here=any(
+                                   norm(f) and (norm(f) in norm(here) or norm(here) in norm(f))
+                                   for f in feedback_done))
         user = (f"[이번 턴에 고를 수 있는 행동] {' | '.join(acts)}"
                 f"{NL}이 중에서만 고르십시오." + NL + NL + user)
         if kind == "detail" and "scroll" not in acts:
@@ -1646,6 +1660,23 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             okd = False
             if verbose:
                 print(f"       [조작 실패] {type(e).__name__}: {str(e)[:70]}")
+        if act == "write_feedback":
+            # do_action 은 DOM 조작만 한다. 의견은 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서 처리한다.
+            # **집계(done/failed)와 history 보다 앞이어야 한다** — 뒤에 두면 성공해도 실패로 세고
+            # 다음 턴 프롬프트가 "(실패)" 라는 틀린 사실을 본다.
+            got = None
+            if client:
+                try:
+                    got = write_feedback(page, client, persona, here or "이 제품", cache_on, dry)
+                except Exception:
+                    got = None
+            okd = bool(got)
+            if okd:
+                calls += 1
+                feedbacks += 1
+                feedback_done.add(here)
+                if verbose:
+                    print(f"        의견 [{got[0]}] {got[1][:46]}")
         scroll_run = scroll_run + 1 if act == "scroll" else 0
         history.append(f"{act}" + (f" → {tgt}" if tgt else "")
                        + ("" if okd else "  (실패)"))
