@@ -159,10 +159,13 @@ pipeline {
                     set -eu
                     test -f "$EC2_ENV_FILE"
 
-                    # merge 커밋은 diff-tree 기본 동작이 변경 파일을 비워 둔다. 그러면
-                    # 수동 배포가 "변경된 서비스 없음"으로 끝나므로, 첫 부모 대비 diff를
-                    # 사용해 현재 배포 대상에 들어온 변경을 정확히 잡는다.
-                    if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+                    # 최신 커밋이 merge 이후의 일반 커밋이면 HEAD^만 비교할 때
+                    # merge에서 들어온 shop_backend 변경을 놓칠 수 있다. 최근 merge의
+                    # 첫 부모부터 현재 HEAD까지 누적해 배포 대상 서비스를 계산한다.
+                    latest_merge="$(git log -1 --merges --format='%H' 2>/dev/null || true)"
+                    if [ -n "$latest_merge" ] && git rev-parse --verify "$latest_merge^1" >/dev/null 2>&1; then
+                        changed="$(git diff --name-only "$latest_merge^1" HEAD)"
+                    elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
                         changed="$(git diff --name-only HEAD^ HEAD)"
                     else
                         changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
