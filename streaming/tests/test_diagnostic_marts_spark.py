@@ -410,5 +410,50 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertEqual(1, row["wishlist_count"])
 
 
+    # ── 노출 분모 (Jira 336 · 프론트 확정 2026-09-17) ───────────────────
+    def test_ctr_denominator_includes_recommendation_impressions(self):
+        """추천 카드 클릭도 product_click 이라 분모에 추천 노출이 있어야 한다.
+
+        프론트는 카드 하나에 노출 Event 를 하나만 낸다 — 목록은
+        product_impression, 추천·배너는 recommendation_impression. 분모를
+        전자만 두면 추천발 클릭이 분자에만 들어가 CTR 이 1 을 넘는다 (§4.1).
+        """
+        facts = self._facts([
+            self._fact("S1", "recommendation_impression"),
+            self._fact("S1", "product_click"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(0, row["product_impression_count"])
+        self.assertEqual(1, row["recommendation_impression_count"])
+        self.assertEqual(1, row["impression_count"])
+        self.assertEqual(1.0, row["product_ctr"])
+
+    def test_impression_count_is_the_sum_of_both_surfaces(self):
+        """둘 다 있으면 더한다. 한쪽만 세면 분모가 모자란다."""
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_impression"),
+            self._fact("S2", "recommendation_impression"),
+            self._fact("S1", "product_click"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(3, row["impression_count"])
+        self.assertAlmostEqual(1 / 3, row["product_ctr"])
+
+    def test_ctr_is_null_when_neither_surface_had_an_impression(self):
+        """분모 0 은 0% 가 아니라 모름이다 (§2)."""
+        facts = self._facts([self._fact("S1", "product_view")])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(0, row["impression_count"])
+        self.assertIsNone(row["product_ctr"])
+        self.assertIsNone(row["detail_entry_rate"])
+
+
 if __name__ == "__main__":
     unittest.main()

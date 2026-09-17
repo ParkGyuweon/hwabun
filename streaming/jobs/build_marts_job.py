@@ -83,8 +83,14 @@ DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 # Quick Look은 목록에서 상세를 여는 경로다. 화면에 있는 정상 동선이고 여기서 바로
 # 장바구니에 담을 수 있어서, 퍼널에서 빼면 담기 세션이 조회 세션보다 많아진다
 # (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
+# 노출 Event 는 둘이다. 프론트는 카드 하나에 하나만 내는데, 목록 그리드는
+# product_impression, 유사상품·히어로 배너·맞춤 기획전은
+# recommendation_impression 이다 (프론트 확인 2026-09-17). 클릭은 어느
+# 목록이든 product_click 이라, 분자에 맞는 분모는 두 노출의 합이다 (§4.1).
+IMPRESSION_EVENTS = ("product_impression", "recommendation_impression")
+
 FUNNEL_PRODUCT_EVENTS = (
-    "product_impression",
+    *IMPRESSION_EVENTS,
     "product_click",
     "quick_look",
     "product_view",
@@ -633,9 +639,9 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     ).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
-        F.min(F.when(F.col("event_name") == "product_impression", F.col("event_time"))).alias(
-            "first_impression_at"
-        ),
+        F.min(
+            F.when(F.col("event_name").isin(*IMPRESSION_EVENTS), F.col("event_time"))
+        ).alias("first_impression_at"),
         F.min(F.when(F.col("event_name") == "product_click", F.col("event_time"))).alias(
             "first_click_at"
         ),
@@ -772,6 +778,10 @@ def _product_daily_kpi(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         count_events("product_impression"),
+        # 추천·배너 카드의 노출. product_click 이 여기서도 나오므로 CTR 분모에
+        # 함께 들어간다. 컬럼을 따로 두는 이유는 두 노출의 판정 기준이 달라서다
+        # — 목록은 hold 300ms, 추천은 1000ms (§4.1).
+        count_events("recommendation_impression"),
         count_events("product_click"),
         count_events("quick_look"),
         count_events("product_view"),
@@ -860,8 +870,14 @@ def _product_daily_kpi(
             F.col("purchase_count_distinct_order"),
         )
         .drop("purchase_count_distinct_order")
-        .withColumn("product_ctr", _safe_ratio(F.col("product_click_count"), F.col("product_impression_count")))
-        .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("product_impression_count")))
+        # 분모는 두 노출의 합이다. product_impression 만 쓰면 추천 카드에서 온
+        # 클릭이 분자에만 들어가 비율이 1 을 넘는다 (§4.1).
+        .withColumn(
+            "impression_count",
+            (F.col("product_impression_count") + F.col("recommendation_impression_count")).cast("long"),
+        )
+        .withColumn("product_ctr", _safe_ratio(F.col("product_click_count"), F.col("impression_count")))
+        .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("impression_count")))
         .withColumn("add_to_cart_rate", _safe_ratio(F.col("add_to_cart_sessions"), F.col("detail_view_sessions")))
         .withColumn("purchase_rate", _safe_ratio(F.col("purchase_sessions"), F.col("detail_view_sessions")))
     )
@@ -1508,6 +1524,17 @@ def _content_daily_kpi(
         result.withColumn(
             "product_view_sessions",
             F.coalesce(F.col("product_view_sessions"), F.lit(0).cast("long")),
+        )
+        # 성분·리뷰가 아닌 content_kind 행(cta·price·product_image …)은 조인에
+        # 짝이 없어 NULL 이 된다. 계약이 N 으로 선언했고, "그 콘텐츠 종류가
+        # 아니라 성분 열람이 0" 이 맞는 뜻이다 (§4.4).
+        .withColumn(
+            "ingredient_view_sessions",
+            F.coalesce(F.col("ingredient_view_sessions"), F.lit(0).cast("long")),
+        )
+        .withColumn(
+            "review_view_sessions",
+            F.coalesce(F.col("review_view_sessions"), F.lit(0).cast("long")),
         )
         .withColumn(
             "avg_dwell_ms_per_session",
