@@ -2004,3 +2004,81 @@ table.data tr:hover td {
   gap: 6px;
   margin: 8px 0 0;
 }
+
+/* ---------- 내가 등록한 상품 (썸네일 목록) ---------- */
+
+.myproducts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.myproducts__item {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.06));
+}
+
+.myproducts__item:last-child {
+  border-bottom: 0;
+}
+
+.myproducts__thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 이미지를 안 올린 상품도 줄 높이를 지킨다 — 빈 칸이면 목록이 어긋나 읽기 어렵다 */
+.myproducts__thumb--empty {
+  display: block;
+}
+
+.myproducts__body {
+  min-width: 0;
+}
+
+.myproducts__name {
+  margin: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.myproducts__meta {
+  margin: 2px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.myproducts__price {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- 주문 표 (줄을 누르면 품목이 펴진다) ---------- */
+
+.table tr.is-clickable {
+  cursor: pointer;
+}
+
+.table tr.is-clickable:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* 펼친 품목 줄. 주문 줄보다 한 단 들여 써서 소속이 보이게 한다 */
+.table tr.table__sub td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+}

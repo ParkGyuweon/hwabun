@@ -105,7 +105,7 @@ export default function BehaviorScreen() {
           </p>
         </Panel>
 
-        <Panel title="고객이 지나온 단계" source="mock" fold aside="이벤트가 늘어도 단계는 그대로">
+        <Panel title="고객이 지나온 단계" source={source.friction} fold aside="이벤트가 늘어도 단계는 그대로">
           <Funnel steps={intentFunnel.map((s) => ({ label: s.ko, note: s.label, value: s.value }))} />
         </Panel>
       </div>

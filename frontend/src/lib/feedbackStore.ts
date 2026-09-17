@@ -87,8 +87,16 @@ export function feedbackSnapshot(): Feedback[] {
   if (snapshot) return snapshot;
   const s = readStored();
   const fresh: Override = { status: 'new', reply: null, replied_at: null };
-  const seeded: Feedback[] = SEED.map((row) => ({ ...row, ...(s.overrides[row.feedback_id] ?? fresh) }));
-  snapshot = [...s.local, ...seeded].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  /*
+   * 번들 샘플 30건을 더 이상 섞지 않는다 (2026-09-17).
+   * 배지에 '시드' 라고 적어 두긴 했지만, 화면에는 고객이 쓴 것처럼 생긴 문장이 30개 떠 있었고 사장님은
+   * 그것을 자기 고객의 말로 읽는다. 없으면 없다고 적는다.
+   *
+   * `SEED`·`isSeedFeedback` 은 남긴다 — 예전에 저장된 override 가 시드 id 를 가리킬 수 있어서, 그 판정이
+   * 사라지면 지운 글이 되살아난 것처럼 보인다.
+   */
+  void fresh;
+  snapshot = [...s.local].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   return snapshot;
 }
 

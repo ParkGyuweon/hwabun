@@ -1,13 +1,14 @@
 /**
  * 행동 지표 묶음 · 화면이 읽는 단 하나의 모양.
  *
- * 화면은 여기 정의된 `BehaviorMetrics` 만 본다. 값이 어디서 왔는지(마트 API 인지 모의 집계인지)는
- * `source` 가 블록별로 말해 주고, 화면은 그 값을 배지에 그대로 붙인다.
+ * 화면은 여기 정의된 `BehaviorMetrics` 만 본다. 값이 어디서 왔는지는 `source` 가 블록별로 말해 주고,
+ * 화면은 그 값을 배지에 그대로 붙인다.
  *
- *   모의  → metrics.ts 의 시드 고정 집계를 이 모양으로 묶는다 (mockBehavior)
- *   마트  → martAdapter.ts 가 API 응답을 이 모양으로 바꾼다. 블록이 없으면 모의 블록을 그대로 둔다
+ *   마트 응답 있음 → martAdapter.ts 가 이 모양으로 바꾼다. 배지 '실측'
+ *   없음           → `emptyBehavior` 의 0·빈 표 그대로. 배지 '없음'
  *
- * 그래서 화면 코드는 마트가 붙기 전과 후가 같다. 바뀌는 것은 배지와 숫자만이다.
+ * **지어낸 값을 끼워 넣지 않는다.** 예전에는 마트가 없으면 metrics.ts 의 시드 고정 집계로 화면을 채웠는데,
+ * 사장님은 그 숫자를 자기 브랜드 값으로 읽는다. 없는 것은 없다고 적는 편이 언제나 낫다.
  */
 import type { Product } from '../../types/product';
 import type { EventName } from '../../types/log';
@@ -16,29 +17,12 @@ import {
   type IngredientGapRow,
   type ProductMetrics,
   MINOR_WEIGHT,
-  contentAttention as mockContent,
-  dailySeries as mockDaily,
-  entryConversion as mockEntry,
-  eventVolumes as mockEventVolumes,
-  frictionByLocation as mockFriction,
-  frictionCounts as mockFrictionCounts,
-  ingredientGap as mockGap,
   ingredientWeights,
-  intentFunnel as mockIntent,
-  overview as mockOverview,
-  productMetrics as mockProducts,
-  products as mockBrandProducts,
-  quickExitRate as mockQuickExit,
-  sameSkinFilterRate as mockSameSkin,
-  scrapedIngredients as mockScraped,
-  segmentMatrix as mockMatrix,
-  segmentTopContent as mockTopContent,
-  standardFunnel as mockFunnel,
-  validationBehaviors as mockValidation,
+  brandProducts as myLineProducts,
 } from './metrics';
 import vocab from '../../../../contracts/product-feature-vocab.json';
 
-export type Src = 'real' | 'mock';
+export type Src = 'real' | 'none';
 
 export interface Overview {
   sessions: number;
@@ -166,7 +150,7 @@ export interface BehaviorSource {
   friction: Src;
   entry: Src;
   ingredients: Src;
-  /** 재구매 (E7). 모의가 없어 'mock' 이면 화면에 자리 자체가 없다 */
+  /** 재구매 (E7). 'none' 이면 화면에 자리 자체가 없다 */
   purchase: Src;
 }
 
@@ -202,53 +186,69 @@ export interface BehaviorMetrics {
   anyReal: boolean;
 }
 
-export const ALL_MOCK: BehaviorSource = {
-  overview: 'mock',
-  funnel: 'mock',
-  products: 'mock',
-  diagnostics: 'mock',
-  content: 'mock',
-  contentLift: 'mock',
-  behaviors: 'mock',
-  scraped: 'mock',
-  segments: 'mock',
-  grid: 'mock',
-  topContent: 'mock',
-  friction: 'mock',
-  entry: 'mock',
-  ingredients: 'mock',
-  purchase: 'mock',
+export const ALL_NONE: BehaviorSource = {
+  overview: 'none',
+  funnel: 'none',
+  products: 'none',
+  diagnostics: 'none',
+  content: 'none',
+  contentLift: 'none',
+  behaviors: 'none',
+  scraped: 'none',
+  segments: 'none',
+  grid: 'none',
+  topContent: 'none',
+  friction: 'none',
+  entry: 'none',
+  ingredients: 'none',
+  purchase: 'none',
 };
 
-/** 모의 집계를 화면 모양으로 묶는다. 값은 metrics.ts 그대로 */
-export function mockBehavior(days: number): BehaviorMetrics {
+/**
+ * 마트가 답하지 않았을 때의 묶음. 전부 0 과 빈 표다.
+ *
+ * `days` 를 받지만 일별 추이는 빈 배열이다 — 없는 날짜를 0 으로 채워 그리면 "방문이 0 이었던 날" 처럼 보인다.
+ * 모르는 것과 0 인 것은 다르고, 여기서는 모르는 쪽이다. 화면은 빈 그래프에 "아직 데이터가 없습니다" 를 적는다.
+ */
+export function emptyBehavior(): BehaviorMetrics {
   return {
     overview: {
-      ...mockOverview,
-      infoRate: (mockOverview.ingredientViewRate + mockOverview.reviewViewRate) / 2,
-      bounceRate: mockOverview.bounceRate,
+      sessions: 0,
+      impressions: 0,
+      clicks: 0,
+      detailViews: 0,
+      quickLooks: 0,
+      addToCart: 0,
+      removed: 0,
+      detailRate: 0,
+      cartRate: 0,
+      removalRate: 0,
+      ingredientViewRate: 0,
+      reviewViewRate: 0,
+      infoRate: 0,
+      bounceRate: null,
     },
     previous: null,
-    daily: mockDaily(days),
-    standardFunnel: mockFunnel,
-    productMetrics: mockProducts,
-    contentAttention: mockContent,
-    scrapedIngredients: mockScraped,
-    validationBehaviors: mockValidation,
-    segmentMatrix: mockMatrix,
+    daily: [],
+    standardFunnel: [],
+    productMetrics: [],
+    contentAttention: [],
+    scrapedIngredients: [],
+    validationBehaviors: [],
+    segmentMatrix: [],
     segmentByType: null,
-    segmentTopContent: mockTopContent,
-    sameSkinFilterRate: mockSameSkin,
-    frictionByLocation: mockFriction,
-    frictionCounts: mockFrictionCounts,
-    entryConversion: mockEntry,
-    intentFunnel: mockIntent,
-    eventVolumes: mockEventVolumes,
-    quickExitRate: mockQuickExit,
-    ingredientGap: mockGap,
-    ingredientInterestKind: 'dwell',
+    segmentTopContent: [],
+    sameSkinFilterRate: 0,
+    frictionByLocation: [],
+    frictionCounts: { rage_click: 0, dead_click: 0, scroll_backtrack: 0 },
+    entryConversion: [],
+    intentFunnel: [],
+    eventVolumes: [],
+    quickExitRate: 0,
+    ingredientGap: [],
+    ingredientInterestKind: 'score',
     repurchase: null,
-    source: ALL_MOCK,
+    source: ALL_NONE,
     martProcessedAt: null,
     anyReal: false,
   };
@@ -293,7 +293,7 @@ export interface IngredientInterestInput {
  * 관심 30종 × 내 라인 보유 (실측). metrics.ts 의 ingredientGap 과 같은 규칙이고, 관심 입력만 밖에서 받는다.
  * 어휘집에 없는 성분 이름은 보유 판정을 할 수 없어 표에서 뺀다 (마트 vocab_version 이 다를 때 조용히 틀리는 것보다 낫다).
  */
-export function buildIngredientGap(interest: IngredientInterestInput[], brandProducts: Product[] = mockBrandProducts): IngredientGapRow[] {
+export function buildIngredientGap(interest: IngredientInterestInput[], brandProducts: Product[] = myLineProducts): IngredientGapRow[] {
   const weightsByProduct = brandProducts.map((p) => ({ product: p, weights: ingredientWeights(p) }));
   const rows: IngredientGapRow[] = interest
     .map((i) => ({ ...i, name: canonicalIngredient(i.name) ?? '' }))

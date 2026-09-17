@@ -1,5 +1,8 @@
+import os
 import unittest
 from datetime import datetime, timezone
+
+from simulator.generator import gen_behavior_logs as gen
 
 try:
     import numpy as np
@@ -422,6 +425,48 @@ class ViewCartCurrencyTest(unittest.TestCase):
                                     and x["properties"].get("navigation_source") == "history_back"
                                     and x["page_view_id"] != ev["page_view_id"] for x in v))
 
+
+
+class ResolveNowTest(unittest.TestCase):
+    """09-17 — 시연 로그는 기준 시각을 오늘로 옮길 수 있어야 한다.
+
+    고정 시각(2026-08-28)으로 만들면 마트가 그 시점에 쌓이는데 대시보드 기본 조회창은
+    '어제까지 14일' 이라 영영 안 걸린다. 평가용 재현성은 기본값으로 지킨다."""
+
+    def setUp(self):
+        self._saved = os.environ.get("GEN_NOW")
+
+    def tearDown(self):
+        if self._saved is None:
+            os.environ.pop("GEN_NOW", None)
+        else:
+            os.environ["GEN_NOW"] = self._saved
+
+    def test_default_is_the_fixed_constant(self):
+        """안 주면 고정값 — 평가 데이터셋이 같은 씨앗으로 같은 파일이어야 한다"""
+        os.environ.pop("GEN_NOW", None)
+        self.assertEqual(datetime(2026, 8, 28, 12, 0, 0), gen._resolve_now())
+        os.environ["GEN_NOW"] = ""
+        self.assertEqual(datetime(2026, 8, 28, 12, 0, 0), gen._resolve_now())
+
+    def test_today_is_noon_of_today(self):
+        """KST 자정을 넘겨 날짜가 밀리지 않게 정오로 둔다"""
+        os.environ["GEN_NOW"] = "today"
+        got = gen._resolve_now()
+        now = datetime.now()
+        self.assertEqual((now.year, now.month, now.day, 12, 0, 0),
+                         (got.year, got.month, got.day, got.hour, got.minute, got.second))
+
+    def test_explicit_dates(self):
+        os.environ["GEN_NOW"] = "2026-09-17"
+        self.assertEqual(datetime(2026, 9, 17, 12, 0, 0), gen._resolve_now())
+        os.environ["GEN_NOW"] = "2026-09-17T09:30:00"
+        self.assertEqual(datetime(2026, 9, 17, 9, 30, 0), gen._resolve_now())
+
+    def test_bad_value_stops_instead_of_guessing(self):
+        os.environ["GEN_NOW"] = "어제"
+        with self.assertRaises(SystemExit):
+            gen._resolve_now()
 
 
 @unittest.skipIf(np is None, "numpy is required for the simulator generator")

@@ -36,5 +36,43 @@ class DemoLiveCurrencyTest(unittest.TestCase):
                 run.assert_not_called()
 
 
+class EnvelopeTest(unittest.TestCase):
+    """09-17 — Kafka 로 직접 넣는 되감기도 수집기가 채우는 봉투 다섯 필드를 채운다.
+
+    안 채우면 정제가 `missing_required_field` 로 전부 버린다. 09-17 실측: 원천 256,554건 중
+    253,596건(98.8%)이 이것 하나로 탈락, 전부 `source=simulator`."""
+
+    # 계약(contracts/event-schema.json) 필수 19개 중 수집기가 채우는 다섯
+    COLLECTOR_FIELDS = ("received_at", "source", "request_id", "event_index", "account_id")
+
+    def test_envelope_fills_every_field_the_collector_would(self):
+        e = demo_live.put_envelope({"actor_type": "synthetic"}, "2026-09-17T06:00:00.000Z", "req-1", 3)
+        for k in self.COLLECTOR_FIELDS:
+            self.assertIn(k, e, f"{k} 가 없으면 정제가 버린다")
+        self.assertEqual("2026-09-17T06:00:00.000Z", e["received_at"])
+        self.assertEqual("req-1", e["request_id"])
+        self.assertEqual(3, e["event_index"])
+
+    def test_source_follows_collector_rule(self):
+        """KafkaEventMessage.sourceOf — synthetic 이면 simulator, 아니면 web"""
+        self.assertEqual("simulator", demo_live.put_envelope({"actor_type": "synthetic"}, "t", "r", 0)["source"])
+        self.assertEqual("web", demo_live.put_envelope({"actor_type": "user"}, "t", "r", 0)["source"])
+
+    def test_account_id_is_null_not_absent(self):
+        """수집기도 비로그인이면 null 로 넣는다. 키가 없는 것과 null 은 다르다 — 없으면 탈락한다"""
+        e = demo_live.put_envelope({"actor_type": "synthetic"}, "t", "r", 0)
+        self.assertIn("account_id", e)
+        self.assertIsNone(e["account_id"])
+
+    def test_existing_account_id_is_kept(self):
+        e = demo_live.put_envelope({"actor_type": "user", "account_id": "PA00001"}, "t", "r", 0)
+        self.assertEqual("PA00001", e["account_id"])
+
+    def test_now_iso_ms_matches_occurred_at_shape(self):
+        """생성기 occurred_at 과 같은 모양 — 밀리초 3자리 + Z"""
+        import re
+        self.assertRegex(demo_live.now_iso_ms(), r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+
+
 if __name__ == "__main__":
     unittest.main()

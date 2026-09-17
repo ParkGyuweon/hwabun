@@ -72,6 +72,8 @@ FRONTEND_PRODUCTS = os.path.join(ROOT, "frontend", "src", "mocks", "products.sam
 REGISTERED_PRODUCTS = os.environ.get("REGISTERED_PRODUCTS_PATH") or os.path.join(
     ROOT, "batch", "ingest", "data", "serving", "registered_products.jsonl")
 FRONTEND_REGISTERED = os.path.join(ROOT, "frontend", "src", "mocks", "products.ssafy-beauty.json")
+# 등록 브랜드 상품 id — 카탈로그를 만들 때 채운다. 리뷰가 없어 페르소나의 구매 후보에 못 드는 상품들이다.
+REGISTERED_IDS = set()
 PROPERTIES_CONTRACT = os.path.join(ROOT, "contracts", "event-properties-schema.md")
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
@@ -106,7 +108,40 @@ def money(item_price_usd, item_price_krw):
         return int(item_price_krw) if item_price_krw is not None else None
     return round(float(item_price_usd), 2)
 DEFAULT_GENERATOR_TYPE = "python_batch"
-NOW = datetime(2026, 8, 28, 12, 0, 0)
+def _resolve_now():
+    """생성기 기준 시각. 모든 이벤트 시각이 여기서 거꾸로 뻗어 나간다 (window_days 만큼).
+
+    기본은 고정 상수다 — 평가용 로그가 재현돼야 하기 때문이다. 같은 씨앗으로 같은 파일이 나와야
+    홀드아웃 비교가 성립한다.
+
+    시연 로그는 사정이 다르다. 고정 시각으로 만들면 마트가 그 시점(2026-06-04~08-28)에 쌓이는데,
+    대시보드 기본 조회창은 "어제까지 14일" 이라 영영 안 걸린다. 배치가 다 성공해도 화면이 빈다.
+    그래서 시연 캐시를 만들 때만 `GEN_NOW` 로 오늘을 준다 — 로그 85일치가 통째로 따라와
+    최근 14일에 날짜별 데이터가 생긴다.
+
+        GEN_NOW=today                 오늘 12:00 (KST 자정 넘김을 피하려 정오)
+        GEN_NOW=2026-09-17            그 날 12:00
+        GEN_NOW=2026-09-17T09:30:00   분까지
+
+    주의: 이 값을 바꾸면 **같은 씨앗이라도 다른 파일**이 나온다. 평가 데이터셋을 다시 만들 때는
+    주지 말 것.
+    """
+    raw = (os.environ.get("GEN_NOW") or "").strip()
+    if not raw:
+        return datetime(2026, 8, 28, 12, 0, 0)
+    if raw.lower() == "today":
+        t = datetime.now()
+        return datetime(t.year, t.month, t.day, 12, 0, 0)
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            d = datetime.strptime(raw, fmt)
+            return d if fmt != "%Y-%m-%d" else d.replace(hour=12)
+        except ValueError:
+            continue
+    raise SystemExit(f"GEN_NOW 형식이 아닙니다: {raw!r} (today · 2026-09-17 · 2026-09-17T09:30:00)")
+
+
+NOW = _resolve_now()
 CHECKPOINT_MS = 15000                # 목록 체류 중 dwell 재발화 주기
 LIST_IMPRESSION_HOLD_MS = 300
 RECOMMENDATION_IMPRESSION_HOLD_MS = 1000
@@ -284,6 +319,15 @@ SCENARIO = {
     # 대시보드에서 "다시 온 사람" 을 셀 수 없다.
     "visit_weights": (0.35, 0.40, 0.25),   # 1회 / 2회 / 3회
     "revisit_window_days": 5,              # 최근 이 기간 안에 나눠 담는다
+    # 등록 브랜드(SSAFY Beauty) 상세를 보고 담는 비율. 리뷰 이력과 무관한 "발견 구매" 다.
+    # 페르소나의 담기·구매는 본인 리뷰 이력(pos)에서만 나오는데, 등록 상품은 우리가 만든
+    # 가상 브랜드라 세포라 원천 리뷰에 있을 수가 없다. 그래서 노출·조회는 되는데 **한 번도 안 팔렸다**
+    # (09-17 실측: 노출 39,013 · 조회 1,290 · 구매 0). 판매자 대시보드가 보여 줄 브랜드가
+    # 그 브랜드인데 재생 로그로는 구매 지표가 영영 안 찬다.
+    # 실제 쇼핑몰에서도 신규 브랜드는 리뷰 이력 없이 팔린다 — 상세를 보고 마음에 들면 담는 경로다.
+    "p_new_brand_cart": 0.12,
+    # 담은 것을 결제까지 가져가는 비율. 목표 상품 결제에 얹는다
+    "p_new_brand_buy": 0.55,
     # 상세를 보고 목록으로 돌아갔다가 같은 상품을 다시 여는 비율 (Jira 350).
     # 새 진입이 아니라 재조회라 마트가 건수 집계에서 빼야 하고, 그 제외 로직을 재려면 로그에 있어야 한다.
     "p_history_back": 0.06,
@@ -713,10 +757,14 @@ def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
 
 # ── 목록 페이지 체류 ──────────────────────────────────────────────────────
 def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
-                SC=SCENARIO, qrng=None, banners=None, reco=None):
+                SC=SCENARIO, qrng=None, banners=None, reco=None, carted=None):
     """reco: 추천 서버 응답 (Jira 221). 주면 promo_row 가 서버 items 가 되고
     recommendation_snapshot · recommendation_impression(list_id=main) 을 서버 식별자로 낸다.
-    banners 도 서버 값(banner_slot·trait_source 포함)이면 그대로 싣는다."""
+    banners 도 서버 값(banner_slot·trait_source 포함)이면 그대로 싣는다.
+
+    carted: 주면 Quick Look 으로 담은 상품 id 를 여기에 넣는다. 세션이 결제할 때 장바구니에
+            함께 올리기 위한 것이다 — 예전에는 담기만 하고 결제 목록에 못 들어가 **담았는데
+            영영 안 사지는** 상품이 됐다 (09-17 실측: 등록 상품 담기 27건 중 20건이 이 경로)."""
     e.new_page("product_list")
     e.tick(300, 1200)
     if first:
@@ -812,6 +860,8 @@ def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
                 e.tick(300, 2000, rng=qrng)
                 e.emit("add_to_cart", g, quantity=1, **price_props(catalog, g),
                        entry_source="quick_look")   # 다른 담기 5곳과 같이 가격 속성 (Jira 342)
+                if carted is not None:
+                    carted.append(g)                # 결제 목록에 올릴 수 있게 알린다
             if wished:
                 e.tick(200, 1200, rng=qrng)
                 e.emit("wishlist_toggle", g, action="add", entry_source="quick_look")
@@ -1177,6 +1227,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     #   cbf_v1      추천 점수가 후보의 절반을 정한다. 사람마다 다른 화면을 본다
     # 어느 쪽이든 고른 뒤의 행동(체류·담기)은 hidden preference 가 정한다.
     regret = None          # 담았다 뺄 이탈 상품 (최대 1개)
+    discovered = []        # 리뷰 이력 없이 담은 등록 브랜드 상품 (신규 브랜드 발견 구매)
+    ql_carted = []         # Quick Look 으로 담은 상품 — 결제 목록에 올린다
     cat = catalog[target]["cat"]
     n_bounce = int(rng.integers(*SC["bounce_range"]))
     if exposure is not None:
@@ -1287,7 +1339,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             browse_list(e, promo_now, grid[:PAGE_SIZE], catalog, rng,
                         dwell_ms=int(rng.integers(*SC["list_dwell_ms"])),
                         first=(i == 0 or i in splits),
-                        SC=SC, qrng=qrng, banners=banners, reco=reco)
+                        SC=SC, qrng=qrng, banners=banners, reco=reco,
+                        carted=ql_carted)
             if via_banner:
                 batch, shown, source, algo = e.last_banner
                 b = next(x for x in shown if x["product_id"] == g)
@@ -1367,6 +1420,15 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             e.tick(); e.emit("add_to_cart", g, quantity=1,
                              **price_props(catalog, g), content_kind="cta")
             regret = g
+        elif g in REGISTERED_IDS and rng.random() < SC["p_new_brand_cart"]:
+            # ── 신규 브랜드 발견 구매 ────────────────────────────────────────
+            # 등록 상품은 리뷰가 없어 pos(구매 후보)에 절대 못 든다. 그래서 배너·추천으로 상세까지
+            # 와도 담기 분기가 하나도 안 걸렸다. 리뷰 이력과 무관하게, 본 김에 담는 경로를 준다.
+            if rng.random() < SC["wishlist_p_target"]:
+                e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+            e.tick(); e.emit("add_to_cart", g, quantity=1,
+                             **price_props(catalog, g), content_kind="cta")
+            discovered.append(g)
         elif rng.random() < SC["wishlist_p_bounce"]:
             e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
 
@@ -1389,8 +1451,13 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     # product_id 는 싣지 않는다 — 화면 단위 이벤트라 특정 상품의 증거가 아니다.
     # 결제까지 가는 세션 (Jira 312). 목표 상품만 결제한다 — 시드는 과거에 이미 산 것이고, 이탈 상품은 빼는 중이다
     buy = rng.random() < SC["p_purchase_after_cart"]
-    if regret is not None or buy or rng.random() < SC["p_view_cart"]:
-        cart = [g for g in seeds] + [target] + ([regret] if regret else [])
+    # 발견 구매한 등록 상품 중 결제까지 가는 것 (위 p_new_brand_cart 로 담긴 것들)
+    # 담은 것 중 결제까지 가는 것. 목표 상품 외에 담긴 것들(발견 구매 · Quick Look)이 대상이다.
+    # 시드는 과거에 이미 산 것이라 뺀다.
+    extra = list(dict.fromkeys(discovered + [g for g in ql_carted if g not in seeds and g != target]))
+    buy_new = [g for g in extra if rng.random() < SC["p_new_brand_buy"]]
+    if regret is not None or buy or buy_new or rng.random() < SC["p_view_cart"]:
+        cart = [g for g in seeds] + [target] + extra + ([regret] if regret else [])
         e.new_page("cart")
         e.tick(); e.emit("page_view", navigation_source="in_app")
         e.tick(300, 2000)
@@ -1411,8 +1478,11 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             e.emit("remove_from_cart", regret, quantity=1,
                    **price_props(catalog, regret),
                    cart_size_after=len(cart) - 1)
-        if buy:
-            checkout(e, catalog, [target], rng, SC, quantities={target: q})
+        if buy or buy_new:
+            # 목표 상품은 buy 일 때만. 발견한 등록 상품은 제 확률로 따로 붙는다 —
+            # 신규 브랜드만 사고 나가는 세션도 실제로 있다
+            gids = ([target] if buy else []) + buy_new
+            checkout(e, catalog, gids, rng, SC, quantities={target: q} if buy else None)
 
     e.new_page("product_list")
     e.tick(); e.emit("page_view", navigation_source="in_app")
@@ -1516,6 +1586,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         for r in reg:                      # 스키마 맞춤: 생성기가 읽는 키만 채운다
             r.setdefault("_review_stats", {}).setdefault("review_count", 0)
         prods = prods + reg
+        REGISTERED_IDS.update(r["product_id"] for r in reg)
         if os.path.exists(FRONTEND_REGISTERED):
             for product in json.load(open(FRONTEND_REGISTERED, encoding="utf-8")):
                 frontend_products.setdefault(product["product_id"], product)
