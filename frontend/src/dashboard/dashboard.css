@@ -2064,3 +2064,21 @@ table.data tr:hover td {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ---------- 주문 표 (줄을 누르면 품목이 펴진다) ---------- */
+
+.table tr.is-clickable {
+  cursor: pointer;
+}
+
+.table tr.is-clickable:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* 펼친 품목 줄. 주문 줄보다 한 단 들여 써서 소속이 보이게 한다 */
+.table tr.table__sub td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+}

@@ -590,6 +590,56 @@ export interface SellerPulse {
   feedbacks: number;
 }
 
+/* ------------------------------------------------------------------ 판매자 주문 목록 */
+
+export interface SellerOrderItem {
+  product_id: string;
+  product_name: string;
+  variant_label: string | null;
+  quantity: number;
+  unit_price: number;
+  line_amount: number;
+}
+
+export interface SellerOrder {
+  order_id: string;
+  buyer_id: string;
+  buyer_nickname: string | null;
+  status: string;
+  currency: string;
+  /** 결제 시각 (없으면 생성 시각). ISO 문자열 */
+  ordered_at: string | null;
+  /** **내 브랜드 줄의 합.** 주문 총액이 아니다 — 다른 브랜드가 섞인 주문에서 남의 몫을 빼고 센다 */
+  brand_amount: number;
+  item_count: number;
+  items: SellerOrderItem[];
+}
+
+/**
+ * `GET /api/seller/orders?brandId=&from=&to=` (docs/dashboard/seller-console-gaps.md §4).
+ *
+ * 못 읽으면 null 이다. 화면은 그때 "-" 를 적는다 — 빈 배열로 바꿔 돌려주면 "주문이 없다" 와 구분이 안 된다.
+ */
+export async function fetchSellerOrders(
+  brandId: string,
+  range?: { from: string; to: string },
+): Promise<SellerOrder[] | null> {
+  const query = new URLSearchParams({ brandId });
+  if (range) {
+    query.set('from', range.from);
+    query.set('to', range.to);
+  }
+  try {
+    const res = await authFetch('SELLER', `/api/seller/orders?${query.toString()}`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { orders?: unknown };
+    if (!Array.isArray(body.orders)) return null;
+    return body.orders as SellerOrder[];
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchSellerPulse(brandId: string): Promise<SellerPulse | null> {
   try {
     const res = await authFetch('SELLER', `/api/seller/dashboard?brandId=${encodeURIComponent(brandId)}`);
