@@ -246,7 +246,7 @@ PRODUCT_FACT_SCHEMA = (
     "actor_type string, source string, generator_type string, scenario_id string, "
     "simulation_run_id string, session_id string, user_id string, event_name string, "
     "order_id string, purchase_quantity int, item_revenue decimal(18,2), currency string, "
-    "close_reason string, action string"
+    "close_reason string, action string, navigation_source string"
 )
 
 
@@ -276,7 +276,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
         return (
             date(2026, 9, day), product, "CAT1", "A", "user", "web",
             None, None, None, session, user, event_name, None, None, None, None,
-            None, action,
+            None, action, None,
         )
 
     def test_quick_look_cart_counts_against_detail_view_sessions(self):
@@ -327,7 +327,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
             self._event("S1", "U1", "quick_look"),
             (
                 date(2026, 9, 8), "P1", "CAT1", "A", "user", "web", None, None, None,
-                "S1", "U1", "purchase", "O1", 1, None, None, None, None,
+                "S1", "U1", "purchase", "O1", 1, None, None, None, None, None,
             ),
             self._event("S2", "U2", "product_view"),
         ])

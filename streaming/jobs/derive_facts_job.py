@@ -282,6 +282,7 @@ def _properties_schema() -> Any:
         "action",
         "open",
         "close_reason",
+        "navigation_source",
         "vocab_version",
         "banner_type",
         "banner_value",
@@ -530,6 +531,10 @@ def _product_event_fact(
         # 찜은 토글이라 추가와 해제가 같은 Event 다. 가르지 않으면
         # wishlist_count 가 "관심"이 아니라 "누른 횟수"가 된다 (§4.1).
         _prop(F.col("_properties"), "action").alias("action"),
+        # 뒤로가기로 돌아오면 프론트가 product_view 를 다시 낸다
+        # (navigation_source="history_back", 프론트 확인 2026-09-17).
+        # 새 진입이 아니라 재조회라 건수 기준 집계에서 빼야 한다 (§4.1).
+        _prop(F.col("_properties"), "navigation_source").alias("navigation_source"),
         _prop(F.col("_properties"), "added_to_cart")
         .cast("boolean")
         .alias("added_to_cart"),
