@@ -73,6 +73,22 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
         <div className="grid grid--kpi">
           <Kpi label="백엔드 주문" value={fmt.int(pulse.orders)} sub="결제 완료 기준 · shop_backend 실측" source="real" />
           <Kpi label="백엔드 매출" value={`${Math.round(pulse.revenue).toLocaleString('ko-KR')}원`} sub="결제 완료 합계" source="real" />
+          {/*
+            주문 수만 보면 "5건" 이 5개인지 50개인지 알 수 없다. 팔린 개수와 가짓수를 따로 적는다 —
+            한 상품이 5번 팔린 것과 다섯 상품이 하나씩 팔린 것은 다음에 할 일이 다르다.
+          */}
+          <Kpi
+            label="판매 수량"
+            value={`${fmt.int(pulse.units)}개`}
+            sub={pulse.orders > 0 ? `주문 ${fmt.int(pulse.orders)}건 · 한 주문에 평균 ${(pulse.units / pulse.orders).toFixed(1)}개` : '결제 완료 기준'}
+            source="real"
+          />
+          <Kpi
+            label="팔린 상품 가짓수"
+            value={`${fmt.int(pulse.soldProducts)}개`}
+            sub={`주문 줄 ${fmt.int(pulse.orderItems)}건 · 한 번이라도 팔린 상품`}
+            source="real"
+          />
           <Kpi label="백엔드 리뷰" value={fmt.int(pulse.reviews)} sub="구매 고객이 남긴 리뷰" source="real" />
           <Kpi label="백엔드 피드백" value={fmt.int(pulse.feedbacks)} sub="구매 고객이 남긴 의견" source="real" />
         </div>
