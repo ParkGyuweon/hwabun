@@ -1,4 +1,4 @@
-import { BarList, Funnel, Kpi, Panel } from '../components';
+import { BarList, Funnel, Kpi, OriginBadge, Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
 
@@ -24,8 +24,10 @@ export default function BehaviorScreen() {
   return (
     <div className="stack">
       {worst ? (
-        <section className="verdict">
-          <p className="verdict__eyebrow">고객이 가장 많이 막힌 자리</p>
+        <section className="verdict verdict--mine">
+          <p className="verdict__eyebrow">
+            고객이 가장 많이 막힌 자리 <OriginBadge kind="mine" />
+          </p>
           <h2 className="verdict__headline">
             {worst.where}에서 {worst.ko}
           </h2>
@@ -103,14 +105,14 @@ export default function BehaviorScreen() {
           </p>
         </Panel>
 
-        <Panel title="고객이 지나온 단계" source="mock" aside="이벤트가 늘어도 단계는 그대로">
+        <Panel title="고객이 지나온 단계" source="mock" fold aside="이벤트가 늘어도 단계는 그대로">
           <Funnel steps={intentFunnel.map((s) => ({ label: s.ko, note: s.label, value: s.value }))} />
         </Panel>
       </div>
 
       <details className="fold">
         <summary>수집된 행동 종류 상위 {eventVolumes.length}개 · 전체 36종</summary>
-        <Panel title="행동별 수집 건수" source={source.friction}>
+        <Panel title="행동별 수집 건수" source={source.friction} fold>
           <BarList items={eventVolumes.map((e) => ({ label: e.name, value: e.count }))} format={fmt.compact} />
         </Panel>
       </details>

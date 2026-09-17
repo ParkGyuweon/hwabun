@@ -305,6 +305,18 @@ table.data th {
   padding: 24px 26px;
 }
 
+/*
+ * 공유 데이터(핑크) 표시. 이 레이어가 위에서 `.panel`·`.kpi` 의 테두리를 없애고 그림자로 바꾸므로
+ * 구분선도 여기서 다시 그린다 — dashboard.css 에만 두면 이 규칙에 덮인다.
+ *
+ * 배지 하나로는 스크롤 중에 놓친다. "이건 혼자서는 못 얻는 값" 이 이 화면에서 가장 중요한 구분이라
+ * 왼쪽 띠를 한 겹 더 둔다. 면 전체를 칠하지는 않는다 — 통째로 분홍이면 경고처럼 읽힌다.
+ */
+.panel--shared,
+.kpi--shared {
+  box-shadow: var(--lift), inset 3px 0 0 var(--accent);
+}
+
 .panel__head {
   margin-bottom: 18px;
   padding-bottom: 14px;
@@ -1292,4 +1304,16 @@ table.data td.is-warn {
   .defn__list dd {
     margin-bottom: 10px;
   }
+}
+
+/* 결론 배너: 전체 브랜드 종합은 핑크 그라데이션 + 왼쪽 띠. 내 것(연두)과 한눈에 갈려야 한다 */
+.verdict--mine {
+  border-left: 5px solid var(--brand);
+}
+
+.verdict--shared {
+  border-left: 5px solid var(--accent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), rgba(255, 255, 255, 0) 58%),
+    var(--panel);
 }

@@ -1,4 +1,4 @@
-import { BarList, Kpi, Panel } from '../components';
+import { BarList, Kpi, OriginBadge, Panel } from '../components';
 import { SKIN_TYPE_KO, fmt, products, reviewStats, reviewsBySkinType, troubleRanking } from '../lib/metrics';
 
 /** 소비자 평가와 자극·트러블. 이 화면은 전부 리뷰 2,000건 실측이다 */
@@ -45,8 +45,10 @@ export default function ReviewsScreen({
       </div>
 
       {hi && lo && split >= 0.5 ? (
-        <section className="verdict">
-          <p className="verdict__eyebrow">피부 타입별로 평가가 갈립니다</p>
+        <section className="verdict verdict--mine">
+          <p className="verdict__eyebrow">
+            피부 타입별로 평가가 갈립니다 <OriginBadge kind="mine" />
+          </p>
           <h2 className="verdict__headline">
             {SKIN_TYPE_KO[hi.type]} {hi.avgRating.toFixed(1)}점 · {SKIN_TYPE_KO[lo.type]} {lo.avgRating.toFixed(1)}점
           </h2>
@@ -138,7 +140,7 @@ export default function ReviewsScreen({
         </div>
       </Panel>
 
-      <Panel title="자극·트러블 언급 상위 상품" source="real" aside="언급 비율 합 기준">
+      <Panel title="자극·트러블 언급 상위 상품" source="real" fold aside="언급 비율 합 기준">
         <div className="table-wrap">
           <table className="data">
             <thead>

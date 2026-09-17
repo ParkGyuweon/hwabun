@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useBackdropClose } from '../../hooks/useBackdropClose';
 import AuthForm from './AuthForm';
 import MyPage from '../account/MyPage';
 import '../../styles/auth.css';
@@ -38,6 +39,9 @@ export default function AccountMenu() {
     );
   }
 
+  // 드래그로 글자를 긁다 배경에서 손을 떼도 닫히지 않게 — 배경에서 눌렀다 뗀 클릭만 닫는다
+  const backdrop = useBackdropClose(() => setOpen(false));
+
   return (
     <>
       <button type="button" className="account__btn account__btn--login" onClick={() => setOpen(true)}>
@@ -45,14 +49,8 @@ export default function AccountMenu() {
       </button>
       {/* body 로 포털 — 헤더의 backdrop-filter 가 fixed 기준을 헤더로 바꿔 카드가 잘린다 (MyPage 주석) */}
       {open ? createPortal(
-        <div className="auth-modal" role="presentation" onClick={() => setOpen(false)}>
-          <div
-            className="auth-modal__card"
-            role="dialog"
-            aria-modal="true"
-            aria-label="로그인"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="auth-modal" role="presentation" {...backdrop}>
+          <div className="auth-modal__card" role="dialog" aria-modal="true" aria-label="로그인">
             <button type="button" className="auth-modal__close" aria-label="닫기" onClick={() => setOpen(false)}>
               ×
             </button>

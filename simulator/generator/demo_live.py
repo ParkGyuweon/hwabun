@@ -16,7 +16,8 @@
        있으면 그대로 쓴다. 통화는 env `DEMO_CURRENCY`(기본 KRW) — 사이트가 원화(Jira 302)이고 계약이 purchase·view_cart 의
        currency 를 KRW 로 고정(Jira 303)해서, 달러 로그를 섞으면 Q5 `purchase_fact_currency_is_unambiguous` 가 깨진다(Jira 341).
        파일명에 통화가 들어가서 옛 `demo_behavior_<limit>.jsonl`(USD) 캐시는 다시 쓰지 않는다.
-       배포 컨테이너는 `DEMO_LIMIT=1000`(71만 건 · 714MB · 20초 · RSS 1.2GB) 으로 돈다 — 1GB 한도에서 9,900명은 OOM.
+       컨테이너 안 생성은 1,000명(71만 건 · 714MB · 20초 · RSS 1.2GB)까지 — 9,900명(RSS 12GB)은 OOM. 배포본은 DEMO_LIMIT=9900 이고
+       캐시를 노트북에서 만들어 볼륨 /data/demo_cache 에 올려 둔다(런북 §3, 09-17).
     4. 로그를 **key = session_id** 로 Kafka `activity-events` 에 초당 `--rate` 건씩 넣는다 — 수집기(backend/)와 같은 규칙이라
        파티션 3개로 갈라지고, 추천 서버 소비자가 읽어 상태에 반영한다. 그 사이 `/api/recommend` 도 초당 2~3번 불러
        응답 시간 칸을 살린다.
@@ -47,7 +48,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 페르소나 수·캐시 위치는 환경변수로도 준다 (Jira 335). 생성기는 페르소나 1명당 RSS 약 1.2MB · 파일 0.7MB 를 쓰므로
 # 9,900명은 RSS 약 12GB · 6.9GB 파일 — 노트북에선 되지만 배포 컨테이너(mem_limit)에서는 OOM 으로 죽는다(09-16 실측).
-# 배포 compose 는 DEMO_LIMIT=1000(RSS 1.2GB · 714MB · 21초), DEMO_CACHE_DIR=/data/demo_cache(볼륨, 재배포에도 남는다).
+# 배포 compose 기본값은 DEMO_LIMIT=1000 이지만 EC2-1 .env 는 9900(노트북 생성 캐시 업로드, 09-17). DEMO_CACHE_DIR=/data/demo_cache(볼륨, 재배포에도 남는다).
 DEFAULT_LIMIT = int(os.environ.get("DEMO_LIMIT", "9900"))
 CACHE_DIR = os.environ.get("DEMO_CACHE_DIR") or os.path.join(HERE, ".cache")
 # 생성기 통화(Jira 341). 생성기 기본은 USD(평가용 로그 호환, Jira 334)지만 시연 로그는 사이트·계약과 같은 KRW 여야 한다.

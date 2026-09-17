@@ -12,10 +12,17 @@ class ContractTests(unittest.TestCase):
     def test_checked_in_ddl_uses_grain_not_surrogate(self):
         contract = load_contract()
         self.assertEqual(16, len(contract.columns))
+        self.assertTrue(contract.uses_surrogate_key)
         self.assertNotIn("dw_row_id", contract.names)
         self.assertIn("scenario_id", contract.grain)
         self.assertIn("simulation_run_id", contract.grain)
         self.assertTrue(next(c for c in contract.columns if c.name == "scenario_id").nullable)
+
+    def test_dimension_contract_uses_its_direct_primary_key(self):
+        contract = load_contract(mart="brand_cohort_dim")
+        self.assertFalse(contract.uses_surrogate_key)
+        self.assertEqual(("brand_id",), contract.grain)
+        self.assertEqual("brand_id", contract.names[0])
 
     def test_identifier_rejects_injection_and_long_names(self):
         for value in ("dw; DROP TABLE x", "x" * 65, "a.b", "A"):

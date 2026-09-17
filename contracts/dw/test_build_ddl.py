@@ -175,11 +175,19 @@ class GrainTest(unittest.TestCase):
         self.assertIn(f"PRIMARY KEY (`{SURROGATE_KEY}`)", ddl)
         self.assertIn("KEY `ix_brand_daily_kpi__grain`", ddl)
 
-    def test_every_projected_mart_needs_a_surrogate_key(self):
-        """10종 전부 grain 에 실행 축이 있어 복합 PRIMARY KEY 를 쓸 수 없다."""
+    def test_nullable_grain_marts_use_surrogate_except_dimension(self):
+        """NULL 가능 축은 대리키를 쓰고, Dimension grain은 직접 PK를 쓴다."""
         for mart, grain in GRAINS.items():
             with self.subTest(mart=mart):
-                self.assertTrue(any(column in NULLABLE_KEYS for column in grain))
+                nullable_grain = any(
+                    column in NULLABLE_KEYS
+                    and column not in NOT_NULL_KEYS_BY_MART.get(mart, ())
+                    for column in grain
+                )
+                if mart == "brand_cohort_dim":
+                    self.assertFalse(nullable_grain)
+                else:
+                    self.assertTrue(nullable_grain)
 
     def test_grain_without_nullable_axis_uses_a_composite_key(self):
         """지금은 해당하는 Mart 가 없지만 분기는 살아 있어야 한다.

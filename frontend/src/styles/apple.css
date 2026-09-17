@@ -26,9 +26,8 @@
 
   --page-max: 1120px;
 
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Pretendard',
-    'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif;
+  /* 글꼴은 styles/pretendard.css 한 곳에서 정한다 — 세 파일에 적어 두면 조용히 갈라진다 */
+  font-family: var(--font-sans);
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;

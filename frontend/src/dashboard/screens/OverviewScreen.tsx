@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerPulse } from '../../lib/shopApi';
-import { BarList, Funnel, Kpi, LineChart, Panel } from '../components';
+import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
@@ -110,8 +110,10 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
         </div>
       ) : null}
       {top ? (
-        <section className="verdict">
-          <p className="verdict__eyebrow">지금 손봐야 할 것</p>
+        <section className={`verdict verdict--${top.origin}`}>
+          <p className="verdict__eyebrow">
+            지금 손봐야 할 것 <OriginBadge kind={top.origin} />
+          </p>
           <h2 className="verdict__headline">{top.headline}</h2>
           <ul className="verdict__reasons">
             {top.reasons.map((r) => (
@@ -165,10 +167,10 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
           <ul className="insight-list">
             {rest.map((i) => (
               <li key={i.id}>
-                <button type="button" className="insight-list__item" onClick={() => onGo?.(i.screen)}>
+                <button type="button" className={`insight-list__item insight-list__item--${i.origin}`} onClick={() => onGo?.(i.screen)}>
                   <span className="insight-list__head">{i.headline}</span>
                   <span className="insight-list__meta">
-                    {i.unit} · 표본 {fmt.int(i.n)} · {i.confidence}
+                    <OriginBadge kind={i.origin} /> {i.unit} · 표본 {fmt.int(i.n)} · {i.confidence}
                   </span>
                 </button>
               </li>
@@ -205,7 +207,7 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
             sub={overview.bounceRate === null ? '마트에 이탈률이 없습니다. 3초 이탈이 오면 여기에 씁니다' : '추가 행동 없이 이탈'}
           />
         </div>
-        <Panel title="관심도 TOP 5" source={source.products} aside="행동 가중 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)">
+        <Panel title="관심도 TOP 5" source={source.products} fold aside="행동 가중 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)">
           <BarList
             items={productMetrics.slice(0, 5).map((p) => ({
               label: p.product.product_name,

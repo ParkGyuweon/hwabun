@@ -159,15 +159,10 @@ NULLABLE_VALUES = {
 
 
 # ── projection 대상 ─────────────────────────────────────────────────────────
-# **Parquet 을 읽을 수 없는 소비자가 있는 Mart 만 MySQL 로 옮긴다** (§7.2).
-# 지금 그런 소비자는 둘뿐이다.
-#   1) 대시보드 API — Spark 는 잡을 띄우는 데만 수 초라 조회를 못 받는다
-#   2) 추천 서버   — EC2-1 에 있고 Parquet 은 EC2-2 에 있다. 파일을 못 읽는다
-#      (deploy/ec2-2/README "EC2-1 의 추천 데이터 Volume 은 이 서버에 자동
-#       공유되지 않는다")
-#
-# 나머지는 Parquet 에 그대로 두고 Q5 가 계속 검증한다. 소비자가 생기면 GRAINS 에
-# 한 줄 더하고 다시 돌리면 된다 — 근거 없는 테이블을 미리 만들지 않는다.
+# 현재 MySQL projection 대상은 이 파일의 GRAINS 22종이다 (§7.2).
+# EC2-2 Compose의 기본 실행은 첫 리허설을 위해 7종으로 제한하지만, 적재 Job의
+# allowlist와 DDL은 전체 GRAINS를 지원해야 한다. Parquet 전용 Mart는 아래
+# PARQUET_ONLY에 명시한다.
 #
 # grain 은 §4 그대로이고 인덱스 선두만 §7.6 의 접근 방식에 따라 바꾼다.
 GRAINS = {
@@ -307,8 +302,9 @@ PARQUET_ONLY = {
 }
 
 # MySQL 은 PRIMARY KEY 에 NULL 을 허용하지 않는다. NULL 이 가능한 축이 grain 에
-# 있는 Mart 는 UNIQUE KEY 로 둘 수 없어(NULL 은 중복으로 보지 않는다) 대리키를
-# 쓴다. 중복 검사는 적재 Job 이 §7.1 검증에서 수행한다.
+# 있는 Mart는 UNIQUE KEY로 둘 수 없어(NULL은 중복으로 보지 않는다) 대리키를 쓴다.
+# brand_cohort_dim처럼 grain이 NOT NULL인 Dimension은 직접 PRIMARY KEY를 쓴다.
+# 중복 검사는 적재 Job이 §7.1 검증에서 수행한다.
 SURROGATE_KEY = "dw_row_id"
 
 

@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { fetchSellerFeedback } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
-import { Panel } from '../components';
+import { OriginBadge, Panel } from '../components';
 import { feedbackProducts as products } from '../lib/metrics';
 import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -196,8 +196,10 @@ export default function FeedbackScreen() {
       </div>
 
       {verdict ? (
-        <section className="verdict">
-          <p className="verdict__eyebrow">가장 많이 고쳐 달라는 것</p>
+        <section className="verdict verdict--mine">
+          <p className="verdict__eyebrow">
+            가장 많이 고쳐 달라는 것 <OriginBadge kind="mine" />
+          </p>
           <h2 className="verdict__headline">{verdict.headline}</h2>
           <p className="verdict__reason">{verdict.reason}</p>
           <div className="fbx-verdict__routes">
@@ -324,7 +326,7 @@ export default function FeedbackScreen() {
       </Panel>
 
       {rows.length > 0 ? (
-        <Panel title="원문" source="real" aside={`${rows.length}건`}>
+        <Panel title="원문" source="real" fold aside={`${rows.length}건`}>
           <div className="fbx-inbox__head">
             <h3>{category ? (category === PENDING ? '분류 대기' : categoryLabel(category)) : axisLabelOf(axis)}</h3>
             <small>반영했으면 한 줄 남기세요. 고객 화면에 그대로 갑니다.</small>

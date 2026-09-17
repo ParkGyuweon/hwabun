@@ -1,8 +1,11 @@
-import { useMemo } from 'react';
-import { Panel } from '../components';
+import { useMemo, useState } from 'react';
+import { OriginBadge, Panel } from '../components';
 import { MINOR_WEIGHT, catalogProducts, cautionPrevalence, fmt, ingredientStats, ingredientWeights, products } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
 import { labelKo } from '../../lib/formLabels';
+
+/** 성분 갭 표의 기본 행 수. 관심 상위 10종이면 "찾는데 없는 성분" 판단에 충분하다 */
+const GAP_PREVIEW = 10;
 
 const ko = (name: string) => {
   const k = labelKo(name);
@@ -29,6 +32,12 @@ export default function IngredientsScreen({
 
   const gaps = ingredientGap.filter((r) => r.gap);
   const top10 = ingredientGap.filter((r) => r.rank <= 10);
+  /*
+   * 표는 갭 행이 위로 정렬돼 있어 답이 첫 열 줄 안에 있다. 30종을 다 펼쳐 두면 화면이 표 하나로
+   * 덮이고 정작 봐야 할 갭 행이 스크롤에 묻힌다. 기본은 10행, 나머지는 눌러서 편다.
+   */
+  const [showAllGap, setShowAllGap] = useState(false);
+  const shownGap = showAllGap ? ingredientGap : ingredientGap.slice(0, GAP_PREVIEW);
   const ownedTop = top10.filter((r) => r.owned.length > 0).length;
 
   const band = [...weights.entries()]
@@ -41,8 +50,11 @@ export default function IngredientsScreen({
 
   return (
     <div className="stack">
-      <section className="verdict">
-        <p className="verdict__eyebrow">찾는데 없는 성분</p>
+            {/* 관심 순위는 플랫폼 전체 값(E5 에 brand 축 없음). 보유 판정만 내 전성분이다 → 전체 종합(핑크) */}
+      <section className="verdict verdict--shared">
+        <p className="verdict__eyebrow">
+          찾는데 없는 성분 <OriginBadge kind="shared" />
+        </p>
         <h2 className="verdict__headline">
           {gaps.length === 0
             ? '관심 상위 10 성분을 모두 갖고 있습니다'
@@ -61,7 +73,7 @@ export default function IngredientsScreen({
         <p className="verdict__sample">{source.ingredients === 'real' ? '관심은 마트 실측 (플랫폼 전체) · 보유는 전성분 실측' : '관심은 모의 · 보유는 전성분 실측'}</p>
       </section>
 
-      <Panel title="성분 갭 표" source={source.ingredients} aside={`관심 순 ${ingredientGap.length}종 · 갭 행 위`}>
+      <Panel title="성분 갭 표" origin="shared" source={source.ingredients} aside={`관심 순 ${ingredientGap.length}종 · 갭 행 위`}>
         <div className="table-wrap">
           <table className="fbx-table gap-table">
             <thead>
@@ -75,7 +87,7 @@ export default function IngredientsScreen({
               </tr>
             </thead>
             <tbody>
-              {ingredientGap.map((r) => (
+              {shownGap.map((r) => (
                 <tr key={r.name} className={r.gap ? 'is-gap' : r.minor ? 'is-minor' : ''}>
                   <td className="is-num">{r.rank}</td>
                   <td>
@@ -113,6 +125,17 @@ export default function IngredientsScreen({
             </tbody>
           </table>
         </div>
+        {/*
+          갭이 위로 정렬돼 있어 답은 첫 열 줄 안에 있다. 30행을 다 펼쳐 두면 화면이 표 하나로 덮이고,
+          정작 봐야 할 갭 행이 스크롤에 묻힌다. 나머지는 접되 몇 개가 더 있는지는 버튼에 적는다.
+        */}
+        {ingredientGap.length > GAP_PREVIEW ? (
+          <button type="button" className="more-btn" onClick={() => setShowAllGap((v) => !v)}>
+            {showAllGap
+              ? '상위 10종만 보기'
+              : `나머지 ${ingredientGap.length - GAP_PREVIEW}종 더 보기`}
+          </button>
+        ) : null}
         {ingredientInterestKind === 'score' ? (
           <p className="note">
             긁기 = 고객이 성분 이름을 직접 드래그·복사한 점수(direct_match_score). 상품 귀속 = 그 성분이 든 상품에서 한
@@ -122,7 +145,7 @@ export default function IngredientsScreen({
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="내 상품 성분 띠" source="real" aside="앞쪽일수록 함량 높음">
+        <Panel title="내 상품 성분 띠" origin="mine" source="real" fold aside="앞쪽일수록 함량 높음">
           <div className="scope scope--inline">
             <label className="scope__field">
               <span className="scope__label">상품</span>
@@ -165,7 +188,7 @@ export default function IngredientsScreen({
           ) : null}
         </Panel>
 
-        <Panel title="주의 성분" source="real" aside={`${product.product_name} · 플랫폼 ${catalogProducts.length}개 대비`}>
+        <Panel title="주의 성분" origin="shared" source="real" fold aside={`${product.product_name} · 플랫폼 ${catalogProducts.length}개 대비`}>
           <table className="fbx-table">
             <thead>
               <tr>

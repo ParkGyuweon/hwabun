@@ -108,7 +108,7 @@
 |---|---|---|---|---|---|---|---|---|
 | C1 | **콘텐츠별 주목도 × 전환 기여** | 주목도 = `dwell_ms_sum / product_view_sessions` (content_kind별, `max_co_visible_blocks ≤ 2`만). 전환 기여 = 그 콘텐츠를 본 세션의 담기율 ÷ 전체 담기율 (lift) | `content_daily_kpi`, `section_dwell_agg`, `funnel_session_fact` | 가능 | content_kind별 200~500 | Contentsquare Exposure→Attractiveness→Conversion 체인. 체류 길다 ≠ 좋다 | lift ≥1.3 & 체류 하위 → "짧게 보지만 결정에 기여, 위로 올려라". lift ≤0.8 & 체류 상위 → "오래 보지만 안 산다: 설명 문제" (사용법이면 난이도, 성분이면 기피 성분 발견 가능성) | **두 축 산점도**(x 주목도, y lift). 막대 2개 나열 금지 |
 | C2 | 사용자가 가장 많이 드래그한 성분 | `text_select_count + text_copy_count`를 `matched_ingredients` 성분별 합산 | `content_interest_fact.matched_ingredients` | 가능 | 성분별 수십~수백 | **관심의 크기.** 설명 부족으로 단정하지 않는다. 성분→고객군 문장 붙임(R-3) | 상위 3개 언급. 내 라인에 없는 성분이면 성분 화면으로 연결 | 순위 막대(rank) |
-| C2b | 드래그 성분의 관심 vs 어려움 판별 | 성분별로 (드래그 세션 중) `scroll_backtrack(section=ingredients)` 비율, `exit_summary.last_content_kind=ingredient_*` 비율, 담기율 lift(드래그 세션 ÷ 전체) | `content_interest_fact` + `cleaned_events` + `funnel_session_fact` 세션 조인 → **신규 마트 `ingredient_interest_kpi`** (grain: brand_id, product_id, ingredient) | 조건부(마트 없음. 세션 조인이라 FE 계산 불가) | 성분별 수십~수백 | 네 신호 중 둘 이상: 되돌아 읽기↑·이탈↑·lift<1 → "관심은 있는데 이해가 안 됨". lift≥1.3 → "소구 성분". 그 외 → "관심" | 판별은 마트가 준 플래그로만. 없으면 "관심" 으로 표시 | 표 열 2개(관심 지수 · 판별) |
+| ~~C2b~~ | ~~드래그 성분의 관심 vs 어려움 판별~~ **보류 (2026-09-16 · §6 참고)** — 성분 단위로 쪼개면 표본이 무너진다. 당분간 C2 의 "관심" 으로만 표시한다 | 성분별로 (드래그 세션 중) `scroll_backtrack(section=ingredients)` 비율, `exit_summary.last_content_kind=ingredient_*` 비율, 담기율 lift(드래그 세션 ÷ 전체) | `content_interest_fact` + `cleaned_events` + `funnel_session_fact` 세션 조인 → **신규 마트 `ingredient_interest_kpi`** (grain: brand_id, product_id, ingredient) | 조건부(마트 없음. 세션 조인이라 FE 계산 불가) | 성분별 수십~수백 | 네 신호 중 둘 이상: 되돌아 읽기↑·이탈↑·lift<1 → "관심은 있는데 이해가 안 됨". lift≥1.3 → "소구 성분". 그 외 → "관심" | 판별은 마트가 준 플래그로만. 없으면 "관심" 으로 표시 | 표 열 2개(관심 지수 · 판별) |
 | C3 | 긁어간 문장 유형 | `selection_kind` 분포 | `cleaned_events`(text_selection.selection_kind) | 조건부(생성기가 selection_kind를 내는지 확인) | — | 클레임 긁기 = 근거 찾기 | claim 30% 이상 → "출처·시험 조건 표기" | 가로 누적 막대 1개 |
 | C4 | 성분 표시 모드 효과 | `ingredient_view_mode_change.mode`별 이후 담기율 | `cleaned_events` + funnel | 조건부 | 모드별 수백 | 어느 표시가 구매를 돕나 | 모드 간 담기율 차 5%p 이상이면 기본 모드 변경 권고 | 3막대 (표본 병기) |
 | C5 | 배지 신뢰도 | `highlight_badge` 체류 (badge_id별) + 전환 기여 | `section_dwell_agg`(content_ref=badge_id) | 조건부(생성기 badge_id 확인) | 배지별 수십 | 클레임 피로 79% | 체류 <0.5초 & lift <1 → "읽히지 않는 배지" | 표 |
@@ -331,10 +331,77 @@
 |---|---|---|
 | `persona_segment_daily_kpi`에 `skin_type × skin_tone` 교차 segment_type 추가 | S1 격자 | 데이터 |
 | 세션 첫 조회 브랜드 컬럼(`first_brand_id`)을 `sessionized_events`에 | O4 교차 유입 | 데이터 |
-| `content_daily_kpi`에 `co_visible_le2_dwell_ms_sum` 분리 컬럼 | C1 귀속 순도 | 데이터 |
-| **신규 마트 `ingredient_interest_kpi`** (brand_id, product_id, ingredient): select_sessions, copy_sessions, backtrack_rate, exit_after_rate, cart_lift, 판별 플래그(interest / hard / selling) | C2b 관심 vs 어려움 판별. 세션 조인이라 FE 에서 못 한다 | 데이터 |
-| `product_daily_kpi`에 `wishlist_count` | P5 | 데이터 |
+| `content_daily_kpi`에 `co_visible_le2_dwell_ms_sum` 분리 컬럼 | C1 귀속 순도 | 데이터 · **별도 티켓 진행 중 (2026-09-16)**. 기존 `dwell_ms_sum` 은 두고 컬럼을 하나 더 단다 — 화면은 C1 산점도의 x축(주목도)만 새 컬럼을 쓴다 |
+| ~~**신규 마트 `ingredient_interest_kpi`**~~ **철회 (2026-09-16)** — 판별에 쓸 표본이 안 나온다. 실질 마찰 신호가 `scroll_backtrack` 1,883건뿐이고(`dead_click`·`rage_click` 은 시드 제외 후 0), 이걸 성분 30종 × 상품으로 쪼개면 셀당 몇 건이라 플래그가 잡음이 된다. `content_kind` 단위로는 `friction_daily`·`content_conversion_daily` 로 이미 답할 수 있다. 실사용자 로그가 쌓이면 다시 요청한다 | C2b | 데이터 |
+| `product_daily_kpi`에 `wishlist_count` | P5 | 데이터 · **별도 티켓 진행 중 (2026-09-16)** |
 | 생성기 `selection_kind`, `badge_id` 실제 값 확인 | C3, C5 | 데이터·AI |
 | `purchase`·`purchase_reason_select` 생성기 구현 | O7, C8, P8 전부 | AI(생성기) |
 | 결정 1-B 선택 시: SB 8종 상품 벡터·정규화 테이블 포함 | 브랜드 통일 | AI |
 | 해석 LLM 호출 경로(배치 or 요청 시)와 모델 | §4 | AI |
+| **이벤트 금액을 원화로** — `unit_price` + `currency: 'KRW'` | §6-1 | 프론트 |
+
+### 6-1. 이벤트 금액 단위 — 원화로 확정 (2026-09-16)
+
+지금까지 프론트 주석(`lib/format.ts`·`lib/localize.ts`)이 "데이터 팀과 단위 합의 전이라 이벤트의
+`price_usd`·`cart_value`·`currency:'USD'` 는 건드리지 않는다" 였다. 합의됐다.
+
+네 곳 중 **한 곳만 달러였다.**
+
+| | 단위 |
+|---|---|
+| 화면 표시 | 원화 |
+| 카카오페이 결제 (`payment.ts`) | 원화 (`CURRENCY_KRW`) |
+| `dim_product.base_price` | 원화 (Jira 302) |
+| **이벤트 금액** | **달러** ← 여기만 |
+
+실제로 원화로 결제되는데 `purchase.paid_value` 가 달러값이었다.
+
+**필드 이름은 `unit_price` 다.** 데이터 파트 제안은 `price_usd` → `price` 개명이었는데
+(`dim_product` 가 `base_price`/`source_price_usd` 로 겪은 문제와 같다), `price` 로 가면 네 번째
+이름이 생긴다. 이미 세 곳이 `unit_price` 를 쓰고 있다 — `event-properties-schema.md` §4 의
+`purchase.items[]` 필수 속성, 같은 표의 `add_to_cart` 선택 속성, 그리고 생성기(`--currency KRW`)와
+Fact 컬럼. `unit_price` 로 맞추면 프론트만 바꾸면 되고 Fact 의 폴백(`unit_price` 없으면
+`price_usd`)도 필요 없어진다.
+
+| 이벤트 | 바꾸는 것 |
+|---|---|
+| `add_to_cart` · `remove_from_cart` | `price_usd` 제거 → `unit_price` + `currency: 'KRW'` |
+| `view_cart` | `cart_value` 원화 + `currency: 'KRW'` — `App.tsx` 의 `cartSummary()` 가 `price_usd` 로 더하고 `currency` 를 안 싣는다. 계약에서 `view_cart.currency` 가 **필수**로 올라갔다 (데이터 파트 09-16) |
+| `begin_checkout` | `cart_value` 원화 + `currency: 'KRW'` |
+| `purchase` | `order_value`·`paid_value` 원화, `items[].unit_price` 원화 |
+| `price_usd` | 계약에서 **deprecated**. 당분간 두되 프론트는 보내지 않는다 |
+
+환산 규칙은 데이터·추천이 쓰는 것과 같다 (`dw-schema.md` §3.2 · `batch/jobs/product_encoder.py`
+`price_krw_of()`).
+
+```text
+price_krw 가 있으면 그 값
+없으면  round(price_usd × 1340.86 / 100) × 100     (100원 반올림)
+```
+
+**프론트에 이미 같은 함수가 있다** — `lib/localize.ts` 의 `toKrw()` 가 같은 식이다
+(`KRW_PER_USD = 1340.86` · `KRW_ROUNDING = 100`). 지금은 화면 표시에만 쓰고 있어서 이벤트에도
+태우면 된다.
+
+**두 구현이 같은 값을 내는지 데이터 파트가 전수 대조했다 (2026-09-16).** 상품 200개 전부에서
+`price_krw_of()` 와 `toKrw()` 결과가 같고 카탈로그의 `price_krw` 와도 같다. $0.01~$999.99 를
+1센트 단위로 99,999개 돌려도 갈리는 값이 없었다. **프론트 식을 그대로 쓴다.**
+
+> 이론적으로는 Python 의 `round()` 가 은행가 반올림이고 JS 의 `Math.round()` 가 올림이라 `x.5` 에서
+> 100원이 벌어질 수 있다. 2자리 달러 입력에서는 부동소수점상 정확히 `.5` 가 나오지 않아 실제로는
+> 발생하지 않는다. 입력 자릿수가 늘면 다시 봐야 한다.
+
+**구현 시점은 결제 작업과 맞춘다.** 고칠 자리가 `App.tsx` 의 `begin_checkout`·`purchase` 인데 그
+파일이 배포 브랜치의 결제 작업과 겹친다. 백엔드 담당과 순서를 정한 뒤 넣는다. 데이터 파트는 이
+문구만 있으면 구현을 마무리할 수 있다고 해서 결정을 먼저 적어 둔다.
+
+### 6-2. PA 를 가르는 축 — `actor_type` 이 아니라 `generator_type` (2026-09-16)
+
+마트 계약 §8-1 에서 "PA 에 별도 `actor_type`(예: `agent`)을 줄 수 있는지" 를 데이터 파트 판단으로
+넘겼던 건이다. **주지 않는다.**
+
+`actor_type` enum 에 새 값을 넣으면 **기존 모든 마트의 grain 이 바뀐다.** 대신 `generator_type` 으로
+가른다 — PA 와 PC 가 이미 이 값으로 갈려 있고, Jira 324 에서 `generator_type` 이 모든 마트의 key 에
+들어갔다.
+
+그래서 화면의 `actorType` 기본값은 `all` 로 두고, PA 를 뺄 때는 `generatorType` 으로 거른다.
