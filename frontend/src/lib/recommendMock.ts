@@ -16,14 +16,17 @@ import vocab from '../../../contracts/product-feature-vocab.json';
 import { DEFAULT_HERO } from './bannerConfig';
 import { isNewRegistered } from './newBrandRule';
 import { CLEAN_VALUES } from './vocabLabels';
+import { toKrw } from './localize';
 import type { BannerType } from '../types/log';
 import type { PersonaProfile } from '../types/persona';
 import type { Product, SkinType } from '../types/product';
 import type { HeroPolicy, RecommendBanner, RecommendResponse } from '../types/recommendation';
 
 const INGREDIENT_SYNONYMS = vocab.ingredient_source.synonyms as Record<string, string[]>;
+/** 어휘집 0.7 `price_bin_edges` 는 **원화** 경계 [0, 26000, 46000, 66000, 105000] 이고 토큰은 `blocks[price_bin].vocab` 다 */
 const PRICE_EDGES = vocab.price_bin_edges as number[];
-const PRICE_BINS = ['~20', '20-35', '35-50', '50-80', '80+'];
+const PRICE_BINS = ((vocab.blocks as Array<{ name: string; vocab: string[] }>).find((b) => b.name === 'price_bin')?.vocab ??
+  ['~26k', '26k-46k', '46k-66k', '66k-105k', '105k+']) as string[];
 
 export const MOCK_MODEL_VERSION = 'mock-fe-0.1';
 
@@ -62,9 +65,15 @@ export interface BuildInput {
   reserved: number;
 }
 
+/**
+ * 상품의 가격 구간 토큰. 경계가 원화라 `price_usd` 를 표시 환율(localize toKrw)로 바꿔 자른다.
+ * 전에는 달러 값을 원화 경계에 대서 늘 첫 칸(`~20`, 어휘집에 없는 폐기 토큰)이 나왔다 — 그 값이 `banner_value` 로
+ * 로그에 실렸고 배너 축 매칭이 통째로 빗나갔다 (계약 대조 2026-09-17).
+ */
 function priceBin(usd: number): string {
+  const krw = toKrw(usd);
   for (let i = 1; i < PRICE_EDGES.length; i += 1) {
-    if (usd < PRICE_EDGES[i]) return PRICE_BINS[i - 1];
+    if (krw < PRICE_EDGES[i]) return PRICE_BINS[i - 1];
   }
   return PRICE_BINS[PRICE_BINS.length - 1];
 }

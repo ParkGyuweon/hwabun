@@ -507,7 +507,7 @@ export type TraitSource = 'session' | 'profile' | 'coldstart' | 'explore';
 export interface BannerEventProperties {
   banner_type: BannerType;
   banner_value: string | null;
-  /** 배너 영역에서 몇 번째 칸인가 (히어로는 0) */
+  /** 배너 영역에서 몇 번째 칸인가. 1 이상 (계약 §3.13). 히어로는 1 */
   banner_slot: number;
   product_id: string;
   trait_source: TraitSource;

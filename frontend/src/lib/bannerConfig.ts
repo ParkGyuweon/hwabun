@@ -27,18 +27,14 @@ export const MAIN_SLOTS = 10;
  */
 export const HERO_POLICY: 'top' | 'new_brand' = 'new_brand';
 
-/**
- * `banner_impression` / `banner_click` 발행 스위치.
+/*
+ * `banner_impression` / `banner_click` 전환 기록.
  *
- * **켰다 (2026-09-11).** 막고 있던 둘이 다 풀렸다 (데이터 파트 회신).
- *   계약 enum  — `contracts/event-schema.json` event_name enum 에 둘 다 있다 (198)
- *   수집기      — `EventContractValidator` INTENTS 에 `banner_impression → session` · `banner_click → interest`,
- *                 배너 속성 전용 검증까지 dev 에 들어왔다
- *
- * 켜기 전에는 `recommendation_impression` / `recommendation_click` 에 배너 property 를 얹어 보냈다.
- * `banner_daily` 마트는 `event_name` 으로 거르므로 그 기간은 0행이고 소급되지 않는다.
+ * 2026-09-11 계약 enum(`event-schema.json`)·수집기 INTENTS(`banner_impression → session` · `banner_click → interest`)·
+ * 배너 속성 검증이 dev 에 들어왔고, 2026-09-17 프론트가 실제로 이름을 바꿨다 (ProductListPage heroRef · selectFromBanner).
+ * 그 전 기간은 `recommendation_*` 에 배너 property 를 얹어 보냈으므로 `banner_daily` 마트(event_name 으로 거름)는 0행이고
+ * 소급되지 않는다. 전에 있던 `BANNER_EVENTS_ENABLED` 스위치는 읽는 곳이 없어 지웠다 — 스위치가 아니라 코드가 바뀐 것이다.
  */
-export const BANNER_EVENTS_ENABLED = true;
 
 /**
  * 배너·정렬 정책의 배포 버전. 배너 이벤트에 실으면 `banner_daily` 까지 내려가서

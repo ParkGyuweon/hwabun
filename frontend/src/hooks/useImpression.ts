@@ -21,7 +21,7 @@ interface UseImpressionOptions {
   /** 방문이 바뀌면 노출을 다시 셀 수 있도록 하는 키 */
   pageViewKey: string;
   /** 남길 이벤트 이름 */
-  eventName: Extract<EventName, 'product_impression' | 'recommendation_impression'>;
+  eventName: Extract<EventName, 'product_impression' | 'recommendation_impression' | 'banner_impression'>;
   /** 어느 목록에서 노출됐는지 (`similar_products`, `list_grid` 등) */
   listId: string;
   /** 노출 판정 유지 시간. 추천 카드는 1000ms 를 넘긴다 */
@@ -90,7 +90,8 @@ export function useImpression({
       ...(el.dataset.bannerType
         ? {
             banner_type: el.dataset.bannerType,
-            ...(el.dataset.bannerValue !== undefined ? { banner_value: el.dataset.bannerValue } : {}),
+            // 계약 §3.13: 값이 없는 new_brand 는 키를 빼는 게 아니라 null 을 싣는다 (로거 NULLABLE_PROPERTIES 가 통과시킨다)
+            banner_value: el.dataset.bannerValue ?? null,
             banner_slot: Number(el.dataset.bannerSlot ?? 0),
             ...(el.dataset.traitSource ? { trait_source: el.dataset.traitSource } : {}),
           }
