@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/seller/dashboard")
 public class DashboardController {
 
-  private final JdbcTemplate jdbc;
+  private final DashboardMartService marts;
 
-  public DashboardController(JdbcTemplate jdbc) {
-    this.jdbc = jdbc;
+  public DashboardController(DashboardMartService marts) {
+    this.marts = marts;
   }
 
   @GetMapping
@@ -28,22 +28,32 @@ public class DashboardController {
       org.springframework.http.HttpStatus.FORBIDDEN,
       "seller role required"
     );
-    String seller = actor.accountId();
-    if (
-      jdbc.queryForObject(
-        "select count(*) from brand where brand_id=? and seller_account_id=?",
-        Integer.class,
-        brandId,
-        seller
-      ) == 0
-    ) throw new org.springframework.web.server.ResponseStatusException(
-      org.springframework.http.HttpStatus.FORBIDDEN
-    );
-    return jdbc.queryForMap(
-      "select count(distinct oi.order_id) orders,coalesce(sum(oi.line_amount),0) revenue,(select count(*) from review r join order_item x on x.order_item_id=r.order_item_id where x.brand_id=?) reviews,(select count(*) from feedback f join order_item x on x.order_item_id=f.order_item_id where x.brand_id=? and f.status='VISIBLE') feedbacks from order_item oi join shop_order o on o.order_id=oi.order_id where oi.brand_id=? and o.status='PAID'",
-      brandId,
-      brandId,
-      brandId
-    );
+    return marts.commerceSummary(actor.accountId(), brandId);
+  }
+
+  @GetMapping("/overview")
+  public Map<String, Object> overview(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.overview(requireSeller(actor), brandId, from, to, actorType); }
+
+  @GetMapping("/products")
+  public Map<String, Object> products(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.products(requireSeller(actor), brandId, from, to, actorType); }
+
+  @GetMapping("/content")
+  public Map<String, Object> content(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.content(requireSeller(actor), brandId, from, to, actorType); }
+
+  @GetMapping("/segments")
+  public Map<String, Object> segments(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.segments(requireSeller(actor), brandId, from, to, actorType); }
+
+  @GetMapping("/ingredients")
+  public Map<String, Object> ingredients(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.ingredients(requireSeller(actor), brandId, from, to, actorType); }
+
+  @GetMapping("/friction")
+  public Map<String, Object> friction(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.friction(requireSeller(actor), brandId, from, to, actorType); }
+
+  @GetMapping("/purchase")
+  public Map<String, Object> purchase(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.purchase(requireSeller(actor), brandId, from, to, actorType); }
+
+  private String requireSeller(ShopPrincipal actor) {
+    if (actor == null || actor.role() != AccountRole.SELLER) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "seller role required");
+    return actor.accountId();
   }
 }

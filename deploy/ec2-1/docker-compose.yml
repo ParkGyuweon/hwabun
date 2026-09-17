@@ -28,6 +28,9 @@ services:
       SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
       SHOP_BACKEND_MYSQL_USER: ${MYSQL_USER:-shop_backend}
       SHOP_BACKEND_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      DASHBOARD_MART_MYSQL_URL: jdbc:mysql://${DW_MYSQL_HOST:-mysql}:${DW_MYSQL_PORT:-3306}/${DW_MYSQL_DB:-dw}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+      DW_MYSQL_USER: ${DW_MYSQL_USER:-}
+      DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
       PORTONE_API_SECRET: ${PORTONE_API_SECRET:?Set PORTONE_API_SECRET in .env}
       PORTONE_API_URL: ${PORTONE_API_URL:-https://api.portone.io}
       PORTONE_TIMEOUT_MS: ${PORTONE_TIMEOUT_MS:-10000}
