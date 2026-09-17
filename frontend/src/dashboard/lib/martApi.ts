@@ -329,11 +329,19 @@ export interface MartQuery {
   generatorType?: string;
 }
 
-/** KST 기준 어제까지 N일. 계약 §1-2 기본과 같지만 명시적으로 보낸다 */
+/**
+ * KST 기준 **오늘까지** N일.
+ *
+ * 계약 §1-2 의 기본값은 어제까지다. "오늘은 마트가 아직 없다" 를 전제했기 때문인데, 그 전제가 뒤집혔다 —
+ * 지금 마트에 있는 것이 오늘(재생한 날) 것뿐이라 어제까지로 부르면 전부 `coverage: none` 이다
+ * (데이터 파트 확인 2026-09-17).
+ *
+ * 오늘을 넣어서 잃는 것은 없다. 오늘 마트가 없으면 그 날짜의 행이 0건이라 합계가 그대로다. 있으면 보인다.
+ * 하나만 감수한다: 배치를 돌린 시각에 따라 방문 추이의 마지막 점이 덜 찬 하루일 수 있다.
+ */
 export function rangeOf(days: number): { from: string; to: string } {
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const to = new Date(kstNow);
-  to.setUTCDate(to.getUTCDate() - 1);
   const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - (days - 1));
   const iso = (d: Date) => d.toISOString().slice(0, 10);
