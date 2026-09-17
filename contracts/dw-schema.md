@@ -888,6 +888,17 @@ key = event_date_kst + destination_brand_id + actor_type + source + generator_ty
 input = sessionized_events
 ```
 
+| column | type | nullable | 설명 |
+| --- | --- | --- | --- |
+| key 전체 | 공통/string | scenario/run만 Y | 집계 축. 출발 브랜드는 두지 않는다 |
+| `brand_view_sessions` | bigint | N | 그 브랜드 상품을 조회한 세션. 모든 비율의 분모 |
+| `cross_brand_entry_sessions` | bigint | N | 그중 세션 첫 브랜드와 다른 브랜드로 넘어온 세션 |
+| `recommendation_cross_brand_entry_sessions` | bigint | N | 위 중 추천 귀속 |
+| `banner_cross_brand_entry_sessions` | bigint | N | 위 중 배너 귀속. 추천과 겹칠 수 있다 |
+| `cross_brand_entry_rate`, `recommendation_cross_brand_entry_rate`, `banner_cross_brand_entry_rate` | double | Y | 분모는 셋 다 `brand_view_sessions` |
+| `recommendation_share_of_cross_brand_entries`, `banner_share_of_cross_brand_entries` | double | Y | 분모는 `cross_brand_entry_sessions` |
+| `mart_processed_at` | timestamp | N | 갱신 시각 |
+
 `sessionized_events.event_order`로 정렬한 `product_view`만 사용하며, 세션 최초 브랜드와
 목적 브랜드가 다를 때 교차 유입으로 판정한다. Front의 `cross_brand` boolean은 입력으로
 사용하지 않고, 한 세션의 같은 목적 브랜드는 각 지표에서 한 번만 센다.
@@ -925,9 +936,6 @@ PA(`agent_llm`)의 교차 유입 세션이 한 행에 합쳐지고 있었다 —
 이 Mart를 입력으로 쓰는 `analytics_baseline`(§4.13)이 축을 걷어내고 합산하므로
 중요한 성질이다.
 ([`event-attribution-contract.md`](./event-attribution-contract.md) §2).
-
-이 Mart만 실행 축에 `generator_type`이 없다. 대시보드 엔드포인트가 쓰지 않아 제외했다
-(프론트 확인 2026-09-14). 필요해지면 다른 Mart와 같은 방식으로 추가한다.
 
 ### 4.13 `analytics_baseline`
 
