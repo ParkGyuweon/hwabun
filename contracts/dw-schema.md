@@ -441,13 +441,17 @@ source = dim_product, contracts/product-feature-vocab.json
 
 `user_trait_daily`의 시드 유지는 **결정됐다** (2026-09-15, Jira 306). 실회원에게는
 시드가 없고, Persona 응답에 주입된 선호가 드러나는 것은 시연에서 보여주려는 바이므로
-Mart에서 빼지 않는다. **대신 서빙에서 `actor_type`으로 가른다** — 추천 서버는
-`actor_type='user'` 행만 읽고 `identity_scope`를 `account` → `persona` 순으로 찾는다
-(`recommendation-io-spec.md` 장기 성향 절).
+Mart에서 빼지 않는다. **대신 서빙에서 `identity_scope`로 가른다** — 추천 서버는
+`actor_type IN ('user','synthetic')` 행을 읽고 `identity_scope`를 `account` → `persona` 순으로
+찾는다 (`recommendation-io-spec.md` 장기 성향 절). 2026-09-17(Jira 346) 정정: 이전 문구는
+`actor_type='user'` 행만 읽는다고 했으나, Persona Event는 `actor_type=synthetic`이므로 그 규칙으로는
+Persona 행이 0이 되어 시연 응답의 장기 성향이 항상 null이었다.
 
-따라서 이 Mart를 읽는 쪽은 **반드시 `actor_type`으로 좁혀야 한다.** 좁히지 않으면
-합성 Persona 행이 실회원 응답에 섞인다. MySQL projection이 `actor_type`을 포함한
-전체 컬럼을 싣는 이유도 이것이다 (§7.2.1).
+따라서 이 Mart를 읽는 쪽은 **`identity_scope`로 좁혀야 한다.** `account` 조회가 `persona` 행으로
+흘러가지 않으면 합성 Persona 행이 실회원 응답에 섞이지 않는다. 같은 (scope, user_id, trait)에
+source·실행 축이 다른 행이 여럿이면 소비자가 `window_end_date` → `contributing_event_count` 순으로
+하나를 고르고 그 수를 관측값으로 남긴다. MySQL projection이 `actor_type`·`contributing_event_count`를
+포함한 전체 컬럼을 싣는 이유도 이것이다 (§7.2.1).
 
 ### 4.1 `product_daily_kpi`
 

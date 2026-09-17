@@ -12,7 +12,12 @@
 
 행 스키마 (두 경로 모두 같다 — 사용자당 trait 5행):
   user_id · identity_scope(account|persona) · trait · trait_score · is_primary_trait · window_end_date · trait_policy_version
-`actor_type='user'` 로 이미 좁혀진 행만 온다고 가정한다 (합성 페르소나 행은 identity_scope=persona 로 구분).
+  (+ 있으면 actor_type · contributing_event_count — dw 경로에서 온다)
+actor_type 은 user·synthetic 둘 다 읽는다 (Jira 346). 페르소나 이벤트는 actor_type=synthetic 이라 'user' 로 좁히면
+페르소나 행이 0 이 되어 시연 응답의 long_term_trait 가 영원히 null 이다 (09-15 로컬 Q4: 66,255행 전부 synthetic/persona).
+실회원과 페르소나가 섞이지 않는 근거는 actor_type 이 아니라 identity_scope 다 — account 조회는 account 행만 본다.
+같은 (scope, user_id, trait) 에 행이 여럿이면(source·simulation_run_id 축) window_end_date 가 늦은 것,
+같으면 contributing_event_count 가 큰 것을 고르고 health.duplicate_grains 로 센다 — 임의로 마지막 행을 쓰지 않는다.
 
 신선도 (Jira 319, 데이터 파트 합의 2026-09-16 — 마트 배치는 하루 1회):
   * 관측  — `health()` 에 `window_end_date`(표 최댓값)·`age_days`(오늘 KST − 그 날짜)·`stale`
@@ -63,9 +68,12 @@ def age_days(window_end_date, today=None) -> int | None:
     return ((today or today_kst()) - wed).days
 
 # dw MySQL — 열 이름은 계약 dw-schema.md §4 그대로. 표가 다르게 만들어지면 DW_MYSQL_QUERY 로 SQL 을 통째로 바꾼다.
+ACTOR_TYPES = ("user", "synthetic")     # 실회원 + 합성 페르소나. 가르는 건 identity_scope (Jira 346)
 DEFAULT_QUERY = (
-    "SELECT user_id, identity_scope, trait, trait_score, is_primary_trait, window_end_date, trait_policy_version "
-    "FROM {table} WHERE trait_date_kst = (SELECT MAX(trait_date_kst) FROM {table}) AND actor_type = 'user'"
+    "SELECT user_id, identity_scope, trait, trait_score, is_primary_trait, window_end_date, trait_policy_version, "
+    "actor_type, contributing_event_count "
+    "FROM {table} WHERE trait_date_kst = (SELECT MAX(trait_date_kst) FROM {table}) "
+    "AND actor_type IN ('user', 'synthetic')"
 )
 
 
@@ -75,13 +83,34 @@ def _truthy(v) -> bool:
     return bool(v)
 
 
-def aggregate(rows) -> dict:
-    """(scope, user_id) → 응답 한 덩어리. 5행을 trait 별 점수로 접고 primary 는 is_primary_trait, 없으면 최고점."""
-    out = {}
+def _grain_rank(r) -> tuple:
+    """같은 (scope, user_id, trait) 행이 여럿일 때의 우선순위 — 창이 늦은 것, 같으면 기여 이벤트가 많은 것."""
+    wed = str(r.get("window_end_date") or "")[:10]
+    try:
+        n = int(r.get("contributing_event_count") or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return (wed, n)
+
+
+def aggregate(rows, stats: dict | None = None) -> dict:
+    """(scope, user_id) → 응답 한 덩어리. 5행을 trait 별 점수로 접고 primary 는 is_primary_trait, 없으면 최고점.
+
+    `stats` 를 주면 rows_by_actor_type 과 duplicate_grains(같은 scope·user·trait 에 행이 둘 이상이던 수)를 채운다."""
+    out, best, by_actor, dups = {}, {}, {}, 0
     for r in rows:
         uid, scope, trait = str(r["user_id"]), str(r.get("identity_scope") or "account"), str(r["trait"])
         if trait not in TRAITS:
             continue
+        at = str(r.get("actor_type") or "user")
+        by_actor[at] = by_actor.get(at, 0) + 1
+        g = (scope, uid, trait)
+        if g in best:
+            dups += 1
+            if _grain_rank(r) <= _grain_rank(best[g]):
+                continue                                  # 이미 더 좋은 행이 있다
+        best[g] = r
+    for (scope, uid, trait), r in best.items():
         key = (scope, uid)
         d = out.setdefault(key, {t: 0.0 for t in TRAITS})
         d[trait] = round(float(r.get("trait_score") or 0.0), 4)
@@ -93,6 +122,9 @@ def aggregate(rows) -> dict:
             d["window_end_date"] = max(d.get("window_end_date") or "", wed)
         if r.get("trait_policy_version"):
             d["trait_policy_version"] = str(r["trait_policy_version"])
+    if stats is not None:
+        stats["rows_by_actor_type"] = by_actor
+        stats["duplicate_grains"] = dups
     for (scope, uid), d in out.items():
         d.setdefault("primary", max(TRAITS, key=lambda t: d[t]))
         d.setdefault("window_end_date", None)
@@ -162,6 +194,8 @@ class UserTraitStore:
         self.error = None
         self.n_rows = 0
         self.window_end_date = None            # 표 전체의 최댓값 — 마트가 마지막으로 본 날
+        self.rows_by_actor_type: dict = {}     # 적재 뒤 확인용 — 첫 적재에서 synthetic 이 0 이면 마트 쪽을 본다 (Jira 346)
+        self.duplicate_grains = 0
         self.stale_days, self.max_age_days = stale_days, max_age_days
         self._today = today or today_kst       # 테스트에서 날짜를 고정할 수 있게
 
@@ -185,13 +219,16 @@ class UserTraitStore:
                         self.log(f"[user-trait] 스냅샷 읽기 실패 — {err}")
         with self._lock:
             if rows is not None:
-                self.table = aggregate(rows)
+                stats: dict = {}
+                self.table = aggregate(rows, stats)
+                self.rows_by_actor_type, self.duplicate_grains = stats["rows_by_actor_type"], stats["duplicate_grains"]
                 self.n_rows = len(rows)
                 self.source = source
                 self.window_end_date = max((d["window_end_date"] for d in self.table.values()
                                             if d.get("window_end_date")), default=None)
             else:
                 self.table, self.n_rows, self.source, self.window_end_date = {}, 0, None, None
+                self.rows_by_actor_type, self.duplicate_grains = {}, 0
             self.loaded_at = time.time()
             self.error = err
         if rows is not None:
@@ -199,7 +236,9 @@ class UserTraitStore:
             note = (f", window_end_date {self.window_end_date} ({age}일 전"
                     + (", TTL 초과 → 응답 null" if self.expired() else ", stale" if self.stale() else "") + ")"
                     if age is not None else "")
-            self.log(f"[user-trait] {source} 에서 {self.n_rows}행 → 사용자 {len(self.table)}명{note}")
+            self.log(f"[user-trait] {source} 에서 {self.n_rows}행 → 사용자 {len(self.table)}명{note}"
+                     f" · actor_type {self.rows_by_actor_type}"
+                     + (f" · 중복 grain {self.duplicate_grains}" if self.duplicate_grains else ""))
         return self.source
 
     # ── 신선도 (Jira 319) ─────────────────────────────────────────────────
@@ -238,6 +277,7 @@ class UserTraitStore:
 
     def health(self) -> dict:
         return {"source": self.source, "rows": self.n_rows, "users": len(self.table),
+                "rows_by_actor_type": self.rows_by_actor_type, "duplicate_grains": self.duplicate_grains,
                 "loaded_at": (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(self.loaded_at))
                               if self.loaded_at else None),
                 "reload_sec": self.reload_sec, "error": self.error,
