@@ -8,7 +8,7 @@ import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
-import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
+import { EVENT_CURRENCY, createOrderId, orderTotals, orderTotalsKrw, toOrderItems, unitMoneyProps } from './lib/checkout';
 import {
   canCheckoutOnBackend,
   checkoutOnBackend,
@@ -319,7 +319,9 @@ export default function App() {
     () => ({
       item_count: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       distinct_products: cartItems.length,
-      cart_value: cartItems.reduce((sum, item) => sum + item.price_usd * item.quantity, 0),
+      // 원화 정가 합 + currency (계약 §4.5 view_cart 필수 · 2026-09-16)
+      cart_value: orderTotalsKrw(cartItems).total,
+      currency: EVENT_CURRENCY,
     }),
     [cartItems],
   );
@@ -376,7 +378,7 @@ export default function App() {
         product_id: item.product_id,
         sku_id: item.sku_id,
         quantity: item.quantity,
-        price_usd: item.price_usd,
+        ...unitMoneyProps(item),
         cart_size_after: next.length,
       });
       setCartItems(next);
@@ -403,7 +405,7 @@ export default function App() {
     pendingOrderIdRef.current = orderId;
     pendingOrderSigRef.current = sig;
 
-    const { total, paid } = orderTotals(cartItems);
+    const { total, paid } = orderTotalsKrw(cartItems);
     track('begin_checkout', {
       /*
        * 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다 — "확인까지 갔다가 안 산 사람" 을 세기 위해서다.
@@ -413,10 +415,10 @@ export default function App() {
       order_id: orderId,
       client_order_id: orderId,
       items: toOrderItems(cartItems),
-      cart_value: Number(total.toFixed(2)),
-      // 할인 적용 합계. cart_value(정가)의 뜻은 그대로 두고 덧붙인다
-      paid_value: Number(paid.toFixed(2)),
-      currency: 'USD',
+      // 원화 정가 합. 할인 적용 합은 paid_value 로 덧붙인다 (계약 §4.5 · 2026-09-16)
+      cart_value: total,
+      paid_value: paid,
+      currency: EVENT_CURRENCY,
     });
   }, [cartItems]);
 
@@ -435,9 +437,10 @@ export default function App() {
         order_id: placed.orderId,
         ...(placed.clientOrderId ? { client_order_id: placed.clientOrderId } : {}),
         items: placed.items,
-        order_value: Number(placed.total.toFixed(2)),
-        paid_value: Number(placed.paid.toFixed(2)),
-        currency: 'USD',
+        // 원화. order_value 는 정가 합(items[].unit_price × quantity), paid_value 는 실결제액 — 서버 주문이면 totalAmount 그대로
+        order_value: placed.items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0),
+        paid_value: placed.paidKrw,
+        currency: EVENT_CURRENCY,
         order_channel: placed.mode,
         payment_method: placed.payment_method ?? 'test',
         pg_provider: placed.payment_method === 'kakaopay' ? PAYMENT_PROVIDER : null,
@@ -498,6 +501,7 @@ export default function App() {
     if (source.length === 0 || paying) return;
     const items = toOrderItems(source);
     const { count, total, paid } = orderTotals(source);
+    const paidKrwLocal = orderTotalsKrw(source).paid;
     setPaymentError(null);
 
     /**
@@ -542,6 +546,8 @@ export default function App() {
           }
           // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
           savePendingPayment({ orderId: created.orderId, clientOrderId: localOrderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
+          // 결제 정본은 서버 totalAmount(원화 정수). 화면 합계와 1원 차이가 나도 이벤트는 실제 결제액을 따른다
+          const paidKrw = created.totalAmountKrw;
           const pay = await requestKakaoPay({
             orderId: created.orderId,
             totalAmountKrw: created.totalAmountKrw,
@@ -574,6 +580,7 @@ export default function App() {
             payment_method: 'kakaopay',
             payment_id: pay.paymentId,
             paid_at: confirmed.paidAt ?? new Date().toISOString(),
+            paidKrw,
           }, origin);
         } finally {
           setPaying(false);
@@ -583,7 +590,7 @@ export default function App() {
 
       const r = await checkoutOnBackend(source, localOrderId);
       if (r.ok) {
-        finishOrder({ orderId: r.orderId, clientOrderId: localOrderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' }, origin);
+        finishOrder({ orderId: r.orderId, clientOrderId: localOrderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test', paidKrw: paidKrwLocal }, origin);
         return;
       }
       failPayment(localOrderId, `order_${r.status}`, `주문을 완료하지 못했습니다. ${r.reason}`, 'test', localOrderId);
@@ -629,7 +636,7 @@ export default function App() {
         return;
       }
       const orderId = createOrderId();
-      const { total, paid } = orderTotals([item]);
+      const { total, paid } = orderTotalsKrw([item]);
       /*
        * 바로 구매도 퍼널을 전부 밟는다 — add_to_cart → begin_checkout → purchase.
        * 단계를 비우면 그 단계를 분모로 쓰는 비율이 1.0 을 넘는다 (ProductSummary.buyNow 주석).
@@ -642,9 +649,9 @@ export default function App() {
         order_id: orderId,
         client_order_id: orderId,
         items: toOrderItems([item]),
-        cart_value: Number(total.toFixed(2)),
-        paid_value: Number(paid.toFixed(2)),
-        currency: 'USD',
+        cart_value: total,
+        paid_value: paid,
+        currency: EVENT_CURRENCY,
         entry_source: 'buy_now',
       });
       await submitOrder([item], 'buy_now', orderId);
@@ -688,6 +695,7 @@ export default function App() {
         payment_method: 'kakaopay',
         payment_id: paymentId,
         paid_at: confirmed.paidAt ?? new Date().toISOString(),
+        paidKrw: pending.totalAmountKrw,
       });
     });
     // 첫 진입 한 번만. finishOrder/failPayment 는 안정적이다

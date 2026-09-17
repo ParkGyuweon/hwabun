@@ -526,7 +526,7 @@ export type PurchaseReason =
   | 'recommendation'
   | 'restock';
 
-/** 계약 §5 `items[]`. 단가는 전환 분석용이고 매출의 정본이 아니다 */
+/** 계약 §5 `items[]`. 단가는 **원화 정가**(currency KRW)이고 전환 분석용이라 매출의 정본이 아니다 */
 export interface OrderItem {
   product_id: string;
   quantity: number;

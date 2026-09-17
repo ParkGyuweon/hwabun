@@ -12,8 +12,7 @@
  *     손대지 않고 화면에서만 `labels-ko` 로 바꿔 보여준다. 값을 바꾸면 추천 매칭이 조용히 0 이 된다
  *   · 리뷰는 쇼핑몰 화면만 한국어를 쓴다. 대시보드 리뷰 지표(자극·트러블 언급)는 영문
  *     정규식이라 원본을 읽는다 (`dashboard/lib/metrics.ts`)
- *   · 가격은 원화로 **표시만** 한다. 이벤트의 `price_usd`·`cart_value`·`currency:'USD'` 는
- *     데이터 팀과 단위 합의 전이라 그대로다 (README 원칙)
+ *   · 가격은 원화로 표시하고, 이벤트 금액도 같은 식(toKrw)으로 원화다 (lib/checkout · 계약 §4.5, 2026-09-17)
  */
 import productsKo from '../../../contracts/localization/products-ko.json';
 import labelsKo from '../../../contracts/localization/labels-ko.json';
