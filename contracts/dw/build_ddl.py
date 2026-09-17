@@ -160,8 +160,8 @@ NULLABLE_VALUES = {
 
 # ── projection 대상 ─────────────────────────────────────────────────────────
 # 현재 MySQL projection 대상은 이 파일의 GRAINS 22종이다 (§7.2).
-# EC2-2 Compose의 기본 실행은 첫 리허설을 위해 7종으로 제한하지만, 적재 Job의
-# allowlist와 DDL은 전체 GRAINS를 지원해야 한다. Parquet 전용 Mart는 아래
+# EC2-2 Compose의 기본 실행과 적재 Job의 allowlist·DDL은 전체 GRAINS를
+# 지원한다. Parquet 전용 Mart는 아래
 # PARQUET_ONLY에 명시한다.
 #
 # grain 은 §4 그대로이고 인덱스 선두만 §7.6 의 접근 방식에 따라 바꾼다.

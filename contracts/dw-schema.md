@@ -1560,9 +1560,8 @@ Q5(`validate_pipeline_job`)가 이미 같은 불변식을 Parquet 단계에서 �
 
 현재 MySQL `dw` projection 대상은 `contracts/dw/schema.sql`에 정의된 22개 Mart다.
 Spark가 만든 Parquet이 기준 저장소이고, `publish_user_trait_job.py`가 선택된 Mart를
-staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 첫 리허설을
-위해 7개 핵심 Mart만 발행하며, 전체 목록은 `DW_PROJECTION_MARTS` 또는 `--marts`로
-선택한다.
+staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 22종
+전체를 발행하며, `DW_PROJECTION_MARTS` 또는 `--marts`로 일부만 선택할 수 있다.
 
 | 그룹 | Mart |
 | --- | --- |

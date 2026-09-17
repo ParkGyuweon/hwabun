@@ -195,14 +195,14 @@ services:
       DW_MYSQL_DB: ${DW_MYSQL_DB:-dw}
       DW_MYSQL_USER: ${DW_MYSQL_USER:-}
       DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
-      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily}
+      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily}
     volumes:
       - ${SPARK_DATA_PATH:-/opt/hwabun/data}:/data:ro
       - ../../contracts:/app/contracts:ro
       - dw-projection-reports:/reports
     command:
       - --marts
-      - ${DW_PROJECTION_MARTS:-user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily}
+      - ${DW_PROJECTION_MARTS:-user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily}
       - --source-root
       - /data/marts
       - --report-path
