@@ -190,7 +190,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         <p className="note">
           흐린 행은 본 방문이 500건 미만이라 아직 판단하기에 표본이 얇습니다. 작은 회색 글씨는 데이터 파트와 맞춘 이벤트
           이름이라 그대로 두었습니다.
-          {source.content === 'real' && source.contentLift === 'mock'
+          {source.content === 'real' && source.contentLift === 'none'
             ? ' 열람·체류·표본은 마트 실측이고, 담기율 배수만 아직 모의입니다 (content_conversion_daily 요청 중).'
             : ''}
         </p>

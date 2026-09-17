@@ -26,7 +26,7 @@ import type {
 import type { BehaviorMetrics, BehaviorSource, Overview, Repurchase, SegmentTop } from './behavior';
 import { buildIngredientGap, canonicalIngredient } from './behavior';
 import type { ContentAttention, ProductMetrics } from './metrics';
-import { SKIN_TONE_ORDER, catalogProducts, hashString, rng } from './metrics';
+import { SKIN_TONE_ORDER, catalogProducts } from './metrics';
 
 /* ---------- 이름표 ---------- */
 
@@ -140,9 +140,8 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
   };
 }
 
-function toProducts(p: ProductsPayload, mock: ProductMetrics[]): { rows: ProductMetrics[]; diagnostics: boolean } {
+function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: boolean } {
   const byId = new Map<string, Product>(catalogProducts.map((c) => [c.product_id, c]));
-  const mockById = new Map(mock.map((m) => [m.product.product_id, m]));
   let anyDiag = false;
 
   const base = p.products
@@ -170,13 +169,15 @@ function toProducts(p: ProductsPayload, mock: ProductMetrics[]): { rows: Product
           addToCart * EVENT_WEIGHT.add_to_cart +
           removed * EVENT_WEIGHT.remove_from_cart;
 
-      // 진단 3열. 마트가 없으면 모의 상품의 값을 그대로(같은 상품이면) 아니면 시드로
+      /*
+       * 진단 3열. **마트가 안 주면 null 이다.** 예전에는 상품 id 로 시드 난수를 굴려 이탈 지점·옵션 왕복을
+       * 지어냈다. 배지가 '모의' 였다고는 해도 표에는 그럴듯한 값이 박혀 있어서, 사장님이 "리뷰에서 나간다"
+       * 같은 문장을 그대로 읽고 손을 댔다. 없는 것은 하이픈으로 둔다.
+       */
       const d = r.diagnostics;
-      const fallback = mockById.get(r.product_id);
-      const rand = rng(hashString(r.product_id));
       const exitContent = (d?.exit_content_kind_top && EXIT_KINDS.includes(d.exit_content_kind_top as ProductMetrics['exitContent'])
-        ? d.exit_content_kind_top
-        : fallback?.exitContent ?? EXIT_KINDS[Math.floor(rand() * EXIT_KINDS.length)]) as ProductMetrics['exitContent'];
+        ? (d.exit_content_kind_top as ProductMetrics['exitContent'])
+        : null);
       if (d) anyDiag = true;
 
       const row: ProductMetrics & { rates: typeof rates } = {
@@ -192,8 +193,8 @@ function toProducts(p: ProductsPayload, mock: ProductMetrics[]): { rows: Product
         interestScore: Math.round(interest),
         bottleneck: 'cart',
         exitContent,
-        variantSwitches: d?.variant_select_per_session ?? fallback?.variantSwitches ?? Math.round((1 + rand() * 3) * 10) / 10,
-        quickLookToDetail: d?.quick_look_open_detail_rate ?? fallback?.quickLookToDetail ?? 0.3 + rand() * 0.45,
+        variantSwitches: d?.variant_select_per_session ?? null,
+        quickLookToDetail: d?.quick_look_open_detail_rate ?? null,
         removeRate: ratio(r.remove_from_cart_sessions, r.add_to_cart_sessions),
         infoRate,
         rates,
@@ -219,8 +220,7 @@ function toProducts(p: ProductsPayload, mock: ProductMetrics[]): { rows: Product
   return { rows, diagnostics: anyDiag };
 }
 
-function toContent(p: ContentPayload, mock: ContentAttention[]): { rows: ContentAttention[]; lift: boolean } {
-  const mockLift = new Map(mock.map((m) => [m.kind, m.conversionLift]));
+function toContent(p: ContentPayload): { rows: ContentAttention[]; lift: boolean } {
   let anyLift = false;
   const rows = Object.keys(CONTENT_KO)
     .map((kind) => {
@@ -233,7 +233,7 @@ function toContent(p: ContentPayload, mock: ContentAttention[]): { rows: Content
         ko: CONTENT_KO[kind],
         avgDwellMs: nz(r.avg_dwell_ms_per_session, ratio(r.dwell_ms_sum, r.product_view_sessions)),
         viewRate: nz(r.view_rate, ratio(r.section_view_sessions, r.product_view_sessions)),
-        conversionLift: lift ?? mockLift.get(kind) ?? 1,
+        conversionLift: lift ?? 1,
         sampleSize: r.section_view_sessions,
       };
     })
@@ -241,7 +241,7 @@ function toContent(p: ContentPayload, mock: ContentAttention[]): { rows: Content
   return { rows, lift: anyLift };
 }
 
-function toSegments(p: SegmentsPayload, mockMatrix: BehaviorMetrics['segmentMatrix'], mockTop: SegmentTop[]) {
+function toSegments(p: SegmentsPayload, emptyMatrix: BehaviorMetrics['segmentMatrix'], emptyTop: SegmentTop[]) {
   const types = ['dry', 'oily', 'combination', 'normal'];
   const byType = p.by_segment
     .filter((s) => s.segment_type === 'skin_type')
@@ -259,7 +259,7 @@ function toSegments(p: SegmentsPayload, mockMatrix: BehaviorMetrics['segmentMatr
           };
         }),
       }))
-    : mockMatrix;
+    : emptyMatrix;
 
   const top = p.top_content
     ? types.map((type) => {
@@ -267,7 +267,7 @@ function toSegments(p: SegmentsPayload, mockMatrix: BehaviorMetrics['segmentMatr
         const ko = (k: string | undefined) => (k ? CONTENT_KO[k] ?? k : '-');
         return { type, top: ko(rows[0]?.content_kind), second: ko(rows[1]?.content_kind), dwellShare: rows[0]?.dwell_share ?? 0 };
       })
-    : mockTop;
+    : emptyTop;
 
   return { byType: byType.length > 0 ? byType : null, matrix, grid: Boolean(p.grid), top, topReal: Boolean(p.top_content), sameSkin: p.same_skin_filter_rate };
 }
@@ -282,7 +282,7 @@ function toScraped(p: IngredientsPayload) {
     .map((i) => ({ name: i.name, count: Math.round(i.score), copyCount: null }));
 }
 
-function toFriction(p: FrictionPayload, mock: BehaviorMetrics) {
+function toFriction(p: FrictionPayload, base: BehaviorMetrics) {
   const byLocation = p.by_location
     ? p.by_location
         .map((f) => ({
@@ -293,7 +293,7 @@ function toFriction(p: FrictionPayload, mock: BehaviorMetrics) {
           meaning: FRICTION_KO[f.event_name]?.meaning ?? '',
         }))
         .sort((a, b) => b.count - a.count)
-    : mock.frictionByLocation;
+    : base.frictionByLocation;
   const entry = p.entry_source
     ? p.entry_source
         .map((e) => ({
@@ -303,13 +303,13 @@ function toFriction(p: FrictionPayload, mock: BehaviorMetrics) {
           cartRate: cartRateOf(e),
         }))
         .sort((a, b) => b.sessions - a.sessions)
-    : mock.entryConversion;
+    : base.entryConversion;
   const volumes = p.event_volumes
     ? p.event_volumes.map((e) => ({ name: e.event_name as EventName, count: e.event_count })).sort((a, b) => b.count - a.count).slice(0, 13)
-    : mock.eventVolumes;
+    : base.eventVolumes;
   return {
     byLocation,
-    counts: p.counts ?? mock.frictionCounts,
+    counts: p.counts ?? base.frictionCounts,
     // 마트가 답했는데 비율이 없으면 "판정할 세션이 없었다" 는 뜻이다. 모의 이탈률을 끼워 넣지 않는다
     quickExit: p.quick_exit_rate ?? 0,
     entry,
@@ -369,12 +369,12 @@ function toRepurchase(p: PurchasePayload): Repurchase | null {
 /* ---------- 합치기 ---------- */
 
 /**
- * 마트 묶음을 화면 모양으로. `mock` 은 같은 기간의 모의 묶음이고, 없는 블록은 거기서 그대로 가져온다.
+ * 마트 묶음을 화면 모양으로. `base` 는 `emptyBehavior()` 의 0·빈 표이고, 마트가 답하지 않은 블록은 그대로 남는다.
  * 브랜드 상품 목록(`brandProducts`)은 성분 갭의 보유 판정에 쓴다. 마트 브랜드가 카탈로그에 있으면 그 상품들, 없으면 모의 브랜드 상품.
  */
-export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProducts?: Product[]): BehaviorMetrics {
-  const src: BehaviorSource = { ...mock.source };
-  let out: BehaviorMetrics = { ...mock };
+export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProducts?: Product[]): BehaviorMetrics {
+  const src: BehaviorSource = { ...base.source };
+  let out: BehaviorMetrics = { ...base };
 
   /**
    * **서버가 답했으면 그 답이 정본이다. 0 건이어도 그렇다.**
@@ -395,20 +395,20 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
   const pu = bundle.purchase;
 
   // E2 먼저. 개요의 퀵룩 합계와 성분 보유 판정에 상품이 필요하다
-  let quickLooks = mock.overview.quickLooks;
+  let quickLooks = base.overview.quickLooks;
   if (pr) {
-    const { rows, diagnostics } = toProducts(pr, mock.productMetrics);
+    const { rows, diagnostics } = toProducts(pr);
     // 행이 0 개여도 그대로 쓴다. "아직 아무도 안 봤다" 는 사실이고, 모의 상품 목록으로 덮으면 사실이 사라진다
     out = { ...out, productMetrics: rows };
     src.products = 'real';
-    src.diagnostics = diagnostics ? 'real' : 'mock';
+    src.diagnostics = diagnostics ? 'real' : 'none';
     quickLooks = rows.reduce((s, r) => s + r.quickLooks, 0);
   }
 
   // E6 (개요의 이탈률에 quick_exit 를 쓴다)
   let bounce: number | null = null;
   if (fr) {
-    const f = toFriction(fr, mock);
+    const f = toFriction(fr, base);
     out = {
       ...out,
       frictionByLocation: f.byLocation,
@@ -417,8 +417,8 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
       entryConversion: f.entry,
       eventVolumes: f.volumes,
     };
-    src.friction = f.frictionReal ? 'real' : 'mock';
-    src.entry = f.entryReal ? 'real' : 'mock';
+    src.friction = f.frictionReal ? 'real' : 'none';
+    src.entry = f.entryReal ? 'real' : 'none';
     if (fr.event_volumes) out = { ...out, intentFunnel: toIntentFunnel(fr.event_volumes) };
     bounce = fr.quick_exit_rate;
   }
@@ -450,10 +450,10 @@ export function fromMart(bundle: MartBundle, mock: BehaviorMetrics, brandProduct
 
   // E3
   if (ct) {
-    const { rows, lift } = toContent(ct, mock.contentAttention);
+    const { rows, lift } = toContent(ct);
     out = { ...out, contentAttention: rows };
     src.content = 'real';
-    src.contentLift = lift ? 'real' : 'mock';
+    src.contentLift = lift ? 'real' : 'none';
     if (ct.behaviors) {
       out = {
         ...out,

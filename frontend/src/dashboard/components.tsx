@@ -16,12 +16,14 @@ import type { ReactNode } from 'react';
  * | `seed` | 번들에 든 샘플 파일. 백엔드에 행이 아직 없어서 파일로 보여 주는 것 — 진짜 고객 글이 아니다 |
  * | `mock` | 화면 모양을 위해 만든 값. 이 브랜드와 무관하다 |
  */
-export type SourceKind = 'real' | 'seed' | 'mock';
+export type SourceKind = 'real' | 'seed' | 'none' | 'mock';
 
 const SOURCE_TEXT: Record<SourceKind, { label: string; title: string }> = {
   real: { label: '실측', title: '백엔드에서 받은 값입니다' },
   seed: { label: '시드', title: '백엔드에 아직 행이 없어 번들 샘플 파일로 보여 줍니다. 진짜 고객 글이 아닙니다' },
-  mock: { label: '모의', title: '화면 모양을 위한 값입니다. 이 브랜드 데이터가 아닙니다' },
+  none: { label: '없음', title: '아직 쌓인 데이터가 없거나 읽지 못했습니다. 지어낸 값을 대신 보여 주지 않습니다' },
+  // 브랜드 대시보드에는 더 이상 쓰지 않는다. 플랫폼 화면(platform.html)의 시연용 합계에만 남아 있다
+  mock: { label: '모의', title: '화면 모양을 위한 값입니다. 실제 집계가 아닙니다' },
 };
 
 export function SourceBadge({ kind }: { kind: SourceKind }) {

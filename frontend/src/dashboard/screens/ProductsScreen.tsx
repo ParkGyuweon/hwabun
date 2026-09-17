@@ -36,7 +36,8 @@ export default function ProductsScreen() {
       case 'remove':
         return list.sort((a, b) => b.removeRate - a.removeRate);
       case 'variant':
-        return list.sort((a, b) => b.variantSwitches - a.variantSwitches);
+        // 값이 없는 상품은 뒤로. 모르는 것을 0 으로 세면 '왕복이 적은 상품' 으로 둔갑한다
+        return list.sort((a, b) => (b.variantSwitches ?? -1) - (a.variantSwitches ?? -1));
       default:
         return list;
     }
@@ -45,9 +46,13 @@ export default function ProductsScreen() {
   // 병목 단계 분포: 내 라인에서 가장 많이 막히는 단계
   const bottleneckCount = eligible.reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.bottleneck]: (acc[p.bottleneck] ?? 0) + 1 }), {});
   const topBottleneck = (Object.entries(bottleneckCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'cart') as ProductMetrics['bottleneck'];
-  const exitCount = eligible.reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.exitContent]: (acc[p.exitContent] ?? 0) + 1 }), {});
-  const topExit = (Object.entries(exitCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'product_hero') as ProductMetrics['exitContent'];
-  const friction = eligible.filter((p) => p.variantSwitches >= 3).length;
+  // 이탈 지점을 모르는 상품은 세지 않는다. 임의의 기본값('product_hero')으로 채우면 없는 결론이 생긴다
+  const exitCount = eligible.reduce<Record<string, number>>(
+    (acc, p) => (p.exitContent ? { ...acc, [p.exitContent]: (acc[p.exitContent] ?? 0) + 1 } : acc),
+    {},
+  );
+  const topExit = (Object.entries(exitCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as ProductMetrics['exitContent'];
+  const friction = eligible.filter((p) => (p.variantSwitches ?? 0) >= 3).length;
   const highRemove = eligible.filter((p) => p.removeRate >= 0.3).length;
 
   return (
@@ -59,7 +64,12 @@ export default function ProductsScreen() {
           sub={`상품 ${bottleneckCount[topBottleneck] ?? 0}개 (상세 200건 이상 ${eligible.length}개 중)`}
           source={source.products}
         />
-        <Kpi label="가장 흔한 이탈 지점" value={EXIT_HINT[topExit].ko} sub={`${exitCount[topExit] ?? 0}개 상품 · ${EXIT_HINT[topExit].hint}`} source={source.diagnostics} />
+        <Kpi
+          label="가장 흔한 이탈 지점"
+          value={topExit ? EXIT_HINT[topExit].ko : '-'}
+          sub={topExit ? `${exitCount[topExit] ?? 0}개 상품 · ${EXIT_HINT[topExit].hint}` : '이탈 지점 마트가 아직 없습니다'}
+          source={source.diagnostics}
+        />
         <Kpi label="옵션 왕복 3회 이상" value={`${friction}개`} sub="용량·색상 사이를 오가는 상품. 막힌 기록" source={source.diagnostics} />
         <Kpi label="담기 후 제거 30% 이상" value={`${highRemove}개`} sub="배송비·묶음 조건 점검 대상" source={source.products} />
       </div>
@@ -112,15 +122,20 @@ export default function ProductsScreen() {
                       <span className={`diag-step diag-step--${p.bottleneck}`}>{STEP_KO[p.bottleneck]}</span>
                     </td>
                     <td>
-                      {EXIT_HINT[p.exitContent].ko}
-                      <span className="diag-hint">{EXIT_HINT[p.exitContent].hint}</span>
+                      {p.exitContent ? EXIT_HINT[p.exitContent].ko : '-'}
+                      {p.exitContent ? <span className="diag-hint">{EXIT_HINT[p.exitContent].hint}</span> : null}
                     </td>
                     <td>
                       <b>{fmt.pct(p.detailViews === 0 ? 0 : p.addToCart / p.detailViews)}</b>
                     </td>
                     <td>{fmt.pct(p.infoRate, 0)}</td>
-                    <td className={p.variantSwitches >= 3 ? 'is-warn' : ''}>{p.variantSwitches.toFixed(1)}회</td>
-                    <td className={p.quickLookToDetail < 0.4 ? 'is-warn' : ''}>{fmt.pct(p.quickLookToDetail, 0)}</td>
+                    {/* 모르는 값은 하이픈이다. 0 으로 적으면 "왕복이 없다" 로 읽힌다 */}
+                    <td className={(p.variantSwitches ?? 0) >= 3 ? 'is-warn' : ''}>
+                      {p.variantSwitches === null ? '-' : `${p.variantSwitches.toFixed(1)}회`}
+                    </td>
+                    <td className={p.quickLookToDetail !== null && p.quickLookToDetail < 0.4 ? 'is-warn' : ''}>
+                      {p.quickLookToDetail === null ? '-' : fmt.pct(p.quickLookToDetail, 0)}
+                    </td>
                     <td className={p.removeRate >= 0.3 ? 'is-warn' : ''}>{fmt.pct(p.removeRate, 0)}</td>
                     {showRepurchase ? <td>{repurchaseCell(repurchase?.products.get(p.product.product_id))}</td> : null}
                     <td>{fmt.compact(p.detailViews)}</td>
@@ -132,7 +147,7 @@ export default function ProductsScreen() {
         </div>
         <p className="note">
           병목 = 다섯 단계 중 브랜드 중앙값 대비 가장 낮은 하나. 이탈 지점의 힌트는 가능성이고 단정이 아닙니다. 흐린 행은 상세 조회 200건 미만.
-          {source.products === 'real' && source.diagnostics === 'mock'
+          {source.products === 'real' && source.diagnostics === 'none'
             ? ' 수량·전환·제거율은 마트 실측이고, 이탈 지점·옵션 왕복·퀵룩→상세 세 열은 아직 모의입니다 (product_exit_daily 요청 중).'
             : ''}
         </p>

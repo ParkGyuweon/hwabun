@@ -15,8 +15,6 @@ import vocab from '../../../../contracts/product-feature-vocab.json';
 import { products as catalogData } from '../../mocks/products';
 import { BEHAVIOR_BRAND, FEEDBACK_BRAND } from './scope';
 import reviewsData from '../../mocks/reviews.sample.json';
-import { EVENT_WEIGHT } from '../../types/log';
-import type { EventName } from '../../types/log';
 import type { Product } from '../../types/product';
 import type { Review } from '../../types/review';
 import { splitIngredients } from '../../lib/format';
@@ -32,7 +30,12 @@ import { splitIngredients } from '../../lib/format';
  * (주의 성분 보급률 같은 커먼즈)는 `catalogProducts` 를 쓴다.
  */
 export const catalogProducts = catalogData as unknown as Product[];
-export const products = catalogProducts.filter((p) => p.brand_name === BEHAVIOR_BRAND);
+/**
+ * 성분 갭 표의 "내 라인 보유" 판정 기본값. 대시보드가 브랜드 상품을 넘겨 주면 그쪽이 우선이고,
+ * 이것은 넘겨 줄 것이 없을 때의 카탈로그 브랜드다.
+ */
+export const brandProducts = catalogProducts.filter((p) => p.brand_name === BEHAVIOR_BRAND);
+export const products = brandProducts;
 /** 피드백·등록 화면의 상품 목록 (SSAFY Beauty) */
 export const feedbackProducts = catalogProducts.filter((p) => p.brand_name === FEEDBACK_BRAND);
 export const reviews = reviewsData as unknown as Review[];
@@ -75,15 +78,15 @@ export interface ProductMetrics {
   /** EVENT_WEIGHT 기반 행동 가중 관심도. 대시보드의 '상품별 관심도' 정의다 */
   interestScore: number;
 
-  // ---- 상품 진단 (명세 §2-5). funnel_session_fact · exit_summary · variant_select · quick_look_close 에서 온다. 지금은 모의
+  // ---- 상품 진단 (명세 §2-5). product_exit_daily · product_daily_kpi 에서 온다. **마트가 안 주면 null 이다**
   /** 노출→클릭→상세→정보확인→담기 중 브랜드 중앙값 대비 가장 낮은 단계 */
   bottleneck: 'click' | 'detail' | 'info' | 'cart';
-  /** 이탈 직전 본 콘텐츠 최빈값 (exit_summary.last_content_kind) */
-  exitContent: 'ingredient_list' | 'usage_guide' | 'user_review' | 'similar_products' | 'product_hero' | 'price';
-  /** 세션당 variant_select 평균. 3 이상은 마찰 */
-  variantSwitches: number;
-  /** quick_look_close.close_reason = open_detail 비율 */
-  quickLookToDetail: number;
+  /** 이탈 직전 본 콘텐츠 최빈값 (product_exit_daily). 마트가 없으면 null — 화면은 하이픈 */
+  exitContent: 'ingredient_list' | 'usage_guide' | 'user_review' | 'similar_products' | 'product_hero' | 'price' | null;
+  /** 세션당 variant_select 평균. 3 이상은 마찰. 마트가 없으면 null */
+  variantSwitches: number | null;
+  /** quick_look_close.close_reason = open_detail 비율. 마트가 없으면 null */
+  quickLookToDetail: number | null;
   /** 담기 후 제거 비율 */
   removeRate: number;
   /** 정보 확인(성분 또는 리뷰) 도달 세션 비율 */
@@ -91,7 +94,7 @@ export interface ProductMetrics {
 }
 
 /** 이탈 지점 → 이유 힌트 (규칙 R-1c·e·h). 단정하지 않는다 */
-export const EXIT_HINT: Record<ProductMetrics['exitContent'], { ko: string; hint: string }> = {
+export const EXIT_HINT: Record<NonNullable<ProductMetrics['exitContent']>, { ko: string; hint: string }> = {
   ingredient_list: { ko: '성분 목록', hint: '기피 성분 발견 가능성' },
   usage_guide: { ko: '사용법', hint: '설명 난이도 가능성' },
   user_review: { ko: '리뷰', hint: '부정 리뷰 노출 가능성' },
@@ -106,176 +109,6 @@ export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
   info: '상세 → 정보 확인',
   cart: '정보 확인 → 담기',
 };
-
-function buildProductMetrics(product: Product): ProductMetrics {
-  const rand = rng(hashString(product.product_id));
-
-  /** 실제 인기(리뷰 수)에 비례시키되 로그 스케일로 눌러 상위 쏠림을 줄인다 */
-  const popularity = Math.log10((product.review_count ?? 0) + 10) / 6;
-  const quality = (product.rating ?? 3.5) / 5;
-
-  const impressions = Math.round(400 + popularity * 4200 + rand() * 300);
-  const ctr = 0.05 + popularity * 0.1 + rand() * 0.03;
-  const clicks = Math.round(impressions * ctr);
-  const detailViews = Math.round(clicks * (0.82 + rand() * 0.12));
-  const quickLooks = Math.round(clicks * (0.14 + rand() * 0.1));
-
-  const ingredientViewRate = 0.28 + quality * 0.2 + rand() * 0.18;
-  const reviewViewRate = 0.4 + popularity * 0.25 + rand() * 0.15;
-
-  const cartRate = 0.05 + quality * 0.1 + rand() * 0.05;
-  const addToCart = Math.round(detailViews * cartRate);
-  const removedFromCart = Math.round(addToCart * (0.08 + rand() * 0.14));
-
-  const interestScore =
-    clicks * EVENT_WEIGHT.product_click +
-    detailViews * EVENT_WEIGHT.page_view +
-    quickLooks * EVENT_WEIGHT.quick_look +
-    addToCart * EVENT_WEIGHT.add_to_cart +
-    removedFromCart * EVENT_WEIGHT.remove_from_cart;
-
-  const infoRate = Math.min(0.95, (ingredientViewRate + reviewViewRate) / 2 + rand() * 0.1);
-  const rates = {
-    click: ctr / 0.12,
-    detail: detailViews / Math.max(1, clicks) / 0.9,
-    info: infoRate / 0.6,
-    cart: cartRate / 0.12,
-  };
-  const bottleneck = (Object.keys(rates) as Array<keyof typeof rates>).reduce((a, b) => (rates[a] <= rates[b] ? a : b));
-  const exits: ProductMetrics['exitContent'][] = ['ingredient_list', 'usage_guide', 'user_review', 'similar_products', 'product_hero', 'price'];
-  const exitContent = exits[Math.floor(rand() * exits.length)];
-
-  return {
-    product,
-    impressions,
-    clicks,
-    detailViews,
-    quickLooks,
-    ingredientViewRate,
-    reviewViewRate,
-    addToCart,
-    removedFromCart,
-    interestScore: Math.round(interestScore),
-    bottleneck,
-    exitContent,
-    variantSwitches: Math.round((1 + rand() * 3) * 10) / 10,
-    quickLookToDetail: 0.3 + rand() * 0.45,
-    removeRate: addToCart === 0 ? 0 : removedFromCart / addToCart,
-    infoRate,
-  };
-}
-
-export const productMetrics: ProductMetrics[] = products
-  .map(buildProductMetrics)
-  .sort((a, b) => b.interestScore - a.interestScore);
-
-/* ---------- 전체 요약 (모의) ---------- */
-
-const totals = productMetrics.reduce(
-  (acc, m) => ({
-    impressions: acc.impressions + m.impressions,
-    clicks: acc.clicks + m.clicks,
-    detailViews: acc.detailViews + m.detailViews,
-    quickLooks: acc.quickLooks + m.quickLooks,
-    addToCart: acc.addToCart + m.addToCart,
-    removed: acc.removed + m.removedFromCart,
-  }),
-  { impressions: 0, clicks: 0, detailViews: 0, quickLooks: 0, addToCart: 0, removed: 0 },
-);
-
-export const overview = {
-  sessions: Math.round(totals.detailViews * 0.55),
-  ...totals,
-  detailRate: totals.clicks === 0 ? 0 : totals.detailViews / totals.impressions,
-  cartRate: totals.detailViews === 0 ? 0 : totals.addToCart / totals.detailViews,
-  /** 담았다 뺀 비율. remove_from_cart 가 생기면서 잴 수 있게 된 지표다 */
-  removalRate: totals.addToCart === 0 ? 0 : totals.removed / totals.addToCart,
-  ingredientViewRate:
-    productMetrics.reduce((s, m) => s + m.ingredientViewRate * m.detailViews, 0) /
-    totals.detailViews,
-  reviewViewRate:
-    productMetrics.reduce((s, m) => s + m.reviewViewRate * m.detailViews, 0) / totals.detailViews,
-  bounceRate: 0.34,
-};
-
-/** 일별 추이. 주말 골과 완만한 성장 곡선을 시드 고정으로 만든다 */
-export function dailySeries(days: number): Array<{ label: string; visits: number; carts: number }> {
-  const rand = rng(20260828);
-  const base = overview.sessions / 14;
-  const out: Array<{ label: string; visits: number; carts: number }> = [];
-
-  for (let i = 0; i < days; i += 1) {
-    const weekday = (i + 3) % 7;
-    const weekend = weekday === 5 || weekday === 6 ? 0.72 : 1;
-    const growth = 1 + (i / days) * 0.25;
-    const visits = Math.round(base * weekend * growth * (0.9 + rand() * 0.2));
-    out.push({
-      label: `${i + 1}일`,
-      visits,
-      carts: Math.round(visits * overview.cartRate * (0.85 + rand() * 0.3)),
-    });
-  }
-  return out;
-}
-
-/* ---------- 퍼널 (모의) ---------- */
-
-/** 표준 퍼널. 구매는 이 쇼핑몰의 범위 밖이라 장바구니에서 끝난다 */
-export const standardFunnel = [
-  { label: '상품 노출', value: totals.impressions },
-  { label: '상품 클릭', value: totals.clicks },
-  { label: '상세 조회', value: totals.detailViews },
-  {
-    label: '정보 확인',
-    value: Math.round(totals.detailViews * ((overview.ingredientViewRate + overview.reviewViewRate) / 2)),
-  },
-  { label: '장바구니', value: totals.addToCart },
-];
-
-/** 퍼널 누수 판정(leakVerdict)은 lib/insight.ts 로 옮겼다. 입력이 모의·마트 어느 쪽이든 같은 규칙이라야 해서다 */
-
-/**
- * intent 퍼널 · 이 대시보드의 차별점.
- * 이벤트 이름이 아니라 발생 시점에 실린 의미(intent)로 단계를 세므로
- * 이벤트가 늘어나도 퍼널 정의가 흔들리지 않는다.
- */
-export const intentFunnel = [
-  { label: 'exposure', ko: '노출', value: totals.impressions + Math.round(totals.detailViews * 9.5) },
-  { label: 'interest', ko: '열람', value: Math.round(totals.detailViews * 8.2) },
-  { label: 'comparison', ko: '비교', value: Math.round(totals.detailViews * 1.9) },
-  { label: 'validation', ko: '확인', value: Math.round(totals.detailViews * 1.1) },
-  { label: 'conversion', ko: '전환', value: totals.addToCart + Math.round(totals.addToCart * 0.9) },
-];
-
-/** 막힌 기록. 어느 단계에서든 새는 구멍이라 퍼널 밖에 따로 둔다 */
-export const frictionCounts = {
-  rage_click: Math.round(totals.detailViews * 0.013),
-  dead_click: Math.round(totals.detailViews * 0.058),
-  scroll_backtrack: Math.round(totals.detailViews * 0.31),
-};
-
-/** 이벤트별 발생량. 실측 분포(section_dwell 이 압도적)를 반영한 모의값 */
-export const eventVolumes: Array<{ name: EventName; count: number }> = (
-  [
-    ['section_dwell', totals.detailViews * 6.4],
-    ['section_view', totals.detailViews * 2.4],
-    ['scroll_depth', totals.detailViews * 3.1],
-    ['product_impression', totals.impressions],
-    ['scroll_pause', totals.detailViews * 1.7],
-    ['page_view', totals.detailViews * 1.8],
-    ['product_click', totals.clicks],
-    ['media_view', totals.detailViews * 0.9],
-    ['recommendation_impression', totals.detailViews * 2.2],
-    ['quick_look', totals.quickLooks],
-    ['add_to_cart', totals.addToCart],
-    ['text_selection', totals.detailViews * 0.21],
-    ['remove_from_cart', totals.removed],
-  ] as Array<[EventName, number]>
-)
-  .map(([name, count]) => ({ name, count: Math.round(count) }))
-  .sort((a, b) => b.count - a.count);
-
-/* ---------- 리뷰 분석 (실측) ---------- */
 
 /** 리뷰 본문에서 찾을 표현. 데이터셋 리뷰가 영문이라 영문 패턴을 쓴다 */
 const IRRITATION_PATTERN = /irritat|sting|burn|tingl|itch|sensitiv/i;
@@ -395,22 +228,6 @@ export const cautionPrevalence = CAUTION_INGREDIENTS.map(({ label, pattern }) =>
 
 /* ---------- 세그먼트 (리뷰 실측 + 전환 모의) ---------- */
 
-export const skinTypeSegments = (() => {
-  const counts = new Map<string, number>();
-  for (const r of reviews) if (r.skin_type) counts.set(r.skin_type, (counts.get(r.skin_type) ?? 0) + 1);
-  const total = [...counts.values()].reduce((s, n) => s + n, 0);
-  const rand = rng(777);
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([type, n]) => ({
-      type,
-      share: n / total,
-      cartRate: overview.cartRate * (0.8 + rand() * 0.5),
-    }));
-})();
-
-/* ---------- 포맷터 ---------- */
-
 export const fmt = {
   int: (n: number) => n.toLocaleString('ko-KR'),
   pct: (n: number, digits = 1) => `${(n * 100).toFixed(digits)}%`,
@@ -440,94 +257,6 @@ export interface ContentAttention {
   sampleSize: number;
 }
 
-export const contentAttention: ContentAttention[] = (() => {
-  const rand = rng(hashString('content-attention'));
-  const base: Array<[string, string, number, number, number]> = [
-    // [kind, 한국어, 평균 체류 ms, 열람률, 전환 기여]
-    ['ingredient_list', '성분 목록', 38200, 0.62, 2.3],
-    ['user_review', '사용자 리뷰', 31400, 0.71, 1.8],
-    ['clinical_claim', '임상 결과', 22300, 0.34, 2.1],
-    ['ingredient_callout', '성분 특징', 15800, 0.41, 1.6],
-    ['what_it_is', '제품 소개', 12900, 0.88, 1.0],
-    ['usage_guide', '사용법', 12100, 0.37, 0.9],
-    ['brand_story', '브랜드 소개', 9800, 0.22, 1.2],
-    ['review_stats', '평점 분포', 8400, 0.66, 1.1],
-    ['what_else', '추가 설명', 7600, 0.28, 0.8],
-    ['product_image', '상품 이미지', 6900, 0.94, 1.0],
-  ];
-  return base.map(([kind, ko, avgDwellMs, viewRate, conversionLift]) => ({
-    kind,
-    ko,
-    avgDwellMs,
-    viewRate,
-    conversionLift,
-    sampleSize: Math.round(400 + rand() * 900),
-  }));
-})();
-
-/**
- * 긁어간 성분 빈도.
- *
- * 원문은 로그에 남지 않는다(데이터 계약). 성분 사전에 걸린 표준 명칭만 온다.
- * 사전은 contracts/product-feature-vocab.json · AI 파트가 상품 벡터에 쓰는 것과
- * 같은 파일이라 "이 성분을 긁은 사람" 과 "이 성분이 든 상품" 이 같은 이름으로
- * 조인된다. 여기서도 그 사전을 그대로 읽어 화면과 로그의 성분 목록이 어긋나지
- * 않게 한다.
- *
- * 반복해서 드래그되는 성분 = 사용자가 가장 관심을 두는 성분. 드래그 자체는 관심의 크기다.
- * "설명이 어렵다" 는 별개의 판단이라 같은 성분 구간의 되돌아 읽기·이탈·담기율을 함께 봐야 하고,
- * 그 조합은 세션 단위 조인이 필요해 데이터 마트(ingredient_interest_kpi 제안)에서 만든다.
- */
-export const scrapedIngredients: Array<{ name: string; count: number; copyCount: number }> =
-  (() => {
-    const rand = rng(hashString('scraped-ingredients'));
-    return Object.keys(vocab.ingredient_source.synonyms)
-      .map((name) => {
-        const count = Math.round(8 + rand() * 190);
-        return { name, count, copyCount: Math.round(count * (0.15 + rand() * 0.3)) };
-      })
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  })();
-
-/**
- * 검증 행동 실행률과 전환 비교.
- * "그 행동을 한 방문" 과 "안 한 방문" 의 담기 비율을 나란히 두면
- * 어떤 정보가 결정을 만드는지가 바로 보인다.
- */
-export const validationBehaviors = [
-  {
-    event: 'ingredient_view_mode_change',
-    ko: '전성분 펼쳐 보기',
-    doneRate: 0.18,
-    cartRateWith: 0.132,
-    cartRateWithout: 0.051,
-  },
-  {
-    event: 'review_filter_apply',
-    ko: '내 피부 타입 리뷰만 보기',
-    doneRate: 0.11,
-    cartRateWith: 0.148,
-    cartRateWithout: 0.056,
-  },
-  {
-    event: 'accordion_toggle',
-    ko: '접힌 정보 펼치기',
-    doneRate: 0.42,
-    cartRateWith: 0.094,
-    cartRateWithout: 0.049,
-  },
-  {
-    event: 'text_copy',
-    ko: '성분명 복사',
-    doneRate: 0.06,
-    cartRateWith: 0.087,
-    cartRateWithout: 0.061,
-  },
-];
-
-/* ---------- ④ 고객군 ---------- */
-
 export const SKIN_TYPE_KO: Record<string, string> = {
   dry: '건성',
   oily: '지성',
@@ -536,59 +265,6 @@ export const SKIN_TYPE_KO: Record<string, string> = {
 };
 
 export const SKIN_TONE_ORDER = ['fair', 'light', 'medium', 'tan', 'deep'] as const;
-
-/**
- * 피부 타입 × 톤 전환 매트릭스.
- *
- * 페르소나 100명이 타입 4종 × 톤 5종으로 정확히 균등이라(칸마다 5명)
- * 어느 조합을 골라도 비교가 성립한다. 균등이 아니었으면 칸마다 표본 수부터
- * 보정해야 했다.
- */
-export const segmentMatrix = (() => {
-  const rand = rng(hashString('segment-matrix'));
-  const types = ['dry', 'oily', 'combination', 'normal'];
-  return types.map((type) => ({
-    type,
-    cells: SKIN_TONE_ORDER.map((tone) => ({
-      tone,
-      cartRate: 0.04 + rand() * 0.11,
-      sessions: Math.round(60 + rand() * 200),
-    })),
-  }));
-})();
-
-/**
- * 고객군별로 가장 오래 본 콘텐츠.
- * "건성은 성분을, 지성은 임상 근거를 오래 본다" 가 데이터로 나오면
- * 그것이 바로 브랜드에 파는 인사이트다.
- */
-export const segmentTopContent = [
-  { type: 'dry', top: '성분 목록', second: '사용자 리뷰', dwellShare: 0.34 },
-  { type: 'oily', top: '임상 결과', second: '성분 목록', dwellShare: 0.29 },
-  { type: 'combination', top: '사용자 리뷰', second: '성분 목록', dwellShare: 0.31 },
-  { type: 'normal', top: '상품 이미지', second: '사용자 리뷰', dwellShare: 0.26 },
-];
-
-/** 리뷰 필터에서 "나와 같은 피부 타입" 을 고른 방문 비율 */
-export const sameSkinFilterRate = 0.63;
-
-/* ---------- ⑤ 막히는 곳 ---------- */
-
-/**
- * 막힌 기록를 위치와 함께 본다.
- * dead_click 이 상품 이미지에 몰리면 확대를 기대했는데 안 되는 것이고,
- * scroll_backtrack 이 성분에 몰리면 그 구간 설명이 어렵다는 뜻이다.
- * 상품 선호와 UI 품질은 같은 축이 아니라서 여기 값은 선호 벡터에 넣지 않는다.
- */
-export const frictionByLocation = [
-  { where: '상품 이미지', event: 'dead_click', ko: '눌러도 아무 일이 없었습니다', count: 412, meaning: '확대해서 보려고 눌렀는데 확대가 안 됩니다' },
-  { where: '성분 목록', event: 'scroll_backtrack', ko: '위로 다시 올려 읽었습니다', count: 388, meaning: '한 번 읽고 이해가 안 돼 다시 봤을 수 있습니다' },
-  { where: '옵션 선택', event: 'rage_click', ko: '같은 자리를 여러 번 눌렀습니다', count: 214, meaning: '고를 수 없는 옵션을 계속 누르고 있습니다' },
-  { where: '리뷰 더보기', event: 'dead_click', ko: '눌러도 아무 일이 없었습니다', count: 156, meaning: '버튼처럼 보이는데 버튼이 아닙니다' },
-  { where: '담기 버튼', event: 'hover_dwell', ko: '누르기 전에 머뭇거렸습니다', count: 1893, meaning: '커서를 얹고 평균 2.4초 망설였습니다' },
-];
-
-/* ---------- ④ 성분 갭 (명세 I1·I2) ---------- */
 
 interface IngredientSource {
   synonyms: Record<string, string[]>;
@@ -640,44 +316,6 @@ export interface IngredientGapRow {
   minor: boolean;
 }
 
-/**
- * 성분 갭 표. 관심(모의) 순으로 30행, 갭 행이 위로 올라온다.
- * 관심은 수집 연결 전이라 시드 고정 모의값이고, 보유·위치가중은 내 상품 전성분에서 실측.
- */
-export const ingredientGap: IngredientGapRow[] = (() => {
-  const rand = rng(hashString('ingredient-interest'));
-  const weightsByProduct = products.map((p) => ({ product: p, weights: ingredientWeights(p) }));
-  const rows = Object.keys(INGREDIENT_SOURCE.synonyms).map((name) => {
-    const scrapeCount = Math.round(8 + rand() * 190);
-    const dwellMs = Math.round(4000 + rand() * 30000);
-    const owned = weightsByProduct
-      .filter(({ weights }) => weights.has(name))
-      .map(({ product, weights }) => ({ product, weight: weights.get(name) ?? 0 }))
-      .sort((a, b) => b.weight - a.weight);
-    const maxWeight = owned[0]?.weight ?? 0;
-    return {
-      name,
-      interest: scrapeCount * 100 + dwellMs / 100,
-      scrapeCount,
-      dwellMs,
-      owned,
-      maxWeight,
-      rank: 0,
-      gap: false,
-      minor: owned.length > 0 && maxWeight <= MINOR_WEIGHT,
-    };
-  });
-  rows.sort((a, b) => b.interest - a.interest);
-  rows.forEach((r, i) => {
-    r.rank = i + 1;
-    r.gap = i < 10 && r.owned.length === 0;
-  });
-  return rows.sort((a, b) => Number(b.gap) - Number(a.gap) || a.rank - b.rank);
-})();
-
-
-/* ---------- 리뷰 × 리뷰어 피부 타입 (실측) ---------- */
-
 export interface SkinReviewRow {
   type: string;
   n: number;
@@ -704,14 +342,3 @@ export function reviewsBySkinType(productId: string | null): SkinReviewRow[] {
 }
 
 /* ---------- 막히는 곳 보조 (모의) ---------- */
-
-/** 진입 경로별 상세→담기 전환 (entry_source). 추천 진입 lift 가 이 표의 답이다 */
-export const entryConversion = [
-  { source: 'similar_products', ko: '유사 상품 추천', sessions: Math.round(totals.detailViews * 0.18), cartRate: overview.cartRate * 1.8 },
-  { source: 'promo_pick', ko: '맞춤 기획전', sessions: Math.round(totals.detailViews * 0.14), cartRate: overview.cartRate * 1.5 },
-  { source: 'list_grid', ko: '목록', sessions: Math.round(totals.detailViews * 0.58), cartRate: overview.cartRate * 0.9 },
-  { source: 'quick_look', ko: '퀵룩에서', sessions: Math.round(totals.detailViews * 0.1), cartRate: overview.cartRate * 1.1 },
-];
-
-/** 3초 안에 나간 상세 방문 비율 (exit_summary dwell). 40% 초과면 첫 화면 기대 불일치 */
-export const quickExitRate = 0.29;
