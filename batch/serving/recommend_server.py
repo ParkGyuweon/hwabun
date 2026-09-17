@@ -108,7 +108,8 @@ from live_stats import LiveStats, LIVE_HTML                            # noqa: E
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
-from user_trait import UserTraitStore                                  # noqa: E402  (Jira 306 장기 성향)
+import pipeline_stats                                                   # noqa: E402  (Jira 337 파이프라인 화면)
+from user_trait import UserTraitStore, mysql_config_from_env          # noqa: E402  (Jira 306 장기 성향 · 337 dw 감시)
 import validate_product_registration as vpr                    # noqa: E402
 
 # 히어로 정책 (2026-09-10, Jira 237). top = items[0] (계약 원안) · new_brand = 신규 상품 중 점수 최고.
@@ -590,19 +591,37 @@ def _sync_loop():
 KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP_SERVERS")        # 없으면 구독 안 함 — POST /api/events 만
 _kafka: Optional[kafka_state.StateConsumer] = None
 
+# ── 파이프라인 화면 (Jira 337): 사이트 → Kafka → Spark → dw → 대시보드. 전부 읽기만 ─────────────
+ACTIVITY = pipeline_stats.ActorStats()                             # Kafka 로 들어온 모든 메시지, 주체별
+SPARK_MASTER_UI = os.environ.get("SPARK_MASTER_UI", "")            # 예 http://<EC2-2 사설 IP>:18080 (포트 개방 뒤)
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "")
+_broker: Optional[pipeline_stats.BrokerWatch] = None
+_spark: Optional[pipeline_stats.SparkWatch] = None
+_dw: Optional[pipeline_stats.DwWatch] = None
+
 
 @app.on_event("shutdown")
 def _shutdown():
     if _kafka is not None:
         _kafka.stop()
+    for w in (_broker, _spark, _dw):
+        if w is not None:
+            w.stop()
 
 
 @app.on_event("startup")
 def _startup():
-    global _kafka
+    global _kafka, _broker, _spark, _dw
     if KAFKA_BOOTSTRAP:
-        _kafka = kafka_state.StateConsumer(get_engine(), KAFKA_BOOTSTRAP, log=lambda m: print(m, flush=True))
+        _kafka = kafka_state.StateConsumer(get_engine(), KAFKA_BOOTSTRAP, log=lambda m: print(m, flush=True),
+                                           observer=ACTIVITY.record)
         _kafka.start()
+        _broker = pipeline_stats.BrokerWatch(KAFKA_BOOTSTRAP, kafka_state.TOPIC, kafka_state.GROUP); _broker.start()
+    _spark = pipeline_stats.SparkWatch(SPARK_MASTER_UI)                 # 미설정이면 스레드가 '대기' 만 남긴다
+    _dw = pipeline_stats.DwWatch(mysql_config_from_env())
+    for w in (_spark, _dw):
+        if w.state["configured"]:
+            w.start()
     if SHOP_BACKEND_URL:
         import threading
         try:
@@ -654,18 +673,22 @@ def _demo_status():
         tail = ""
     return {"available": os.path.exists(_DEMO_SCRIPT), "running": running,
             "exit_code": (None if running or p is None else p.returncode),
-            "started_at": _demo["started_at"], "args": _demo["args"], "last_line": tail}
+            "started_at": _demo["started_at"], "args": _demo["args"], "last_line": tail,
+            "limit": int(os.environ.get("DEMO_LIMIT", "9900") or 9900),       # 화면 버튼 글자가 읽는다 (배포 1,000 · 로컬 9,900)
+            "currency": os.environ.get("DEMO_CURRENCY", "KRW").upper()}         # 생성 로그 통화 (Jira 341, demo_live 가 같은 env 를 읽는다)
 
 
 class DemoStart(BaseModel):
     rate: int = 3000
     max_events: int = 0
     http: bool = False
+    restart: bool = False       # true 면 파일 처음부터. 기본은 지난 정지 자리에서 이어 보낸다 (중복 event_id 는 소비자가 버림)
 
 
 @app.post("/live/demo/start")
 def live_demo_start(req: DemoStart):
-    """9,900명 로그 되감기 시작 — 로컬 시연 전용. Docker 이미지에는 simulator/ 가 없어 404 가 된다"""
+    """페르소나 로그 되감기 시작. 인원은 env DEMO_LIMIT(기본 9,900 · 배포 compose 1,000), 캐시는 DEMO_CACHE_DIR (Jira 295·335).
+    demo_live.py 가 이미지에 없으면 404 DEMO_UNAVAILABLE"""
     if not os.path.exists(_DEMO_SCRIPT):
         raise HTTPException(404, {"code": "DEMO_UNAVAILABLE", "path": _DEMO_SCRIPT})
     if _demo_status()["running"]:
@@ -679,6 +702,8 @@ def live_demo_start(req: DemoStart):
         args += ["--max-events", str(int(req.max_events))]
     if req.http:
         args += ["--http"]
+    if req.restart:
+        args += ["--restart"]
     if KAFKA_BOOTSTRAP:
         args += ["--bootstrap", KAFKA_BOOTSTRAP]
     env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
@@ -698,6 +723,26 @@ def live_demo_stop():
         except Exception:
             p.kill()
     return {"ok": True, **_demo_status()}
+
+
+@app.get("/pipeline/stats")
+def pipeline_stats_json():
+    """파이프라인 다섯 층의 현재 값 (Jira 337). /pipeline 이 1초마다 읽는다"""
+    e = get_engine()
+    live = LIVE.snapshot()
+    return {"activity": ACTIVITY.snapshot(), "live": live, "sessions_in_memory": len(e.states),
+            "kafka": (_kafka.health() if _kafka is not None else None),
+            "broker": (_broker.snapshot() if _broker is not None else None),
+            "spark": (_spark.snapshot() if _spark is not None else None),
+            "dw": (_dw.snapshot() if _dw is not None else None),
+            "dashboard_url": DASHBOARD_URL, "demo": _demo_status()}
+
+
+@app.get("/pipeline", include_in_schema=False)
+def pipeline_page():
+    """시연 파이프라인 한 화면 (Jira 337) — 사이트 → Kafka → Spark → dw → 대시보드. /live 는 그대로"""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(pipeline_stats.PIPELINE_HTML)
 
 
 @app.get("/live", include_in_schema=False)

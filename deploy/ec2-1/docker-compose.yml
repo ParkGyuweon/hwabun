@@ -98,12 +98,20 @@ services:
       DW_MYSQL_PASSWORD: ${DW_MYSQL_PASSWORD:-}
       DW_MYSQL_DB: ${DW_MYSQL_DB:-dw}
       USER_TRAIT_RELOAD_SEC: ${USER_TRAIT_RELOAD_SEC:-300}
+      USER_TRAIT_STALE_DAYS: ${USER_TRAIT_STALE_DAYS:-2}
+      USER_TRAIT_MAX_AGE_DAYS: ${USER_TRAIT_MAX_AGE_DAYS:-14}
+      PRESCRIPTION_LLM: ${PRESCRIPTION_LLM:-on}
+      DEMO_LIMIT: ${DEMO_LIMIT:-1000}
+      DEMO_CACHE_DIR: /data/demo_cache
+      DEMO_CURRENCY: ${DEMO_CURRENCY:-KRW}
+      SPARK_MASTER_UI: ${SPARK_MASTER_UI:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
       NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
     volumes:
       - recommend-data:/data
     expose:
       - "8300"
-    mem_limit: 1g
+    mem_limit: 3g
 
   nginx:
     build:

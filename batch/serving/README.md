@@ -49,7 +49,9 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 | 추천 응답 p50/p95 · 요청/초 | 최근 60초 `/api/recommend` `latency_ms` | |
 | 방금 상태가 바뀐 사용자 | 최근 40명, 어느 파티션(또는 직접)에서 어떤 이벤트로 | |
 
-상단 오른쪽 **▶ 페르소나 9,900명 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다 — 로컬 시연 전용(Docker 이미지엔 simulator/ 가 없어 비활성). 절차 정본은 `docs/ai/live-demo-runbook.md`.
+상단 오른쪽 **▶ 페르소나 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다. 인원은 env `DEMO_LIMIT`(로컬 기본 9,900, 배포 compose 1,000 — 컨테이너 메모리 때문), 통화는 `DEMO_CURRENCY`(기본 KRW, 사이트·계약과 같게, Jira 341), 캐시는 `DEMO_CACHE_DIR`(배포 볼륨 `/data/demo_cache`, 파일명 `demo_behavior_<limit>_<currency>.jsonl`). 09-16 부터 Docker 이미지에도 들어 있다(Jira 335). 절차 정본은 `docs/ai/live-demo-runbook.md`.
+
+`GET /pipeline` · `/pipeline/stats` (Jira 337, `pipeline_stats.py`): 사이트 활동(PC/PA/실사용자) → Kafka 파티션(브로커 워터마크·committed·lag) → Spark(`SPARK_MASTER_UI`) → dw 마트 7개(`DW_MYSQL_*`) → 대시보드(`DASHBOARD_URL`) 를 한 화면에. 다른 파트 자원은 읽기만. 소비자에 `observer` 훅(필터 전 모든 메시지)이 붙는다. 에이전트 버튼은 노트북 런처 `simulator/agents/agent_launcher.py`(8301) 로 간다. 런북 §2-1.
 
 `GET /live/stats` 가 같은 숫자를 JSON 으로 준다(`events.series_60s`·`partitions`·`recent`…). 인증은 없다 — 추천 서버는
 내부 네트워크 전용이고, 시연에서 밖에 보이려면 nginx 에 `/live` 를 `recommend:8300` 으로 여는 한 줄이 필요하다(배포 README).
@@ -65,7 +67,7 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 
 ```bash
 cd batch/serving
-python -m unittest test_recommend_server      # 35
+python -m unittest test_recommend_server      # 36
 python -m unittest test_banners               # 22   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
 python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 13·5·7·3·17·10 = 55
 python -m unittest test_live                  # 4    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
