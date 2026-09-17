@@ -1187,6 +1187,19 @@ def validate_frames(
         f"unbalanced_rows={unbalanced_entry_paths}; "
         "quick_look 선진입 + direct_click = detail_view",
     ))
+
+    # click_to_view_rate 의 분자는 분모의 부분집합이라야 한다 (§4.5).
+    # direct_click 만으로 세면 클릭 없이 상세를 연 세션이 분자에만 들어간다.
+    invalid_click_through = funnel_daily.where(
+        (F.col("click_through_detail_sessions") > F.col("click_sessions"))
+        | (F.col("click_through_detail_sessions") > F.col("direct_click_sessions"))
+        | (F.col("click_through_detail_sessions") < 0)
+    ).count()
+    checks.append(_check(
+        "funnel_click_through_is_a_subset_of_clicks",
+        invalid_click_through == 0,
+        f"invalid_rows={invalid_click_through}; 클릭하고 상세로 간 세션 <= 클릭 세션 · direct_click 세션",
+    ))
     funnel_rate_columns = [
         "impression_to_click_rate", "click_to_view_rate", "view_to_information_rate",
         "view_to_cart_rate", "cart_to_purchase_rate", "view_to_purchase_rate",
