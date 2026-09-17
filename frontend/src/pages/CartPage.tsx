@@ -8,6 +8,7 @@ import { useSectionView } from '../hooks/useSectionView';
 import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
+import { MAX_CART_QUANTITY } from '../types/cart';
 import type { CartItem } from '../types/cart';
 import type { PlacedOrder } from '../lib/checkout';
 
@@ -164,19 +165,32 @@ export default function CartPage({
                 </div>
 
                 <div className="cart__controls">
-                  <label className="cart__qty">
-                    수량
-                    <select
-                      value={item.quantity}
-                      onChange={(event) => onQuantityChange(item, Number(event.target.value))}
+                  {/*
+                    셀렉트가 아니라 상품 화면과 같은 +/− 단추다.
+                    셀렉트였을 때는 선택지가 1~5 뿐이라 상품 화면에서 10 을 담으면 그 값이 목록에 없어
+                    브라우저가 첫 항목(1)을 그렸다. 합계는 10개로 맞는데 줄의 수량만 1 로 보였고, 손대면
+                    조용히 1 로 떨어졌다. 두 화면이 같은 상한(MAX_CART_QUANTITY)을 보게 해서 그 틈을 없앤다.
+                  */}
+                  <div className="cart__qty qty" role="group" aria-label={`${item.product_name} 수량`}>
+                    <span className="cart__qty-label">수량</span>
+                    <button
+                      type="button"
+                      aria-label="수량 감소"
+                      disabled={item.quantity <= 1}
+                      onClick={() => onQuantityChange(item, Math.max(1, item.quantity - 1))}
                     >
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      −
+                    </button>
+                    <span aria-live="polite">{item.quantity}</span>
+                    <button
+                      type="button"
+                      aria-label="수량 증가"
+                      disabled={item.quantity >= MAX_CART_QUANTITY}
+                      onClick={() => onQuantityChange(item, Math.min(MAX_CART_QUANTITY, item.quantity + 1))}
+                    >
+                      +
+                    </button>
+                  </div>
 
                   <strong className="cart__price">
                     {formatPrice(effectivePrice(item) * item.quantity)}
