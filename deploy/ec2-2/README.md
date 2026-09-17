@@ -57,12 +57,43 @@ docker compose up -d backend recommend
 - 현재 Kafka는 인증 없는 PLAINTEXT다. EC2-2의 보안 그룹/방화벽에서 TCP 9092는
   EC2-1의 실제 접속 출발지에만 허용한다. 인터넷 전체에 개방하지 않는다.
 - Controller 9093, 내부 Kafka 19092, Spark RPC 7077은 호스트에 공개하지 않는다.
-- Spark UI는 `127.0.0.1:18080`, History UI는 `127.0.0.1:18081`이다.
+- Spark UI는 기본적으로 `127.0.0.1:18080`, History UI는 `127.0.0.1:18081`이다.
+  EC2-1의 `/pipeline`에서 Spark Master의 `/json`을 읽어야 할 때만 `.env`의
+  `SPARK_MASTER_UI_BIND_IP`를 EC2-2 사설 IP로 바꾼다. 외부 인터넷에 공개하지 않는다.
 
 개발 PC에서 SSH 터널을 열고 브라우저로 `http://localhost:18080` 또는 `18081`에 접속한다.
 
 ```bash
 ssh -N -L 18080:127.0.0.1:18080 -L 18081:127.0.0.1:18081 ubuntu@<EC2-2-SSH주소>
+```
+
+EC2-1에서 Spark UI를 읽는 배포 설정은 다음과 같이 둔다.
+
+```dotenv
+# EC2-2 .env
+SPARK_MASTER_UI_BIND_IP=172.26.1.194
+```
+
+EC2-2의 AWS 보안 그룹과 UFW에는 EC2-1 사설 IP만 TCP 18080으로 허용한다.
+Spark RPC 7077, Worker UI 8081, History UI 18081은 이 연동에 필요하지 않다.
+
+```bash
+sudo ufw allow from 172.26.8.48 to any port 18080 proto tcp
+sudo ufw reload
+sudo docker compose up -d --no-deps spark-master
+```
+
+EC2-1에서 연결을 확인한다.
+
+```bash
+curl -sS --max-time 4 http://172.26.1.194:18080/json
+```
+
+연결 확인 후 EC2-1의 `.env`에 `SPARK_MASTER_UI=http://172.26.1.194:18080`을
+넣고 추천 컨테이너만 재생성한다.
+
+```bash
+sudo docker compose up -d recommend
 ```
 
 ## 적재 확인 및 배치 실행
