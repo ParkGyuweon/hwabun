@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { variantIdOf } from '../../lib/discount';
 import PriceTag from './PriceTag';
-import { hasDiscount } from '../../lib/discount';
+import { unitMoneyProps } from '../../lib/checkout';
 import StarRating from '../common/StarRating';
 import VariantPicker from './VariantPicker';
 import { IMAGE_WIDTH_MAIN, sizedImage } from '../../lib/image';
@@ -110,8 +110,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
       product_id: product.product_id,
       sku_id: skuId,
       quantity,
-      price_usd: product.price_usd,
-      ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
+      // 원화 정가 unit_price + currency:'KRW' (계약 §4.5). 상세의 담기와 같은 모양
+      ...unitMoneyProps(product),
       entry_source: 'quick_look',
     });
     onAddToCart({

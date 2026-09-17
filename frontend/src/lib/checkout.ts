@@ -1,5 +1,34 @@
 import type { CartItem } from '../types/cart';
-import { effectivePrice } from './discount';
+import type { Product } from '../types/product';
+import { effectivePrice, hasDiscount, discountPercent } from './discount';
+import { toKrw } from './localize';
+
+/**
+ * 이벤트 금액의 정본 통화 (계약 event-properties-schema §4.5, 2026-09-16 · Jira 303).
+ *
+ * 화면은 처음부터 원화로 보여 왔고(localize toKrw), 백엔드 원장·결제도 원화 정수다. 이벤트만 `price_usd`·
+ * `currency:'USD'` 로 남아 세 곳의 단위가 갈렸다. 이제 담기·빼기·장바구니·주문·결제 이벤트 전부 **원화**로 싣고
+ * 이름은 계약대로 `unit_price` 다. `price_usd` 는 deprecated 입력이라 함께 보내지 않는다.
+ * 환산은 표시와 같은 식(toKrw · 100원 반올림)이라 화면에 보이는 값과 로그 값이 같다 (데이터 파트 전수 대조 09-16).
+ */
+export const EVENT_CURRENCY = 'KRW';
+
+/** 정가 원화. 화면 표시(formatPrice)와 같은 식 */
+export const unitPriceKrw = (p: Pick<Product, 'price_usd'>): number => toKrw(p.price_usd);
+
+/**
+ * 담기·빼기 이벤트의 금액 속성. `unit_price` 는 **정가**(계약 · 생성기 `price_props` 와 같음)이고 할인은 열린 속성으로
+ * 덧붙인다 — `sale_price`(원화 실판매가)·`discount_rate`(정수 %). 할인이 없으면 두 키를 싣지 않는다.
+ */
+export function unitMoneyProps(p: Pick<Product, 'price_usd' | 'sale_price_usd'> & { discount_rate?: number }): Record<string, unknown> {
+  return {
+    unit_price: unitPriceKrw(p),
+    currency: EVENT_CURRENCY,
+    ...(hasDiscount(p)
+      ? { sale_price: toKrw(effectivePrice(p)), discount_rate: p.discount_rate ?? discountPercent(p) }
+      : {}),
+  };
+}
 
 /**
  * 테스트 주문.
@@ -59,6 +88,11 @@ export interface PlacedOrder {
   payment_id?: string | null;
   /** 서버 confirm 응답 시각(ISO). 테스트 주문이면 없다 */
   paid_at?: string | null;
+  /**
+   * purchase.paid_value 에 실을 **원화 실결제액**. 서버 주문이면 `POST /api/orders` 응답의 `totalAmount`(결제 정본),
+   * 없으면 `orderTotalsKrw().paid`. `paid`(달러)는 화면 표시용이라 따로 둔다.
+   */
+  paidKrw: number;
 }
 
 /**
@@ -78,9 +112,22 @@ export function toOrderItems(items: CartItem[]): OrderItem[] {
   return items.map((item) => ({
     product_id: item.product_id,
     quantity: item.quantity,
-    unit_price: item.price_usd,
+    // 계약 §5 items[].unit_price — 원화 정가. 할인 반영 실결제액은 purchase.paid_value 가 든다
+    unit_price: unitPriceKrw(item),
     ...(item.sku_id ? { sku_id: item.sku_id } : {}),
   }));
+}
+
+/**
+ * 이벤트용 원화 합계. `total` 은 정가 합(cart_value·order_value), `paid` 는 할인 적용 합(paid_value).
+ * 화면 표시용 달러 합계(`orderTotals`)와 따로 둔다 — 화면은 formatPrice 가 달러를 받아 원화로 그리기 때문이다.
+ * 단가를 먼저 100원 단위로 반올림한 뒤 곱해, 화면의 줄 합계와 로그 값이 1원도 어긋나지 않게 한다.
+ */
+export function orderTotalsKrw(items: CartItem[]): { total: number; paid: number } {
+  return {
+    total: items.reduce((sum, item) => sum + unitPriceKrw(item) * item.quantity, 0),
+    paid: items.reduce((sum, item) => sum + toKrw(effectivePrice(item)) * item.quantity, 0),
+  };
 }
 
 /**

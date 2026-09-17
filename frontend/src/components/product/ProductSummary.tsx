@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { variantIdOf } from '../../lib/discount';
 import PriceTag from './PriceTag';
-import { hasDiscount } from '../../lib/discount';
+import { unitMoneyProps } from '../../lib/checkout';
 import StarRating from '../common/StarRating';
 import VariantPicker from './VariantPicker';
 import { formatCount } from '../../lib/format';
@@ -84,9 +84,8 @@ export default function ProductSummary({
     product_id: product.product_id,
     sku_id: selectedSkuId,
     quantity,
-    price_usd: product.price_usd,
-    // 할인은 열린 속성으로 덧붙인다. price_usd 의 뜻(정가)은 그대로다
-    ...(hasDiscount(product) ? { sale_price_usd: product.sale_price_usd, discount_rate: product.discount_rate } : {}),
+    // 원화 정가 unit_price + currency:'KRW' (계약 §4.5). 할인은 sale_price·discount_rate 로 덧붙는다
+    ...unitMoneyProps(product),
     ...(entrySource ? { entry_source: entrySource } : {}),
   });
 
