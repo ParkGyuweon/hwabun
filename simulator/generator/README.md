@@ -211,13 +211,19 @@ python simulator/generator/build_persona_style.py
 4. **결제** (Jira 312, 2026-09-15) — 시드(과거 구매)와 재구매(S2)는 담기 뒤 **전부** `begin_checkout → purchase →
    purchase_reason_select` 까지 간다(리뷰를 썼다 = 샀다). 목표 상품은 담은 세션의 45% `[추정]`가 결제까지 간다.
    결제 5% 는 `payment_failed`(user_cancel), 설문은 70% 응답(1~2개, 재구매면 `restock` 첫 번째)·30% `skipped`.
-   금액은 이벤트 계약대로 USD, `order_channel=backend`, 결제수단은 kakaopay 60 / card 40 (`test` 는 시연 전용이라 안 씀).
+   금액 통화는 `--currency`(기본 USD, 시연·데이터 재생은 KRW — 계약 303 이 purchase·view_cart 의 currency 를 KRW 로 고정). `view_cart` 도
+   `currency` 를 싣는다(Jira 340, 09-17 — 빠져 있어 303 뒤 dev 생성기가 계약 검사에서 멈추던 것). `order_channel=backend`, 결제수단은 kakaopay 60 / card 40 (`test` 는 시연 전용이라 안 씀).
    이게 없던 09-14 캐시로는 데이터 마트의 재구매·구매 사유 3종이 0 이었다.
 
 5. **재구매 쌍은 비시드** (Jira 327, 2026-09-16) — 같은 상품에 리뷰가 2건 이상인 상품의 첫 구매·restock 세션은 `seeded` 없이
    `hist:{run}:{persona}:{product}` 세션으로 나간다. 데이터 마트 계약이 `is_seeded` 행을 빼기 때문에, 시드로 두면 재구매율이 영원히 0 이었다
    (비시드 결제가 라이브 target 1건/사용자뿐). 1회 구매 시드는 `seeded=true` 그대로. 추천 서버는 `seeded` 를 안 본다.
    1,000명 실측: 비시드 purchase 447→1,874, 재구매자 446명(64.5%, 원천에서 같은 상품 리뷰 2건+ 인 사람 60.6% 와 같은 수준).
+   **hist: 세션은 상세를 열고 담는다** (Jira 345, 09-17) — `page_view`+`product_view`(둘 다 `navigation_source=session_start`, 같은 page_view_id) 뒤에
+   `add_to_cart`. 없으면 마트에서 add_to_cart_sessions > detail_view_sessions 가 되어 퍼널·브랜드·상품·고객군·가격대 마트 불변식이 깨진다(데이터 336 스모크 230행).
+   `seed:` 긍정 시드는 계약대로 **조회 없이 담기만** 그대로다 — 마트는 seeded 를 빼고 추천 입력의 시드 표현도 안 바뀐다.
+6. **담기 6곳 전부 가격 속성** (Jira 342, 09-17) — Quick Look 담기(`entry_source=quick_look`)만 `price_props` 가 빠져 관측 담기의 38% 가 `unit_price` NULL 로
+   적재되던 것을 고쳤다. USD 면 `price_usd`, KRW 면 `unit_price`+`currency`. 테스트 `test_every_add_to_cart_carries_price_props` 가 지킨다.
 
 모든 synthetic Event의 `properties`에는 `scenario_id`, `simulation_run_id`,
 `generator_type`이 포함된다. 기본 시나리오는 `normal_day`, 생성 방식은
@@ -236,7 +242,8 @@ python gen_behavior_logs.py --limit 50 \
 # 2) 추천 서버를 Kafka 구독으로
 KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092 SESSION_EVENTS_PATH=/tmp/demo_session.jsonl python -m uvicorn batch.serving.recommend_server:app --port 8300
 # 3) 한 방
-python simulator/generator/demo_live.py                # 9,900명 · 3,000건/초 · 캐시 없으면 로그 생성(1분, 6.9GB)
+python simulator/generator/demo_live.py                # 9,900명 · KRW · 3,000건/초 · 캐시 없으면 로그 생성(1분, 7GB)
+DEMO_CURRENCY=USD python simulator/generator/demo_live.py   # 통화 바꾸기(기본 KRW, Jira 341). 캐시 파일명 demo_behavior_<limit>_<currency>.jsonl
 python simulator/generator/demo_live.py --rate 5000 --max-events 3000000
 python simulator/generator/demo_live.py --http         # Kafka 없이 (파티션 칸은 비어 있다)
 ```
@@ -245,3 +252,7 @@ python simulator/generator/demo_live.py --http         # Kafka 없이 (파티션
 파티션에 갈린다) · 상태 바뀐 사용자(→ 9,900) · 방금 바뀐 사용자 40명 · 추천 p50/p95. 실측(2026-09-14, 노트북): 3,000건/초
 투입에 소비 lag 3 이하, 추천 p50 1.2ms 유지. 5,000건/초도 lag 두 자리. 상태에 영향 없는 이벤트(dwell 류 약 30%)는
 소비자가 걸러(`filtered`) 화면 카운터엔 반영분만 잡힌다. 로그는 `.cache/` 에 남고 gitignore 다.
+
+**배포본(EC2-1)은 9,900명 캐시를 노트북에서 만들어 올린다** (09-17): 컨테이너 안 생성은 RSS 12GB 로 OOM 이라 `gen_behavior_logs.py --limit 9900 --currency KRW`
+→ `shuffle_sessions.py` → `gzip -1 | ssh … docker exec -i … gunzip > /data/demo_cache/demo_behavior_9900_KRW.jsonl` 한 파이프(약 2분). 생성기가 바뀌면
+(340·342·345 처럼 이벤트 내용이 달라지면) 캐시도 다시 만든다 — 09-17 세 번 재생성. 절차 정본은 `docs/ai/live-demo-runbook.md` §3.

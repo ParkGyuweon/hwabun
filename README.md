@@ -2,7 +2,7 @@
 
 HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)과 인사이트 대시보드.
 
-기준일 2026-09-16
+기준일 2026-09-17
 
 ## 1. 시스템 아키텍처
 
@@ -40,6 +40,8 @@ HWABUN — 1인·소상공인 뷰티 브랜드가 나눠 쓰는 쇼핑몰(BLOOM)
                         09-15 17:40 실측: 전부 기동, recommend 는 dev 최신(어휘집 0.7) · 수집기·추천 모두 EC2-2 Kafka 연결 · .env 에 GMS_KEY·DW_MYSQL_* 은 비어 있음
                         09-16 12:35 실측: recommend ltr_trees 239(20피처) · kafka connected · personas_in_memory 4(실이벤트 반영 확인) · GMS_KEY 투입, 처방 LLM 스위치 off
                         · DW_MYSQL_* 은 계정 대기(적재 Job 은 dev 에 있음, 첫 실행 전) · 12:21 백엔드 Jenkins 가 추천을 09-15 이미지로 되돌려 재배포로 복구(런북 §6)
+                        09-17 10:40 실측: recommend dev 최신(340~347) · user_trait source dw_mysql(22 테이블, 첫 적재 전 0행, synthetic 행도 읽음 346, TTL 60) · /pipeline Spark 칸 워커 1(EC2-2 18080 개방 !297)
+                        · dw 칸 22 테이블 · 대시보드 링크 dashboard.html · /live 캐시 9,900명 KRW(노트북 생성·업로드) · 초기화 ③ 스크립트 reset-demo-local.sh · Q1 raw sink 는 미가동(Kafka 보존 24h, 상시 가동 요청)
 ```
 
 ---
@@ -227,7 +229,7 @@ S15P21A306/
 │       ├── catalog_sync.py              쇼핑몰 백엔드(8090) ACTIVE 상품 → 카탈로그 편입·갱신·중단. POST /api/catalog/sync · 주기 실행 (Jira 222)
 │       ├── session_store.py             세션 상태 영속화 — 이벤트 로그 append + 기동 시 재생, compact (Jira 224)
 │       ├── kafka_state.py               Kafka activity-events 구독 → 세션 상태 실시간 갱신. 별도 group·수동 commit·event_id dedupe (Jira 226)
-│       ├── user_trait.py                장기 성향 user_trait_daily → 응답 long_term_trait. dw MySQL → 스냅샷 → null, 5분 재적재 (Jira 306)
+│       ├── user_trait.py                장기 성향 user_trait_daily → 응답 long_term_trait. dw MySQL → 스냅샷 → null, 5분 재적재 (Jira 306) · actor_type user+synthetic, identity_scope 로 가름, 중복 grain 규칙 (09-17 Jira 346)
 │       ├── live_stats.py                GET /live 실시간 처리 현황(시연 화면) · /live/stats (Jira 295)
 │       ├── catalog_registry.py          등록 입력 → §4 파생 → 계약 검사 → 인코딩 → 카탈로그 확장. CLI 로 카탈로그 파일 변환
 │       ├── bench_recommend.py           응답 시간 실측 (p50/p95)
@@ -259,7 +261,8 @@ S15P21A306/
 │   ├── generator/
 │   │   ├── gen_behavior_logs.py         PC 9,900명 합성 로그 (1인당 약 600건) — 노출 정책 --exposure · 추천 서버 연동 --recommend-url (Jira 221)
 │   │   │                                 09-15: 담기 뒤 결제 begin_checkout→purchase→purchase_reason_select, 시드·재구매는 전부 결제 (Jira 312) · 시드 날짜 85일 창 (Jira 313)
-│   │   ├── demo_live.py                 9,900명 로그 캐시 → Kafka 프로듀스(key=session_id), /live 시연용. Kafka 없으면 --http (Jira 295)
+│   │   │                                 09-17: view_cart currency(340) · Quick Look 담기 가격 속성(342) · hist: 세션 product_view 로 최소 퍼널(345) — 데이터 336 재생성 선행 조건 3건
+│   │   ├── demo_live.py                 9,900명 로그 캐시 → Kafka 프로듀스(key=session_id), /live 시연용. Kafka 없으면 --http (Jira 295) · DEMO_CURRENCY 기본 KRW, 캐시 demo_behavior_<limit>_<currency>.jsonl (09-17 Jira 341)
 │   │   ├── recommend_client.py          추천 서버 클라이언트 — items·hero·banners 식별자를 이벤트에 그대로, 행동은 /api/events 로 상태 전송. 없으면 폴백
 │   │   ├── build_persona_style.py       리뷰에서 페르소나 6축 스타일 추출
 │   │   └── test_gen_behavior_logs.py · test_recommend_client.py · README.md
@@ -289,7 +292,7 @@ S15P21A306/
 ├── deploy/                          EC2 배포 (백엔드·인프라·AI)
 │   ├── backend.Dockerfile · nginx.Dockerfile · nginx/default.conf   nginx 는 /api/ → backend:8080 만
 │   ├── recommend.Dockerfile · recommend.Dockerfile.dockerignore · recommend-entrypoint.sh   ★ 추천 서버 이미지 (AI, Jira 219) — BuildKit 필수
-│   └── ec2-1/                           docker-compose.yml(dev 판; 운영 정본은 ec2-1-deploy) · README.md · redeploy-recommend-from-dev.sh · redeploy-local.sh · reset-registered-local.sh · build-verbose-local.sh (AI, Jira 305·309)
+│   └── ec2-1/                           docker-compose.yml(dev 판; 운영 정본은 ec2-1-deploy) · README.md · redeploy-recommend-from-dev.sh · redeploy-local.sh · reset-registered-local.sh · reset-demo-local.sh(시연 초기화 ③, 09-17 Jira 347) · build-verbose-local.sh (AI, Jira 305·309)
 │
 ├── kafka/README.md                  Kafka 구조·이벤트 처리 명세 (백엔드·인프라)
 ├── infra/

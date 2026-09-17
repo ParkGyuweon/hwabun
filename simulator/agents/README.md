@@ -68,7 +68,7 @@ python simulator/agents/agent_runner.py --checkout --limit 1     --script click_
   노출 A/B 의 대조군. 배너 노출 로그(`recommendation_impression`, `list_id=hero_banner`)는 두 조건 모두 프론트가 남긴다.
 - 파일럿 결과(배포 서버, 09-16): 배너를 본 20명 중 **6명 클릭(30%), 4명은 첫 화면에서**, 배너 상품 상세 4·찜 1·담기 1.
   전체 담기는 85 vs 89 로 같고 찜은 34 vs 62(n=20, 잡음 범위). 클릭 이유는 전부 "새 브랜드 신상품". 데이터는 레포 밖(Research/banner-ab-20260916).
-- 배포 프론트에는 09-16 부터 포트원 키가 있어 `checkout` 이 카카오페이 창에서 멈춘다 → 프론트 `?pay=test` 스위치 요청 중. 그 전엔 배포본 실행은 결제 없이.
+- 배포 프론트에는 09-16 부터 포트원 키가 있어 `checkout` 이 카카오페이 창에서 멈춘다 → 프론트 `?pay=test` 스위치(`navigator.webdriver` 자동 판별)는 09-17 11:00 !271 로 dev 에 머지됐고, 배포 브랜치(ec2-1-deploy) 반영·재배포는 대기(!286). 그 전엔 배포본 실행은 결제 없이(`--checkout` 빼고). 배포되면 `--checkout --limit 1` 로 E2E 1명 먼저.
 
 ## 페르소나가 행동을 이끄는가 — `--prefer-category`
 

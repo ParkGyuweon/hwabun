@@ -24,7 +24,8 @@ ssh -i ~/Downloads/J15A306T.pem ubuntu@j15a306.p.ssafy.io \
 | `kafka_state.connected` | true, `broker_errors` 안 늘어남 (09-15 17:40 부터 EC2-2 브로커 `j15a306a.p.ssafy.io:9092` 에 연결됨) | 브로커 미기동 또는 `.env` 호스트 오류(EC2-1 자기 주소면 틀림). 인프라 |
 | `sessions.personas_in_memory` | 시연 트래픽 뒤 > 0 | 이벤트가 안 들어옴 = Kafka. `--http` 보험(§2-B) |
 | `catalog_sync.last` | `replaced 0 · seed_kept 200 · added/unchanged 8` | `replaced` 가 크면 옛 이미지 |
-| `user_trait.source` | dw 연결 전엔 null (정상 — 적재 Job 이 아직 없어 세 경로 전부 없음, 09-16) | dw 붙으면 `dw_mysql:…`, `age_days` ≤ 2 (319) |
+| `user_trait.source` / `rows` / `rows_by_actor_type` | `dw_mysql:mysql/dw`(09-16 저녁부터). 첫 적재 전엔 `rows 0`·`{}` 가 정상. 적재 뒤 `rows_by_actor_type.synthetic` 이 잡혀야 페르소나 장기 성향이 산다(346 — 이전엔 `actor_type='user'` 만 읽어 영원히 0) | `rows 0` 이 계속이면 민우님 발행 Job 미실행. `max_age_days` 는 시연용 60(.env, 재생 로그 날짜 08-28), 시연 뒤 14 |
+| `/pipeline/stats` `spark.reachable` / `dw.tables` / `dashboard_url` | true · 22 · `https://j15a306.p.ssafy.io/dashboard.html` (09-17 10:36) | Spark 는 EC2-2 18080(!297), dw 는 백엔드 CI 스키마, 대시보드는 .env |
 | 컨테이너 어휘집 | `vocab 0.7 [0, 26000, 46000, 66000, 105000]` | 백엔드 재배포가 옛 브랜치로 되돌린 것(§6) |
 | 응답 `hero.hero_policy_version` | `hero-2026-09-15` | 307 이전 이미지 |
 | `prescription.enabled` / `key_present` / `llm_calls` | 시연 직전 true / true, 끝나면 false 로 | GMS 과금은 처방 요청에서만 난다(배치·Kafka 아님). 켜기·끄기(컨테이너에 curl 없음, python 으로): `sudo docker exec ec2-1-recommend-1 python -c "import urllib.request as u;r=u.Request('http://127.0.0.1:8300/api/prescription/llm',data=b'{\"enabled\":false}',headers={'content-type':'application/json'});print(u.urlopen(r).read().decode())"` — 메모리 상태라 재배포하면 `.env` 의 `PRESCRIPTION_LLM`(기본 on)으로 돌아간다 (Jira 325). GMS_KEY 는 EC2-1 `deploy/ec2-1/.env` 에만 있다(레포 아님, 09-16 투입) |
@@ -81,8 +82,8 @@ bash deploy/ec2-1/reset-registered-local.sh
 - `/live` 를 밖에서 보려면 nginx 에 `location = /live` · `location /live/` → `http://recommend:8300` 한 블록 (백엔드 몫). 없으면
   `ssh -L 8300:127.0.0.1:8300 …` 터널로 발표 노트북에서 `http://127.0.0.1:8300/live`. 단 컨테이너 8300 은 호스트에 안 열려 있으니
   터널 대상은 `docker exec` 로 컨테이너 IP 를 확인해 잡는다(`sudo docker inspect ec2-1-recommend-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`).
-- 배포본 `/live` 의 시작 버튼은 **1,000명**을 돌린다(compose `DEMO_LIMIT=1000`, 캐시 볼륨 `/data/demo_cache`, 09-16 Jira 335).
-  생성기가 페르소나 1명당 RSS 1.2MB 라 9,900명(12GB)은 컨테이너에서 OOM 으로 죽는다(실측). 9,900명이 꼭 필요하면 **EC2 호스트의 dev 워크트리**에서 돌린다:
+- 배포본 `/live` 의 시작 버튼은 **9,900명**을 돌린다(EC2-1 `.env` `DEMO_LIMIT=9900`, 캐시 `/data/demo_cache/demo_behavior_9900_KRW.jsonl` 7GB 를 노트북에서 만들어 올림 — §3). 끝까지 가면 1,050만 건·약 57분,
+  중간에 정지하면 `.pos` 에서 이어 간다. 컨테이너 안 생성은 1,000명까지(9,900명은 RSS 12GB 로 OOM, 09-16 실측). 캐시가 없을 때 9,900명을 EC2 에서 만들려면 **EC2 호스트의 dev 워크트리**에서 돌린다:
 
 ```bash
 # EC2-1 안. dev 워크트리는 redeploy 가 /home/ubuntu/dev-build 에 만들어 둔다. 디스크 292GB 여유, 파이썬 3.12
@@ -108,11 +109,11 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 | --- | --- | --- | --- |
 | ① 활동 | Kafka 소비자가 받은 모든 메시지(상태 필터 전) | 됨 | — |
 | ② Kafka | 같은 group 의 두 번째 Consumer(구독 안 함)로 워터마크·committed | 됨 | — |
-| ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **동작 (09-17 14:00)** — 민우님 !297 로 EC2-2 가 `SPARK_MASTER_UI_BIND_IP` 로 마스터 UI 를 열었고, EC2-1 `.env` `SPARK_MASTER_UI=http://j15a306a.p.ssafy.io:18080`(Kafka 와 같은 공개 호스트명 — 사설 IP 172.26.1.194 는 무응답) · 실측 워커 1 · 코어 2 · ALIVE | `/json` 은 `/json/` 로 302 하지만 urllib 이 따라간다. 컨테이너 재생성만(재빌드 없음) |
-| ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **대기** — dw 스키마·reader 없음 | 백엔드 ①② 뒤 `.env` |
-| ⑤ 대시보드 | `DASHBOARD_URL` 링크 | 링크만 | 백엔드 API 6개 뒤 숫자 |
+| ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **동작 (09-17 10:33)** — 민우님 !297 로 EC2-2 가 `SPARK_MASTER_UI_BIND_IP` 로 마스터 UI 를 열었고, EC2-1 `.env` `SPARK_MASTER_UI=http://j15a306a.p.ssafy.io:18080`(Kafka 와 같은 공개 호스트명 — 사설 IP 172.26.1.194 는 무응답) · 실측 워커 1 · 코어 2 · ALIVE | `/json` 은 `/json/` 로 302 하지만 urllib 이 따라간다. 컨테이너 재생성만(재빌드 없음) |
+| ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **연결 (09-17)** — 스키마 22 테이블 인식, 행 0(첫 적재 전). 마트 목록은 `DW_PROJECTION_MARTS`(기본 7) | 민우님 발행 Job → 행 수. projection 이 22개면 EC2-1 .env 에도 같은 목록 |
+| ⑤ 대시보드 | `DASHBOARD_URL` 링크 | **링크 (09-17)** — `https://j15a306.p.ssafy.io/dashboard.html`(프론트 별도 엔트리, SELLER 로그인) | 백엔드 마트 API 7개(!296, ec2-1-deploy) 배포 뒤 숫자 붙이기(AI 후속) |
 
-버튼 둘. **▶ 페르소나 시작**은 `/live` 와 같은 `POST /live/demo/start`(1,000명·이어 보내기). **▶ 에이전트 100명**은 발표 노트북의 런처
+버튼 둘. **▶ 페르소나 시작**은 `/live` 와 같은 `POST /live/demo/start`(9,900명·KRW·이어 보내기). 상태 줄 한글은 09-17(344)부터 안 깨진다. **▶ 에이전트 100명**은 발표 노트북의 런처
 `python simulator/agents/agent_launcher.py`(127.0.0.1:8301, GMS_KEY 있는 셸에서)로 가서 `agent_runner --url <배포 사이트> --limit 100 --checkout --workers 5 --simulation-run-id demo-<날짜>` 를 띄운다.
 런처를 켜는 것이 곧 GMS 허락이다(1명 약 9 크레딧, 100명 약 900). 런처 주소는 화면 오른쪽 위 칸(브라우저에 기억).
 에이전트 로그는 진짜 브라우저 → 프론트 로거 → 수집기 → Kafka 로 페르소나와 같은 길을 가서 ① 의 PA 줄에 잡힌다.
@@ -120,7 +121,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 ## 3. 데이터
 
 - 로그 캐시 `<DEMO_CACHE_DIR>/demo_behavior_<limit>_<currency>.jsonl` (로컬 기본 `simulator/generator/.cache/`, gitignore). 9,900명 = 1,030만 건 · 6.9GB · 1분 · RSS 12GB,
-  1,000명 = 71만 건 · 714MB · 21초 · RSS 1.2GB (09-16 실측). 없으면 첫 시작에 `gen_behavior_logs.py --limit <limit> --currency <currency>` 으로 생성. 배포본은 1,000명, 볼륨 `/data/demo_cache` 라 재배포에도 남는다.
+  1,000명 = 71만 건 · 714MB · 21초 · RSS 1.2GB (09-16 실측). 없으면 첫 시작에 `gen_behavior_logs.py --limit <limit> --currency <currency>` 으로 생성(컨테이너 안은 1,000명까지). 배포본은 9,900명 캐시를 올려 두며, 볼륨 `/data/demo_cache` 라 재배포에도 남는다.
 - **통화는 KRW**(env `DEMO_CURRENCY`, 09-17 Jira 341). 사이트가 원화(302)이고 계약이 purchase·view_cart 의 currency 를 KRW 로 고정(303)해서, 달러 로그가 섞이면
   Q5 `purchase_fact_currency_is_unambiguous` 가 깨진다. 09-16 까지의 캐시 `demo_behavior_1000.jsonl`·`demo_behavior_9900.jsonl` 은 USD 라 이름이 달라 자동으로 안 쓰인다 — 볼륨에서 지운다(7.7GB).
 - **배포본을 9,900명으로**: 컨테이너 안 생성은 OOM 이라 노트북에서 만든다 — `gen_behavior_logs.py --limit 9900 --currency KRW --out <grouped>` → `shuffle_sessions.py <grouped> <shuffled>`(페르소나별로 뭉친 파일을 세션 단위로 섞어 2분 안에 전원이 나타나게; 세션 안 순서는 그대로) → gzip → scp → 볼륨 `/data/demo_cache/demo_behavior_9900_KRW.jsonl` 에 gunzip → EC2 `.env` `DEMO_LIMIT=9900` → 컨테이너 재생성. 1,030만 건이라 초당 8,000 이면 21분, 3,000 이면 57분. 버튼 글자는 서버의 DEMO_LIMIT 을 읽어 바뀐다.
@@ -192,7 +193,10 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 - 다른 브랜치를 체크아웃한 상태로 로컬 서버를 재기동하면 `/live` 가 없는 옛 코드가 뜬다 (404).
 - **배포본 /live 시작 버튼이 404 `DEMO_UNAVAILABLE`** — 이미지에 `simulator/generator/demo_live.py` 가 없었다(09-16 발견, Jira 335 로 Dockerfile COPY + `recommend.Dockerfile.dockerignore` 예외 — 둘 다 있어야 빌드된다).
 - **dw 접속이 `'cryptography' package is required for ... caching_sha2_password`** — MySQL 8 기본 인증에 pymysql 이 cryptography 를 요구한다(09-16, 백엔드 CI 가 dw·계정·.env 를 채운 직후 발견). 서버 requirements 에 추가(Jira 339). 확인은 `/health.user_trait.source = dw_mysql:…`, `/pipeline` dw 칸 schema_exists.
-- **배포본 /live 시작이 `로그 생성 실패`** — 컨테이너 `mem_limit: 1g` 에서 9,900명 생성이 OOM(`OOMKilled=true`, 트레이스백 없이 죽는다). 335 후속으로 `DEMO_LIMIT=1000`·`mem_limit: 3g`·캐시 볼륨. 진단은 `/data/demo_live.log` 와 `docker inspect --format '{{.State.OOMKilled}}'`.
+- **배포본 /live 시작이 `로그 생성 실패`** — 컨테이너 `mem_limit: 1g` 에서 9,900명 생성이 OOM(`OOMKilled=true`, 트레이스백 없이 죽는다). 335 후속으로 `mem_limit: 3g`·캐시 볼륨, 09-17 부터 9,900명 캐시는 노트북에서 만들어 올린다(§3). 캐시 파일이 없거나 이름이 `demo_behavior_<limit>_<currency>.jsonl` 과 다르면 컨테이너가 생성을 시도해 이 실패가 난다. 진단은 `/data/demo_live.log` 와 `docker inspect --format '{{.State.OOMKilled}}'`.
+- **상태 줄이 `蹂닿린: …` 처럼 깨진다** — 로그 꼬리 400바이트가 한글 3바이트 중간에서 잘려 cp949 폴백으로 풀리던 것(09-17, Jira 344 로 `log_tail()` 수정). 옛 이미지면 재배포.
+- **첫 적재 뒤에도 `user_trait.rows` 가 0** — (가) 옛 서버는 `actor_type='user'` 만 읽었고 페르소나 행은 synthetic 이다(346 으로 해결, `rows_by_actor_type` 확인). (나) `age_days > max_age_days` 면 값이 있어도 응답은 null — 재생 로그 날짜가 08-28 이라 EC2-1 은 60 으로 올려 둠(.env `USER_TRAIT_MAX_AGE_DAYS`). `expired=false` 인지 본다.
+- **Kafka 보존 24시간·Q1 은 스트리밍** — EC2-2 토픽 보존 `KAFKA_TOPIC_RETENTION_MS=86400000`. Q1 raw sink(Structured Streaming)가 꺼져 있으면 그 사이 들어온 이벤트는 24시간 뒤 raw 에 못 간다. 버튼 전에 Spark 마스터 `/json/` 의 `activeapps` 에 raw sink 가 있는지 본다(09-17 요청: Q1 상시 가동·보존 7일).
 - **시작 버튼은 배포 Kafka 로 진짜 이벤트를 보낸다** — EC2-2 `activity-events` → Spark raw sink → 마트까지 흐른다(generator_type=python_batch, 새 run_id). 데이터·인프라 파트와 시점을 맞추고 누른다.
 - **정지 뒤 다시 시작하면 화면이 안 움직인다** — 같은 캐시를 처음부터 다시 보내면 event_id 가 같아 소비자(`Dedupe` 최근 20만 건)가 전부 버린다(09-16 duplicates 74,068 실측). 335 후속으로 demo_live 가 `<캐시>.pos` 에 보낸 줄 수를 10초마다 적고 다음 시작은 거기서 이어 간다. 끝까지 가면 0. 처음부터 다시 보내려면 `POST /live/demo/start {"restart": true}` 또는 `--restart` — 이때는 컨테이너를 재기동해 중복 창을 비우는 게 맞다.
 - **배포본 /live 는 nginx 밖으로 안 열려 있다** — 추천 8300 은 컨테이너 안에서만. 보려면 `ssh -N -i ~/Downloads/J15A306T.pem -L 8300:<추천 컨테이너 IP>:8300 ubuntu@j15a306.p.ssafy.io` 뒤 `http://localhost:8300/live`. 컨테이너 IP 는 `sudo docker inspect ec2-1-recommend-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`. 고정 주소는 백엔드 nginx `location /live` 요청.
