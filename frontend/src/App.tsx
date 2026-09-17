@@ -94,9 +94,31 @@ function initialProductId(): string | null {
  * 로그의 출처(actor_type)를 바꾸는 값이 아니므로 위장에 쓰일 여지도 없다.
  */
 function initialPersonaId(): string {
-  const fallback = personas[0]?.persona_id ?? '';
+  return requestedPersonaId() ?? personas[0]?.persona_id ?? '';
+}
+
+/**
+ * **주소로 명시한** 페르소나. 없으면 null.
+ *
+ * `initialPersonaId` 와 갈라 두는 이유는 둘이 답해야 하는 질문이 다르기 때문이다.
+ *
+ *   화면  "스위처에 누구를 띄울까"      → 아무도 안 골랐어도 하나는 띄워야 한다
+ *   로그  "이 이벤트는 누구 것인가"     → 아무도 안 골랐으면 **주인이 없다**
+ *
+ * 예전에는 둘 다 `personas[0]`(PA00001)로 떨어졌다. 그래서 **로그인도 안 하고 페르소나도 안 고른
+ * 실제 방문자의 이벤트가 전부 PA00001 앞으로 기록됐다** (AI 파트 배포본 확인 2026-09-16).
+ * 대시보드에서는 있지도 않은 PA 한 명이 크게 잡히고, 그 사람의 진짜 로그와 섞여 둘 다 못 쓰게 된다.
+ *
+ * 없는 사실을 만드는 것보다 비우는 쪽이 낫다. 계약도 `persona_id` 를 `["string", "null"]` 로
+ * 허용한다 (`event-schema.json`).
+ *
+ * 러너는 영향을 받지 않는다. `?persona=` 없이 화면을 먼저 열고 스위처로 바꾸는 순서라
+ * 전환 **전** 이벤트를 이미 게이트로 버린다 (`simulator/agents/agent_runner.py`).
+ * 그 이벤트가 PA00001 대신 null 로 찍힐 뿐 버려지는 것은 같다.
+ */
+function requestedPersonaId(): string | null {
   const requested = new URLSearchParams(window.location.search).get('persona');
-  return requested && personas.some((p) => p.persona_id === requested) ? requested : fallback;
+  return requested && personas.some((p) => p.persona_id === requested) ? requested : null;
 }
 
 /**
@@ -109,7 +131,7 @@ function initialPersonaId(): string {
  *
  * 모듈을 읽을 때 한 번 정한다 — 로거가 synthetic 표시를 정하는 방식과 같다.
  */
-setLoggerContext({ personaId: initialPersonaId() });
+setLoggerContext({ personaId: requestedPersonaId() });
 
 /**
  * 라우터는 아직 붙이지 않았다.
@@ -124,6 +146,11 @@ export default function App() {
   const [productId, setProductId] = useState<string | null>(initialProductId);
 
   const [personaId, setPersonaId] = useState(initialPersonaId);
+  /**
+   * 이 페르소나를 **누가 골랐나.** 주소(`?persona=`)나 스위처로 고른 것만 참이다.
+   * 거짓이면 화면은 기본 페르소나로 그리되 로그에는 신원을 싣지 않는다 (`requestedPersonaId` 주석).
+   */
+  const [personaChosen, setPersonaChosen] = useState(() => requestedPersonaId() !== null);
   // 브랜드가 대시보드에서 등록·수정하면 새로고침 없이 따라온다 (lib/productRegistry)
   const products = useCatalog();
   const draft = useDraft();
@@ -609,9 +636,16 @@ export default function App() {
    * 여기서 'user' 로 덮으면 부하 생성기의 방문까지 실사용자로 남는다.
    */
   useEffect(() => {
-    // 등록 폼 미리보기(iframe)에서 나온 로그는 소비자 행동이 아니다. environment 로 구분한다
-    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
-    setLoggerContext({ environment: isPreview ? 'preview' : 'local' });
+    /*
+     * 등록 폼 미리보기(iframe)에서 나온 로그는 소비자 행동이 아니다. environment 로 구분한다.
+     *
+     * **미리보기가 아닐 때는 건드리지 않는다.** 예전에는 여기서 `'local'` 로 덮어써서, 로거가
+     * 빌드 모드로 정한 값(`production`)이 마운트 직후 지워졌다 — 배포본 이벤트가 전부 `local` 로
+     * 나간 원인이다 (AI 파트 배포본 확인 2026-09-16). 기본값은 로거가 안다 (`lib/logger.ts`).
+     */
+    if (new URLSearchParams(window.location.search).get('preview') === '1') {
+      setLoggerContext({ environment: 'preview' });
+    }
   }, []);
 
   /**
@@ -742,7 +776,8 @@ export default function App() {
    * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 식별자면
    * 아무것도 하지 않으므로 productId 변경으로 다시 실행돼도 무해하다.
    */
-  const logIdentity = member?.id ?? (personaId || null);
+  // 로그인 회원이 최우선. 아니면 **고른** 페르소나. 둘 다 없으면 주인 없는 방문이라 null 이다
+  const logIdentity = member?.id ?? (personaChosen ? personaId || null : null);
   useEffect(() => {
     setLoggerContext({
       pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',
@@ -765,7 +800,10 @@ export default function App() {
       <SiteHeader
         personas={personas}
         persona={persona}
-        onPersonaChange={setPersonaId}
+        onPersonaChange={(id: string) => {
+          setPersonaId(id);
+          setPersonaChosen(true);
+        }}
         onHome={goHome}
         categories={HEADER_CATEGORIES}
         onCategorySelect={selectCategory}
