@@ -674,7 +674,8 @@ def _demo_status():
     return {"available": os.path.exists(_DEMO_SCRIPT), "running": running,
             "exit_code": (None if running or p is None else p.returncode),
             "started_at": _demo["started_at"], "args": _demo["args"], "last_line": tail,
-            "limit": int(os.environ.get("DEMO_LIMIT", "9900") or 9900)}       # 화면 버튼 글자가 읽는다 (배포 1,000 · 로컬 9,900)
+            "limit": int(os.environ.get("DEMO_LIMIT", "9900") or 9900),       # 화면 버튼 글자가 읽는다 (배포 1,000 · 로컬 9,900)
+            "currency": os.environ.get("DEMO_CURRENCY", "KRW").upper()}         # 생성 로그 통화 (Jira 341, demo_live 가 같은 env 를 읽는다)
 
 
 class DemoStart(BaseModel):
