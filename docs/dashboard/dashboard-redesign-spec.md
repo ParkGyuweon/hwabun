@@ -366,6 +366,7 @@ Fact 컬럼. `unit_price` 로 맞추면 프론트만 바꾸면 되고 Fact 의 �
 | 이벤트 | 바꾸는 것 |
 |---|---|
 | `add_to_cart` · `remove_from_cart` | `price_usd` 제거 → `unit_price` + `currency: 'KRW'` |
+| `view_cart` | `cart_value` 원화 + `currency: 'KRW'` — `App.tsx` 의 `cartSummary()` 가 `price_usd` 로 더하고 `currency` 를 안 싣는다. 계약에서 `view_cart.currency` 가 **필수**로 올라갔다 (데이터 파트 09-16) |
 | `begin_checkout` | `cart_value` 원화 + `currency: 'KRW'` |
 | `purchase` | `order_value`·`paid_value` 원화, `items[].unit_price` 원화 |
 | `price_usd` | 계약에서 **deprecated**. 당분간 두되 프론트는 보내지 않는다 |
@@ -381,6 +382,14 @@ price_krw 가 있으면 그 값
 **프론트에 이미 같은 함수가 있다** — `lib/localize.ts` 의 `toKrw()` 가 같은 식이다
 (`KRW_PER_USD = 1340.86` · `KRW_ROUNDING = 100`). 지금은 화면 표시에만 쓰고 있어서 이벤트에도
 태우면 된다.
+
+**두 구현이 같은 값을 내는지 데이터 파트가 전수 대조했다 (2026-09-16).** 상품 200개 전부에서
+`price_krw_of()` 와 `toKrw()` 결과가 같고 카탈로그의 `price_krw` 와도 같다. $0.01~$999.99 를
+1센트 단위로 99,999개 돌려도 갈리는 값이 없었다. **프론트 식을 그대로 쓴다.**
+
+> 이론적으로는 Python 의 `round()` 가 은행가 반올림이고 JS 의 `Math.round()` 가 올림이라 `x.5` 에서
+> 100원이 벌어질 수 있다. 2자리 달러 입력에서는 부동소수점상 정확히 `.5` 가 나오지 않아 실제로는
+> 발생하지 않는다. 입력 자릿수가 늘면 다시 봐야 한다.
 
 **구현 시점은 결제 작업과 맞춘다.** 고칠 자리가 `App.tsx` 의 `begin_checkout`·`purchase` 인데 그
 파일이 배포 브랜치의 결제 작업과 겹친다. 백엔드 담당과 순서를 정한 뒤 넣는다. 데이터 파트는 이
