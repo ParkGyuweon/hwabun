@@ -42,7 +42,7 @@ BRIDGE_SCHEMA = "persona_id string, segment_type string, segment_value string"
 FACT_SCHEMA = (
     "event_date_kst date, brand_id string, product_id string, category_id string, "
     "session_id string, user_id string, event_name string, close_reason string, "
-    "action string, "
+    "action string, navigation_source string, "
     "purchase_quantity int, order_id string, item_revenue decimal(18,2), "
     "currency string, "
     "actor_type string, source string, generator_type string, "
@@ -94,10 +94,11 @@ class DiagnosticMartSparkTest(unittest.TestCase):
 
     @staticmethod
     def _fact(session, event_name, close_reason=None, product="P1", brand="B1",
-              seeded=False, action=None):
+              seeded=False, action=None, navigation_source=None):
         return (
             date(2026, 9, 8), brand, product, "C1", session, "U-" + session,
-            event_name, close_reason, action, None, None, None, None,
+            event_name, close_reason, action, navigation_source,
+            None, None, None, None,
             "user", "web", None, None, None, seeded,
         )
 
@@ -430,19 +431,66 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertEqual(1, row["impression_count"])
         self.assertEqual(1.0, row["product_ctr"])
 
-    def test_impression_count_is_the_sum_of_both_surfaces(self):
-        """둘 다 있으면 더한다. 한쪽만 세면 분모가 모자란다."""
+    def test_impression_count_is_the_sum_of_all_three_surfaces(self):
+        """목록·추천·배너 셋을 더한다. 하나라도 빠지면 분모가 모자란다."""
         facts = self._facts([
             self._fact("S1", "product_impression"),
             self._fact("S1", "product_impression"),
             self._fact("S2", "recommendation_impression"),
+            self._fact("S3", "banner_impression"),
             self._fact("S1", "product_click"),
         ])
 
         row = _product_daily_kpi(facts).first()
 
-        self.assertEqual(3, row["impression_count"])
-        self.assertAlmostEqual(1 / 3, row["product_ctr"])
+        self.assertEqual(2, row["product_impression_count"])
+        self.assertEqual(1, row["recommendation_impression_count"])
+        self.assertEqual(1, row["banner_impression_count"])
+        self.assertEqual(4, row["impression_count"])
+        self.assertEqual(0.25, row["product_ctr"])
+
+    def test_history_back_views_are_not_new_entries(self):
+        """뒤로가기 재조회는 새 진입이 아니다 (§4.1, 프론트 확정 2026-09-17).
+
+        건수 기준 detail_entry_rate 의 분자라, 재조회를 포함하면 노출보다
+        조회가 많아져 비율이 1 을 넘을 수 있다.
+        """
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="in_app"),
+            self._fact("S1", "product_view", navigation_source="history_back"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["product_view_count"])      # 재조회 제외
+        self.assertEqual(1, row["product_view_sessions"])   # 세션은 원래 하나
+        self.assertEqual(1.0, row["detail_entry_rate"])
+
+    def test_missing_navigation_source_counts_as_a_new_entry(self):
+        """값이 없는 옛 로그는 재조회로 보지 않는다."""
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view"),
+        ])
+
+        self.assertEqual(1, _product_daily_kpi(facts).first()["product_view_count"])
+
+    def test_banner_click_counts_against_the_banner_impression(self):
+        """배너는 banner_click 뒤에 product_click 도 낸다 (생성기 :1289).
+
+        분자에 들어가므로 banner_impression 이 분모에 없으면 1 을 넘는다.
+        """
+        facts = self._facts([
+            self._fact("S1", "banner_impression"),
+            self._fact("S1", "banner_click"),
+            self._fact("S1", "product_click"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["impression_count"])
+        self.assertEqual(1.0, row["product_ctr"])
 
     def test_ctr_is_null_when_neither_surface_had_an_impression(self):
         """분모 0 은 0% 가 아니라 모름이다 (§2)."""

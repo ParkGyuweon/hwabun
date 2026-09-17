@@ -83,11 +83,18 @@ DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 # Quick Look은 목록에서 상세를 여는 경로다. 화면에 있는 정상 동선이고 여기서 바로
 # 장바구니에 담을 수 있어서, 퍼널에서 빼면 담기 세션이 조회 세션보다 많아진다
 # (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
-# 노출 Event 는 둘이다. 프론트는 카드 하나에 하나만 내는데, 목록 그리드는
-# product_impression, 유사상품·히어로 배너·맞춤 기획전은
-# recommendation_impression 이다 (프론트 확인 2026-09-17). 클릭은 어느
-# 목록이든 product_click 이라, 분자에 맞는 분모는 두 노출의 합이다 (§4.1).
-IMPRESSION_EVENTS = ("product_impression", "recommendation_impression")
+# 노출 Event 는 셋이다. 프론트는 카드 하나에 하나만 내는데, 목록 그리드는
+# product_impression, 유사상품·맞춤 기획전은 recommendation_impression,
+# 히어로 배너는 banner_impression 이다 (프론트 !305, 2026-09-17).
+# **클릭은 어느 목록이든 product_click 을 낸다** — 배너도 banner_click 뒤에
+# product_click 을 함께 낸다 (gen_behavior_logs.py:1289). 그래서 분자에 맞는
+# 분모는 세 노출의 합이다. 하나라도 빼면 그 경로의 클릭이 분자에만 들어가
+# 비율이 1 을 넘는다 (§4.1).
+IMPRESSION_EVENTS = (
+    "product_impression",
+    "recommendation_impression",
+    "banner_impression",
+)
 
 FUNNEL_PRODUCT_EVENTS = (
     *IMPRESSION_EVENTS,
@@ -779,12 +786,24 @@ def _product_daily_kpi(
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         count_events("product_impression"),
         # 추천·배너 카드의 노출. product_click 이 여기서도 나오므로 CTR 분모에
-        # 함께 들어간다. 컬럼을 따로 두는 이유는 두 노출의 판정 기준이 달라서다
+        # 함께 들어간다. 컬럼을 따로 두는 이유는 노출 판정 기준이 달라서다
         # — 목록은 hold 300ms, 추천은 1000ms (§4.1).
         count_events("recommendation_impression"),
+        count_events("banner_impression"),
         count_events("product_click"),
         count_events("quick_look"),
-        count_events("product_view"),
+        # 뒤로가기 재조회를 뺀 새 진입만 센다 (§4.1). detail_entry_rate 의
+        # 분자라, 재조회를 포함하면 노출보다 조회가 많아질 수 있다.
+        F.sum(
+            F.when(
+                (F.col("event_name") == F.lit("product_view"))
+                & ~F.coalesce(
+                    F.col("navigation_source") == F.lit(HISTORY_BACK_NAVIGATION),
+                    F.lit(False),
+                ),
+                F.lit(1),
+            ).otherwise(F.lit(0))
+        ).cast("long").alias("product_view_count"),
         count_events("add_to_cart"),
         count_events("remove_from_cart"),
         count_events("purchase"),
@@ -874,7 +893,11 @@ def _product_daily_kpi(
         # 클릭이 분자에만 들어가 비율이 1 을 넘는다 (§4.1).
         .withColumn(
             "impression_count",
-            (F.col("product_impression_count") + F.col("recommendation_impression_count")).cast("long"),
+            (
+                F.col("product_impression_count")
+                + F.col("recommendation_impression_count")
+                + F.col("banner_impression_count")
+            ).cast("long"),
         )
         .withColumn("product_ctr", _safe_ratio(F.col("product_click_count"), F.col("impression_count")))
         .withColumn("detail_entry_rate", _safe_ratio(F.col("product_view_count"), F.col("impression_count")))
@@ -1958,6 +1981,11 @@ EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
 
 # 퀵룩 창을 닫은 이유 중 "상세로 넘어갔다" 를 뜻하는 값
 # (event-properties-schema.md §3.5).
+# 뒤로가기 재조회. 새 진입이 아니라 같은 상세를 다시 연 것이라 건수 집계에서
+# 뺀다 (프론트 확정 2026-09-17). 세션 dedup 지표에는 영향이 없다 — 어차피
+# 같은 세션이라 countDistinct 가 한 번만 센다.
+HISTORY_BACK_NAVIGATION = "history_back"
+
 # 찜 토글에서 "추가" 를 뜻하는 action 값 (event-properties-schema §4.5).
 WISHLIST_ADD_ACTION = "add"
 

@@ -1315,7 +1315,9 @@ def validate_frames(
         # product_impression 만 보면 1 을 넘는다 (§4.1, 프론트 확인 2026-09-17).
         | (F.col("product_click_count") > F.col("impression_count"))
         | (F.col("impression_count")
-           != F.col("product_impression_count") + F.col("recommendation_impression_count"))
+           != F.col("product_impression_count")
+           + F.col("recommendation_impression_count")
+           + F.col("banner_impression_count"))
         | (F.col("purchase_count") > F.col("purchase_quantity"))
     ).count()
     checks.append(_check(
