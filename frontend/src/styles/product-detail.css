@@ -1233,10 +1233,15 @@
 
 /* ---------- 의견 남기기 (피드백) ---------- */
 
+/*
+ * 위 본문(상세·리뷰)과 같은 폭으로 둔다. 720px 로 묶어 두니 왼쪽에만 붙은 좁은 덩어리가 돼서
+ * 같은 페이지의 다른 구역과 줄이 안 맞았다. 폭을 넓히되 한 줄이 너무 길어지지 않게 상한만 둔다.
+ */
 .feedback {
   display: grid;
   gap: var(--space-4);
-  max-width: 720px;
+  width: 100%;
+  max-width: 1080px;
 }
 
 .feedback__kicker {
@@ -1262,7 +1267,8 @@
 /* 계약 0.2.0 — 왼쪽 축 토글 + 오른쪽 자유 입력. 축은 고객이 고른다 */
 .feedback__compose {
   display: grid;
-  grid-template-columns: 148px 1fr;
+  /* 주제 칸은 글자 길이에 맞춘 고정폭, 나머지는 입력이 다 가져간다 */
+  grid-template-columns: 172px minmax(0, 1fr);
   gap: var(--space-5);
   padding: var(--space-4);
   border: 1px solid var(--color-line-soft);

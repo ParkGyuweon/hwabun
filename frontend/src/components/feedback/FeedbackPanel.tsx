@@ -56,8 +56,17 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
   const submit = async () => {
     if (!canSubmit) return;
     setSendError(null);
-    // 백엔드 상품은 서버로. 서버가 이 고객의 결제 완료 주문을 확인하고, 없으면 403 이 정상이다.
-    if (product.source === 'backend') {
+    /*
+     * 백엔드에 있는 상품이면 서버로 보낸다. 서버가 이 고객의 결제 완료 주문을 확인하고, 없으면 403 이 정상이다.
+     *
+     * 판정은 `backend_brand_id` 로 한다. `source` 로 보면 안 된다 — 프론트가 이미 아는 상품(번들 카탈로그에
+     * 있는 것)은 백엔드 값을 얹어도 `source` 를 `seed_catalog` 로 **일부러 남긴다**(productRegistry
+     * `mergeWithLocal`: 그래야 세포라 리뷰 2,000건이 안 사라진다). 그래서 SSAFY Beauty 8종처럼 번들에도 있고
+     * 백엔드에도 있는 상품은 `source !== 'backend'` 라 의견이 서버로 안 가고 이 브라우저에만 쌓였다.
+     * 대시보드 "백엔드 피드백 0" 이 그 결과다. `mergeWithLocal` 주석이 이미 같은 말을 하고 있다 —
+     * "이 상품이 백엔드에 있는가" 는 `backend_brand_id` 로 안다.
+     */
+    if (product.backend_brand_id) {
       const r = await submitFeedbackBackend({ productId: product.product_id, axisId, body: text.trim() });
       if (!r.ok) {
         setSendError(
