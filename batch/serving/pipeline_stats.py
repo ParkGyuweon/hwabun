@@ -7,7 +7,7 @@
     "1만 명이 사이트에서 움직인 로그가 Kafka 로 흩어져 들어가고, Spark 가 받아 정제하고, dw 마트가 되어 대시보드에
     뜬다" 를 **한 화면에서 왼쪽 → 오른쪽으로** 보인다. 리허설(09-17)에서 로그가 어디까지 흘렀는지 바로 짚기 위한 것.
 
-        [사이트 활동]  →  [Kafka 3 파티션]  →  [Spark raw sink]  →  [dw 마트 7개]  →  [대시보드]
+        [사이트 활동]  →  [Kafka 3 파티션]  →  [Spark raw sink]  →  [dw 마트 22개]  →  [대시보드]
         페르소나/에이전트/  브로커 끝 오프셋·   워커·실행 앱          행 수·마지막 갱신    링크
         실사용자 분리        소비 위치·지연       (REST, 포트 개방 뒤)  (reader 계정 뒤)
 
@@ -22,7 +22,7 @@
     Kafka  : 같은 group.id 의 두 번째 Consumer(구독 안 함) 로 파티션별 끝 오프셋(브로커 생산량)과 committed(우리 소비 위치)
     Spark  : `SPARK_MASTER_UI` (예 http://<EC2-2>:18080) 의 `/json` — 살아 있는 워커·실행 중 앱. 09-16 현재 EC2-2 가
              127.0.0.1 에만 열어 두어 EC2-1 에서는 닫힘 → 민우님께 EC2-1 사설 IP 개방 요청
-    dw     : `DW_MYSQL_*` (user_trait 와 같은 값) 로 information_schema + 마트 7개 COUNT(*)
+    dw     : `DW_MYSQL_*` (user_trait 와 같은 값) 로 information_schema + 마트 22개 COUNT(*)
     대시보드: `DASHBOARD_URL` 링크. 백엔드 API 6개가 생기면 숫자를 붙인다
 """
 from __future__ import annotations
@@ -34,10 +34,15 @@ import time
 import urllib.request
 from collections import Counter, deque
 
-# 민우님 projection Job 기본값 (deploy/ec2-2/docker-compose.yml DW_PROJECTION_MARTS) 과 같은 7개
+# EC2-2 projection 기본 allowlist (streaming/jobs/dw_projection_source.py) 와 같은 22개.
+# EC2-1 은 EC2-2 의 .env 를 공유하지 않으므로 여기에도 기본값을 둔다.
 MARTS = tuple((os.environ.get("DW_PROJECTION_MARTS") or
                "user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,"
-               "brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily").split(","))
+               "brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,"
+               "persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,"
+               "brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,"
+               "segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,"
+               "content_conversion_daily,behavior_conversion_daily,event_daily").split(","))
 CONVERSION_EVENTS = ("add_to_cart", "begin_checkout", "purchase")
 
 
@@ -218,7 +223,7 @@ class SparkWatch(_Watcher):
 
 
 class DwWatch(_Watcher):
-    """dw MySQL — 스키마 존재·테이블 수·마트 7개 행 수·마지막 갱신. user_trait 와 같은 DW_MYSQL_* 를 쓴다"""
+    """dw MySQL — 스키마 존재·테이블 수·마트 행 수·마지막 갱신. user_trait 와 같은 DW_MYSQL_* 를 쓴다"""
 
     def __init__(self, cfg, marts=MARTS, interval=30.0, query=None):
         super().__init__("pipeline-dw", interval)
@@ -281,6 +286,7 @@ h1{font-size:22px;margin:0 0 4px;font-weight:700;color:var(--brown)}.sub{color:v
 .dot{width:10px;height:10px;border-radius:50%;background:#C9CDD2;display:inline-block}.dot.ok{background:var(--acc-deep)}.dot.warn{background:var(--amber)}.dot.off{background:var(--pink)}
 .k{color:var(--mute);font-size:12px}.v{font-size:32px;line-height:1.15;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}.v small{font-size:13px;color:var(--mute);font-weight:400;margin-left:4px}
 .row{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;font-size:13px;border-top:1px solid var(--line);padding-top:4px}.row b{font-weight:600}
+.mart-list{max-height:280px;overflow-y:auto;min-height:0}
 .note{color:var(--mute);font-size:12px;margin-top:auto}
 .bars{display:flex;gap:8px;align-items:flex-end;height:70px;padding-top:6px}.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;font-size:11px;font-variant-numeric:tabular-nums}.bar i{display:block;width:100%;background:linear-gradient(180deg,var(--acc-light),var(--acc));border-radius:6px 6px 2px 2px;min-height:3px;transition:height .35s}
 .bottom{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}@media(max-width:1100px){.flow{grid-template-columns:1fr}.stage{margin-right:0}.stage::after{display:none}.bottom{grid-template-columns:1fr}}
@@ -309,7 +315,7 @@ ul{list-style:none;margin:6px 0 0;padding:0;max-height:180px;overflow:auto}li{di
   <div class="note" id="knote">브로커 끝 오프셋 = 생산 누적 · key = session_id 로 3개에 흩어진다</div></div>
  <div class="stage" id="s3"><h2><span class="dot" id="d3"></span>③ Spark</h2><div class="v" id="spw">-<small>워커</small></div><div class="k" id="spc"></div><div id="spapps"></div>
   <div class="note" id="spnote"></div></div>
- <div class="stage" id="s4"><h2><span class="dot" id="d4"></span>④ dw 마트</h2><div class="v" id="dwn">-<small>/7 마트</small></div><div class="k" id="dwt"></div><div id="dwm"></div>
+ <div class="stage" id="s4"><h2><span class="dot" id="d4"></span>④ dw 마트</h2><div class="v" id="dwn">-<small>마트</small></div><div class="k" id="dwt"></div><div class="mart-list" id="dwm"></div>
   <div class="note" id="dwnote"></div></div>
  <div class="stage" id="s5"><h2><span class="dot" id="d5"></span>⑤ 대시보드</h2><div class="v" id="rec">0<small>명 상태 반영</small></div><div class="k" id="rec2"></div>
   <div class="row"><span>추천 응답 p50</span><b id="p50"></b></div><div id="dash"></div>
@@ -338,7 +344,7 @@ async function tick(){try{const d=await (await fetch('/pipeline/stats',{cache:'n
  else{$('spw').innerHTML='-<small>워커</small>';$('spc').textContent='';$('spapps').innerHTML='';$('spnote').textContent=S&&S.configured?('Spark UI 응답 없음 ('+S.url+') — EC2-2 가 127.0.0.1 에만 열어 두었다. 민우님께 EC2-1 사설 IP 개방 요청'):'SPARK_MASTER_UI 미설정 — 포트가 열리면 .env 에 넣는다';dot('d3',S&&S.configured?'off':'');$('s3').classList.add('wait');}
  const D=d.dw;if(D&&D.reachable){const ms=D.marts||{};const have=Object.keys(ms).filter(m=>ms[m]&&ms[m].rows>0);$('dwn').innerHTML=have.length+'<small>/'+Object.keys(ms).length+' 마트 채워짐</small>';$('dwt').textContent=(D.schema_exists?'dw 테이블 '+D.tables+'개':'dw 스키마 없음')+' · '+D.host;
   $('dwm').innerHTML=Object.keys(ms).map(m=>'<div class="row"><span>'+m.replace('_daily','').replace('_kpi','')+'</span><b>'+(ms[m]==null?'<span class=off>테이블 없음</span>':(fmt(ms[m].rows)+'행'+(ms[m].updated?(' · '+ms[m].updated.slice(5,16)):'')))+'</b></div>').join('');$('dwnote').textContent='';dot('d4',have.length?'ok':(D.schema_exists?'warn':'off'));$('s4').classList.remove('wait');}
- else{$('dwn').innerHTML='-<small>/7 마트</small>';$('dwt').textContent='';$('dwm').innerHTML='';$('dwnote').textContent=D&&D.configured?('dw 접속 실패 · '+(D.error||'')):'DW_MYSQL_HOST/USER 미설정 — 백엔드 dw 스키마·reader 계정 뒤 .env';dot('d4',D&&D.configured?'off':'');$('s4').classList.add('wait');}
+ else{$('dwn').innerHTML='-<small>/'+Object.keys((D&&D.marts)||{}).length+' 마트</small>';$('dwt').textContent='';$('dwm').innerHTML='';$('dwnote').textContent=D&&D.configured?('dw 접속 실패 · '+(D.error||'')):'DW_MYSQL_HOST/USER 미설정 — 백엔드 dw 스키마·reader 계정 뒤 .env';dot('d4',D&&D.configured?'off':'');$('s4').classList.add('wait');}
  const L=d.live;$('rec').innerHTML=fmt(L.personas_touched)+'<small>명 상태 반영</small>';$('rec2').textContent='반영 이벤트 '+fmt(L.events.total)+' · 메모리 세션 '+fmt(d.sessions_in_memory);$('p50').textContent=(L.recommend.p50_ms==null?'-':L.recommend.p50_ms+'ms')+' · p95 '+(L.recommend.p95_ms==null?'-':L.recommend.p95_ms+'ms');
  $('dash').innerHTML=d.dashboard_url?'<div class="row"><span>대시보드</span><b><a href="'+d.dashboard_url+'" target="_blank">열기 ↗</a></b></div>':'<div class="k">DASHBOARD_URL 미설정</div>';dot('d5',L.personas_touched?'ok':'warn');
  draw(A.series_60s);const k=d.kafka;$('hdr').innerHTML=k?('추천 소비자 '+(k.connected?'<span class=ok>연결</span>':'<span class=off>미연결</span>')+' · '+k.topic):'Kafka 구독 없음';

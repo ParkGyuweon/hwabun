@@ -57,6 +57,15 @@ class ConsumerObserverHook(unittest.TestCase):
 
 
 class WatchersWithFakes(unittest.TestCase):
+    def test_dw_default_tracks_22_marts(self):
+        self.assertEqual(len(ps.MARTS), 22)
+        self.assertEqual(len(set(ps.MARTS)), 22)
+        self.assertEqual(ps.MARTS[-1], "event_daily")
+        w = ps.DwWatch({"host": "h", "user": "u", "db": "dw"})
+        self.assertEqual(tuple(w.state["marts"]), ps.MARTS)
+        self.assertIn("Object.keys((D&&D.marts)||{}).length", ps.PIPELINE_HTML)
+        self.assertIn('class="mart-list" id="dwm"', ps.PIPELINE_HTML)
+
     def test_spark_poll_parses_master_json(self):
         w = ps.SparkWatch("http://spark:18080", fetch=lambda url: {
             "aliveworkers": 1, "cores": 2, "coresused": 1, "status": "ALIVE",
