@@ -92,6 +92,8 @@ export default function AdBanner({
       data-variant={c.variant}
       data-concern={c.axis === 'concern' && value ? value : undefined}
       data-product-id={product.product_id}
+      // useImpression 이 읽는 필수 `position`(계약 §4.2). 클릭이 slot 을 position 으로 싣으므로 같은 값이어야 노출·클릭이 조인된다
+      data-position={slot}
       data-banner-slot={slot}
       data-trait-source={traitSource}
       data-banner-type={logged.banner_type}

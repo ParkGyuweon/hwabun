@@ -35,6 +35,8 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // 대시보드 마트 조회 SQL 검증용. contracts/dw/schema.sql 을 그대로 올려 컬럼·집계를 대조한다 (MySQL 호환 모드)
+    testImplementation 'com.h2database:h2'
     testCompileOnly 'org.projectlombok:lombok:1.18.46'
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.46'
 }

@@ -61,7 +61,7 @@ export type P0EventName =
    * 상품 선호가 아니라 **이유 선언**이라 가중치는 0 이고, `reasons` 값 자체를 AI 가 따로 쓴다.
    */
   | 'purchase_reason_select'
-  /** 결제창까지 갔다가 실패·취소. 계약 등록 전이라 lib/payment PAYMENT_FAILED_EVENT_ENABLED 로 막혀 있다 */
+  /** 결제창까지 갔다가 실패·취소. 주문 단위라 product_id 가 없다. 스위치는 lib/payment PAYMENT_FAILED_EVENT_ENABLED */
   | 'payment_failed'
   /**
    * 추천 배너. 유료 광고가 아니라 추천 결과를 강조해 보여주는 영역이다 (기획 §15-10).
@@ -526,7 +526,7 @@ export type PurchaseReason =
   | 'recommendation'
   | 'restock';
 
-/** 계약 §5 `items[]`. 단가는 전환 분석용이고 매출의 정본이 아니다 */
+/** 계약 §5 `items[]`. 단가는 **원화 정가**(currency KRW)이고 전환 분석용이라 매출의 정본이 아니다 */
 export interface OrderItem {
   product_id: string;
   quantity: number;

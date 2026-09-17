@@ -6,7 +6,7 @@ import { toKrw } from './localize';
 /**
  * 가격은 원화로 **표시만** 한다. 데이터는 `price_usd` 그대로다.
  * 환율·반올림은 번역 데이터(products-ko.json 의 price_krw)와 같은 식이라 표시가 어긋나지 않는다.
- * 이벤트의 `cart_value`·`currency:'USD'` 는 데이터 팀과 단위 합의 전이라 건드리지 않는다.
+ * 이벤트 금액도 2026-09-17 부터 같은 식으로 원화다 (lib/checkout unitMoneyProps · orderTotalsKrw, 계약 §4.5).
  */
 export function formatPrice(usd: number): string {
   return `${toKrw(usd).toLocaleString('ko-KR')}원`;

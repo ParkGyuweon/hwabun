@@ -183,12 +183,24 @@ function syntheticContextFromUrl(): SyntheticContext | null {
  */
 const syntheticContext = syntheticContextFromUrl();
 
+/**
+ * 실행 환경. 봉투의 필수 필드다 (`raw-event-schema.md`).
+ *
+ * **하드코딩된 `'local'` 이었다.** 바꾸는 곳이 없어서 배포본 이벤트도 전부 `local` 로 나갔다
+ * (AI 파트 배포본 확인 2026-09-16). 로컬 개발 로그와 시연 로그를 가를 방법이 없었다는 뜻이다.
+ *
+ * 빌드 모드로 정한다. 설정을 늘리지 않으면서 `npm run build` 로 나온 번들만 `production` 이 된다 —
+ * dev 서버는 지금처럼 `local` 이다. 계약에 enum 이 없어(`event-schema.json`: minLength 1) 값은
+ * 우리가 정하는데, 배포가 한 곳뿐이라 두 값이면 충분하다. 환경이 늘면 그때 환경변수로 뺀다.
+ */
+const environment = import.meta.env.PROD ? 'production' : 'local';
+
 let context: LoggerContext = {
   personaId: null,
   pageType: 'product_detail',
   productId: null,
   actorType: syntheticContext ? 'synthetic' : 'user',
-  environment: 'local',
+  environment,
   synthetic: syntheticContext,
   storefront: null,
 };
