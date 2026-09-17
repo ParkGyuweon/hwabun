@@ -232,6 +232,8 @@
   align-items: stretch;
   gap: var(--space-2);
   margin-top: var(--space-5);
+  /* 담기·바로 구매 둘이 들어와 한 줄에 네 칸이다. 좁으면 CTA 두 개가 아랫줄로 내려간다 */
+  flex-wrap: wrap;
 }
 
 .summary__meta {
@@ -255,7 +257,7 @@
 
 /* Primary Button = Fresh Green (브랜딩 가이드 UI Token). 검정 CTA 자리를 대신한다 */
 .btn--primary {
-  flex: 1;
+  flex: 1 1 140px;
   background: var(--color-brand);
   border-color: var(--color-brand);
   color: #fff;
@@ -264,6 +266,26 @@
 .btn--primary:hover {
   background: var(--color-brand-deep);
   border-color: var(--color-brand-deep);
+}
+
+/*
+ * 담기 — 바로 구매가 primary 를 가져가면서 한 단계 내려왔다. 두 CTA 가 같은 무게면
+ * 어느 쪽이 주된 행동인지 읽히지 않고, 색이 같으면 잘못 누른다.
+ */
+.btn--secondary {
+  flex: 1 1 140px;
+  background: var(--color-surface);
+  border-color: var(--color-brand);
+  color: var(--color-brand-deep);
+}
+
+.btn--secondary:hover {
+  background: var(--color-brand-tint, rgba(0, 0, 0, 0.04));
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .btn--icon {

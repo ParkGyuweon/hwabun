@@ -36,6 +36,10 @@ services:
       PORTONE_TIMEOUT_MS: ${PORTONE_TIMEOUT_MS:-10000}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-ec2}
+      # 결제 없이 PAID 로 표시하는 테스트 주문(/api/orders/{id}/pay)을 부를 수 있는 회원 ID 접두.
+      # 에이전트 러너 계정(PA00001~PA00100, 시드 shop_backend_seed.sql)만 허용한다.
+      # 프론트의 ?pay=test 판정은 보호 장치가 아니라 러너 분기일 뿐이라 실제 차단은 서버가 한다.
+      TEST_PAY_ALLOWED_MEMBER_PREFIX: ${TEST_PAY_ALLOWED_MEMBER_PREFIX:-PA}
     depends_on:
       mysql:
         condition: service_healthy
