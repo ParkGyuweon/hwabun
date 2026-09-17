@@ -33,7 +33,7 @@ RUNNER = os.path.join(HERE, "agent_runner.py")
 DEFAULT_SITE = "https://j15a306.p.ssafy.io"
 
 _state = {"proc": None, "started_at": None, "args": None, "log": None}
-_cfg = {"site": DEFAULT_SITE, "workers": 5, "turns": 25}
+_cfg = {"site": DEFAULT_SITE, "workers": 5, "turns": 25, "post": None}
 
 
 def _load_dotenv():
@@ -80,6 +80,12 @@ def start(body):
     args = [sys.executable, RUNNER, "--url", _cfg["site"], "--limit", str(limit), "--turns", str(_cfg["turns"]),
             "--workers", str(int(body.get("workers") or _cfg["workers"])), "--out", out,
             "--simulation-run-id", run_id, "--quiet"]
+    # 수집 API 로도 보낸다 (09-17). 안 보내면 로그가 파일로만 쌓여 /pipeline 의 에이전트 축이
+    # 실행 내내 0 이고 마트에도 안 들어간다. 브라우저가 프론트 로거로 보내는 것과는 다르다 —
+    # 그쪽은 러너가 채우는 actor_type·실행 메타데이터가 없어 실사용자와 구분되지 않는다.
+    post = body.get("post") or _cfg.get("post") or _cfg["site"]
+    if post and str(post).lower() not in ("off", "none", "false"):
+        args += ["--post", str(post)]
     if body.get("checkout", True):
         args.append("--checkout")
     log = os.path.join(HERE, "data", f"launcher_{ts}.log")
@@ -144,10 +150,12 @@ def main():
     ap = argparse.ArgumentParser(description="/pipeline 에이전트 버튼용 로컬 런처")
     ap.add_argument("--port", type=int, default=8301)
     ap.add_argument("--site", default=DEFAULT_SITE, help="에이전트가 쓸 사이트 (기본 배포본)")
+    ap.add_argument("--post", default=None,
+                    help="수집 API 베이스 URL. 안 주면 --site 와 같은 곳으로 보낸다. off 로 끈다")
     ap.add_argument("--workers", type=int, default=5, help="동시 브라우저 수")
     ap.add_argument("--turns", type=int, default=25)
     a = ap.parse_args()
-    _cfg.update(site=a.site, workers=a.workers, turns=a.turns)
+    _cfg.update(site=a.site, workers=a.workers, turns=a.turns, post=a.post)
     _load_dotenv()
     print(f"[launcher] http://127.0.0.1:{a.port}  site={a.site} workers={a.workers} "
           f"GMS_KEY={'있음' if os.environ.get('GMS_KEY') else '없음 — 시작 거절'}", flush=True)
