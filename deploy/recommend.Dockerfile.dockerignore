@@ -19,11 +19,17 @@ shop_backend
 deploy/ec2-1
 frontend/**
 !frontend/src/types/log.ts
+!frontend/src/mocks/products.sample.json
+!frontend/src/mocks/products.ssafy-beauty.json
 simulator/**
 !simulator/personas/data/personas_9900.json
 !simulator/personas/data/personas_100_agent.json
 !simulator/personas/data/personas_holdout_a.json
 !simulator/personas/data/personas_holdout_b.json
+!simulator/personas/data/persona_style.json
+!simulator/generator/demo_live.py
+!simulator/generator/gen_behavior_logs.py
+!simulator/generator/recommend_client.py
 !simulator/feedback/banned_terms.py
 batch/ingest/data/**
 !batch/ingest/data/products_200.json
