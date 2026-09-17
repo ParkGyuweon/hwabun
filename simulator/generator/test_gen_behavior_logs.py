@@ -353,6 +353,30 @@ class ViewCartCurrencyTest(unittest.TestCase):
                 self.assertEqual([], missing, f"가격 속성 없는 add_to_cart {len(missing)}/{len(adds)}건 "
                                               f"(entry_source: {sorted({x['properties'].get('entry_source') for x in missing})})")
 
+    def test_history_sessions_open_detail_before_cart_but_seed_sessions_do_not(self):
+        """Jira 345 — hist:(재구매 쌍) 세션은 view→cart→purchase 최소 퍼널을 갖고, seed: 긍정 시드는 계약대로 조회 없이 담기만"""
+        events = self._run("KRW")
+        by_sid = {}
+        for x in events:
+            by_sid.setdefault(x["session_id"], []).append(x)
+        hist = {s: v for s, v in by_sid.items() if s.startswith("hist:")}
+        seed_pos = {s: v for s, v in by_sid.items()
+                    if s.startswith("seed:") and any(x["event_name"] == "add_to_cart" for x in v)}
+        self.assertGreater(len(hist), 0); self.assertGreater(len(seed_pos), 0)
+        for sid, v in hist.items():
+            v = sorted(v, key=lambda x: x["sequence_no"])
+            names = [x["event_name"] for x in v]
+            with self.subTest(sid=sid):
+                self.assertIn("product_view", names)
+                self.assertLess(names.index("product_view"), names.index("add_to_cart"))
+                pv = v[names.index("product_view")]; pg = v[names.index("page_view")]
+                self.assertEqual("session_start", pv["properties"]["navigation_source"])
+                self.assertEqual(pv["properties"]["navigation_source"], pg["properties"]["navigation_source"])
+                self.assertEqual(pv["page_view_id"], pg["page_view_id"])      # 같은 상세 진입
+        for sid, v in seed_pos.items():
+            with self.subTest(sid=sid):
+                self.assertNotIn("product_view", [x["event_name"] for x in v])
+
 
 @unittest.skipIf(np is None, "numpy is required for the simulator generator")
 class SamplePersonasTest(unittest.TestCase):
