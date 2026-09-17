@@ -148,6 +148,21 @@ def seed_session_id(context, persona_id, product_id):
 
     return f"seed:{context.simulation_run_id}:{persona_id}:{product_id}"
 
+
+def history_detail_entry(e, g):
+    """hist: 과거 구매 세션의 상세 진입 — page_view + product_view (Jira 345).
+
+    hist: 세션은 마트가 실제 주문으로 세는데(327), 상세 조회 없이 담고 사면 마트에서
+    add_to_cart_sessions > detail_view_sessions 가 되어 퍼널·브랜드·상품·고객군·가격대 마트의 불변식이 깨진다
+    (데이터 336 스모크: 5종 230행). 프론트 상세 진입과 같이 page_view 직후 product_view 를 같은 page 에 남긴다.
+    세션 첫 page_view 라 navigation_source 는 session_start (계약 §3.4), product_view 도 같은 값.
+    시드(seed:) 세션은 여기 오지 않는다 — 계약대로 "긍정 시드는 조회 없이 add_to_cart 만" 이고 마트는 seeded 를 뺀다."""
+    e.new_page("product_detail")
+    e.emit("page_view", g, navigation_source="session_start")
+    e.tick(300, 1200)
+    e.emit("product_view", g, navigation_source="session_start")
+    e.tick(500, 3000)
+
 # ══════════════════════════════════════════════════════════════════════════
 #  시나리오 파라미터 — ⚠️ 전부 자리표시자다. 팀 합의 전이므로 튜닝하지 않는다.
 #
@@ -1110,7 +1125,10 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             session_id=sid,
             is_seed=not repurchase,
         )
-        e.new_page("product_detail")
+        if repurchase:
+            history_detail_entry(e, g)          # hist: 세션은 상세를 열고 담는다 (Jira 345)
+        else:
+            e.new_page("product_detail")        # 시드는 조회 없이 담기만 (계약 event-properties-schema §시드)
         e.emit("add_to_cart", g, quantity=1, **price_props(catalog, g),
                **({} if repurchase else {"seeded": True}))
         # 시드는 과거 구매다(리뷰를 썼다 = 샀다). 담기에서 끝내면 purchase_fact 가 비어 재구매 마트가 0 이 된다 (Jira 312)
@@ -1136,7 +1154,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 session_id=history_session_id(context, p["persona_id"], f"{g}#restock{k}"),
                 is_seed=False,                  # 재구매는 비시드 (Jira 327)
             )
-            re.new_page("product_detail")
+            history_detail_entry(re, g)         # 재구매도 hist: 세션 — 상세를 열고 담는다 (Jira 345)
             re.emit("add_to_cart", g, quantity=1, **price_props(catalog, g))
             checkout(re, catalog, [g], rng, SC, restock=True)     # 재구매 = 두 번째 결제, 사유는 restock
 
