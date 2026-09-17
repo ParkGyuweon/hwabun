@@ -30,7 +30,7 @@ pipeline {
         booleanParam(
             name: 'INIT_DW_SCHEMA',
             defaultValue: false,
-            description: 'EC2-1 MySQL의 dw 스키마를 최초 1회 생성하고 EC2-2 Spark 전용 계정을 부여합니다. 기존 dw가 있으면 안전을 위해 중단합니다.'
+            description: 'EC2-1 MySQL의 dw 스키마만 삭제 후 재생성하고 EC2-2 Spark 전용 계정을 부여합니다. shop_backend 데이터베이스와 MySQL 볼륨은 유지됩니다.'
         )
     }
 
@@ -237,13 +237,10 @@ pipeline {
                     : "${DW_MYSQL_WRITER_PASSWORD:?Set DW_MYSQL_WRITER_PASSWORD in EC2_ENV_FILE}"
                     : "${DW_MYSQL_WRITER_HOST:?Set DW_MYSQL_WRITER_HOST to EC2-2 private IP}"
 
-                    # schema.sql의 CREATE TABLE은 재실행용이 아니다. 이미 DB가 있으면 기존 데이터를 보호한다.
-                    if docker exec ec2-1-mysql-1 sh -c \
-                      'mysql -N -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '\''dw'\''"' \
-                      | grep -qx 'dw'; then
-                        echo 'dw 데이터베이스가 이미 있습니다. 기존 DW를 보호하기 위해 초기화를 중단합니다.' >&2
-                        exit 1
-                    fi
+                    # DW projection은 재생성 가능하다. dw만 DROP하며, MySQL 컨테이너·볼륨과
+                    # 같은 서버의 shop_backend 데이터베이스에는 손대지 않는다.
+                    docker exec ec2-1-mysql-1 sh -c \
+                      'mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS dw;"'
 
                     docker cp contracts/dw/schema.sql ec2-1-mysql-1:/tmp/dw-schema.sql
                     docker exec ec2-1-mysql-1 sh -c \
