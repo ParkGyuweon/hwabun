@@ -494,6 +494,13 @@ body {
   border-color: transparent;
 }
 
+/* 번들 샘플. 실측처럼 진하지도, 모의처럼 흐리지도 않게 — 점선 테두리로 "자리만 채운 것" */
+.badge--seed {
+  color: var(--ink-soft);
+  border-style: dashed;
+  border-color: var(--ink-faint);
+}
+
 /*
  * 출처 배지 — 이 숫자를 **누구의 데이터로 만들었나.** 실측/모의 배지와 축이 다르다 (components.tsx).
  *
@@ -1087,6 +1094,115 @@ table.data tr:hover td {
 .fbx-route--pricing {
   color: #5c4720;
   background: #f4ead4;
+}
+
+/* ---- 상품별: 1차 상품 → 2차 카테고리 칩 ---- */
+.fbx-products {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fbx-product {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fbx-product.is-active {
+  border-color: var(--ink);
+  background: var(--ground);
+}
+
+.fbx-product__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fbx-product__head:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.fbx-product__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fbx-product__n {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fbx-product__n b {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.fbx-product__cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.fbx-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.fbx-cat:hover {
+  border-color: var(--ink-faint);
+}
+
+.fbx-cat:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.fbx-cat.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.fbx-cat__n {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fbx-cat--pending {
+  border-style: dashed;
 }
 
 /* ---- 축 분포: 한 줄 누적 막대 + 버튼 ---- */

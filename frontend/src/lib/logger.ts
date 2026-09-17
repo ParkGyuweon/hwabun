@@ -225,6 +225,9 @@ const NULLABLE_PROPERTIES: Record<string, ReadonlySet<string>> = {
   hover_dwell: new Set(['action']),
   rage_click: new Set(['action']),
   dead_click: new Set(['target_tag']),
+  // §3.13: banner_type=new_brand 면 banner_value 는 **JSON null 이 필수**다. 키를 빼면 수집기가 거절한다
+  banner_impression: new Set(['banner_value']),
+  banner_click: new Set(['banner_value']),
 };
 
 /** 계약이 허용하지 않는 null 을 걷어낸다. 봉투를 만들기 직전에 한 번 */

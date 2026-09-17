@@ -127,6 +127,9 @@
   padding: 6px 12px;
   cursor: pointer;
   text-decoration: none;
+  /* 계정 이름("브랜드 ssafy-beauty 관리자")이 길면 flex 가 버튼을 눌러 "로그아/웃" 으로 꺾였다 */
+  white-space: nowrap;
+  flex: none;
 }
 
 .sidebar__settings:hover {

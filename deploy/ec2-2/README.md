@@ -164,7 +164,7 @@ EC2-1의 추천 데이터 Volume은 이 서버에 자동 공유되지 않는다.
 
 자동 배치를 사용하면 Q4·Q5 성공 뒤 선택 profile `dw`의 `dw-projection`이 자동 실행된다.
 수동으로 projection만 다시 실행할 수도 있다.
-기본 실행은 `user_trait_daily`와 대시보드 핵심 Mart 6종의 Parquet을 묶음으로 읽어
+기본 실행은 DW 계약의 22종 Mart Parquet을 순서대로 읽어
 MySQL staging에 적재하고, 건수·NULL 축을 포함한 grain 중복·필수값을 검증한 뒤
 Mart별 조회 테이블을 교체한다. 일반 `up`은 이 Job을 실행하지 않는다.
 자세한 최초 DB 준비·계정 권한·추천 서버 연결·실패 복구는
@@ -177,9 +177,13 @@ docker compose --profile dw run --rm dw-projection
 ```
 
 기본 입력은 `SPARK_DATA_PATH/marts/<mart>`이고, 읽기 전용으로 마운트된다.
-발행 결과는 `/reports/dw-projection.json`에서 Mart별로 확인한다. 전체 DW Mart를 발행할
-때는 `streaming/DW_PROJECTION.md`의 22개 목록을 `.env`의 `DW_PROJECTION_MARTS`에
-설정한다. Q4가 같은 입력 경로를 overwrite하는 동안에는 실행하지 않는다.
+발행 결과는 `/reports/dw-projection.json`에서 Mart별로 확인한다. 기존 EC2-2 `.env`에
+7종의 `DW_PROJECTION_MARTS`가 있으면 Compose 기본값보다 우선하므로, 전체 발행을
+원할 때는 `streaming/DW_PROJECTION.md`의 22종 목록으로 그 값을 갱신한다.
+0행이거나 Parquet 파일이 없는 Mart는 발행이 중단되고 앞서 발행한 Mart는 교체된 상태로
+남을 수 있다. Q4가 같은 입력 경로를 overwrite하는 동안에는 실행하지 않는다.
+EC2-1 `/pipeline` 화면의 표시 목록은 별도 추천 서버 설정이므로 이 값을 바꿔도
+자동으로 늘어나지 않는다.
 
 MySQL 준비 전 추천 폴백 파일만 만들 때는 별도 출력 폴더를 바인드하고 JSONL 전용 모드로
 실행한다. 생성된 파일은 EC2-1 추천 컨테이너의 `/data/user_trait_snapshot.jsonl`로

@@ -256,8 +256,12 @@ export default function ProductListPage({
    */
   const promoAlgorithm = recommendation.model_version;
   const promoRecommendationId = recommendation.recommendation_id;
-  /** 배너·히어로는 별도 목록으로 센다. 같은 응답이라 식별자는 공유한다 */
-  const bannerAlgorithm = `${recommendation.model_version}/banner`;
+  /**
+   * 배너·히어로는 별도 목록(`hero_banner`)으로 센다. 같은 응답이라 식별자·알고리즘은 **그대로** 공유한다.
+   * 전에는 `/banner` 를 덧붙였는데 서버는 "응답의 algorithm 을 그대로 싣는 값" 으로 정의한다 (recommend_server 주석).
+   * 접미를 붙이면 알고리즘별 집계에서 히어로만 따로 떨어진다. 배너 여부는 event_name·list_id 가 이미 가른다.
+   */
+  const bannerAlgorithm = recommendation.model_version;
 
   const filtered = useMemo(() => {
     const band = PRICE_BANDS.find((b) => b.key === price) ?? PRICE_BANDS[0];
@@ -349,13 +353,13 @@ export default function ProductListPage({
     listId: 'list_grid',
   });
   /**
-   * 배너 노출. `banner_impression` 은 계약 enum 에는 등록됐지만 수집기가 아직이라
-   * (lib/bannerConfig) `recommendation_impression` 에 배너 property 를 얹어 보낸다.
-   * 노출은 분모일 뿐이다.
+   * 배너 노출 — `banner_impression` (계약 §4.2 · 2026-09-17 전환). 계약 enum·수집기 INTENTS·Spark 에 모두 등록돼 있어
+   * 더는 `recommendation_impression` 에 얹지 않는다. `banner_daily` 마트가 event_name 으로 거르므로 이 이름이어야 행이 생긴다.
+   * 필수 property(banner_type·banner_value·banner_slot·trait_source)는 AdBanner 의 data-* 에서 읽는다. 노출은 분모일 뿐이다.
    */
   const heroRef = useImpression({
     pageViewKey: `hero:${recommendIdentityId ?? 'anonymous'}:${trait.trait_source}`,
-    eventName: 'recommendation_impression',
+    eventName: 'banner_impression',
     listId: 'hero_banner',
     algorithm: bannerAlgorithm,
     recommendationId: promoRecommendationId,
@@ -364,9 +368,9 @@ export default function ProductListPage({
   });
 
   /**
-   * 배너·히어로 클릭. 추천 클릭 + 상품 클릭. entry_source 는 계약 enum 안의 promo_pick 을 쓴다.
-   * 축·값은 AdBanner 가 **실제로 그린 것** 기준으로 넘겨준다 (완성형이면 new_brand · 값 없음). 노출과 같은 값이어야
-   * 칸별·축별 CTR 조인이 성립한다.
+   * 배너·히어로 클릭 — `banner_click` + `product_click` (2026-09-17 전환). entry_source 는 계약 enum 안의 promo_pick 을 쓴다.
+   * 축·값은 AdBanner 가 **실제로 그린 것** 기준으로 넘겨준다 (완성형이면 new_brand · banner_value null). 노출과 같은 값이어야
+   * 칸별·축별 CTR 조인이 성립한다. 히어로는 항상 slot 1 이라 응답과 어긋나도 1 로 싣는다 — position 이 비면 계약 위반이다.
    */
   const selectFromBanner = (listId: 'hero_banner') => (productId: string, logged: BannerLog) => {
     const banner =
@@ -379,24 +383,23 @@ export default function ProductListPage({
           : null
         : (recommendation.banners.find((b) => b.product_id === productId) ?? null);
 
-    track('recommendation_click', {
+    const slot = banner?.slot ?? 1;
+    track('banner_click', {
+      product_id: productId,
+      banner_type: logged.banner_type,
+      // 계약 §3.13: new_brand 는 null 을 **싣는다** (로거 NULLABLE_PROPERTIES). 키를 빼면 수집기가 거절한다
+      banner_value: logged.banner_value,
+      banner_slot: slot,
+      trait_source: trait.trait_source,
+      // 정책 배포 전후를 banner_daily 에서 바로 잘라 보기 위한 귀속 키 (계약 §3.13)
+      policy_version: BANNER_POLICY_VERSION,
+      // 같은 응답의 추천 노출·클릭과 이어 볼 수 있게 식별자도 싣는다 (선택 속성)
       ...(promoRecommendationId ? { recommendation_id: promoRecommendationId } : {}),
       list_id: listId,
       algorithm: bannerAlgorithm,
-      product_id: productId,
-      position: banner ? banner.slot : null,
-      ...(banner
-        ? {
-            banner_type: logged.banner_type,
-            ...(logged.banner_value !== null ? { banner_value: logged.banner_value } : {}),
-            banner_slot: banner.slot,
-            trait_source: trait.trait_source,
-            // 정책 배포 전후를 banner_daily 에서 바로 잘라 보기 위한 귀속 키 (계약 §3.13)
-            policy_version: BANNER_POLICY_VERSION,
-          }
-        : {}),
+      position: slot,
     });
-    track('product_click', { product_id: productId, entry_source: 'promo_pick', position: banner ? banner.slot : null });
+    track('product_click', { product_id: productId, entry_source: 'promo_pick', position: slot });
     onSelectProduct(productId);
   };
 

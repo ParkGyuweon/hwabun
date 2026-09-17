@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 MART = "user_trait_daily"
 DEFAULT_DDL = ROOT / "contracts/dw/schema.sql"
 
-# Keep the checked-in projection allowlist aligned with the DW DDL. The EC2-2
-# Compose still passes the seven core Marts by default for the first rehearsal;
-# callers can select any of these Marts with ``--marts``.
+# Keep the checked-in projection allowlist aligned with the DW DDL. EC2-2
+# Compose publishes all of these Marts by default; callers can select a subset
+# with ``--marts``.
 DEFAULT_PROJECTION_MARTS = (
     "user_trait_daily",
     "brand_daily_kpi",
