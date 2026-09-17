@@ -44,6 +44,8 @@ import sys
 import threading
 import time
 import urllib.request
+import uuid
+from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 페르소나 수·캐시 위치는 환경변수로도 준다 (Jira 335). 생성기는 페르소나 1명당 RSS 약 1.2MB · 파일 0.7MB 를 쓰므로
@@ -147,6 +149,36 @@ class Ticker(threading.Thread):
             self.stop.wait(0.4)
 
 
+# 수집 API 한 요청에 담기는 이벤트 수. request_id 와 event_index 가 이 단위로 묶인다.
+ENVELOPE_BATCH = 20
+
+
+def now_iso_ms():
+    """수집기 receivedAt 과 같은 모양 — 밀리초 3자리 + Z"""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def put_envelope(event, received_at, request_id, event_index):
+    """수집기가 채우는 봉투 다섯 필드를 여기서 채운다 (Jira 없음 — 09-17 규명).
+
+    되감기는 수집 API(`POST /api/events`)를 건너뛰고 Kafka 에 직접 넣는다. 그런데 계약의 필수 19개 중
+    `received_at`·`source`·`request_id`·`event_index`·`account_id` 다섯은 **생성기가 아니라 수집기가 채우는**
+    봉투다(`backend/.../KafkaEventMessage.from`). 그대로 넣으면 정제가 `missing_required_field` 로 전부 버린다 —
+    09-17 실측에서 원천 256,554건 중 253,596건(98.8%)이 이것 하나로 탈락했고 전부 `source=simulator` 였다.
+    그래서 마트가 실사용자 트래픽만으로 만들어졌다.
+
+    `source` 규칙은 수집기와 같다 — `actor_type=='synthetic'` 이면 `simulator`, 아니면 `web`.
+    `account_id` 는 수집기도 비로그인이면 null 로 넣는다. **키가 없는 것과 null 은 다르다** — 없으면 탈락한다.
+    """
+    event["received_at"] = received_at
+    event["source"] = "simulator" if event.get("actor_type") == "synthetic" else "web"
+    event["request_id"] = request_id
+    event["event_index"] = event_index
+    if "account_id" not in event:
+        event["account_id"] = None
+    return event
+
+
 def stream_kafka(path, bootstrap, topic, rate, max_events, skip=0):
     from confluent_kafka import Producer
     p = Producer({"bootstrap.servers": bootstrap, "linger.ms": 20, "batch.num.messages": 2000,
@@ -164,12 +196,21 @@ def stream_kafka(path, bootstrap, topic, rate, max_events, skip=0):
             if not line:
                 continue
             try:
-                key = json.loads(line).get("session_id") or ""
+                event = json.loads(line)
             except Exception:
                 continue
+            key = event.get("session_id") or ""
+            # 수집 API 를 건너뛰므로 봉투를 여기서 채운다 — 안 채우면 정제가 전부 버린다
+            if n % ENVELOPE_BATCH == 0:
+                request_id = str(uuid.uuid4())
+                received_at = now_iso_ms()
+            payload = json.dumps(
+                put_envelope(event, received_at, request_id, n % ENVELOPE_BATCH),
+                ensure_ascii=False, separators=(",", ":"),
+            ).encode("utf-8")
             while True:
                 try:
-                    p.produce(topic, value=line.encode("utf-8"), key=key.encode("utf-8"), on_delivery=on_delivery)
+                    p.produce(topic, value=payload, key=key.encode("utf-8"), on_delivery=on_delivery)
                     break
                 except BufferError:
                     p.poll(0.05)
