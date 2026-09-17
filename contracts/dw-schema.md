@@ -496,8 +496,9 @@ input = product_event_fact, purchase_fact, dim_product
 | key 전체 | 공통 계약 | key 규칙 | 집계 축 |
 | `category_id`, `brand_id` | string | Y | 상품 차원 스냅샷 |
 | `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `purchase_count`, `purchase_quantity` | bigint | N | Event·수량 집계. `purchase_count`는 `order_id` 기준 고유 주문 수 |
-| `recommendation_impression_count` | bigint | N | 추천·배너 카드 노출. 목록 노출과 판정 기준이 다르다 |
-| `impression_count` | bigint | N | 두 노출의 합. `product_ctr`·`detail_entry_rate`의 분모 |
+| `recommendation_impression_count` | bigint | N | 유사 상품·맞춤 기획전 카드 노출 |
+| `banner_impression_count` | bigint | N | 히어로 배너 카드 노출 |
+| `impression_count` | bigint | N | 세 노출의 합. `product_ctr`·`detail_entry_rate`의 분모 |
 | `variant_select_count`, `quick_look_close_open_detail_count` | bigint | N | 옵션 왕복과 퀵룩 → 상세 전환. 상품 진단용 |
 | `wishlist_count` | bigint | N | 찜 **추가** 수. `wishlist_toggle`의 `action = add`만 |
 | `quick_look_sessions`, `product_view_sessions`, `detail_view_sessions`, `add_to_cart_sessions`, `remove_from_cart_sessions`, `purchase_sessions`, `unique_user_count`, `session_count` | bigint | N | 세션·사용자 집계 |
@@ -529,13 +530,25 @@ input = product_event_fact, purchase_fact, dim_product
 이름이 §4.14의 `detail_entry_rate`(세션 기준)와 같지만 분모가 다르다. 두 Mart의 값을
 같은 지표로 나란히 놓지 않는다.
 
-**노출 Event는 둘이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
-하나에 노출 Event를 정확히 하나만 낸다 — 목록 그리드는 `product_impression`,
-유사 상품·히어로 배너·로그인 사용자의 맞춤 기획전은 `recommendation_impression`이다.
-**클릭은 어느 목록에서든 `product_click`**이고 추천 카드면 `recommendation_click`을
-하나 더 낸다. 그래서 `product_click_count`에 맞는 분모는 두 노출의 합이다.
-`product_impression_count`만 쓰면 추천 카드에서 온 클릭이 분자에만 들어가 비율이
-1을 넘는다 — 2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
+**노출 Event는 셋이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
+하나에 노출 Event를 정확히 하나만 낸다.
+
+| 자리 | 노출 Event |
+| --- | --- |
+| 목록 그리드 | `product_impression` |
+| 유사 상품 · 로그인 사용자의 맞춤 기획전 | `recommendation_impression` |
+| 히어로 배너 | `banner_impression` (프론트 !305) |
+
+**클릭은 어느 자리에서든 `product_click`**이다. 추천 카드는 `recommendation_click`을,
+배너는 `banner_click`을 하나 더 낼 뿐이다. 그래서 `product_click_count`에 맞는 분모는
+세 노출의 합이고, 하나라도 빼면 그 경로의 클릭이 분자에만 들어가 비율이 1을 넘는다 —
+2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
+
+**`product_view_count`는 뒤로가기 재조회를 뺀다.** 프론트는 상세에서 뒤로 갔다
+돌아오면 `product_view`를 다시 내는데(`navigation_source="history_back"`, 프론트
+확인 2026-09-17) 그것은 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
+`detail_entry_rate`가 1을 넘을 수 있다. **세션 기준 지표(`product_view_sessions`
+등)에는 영향이 없다** — 같은 세션이라 `countDistinct`가 한 번만 센다.
 
 **노출 판정 기준이 서로 다르다.** 목록은 hold 300ms, 추천은 1000ms다. 합쳐 쓰는 이상
 두 기준이 한 분모에 섞인다는 것을 알고 읽어야 한다. 기준을 맞추는 것은 프론트 몫이고,
