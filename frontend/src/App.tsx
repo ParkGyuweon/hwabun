@@ -8,8 +8,17 @@ import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
-import { createOrderId, orderTotals, toOrderItems } from './lib/checkout';
-import { canCheckoutOnBackend, checkoutOnBackend, confirmBackendOrder, createBackendOrder, fetchBackendReviews } from './lib/shopApi';
+import { EVENT_CURRENCY, createOrderId, orderTotals, orderTotalsKrw, toOrderItems, unitMoneyProps } from './lib/checkout';
+import {
+  canCheckoutOnBackend,
+  checkoutOnBackend,
+  clearBackendCart,
+  confirmBackendOrder,
+  createBackendOrder,
+  fetchBackendReviews,
+  hasMemberSession,
+} from './lib/shopApi';
+import { requestLogin } from './lib/loginPrompt';
 import {
   PAYMENT_FAILED_EVENT_ENABLED,
   PAYMENT_PROVIDER,
@@ -50,6 +59,13 @@ const personas = personasData as unknown as PersonaProfile[];
 
 /** 상세 페이지에서 유사·추천 자리에 올릴 개수 */
 const SIMILAR_SIZE = 6;
+
+/**
+ * 주문이 어디서 시작됐나. 주문 경로는 하나지만 **끝난 뒤 장바구니를 비울지**가 다르다.
+ *   `cart`     장바구니 확인 화면의 주문 버튼 → 장바구니를 비운다
+ *   `buy_now`  상품 상세의 "바로 구매" → 담아 둔 장바구니는 그대로 둔다
+ */
+type OrderOrigin = 'cart' | 'buy_now';
 
 /** 스크롤 복원을 기다려주는 최대 시간. 이미지 배치가 늦어도 이 안에는 자리를 잡는다 */
 const RESTORE_TIMEOUT_MS = 1500;
@@ -94,16 +110,31 @@ function initialProductId(): string | null {
  * 로그의 출처(actor_type)를 바꾸는 값이 아니므로 위장에 쓰일 여지도 없다.
  */
 function initialPersonaId(): string {
+  return requestedPersonaId() ?? personas[0]?.persona_id ?? '';
+}
+
+/**
+ * **주소로 명시한** 페르소나. 없으면 null.
+ *
+ * `initialPersonaId` 와 갈라 두는 이유는 둘이 답해야 하는 질문이 다르기 때문이다.
+ *
+ *   화면  "스위처에 누구를 띄울까"      → 아무도 안 골랐어도 하나는 띄워야 한다
+ *   로그  "이 이벤트는 누구 것인가"     → 아무도 안 골랐으면 **주인이 없다**
+ *
+ * 예전에는 둘 다 `personas[0]`(PA00001)로 떨어졌다. 그래서 **로그인도 안 하고 페르소나도 안 고른
+ * 실제 방문자의 이벤트가 전부 PA00001 앞으로 기록됐다** (AI 파트 배포본 확인 2026-09-16).
+ * 대시보드에서는 있지도 않은 PA 한 명이 크게 잡히고, 그 사람의 진짜 로그와 섞여 둘 다 못 쓰게 된다.
+ *
+ * 없는 사실을 만드는 것보다 비우는 쪽이 낫다. 계약도 `persona_id` 를 `["string", "null"]` 로
+ * 허용한다 (`event-schema.json`).
+ *
+ * 러너는 영향을 받지 않는다. `?persona=` 없이 화면을 먼저 열고 스위처로 바꾸는 순서라
+ * 전환 **전** 이벤트를 이미 게이트로 버린다 (`simulator/agents/agent_runner.py`).
+ * 그 이벤트가 PA00001 대신 null 로 찍힐 뿐 버려지는 것은 같다.
+ */
+function requestedPersonaId(): string | null {
   const requested = new URLSearchParams(window.location.search).get('persona');
-  if (requested && personas.some((p) => p.persona_id === requested)) return requested;
-  /*
-   * 주소에 없으면 **개발·시연 도구가 켜진 브라우저(PA 러너·?dev=1)만** 첫 페르소나로 시작한다.
-   * 실제 방문자는 비운다(`''` → 로거 persona_id null). 전에는 누구나 PA00001 로 시작해서 배포 화면의
-   * 비로그인 방문이 전부 그 한 사람 앞으로 쌓였고, 대시보드 고객군에 가짜 페르소나 하나가 크게 잡혔다
-   * (AI 파트 지적 2026-09-16). 비로그인·페르소나 없음이면 추천 요청도 나가지 않고(useRecommendation) 목록은
-   * 목으로 그린다 — 남의 취향으로 추천하는 것보다 낫다.
-   */
-  return isDevtoolsOn() ? (personas[0]?.persona_id ?? '') : '';
+  return requested && personas.some((p) => p.persona_id === requested) ? requested : null;
 }
 
 /**
@@ -116,7 +147,7 @@ function initialPersonaId(): string {
  *
  * 모듈을 읽을 때 한 번 정한다 — 로거가 synthetic 표시를 정하는 방식과 같다.
  */
-setLoggerContext({ personaId: initialPersonaId() });
+setLoggerContext({ personaId: requestedPersonaId() });
 
 /**
  * 라우터는 아직 붙이지 않았다.
@@ -131,6 +162,11 @@ export default function App() {
   const [productId, setProductId] = useState<string | null>(initialProductId);
 
   const [personaId, setPersonaId] = useState(initialPersonaId);
+  /**
+   * 이 페르소나를 **누가 골랐나.** 주소(`?persona=`)나 스위처로 고른 것만 참이다.
+   * 거짓이면 화면은 기본 페르소나로 그리되 로그에는 신원을 싣지 않는다 (`requestedPersonaId` 주석).
+   */
+  const [personaChosen, setPersonaChosen] = useState(() => requestedPersonaId() !== null);
   // 브랜드가 대시보드에서 등록·수정하면 새로고침 없이 따라온다 (lib/productRegistry)
   const products = useCatalog();
   const draft = useDraft();
@@ -177,6 +213,8 @@ export default function App() {
    * ref 인 이유는 이 값이 화면을 바꾸지 않기 때문이다.
    */
   const pendingOrderIdRef = useRef<string | null>(null);
+  /** 그 번호를 만들 때의 장바구니 내용. 내용이 바뀌었는데 같은 번호(=멱등키)로 주문하면 서버가 409 를 준다 */
+  const pendingOrderSigRef = useRef<string>('');
 
   /**
    * 화면별로 마지막 스크롤 위치를 기억한다.
@@ -308,7 +346,9 @@ export default function App() {
     () => ({
       item_count: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       distinct_products: cartItems.length,
-      cart_value: cartItems.reduce((sum, item) => sum + item.price_usd * item.quantity, 0),
+      // 원화 정가 합 + currency (계약 §4.5 view_cart 필수 · 2026-09-16)
+      cart_value: orderTotalsKrw(cartItems).total,
+      currency: EVENT_CURRENCY,
     }),
     [cartItems],
   );
@@ -365,7 +405,7 @@ export default function App() {
         product_id: item.product_id,
         sku_id: item.sku_id,
         quantity: item.quantity,
-        price_usd: item.price_usd,
+        ...unitMoneyProps(item),
         cart_size_after: next.length,
       });
       setCartItems(next);
@@ -383,19 +423,29 @@ export default function App() {
    */
   const beginCheckout = useCallback(() => {
     if (cartItems.length === 0) return;
-    const orderId = pendingOrderIdRef.current ?? createOrderId();
+    /*
+     * 장바구니 내용(상품·옵션·수량)이 그대로면 같은 번호, 바뀌었으면 새 번호. 이 번호가 서버 `idempotencyKey` 라서
+     * 내용이 다른데 같은 키로 보내면 409 "idempotency key reused" 가 온다 (계약 대조 2026-09-17 #3).
+     */
+    const sig = JSON.stringify(toOrderItems(cartItems));
+    const orderId = pendingOrderIdRef.current !== null && pendingOrderSigRef.current === sig ? pendingOrderIdRef.current : createOrderId();
     pendingOrderIdRef.current = orderId;
+    pendingOrderSigRef.current = sig;
 
-    const { total, paid } = orderTotals(cartItems);
+    const { total, paid } = orderTotalsKrw(cartItems);
     track('begin_checkout', {
-      // 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다.
-      // 이게 없으면 "확인까지 갔다가 안 산 사람" 을 purchase 와 이어 셀 수 없다
+      /*
+       * 계약상 필수는 items[] 뿐이지만 order_id 를 같이 싣는다 — "확인까지 갔다가 안 산 사람" 을 세기 위해서다.
+       * 다만 이 값은 **프론트 번호**다. purchase.order_id 는 서버가 발급한 번호라 둘이 다르다 (서버는 이 값을
+       * idempotencyKey 로만 받는다). 그래서 둘 다 `client_order_id` 에 프론트 번호를 같이 실어 조인 키를 하나 둔다.
+       */
       order_id: orderId,
+      client_order_id: orderId,
       items: toOrderItems(cartItems),
-      cart_value: Number(total.toFixed(2)),
-      // 할인 적용 합계. cart_value(정가)의 뜻은 그대로 두고 덧붙인다
-      paid_value: Number(paid.toFixed(2)),
-      currency: 'USD',
+      // 원화 정가 합. 할인 적용 합은 paid_value 로 덧붙인다 (계약 §4.5 · 2026-09-16)
+      cart_value: total,
+      paid_value: paid,
+      currency: EVENT_CURRENCY,
     });
   }, [cartItems]);
 
@@ -403,18 +453,21 @@ export default function App() {
   const cancelCheckout = useCallback(() => {}, []);
 
   /**
-   * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다 — begin_checkout 과 같은 order_id.
+   * 주문 확정. **purchase 이벤트는 결제(또는 PAID 표시)가 끝난 뒤에만** 남긴다.
+   * `order_id` 는 서버 주문 번호(백엔드 원장과 대조용)이고, begin_checkout 과의 조인은 `client_order_id`(프론트 번호)로 한다.
    * 결제 정보(payment_method · pg_provider · payment_id · paid_at)는 properties 에 덧붙인다. 계약 §6 필드 추가는 데이터 파트가
    * 넣기로 했고(2026-09-14), properties 는 열린 객체라 먼저 실어도 거절되지 않는다.
    */
   const finishOrder = useCallback(
-    (placed: PlacedOrder) => {
+    (placed: PlacedOrder, origin: OrderOrigin = 'cart') => {
       track('purchase', {
         order_id: placed.orderId,
+        ...(placed.clientOrderId ? { client_order_id: placed.clientOrderId } : {}),
         items: placed.items,
-        order_value: Number(placed.total.toFixed(2)),
-        paid_value: Number(placed.paid.toFixed(2)),
-        currency: 'USD',
+        // 원화. order_value 는 정가 합(items[].unit_price × quantity), paid_value 는 실결제액 — 서버 주문이면 totalAmount 그대로
+        order_value: placed.items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0),
+        paid_value: placed.paidKrw,
+        currency: EVENT_CURRENCY,
         order_channel: placed.mode,
         payment_method: placed.payment_method ?? 'test',
         pg_provider: placed.payment_method === 'kakaopay' ? PAYMENT_PROVIDER : null,
@@ -423,26 +476,59 @@ export default function App() {
       });
       setPaymentError(null);
       setOrder(placed);
-      setCartItems([]);
-      // 다음 주문은 새 번호를 받는다
-      pendingOrderIdRef.current = null;
+      /*
+       * 장바구니는 **장바구니 주문일 때만** 비운다. "바로 구매" 는 담아 둔 것과 무관한 주문이라,
+       * 여기서 비우면 사용자가 모아 둔 장바구니가 산 적 없는 채로 사라진다.
+       * 같은 이유로 확인 단계의 주문 번호(`pendingOrderIdRef`)도 건드리지 않는다.
+       */
+      if (origin === 'cart') {
+        setCartItems([]);
+        // 다음 주문은 새 번호를 받는다
+        pendingOrderIdRef.current = null;
+      } else {
+        /*
+         * 완료 화면과 구매 이유 설문은 장바구니 화면 안에 산다. 바로 구매는 상품 상세에서 시작하므로
+         * 여기서 그 화면을 열어 주지 않으면 **주문이 끝났는지 알 수 없다** — 버튼만 잠깐 눌리고 만다.
+         *
+         * `view_cart` 는 남기지 않는다. 장바구니를 본 적이 없기 때문이다. 이걸 흘리면 GA4 퍼널의
+         * 장바구니 단계가 실제보다 커지고, "담기 → 장바구니 → 주문" 이탈률이 흐려진다.
+         */
+        window.history.pushState({ productId: null, cart: true }, '', '?cart=1');
+        setCartOpen(true);
+      }
     },
     [],
   );
 
-  /** 결제 실패·취소. 장바구니는 그대로, 화면에 이유를 적고 이벤트는 계약 등록 뒤에만 */
-  const failPayment = useCallback((orderId: string, code: string, message: string, method: PaymentMethod) => {
+  /** 결제 실패·취소. 장바구니는 그대로 두고 화면에 이유를 적고 `payment_failed` 를 남긴다 */
+  const failPayment = useCallback((orderId: string, code: string, message: string, method: PaymentMethod, clientOrderId?: string) => {
     setPaymentError(message);
     if (PAYMENT_FAILED_EVENT_ENABLED) {
-      track('payment_failed', { order_id: orderId, reason_code: code, payment_method: method });
+      track('payment_failed', {
+        order_id: orderId,
+        // begin_checkout(프론트 번호)과 이어 세기 위한 키. 서버 주문을 만들기 전에 실패하면 order_id 자체가 프론트 번호다
+        ...(clientOrderId && clientOrderId !== orderId ? { client_order_id: clientOrderId } : {}),
+        reason_code: code,
+        payment_method: method,
+      });
     }
   }, []);
 
-  const placeOrder = useCallback(async () => {
-    if (cartItems.length === 0 || paying) return;
-    const localOrderId = pendingOrderIdRef.current ?? createOrderId();
-    const items = toOrderItems(cartItems);
-    const { count, total, paid } = orderTotals(cartItems);
+  /**
+   * 주문 한 건을 끝까지 보낸다. 장바구니 주문과 "바로 구매" 가 **같은 함수**를 탄다.
+   *
+   * 둘의 차이는 두 가지뿐이라 인자로 받는다.
+   *   `source`  주문할 품목. 장바구니 주문은 장바구니 전부, 바로 구매는 그 상품 하나
+   *   `origin`  끝난 뒤 장바구니를 비울지 (`cart` 만 비운다 — 바로 구매는 담아 둔 걸 건드리지 않는다)
+   *
+   * 경로를 두 벌로 나누지 않은 이유는, 결제·확인·실패 처리가 전부 같아야 하기 때문이다. 한쪽만
+   * 고치면 "장바구니로는 되는데 바로 구매는 안 되는" 종류의 버그가 난다.
+   */
+  const submitOrder = useCallback(async (source: CartItem[], origin: OrderOrigin, localOrderId: string) => {
+    if (source.length === 0 || paying) return;
+    const items = toOrderItems(source);
+    const { count, total, paid } = orderTotals(source);
+    const paidKrwLocal = orderTotalsKrw(source).paid;
     setPaymentError(null);
 
     /**
@@ -450,21 +536,45 @@ export default function App() {
      * 서버 confirm, 없으면 예전처럼 /pay 로 PAID 표시. 그래야 피드백 API 의 "구매 이력" 조건이 성립한다.
      * 백엔드 주문으로 만들 수 없는 상품이나 비로그인 상태에서는 로컬 테스트 주문으로 우회하지 않고 실패를 표시한다.
      */
-    if (canCheckoutOnBackend(cartItems)) {
+    if (canCheckoutOnBackend(source)) {
+      /*
+       * 서버 장바구니는 주문 직전에만 채워지는 임시 자리인데, `POST /api/orders` 는 요청 본문이 아니라 거기 든 것을
+       * **전부** 주문한다 (CommerceController). 그래서 **어느 경로든** 주문 직전에 서버 카트를 비우고 이번 품목만 담는다.
+       * 전에는 바로 구매만 비웠는데, 장바구니 주문도 앞선 시도가 실패해 남은 항목(품절 409 뒤의 잔여물, 결제 실패 뒤
+       * 다시 담은 중복)이 다음 주문에 섞여 화면 합계와 다른 금액이 결제될 수 있었다 (계약 대조 2026-09-17 #2·#3).
+       *
+       * **못 비웠으면 주문하지 않는다** (백엔드 리뷰 2026-09-17). 비우기가 실패한 채로 진행하면 남아
+       * 있던 상품까지 같이 결제된다. 조용히 덮지 않고 멈춘 이유를 화면에 띄운다.
+       */
+      {
+        const cleared = await clearBackendCart();
+        if (!cleared.ok) {
+          failPayment(
+            localOrderId,
+            `cart_clear_${cleared.status}`,
+            `서버 장바구니를 정리하지 못해 주문을 멈췄습니다. ${cleared.reason} 잠시 뒤 다시 시도해 주세요.`,
+            isPaymentEnabled() ? 'kakaopay' : 'test',
+            localOrderId,
+          );
+          return;
+        }
+      }
       if (isPaymentEnabled()) {
         setPaying(true);
         try {
-          const created = await createBackendOrder(cartItems, localOrderId);
+          const created = await createBackendOrder(source, localOrderId);
           if (!created.ok) {
-            failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay');
+            failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay', localOrderId);
             return;
           }
           if (created.totalAmountKrw === null) {
-            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay');
+            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay', localOrderId);
             return;
           }
           // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
-          savePendingPayment({ orderId: created.orderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
+          savePendingPayment({ orderId: created.orderId, clientOrderId: localOrderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
+          // 결제 정본은 서버 totalAmount(원화 정수). 화면 합계와 1원 차이가 나도 이벤트는 실제 결제액을 따른다
+          const paidKrw = created.totalAmountKrw;
           const pay = await requestKakaoPay({
             orderId: created.orderId,
             totalAmountKrw: created.totalAmountKrw,
@@ -476,17 +586,18 @@ export default function App() {
           });
           if (!pay.ok) {
             clearPendingPayment();
-            failPayment(created.orderId, pay.code, pay.message, 'kakaopay');
+            failPayment(created.orderId, pay.code, pay.message, 'kakaopay', localOrderId);
             return;
           }
           const confirmed = await confirmBackendOrder(created.orderId, pay.paymentId);
           clearPendingPayment();
           if (!confirmed.ok) {
-            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay');
+            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', localOrderId);
             return;
           }
           finishOrder({
             orderId: created.orderId,
+            clientOrderId: localOrderId,
             items,
             count,
             total,
@@ -496,27 +607,84 @@ export default function App() {
             payment_method: 'kakaopay',
             payment_id: pay.paymentId,
             paid_at: confirmed.paidAt ?? new Date().toISOString(),
-          });
+            paidKrw,
+          }, origin);
         } finally {
           setPaying(false);
         }
         return;
       }
 
-      const r = await checkoutOnBackend(cartItems, localOrderId);
+      const r = await checkoutOnBackend(source, localOrderId);
       if (r.ok) {
-        finishOrder({ orderId: r.orderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test' });
+        finishOrder({ orderId: r.orderId, clientOrderId: localOrderId, items, count, total, paid, mode: 'backend', note: null, payment_method: 'test', paidKrw: paidKrwLocal }, origin);
         return;
       }
-      failPayment(localOrderId, `order_${r.status}`, `주문을 완료하지 못했습니다. ${r.reason}`, 'test');
+      failPayment(localOrderId, `order_${r.status}`, `주문을 완료하지 못했습니다. ${r.reason}`, 'test', localOrderId);
       return;
     }
 
-    const message = cartItems.some((i) => !i.variant_id)
+    /*
+     * 서버 주문을 탈 수 없으면 **로컬 테스트 주문으로 우회하지 않고** 이유를 띄운다
+     * (백엔드 요청 2026-09-15 §5 · 이 브랜치의 결정을 그대로 따른다).
+     * 바로 구매도 같은 길이라 여기서 갈리지 않는다 — 막힌 이유는 origin 과 무관하다.
+     */
+    const message = source.some((i) => !i.variant_id)
       ? '백엔드에 등록되지 않은 상품은 결제할 수 없습니다.'
       : '결제하려면 고객 로그인이 필요합니다.';
-    failPayment(localOrderId, 'backend_checkout_required', message, 'test');
-  }, [cartItems, paying, member, finishOrder, failPayment]);
+    failPayment(localOrderId, 'backend_checkout_required', message, 'test', localOrderId);
+  }, [paying, member, finishOrder, failPayment]);
+
+  /** 장바구니 확인 화면의 주문 버튼. 주문 번호는 `beginCheckout` 이 만든 것을 그대로 쓴다 */
+  const placeOrder = useCallback(
+    () => submitOrder(cartItems, 'cart', pendingOrderIdRef.current ?? createOrderId()),
+    [submitOrder, cartItems],
+  );
+
+  /**
+   * 상품 상세의 "바로 구매". 장바구니를 거치지 않고 **이 상품 하나만** 주문한다.
+   *
+   * 로그인이 없으면 여기서 멈추고 로그인 모달을 띄운다. 백엔드가 비회원 주문을 받지 않기 때문이다 —
+   * `/api/cart/items` · `/api/orders` · `/pay` · `/confirm` 전부 `requireMember` 가 걸려 있다
+   * (`CommerceController`). 담아 두고 마지막에 막히는 것보다 여기서 말하는 게 낫다.
+   *
+   * 주문 번호는 매번 새로 만든다. `pendingOrderIdRef` 는 장바구니 확인 단계의 번호라 공유하면
+   * "확인까지 갔다가 안 산 사람" 집계가 섞인다.
+   */
+  const buyNow = useCallback(
+    async (item: CartItem, addToCartProps: Record<string, unknown>) => {
+      if (paying) return;
+      if (!hasMemberSession()) {
+        /*
+         * 여기서는 이벤트를 남기지 않는다. 새 이름(`buy_now_blocked` 같은)은 계약
+         * (`event-schema.json` · 수집기 INTENTS)에 등록되기 전에는 `unregistered_event` 로 거절된다.
+         */
+        requestLogin('바로 구매는 고객 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
+        return;
+      }
+      const orderId = createOrderId();
+      const { total, paid } = orderTotalsKrw([item]);
+      /*
+       * 바로 구매도 퍼널을 전부 밟는다 — add_to_cart → begin_checkout → purchase.
+       * 단계를 비우면 그 단계를 분모로 쓰는 비율이 1.0 을 넘는다 (ProductSummary.buyNow 주석).
+       *
+       * `add_to_cart` 는 **로그인 확인을 통과한 여기서** 남긴다. 위에서 모달만 열고 끝난 클릭은 담기도
+       * 결제도 아니므로 아무 이벤트도 남기지 않는다 (리뷰 !286). 속성 모양은 담기 버튼과 같다 (ProductSummary).
+       */
+      track('add_to_cart', addToCartProps);
+      track('begin_checkout', {
+        order_id: orderId,
+        client_order_id: orderId,
+        items: toOrderItems([item]),
+        cart_value: total,
+        paid_value: paid,
+        currency: EVENT_CURRENCY,
+        entry_source: 'buy_now',
+      });
+      await submitOrder([item], 'buy_now', orderId);
+    },
+    [paying, submitOrder],
+  );
 
   /**
    * 모바일 결제창(REDIRECTION)에서 돌아온 경우 — `/?order=…&pay=return`. 결제창을 열기 전에 둔 주문을 꺼내
@@ -529,7 +697,7 @@ export default function App() {
     window.history.replaceState({ productId: null, cart: true }, '', '?cart=1');
     setCartOpen(true);
     if (ret.code || !ret.paymentId) {
-      failPayment(ret.orderId, ret.code ?? 'no_payment_id', ret.message ?? '결제가 완료되지 않았습니다.', 'kakaopay');
+      failPayment(ret.orderId, ret.code ?? 'no_payment_id', ret.message ?? '결제가 완료되지 않았습니다.', 'kakaopay', pending?.clientOrderId);
       return;
     }
     if (!pending) {
@@ -539,11 +707,12 @@ export default function App() {
     const paymentId = ret.paymentId;
     void confirmBackendOrder(pending.orderId, paymentId).then((confirmed) => {
       if (!confirmed.ok) {
-        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay');
+        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', pending.clientOrderId);
         return;
       }
       finishOrder({
         orderId: pending.orderId,
+        clientOrderId: pending.clientOrderId,
         items: pending.items,
         count: pending.count,
         total: pending.total,
@@ -553,6 +722,7 @@ export default function App() {
         payment_method: 'kakaopay',
         payment_id: paymentId,
         paid_at: confirmed.paidAt ?? new Date().toISOString(),
+        paidKrw: pending.totalAmountKrw,
       });
     });
     // 첫 진입 한 번만. finishOrder/failPayment 는 안정적이다
@@ -616,15 +786,16 @@ export default function App() {
    * 여기서 'user' 로 덮으면 부하 생성기의 방문까지 실사용자로 남는다.
    */
   useEffect(() => {
-    // 등록 폼 미리보기(iframe)에서 나온 로그는 소비자 행동이 아니다. environment 로 구분한다
-    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
     /*
-     * 어디서 돌았는지 (log-transport-contract §9: local / dev / staging / prod / loadtest). 배포 번들은 `prod`,
-     * 개발 서버는 `local`. 배포 화면까지 `local` 로 남기면 배포에서 돌린 방문과 개발 PC 의 방문을 가를 수 없다
-     * (AI 파트 지적 2026-09-16). 실제/합성 구분은 여기가 아니라 actor_type 이 한다.
+     * 등록 폼 미리보기(iframe)에서 나온 로그는 소비자 행동이 아니다. environment 로 구분한다.
+     *
+     * **미리보기가 아닐 때는 건드리지 않는다.** 예전에는 여기서 `'local'` 로 덮어써서, 로거가
+     * 빌드 모드로 정한 값(`production`)이 마운트 직후 지워졌다 — 배포본 이벤트가 전부 `local` 로
+     * 나간 원인이다 (AI 파트 배포본 확인 2026-09-16). 기본값은 로거가 안다 (`lib/logger.ts`).
      */
-    const environment = isPreview ? 'preview' : import.meta.env.PROD ? 'prod' : 'local';
-    setLoggerContext({ environment });
+    if (new URLSearchParams(window.location.search).get('preview') === '1') {
+      setLoggerContext({ environment: 'preview' });
+    }
   }, []);
 
   /**
@@ -755,7 +926,8 @@ export default function App() {
    * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 식별자면
    * 아무것도 하지 않으므로 productId 변경으로 다시 실행돼도 무해하다.
    */
-  const logIdentity = member?.id ?? (personaId || null);
+  // 로그인 회원이 최우선. 아니면 **고른** 페르소나. 둘 다 없으면 주인 없는 방문이라 null 이다
+  const logIdentity = member?.id ?? (personaChosen ? personaId || null : null);
   useEffect(() => {
     setLoggerContext({
       pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',
@@ -778,7 +950,10 @@ export default function App() {
       <SiteHeader
         personas={personas}
         persona={persona}
-        onPersonaChange={setPersonaId}
+        onPersonaChange={(id: string) => {
+          setPersonaId(id);
+          setPersonaChosen(true);
+        }}
         onHome={goHome}
         categories={HEADER_CATEGORIES}
         onCategorySelect={selectCategory}
@@ -817,6 +992,8 @@ export default function App() {
             persona={persona}
             onSelectProduct={openProduct}
             onAddToCart={addToCart}
+            onBuyNow={buyNow}
+            buying={paying}
           />
         </>
       ) : (

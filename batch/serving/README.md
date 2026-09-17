@@ -17,7 +17,7 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 - `GMS_KEY` 는 `POST /api/prescription` 만 쓴다. 없으면 그 엔드포인트만 503, 추천은 전부 정상.
 - `KAFKA_BOOTSTRAP_SERVERS` 를 주면 `activity-events` 를 구독해 상태를 갱신한다 (없으면 `POST /api/events` 만).
 - 처방 LLM(GMS 과금) 스위치(Jira 325): `PRESCRIPTION_LLM=off` 로 끄고, 재배포 없이 `POST /api/prescription/llm {"enabled": true|false}` 로 켜고 끈다. 꺼지면 503 → 프론트 규칙표 문장. 저장본(cached)은 꺼도 준다. `/health.prescription` 에 enabled·key_present·llm_calls·cache_hits.
-- `DW_MYSQL_HOST/USER/PASSWORD/DB` 또는 `USER_TRAIT_SNAPSHOT_PATH` 를 주면 응답 `long_term_trait` 가 채워진다 (둘 다 없으면 null, health `user_trait` 에 출처). 신선도(Jira 319): health `age_days`·`stale`(`USER_TRAIT_STALE_DAYS` 2 초과), `USER_TRAIT_MAX_AGE_DAYS`(기본 14) 넘으면 `long_term_trait` null — EC2-1 은 시연용으로 60(재생 로그 날짜가 08-28, 09-17). **페르소나 행도 읽는다**(Jira 346): 쿼리가 `actor_type IN ('user','synthetic')`, 가르는 건 `identity_scope`. 같은 (scope·user·trait) 행이 여럿이면 `window_end_date`→`contributing_event_count` 순으로 하나. health 에 `rows_by_actor_type`·`duplicate_grains`.
+- `DW_MYSQL_HOST/USER/PASSWORD/DB` 또는 `USER_TRAIT_SNAPSHOT_PATH` 를 주면 응답 `long_term_trait` 가 채워진다 (둘 다 없으면 null, health `user_trait` 에 출처). 신선도(Jira 319): health `age_days`·`stale`(`USER_TRAIT_STALE_DAYS` 2 초과), `USER_TRAIT_MAX_AGE_DAYS`(14) 넘으면 `long_term_trait` null.
 - `seed=review` 는 리뷰 시드를 상태로 쓰는 **시연용** (`state_source: review_seed`).
 
 ## 파일
@@ -49,9 +49,9 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 | 추천 응답 p50/p95 · 요청/초 | 최근 60초 `/api/recommend` `latency_ms` | |
 | 방금 상태가 바뀐 사용자 | 최근 40명, 어느 파티션(또는 직접)에서 어떤 이벤트로 | |
 
-상단 오른쪽 **▶ 페르소나 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다. 인원은 env `DEMO_LIMIT`(기본 9,900. compose 기본값은 1,000 이지만 EC2-1 .env 는 9,900 — 컨테이너 안 생성은 OOM 이라 노트북에서 만든 캐시를 볼륨에 올린다, 09-17), 통화는 `DEMO_CURRENCY`(기본 KRW, 사이트·계약과 같게, Jira 341), 캐시는 `DEMO_CACHE_DIR`(배포 볼륨 `/data/demo_cache`, 파일명 `demo_behavior_<limit>_<currency>.jsonl`). 09-16 부터 Docker 이미지에도 들어 있다(Jira 335). 절차 정본은 `docs/ai/live-demo-runbook.md`.
+상단 오른쪽 **▶ 페르소나 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다. 인원은 env `DEMO_LIMIT`(로컬 기본 9,900, 배포 compose 1,000 — 컨테이너 메모리 때문), 통화는 `DEMO_CURRENCY`(기본 KRW, 사이트·계약과 같게, Jira 341), 캐시는 `DEMO_CACHE_DIR`(배포 볼륨 `/data/demo_cache`, 파일명 `demo_behavior_<limit>_<currency>.jsonl`). 09-16 부터 Docker 이미지에도 들어 있다(Jira 335). 절차 정본은 `docs/ai/live-demo-runbook.md`.
 
-`GET /pipeline` · `/pipeline/stats` (Jira 337, `pipeline_stats.py`): 사이트 활동(PC/PA/실사용자) → Kafka 파티션(브로커 워터마크·committed·lag) → Spark(`SPARK_MASTER_UI`, 09-17 부터 EC2-1 .env 에 `http://j15a306a.p.ssafy.io:18080` — 워커·실행 앱 표시) → dw 마트(`DW_MYSQL_*`, `DW_PROJECTION_MARTS` 기본 22종; EC2-2 발행 목록과 일치) → 대시보드(`DASHBOARD_URL`, 09-17 `https://j15a306.p.ssafy.io/dashboard.html`) 를 한 화면에. 다른 파트 자원은 읽기만. EC2-1 의 기존 `.env` 에 `DW_PROJECTION_MARTS` 7종 값이 있으면 22종으로 갱신하거나 제거해야 기본값이 적용된다. 소비자에 `observer` 훅(필터 전 모든 메시지)이 붙는다. 에이전트 버튼은 노트북 런처 `simulator/agents/agent_launcher.py`(8301) 로 간다. 런북 §2-1.
+`GET /pipeline` · `/pipeline/stats` (Jira 337, `pipeline_stats.py`): 사이트 활동(PC/PA/실사용자) → Kafka 파티션(브로커 워터마크·committed·lag) → Spark(`SPARK_MASTER_UI`) → dw 마트 7개(`DW_MYSQL_*`) → 대시보드(`DASHBOARD_URL`) 를 한 화면에. 다른 파트 자원은 읽기만. 소비자에 `observer` 훅(필터 전 모든 메시지)이 붙는다. 에이전트 버튼은 노트북 런처 `simulator/agents/agent_launcher.py`(8301) 로 간다. 런북 §2-1.
 
 `GET /live/stats` 가 같은 숫자를 JSON 으로 준다(`events.series_60s`·`partitions`·`recent`…). 인증은 없다 — 추천 서버는
 내부 네트워크 전용이고, 시연에서 밖에 보이려면 nginx 에 `/live` 를 `recommend:8300` 으로 여는 한 줄이 필요하다(배포 README).

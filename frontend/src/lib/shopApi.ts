@@ -51,9 +51,25 @@ async function reasonOf(res: Response): Promise<string> {
   if (res.status === 401 && text.includes('unauthorized')) {
     return '백엔드가 요청을 거절했습니다 (401). 로그인 만료이거나, 백엔드가 4xx 를 401 로 돌려주는 알려진 문제일 수 있습니다';
   }
-  if (res.status === 403) return '권한이 없습니다 (403). 구매한 상품에만 남길 수 있거나, 다른 역할의 계정입니다';
+  /*
+   * 403·409 는 **어느 API 인지에 따라 뜻이 다르다.** 전에는 둘 다 피드백 화면 문장으로 고정돼 있어서 결제 403 이
+   * "구매한 상품에만 남길 수 있다" 로, 품절 409 가 "이미 있는 항목" 으로 떴다 (계약 대조 2026-09-17). 서버 본문의
+   * 문구(CommerceController · FeedbackController)로 가른다. 본문이 낯설면 상태 코드만 적고 원문을 덧붙인다.
+   */
+  const lower = text.toLowerCase();
+  if (res.status === 403) {
+    if (lower.includes('paid purchase')) return '구매한 상품에만 남길 수 있습니다 (403)';
+    if (lower.includes('test payment')) return '테스트 결제는 에이전트 러너 계정만 쓸 수 있습니다 (403). 카카오페이로 결제해 주세요';
+    if (lower.includes('brand')) return '내 브랜드가 아닙니다 (403)';
+    return `권한이 없습니다 (403)${text ? ` — ${text.slice(0, 80)}` : '. 다른 역할의 계정이거나 로그인이 만료됐습니다'}`;
+  }
   if (res.status === 404) return '백엔드에 없는 상품입니다 (404)';
-  if (res.status === 409) return '이미 있는 항목입니다 (409)';
+  if (res.status === 409) {
+    if (lower.includes('inactive') || lower.includes('unavailable')) return '품절·판매 중지된 상품이 장바구니에 있습니다 (409). 그 상품을 빼고 다시 주문해 주세요';
+    if (lower.includes('idempotency')) return '같은 주문 번호로 다른 내용이 요청됐습니다 (409). 장바구니를 다시 열어 주문해 주세요';
+    if (lower.includes('feedback') || lower.includes('duplicate')) return '이미 남긴 피드백입니다 (409)';
+    return `이미 있는 항목입니다 (409)${text ? ` — ${text.slice(0, 80)}` : ''}`;
+  }
   if (res.status >= 500) return `백엔드 오류 (${res.status})`;
   try {
     const j = JSON.parse(text) as { message?: string; error?: string };
@@ -327,6 +343,50 @@ export async function fetchBackendOrders(): Promise<OrderListResult> {
 /** 장바구니 전부가 백엔드 상품(옵션 id 있음)이고 고객 로그인이 있을 때만 API 를 탈 수 있다 */
 export function canCheckoutOnBackend(items: CartItem[]): boolean {
   return items.length > 0 && hasMemberSession() && items.every((i) => Boolean(i.variant_id));
+}
+
+/**
+ * 서버 장바구니를 비운다. **"바로 구매" 전에만 부른다.**
+ *
+ * `POST /api/orders` 는 요청 본문의 품목이 아니라 **서버 장바구니에 든 것 전부**를 주문한다
+ * (`CommerceController.order` — `cartItems.findByCartId`). 정상 주문은 끝나면 서버가 장바구니를
+ * 비우므로(`deleteByCartId`) 보통은 비어 있지만, 담기까지 갔다가 주문이 실패한 시도가 있으면
+ * 그 품목이 남는다. 그 상태에서 "이 상품만" 을 주문하면 남아 있던 것까지 같이 결제된다.
+ *
+ * 그래서 바로 구매는 **비우고 → 그 상품 하나만 담고 → 주문**한다. 화면의 장바구니(로컬 상태)는
+ * 건드리지 않는다 — 서버 장바구니는 주문 직전에만 채워지는 임시 자리다.
+ *
+ * **실패를 삼키지 않는다** (백엔드 리뷰 2026-09-17). 조회나 삭제 하나라도 실패한 뒤 주문을 계속하면
+ * **서버에 남아 있던 기존 상품까지 같이 결제된다.** "이 상품만" 이라고 적힌 버튼이 다른 것도 사는
+ * 셈이라, 호출부가 결과를 보고 멈출 수 있게 성공·실패를 돌려준다. 삭제 응답도 하나하나 확인한다.
+ */
+export type ClearCartResult = { ok: true; removed: number } | ApiFailure;
+
+export async function clearBackendCart(): Promise<ClearCartResult> {
+  try {
+    const res = await authFetch('MEMBER', '/api/cart');
+    if (!res.ok) return fail(res);
+    const body = (await res.json()) as { items?: Array<{ id?: string }> };
+    const items = body.items ?? [];
+    let removed = 0;
+    for (const item of items) {
+      /*
+       * id 가 없으면 지울 방법이 없다. "없는 셈 치고 넘어가면" 그 품목이 그대로 주문에 실린다 —
+       * 비우지 못한 것을 비웠다고 보고하는 셈이라 여기서 멈춘다.
+       */
+      if (!item.id) {
+        return { ok: false, status: 0, reason: '장바구니 항목에 id 가 없어 비울 수 없습니다' };
+      }
+      const del = await authFetch('MEMBER', `/api/cart/items/${encodeURIComponent(item.id)}`, {
+        method: 'DELETE',
+      });
+      if (!del.ok) return fail(del);
+      removed += 1;
+    }
+    return { ok: true, removed };
+  } catch {
+    return offline();
+  }
 }
 
 /**
