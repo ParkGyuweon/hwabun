@@ -781,7 +781,8 @@ def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
             wished = qrng.random() < SC["p_ql_wish"]
             if added:
                 e.tick(300, 2000, rng=qrng)
-                e.emit("add_to_cart", g, quantity=1, entry_source="quick_look")
+                e.emit("add_to_cart", g, quantity=1, **price_props(catalog, g),
+                       entry_source="quick_look")   # 다른 담기 5곳과 같이 가격 속성 (Jira 342)
             if wished:
                 e.tick(200, 1200, rng=qrng)
                 e.emit("wishlist_toggle", g, action="add", entry_source="quick_look")
