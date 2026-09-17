@@ -392,6 +392,37 @@ class ViewCartCurrencyTest(unittest.TestCase):
                 self.assertNotIn("product_view", seed_names)
                 self.assertNotIn("product_impression", seed_names)
 
+    def test_history_back_revisit_exists_and_is_marked(self):
+        """Jira 350 — 상세 → 목록 복귀 → 같은 상품 재조회가 navigation_source=history_back 으로 남는다.
+
+        마트가 재조회를 건수 집계에서 빼는 로직을 검증하려면 로그에 이 모양이 있어야 한다 (데이터·프론트 요청)."""
+        events = self._run("KRW")
+        back = [x for x in events
+                if x["event_name"] == "product_view"
+                and x["properties"].get("navigation_source") == "history_back"]
+        self.assertGreater(len(back), 0, "20명 표본에 뒤로가기 재조회가 한 건도 없다")
+
+        by_sid = {}
+        for x in events:
+            by_sid.setdefault(x["session_id"], []).append(x)
+        for ev in back[:5]:
+            v = sorted(by_sid[ev["session_id"]], key=lambda x: x["sequence_no"])
+            with self.subTest(sid=ev["session_id"], product=ev["product_id"]):
+                views = [x for x in v
+                         if x["event_name"] == "product_view" and x["product_id"] == ev["product_id"]]
+                self.assertGreaterEqual(len(views), 2, "재조회면 같은 상품 조회가 둘 이상이어야 한다")
+                self.assertNotEqual("history_back", views[0]["properties"]["navigation_source"])  # 첫 진입은 아니다
+                # 계약 §3.4 — 같은 상세 진입의 page_view 와 값이 같아야 한다
+                pg = [x for x in v if x["event_name"] == "page_view"
+                      and x["page_view_id"] == ev["page_view_id"]]
+                self.assertEqual(1, len(pg))
+                self.assertEqual("history_back", pg[0]["properties"]["navigation_source"])
+                # 목록 복귀도 history_back 으로 남는다
+                self.assertTrue(any(x["event_name"] == "page_view"
+                                    and x["properties"].get("navigation_source") == "history_back"
+                                    and x["page_view_id"] != ev["page_view_id"] for x in v))
+
+
 
 @unittest.skipIf(np is None, "numpy is required for the simulator generator")
 class SamplePersonasTest(unittest.TestCase):
