@@ -51,9 +51,25 @@ async function reasonOf(res: Response): Promise<string> {
   if (res.status === 401 && text.includes('unauthorized')) {
     return '백엔드가 요청을 거절했습니다 (401). 로그인 만료이거나, 백엔드가 4xx 를 401 로 돌려주는 알려진 문제일 수 있습니다';
   }
-  if (res.status === 403) return '권한이 없습니다 (403). 구매한 상품에만 남길 수 있거나, 다른 역할의 계정입니다';
+  /*
+   * 403·409 는 **어느 API 인지에 따라 뜻이 다르다.** 전에는 둘 다 피드백 화면 문장으로 고정돼 있어서 결제 403 이
+   * "구매한 상품에만 남길 수 있다" 로, 품절 409 가 "이미 있는 항목" 으로 떴다 (계약 대조 2026-09-17). 서버 본문의
+   * 문구(CommerceController · FeedbackController)로 가른다. 본문이 낯설면 상태 코드만 적고 원문을 덧붙인다.
+   */
+  const lower = text.toLowerCase();
+  if (res.status === 403) {
+    if (lower.includes('paid purchase')) return '구매한 상품에만 남길 수 있습니다 (403)';
+    if (lower.includes('test payment')) return '테스트 결제는 에이전트 러너 계정만 쓸 수 있습니다 (403). 카카오페이로 결제해 주세요';
+    if (lower.includes('brand')) return '내 브랜드가 아닙니다 (403)';
+    return `권한이 없습니다 (403)${text ? ` — ${text.slice(0, 80)}` : '. 다른 역할의 계정이거나 로그인이 만료됐습니다'}`;
+  }
   if (res.status === 404) return '백엔드에 없는 상품입니다 (404)';
-  if (res.status === 409) return '이미 있는 항목입니다 (409)';
+  if (res.status === 409) {
+    if (lower.includes('inactive') || lower.includes('unavailable')) return '품절·판매 중지된 상품이 장바구니에 있습니다 (409). 그 상품을 빼고 다시 주문해 주세요';
+    if (lower.includes('idempotency')) return '같은 주문 번호로 다른 내용이 요청됐습니다 (409). 장바구니를 다시 열어 주문해 주세요';
+    if (lower.includes('feedback') || lower.includes('duplicate')) return '이미 남긴 피드백입니다 (409)';
+    return `이미 있는 항목입니다 (409)${text ? ` — ${text.slice(0, 80)}` : ''}`;
+  }
   if (res.status >= 500) return `백엔드 오류 (${res.status})`;
   try {
     const j = JSON.parse(text) as { message?: string; error?: string };

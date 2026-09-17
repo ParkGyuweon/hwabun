@@ -36,7 +36,13 @@ export interface OrderItem {
 }
 
 export interface PlacedOrder {
+  /** 서버가 발급한 주문 번호 (백엔드 원장·purchase.order_id). 로컬 테스트 주문이면 프론트 번호 */
   orderId: string;
+  /**
+   * 프론트가 확인 단계에서 만든 번호. `begin_checkout.order_id` 가 이 값이고 서버는 `idempotencyKey` 로만 받는다.
+   * purchase 는 서버 번호를 싣기 때문에 둘을 이으려면 이 값을 `client_order_id` 로 같이 실어야 한다 (계약 대조 2026-09-17).
+   */
+  clientOrderId?: string;
   items: OrderItem[];
   /** 상품 종류가 아니라 수량 합 */
   count: number;
