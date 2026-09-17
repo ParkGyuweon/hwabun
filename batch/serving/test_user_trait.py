@@ -122,5 +122,55 @@ class TestStore(unittest.TestCase):
         self.assertEqual(st.get("PC00001")["primary"], "price")
 
 
+
+class TestSyntheticRows(unittest.TestCase):
+    """Jira 346 — 페르소나(actor_type=synthetic, identity_scope=persona) 행도 읽는다. 첫 적재 뒤 rows 0 방지."""
+
+    def test_default_query_reads_both_actor_types(self):
+        self.assertIn("actor_type IN ('user', 'synthetic')", ut.DEFAULT_QUERY)
+        self.assertIn("contributing_event_count", ut.DEFAULT_QUERY)
+
+    def test_synthetic_persona_rows_are_served_for_pc_ids(self):
+        rows = [dict(r, actor_type="synthetic") for r in
+                _rows("PC00001", "persona", {"price": 0.9, "review": 0.2}, "price")]
+        rows += [dict(r, actor_type="user") for r in
+                 _rows("1001", "account", {"review": 0.8}, "review")]
+        stats = {}
+        table = ut.aggregate(rows, stats)
+        self.assertEqual(table[("persona", "PC00001")]["primary"], "price")
+        self.assertEqual(table[("account", "1001")]["primary"], "review")
+        self.assertEqual(stats["rows_by_actor_type"], {"synthetic": 2, "user": 1})
+        self.assertEqual(stats["duplicate_grains"], 0)
+
+    def test_account_lookup_never_falls_through_to_a_persona_row_of_same_id(self):
+        # 같은 문자열 id 가 두 scope 에 있어도 account 가 먼저고, persona 만 요청하면 persona 가 나온다
+        rows = _rows("42", "account", {"review": 0.8}, "review") + \
+               [dict(r, actor_type="synthetic") for r in _rows("42", "persona", {"price": 0.9}, "price")]
+        d = tempfile.mkdtemp(); path = os.path.join(d, "t.jsonl")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(json.dumps(r) for r in rows) + "\n")
+        st = ut.UserTraitStore(snapshot_paths=(path,), mysql=None, today=lambda: date(2026, 9, 14))
+        st.load()
+        self.assertEqual(st.get("42")["identity_scope"], "account")
+        self.assertEqual(st.get("42", scopes=("persona",))["primary"], "price")
+        h = st.health()
+        self.assertEqual(h["rows_by_actor_type"], {"user": 1, "synthetic": 1})
+
+    def test_duplicate_grain_prefers_later_window_then_more_events(self):
+        older = [dict(r, actor_type="synthetic", contributing_event_count=500, window_end_date="2026-09-10")
+                 for r in _rows("PC00002", "persona", {"price": 0.1}, "price")]
+        newer = [dict(r, actor_type="synthetic", contributing_event_count=5, window_end_date="2026-09-13")
+                 for r in _rows("PC00002", "persona", {"price": 0.7}, "price")]
+        stats = {}
+        table = ut.aggregate(older + newer, stats)           # 순서와 무관해야 한다
+        self.assertEqual(table[("persona", "PC00002")]["price"], 0.7)
+        table2 = ut.aggregate(newer + older, stats)
+        self.assertEqual(table2[("persona", "PC00002")]["price"], 0.7)
+        self.assertEqual(stats["duplicate_grains"], 1)
+        same_day = [dict(r, actor_type="synthetic", contributing_event_count=n, window_end_date="2026-09-13")
+                    for n, sc in ((3, 0.2), (30, 0.6)) for r in _rows("PC00003", "persona", {"price": sc}, "price")]
+        self.assertEqual(ut.aggregate(same_day)[("persona", "PC00003")]["price"], 0.6)
+
+
 if __name__ == "__main__":
     unittest.main()
