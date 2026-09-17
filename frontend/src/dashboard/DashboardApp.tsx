@@ -136,7 +136,7 @@ export default function DashboardApp() {
   const seller = useAuth('SELLER');
   /**
    * 내 브랜드. 판매자 API 는 전부 brandId 를 요구하므로 로그인 직후 받아 하나를 고른다.
-   * 서버가 없으면 'unavailable' · 화면은 모의 브랜드(DEMO_BRAND)로 남고 사이드바에 그 사실을 적는다.
+   * 서버가 없으면 'unavailable' · 화면은 시연 브랜드 이름(DEMO_BRAND)만 띄우고 사이드바에 그 사실을 적는다.
    */
   const [brands, setBrands] = useState<BrandsState>({ kind: 'loading' });
   const [brandId, setBrandId] = useState<string | null>(() => loadBrandId());
@@ -173,7 +173,7 @@ export default function DashboardApp() {
   return (
     /*
      * 행동 지표는 여기서 한 번 받는다 (마트 API 6개 병렬 · contracts/dashboard-mart-api-spec.md).
-     * 서버 브랜드가 없으면 부르지 않고 모의 집계다. 화면은 useBehavior() 로 같은 모양을 읽는다.
+     * 서버 브랜드가 없으면 부르지 않고 값은 전부 0 이다. 화면은 useBehavior() 로 같은 모양을 읽는다.
      */
     <BehaviorProvider brandId={brand?.id ?? null} brandName={brand?.name ?? null} days={days}>
     <div className="console">
@@ -222,7 +222,7 @@ export default function DashboardApp() {
         ) : null}
         {brands.kind === 'unavailable' ? (
           <p className="sidebar__brand-note">
-            {brands.reason === 'server' ? '서버 미연결 · 모의 브랜드' : '로그인 만료 · 다시 로그인'}
+            {brands.reason === 'server' ? '서버 미연결 · 브랜드를 못 읽었습니다' : '로그인 만료 · 다시 로그인'}
           </p>
         ) : null}
 
@@ -378,10 +378,10 @@ function MartNote() {
   const state = useMartState();
   const { anyReal, martProcessedAt } = useBehavior();
   let line: string;
-  if (state === 'loading') line = '마트 지표를 받는 중 · 그동안은 모의 집계';
+  if (state === 'loading') line = '마트 지표를 받는 중';
   else if (anyReal) line = `마트 연결됨${martProcessedAt ? ` · 갱신 ${martProcessedAt.slice(0, 16).replace('T', ' ')}` : ''} · 배지가 화면별 출처`;
-  else if (state === 'ready') line = '마트 응답은 왔지만 이 브랜드 행이 없음 · 행동 지표는 모의 집계';
-  else line = '행동 지표는 마트 API 연결 전까지 모의 집계입니다. 리뷰·성분은 실측.';
+  else if (state === 'ready') line = '마트는 답했지만 이 브랜드·기간에 행이 없습니다 · 행동 지표는 0';
+  else line = '마트에 닿지 못했습니다 · 행동 지표는 0. 리뷰·성분은 실측.';
   return (
     <p>
       <span className="sidebar__mart">

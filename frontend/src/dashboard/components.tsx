@@ -344,6 +344,10 @@ export function LineChart({
 }) {
   const width = 640;
   const pad = 6;
+  // 점이 하나도 없으면 그릴 선도 없다. 0 으로 채운 평평한 선을 그리면 "방문이 0 이었다" 로 읽힌다
+  if (points.length === 0) {
+    return <p className="note">아직 쌓인 데이터가 없습니다.</p>;
+  }
   const max = Math.max(1, ...points.map((p) => p.value));
   // 축은 0 부터. 아래를 잘라 내면 작은 흔들림이 큰 변화처럼 보인다 (명세 §3-1)
   const min = 0;
