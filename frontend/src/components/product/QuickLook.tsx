@@ -7,6 +7,7 @@ import VariantPicker from './VariantPicker';
 import { IMAGE_WIDTH_MAIN, sizedImage } from '../../lib/image';
 import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
+import { useBackdropClose } from '../../hooks/useBackdropClose';
 import { setWished, useWished } from '../../lib/wishlist';
 import type { Product, ProductVariant } from '../../types/product';
 import type { CartItem } from '../../types/cart';
@@ -73,6 +74,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
     emitClose(reason);
     onClose();
   };
+  const backdrop = useBackdropClose(() => handleClose('backdrop'));
 
   // ESC 핸들러가 최신 상태를 보게 한다. 렌더 중 ref 할당은 lint 가 막으므로 이펙트에서 한다
   const handleCloseRef = useRef(handleClose);
@@ -146,10 +148,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
     <div
       className="qlook"
       data-log-action="quick_look_close"
-      onClick={(event) => {
-        // 흐린 배경을 누르면 닫는다. 창 안쪽 클릭은 여기까지 안 올라온다
-        if (event.target === event.currentTarget) handleClose('backdrop');
-      }}
+      // 흐린 배경을 눌렀다 떼면 닫는다. 창 안에서 드래그를 시작해 배경에서 놓은 것은 닫지 않는다 (useBackdropClose)
+      {...backdrop}
     >
       <div
         className="qlook__dialog"

@@ -14,6 +14,7 @@ import {
 } from '../../lib/memberProfile';
 import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
 import { fetchBackendOrders } from '../../lib/shopApi';
+import { useBackdropClose } from '../../hooks/useBackdropClose';
 import type { BackendOrder } from '../../lib/shopApi';
 
 /**
@@ -72,6 +73,8 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
   }, [onClose]);
 
   const dirty = PROFILE_FIELDS.some((f) => draft[f] !== saved[f]);
+  // 주문 번호 같은 글자를 긁어 복사하다 창이 닫히지 않게 (useBackdropClose)
+  const backdrop = useBackdropClose(onClose);
 
   const save = () => {
     saveMemberProfile(session.id, draft);
@@ -79,8 +82,8 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
   };
 
   return createPortal(
-    <div className="auth-modal" role="presentation" onClick={onClose}>
-      <div className="auth-modal__card mypage" role="dialog" aria-modal="true" aria-label="내 정보" onClick={(e) => e.stopPropagation()}>
+    <div className="auth-modal" role="presentation" {...backdrop}>
+      <div className="auth-modal__card mypage" role="dialog" aria-modal="true" aria-label="내 정보">
         <button type="button" className="auth-modal__close" aria-label="닫기" onClick={onClose}>
           ×
         </button>
