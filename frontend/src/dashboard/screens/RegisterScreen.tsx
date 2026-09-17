@@ -6,7 +6,6 @@ import {
   DRAFT_PRODUCT_ID,
   EMPTY_FORM,
   KRW_PER_USD,
-  KRW_PER_USD_RECOMMEND,
   recommendPriceBin,
   fromProduct,
   removeRegistered,
@@ -124,10 +123,10 @@ export default function RegisterScreen() {
                 <label className="reg-label" htmlFor="reg-price">가격 (원) *</label>
                 <input id="reg-price" className="reg-input" type="number" min={0} step={100} value={form.price_krw} onChange={(e) => set('price_krw', e.target.value === '' ? '' : Number(e.target.value))} placeholder="32000" />
                 <p className="reg-hint">고객 화면에는 ${form.price_krw === '' ? '-' : (Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 보입니다 (표시 환율 {KRW_PER_USD}원)</p>
-                {/* 추천 순위는 추천 서버 환율(1,400)로 자른 가격 구간을 쓴다. 표시 환율과 다르다 (AI 요청 2026-09-10 §2.3) */}
+                {/* 추천 순위는 원화 경계(26,000/46,000/66,000/105,000)로 자른 가격 구간을 쓴다. 환율은 개입하지 않는다 (계약 §4.1 · Jira 302) */}
                 {form.price_krw !== '' ? (
                   <p className="reg-hint">
-                    추천이 읽는 가격 구간: <b>{recommendPriceBin(Number(form.price_krw)).bin}</b> (${recommendPriceBin(Number(form.price_krw)).usd.toFixed(1)} · 환율 {KRW_PER_USD_RECOMMEND.toLocaleString('ko-KR')}원 기준, 계약 §4.1)
+                    추천이 읽는 가격 구간: <b>{recommendPriceBin(Number(form.price_krw)).bin}</b> ({recommendPriceBin(Number(form.price_krw)).token} · 원화 경계 그대로, 계약 §4.1)
                   </p>
                 ) : null}
               </div>
