@@ -845,13 +845,6 @@
   display: block;
 }
 
-.site-header__nav {
-  display: flex;
-  gap: var(--space-4);
-  font-size: 12px;
-  color: var(--color-ink-soft);
-}
-
 .site-header__account {
   margin-left: auto;
   display: flex;

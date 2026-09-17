@@ -664,11 +664,6 @@
   gap: 16px;
 }
 
-:root[data-header='center'] .site-header__nav {
-  order: 1;
-  justify-content: flex-start;
-}
-
 :root[data-header='center'] .site-header__logo {
   order: 2;
   justify-self: center;
@@ -698,6 +693,3 @@
   font-size: 13px;
 }
 
-:root[data-header='mini'] .site-header__nav {
-  font-size: 12.5px;
-}

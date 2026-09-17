@@ -70,22 +70,6 @@ type OrderOrigin = 'cart' | 'buy_now';
 /** 스크롤 복원을 기다려주는 최대 시간. 이미지 배치가 늦어도 이 안에는 자리를 잡는다 */
 const RESTORE_TIMEOUT_MS = 1500;
 
-/**
- * 헤더 메뉴에 걸 카테고리.
- * 데이터에 실제로 있는 중분류만 쓴다. 상품 수가 많은 순서.
- */
-const HEADER_CATEGORIES = (() => {
-  const counts = new Map<string, number>();
-  // 헤더 메뉴는 시작 시점 카탈로그로 정한다. 등록 상품은 기존 중분류 안에 들어오므로 메뉴가 바뀌지 않는다
-  for (const p of catalogSnapshot()) {
-    const key = p.category[1];
-    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([name]) => name);
-})();
-
 /** 첫 진입 주소에 상품이 있으면 그 상세로 시작한다 */
 function initialProductId(): string | null {
   const requested = new URLSearchParams(window.location.search).get('product');
@@ -324,15 +308,6 @@ export default function App() {
      * 클릭 수와 노출 대비 클릭률이 어긋난다. 화면 이동으로 분리한다.
      */
     track('navigation_click', { target: 'home', entry_source: 'breadcrumb' });
-    window.history.pushState({ productId: null, cart: false }, '', '/');
-    setCartOpen(false);
-    setProductId(null);
-  }, []);
-
-  /** 헤더 메뉴로 카테고리를 고르면 목록으로 돌아가 그 카테고리를 펼친다 */
-  const selectCategory = useCallback((category: string) => {
-    track('filter_change', { filter_kind: 'category', filter_value: category, from: 'header' });
-    setListCategory(category);
     window.history.pushState({ productId: null, cart: false }, '', '/');
     setCartOpen(false);
     setProductId(null);
@@ -955,8 +930,6 @@ export default function App() {
           setPersonaChosen(true);
         }}
         onHome={goHome}
-        categories={HEADER_CATEGORIES}
-        onCategorySelect={selectCategory}
         cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
         onCart={openCart}
       />
