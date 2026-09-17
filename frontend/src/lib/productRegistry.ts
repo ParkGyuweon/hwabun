@@ -37,23 +37,24 @@ export const DRAFT_PRODUCT_ID = 'DRAFT';
 export const KRW_PER_USD = KRW_PER_USD_DISPLAY;
 
 /**
- * 추천 서버가 가격 구간을 자를 때 쓰는 환율 (계약 §4.1 · `catalog_registry.py:43`). 표시 환율과 다르다.
+ * 추천이 읽는 가격 구간 — **원화 경계 그대로** (계약 recommendation-io-spec §4.1 · product-registration-spec §4 · Jira 302, 2026-09-15).
  *
- * 세 곳이 달랐다 (AI 요청 2026-09-10 §2.3-1): 프론트 표시 1,340.86 · 백엔드 1,300 · 추천 1,400. 순위는 추천 서버 값으로
- * 정해지므로 **구간 힌트는 이 값**으로 보여준다. 표시 가격은 그대로 1,340.86 이어야 사장님이 넣은 원화가 화면에 그대로 나온다.
- * 27,000원이면 1,400 기준 $19.3(~20 구간), 1,300 기준 $20.8(20~35 구간)로 구간이 갈린다.
+ * 예전에는 원화를 환율로 나눠 달러 구간(0/20/35/50/80)에 넣었는데 세 곳(프론트 1,340.86 · 백엔드 1,300 · 추천 1,400)의
+ * 환율이 달라 47,000원이 35~50 과 20~35 로 갈렸다. 그래서 계약이 **환산 없이 원화로 자르는 것**으로 바뀌었다
+ * (`contracts/product-feature-vocab.json` 0.7 `price_bin_edges`). 추천 서버·백엔드(`ProductContract.priceBin()`)와 같은 경계여야
+ * 등록 폼의 "추천이 읽는 구간" 힌트가 실제 순위와 어긋나지 않는다. 환율은 이 판정에 더 이상 등장하지 않는다.
  */
-export const KRW_PER_USD_RECOMMEND = 1400;
+/** 어휘집 0.7 `price_bin_edges` 의 안쪽 경계 (원). 첫 칸은 `~26k`, 마지막 칸은 `105k+` */
+export const RECOMMEND_PRICE_BIN_EDGES_KRW = [26_000, 46_000, 66_000, 105_000] as const;
+/** 어휘집 0.7 `blocks[price_bin].vocab` 토큰. 이벤트·마트의 `price_bin` 값이 이것이다 */
+const PRICE_BIN_TOKENS = ['~26k', '26k-46k', '46k-66k', '66k-105k', '105k+'] as const;
+const PRICE_BIN_KO = ['2.6만원 미만', '2.6~4.6만원', '4.6~6.6만원', '6.6~10.5만원', '10.5만원 이상'] as const;
 
-/** 계약 §4.1 가격 구간 경계 (USD). 0~20 · 20~35 · 35~50 · 50~80 · 80~ */
-const PRICE_BIN_EDGES = [20, 35, 50, 80];
-const PRICE_BIN_KO = ['2만원 이하', '2~3만원대', '3만원대 후반~5만원', '5~8만원', '8만원 이상'];
-
-/** 원화 → 추천이 읽는 가격 구간 이름과 달러 값 */
-export function recommendPriceBin(priceKrw: number): { usd: number; bin: string } {
-  const usd = priceKrw / KRW_PER_USD_RECOMMEND;
-  const idx = PRICE_BIN_EDGES.findIndex((edge) => usd < edge);
-  return { usd, bin: PRICE_BIN_KO[idx === -1 ? PRICE_BIN_KO.length - 1 : idx] };
+/** 원화 → 추천이 읽는 가격 구간. `token` 은 어휘집 값, `bin` 은 화면 표기 */
+export function recommendPriceBin(priceKrw: number): { token: string; bin: string } {
+  const idx = RECOMMEND_PRICE_BIN_EDGES_KRW.findIndex((edge) => priceKrw < edge);
+  const at = idx === -1 ? PRICE_BIN_TOKENS.length - 1 : idx;
+  return { token: PRICE_BIN_TOKENS[at], bin: PRICE_BIN_KO[at] };
 }
 
 export interface RegistrationForm {

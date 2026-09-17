@@ -94,9 +94,16 @@ function initialProductId(): string | null {
  * 로그의 출처(actor_type)를 바꾸는 값이 아니므로 위장에 쓰일 여지도 없다.
  */
 function initialPersonaId(): string {
-  const fallback = personas[0]?.persona_id ?? '';
   const requested = new URLSearchParams(window.location.search).get('persona');
-  return requested && personas.some((p) => p.persona_id === requested) ? requested : fallback;
+  if (requested && personas.some((p) => p.persona_id === requested)) return requested;
+  /*
+   * 주소에 없으면 **개발·시연 도구가 켜진 브라우저(PA 러너·?dev=1)만** 첫 페르소나로 시작한다.
+   * 실제 방문자는 비운다(`''` → 로거 persona_id null). 전에는 누구나 PA00001 로 시작해서 배포 화면의
+   * 비로그인 방문이 전부 그 한 사람 앞으로 쌓였고, 대시보드 고객군에 가짜 페르소나 하나가 크게 잡혔다
+   * (AI 파트 지적 2026-09-16). 비로그인·페르소나 없음이면 추천 요청도 나가지 않고(useRecommendation) 목록은
+   * 목으로 그린다 — 남의 취향으로 추천하는 것보다 낫다.
+   */
+  return isDevtoolsOn() ? (personas[0]?.persona_id ?? '') : '';
 }
 
 /**
@@ -611,7 +618,13 @@ export default function App() {
   useEffect(() => {
     // 등록 폼 미리보기(iframe)에서 나온 로그는 소비자 행동이 아니다. environment 로 구분한다
     const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
-    setLoggerContext({ environment: isPreview ? 'preview' : 'local' });
+    /*
+     * 어디서 돌았는지 (log-transport-contract §9: local / dev / staging / prod / loadtest). 배포 번들은 `prod`,
+     * 개발 서버는 `local`. 배포 화면까지 `local` 로 남기면 배포에서 돌린 방문과 개발 PC 의 방문을 가를 수 없다
+     * (AI 파트 지적 2026-09-16). 실제/합성 구분은 여기가 아니라 actor_type 이 한다.
+     */
+    const environment = isPreview ? 'preview' : import.meta.env.PROD ? 'prod' : 'local';
+    setLoggerContext({ environment });
   }, []);
 
   /**
