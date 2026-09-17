@@ -341,6 +341,18 @@ class ViewCartCurrencyTest(unittest.TestCase):
                 for x in view_cart:
                     self.assertIsInstance(x["properties"]["cart_value"], value_type)
 
+    def test_every_add_to_cart_carries_price_props(self):
+        """Jira 342 — 담기 6곳 전부 가격 속성. Quick Look 경로(:784)만 빠져 관측 담기의 38% 가 unit_price NULL 이었다"""
+        for currency, keys in (("USD", {"price_usd"}), ("KRW", {"unit_price", "currency"})):
+            with self.subTest(currency=currency):
+                events = self._run(currency)
+                adds = [x for x in events if x["event_name"] == "add_to_cart"]
+                quick = [x for x in adds if x["properties"].get("entry_source") == "quick_look"]
+                self.assertGreater(len(quick), 0)                # Quick Look 담기가 표본에 있어야 검사가 의미 있다
+                missing = [x for x in adds if not keys <= set(x["properties"])]
+                self.assertEqual([], missing, f"가격 속성 없는 add_to_cart {len(missing)}/{len(adds)}건 "
+                                              f"(entry_source: {sorted({x['properties'].get('entry_source') for x in missing})})")
+
 
 @unittest.skipIf(np is None, "numpy is required for the simulator generator")
 class SamplePersonasTest(unittest.TestCase):
