@@ -2,8 +2,7 @@
  * shop_backend(8090) 어댑터 · 프론트 선에서 붙일 수 있는 것은 전부 여기로 붙인다 (2026-09-10).
  *
  * 원칙
- *   · 백엔드가 있으면 쓰고, 없거나 거절하면 **지금까지의 목(mock) 경로로 조용히 물러난다.**
- *     시연이 백엔드 상태에 볼모로 잡히지 않아야 한다. 어느 경로를 탔는지는 화면에 밝힌다.
+ *   · 결제와 주문은 백엔드 원장을 정본으로 사용하며, 실패를 로컬 주문 성공으로 바꾸지 않는다.
  *   · 세포라 200개·SSAFY Beauty 시드는 백엔드 DB 에 없다. 그 상품은 장바구니·주문·피드백 API 를
  *     탈 수 없으므로 목 경로다. 백엔드에서 온 상품(`source: 'backend'`)만 API 를 탄다.
  *   · 이벤트 로그(`/api/events`, 8080)는 이 파일과 무관하다. 그대로 나간다.
@@ -88,6 +87,8 @@ interface ProductSummaryDto {
   lovesCount: number | null;
   primaryImageUrl: string | null;
   highlights: string[] | null;
+  /** 목록에서도 구매 단위 ID를 받아 장바구니 API로 바로 전달한다. */
+  variants?: VariantDto[] | null;
   /** 요청서 9-11 — 백엔드가 아직 안 내려준다. 오면 14일 신규 판정에 쓴다 */
   createdAt?: string | null;
 }
@@ -112,16 +113,27 @@ interface ProductDetailDto {
   images?: Array<string | { url: string }> | null;
 }
 
+function mapVariant(v: VariantDto, fallbackImage: string | null): ProductVariant {
+  return {
+    sku_id: v.skuId,
+    label: v.label,
+    image_url: v.imageUrl ?? fallbackImage ?? '',
+    swatch_url: v.swatchUrl ?? null,
+    variant_id: v.variantId,
+  };
+}
+
 function mapSummary(s: ProductSummaryDto): Product {
+  const active = (s.variants ?? []).filter((v) => v.status === 'ACTIVE');
   return {
     product_id: s.productId,
     product_name: s.productName,
     brand_name: s.brandName ?? '',
     category: ['Skincare', s.secondaryCategory, s.tertiaryCategory].filter(Boolean),
     image_url: s.primaryImageUrl,
-    sku_id: null,
+    sku_id: active[0]?.skuId ?? null,
     images: s.primaryImageUrl ? [s.primaryImageUrl] : [],
-    variants: [],
+    variants: active.map((v) => mapVariant(v, s.primaryImageUrl)),
     description: null,
     price_usd: krwToUsd(s.priceKrw),
     size: null,
@@ -159,13 +171,7 @@ function mapDescription(d: Record<string, unknown> | null): ProductDescription |
 function mapDetail(d: ProductDetailDto): Product {
   const base = mapSummary(d.product);
   const active = d.variants.filter((v) => v.status === 'ACTIVE');
-  const variants: ProductVariant[] = active.map((v) => ({
-    sku_id: v.skuId,
-    label: v.label,
-    image_url: v.imageUrl ?? base.image_url ?? '',
-    swatch_url: v.swatchUrl ?? null,
-    variant_id: v.variantId,
-  }));
+  const variants: ProductVariant[] = active.map((v) => mapVariant(v, base.image_url));
   const extraImages = (d.images ?? []).map((i) => (typeof i === 'string' ? i : i?.url)).filter((u): u is string => Boolean(u));
   const images = [...new Set([...base.images, ...extraImages])];
   const first = active[0];
@@ -289,6 +295,34 @@ export async function registerProductBackend(form: RegistrationForm): Promise<Re
 export type CheckoutResult = { ok: true; orderId: string; status: string } | ApiFailure;
 export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null } | ApiFailure;
 export type ConfirmResult = { ok: true; orderId: string; status: string; paidAt: string | null } | ApiFailure;
+
+export interface BackendOrder {
+  orderId: string;
+  status: string;
+  totalAmount: number;
+  paidAmount: number;
+  currency: string;
+  paymentId: string | null;
+  paymentProvider: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  itemCount: number;
+}
+
+export type OrderListResult = { ok: true; orders: BackendOrder[] } | ApiFailure;
+
+/** 결제 완료된 내 주문 목록. 브라우저 localStorage 주문 내역은 사용하지 않는다. */
+export async function fetchBackendOrders(): Promise<OrderListResult> {
+  if (!hasMemberSession()) return { ok: false, status: 401, reason: '고객 로그인이 없습니다' };
+  try {
+    const res = await authFetch('MEMBER', '/api/orders');
+    if (!res.ok) return fail(res);
+    const rows = (await res.json()) as BackendOrder[];
+    return { ok: true, orders: Array.isArray(rows) ? rows : [] };
+  } catch {
+    return offline();
+  }
+}
 
 /** 장바구니 전부가 백엔드 상품(옵션 id 있음)이고 고객 로그인이 있을 때만 API 를 탈 수 있다 */
 export function canCheckoutOnBackend(items: CartItem[]): boolean {

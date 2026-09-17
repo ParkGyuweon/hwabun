@@ -121,6 +121,7 @@ volumes:
   prometheus-data:
   grafana-data:
   recommend-data:
+  mysql-data:
 
 networks:
   # shop_backend/docker-compose.mysql.yml creates this named network.

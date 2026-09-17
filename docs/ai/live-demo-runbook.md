@@ -154,7 +154,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
    `trait_source=coldstart` 로 적는다(307) — 그래서 **이 단계는 항상 가격 문구가 나온다.** 응답 `hero.hero_policy_version=hero-2026-09-15`.
 4. **담기 → 주문 → 결제 → 추천 갱신 확인 (Jira 320, 백엔드 결제 구현 뒤).** 로그인한 회원으로 SB 상품 하나를 담고 주문한다.
    - 결제 경로는 둘. **배포 프론트에는 09-16 12:19 부터 포트원 공개 키가 들어가 있어 사람 시연은 카카오페이 테스트 창**
-     → 백엔드 `/api/orders/{id}/confirm`(백엔드 배포 브랜치에만 있음, dev 머지 확인 필요). 키가 없는 프론트(로컬)는
+     → 백엔드 `/api/orders/{id}/confirm`(2026-09-17 dev 병합 반영). 키가 없는 프론트(로컬)는
      `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문). 어느 쪽이든 `purchase` 이벤트 모양은 같고 `payment_method` 만 다르다.
    - **에이전트(PA) 결제는 배포본에서 결제창을 넘지 못한다** — 카카오 로그인·QR 승인은 자동화 불가. 프론트에 `?pay=test`
      런타임 스위치를 요청했다(09-16, Downloads 요청서). 그 전까지 에이전트 `--checkout` 은 로컬 스택에서만. 배포본 에이전트 실행은 결제 없이.

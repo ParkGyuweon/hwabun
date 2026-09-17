@@ -357,8 +357,8 @@ const localById = new Map<string, Product>([...seedProducts, ...sampleProducts].
  * 막고 있던 것은 옵션이고, 그건 `ensureBackendDetail` 이 채운다. "이 상품이 백엔드에 있는가" 는 `backend_brand_id`
  * 로 이미 알 수 있어서 `source` 를 겸업시킬 이유가 없다.
  *
- * 옵션(`variants`)은 목록 요약에 아예 없다 (`ProductSummary` 에 옵션 칸이 없다). 그래서 여기서는 채울 수 없고
- * `ensureBackendDetail` 이 상세를 받아 채운다. 정적 사본의 옵션에는 `variant_id` 가 없다 — 202개 중 0개다.
+ * 목록 응답이 variant를 주면 그 값을 즉시 쓰고, 상세·퀵룩은 `ensureBackendDetail`로 최신 옵션을 다시 보강한다.
+ * 정적 사본의 옵션에는 `variant_id` 가 없다 — 202개 중 0개다.
  */
 function mergeWithLocal(row: Product): Product {
   const local = localById.get(row.product_id);
@@ -367,6 +367,8 @@ function mergeWithLocal(row: Product): Product {
     ...local,
     price_usd: row.price_usd > 0 ? row.price_usd : local.price_usd,
     rating: row.rating ?? local.rating,
+    sku_id: row.sku_id ?? local.sku_id,
+    variants: row.variants,
     backend_brand_id: row.backend_brand_id,
   };
 }

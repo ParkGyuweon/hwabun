@@ -106,7 +106,9 @@ public class CatalogController {
     BigDecimal rating,
     Integer lovesCount,
     String primaryImageUrl,
-    List<String> highlights
+    List<String> highlights,
+    /** 구매 화면이 백엔드 variant_id를 바로 쓸 수 있도록 목록에도 포함한다. */
+    List<VariantView> variants
   ) {}
 
   public record VariantView(
@@ -344,22 +346,14 @@ public class CatalogController {
       p.getRating(),
       p.getLovesCount(),
       p.getPrimaryImageUrl(),
-      highlights
+      highlights,
+      variantViews(activeVariants)
     );
   }
 
-  private ProductDetail detail(Product p, Locale locale) {
-    Map<String, Object> d = null;
-    try {
-      if (p.getDescriptionJson() != null) d = mapper.readValue(
-        p.getDescriptionJson(),
-        Map.class
-      );
-    } catch (Exception ignored) {}
-    List<VariantView> vs = variants
-      .findByProductId(p.getId())
+  private List<VariantView> variantViews(List<ProductVariant> values) {
+    return values
       .stream()
-      .filter(v -> v.getStatus() == ProductVariant.Status.ACTIVE)
       .map(v ->
         new VariantView(
           v.getId(),
@@ -376,6 +370,23 @@ public class CatalogController {
         )
       )
       .toList();
+  }
+
+  private ProductDetail detail(Product p, Locale locale) {
+    Map<String, Object> d = null;
+    try {
+      if (p.getDescriptionJson() != null) d = mapper.readValue(
+        p.getDescriptionJson(),
+        Map.class
+      );
+    } catch (Exception ignored) {}
+    List<VariantView> vs = variantViews(
+      variants
+        .findByProductId(p.getId())
+        .stream()
+        .filter(v -> v.getStatus() == ProductVariant.Status.ACTIVE)
+        .toList()
+    );
     List<ImageView> images = jdbc.query(
       "select image_id,url,sort_order from product_image where product_id=? order by sort_order",
       (rs, rowNum) -> new ImageView(rs.getString("image_id"), rs.getString("url"), rs.getInt("sort_order")),

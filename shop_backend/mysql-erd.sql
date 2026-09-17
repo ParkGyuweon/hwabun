@@ -108,9 +108,21 @@ CREATE TABLE cart_item (
 CREATE TABLE shop_order (
  order_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, idempotency_key VARCHAR(128) NOT NULL, request_hash CHAR(64) NOT NULL,
  status ENUM('CREATED','PAID','CANCELLED','REFUNDED') NOT NULL DEFAULT 'CREATED', currency CHAR(3) NOT NULL DEFAULT 'KRW', total_amount DECIMAL(18,0) NOT NULL, paid_at DATETIME(6) NULL,
+ payment_id VARCHAR(64) NULL, payment_provider VARCHAR(32) NULL, paid_amount DECIMAL(18,0) NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, UNIQUE KEY uq_order_idempotency(member_id,idempotency_key), CHECK(total_amount >= 0), INDEX ix_order_member_created(member_id,created_at)
+ FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, UNIQUE KEY uq_order_idempotency(member_id,idempotency_key), UNIQUE KEY uq_order_payment(payment_id), CHECK(total_amount >= 0), INDEX ix_order_member_created(member_id,created_at)
 );
+
+CREATE TABLE payment (
+ payment_id VARCHAR(64) PRIMARY KEY, order_id VARCHAR(64) NOT NULL UNIQUE,
+ provider VARCHAR(32) NOT NULL, provider_transaction_id VARCHAR(128) NULL,
+ status ENUM('PAID','CANCELLED','FAILED') NOT NULL, amount DECIMAL(18,0) NOT NULL,
+ currency CHAR(3) NOT NULL, paid_at DATETIME(6) NULL, verified_at DATETIME(6) NOT NULL,
+ raw_status VARCHAR(32) NOT NULL,
+ FOREIGN KEY(order_id) REFERENCES shop_order(order_id) ON DELETE RESTRICT,
+ CHECK(amount >= 0)
+);
+
 CREATE TABLE order_item (
  order_item_id VARCHAR(64) PRIMARY KEY, order_id VARCHAR(64) NOT NULL, variant_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, brand_id VARCHAR(64) NOT NULL,
  product_name_snapshot VARCHAR(300) NOT NULL, brand_name_snapshot VARCHAR(200) NOT NULL, sku_snapshot VARCHAR(64) NOT NULL, variant_label_snapshot VARCHAR(200) NOT NULL, unit_price DECIMAL(18,0) NOT NULL, quantity INT NOT NULL, line_amount DECIMAL(18,0) NOT NULL,

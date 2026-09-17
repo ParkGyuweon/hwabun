@@ -45,6 +45,10 @@ public class OrderItem {
 
   protected OrderItem() {}
 
+  public int getQuantity() {
+    return quantity;
+  }
+
   public OrderItem(
     String id,
     String orderId,

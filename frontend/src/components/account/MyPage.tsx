@@ -13,8 +13,8 @@ import {
   subscribeMemberProfile,
 } from '../../lib/memberProfile';
 import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
-import { loadOrders, subscribeOrders } from '../../lib/orderHistory';
-import { formatPrice } from '../../lib/format';
+import { fetchBackendOrders } from '../../lib/shopApi';
+import type { BackendOrder } from '../../lib/shopApi';
 
 /**
  * 마이페이지 · 쇼핑몰의 기본 요소 중 빠져 있던 것 (2026-09-11).
@@ -22,8 +22,7 @@ import { formatPrice } from '../../lib/format';
  * 세 덩이만 둔다. 내 정보(이메일·닉네임) · 피부 정보(가입 때 받은 4개, 여기서 고침) · 주문 내역.
  * 피부 정보는 "가입에서 건너뛸 수 있게 하되 나중에 채우고 바꿀 수 있어야 한다" (AI 요청 §1.2) 의 그 자리다.
  *
- * 백엔드에 프로필 조회·수정 API 와 주문 목록 API 가 없다 (`docs/shop-backend-requests.md` 8번). 그래서 지금은
- * 둘 다 이 브라우저 저장본이고, 화면에 그렇게 적는다. API 가 열리면 저장·조회 함수 본문만 바뀐다.
+ * 피부 정보는 아직 브라우저 저장본이고, 주문 내역은 백엔드의 결제 완료 주문만 조회한다.
  *
  * 비밀번호 변경·회원 탈퇴는 백엔드 API 가 없어 넣지 않았다. 빈 버튼을 두는 것보다 없는 것이 낫다.
  *
@@ -42,8 +41,27 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
   const setDraft = (update: (p: MemberProfile) => MemberProfile) => setEdit({ from: saved, value: update(draft) });
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  const getOrders = useCallback(() => loadOrders(session.id), [session.id]);
-  const orders = useSyncExternalStore(subscribeOrders, getOrders, getOrders);
+  const [orders, setOrders] = useState<BackendOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchBackendOrders().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setOrders(result.orders);
+        setOrdersError(null);
+      } else {
+        setOrders([]);
+        setOrdersError(result.reason);
+      }
+      setOrdersLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -114,28 +132,32 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
 
         <section className="mypage__section">
           <h3>주문 내역</h3>
-          {orders.length === 0 ? (
-            <p className="mypage__empty">이 브라우저에서 한 주문이 없습니다.</p>
+          {ordersLoading ? (
+            <p className="mypage__empty">주문 내역을 불러오는 중입니다.</p>
+          ) : ordersError ? (
+            <p className="mypage__empty">주문 내역을 불러오지 못했습니다. {ordersError}</p>
+          ) : orders.length === 0 ? (
+            <p className="mypage__empty">결제 완료된 주문이 없습니다.</p>
           ) : (
             <ul className="mypage__orders">
               {orders.map((o) => (
                 <li key={o.orderId} className="mypage__order">
                   <div className="mypage__order-head">
                     <span className="mypage__order-id">주문 {o.orderId.slice(0, 8)}</span>
-                    <span className="mypage__order-when">{formatWhen(o.placed_at)}</span>
+                    <span className="mypage__order-when">{formatWhen(o.paidAt ?? o.createdAt)}</span>
                   </div>
                   <div className="mypage__order-body">
-                    <span>상품 {o.count}개</span>
-                    <strong>{formatPrice(o.paid)}</strong>
-                    <span className={`mypage__order-mode mypage__order-mode--${o.mode}`}>
-                      {o.payment_method === 'kakaopay' ? '카카오페이 테스트 결제' : o.mode === 'backend' ? '서버 주문' : '테스트 주문'}
+                    <span>상품 {o.itemCount}개</span>
+                    <strong>{Math.round(o.paidAmount ?? o.totalAmount).toLocaleString('ko-KR')}원</strong>
+                    <span className="mypage__order-mode mypage__order-mode--backend">
+                      {o.paymentProvider === 'PORTONE_TEST' ? '카카오페이 테스트 결제' : '서버 테스트 결제'}
                     </span>
                   </div>
                 </li>
               ))}
             </ul>
           )}
-          <p className="mypage__note">서버 주문 목록 API 가 아직 없어 이 브라우저에서 한 주문만 보입니다.</p>
+          <p className="mypage__note">백엔드에서 확인된 결제 완료 주문만 표시됩니다.</p>
         </section>
 
         <footer className="mypage__foot">
