@@ -90,7 +90,7 @@ public class FeedbackController {
   ) {
     requireRole(actor, AccountRole.MEMBER);
     String memberId = actor.accountId();
-    String orderItemId = purchased(memberId, req.productId());
+    String orderItemId = purchasedItemOrNull(memberId, req.productId());
     String axisId = normalizeAxisValue(req.axisId());
     if (
       count(
@@ -139,17 +139,29 @@ public class FeedbackController {
     requireRole(actor, AccountRole.SELLER);
     String sellerId = actor.accountId();
     owns(sellerId, brandId);
+    /*
+     * 브랜드 필터는 **상품(product.brand_id)** 으로 한다. 예전에는 `order_item` 을 inner join 해서
+     * 걸렀는데, 미구매자 의견은 `order_item_id` 가 NULL 이라 그 조인에서 통째로 사라진다 —
+     * 사장님이 "안 산 사람이 뭐라 했는지" 를 영영 볼 수 없었다.
+     *
+     * `purchased` 는 그 의견이 산 사람의 것인지. `order_item_id` 가 있으면 구매자다 (서버가 결제 완료
+     * 주문에서만 그 값을 채운다). 상품명은 구매자면 주문 당시 스냅샷을, 아니면 현재 상품명을 쓴다.
+     */
     List<Map<String, Object>> rows = jdbc.queryForList(
       "select f.feedback_id feedbackId,f.order_item_id orderItemId,f.product_id productId, " +
-        "oi.product_name_snapshot productName,f.member_id authorMemberId, " +
+        "coalesce(oi.product_name_snapshot,p.product_name) productName, " +
+        "case when f.order_item_id is null then false else true end purchased, " +
+        "f.member_id authorMemberId, " +
         "m.skin_type_code authorSkinTypeCode,m.skin_tone_code authorSkinToneCode, " +
         "m.hair_color_code authorHairColorCode,m.eye_color_code authorEyeColorCode, " +
         "f.axis_id axisId,f.body,f.status,f.created_at createdAt, " +
         "coalesce(fc.classification_status,'PENDING') classificationStatus,coalesce(fc.hidden_by_default,false) hiddenByDefault " +
-        "from feedback f join order_item oi on oi.order_item_id=f.order_item_id " +
+        "from feedback f " +
+        "join product p on p.product_id=f.product_id " +
+        "left join order_item oi on oi.order_item_id=f.order_item_id and oi.product_id=f.product_id " +
         "left join member m on m.member_id=f.member_id " +
         "left join feedback_classification fc on fc.feedback_id=f.feedback_id " +
-        "where oi.brand_id=? and f.product_id=oi.product_id and f.status='VISIBLE' order by f.created_at desc",
+        "where p.brand_id=? and f.status='VISIBLE' order by f.created_at desc",
       brandId
     );
     for (Map<String, Object> row : rows) {
@@ -231,7 +243,14 @@ public class FeedbackController {
     }
   }
 
-  private String purchased(String memberId, String productId) {
+  /**
+   * 이 회원이 그 상품을 산 적이 있으면 가장 최근 결제 품목, 아니면 **null**.
+   *
+   * 예전에는 없으면 403 이었다. 그래서 미구매자의 의견은 사장님에게 영영 닿지 않았다 — 제품을 아직 안
+   * 샀지만 살까 말까 하며 묻고 싶은 사람이 가장 많은데 그 말이 통째로 막혀 있었다.
+   * 이제 누구나 보낼 수 있고, 산 사람인지는 이 값이 있는지로 구분해 사장님 화면이 배지로 적는다.
+   */
+  private String purchasedItemOrNull(String memberId, String productId) {
     List<String> itemIds = jdbc.query(
       "select oi.order_item_id from order_item oi join shop_order o on o.order_id=oi.order_id " +
         "where oi.product_id=? and o.member_id=? and o.status='PAID' order by o.paid_at desc",
@@ -239,11 +258,7 @@ public class FeedbackController {
       productId,
       memberId
     );
-    if (itemIds.isEmpty()) throw new ResponseStatusException(
-      HttpStatus.FORBIDDEN,
-      "paid purchase required"
-    );
-    return itemIds.get(0);
+    return itemIds.isEmpty() ? null : itemIds.get(0);
   }
 
   private void purchasedOrderItem(String memberId, String itemId) {

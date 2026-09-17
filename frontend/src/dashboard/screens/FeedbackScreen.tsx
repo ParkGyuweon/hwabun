@@ -450,6 +450,16 @@ export default function FeedbackScreen() {
                 <li key={f.feedback_id} className={`fbx-card is-${f.status}`}>
                   <div className="fbx-card__meta">
                     <span className="fbx-card__product">{productName(f.product_id)}</span>
+                    {/*
+                      산 사람의 말인지. 의견은 사지 않아도 보낼 수 있고, 두 말은 무게가 다르다 —
+                      산 사람의 "향이 강하다" 와 안 산 사람의 "향이 강할 것 같다" 는 다른 이야기다.
+                      옛 서버 응답·로컬 저장본은 이 값이 없어서(undefined) 아무것도 적지 않는다.
+                    */}
+                    {f.purchased === true ? (
+                      <span className="fbx-card__buyer" title="이 상품을 결제한 고객입니다">구매자</span>
+                    ) : f.purchased === false ? (
+                      <span className="fbx-card__buyer fbx-card__buyer--no" title="이 상품을 결제하지 않은 고객입니다">미구매</span>
+                    ) : null}
                     {labelsOf(f).map((l) => (
                       <span key={l.category_id} className="fbx-card__cat">{categoryLabel(l.category_id)}</span>
                     ))}

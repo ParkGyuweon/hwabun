@@ -487,6 +487,8 @@ interface SellerFeedbackRow {
   productId: string;
   productName: string;
   authorMemberId: string;
+  /** 산 사람의 의견인지. 옛 서버는 안 준다 */
+  purchased?: boolean;
   authorSkinTypeCode: string | null;
   authorSkinToneCode: string | null;
   axisId: string;
@@ -534,6 +536,8 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       hidden_by_default: Boolean(r.hiddenByDefault),
       brand_name: brandName,
       profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
+      // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
+      purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
       status: 'new',
       reply: null,
       replied_at: null,
