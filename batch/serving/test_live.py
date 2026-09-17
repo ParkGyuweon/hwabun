@@ -9,7 +9,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "jobs"))
 
-from live_stats import LiveStats  # noqa: E402
+from live_stats import LiveStats, log_tail  # noqa: E402
 
 
 class LiveStatsUnit(unittest.TestCase):
@@ -39,6 +39,32 @@ class LiveStatsUnit(unittest.TestCase):
         s = ls.snapshot()
         self.assertEqual(s["events"]["per_sec"], 0)
         self.assertEqual(s["events"]["total"], 7)            # 누적은 남는다
+
+
+class LogTailUnit(unittest.TestCase):
+    """Jira 344 — 상태 줄은 로그 꼬리 400바이트를 읽는데, 그 경계가 한글 3바이트 중간에 걸려도 깨지지 않아야 한다."""
+
+    def _write(self, lines):
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".log"); os.close(fd)
+        with open(path, "wb") as f:
+            f.write("\n".join(lines).encode("utf-8") + b"\n")
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        return path
+
+    def test_boundary_inside_multibyte_char_keeps_last_line_intact(self):
+        last = "[demo] Kafka 로 30,000건 (파일 위치 30,000) · 실패 0 · 3,000건/초"
+        for pad in range(0, 3):                      # 경계를 1바이트씩 밀어 3바이트 글자의 모든 위치에 걸어 본다
+            filler = "[demo] 보기: http://127.0.0.1:8300/live (경로: Kafka → 파티션 3 → 소비자)" + "가" * (40 + pad)
+            path = self._write([filler] * 6 + [last])
+            with self.subTest(pad=pad):
+                self.assertEqual(last, log_tail(path, 400))
+                self.assertNotIn("\ufffd", log_tail(path, 400))
+
+    def test_short_file_and_missing_file(self):
+        self.assertEqual("한 줄", log_tail(self._write(["한 줄"]), 400))
+        self.assertEqual("", log_tail(self._write([]), 400))
+        self.assertEqual("", log_tail(os.path.join(HERE, "no-such.log"), 400))
 
 
 class LiveEndpoints(unittest.TestCase):
