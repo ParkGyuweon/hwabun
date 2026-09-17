@@ -39,6 +39,24 @@ SHOW CREATE TABLE dw.user_trait_daily;
 기존 MySQL Volume에 init SQL을 추가하는 것만으로는 적용되지 않는다. 관리자에게 실제
 접속 출발지 제한과 별도 계정을 요청한다. 비밀번호는 저장소에 넣지 않는다.
 
+기존 `dw`에는 `schema.sql`을 다시 실행하지 않는다. 2026-09-17 Mart 컬럼 변경은
+[`deploy/ec2-1/migrations/20260917_dw_mart_columns.sql`](../deploy/ec2-1/migrations/20260917_dw_mart_columns.sql)
+마이그레이션으로 적용한다. 세 대상 테이블에 기존 행이 있고 새 컬럼이 일부라도 빠졌으면
+의미 없는 0으로 채우지 않고 중단한다. 적용 후에는 발행기의 `MysqlStore.check_target()`으로
+실제 테이블이 최신 DDL과 일치하는지 검증한다. 적용 전에는 현재 테이블과 행 수를
+확인한다. EC2-1에 이미 수동 적용한 경우 스크립트는 변경 없이 통과하지만, 그 경우에도
+검증은 생략하지 않는다. `INIT_DW_SCHEMA`는 신규 DB 전용이므로 기존 DB 마이그레이션에
+사용하지 않는다.
+
+```bash
+# EC2-1 저장소 루트에서, DB 관리자 검토 후 실행
+sudo docker cp deploy/ec2-1/migrations/20260917_dw_mart_columns.sql \
+  ec2-1-mysql-1:/tmp/dw-mart-columns.sql
+sudo docker exec ec2-1-mysql-1 sh -c \
+  'mysql -u root -p"$MYSQL_ROOT_PASSWORD" < /tmp/dw-mart-columns.sql'
+sudo docker exec ec2-1-mysql-1 rm -f /tmp/dw-mart-columns.sql
+```
+
 - 발행 계정: `dw.*`의 `SELECT, INSERT, CREATE, DROP, ALTER` 권한.
 - 추천 계정: `dw.user_trait_daily`의 `SELECT` 권한만.
 - JDBC/MySQL 외부 포트 기본은 호스트 13306 → 컨테이너 3306이다. 실제 설정을 확인한다.
