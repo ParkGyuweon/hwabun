@@ -101,7 +101,7 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback")
+           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback", "select_text")
 # 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
 # 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
 FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
@@ -1309,6 +1309,49 @@ def do_action(page, act, target, scroll_center=None):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
 
+    if a == "select_text":
+        # 성분 섹션의 글을 긁는다. 프론트 useTextSelection 이 selectionchange 를 350ms
+        # 디바운스해서 text_selection 을 남긴다 — 진짜 마우스 드래그가 아니어도 잡힌다.
+        # 성분을 중요시하는 사람이 성분명을 긁어 보는 행동이고, 대시보드의 "드래그 TOP 10"
+        # 과 처방 문장이 이 값을 읽는다 (Jira 363).
+        sec = page.locator('[data-log-section="ingredients"]')
+        if not sec.count():
+            return False
+        try:
+            sec.first.scroll_into_view_if_needed(timeout=4000)
+            page.wait_for_timeout(random.randint(400, 1200))   # 눈으로 훑는 시간
+            ok = sec.first.evaluate("""(el) => {
+              const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+              const parts = [];
+              let n;
+              while ((n = walk.nextNode())) {
+                if (n.textContent && n.textContent.trim().length > 3) parts.push(n);
+              }
+              if (!parts.length) return false;
+              const node = parts[Math.floor(Math.random() * parts.length)];
+              const len = node.textContent.length;
+              const from = Math.floor(Math.random() * Math.max(1, len - 8));
+              const to = Math.min(len, from + 6 + Math.floor(Math.random() * 24));
+              const range = document.createRange();
+              range.setStart(node, from);
+              range.setEnd(node, to);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              return sel.toString().trim().length >= 2;
+            }""")
+            if not ok:
+                return False
+            page.wait_for_timeout(700)          # 디바운스(350ms)를 넘긴다
+            # 긁은 김에 복사까지 하는 사람이 있다. 복사는 더 무거운 관심 신호다
+            if random.random() < 0.3:
+                page.keyboard.press("Control+C")
+                page.wait_for_timeout(random.randint(200, 600))
+        except Exception:
+            return False
+        return True
+
+
     if a == "scroll":
         # 바닥에 닿았으면 위로 올린다. 아래로만 굴리면 화면이 안 바뀌어
         # "볼 것이 없다" 로 읽히고, 실제로 위쪽에 안 본 상품이 남아 있다
@@ -1575,6 +1618,9 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
             acts.insert(1, "buy_now")
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
+        # 성분을 긁어 보는 행동. 상세에서는 늘 열어 둔다 — 성분을 중요시하는 사람이
+        # 고르고, 그렇지 않은 사람은 안 고른다. 대시보드의 드래그 TOP 10 이 이 값이다
+        acts.append("select_text")
         # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
         if not wished_here:
             acts.append("wishlist_toggle")
