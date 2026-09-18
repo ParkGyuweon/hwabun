@@ -930,6 +930,7 @@ export default function App() {
           setPersonaChosen(true);
         }}
         onHome={goHome}
+        onOpenProduct={openProduct}
         cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
         onCart={openCart}
       />

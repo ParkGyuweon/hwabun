@@ -1,4 +1,5 @@
 import AccountMenu from '../auth/AccountMenu';
+import NotificationBell from '../notifications/NotificationBell';
 import PersonaSwitcher from './PersonaSwitcher';
 import { isDevtoolsOn } from '../../lib/devtools';
 import type { PersonaProfile } from '../../types/persona';
@@ -14,6 +15,8 @@ interface SiteHeaderProps {
   onCart: () => void;
   /** 소상공인이 가입할 때 적은 브랜드 이름. 비어 있으면 BLOOM 워드마크 */
   brandName?: string;
+  /** 알림(의견 확인·답변·반영)을 누르면 그 상품 상세로 */
+  onOpenProduct: (productId: string) => void;
 }
 
 /**
@@ -34,6 +37,7 @@ export default function SiteHeader({
   cartCount,
   onCart,
   brandName,
+  onOpenProduct,
 }: SiteHeaderProps) {
   return (
     <header className="site-header">
@@ -63,6 +67,13 @@ export default function SiteHeader({
           {isDevtoolsOn() ? (
             <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
           ) : null}
+          {/* 인앱 알림함. 로그인 전에는 안 그린다. 회원은 자기 의견의 확인·답변·반영 알림을 받는다 */}
+          <NotificationBell
+            role="MEMBER"
+            onOpen={(n) => {
+              if (n.payload?.productId) onOpenProduct(n.payload.productId);
+            }}
+          />
           <AccountMenu />
         </div>
       </div>
