@@ -70,10 +70,10 @@ for job in clean_events_job derive_facts_job build_marts_job; do
   submit "$job"
 done
 
-# Q5 is a report, not a gate. It checks 159 conditions across the Marts, and a
+# Q5 is a report, not a gate. It checks 160 conditions across the Marts, and a
 # handful of bad rows used to abort the run before the publish step below
 # (set -e), leaving 22 correct Marts unpublished and the dashboard blank. On
-# 2026-09-18 that was 13 of 159 checks, 7 of them from one real user on a stale
+# 2026-09-18 that was 13 failures, 7 of them from one real user on a stale
 # frontend bundle. Record the failure, publish anyway, and keep it in the exit
 # code so systemd and CI still mark the run as failed.
 echo "running Q5 (validation)"
