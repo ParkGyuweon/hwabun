@@ -1060,18 +1060,23 @@ def _wait_order_done(page, timeout_ms=15000):
 def _place_and_survey(page):
     """주문 확인 단계 → 주문 완료(place_order) → 구매 사유 설문. checkout 과 buy_now 가 같이 쓴다 (Jira 321·333).
     ?pay=test 자동 판별(프론트 09-16)로 러너는 결제창 없이 PAID 로 간다."""
-    place = page.locator('[data-log-action="place_order"]')
-    if not place.count() or not click_safe(place.first, page):
-        page.go_back(); page.wait_for_timeout(800)
-        return False
-    # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다.
-    #
-    # **설문 절 하나로 판정하지 않는다.** `purchase_survey` 는 CartPage 의 완료 화면에서만
-    # 그려지는데(CartPage.tsx), buy_now 는 상세에서 바로 사는 경로라 거기에 닿지 않는다.
-    # 그래서 주문이 PAID 로 끝나도 실패로 찍혔고, `if okd` 안에 있는 주문 직후 단계
-    # (피드백·리뷰)가 아예 안 돌았다 — 실측 4건 전부 (Jira 360).
-    if not _wait_order_done(page):
-        return False                             # 결제까지 못 갔다 — purchase 이벤트도 없다
+    # **buy_now 는 주문 확인 단계를 건너뛴다.** 상세에서 바로 누르면 프론트가 그 자리에서
+    # POST /api/orders (201) → /pay (200) 까지 하고 완료 화면으로 넘어간다 (배포본 실측
+    # 2026-09-18). 그래서 place_order 버튼이 아예 없다. 예전에는 그 버튼이 없으면 곧바로
+    # go_back + False 였고, 완료 화면이 눈앞에 있는데도 주문을 실패로 셌다. 그 때문에
+    # `if okd` 안에 있는 주문 직후 단계(피드백·리뷰)가 통째로 안 돌았다 (Jira 361).
+    if not _wait_order_done(page, timeout_ms=2000):
+        place = page.locator('[data-log-action="place_order"]')
+        if not place.count() or not click_safe(place.first, page):
+            page.go_back(); page.wait_for_timeout(800)
+            return False
+        # 눌렀으면 서버 주문 + PAID 표시를 기다린다. 로그인이 없거나 서버가 거절하면
+        # 완료 화면 대신 오류 문구가 남는다.
+        #
+        # **완료 판정을 한 셀렉터에 걸지 않는다.** `purchase_survey` 는 CartPage 의 완료
+        # 화면에만 있어서, 그것만 보면 다른 경로가 통째로 실패로 찍힌다 (Jira 360).
+        if not _wait_order_done(page):
+            return False                         # 결제까지 못 갔다 — purchase 이벤트도 없다
     page.wait_for_timeout(random.randint(1200, 3000))       # 완료 화면을 읽는 시간
     chips = page.locator('[data-log-action="purchase_reason_toggle"]')
     if chips.count() and random.random() < SURVEY_ANSWER_P:
