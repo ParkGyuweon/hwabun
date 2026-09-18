@@ -91,3 +91,29 @@ export function calcReviewStats(reviews: Review[]): ReviewStats {
 /** 리뷰어 피부 타입 파생. 플러그인과 같이 쓰려고 lib/skinTypes.ts 로 옮겼다 — 여기서 다시 내보낸다 */
 export { deriveSkinTypesFromReviews } from './skinTypes';
 export type { DerivedSkinTypes } from './skinTypes';
+
+/**
+ * 조사. 앞말의 받침을 보고 을/를 · 이/가 · 은/는 · 과/와 · 으로/로 를 고른다.
+ *
+ * 화면 문장에 상품·콘텐츠 이름이 끼어들 때 `${name}을` 처럼 박아 두면 "평점 분포을 손보세요" 가 된다 (2026-09-18 지적).
+ * 한글이면 종성으로, 숫자면 읽는 소리로(0·1·3·6·7·8 받침 있음), 그 밖(영문 등)은 받침 없는 쪽으로 간다.
+ * 으로/로 는 ㄹ 받침이면 '로' 다.
+ */
+export function josa(word: string, pair: '을/를' | '이/가' | '은/는' | '과/와' | '으로/로'): string {
+  const [withFinal, withoutFinal] = pair.split('/');
+  const trimmed = word.replace(/[\s)\]}'"”’·]+$/u, '');
+  const last = trimmed.charAt(trimmed.length - 1);
+  let hasFinal = false;
+  let finalIsRieul = false;
+  const code = last.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) {
+    const jong = (code - 0xac00) % 28;
+    hasFinal = jong !== 0;
+    finalIsRieul = jong === 8;
+  } else if (/[0-9]/.test(last)) {
+    hasFinal = '013678'.includes(last);
+    finalIsRieul = last === '1' || last === '7' || last === '8';
+  }
+  if (pair === '으로/로') return `${word}${hasFinal && !finalIsRieul ? withFinal : withoutFinal}`;
+  return `${word}${hasFinal ? withFinal : withoutFinal}`;
+}

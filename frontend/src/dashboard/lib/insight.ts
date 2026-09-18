@@ -16,6 +16,7 @@ import { labelKo } from '../../lib/formLabels';
 import type { DataOrigin } from '../components';
 import type { BehaviorMetrics, FunnelStep } from './behavior';
 import { SKIN_TYPE_KO, fmt } from './metrics';
+import { josa } from '../../lib/format';
 
 export interface Insight {
   id: string;
@@ -132,7 +133,7 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
           `열람률 ${fmt.pct(c.viewRate)}, 평균 체류 ${(c.avgDwellMs / 1000).toFixed(0)}초로 하위 (n=${fmt.int(c.sampleSize)})`,
           '본 사람은 사는데 보는 사람이 적다는 뜻',
         ],
-        action: `${c.ko}을 상세 위쪽으로 올리고 목록 카드에도 한 줄 노출하세요`,
+        action: `${josa(c.ko, '을/를')} 상세 위쪽으로 올리고 목록 카드에도 한 줄 노출하세요`,
         unit: '상세페이지',
         n: c.sampleSize,
         confidence: conf(c.sampleSize, 1),
