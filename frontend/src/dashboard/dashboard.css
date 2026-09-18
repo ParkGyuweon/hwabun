@@ -2172,3 +2172,59 @@ table.data tr:hover td {
   background: rgba(0, 0, 0, 0.06);
   color: var(--ink-faint, rgba(0, 0, 0, 0.55));
 }
+
+/* ---------- 공개 리뷰 원문 (ReviewsScreen) ---------- */
+
+.reviews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviews__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.reviews__item:last-child {
+  border-bottom: 0;
+}
+
+.reviews__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.reviews__stars {
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+.reviews__product {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviews__when {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.reviews__title {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reviews__body {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}

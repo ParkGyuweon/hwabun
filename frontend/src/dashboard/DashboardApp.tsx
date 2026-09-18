@@ -75,7 +75,7 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점',
   },
   orders: {
-    section: 'orders', tab: '주문', scope: 'feedback',
+    section: 'orders', tab: '주문', scope: 'ledger',
     title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 원장 그대로',
   },
   segments: {
@@ -83,8 +83,8 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지',
   },
   reviews: {
-    section: 'voice', tab: '공개 리뷰', scope: 'behavior',
-    title: '공개 리뷰', desc: '피부 타입에 따라 갈리는 평가와 자극 언급',
+    section: 'voice', tab: '공개 리뷰', scope: 'ledger',
+    title: '공개 리뷰', desc: '내 상품에 결제한 회원이 남긴 별점과 원문 · 자극·트러블 언급',
   },
   feedback: {
     section: 'voice', tab: '받은 피드백', scope: 'feedback',
@@ -344,7 +344,7 @@ export default function DashboardApp() {
         {screen === 'segments' ? <SegmentsScreen /> : null}
         {screen === 'behavior' ? <BehaviorScreen /> : null}
         {screen === 'reviews' ? (
-          <ReviewsScreen productId={productId} onProductChange={setProductId} />
+          <ReviewsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'ingredients' ? (
           <IngredientsScreen productId={productId} onProductChange={setProductId} />
@@ -371,7 +371,8 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
   const { anyReal } = useBehavior();
   const label = SCOPE_LABEL[scope];
   const live = scope === 'behavior' && anyReal && brandName !== null;
-  const brand = live && brandName ? brandName : label.brand;
+  // 원장 스코프는 언제나 로그인한 브랜드다. 이름을 아직 못 받았으면 고정 라벨로
+  const brand = (live || scope === 'ledger') && brandName ? brandName : label.brand;
   const source = live ? '행동 마트 실측 · 로그인한 브랜드' : label.source;
   return (
     <p className="main__scope" title={source}>

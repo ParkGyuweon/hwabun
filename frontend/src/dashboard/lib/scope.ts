@@ -15,7 +15,11 @@ import { DEMO_BRAND } from '../../mocks/products';
 export const BEHAVIOR_BRAND = 'Drunk Elephant';
 export const FEEDBACK_BRAND = DEMO_BRAND;
 
-export type ScopeKind = 'behavior' | 'feedback';
+/**
+ * `ledger` 는 2026-09-18 에 더했다. 주문·정산·공개 리뷰는 마트도 시드도 아니고 **쇼핑몰 원장을 로그인한 브랜드로**
+ * 읽는다. 전에는 리뷰가 `behavior`(세포라 시드) 라벨을 달고 Drunk Elephant 리뷰를 보여줬다.
+ */
+export type ScopeKind = 'behavior' | 'feedback' | 'ledger';
 
 export const SCOPE_LABEL: Record<ScopeKind, { brand: string; what: string; source: string }> = {
   behavior: {
@@ -27,5 +31,10 @@ export const SCOPE_LABEL: Record<ScopeKind, { brand: string; what: string; sourc
     brand: FEEDBACK_BRAND,
     what: '피드백·상품 등록',
     source: '시연 브랜드 · 피드백 30건 분류',
+  },
+  ledger: {
+    brand: FEEDBACK_BRAND,
+    what: '주문·리뷰 원장',
+    source: '쇼핑몰 백엔드 실측 · 로그인한 브랜드',
   },
 };
