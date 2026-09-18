@@ -485,6 +485,39 @@
   margin: 10px 0 0;
 }
 
+/* 주문 5건씩 넘기는 번호 — ‹ 1 2 3 4 5 › */
+.mypage__pager {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.mypage__pager-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--a-line, #e5e5ea);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--a-ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mypage__pager-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.mypage__pager-btn.is-current {
+  background: var(--a-ink, #1d1d1f);
+  border-color: var(--a-ink, #1d1d1f);
+  color: #fff;
+  font-weight: 600;
+}
+
 .mypage__actions {
   display: flex;
   align-items: center;

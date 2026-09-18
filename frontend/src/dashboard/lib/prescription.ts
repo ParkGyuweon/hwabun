@@ -2,6 +2,7 @@ import { labelKo } from '../../lib/formLabels';
 import type { BehaviorMetrics } from './behavior';
 import type { ContentAttention } from './metrics';
 import { SKIN_TYPE_KO, fmt } from './metrics';
+import { josa } from '../../lib/format';
 
 /**
  * 처방 · "위로 올리세요" 다음 문장.
@@ -142,7 +143,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
     },
 
     ingredient_callout: {
-      how: `성분 특징을 ${after('ingredient_callout')} 바로 아래로 옮기세요. 고객이 가장 많이 드래그한 성분 ${drag3.length}개, ${drag3.join('·')}를 맨 앞 카드로 세우세요. 성분마다 무엇인지 한 줄, 이 제품에 왜 넣었는지 한 줄이면 됩니다.`,
+      how: `성분 특징을 ${after('ingredient_callout')} 바로 아래로 옮기세요. 고객이 가장 많이 드래그한 성분 ${drag3.length}개, ${josa(drag3.join('·'), '을/를')} 맨 앞 카드로 세우세요. 성분마다 무엇인지 한 줄, 이 제품에 왜 넣었는지 한 줄이면 됩니다.`,
       basis: [
         {
           from: '무엇을 보고 사나',

@@ -49,6 +49,8 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
 
   /** 리뷰를 쓰면 그 품목의 `reviewed` 가 바뀌므로 목록을 다시 받는다 */
   const [ordersNonce, setOrdersNonce] = useState(0);
+  /** 주문 목록 페이지. 5건씩 — 다 펼치면 로그아웃이 화면 밖으로 밀려난다 (2026-09-18) */
+  const [page, setPage] = useState(1);
   const reloadOrders = useCallback(() => setOrdersNonce((n) => n + 1), []);
 
   useEffect(() => {
@@ -57,6 +59,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
       if (cancelled) return;
       if (result.ok) {
         setOrders(result.orders);
+        setPage(1);
         setOrdersError(null);
       } else {
         setOrders([]);
@@ -148,7 +151,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
             <p className="mypage__empty">결제 완료된 주문이 없습니다.</p>
           ) : (
             <ul className="mypage__orders">
-              {orders.map((o) => (
+              {orders.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE).map((o) => (
                 <li key={o.orderId} className="mypage__order">
                   <div className="mypage__order-head">
                     <span className="mypage__order-id">주문 {o.orderId.slice(0, 8)}</span>
@@ -184,7 +187,45 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
               ))}
             </ul>
           )}
-          <p className="mypage__note">백엔드에서 확인된 결제 완료 주문만 표시됩니다.</p>
+          {orders.length > ORDERS_PER_PAGE ? (
+            <nav className="mypage__pager" aria-label="주문 페이지">
+              <button
+                type="button"
+                className="mypage__pager-btn"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="이전"
+              >
+                ‹
+              </button>
+              {pageNumbers(page, Math.ceil(orders.length / ORDERS_PER_PAGE)).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`mypage__pager-btn${n === page ? ' is-current' : ''}`}
+                  aria-current={n === page ? 'page' : undefined}
+                  onClick={() => setPage(n)}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="mypage__pager-btn"
+                disabled={page >= Math.ceil(orders.length / ORDERS_PER_PAGE)}
+                onClick={() => setPage((p) => Math.min(Math.ceil(orders.length / ORDERS_PER_PAGE), p + 1))}
+                aria-label="다음"
+              >
+                ›
+              </button>
+            </nav>
+          ) : null}
+          <p className="mypage__note">
+            백엔드에서 확인된 결제 완료 주문만 표시됩니다.
+            {orders.length > ORDERS_PER_PAGE
+              ? ` 전체 ${orders.length}건 중 ${(page - 1) * ORDERS_PER_PAGE + 1}–${Math.min(orders.length, page * ORDERS_PER_PAGE)}건.`
+              : ''}
+          </p>
         </section>
 
         <footer className="mypage__foot">
@@ -203,6 +244,16 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
     </div>,
     document.body,
   );
+}
+
+/** 한 페이지에 보이는 주문 수 */
+const ORDERS_PER_PAGE = 5;
+
+/** 현재 페이지를 가운데 둔 번호 다섯 개. 페이지가 다섯 미만이면 있는 만큼 */
+function pageNumbers(current: number, total: number): number[] {
+  const span = Math.min(5, total);
+  const start = Math.max(1, Math.min(current - Math.floor(span / 2), total - span + 1));
+  return Array.from({ length: span }, (_, i) => start + i);
 }
 
 function formatWhen(iso: string): string {

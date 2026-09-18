@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Actions, BarList, Kpi, OriginBadge, Panel, Scatter } from '../components';
 import { fmt } from '../lib/metrics';
+import { josa } from '../../lib/format';
 import { useBehavior } from '../lib/useBehavior';
 import { usePrescriptions } from '../lib/prescriptionApi';
 import { labelKo } from '../../lib/formLabels';
@@ -100,8 +101,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           이 화면이 말하는 것 <OriginBadge kind="mine" />
         </p>
         <h2 className="verdict__headline">
-          {firstUp ? `${firstUp.ko}를 위로 올리고, ` : ''}
-          {firstFix ? `${firstFix.ko}을 손보세요` : '지금 순서를 그대로 두세요'}
+          {firstUp ? `${josa(firstUp.ko, '을/를')} 위로 올리고, ` : ''}
+          {firstFix ? `${josa(firstFix.ko, '을/를')} 손보세요` : '지금 순서를 그대로 두세요'}
         </h2>
         <ul className="verdict__reasons">
           <li>

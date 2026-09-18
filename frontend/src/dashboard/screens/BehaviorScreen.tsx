@@ -1,5 +1,6 @@
 import { BarList, Funnel, Kpi, OriginBadge, Panel } from '../components';
 import { fmt } from '../lib/metrics';
+import { josa } from '../../lib/format';
 import { useBehavior } from '../lib/useBehavior';
 
 /**
@@ -39,7 +40,7 @@ export default function BehaviorScreen() {
           </ul>
           <p className="verdict__action">
             <span className="verdict__unit">상세페이지</span>
-            {worst.where}를 눌렀을 때 무엇이 일어나는지 먼저 확인해 보세요
+            {josa(worst.where, '을/를')} 눌렀을 때 무엇이 일어나는지 먼저 확인해 보세요
           </p>
         </section>
       ) : null}
