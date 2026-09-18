@@ -3,9 +3,11 @@ import { BarList, Kpi, Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import { fetchSellerOrders } from '../../lib/shopApi';
 import type { SellerOrder } from '../../lib/shopApi';
-import { rangeOf } from '../lib/martApi';
 import { useBrandProducts } from '../lib/useBrandProducts';
 import { categoryKo } from '../../lib/localize';
+import { DateRangePicker } from '../lib/DateRangePicker';
+import { presetRange } from '../lib/dateRange';
+import type { DateRange } from '../lib/dateRange';
 
 /**
  * 주문 (`docs/dashboard/seller-console-gaps.md` §5).
@@ -19,14 +21,24 @@ import { categoryKo } from '../../lib/localize';
  *
  * 값이 없으면 0 과 "-" 다. 모의로 채우지 않는다.
  */
+/**
+ * 결제 시각을 초까지 보여준다.
+ *
+ * 예전에는 `slice(0, 16)` 으로 분까지만 잘라 냈다. 주문이 몰리는 시간대에는 분 단위로 순서를 가릴 수
+ * 없어서, 어느 게 먼저 결제됐는지 표만 봐서는 알 수 없었다. 서버가 초를 정확히 주므로(고정 형식,
+ * `SellerOrderController.text`) 화면도 그대로 보여준다.
+ */
+function formatOrderedAt(value: string | null): string {
+  if (!value) return '-';
+  return value.slice(0, 19).replace('T', ' ');
+}
+
 export default function OrdersScreen({
   brandId,
   brandName,
-  days,
 }: {
   brandId: string | null;
   brandName: string | null;
-  days: number;
 }) {
   // 등록 상품 전체. "판매된 적 없는 상품" 을 고르려면 판 것만으로는 알 수 없다
   const { products: myProducts } = useBrandProducts(brandId, brandName);
@@ -34,7 +46,14 @@ export default function OrdersScreen({
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
-  const range = useMemo(() => rangeOf(days), [days]);
+  /*
+   * 행동 마트가 쓰는 `days`(7·14·30) 와 다른 자체 기간이다. 주문은 쇼핑몰 원장을 직접 읽어서
+   * 임의의 시작·끝 날짜를 그대로 받을 수 있고, "지난달 이맘때" 처럼 구체적인 기간을 물어보는 자리라
+   * 프리셋 세 개로는 부족하다. 기본은 최근 7일 — 조회 즉시 뭔가 보이는 값이 좋다.
+   */
+  const [range, setRange] = useState<DateRange>(() => presetRange('last7'));
+  /** 화면에 적을 기간 문구. 하루짜리면 그 날짜 하나만, 아니면 시작~끝 */
+  const rangeLabel = range.from === range.to ? range.from : `${range.from} ~ ${range.to}`;
 
   useEffect(() => {
     if (!brandId) return;
@@ -146,8 +165,10 @@ export default function OrdersScreen({
 
   return (
     <div className="stack">
+      <DateRangePicker value={range} onChange={setRange} />
+
       <div className="grid grid--kpi">
-        <Kpi label="기간 매출" value={won(totals.revenue)} sub={`결제 완료 · 최근 ${days}일`} source="real" />
+        <Kpi label="기간 매출" value={won(totals.revenue)} sub={`결제 완료 · ${rangeLabel}`} source="real" />
         <Kpi label="주문 수" value={`${fmt.int(totals.count)}건`} sub="내 브랜드 상품이 포함된 주문" source="real" />
         <Kpi
           label="구매 고객 수"
@@ -164,7 +185,7 @@ export default function OrdersScreen({
         />
       </div>
 
-      <Panel title={`일별 매출 · 최근 ${days}일`} source="real" aside={daily.length === 0 ? '-' : `${daily.length}일`}>
+      <Panel title={`일별 매출 · ${rangeLabel}`} source="real" aside={daily.length === 0 ? '-' : `${daily.length}일`}>
         {daily.length === 0 ? (
           <p className="note">이 기간에 결제된 주문이 없습니다.</p>
         ) : (
@@ -219,7 +240,7 @@ export default function OrdersScreen({
                     className="is-clickable"
                     onClick={() => setOpen((cur) => (cur === o.order_id ? null : o.order_id))}
                   >
-                    <td>{(o.ordered_at ?? '-').slice(0, 16).replace('T', ' ')}</td>
+                    <td>{formatOrderedAt(o.ordered_at)}</td>
                     <td>
                       <span className="table__code">{o.order_id}</span>
                     </td>
@@ -284,7 +305,7 @@ export default function OrdersScreen({
       </Panel>
 
       <Panel
-        title={`최근 ${days}일 동안 안 팔린 상품`}
+        title={`${rangeLabel} 동안 안 팔린 상품`}
         source="real"
         aside={unsold === null ? '불러오는 중' : unsold.length === 0 ? '없음' : `${unsold.length}개`}
       >
