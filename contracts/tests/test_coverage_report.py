@@ -29,6 +29,22 @@ class PropertyContractCoverageTest(unittest.TestCase):
             self.enums["quick_look_close.close_reason"],
         )
 
+    def test_contract_parser_reads_impression_origin_enum_and_type(self) -> None:
+        self.assertEqual(
+            {"observed", "implied_by_click"},
+            self.enums["impression_origin"],
+        )
+        for event_name in (
+            "banner_impression",
+            "product_impression",
+            "recommendation_impression",
+        ):
+            self.assertIn("impression_origin", self.spec[event_name]["all"])
+            self.assertEqual(
+                "string",
+                self.spec[event_name]["types"]["impression_origin"],
+            )
+
     def test_valid_sample_has_no_property_violations(self) -> None:
         result = check_properties(load_events(VALID_SAMPLE_PATH), self.spec, self.enums)
 
@@ -76,6 +92,60 @@ class PropertyContractCoverageTest(unittest.TestCase):
 
         self.assertIn(
             (("scroll_pause", "visible_content_kinds", "string[]", "string"), 1),
+            result["invalid_types"],
+        )
+
+    def _product_impression(self, **overrides):
+        props = {
+            "list_id": "search:all",
+            "position": 1,
+            "hold_ms": 1200,
+            "visible_ratio": 0.8,
+            "impression_origin": "observed",
+        }
+        props.update(overrides)
+        return {"event_name": "product_impression", "properties": props}
+
+    def test_impression_origin_accepts_contract_values(self) -> None:
+        events = [
+            self._product_impression(impression_origin="observed"),
+            self._product_impression(impression_origin="implied_by_click"),
+        ]
+
+        result = check_properties(events, self.spec, self.enums)
+
+        self.assertEqual([], result["missing"])
+        self.assertEqual([], result["invalid_types"])
+        self.assertEqual([], result["invalid_enums"])
+
+    def test_impression_origin_is_required(self) -> None:
+        event = self._product_impression()
+        del event["properties"]["impression_origin"]
+
+        result = check_properties([event], self.spec, self.enums)
+
+        self.assertIn(
+            (("product_impression", "impression_origin"), 1),
+            result["missing"],
+        )
+
+    def test_impression_origin_rejects_unknown_value(self) -> None:
+        event = self._product_impression(impression_origin="synthetic")
+
+        result = check_properties([event], self.spec, self.enums)
+
+        self.assertIn(
+            (("product_impression", "impression_origin", "synthetic"), 1),
+            result["invalid_enums"],
+        )
+
+    def test_impression_origin_rejects_non_string_value(self) -> None:
+        event = self._product_impression(impression_origin=True)
+
+        result = check_properties([event], self.spec, self.enums)
+
+        self.assertIn(
+            (("product_impression", "impression_origin", "string", "boolean"), 1),
             result["invalid_types"],
         )
 

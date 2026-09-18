@@ -156,7 +156,8 @@ def parse_property_contract(path):
     enum_started = False
 
     for line in lines:
-        enum_heading = re.match(r"^###\s+3\.\d+\s+`([^`]+)`", line)
+        # 보조 절 번호(예: 3.12-1)도 Property Enum 정의로 읽는다.
+        enum_heading = re.match(r"^###\s+3\.\d+(?:-\d+)*\s+`([^`]+)`", line)
         if enum_heading:
             enum_key = enum_heading.group(1)
             enums[enum_key] = set()
@@ -530,8 +531,8 @@ def main(argv=None):
                 for (n, k, value), c in props["invalid_enums"]:
                     print(f"      {n:<28} {k:<24} {value:<24} {c:>8,}")
             print()
-            print("      이 위반은 Collector 를 그냥 통과한다 (properties 를 JsonNode 로 넘김).")
-            print("      bad_events 에도 안 남으므로 여기서 세지 않으면 아무도 모른다.")
+            print("      런타임 계층은 Event별 properties 계약 전체를 강제하지 않는다.")
+            print("      이 검사기를 실행하지 않으면 일부 위반은 관측되지 않을 수 있다.")
 
     # 페르소나별
     if a.group_by_persona and personas:

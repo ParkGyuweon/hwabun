@@ -188,8 +188,9 @@ Properties 계약에 반영한 Front 실제 값:
 | PA Agent | Agent 행동 Event의 동일 계약 준수 여부 미검증 | PA 샘플을 같은 검증기로 확인 |
 | Spark Q2 | 공통 필드·synthetic metadata만 검사 | required/type/enum 위반을 `bad_events`로 격리 |
 
-Collector는 현재 공통 Envelope와 synthetic runtime metadata를 검증하지만 Event별
-properties 전체는 `JsonNode`로 통과시킨다. 이 차이는 HTTP 200만으로 확인할 수 없어
+Collector는 현재 공통 Envelope와 synthetic runtime metadata, 구매·배너 Event의 일부
+properties를 검증하지만 Event별 properties 계약 전체를 강제하지는 않는다. 이 차이는
+HTTP 200만으로 확인할 수 없어
 `contracts/coverage_report.py`가 계약 문서의 required property, 타입, enum을 직접 읽어
 검사한다. Spark semantic validation 반영 전까지 이 검증 결과를 구현 인수 기준으로
 사용한다.

@@ -358,11 +358,11 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`, `impression_origin: observed\|implied_by_click`; top-level `product_id` 필수 | `policy_version: string` |
+| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`, `impression_origin: string`; top-level `product_id` 필수 | `policy_version: string` |
 | `banner_click` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
-| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: observed\|implied_by_click` | `impression_area: string`, `dedupe_key: string` |
+| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: string` | `impression_area: string`, `dedupe_key: string` |
 | `product_click` | 없음 | `list_id: string`, `position: integer`, `entry_source: string`, `impression_event_id: string`, `context_product_id: string` |
-| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: observed\|implied_by_click` | `section_id: string`, `context_product_id: string` |
+| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: string` | `section_id: string`, `context_product_id: string` |
 | `recommendation_click` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string` | `section_id: string`, `impression_event_id: string`, `context_product_id: string` |
 | `impression_dwell` | `list_id: string`, `position: integer`, `visible_ms: integer` | `recommendation_id: string`, `algorithm: string`, `context_product_id: string` |
 | `recommendation_snapshot` | `recommendation_id: string`, `list_id: string`, `algorithm: string`, `size: integer`, `ranking: object[]` | 없음 |
