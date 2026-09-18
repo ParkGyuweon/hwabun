@@ -20,6 +20,15 @@ server:
 recommendation:
   url: ${RECOMMEND_URL:http://localhost:8300}
   timeout-ms: ${RECOMMEND_TIMEOUT_MS:300}
+  feedback-timeout-ms: ${RECOMMEND_FEEDBACK_TIMEOUT_MS:30000}
+
+shop:
+  feedback:
+    classify:
+      cron: ${SHOP_FEEDBACK_CLASSIFY_CRON:0 0 6 * * *}
+      batch-size: ${SHOP_FEEDBACK_CLASSIFY_BATCH_SIZE:200}
+  test-pay:
+    allowed-member-prefix: ${TEST_PAY_ALLOWED_MEMBER_PREFIX:}
 
 portone:
   api-url: ${PORTONE_API_URL:https://api.portone.io}
@@ -31,10 +40,6 @@ portone:
 # 프론트의 ?pay=test·navigator.webdriver 판정은 보호 장치가 아니다. 로그인한 사람이면 누구나 토큰으로
 # 이 엔드포인트를 직접 부를 수 있어서, 실제 차단은 여기서 한다.
 # 빈 값이면 제한하지 않는다 — 로컬 개발은 막히면 안 된다. 배포에서만 PA 로 채운다.
-shop:
-  test-pay:
-    allowed-member-prefix: ${TEST_PAY_ALLOWED_MEMBER_PREFIX:}
-
 management:
   metrics:
     tags:
