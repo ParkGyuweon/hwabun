@@ -533,14 +533,15 @@ input = product_event_fact, purchase_fact, dim_product
 **노출 Event는 셋이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
 하나에 노출 Event를 정확히 하나만 낸다.
 
-선행 노출 없이 클릭이 발생해 클릭 직전에 보강한 합성 노출
-(`impression_origin=implied_by_click`)도 관측 노출과 동일하게 `impression_count`와
-CTR 분모에 포함한다. 합성 여부는 분석용 구분이지 분모 제외 조건이 아니다.
+선행 노출 없이 클릭이나 Quick Look 열기가 발생해 그 직전에 보강한 합성 노출
+(`impression_origin` = `implied_by_click` · `implied_by_quick_look`)도 관측 노출과
+동일하게 `impression_count`와 CTR 분모에 포함한다. 합성 여부는 분석용 구분이지 분모
+제외 조건이 아니다.
 
-합성 노출은 2026-09-18 프론트 머지부터 실제로 발행되지만 **`impression_origin` 값은 아직
-실리지 않는다**(`event-properties-schema.md` §3.12-1). 합성 노출이 일반 노출과 같은
-`event_name`으로 나가므로 위 분모 규칙은 마커 없이도 그대로 성립하고, Mart는 손댈 것이
-없다. 마커가 없어 불가능한 것은 분모를 나누는 일(관측분·합성분 분해)뿐이다.
+합성 노출이 일반 노출과 같은 `event_name`으로 나가므로 위 분모 규칙은 마커와 무관하게
+성립하고, **Mart는 손댈 것이 없다.** 마커가 있어야 가능해지는 것은 분모를 나누는 일
+(관측분·합성분 분해)뿐이며, 그 분해 컬럼은 읽는 화면이 생길 때 DDL 변경과 함께 따로
+연다 — 발행이 성공한 뒤에는 ALTER 가 어려우므로 소비처 없이 미리 만들지 않는다.
 
 | 자리 | 노출 Event |
 | --- | --- |
