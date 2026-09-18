@@ -4,7 +4,7 @@
  * 수집 파이프라인(Collector→Kafka→Spark)이 아직 데이터를 흘리기 전이라
  * 두 종류의 값이 섞여 있다. 화면은 이 구분을 배지로 드러낸다.
  *
- * - **실측**: 리뷰 2,000건과 상품 성분 문자열에서 지금 실제로 계산한 값
+ * - **실측**: 상품 성분 문자열에서 지금 실제로 계산한 값
  * - **모의**: 행동 지표. 상품 특성(리뷰 수·평점)에 비례하도록 시드 고정으로 생성.
  *   집계 API 가 붙으면 이 모듈의 함수 본문만 fetch 로 바꾸면 된다
  *
@@ -14,9 +14,7 @@
 import vocab from '../../../../contracts/product-feature-vocab.json';
 import { products as catalogData } from '../../mocks/products';
 import { BEHAVIOR_BRAND, FEEDBACK_BRAND } from './scope';
-import reviewsData from '../../mocks/reviews.sample.json';
 import type { Product } from '../../types/product';
-import type { Review } from '../../types/review';
 import { splitIngredients } from '../../lib/format';
 
 /**
@@ -38,7 +36,6 @@ export const brandProducts = catalogProducts.filter((p) => p.brand_name === BEHA
 export const products = brandProducts;
 /** 피드백·등록 화면의 상품 목록 (SSAFY Beauty) */
 export const feedbackProducts = catalogProducts.filter((p) => p.brand_name === FEEDBACK_BRAND);
-export const reviews = reviewsData as unknown as Review[];
 
 /* ---------- 시드 고정 난수 ---------- */
 
@@ -110,79 +107,6 @@ export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
   cart: '정보 확인 → 담기',
 };
 
-/** 리뷰 본문에서 찾을 표현. 데이터셋 리뷰가 영문이라 영문 패턴을 쓴다 */
-const IRRITATION_PATTERN = /irritat|sting|burn|tingl|itch|sensitiv/i;
-const TROUBLE_PATTERN = /break\s?out|breakout|acne|pimple|rash|redness|bumps/i;
-
-const FACTOR_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
-  { label: '보습감', pattern: /hydrat|moistur/i },
-  { label: '향', pattern: /scent|smell|fragrance/i },
-  { label: '발림성·질감', pattern: /texture|apply|absorb|greasy|sticky/i },
-  { label: '순함', pattern: /gentle|mild|calm|sooth/i },
-  { label: '윤기·톤', pattern: /glow|bright|radian|dewy/i },
-  { label: '가성비', pattern: /price|worth|expensive|value/i },
-  { label: '지속력', pattern: /last|all day|long/i },
-];
-
-export interface ReviewStats {
-  sampleSize: number;
-  withText: number;
-  avgRating: number;
-  ratingDist: number[];
-  recommendRate: number;
-  irritationRate: number;
-  troubleRate: number;
-  factors: Array<{ label: string; count: number; share: number }>;
-}
-
-export function reviewStats(productId: string | null): ReviewStats {
-  const scoped = productId ? reviews.filter((r) => r.product_id === productId) : reviews;
-  const texts = scoped.filter((r) => r.review_text);
-
-  const ratingDist = [0, 0, 0, 0, 0];
-  for (const r of scoped) ratingDist[Math.min(4, Math.max(0, Math.round(r.rating) - 1))] += 1;
-
-  const recommended = scoped.filter((r) => r.is_recommended !== null);
-
-  const factors = FACTOR_PATTERNS.map(({ label, pattern }) => {
-    const count = texts.filter((r) => pattern.test(r.review_text as string)).length;
-    return { label, count, share: texts.length === 0 ? 0 : count / texts.length };
-  }).sort((a, b) => b.count - a.count);
-
-  return {
-    sampleSize: scoped.length,
-    withText: texts.length,
-    avgRating: scoped.length === 0 ? 0 : scoped.reduce((s, r) => s + r.rating, 0) / scoped.length,
-    ratingDist,
-    recommendRate:
-      recommended.length === 0
-        ? 0
-        : recommended.filter((r) => r.is_recommended).length / recommended.length,
-    irritationRate:
-      texts.length === 0
-        ? 0
-        : texts.filter((r) => IRRITATION_PATTERN.test(r.review_text as string)).length /
-          texts.length,
-    troubleRate:
-      texts.length === 0
-        ? 0
-        : texts.filter((r) => TROUBLE_PATTERN.test(r.review_text as string)).length / texts.length,
-    factors,
-  };
-}
-
-/** 자극·트러블 언급 비율 상위 상품 (실측) */
-export const troubleRanking = products
-  .map((p) => {
-    const stats = reviewStats(p.product_id);
-    return {
-      product: p,
-      irritationRate: stats.irritationRate,
-      troubleRate: stats.troubleRate,
-      sampleSize: stats.withText,
-    };
-  })
-  .sort((a, b) => b.troubleRate + b.irritationRate - (a.troubleRate + a.irritationRate));
 
 /* ---------- 성분 분석 (실측) ---------- */
 
@@ -314,31 +238,6 @@ export interface IngredientGapRow {
   gap: boolean;
   /** 보유하지만 전부 미량(위치가중 ≤ 0.3) */
   minor: boolean;
-}
-
-export interface SkinReviewRow {
-  type: string;
-  n: number;
-  avgRating: number;
-  irritationRate: number;
-}
-
-/**
- * 피부 타입별 평점·자극 언급. 리뷰어 skin_type 은 원천에 있어 전부 실측이다.
- * 같은 상품이 건성 4.6 / 지성 3.4 처럼 갈리면 타깃 문구를 갈라 쓸 근거다 (명세 R1·R2).
- */
-export function reviewsBySkinType(productId: string | null): SkinReviewRow[] {
-  const scoped = productId ? reviews.filter((r) => r.product_id === productId) : reviews.filter((r) => products.some((p) => p.product_id === r.product_id));
-  return ['dry', 'oily', 'combination', 'normal'].map((type) => {
-    const rows = scoped.filter((r) => r.skin_type === type);
-    const texts = rows.filter((r) => r.review_text);
-    return {
-      type,
-      n: rows.length,
-      avgRating: rows.length === 0 ? 0 : rows.reduce((s, r) => s + r.rating, 0) / rows.length,
-      irritationRate: texts.length === 0 ? 0 : texts.filter((r) => IRRITATION_PATTERN.test(r.review_text as string)).length / texts.length,
-    };
-  });
 }
 
 /* ---------- 막히는 곳 보조 (모의) ---------- */
