@@ -110,6 +110,9 @@ services:
       DEMO_CURRENCY: ${DEMO_CURRENCY:-KRW}
       SPARK_MASTER_UI: ${SPARK_MASTER_UI:-}
       DASHBOARD_URL: ${DASHBOARD_URL:-}
+      # /pipeline 의 dw 칸이 행 수를 세는 대상 (Jira 359). 비우면 pipeline_stats.py 내장 22종.
+      # EC2-2 의 발행 대상과 같은 목록이어야 한다 — 다르면 발행은 됐는데 화면에 안 잡힌다.
+      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-}
       NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
     volumes:
       - recommend-data:/data
