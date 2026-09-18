@@ -2065,6 +2065,34 @@ table.data tr:hover td {
   white-space: nowrap;
 }
 
+/* 판매량 줄 — 오늘 · 이번 달 · 누적 (쇼핑몰 원장 실측) */
+.myproducts__sales {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.myproducts__sales b {
+  color: var(--ink);
+}
+
+.myproducts__tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.myproducts__item.is-best {
+  background: rgba(0, 0, 0, 0.025);
+  border-radius: 10px;
+}
+
 /* ---------- 주문 표 (줄을 누르면 품목이 펴진다) ---------- */
 
 .table tr.is-clickable {
