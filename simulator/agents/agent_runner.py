@@ -101,7 +101,8 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback")
+           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback",
+           "write_review")
 # 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
 # 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
 FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
@@ -1066,6 +1067,148 @@ def norm_label(t):
     return t
 
 
+# ── 리뷰 쓰기 (Jira 356) ──────────────────────────────────────────────────
+#  리뷰 칸은 **마이페이지 모달** 안에 있다 (AccountMenu 의 "내 정보" → MyPage → 주문 품목마다
+#  WriteReview). 라우트가 아니라 모달이라 URL 이 안 바뀌고, 뒤로가기로는 갈 수 없다.
+#
+#  ⚠ 셀렉터를 두 겹으로 잡는다. 프론트가 요청한 data-log-action 5개는
+#    S15P21A306-fe-buyer-reviews 브랜치에 있는데 dev·배포본에는 아직 없다(머지 뒤 추가됨).
+#    배포본 번들 실측: writereview 클래스는 있고 write_review_open 은 0건.
+#    속성을 먼저 찾고 없으면 클래스로 간다 — 지금도 돌고, 머지되면 자동으로 안전해진다.
+REVIEW_MAX_CHARS = 300
+REVIEW_MIN_CHARS = 20          # 프론트 MIN_BODY 보다 넉넉히. 짧으면 제출 버튼이 안 열린다
+
+
+def _first(page, *selectors):
+    """앞에서부터 실제로 있는 것을 돌려준다. 없으면 None."""
+    for sel in selectors:
+        loc = page.locator(sel)
+        try:
+            if loc.count():
+                return loc.first
+        except Exception:
+            continue
+    return None
+
+
+def open_mypage(page):
+    """헤더 "내 정보" 로 마이페이지 모달을 열고 주문 목록이 그려질 때까지 기다린다."""
+    btn = _first(page, '[data-log-action="open_mypage"]', ".account__btn--me")
+    if btn is None:
+        return False                       # 로그인 상태가 아니다
+    if not click_safe(btn, page):
+        return False
+    # 프론트가 모달을 열 때 주문 목록을 다시 받는다(ordersNonce). 품목이 나타날 때까지 기다린다
+    for _ in range(20):
+        page.wait_for_timeout(400)
+        if page.locator('[data-log-state="orders_ready"]').count():
+            break
+        if page.locator(".mypage__order-item").count():
+            break
+    return bool(page.locator(".mypage__order-item").count())
+
+
+def write_review(page, client, persona, cache_on, dry):
+    """마이페이지 주문 품목에 별점과 리뷰를 남긴다.
+
+    **미리 써 둔 문장을 고르지 않고 그 자리에서 쓴다** — write_feedback 과 같은 이유다.
+    그 사람이 실제로 산 상품과 피부 타입·고민이 글에 묻어나야 판매자 화면이 값어치를 가진다.
+
+    리뷰는 행동 로그에 남지 않는다(review_submit 이벤트는 만들지 않기로 확정). `review`
+    테이블에만 쌓이고 대시보드 리뷰 탭이 그것을 읽는다.
+
+    돌려주는 것: 보냈으면 (상품명, 별점, 글), 못 보냈으면 None.
+    """
+    if not open_mypage(page):
+        return None
+
+    # 아직 리뷰를 안 쓴 품목만. 쓴 품목은 writereview__done 으로 바뀐다
+    items = page.locator(".mypage__order-item")
+    target = None
+    for i in range(min(items.count(), 20)):
+        li = items.nth(i)
+        try:
+            if li.locator(".writereview__done").count():
+                continue
+            if _first_in(li) is None:
+                continue
+            target = li
+            break
+        except Exception:
+            continue
+    if target is None:
+        return None
+
+    try:
+        name = target.locator(".mypage__order-item-name").inner_text(timeout=1500)
+        name = name.split(NL)[0].strip()
+    except Exception:
+        name = "이 제품"
+
+    concerns = ", ".join(persona.get("concerns") or []) or "없음"
+    sys_p = ("너는 화장품을 사서 써 본 소비자다. 그 상품에 리뷰를 남긴다. "
+             "광고 문구가 아니라 실제로 써 본 사람의 말투로, 좋았던 점과 아쉬운 점을 "
+             "구체적으로 짚어서 쓴다. "
+             'JSON 만 답한다: {"rating": <1~5 정수>, "body": "<한국어 2~3문장>"}')
+    usr_p = NL.join([
+        "제품: %s" % name,
+        "피부 타입: %s · 피부 톤: %s · 고민: %s" % (
+            persona.get("skin_type") or "모름",
+            persona.get("skin_tone") or "모름",
+            concerns),
+        "별점은 실제 만족도대로. 다 5점을 주지 않는다.",
+        "본문은 %d자 이내, %d자 이상." % (REVIEW_MAX_CHARS, REVIEW_MIN_CHARS),
+    ])
+    obj = ask(client, sys_p, usr_p, cache_on, dry)
+    if not obj:
+        return None
+    try:
+        rating = int(obj.get("rating") or 0)
+    except (TypeError, ValueError):
+        return None
+    body = str(obj.get("body") or "").strip()[:REVIEW_MAX_CHARS]
+    if not 1 <= rating <= 5 or len(body) < REVIEW_MIN_CHARS:
+        return None
+
+    try:
+        opener = _first_in(target)
+        if opener is None or not click_safe(opener, page):
+            return None
+        page.wait_for_timeout(random.randint(300, 900))
+        star = _first(page, '[data-log-action="review_rating"][data-rating="%d"]' % rating,
+                      ".writereview__stars button:nth-of-type(%d)" % rating)
+        if star is not None:
+            click_safe(star, page)
+            page.wait_for_timeout(random.randint(200, 600))
+        field = _first(page, '[data-log-action="review_body"]', ".writereview__body")
+        if field is None:
+            return None
+        field.fill(body, timeout=4000)
+        page.wait_for_timeout(random.randint(500, 1600))     # 쓰고 잠깐 읽어 보는 시간
+        send = _first(page, '[data-log-action="review_submit"]', ".writereview__send")
+        if send is None or not click_safe(send, page):
+            return None
+        page.wait_for_timeout(1200)
+    except Exception:
+        return None
+    # 보냈으면 그 품목이 "리뷰 작성 완료" 로 바뀐다
+    if not page.locator(".writereview__done").count():
+        return None
+    return (name, rating, body)
+
+
+def _first_in(li):
+    """품목 안의 "리뷰 쓰기" 버튼. 속성 우선, 없으면 클래스."""
+    for sel in ('[data-log-action="write_review_open"]', ".writereview__open"):
+        loc = li.locator(sel)
+        try:
+            if loc.count():
+                return loc.first
+        except Exception:
+            continue
+    return None
+
+
 def write_feedback(page, client, persona, product_name, cache_on, dry):
     """상품 상세의 "이 제품에 의견 남기기" 에 페르소나가 직접 글을 써서 보낸다.
 
@@ -1374,7 +1517,7 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
                     n_details=0, has_unvisited=True, cart_over=False,
                     sorted_once=False, checkout=None, has_banner=False,
-                    feedback_here=False):
+                    feedback_here=False, purchased=0, reviewed=0):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -1428,6 +1571,10 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     checkout = CHECKOUT_ENABLED if checkout is None else checkout
     if checkout and cart_size >= 1 and n_details >= MIN_DETAILS_BEFORE_LEAVE:
         acts.append("checkout")
+    # 리뷰는 **산 뒤에만** 쓸 수 있다 — 백엔드가 order_item_id 로 구매를 검증한다 (Jira 356).
+    # 한 번 쓰면 다시 열지 않는다. 품목당 리뷰 1개라 두 번째는 실패한다
+    if purchased >= 1 and reviewed < 1:
+        acts.append("write_review")
     if n_details >= MIN_DETAILS_BEFORE_LEAVE or not has_unvisited:
         acts.append("leave")
     return acts
@@ -1529,6 +1676,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     system = SYSTEM_TMPL.format(profile=profile_text(persona), category_rule=category_rule,
                                 actions=" | ".join(f'"{a}"' for a in ACTIONS))
     calls, done, failed, carted, purchased, banner_clicks = 0, 0, 0, 0, 0, 0
+    reviewed = 0
     sorted_once = False      # 목록 정렬은 세션당 한 번 (Jira 321)
 
     history = []          # 최근 행동. 없으면 LLM 이 같은 판단을 무한 반복한다
@@ -1583,6 +1731,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                                    budget is not None and v > budget
                                    for v in cart_prices.values()),
                                sorted_once=sorted_once,
+                               purchased=purchased, reviewed=reviewed,
                                has_banner=(kind == "list" and bool(read_banner(page))),
                                feedback_here=any(
                                    norm(f) and (norm(f) in norm(here) or norm(here) in norm(f))
@@ -1688,6 +1837,22 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             okd = False
             if verbose:
                 print(f"       [조작 실패] {type(e).__name__}: {str(e)[:70]}")
+        if act == "write_review":
+            # do_action 은 DOM 조작만 한다. 리뷰는 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서
+            # 처리한다. **집계(done/failed)보다 앞이어야 한다** (write_feedback 과 같은 이유)
+            got = None
+            if client:
+                try:
+                    got = write_review(page, client, persona, cache_on, dry)
+                except Exception:
+                    got = None
+            okd = bool(got)
+            if okd:
+                reviewed += 1
+                name, rating, _ = got
+                if verbose:
+                    print(f"       [리뷰] {name[:24]} {rating}점")
+
         if act == "write_feedback":
             # do_action 은 DOM 조작만 한다. 의견은 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서 처리한다.
             # **집계(done/failed)와 history 보다 앞이어야 한다** — 뒤에 두면 성공해도 실패로 세고
@@ -1772,7 +1937,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             break                                # 프롬프트 확인용이므로 한 턴만
     return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased,
                 feedbacks=feedbacks,
-                banner_clicks=banner_clicks, broken=broken)
+                banner_clicks=banner_clicks, broken=broken, reviewed=reviewed)
 
 
 # ============================================================================
@@ -2010,7 +2175,8 @@ def main():
         print(f"판단 근거 {dec_path}")
 
     from playwright.sync_api import sync_playwright
-    tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, banner_clicks=0, broken=0)
+    tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, banner_clicks=0, broken=0,
+               reviewed=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -2088,7 +2254,7 @@ def main():
     dt = time.time() - t0
     print()
     print("=" * 60)
-    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건 / 배너 클릭 {tot['banner_clicks']}건")
+    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건 / 배너 클릭 {tot['banner_clicks']}건 / 리뷰 {tot['reviewed']}건")
     if tot.get("broken"):
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회"
               f" — AboutProduct.tsx 크래시는 2026-09-02 고쳐졌으므로 다른 원인입니다")
