@@ -18,7 +18,6 @@ import {
   type ProductMetrics,
   MINOR_WEIGHT,
   ingredientWeights,
-  brandProducts as myLineProducts,
 } from './metrics';
 import vocab from '../../../../contracts/product-feature-vocab.json';
 
@@ -293,7 +292,8 @@ export interface IngredientInterestInput {
  * 관심 30종 × 내 라인 보유 (실측). metrics.ts 의 ingredientGap 과 같은 규칙이고, 관심 입력만 밖에서 받는다.
  * 어휘집에 없는 성분 이름은 보유 판정을 할 수 없어 표에서 뺀다 (마트 vocab_version 이 다를 때 조용히 틀리는 것보다 낫다).
  */
-export function buildIngredientGap(interest: IngredientInterestInput[], brandProducts: Product[] = myLineProducts): IngredientGapRow[] {
+// 내 라인 상품은 **호출부가 준다**. 기본값으로 고정 브랜드 목록을 두면 남의 상품으로 보유 판정이 된다
+export function buildIngredientGap(interest: IngredientInterestInput[], brandProducts: Product[]): IngredientGapRow[] {
   const weightsByProduct = brandProducts.map((p) => ({ product: p, weights: ingredientWeights(p) }));
   const rows: IngredientGapRow[] = interest
     .map((i) => ({ ...i, name: canonicalIngredient(i.name) ?? '' }))

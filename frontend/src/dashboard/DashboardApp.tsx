@@ -346,11 +346,11 @@ export default function DashboardApp() {
         {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
-        {screen === 'content' ? <ContentScreen brandName={brand?.name || SCOPE_LABEL.behavior.brand} /> : null}
+        {screen === 'content' ? <ContentScreen brandName={brand?.name ?? ''} /> : null}
         {screen === 'segments' ? <SegmentsScreen /> : null}
         {screen === 'behavior' ? <BehaviorScreen /> : null}
         {screen === 'reviews' ? (
-          <ReviewsScreen productId={productId} onProductChange={setProductId} />
+          <ReviewsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'ingredients' ? (
           <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
@@ -367,18 +367,22 @@ export default function DashboardApp() {
 /**
  * 헤더의 "어느 브랜드 데이터인가" 한 줄.
  *
- * 행동·리뷰 스코프는 마트가 붙기 전까지 세포라 카탈로그의 고정 브랜드(`BEHAVIOR_BRAND`) 모의값이라
- * 그 이름을 적는 것이 정직하다. 마트 행이 실제로 쓰이면(`anyReal`) 숫자의 주인은 **로그인한 브랜드**로
- * 바뀌므로 그 이름으로 갈아끼운다. 이 줄을 고정으로 두면 브랜드 1254 로 로그인해 놓고 헤더는
- * Drunk Elephant 를 가리키게 된다 (09-15 확인. 시드가 브랜드별 판매자 계정을 넣으면서 실제로 갈릴 수 있게 됐다).
+ * **언제나 로그인한 브랜드 이름을 적는다.** 행동 지표는 마트를 로그인한 brandId 로 조회하고, 원장(주문·정산
+ * ·리뷰)과 성분도 내 브랜드 것이라 숫자의 주인은 늘 로그인한 브랜드다. 이름을 아직 못 받았으면 비워 둔다 —
+ * 남의 브랜드 이름을 적느니 비는 편이 낫다.
+ *
+ * 전에는 행동 스코프가 마트 실측(`anyReal`) 전까지 고정 브랜드(Drunk Elephant)를 적었다. 브랜드 1254 로
+ * 로그인해 놓고 헤더가 Drunk Elephant 를 가리켰다 (09-15 확인). 2026-09-18 에 그 고정 브랜드를 없앴다.
+ * `anyReal` 은 이제 이름이 아니라 **출처 문구**만 가른다 (마트 실측인지, 아직 못 받았는지).
  *
  * 피드백·등록 스코프는 마트와 무관한 로컬 분류본이라 언제나 고정 라벨이다.
  */
 function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string | null }) {
   const { anyReal } = useBehavior();
   const label = SCOPE_LABEL[scope];
-  const live = scope === 'behavior' && anyReal && brandName !== null;
-  const brand = live && brandName ? brandName : label.brand;
+  const live = scope === 'behavior' && anyReal;
+  // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다
+  const brand = scope === 'feedback' ? label.brand : (brandName ?? '');
   const source = live ? '행동 마트 실측 · 로그인한 브랜드' : label.source;
   return (
     <p className="main__scope" title={source}>
