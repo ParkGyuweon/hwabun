@@ -25,7 +25,7 @@ services:
       SERVER_PORT: "8090"
       SHOP_BACKEND_JWT_SECRET: ${SHOP_BACKEND_JWT_SECRET:?Set SHOP_BACKEND_JWT_SECRET in .env}
       SHOP_BACKEND_JWT_EXPIRATION_MS: ${SHOP_BACKEND_JWT_EXPIRATION_MS:-900000}
-      SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+      SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul&connectionTimeZone=Asia/Seoul&forceConnectionTimeZoneToSession=true
       SHOP_BACKEND_MYSQL_USER: ${MYSQL_USER:-shop_backend}
       SHOP_BACKEND_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
       DASHBOARD_MART_MYSQL_URL: jdbc:mysql://${DW_MYSQL_HOST:-mysql}:${DW_MYSQL_PORT:-3306}/${DW_MYSQL_DB:-dw}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
