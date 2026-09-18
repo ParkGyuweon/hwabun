@@ -317,3 +317,24 @@ export function bannerImage(productId: string, variant: Variant): string | null 
   const file = BANNER_IMAGES[productId]?.[variant];
   return file ? `${IMG}/banners/${file}` : null;
 }
+
+/** 완성형 배너가 한 장이라도 등록된 상품인지. 히어로는 이 상품군 안에서만 고른다 (2026-09-18) */
+export function hasBannerImages(productId: string): boolean {
+  const files = BANNER_IMAGES[productId];
+  return files !== undefined && Object.values(files).some(Boolean);
+}
+
+/**
+ * 그 상품의 완성형 배너 중 하나. 원하는 변형이 있으면 그것, 없으면 같은 상품의 다른 변형이다.
+ * 다른 상품으로는 넘어가지 않는다. 등록된 것이 없으면 null.
+ */
+export function anyBannerImage(productId: string, preferred: Variant): { src: string; variant: Variant } | null {
+  const files = BANNER_IMAGES[productId];
+  if (!files) return null;
+  const order: Variant[] = [preferred, 'story', 'concern', 'segment', 'price', 'ingredient'];
+  for (const v of order) {
+    const file = files[v];
+    if (file) return { src: `${IMG}/banners/${file}`, variant: v };
+  }
+  return null;
+}
