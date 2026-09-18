@@ -550,6 +550,32 @@ interface SellerFeedbackRow {
   hiddenByDefault: boolean;
 }
 
+/**
+ * 분류 시작 결과.
+ *
+ * `started` 는 이번 호출로 분류가 걸렸다는 뜻이고 `running` 은 이미 돌고 있다는 뜻이다. 둘 다 정상이라
+ * 화면은 구분 없이 "결과를 기다린다" 로 이어간다. `unavailable` 은 서버가 이 엔드포인트를 아직 안 주는
+ * 경우(404)까지 포함한다 — 그때도 화면은 죽지 않고 지금 있는 데이터를 그대로 그린다.
+ */
+export type ClassifyStart = 'started' | 'running' | 'unavailable';
+
+/**
+ * POST /api/seller/feedback/classify?brandId=
+ *
+ * 202 든 409 든 **오류가 아니다**. 409 는 다른 탭·다른 사장님이 이미 돌리고 있다는 뜻이라,
+ * 실패로 적으면 정상 상황에 오류가 뜬다.
+ */
+export async function startFeedbackClassification(brandId: string): Promise<ClassifyStart> {
+  try {
+    const res = await authFetch('SELLER', `/api/seller/feedback/classify?brandId=${encodeURIComponent(brandId)}`, { method: 'POST' });
+    if (res.status === 202) return 'started';
+    if (res.status === 409) return 'running';
+    return 'unavailable';
+  } catch {
+    return 'unavailable';
+  }
+}
+
 /** GET /api/seller/feedback?brandId= 를 화면 타입(Feedback)으로. 분류 전이면 labels 가 빈 배열로 온다 */
 export async function fetchSellerFeedback(brandId: string, brandName: string): Promise<Feedback[] | null> {
   try {
@@ -582,6 +608,7 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
       // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
       purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
+      classification_status: r.classificationStatus ?? null,
       status: 'new',
       reply: null,
       replied_at: null,
