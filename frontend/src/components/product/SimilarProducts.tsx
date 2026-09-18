@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import PriceTag from './PriceTag';
-import { useImpression } from '../../hooks/useImpression';
+import { confirmImpressionByClick, useImpression } from '../../hooks/useImpression';
 import StarRating from '../common/StarRating';
 import { formatCount } from '../../lib/format';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
@@ -69,6 +69,16 @@ export default function SimilarProducts({
   }
 
   const select = (product: Product, position: number) => {
+    // 눌렀다면 본 것이다. 1000ms 판정 전에 누른 클릭도 분모에 넣는다 (useImpression.confirmImpressionByClick)
+    confirmImpressionByClick({
+      pageViewKey: recommendationId,
+      eventName: 'recommendation_impression',
+      listId,
+      productId: product.product_id,
+      position,
+      algorithm,
+      recommendationId,
+    });
     // 노출 이벤트와 같은 recommendation_id / position 을 실어야 CTR 을 계산할 수 있다
     track('recommendation_click', {
       recommendation_id: recommendationId,

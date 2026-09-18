@@ -3,7 +3,7 @@ import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
 import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
-import { useImpression } from '../hooks/useImpression';
+import { confirmImpressionByClick, useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
 import { useRecommendation } from '../hooks/useRecommendation';
@@ -399,6 +399,26 @@ export default function ProductListPage({
   });
 
   /**
+   * 클릭·퀵룩 직전에 그 카드의 노출을 확정한다 (useImpression.confirmImpressionByClick).
+   * 훅과 같은 pageViewKey·eventName·listId 를 써야 한 번만 남는다.
+   */
+  const confirmListImpression = (listId: string, productId: string, position: number) => {
+    if (listId === 'promo_pick') {
+      confirmImpressionByClick({
+        pageViewKey: `promo:${recommendIdentityId ?? 'anonymous'}`,
+        eventName: recommendIdentityId ? 'recommendation_impression' : 'product_impression',
+        listId,
+        productId,
+        position,
+        algorithm: promoAlgorithm,
+        recommendationId: promoRecommendationId,
+      });
+      return;
+    }
+    confirmImpressionByClick({ pageViewKey, eventName: 'product_impression', listId: 'list_grid', productId, position });
+  };
+
+  /**
    * 배너·히어로 클릭 — `banner_click` + `product_click` (2026-09-17 전환). entry_source 는 계약 enum 안의 promo_pick 을 쓴다.
    * 축·값은 AdBanner 가 **실제로 그린 것** 기준으로 넘겨준다 (완성형이면 new_brand · banner_value null). 노출과 같은 값이어야
    * 칸별·축별 CTR 조인이 성립한다. 히어로는 항상 slot 1 이라 응답과 어긋나도 1 로 싣는다 — position 이 비면 계약 위반이다.
@@ -415,6 +435,23 @@ export default function ProductListPage({
         : (recommendation.banners.find((b) => b.product_id === productId) ?? null);
 
     const slot = banner?.slot ?? 1;
+    // 눌렀다면 본 것이다. 노출 타이머보다 먼저 누른 클릭도 분모에 들어가야 배너 CTR 이 1 을 안 넘는다
+    confirmImpressionByClick({
+      pageViewKey: `hero:${recommendIdentityId ?? 'anonymous'}:${trait.trait_source}`,
+      eventName: 'banner_impression',
+      listId,
+      productId,
+      position: slot,
+      algorithm: bannerAlgorithm,
+      recommendationId: promoRecommendationId,
+      extraProps: {
+        banner_type: logged.banner_type,
+        banner_value: logged.banner_value,
+        banner_slot: slot,
+        trait_source: trait.trait_source,
+        policy_version: BANNER_POLICY_VERSION,
+      },
+    });
     track('banner_click', {
       product_id: productId,
       banner_type: logged.banner_type,
@@ -480,6 +517,7 @@ export default function ProductListPage({
     const source = listId === 'promo_pick' ? promo : visible;
     const position =
       source.findIndex((p) => p.product_id === productId) + (listId === 'promo_pick' ? 0 : pageOffset);
+    confirmListImpression(listId, productId, position + 1);
     track('quick_look', {
       product_id: productId,
       entry_source: listId,
@@ -501,6 +539,8 @@ export default function ProductListPage({
     const position =
       (listId === 'promo_pick' ? promo : visible).findIndex((p) => p.product_id === productId) +
       (listId === 'promo_pick' ? 0 : pageOffset);
+
+    confirmListImpression(listId, productId, position + 1);
 
     // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
     if (listId === 'promo_pick' && promoRecommendationId) {

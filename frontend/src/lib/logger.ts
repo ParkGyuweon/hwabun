@@ -495,6 +495,11 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
  * 같은 키로는 한 번만 발생시킨다.
  * section_view, scroll_depth 처럼 페이지 방문당 1회여야 하는 이벤트에 사용한다.
  */
+/** `trackOnce` 로 이미 남긴 키인가. 노출 훅이 "클릭이 먼저 노출을 확정했나" 를 볼 때 쓴다 */
+export function hasTrackedOnce(key: string): boolean {
+  return firedOnceKeys.has(key);
+}
+
 export function trackOnce(
   key: string,
   eventName: EventName,
