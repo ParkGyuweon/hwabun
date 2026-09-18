@@ -88,7 +88,7 @@
 ### 최열음 · 백엔드
 
 - 수집 서버 `backend/` 8080. `POST /api/events` 를 검증하고 Kafka `activity-events` 로 produce 합니다. 파티션 키는 `session_id`, 과부하 때는 429/503 으로 백프레셔를 겁니다. Actuator + Micrometer 로 Prometheus 메트릭을 냅니다.
-- 쇼핑몰 백엔드 `shop_backend/` 8090. 도메인 12개(identity/JWT, brand, catalog, commerce, payment, feedback, dashboard, admin, settlement, recommendation 프록시, security, common)로 나뉘고, MySQL 테이블 36개와 ERD 문서가 있습니다.
+- 쇼핑몰 백엔드 `shop_backend/` 8090. 도메인 12개(identity/JWT, brand, catalog, commerce, payment, feedback, dashboard, admin, settlement, recommendation 프록시, security, common)로 나뉘고, MySQL 테이블 38개와 ERD 문서가 있습니다.
 - 상품 등록 계약을 구현했습니다. 어휘 검증과 unmapped 저장을 포함합니다.
 - CI/CD `Jenkinsfile` 9 스테이지. GitLab 연결 확인 → Backend 테스트 → Shop Backend 테스트 → Frontend Docker 빌드 검증 → EC2 구성 변경 감지 → MySQL 마이그레이션 → EC2 배포 → DW 스키마 초기화 → MySQL seed
 - 모니터링 `monitoring/`. Prometheus 설정과 Grafana 대시보드 3종(backend-overview, collector-validation, shop-backend-performance)을 프로비저닝합니다.
@@ -298,7 +298,7 @@ S15P21A306/
 │   ├── src/main/java/com/cosmetic/shopbackend/
 │   │       identity · brand · catalog · commerce · payment · feedback
 │   │       dashboard · admin · settlement · recommendation · security · common
-│   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md      테이블 36개
+│   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md      테이블 38개
 │   ├── migrations/ · docker-compose.mysql.yml · MYSQL-SETUP.md
 │   └── PERFORMANCE-BASELINE-NPLUS1.md
 │

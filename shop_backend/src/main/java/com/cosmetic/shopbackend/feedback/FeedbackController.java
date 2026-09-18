@@ -1,12 +1,14 @@
 package com.cosmetic.shopbackend.feedback;
 
 import com.cosmetic.shopbackend.identity.AccountRole;
+import com.cosmetic.shopbackend.notification.NotificationService;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,12 +35,15 @@ public class FeedbackController {
   );
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
+  private final NotificationService notifications;
   public FeedbackController(
     JdbcTemplate jdbc,
-    ObjectMapper objectMapper
+    ObjectMapper objectMapper,
+    NotificationService notifications
   ) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
+    this.notifications = notifications;
   }
 
   @PostMapping("/reviews")
@@ -143,6 +148,7 @@ public class FeedbackController {
       "insert into feedback_classification(feedback_id) values(?)",
       id
     );
+    notifySellerOfFeedback(id, req.productId());
     return Map.of(
       "feedbackId",
       id,
@@ -157,6 +163,70 @@ public class FeedbackController {
       "classificationStatus",
       "PENDING"
     );
+  }
+
+  @PostMapping("/seller/feedback/{feedbackId}/responses")
+  @ResponseStatus(HttpStatus.CREATED)
+  @Transactional
+  public Map<String, Object> respondToFeedback(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @PathVariable String feedbackId,
+    @Valid @RequestBody FeedbackResponseRequest req
+  ) {
+    requireRole(actor, AccountRole.SELLER);
+    ResponseAction action = ResponseAction.from(req.action());
+    String body = normalizedBody(req.body());
+    if (action == ResponseAction.REPLIED && body == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reply body required");
+    }
+    if (action != ResponseAction.REPLIED && body != null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body is only allowed for REPLIED");
+    }
+    List<Map<String, Object>> feedbacks = jdbc.queryForList(
+      "select f.member_id memberId,f.product_id productId,p.product_name productName " +
+        "from feedback f join product p on p.product_id=f.product_id join brand b on b.brand_id=p.brand_id " +
+        "where f.feedback_id=? and b.seller_account_id=? and f.status='VISIBLE'",
+      feedbackId,
+      actor.accountId()
+    );
+    if (feedbacks.isEmpty()) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "feedback access denied");
+    Map<String, Object> feedback = feedbacks.getFirst();
+    String responseId = UUID.randomUUID().toString();
+    String handlingStatus = action == ResponseAction.IMPLEMENTED ? "IMPLEMENTED" : "ACKNOWLEDGED";
+    jdbc.update(
+      "insert into feedback_response(feedback_response_id,feedback_id,seller_account_id,action,body) values(?,?,?,?,?)",
+      responseId,
+      feedbackId,
+      actor.accountId(),
+      action.name(),
+      body
+    );
+    jdbc.update(
+      "update feedback set handling_status=?,last_responded_at=current_timestamp(6) where feedback_id=?",
+      handlingStatus,
+      feedbackId
+    );
+    Map<String, Object> response = jdbc.queryForList(
+      "select feedback_response_id feedbackResponseId,action,body,created_at createdAt from feedback_response where feedback_response_id=?",
+      responseId
+    ).getFirst();
+    Object createdAt = response.get("createdAt");
+    notifications.createFeedbackNotification(
+      AccountRole.MEMBER,
+      String.valueOf(feedback.get("memberId")),
+      notificationType(action),
+      feedbackId,
+      String.valueOf(feedback.get("productId")),
+      String.valueOf(feedback.get("productName")),
+      notificationTitle(action),
+      notificationBody(action, String.valueOf(feedback.get("productName")), body)
+    );
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("feedbackId", feedbackId);
+    result.put("handlingStatus", handlingStatus);
+    result.put("lastRespondedAt", createdAt);
+    result.put("response", response);
+    return result;
   }
 
   @GetMapping("/seller/feedback")
@@ -181,23 +251,84 @@ public class FeedbackController {
         "f.member_id authorMemberId, " +
         "m.skin_type_code authorSkinTypeCode,m.skin_tone_code authorSkinToneCode, " +
         "m.hair_color_code authorHairColorCode,m.eye_color_code authorEyeColorCode, " +
-        "f.axis_id axisId,f.body,f.status,f.created_at createdAt, " +
+        "f.axis_id axisId,f.body,f.status,f.handling_status handlingStatus,f.last_responded_at lastRespondedAt,f.created_at createdAt, " +
+        "latest.action latestResponseAction,latest.body latestResponseBody,latest.created_at latestResponseCreatedAt, " +
         "coalesce(fc.classification_status,'PENDING') classificationStatus,coalesce(fc.hidden_by_default,false) hiddenByDefault " +
         "from feedback f " +
         "join product p on p.product_id=f.product_id " +
         "left join order_item oi on oi.order_item_id=f.order_item_id and oi.product_id=f.product_id " +
         "left join member m on m.member_id=f.member_id " +
         "left join feedback_classification fc on fc.feedback_id=f.feedback_id " +
+        "left join feedback_response latest on latest.feedback_response_id=(" +
+          "select fr.feedback_response_id from feedback_response fr where fr.feedback_id=f.feedback_id order by fr.created_at desc,fr.feedback_response_id desc limit 1) " +
         "where p.brand_id=? and f.status='VISIBLE' order by f.created_at desc",
       ownedBrandId
     );
     for (Map<String, Object> row : rows) {
+      Map<String, Object> latestResponse = null;
+      if (row.get("latestResponseAction") != null) {
+        latestResponse = new LinkedHashMap<>();
+        latestResponse.put("action", row.remove("latestResponseAction"));
+        latestResponse.put("body", row.remove("latestResponseBody"));
+        latestResponse.put("createdAt", row.remove("latestResponseCreatedAt"));
+      } else {
+        row.remove("latestResponseAction");
+        row.remove("latestResponseBody");
+        row.remove("latestResponseCreatedAt");
+      }
+      row.put("latestResponse", latestResponse);
       Map<String, Object> classification = classification(
         String.valueOf(row.get("feedbackId"))
       );
       row.putAll(classification);
     }
     return rows;
+  }
+
+  private void notifySellerOfFeedback(String feedbackId, String productId) {
+    List<Map<String, Object>> recipients = jdbc.queryForList(
+      "select b.seller_account_id sellerAccountId,p.product_name productName from product p join brand b on b.brand_id=p.brand_id where p.product_id=?",
+      productId
+    );
+    if (recipients.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "product not found");
+    Map<String, Object> recipient = recipients.getFirst();
+    String productName = String.valueOf(recipient.get("productName"));
+    notifications.createFeedbackNotification(
+      AccountRole.SELLER,
+      String.valueOf(recipient.get("sellerAccountId")),
+      "FEEDBACK_CREATED",
+      feedbackId,
+      productId,
+      productName,
+      "새 피드백이 등록되었어요",
+      productName + "에 새 피드백이 등록되었습니다."
+    );
+  }
+
+  private String normalizedBody(String value) {
+    if (value == null || value.trim().isEmpty()) return null;
+    return value.trim();
+  }
+
+  private String notificationType(ResponseAction action) {
+    return switch (action) {
+      case ACKNOWLEDGED -> "FEEDBACK_ACKNOWLEDGED";
+      case REPLIED -> "FEEDBACK_REPLIED";
+      case IMPLEMENTED -> "FEEDBACK_IMPLEMENTED";
+    };
+  }
+
+  private String notificationTitle(ResponseAction action) {
+    return switch (action) {
+      case ACKNOWLEDGED -> "업체가 의견을 확인했어요";
+      case REPLIED -> "업체가 답변을 남겼어요";
+      case IMPLEMENTED -> "의견이 반영되었어요";
+    };
+  }
+
+  private String notificationBody(ResponseAction action, String productName, String reply) {
+    if (action == ResponseAction.REPLIED) return reply;
+    return productName + (action == ResponseAction.IMPLEMENTED ? "의 개선 의견이 반영되었습니다." : "의 의견을 업체가 확인했습니다.");
   }
 
   private Map<String, Object> classification(String feedbackId) {
@@ -351,4 +482,20 @@ public class FeedbackController {
     @NotBlank String axisId,
     @NotBlank String body
   ) {}
+
+  public record FeedbackResponseRequest(@NotBlank String action, @Size(max = 1000) String body) {}
+
+  private enum ResponseAction {
+    ACKNOWLEDGED,
+    REPLIED,
+    IMPLEMENTED;
+
+    static ResponseAction from(String value) {
+      try {
+        return valueOf(value.trim().toUpperCase(Locale.ROOT));
+      } catch (Exception exception) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported feedback response action");
+      }
+    }
+  }
 }

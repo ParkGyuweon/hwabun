@@ -1,6 +1,6 @@
 # Shop Backend MySQL ERD
 
-현재 MVP DDL은 31개 테이블입니다. 계정·상품·상품 속성·주문·리뷰·피드백·정산을 MySQL에 저장하고 추천 벡터와 DW 집계 결과는 별도 영역에서 관리합니다.
+현재 MVP DDL은 38개 테이블입니다. 계정·상품·상품 속성·주문·리뷰·피드백·인앱 알림·정산을 MySQL에 저장하고 추천 벡터와 DW 집계 결과는 별도 영역에서 관리합니다.
 
 ## 관계
 
@@ -10,6 +10,9 @@ MEMBER 1:N SHOP_ORDER 1:N ORDER_ITEM
 ORDER_ITEM 1:0..1 REVIEW, ORDER_ITEM 1:N FEEDBACK
 MEMBER 1:N FEEDBACK, PRODUCT 1:N FEEDBACK
 FEEDBACK 1:0..1 FEEDBACK_CLASSIFICATION 1:N FEEDBACK_CLASSIFICATION_LABEL
+FEEDBACK 1:N FEEDBACK_RESPONSE
+FEEDBACK 1:N NOTIFICATION
+SELLER_ACCOUNT 1:N FEEDBACK_RESPONSE
 BRAND 1:N SETTLEMENT 1:N SETTLEMENT_ITEM
 PRODUCT N:M SKIN_TYPE, CONCERN, CLEAN, TEXTURE, INGREDIENT
 
@@ -28,7 +31,7 @@ PRODUCT N:M SKIN_TYPE, CONCERN, CLEAN, TEXTURE, INGREDIENT
 | 성분 | ingredient, product_ingredient | 상품 성분, 순서(first_position), 파서 버전. |
 | 등록 품질 | product_unmapped_value | 계약 vocab 밖 입력을 상품·필드·원문 값 단위로 수집한다. |
 | 구매 | cart, cart_item, shop_order, order_item | 장바구니·주문. member_id + idempotency_key UNIQUE로 중복 주문을 방지한다. |
-| 의견 | review, feedback, feedback_classification, feedback_classification_label | 구매 후기, 구매 후 개선 의견, 분류 결과와 다중 라벨. 피드백은 회원·상품·축별 1건만 허용한다. |
+| 의견·알림 | review, feedback, feedback_response, feedback_classification, feedback_classification_label, notification | 구매 후기, 구매 전·후 개선 의견, 업체의 확인·답변·반영 이력, 분류 결과와 다중 라벨, 사용자별 읽음 상태를 가진 인앱 알림. 피드백은 회원·상품·축별 1건만 허용한다. |
 | 정산 | settlement, settlement_item | 브랜드 월별 정산과 정산 대상 주문 상품. |
 
 ## 제거한 테이블

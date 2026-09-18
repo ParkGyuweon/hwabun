@@ -1,6 +1,6 @@
 # 테이블 설명
 
-최종 기준은 [mysql-erd.md](mysql-erd.md)와 [mysql-erd.sql](mysql-erd.sql)입니다. 총 35개 테이블이며, 쇼핑몰 서버의 영속 데이터만 둡니다.
+최종 기준은 [mysql-erd.md](mysql-erd.md)와 [mysql-erd.sql](mysql-erd.sql)입니다. 총 38개 테이블이며, 쇼핑몰 서버의 영속 데이터만 둡니다.
 
 ## 계정·브랜드
 
@@ -32,8 +32,10 @@ clean과 texture는 코드표와 다대다 매핑으로 저장합니다. 원문 
 - cart / cart_item: 회원 장바구니
 - shop_order / order_item: 주문과 구매 당시 상품 스냅샷. member_id + idempotency_key 유일 제약으로 중복 주문을 막음
 - review: 구매 후기
-- feedback: 구매 전·후 개선 의견. member/product/axis와 선택적인 결제 완료 order_item 연결을 보관하며 회원·상품·축별 1건만 허용한다.
+- feedback: 구매 전·후 개선 의견. member/product/axis와 선택적인 결제 완료 order_item 연결을 보관하며 회원·상품·축별 1건만 허용한다. `status`는 노출 상태, `handling_status`는 업체 처리 상태다.
+- feedback_response: 업체 관리자의 확인·답변·반영 이력. `REPLIED`일 때만 본문이 필수이며, 확인·반영은 텍스트 없이도 남길 수 있다.
 - feedback_classification / feedback_classification_label: 분류 워커가 채울 상태·메타데이터와 다중 라벨 저장 공간. 현재 API는 PENDING 상태만 생성하며 AI 호출·금지어 처리는 별도 영역이다.
+- notification: 회원 또는 업체 관리자별 인앱 알림. 수신자별 `read_at`으로 읽음 여부를 관리하고 관련 feedback을 연결한다.
 - settlement / settlement_item: 브랜드별 월 정산
 
 추천 벡터, 페르소나, DW 집계용 리뷰·속성 친화도 테이블은 이 DB에서 제거하고 Redis/AI/DW에서 관리합니다.
