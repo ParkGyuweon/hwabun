@@ -2016,6 +2016,10 @@ def run_parallel(a):
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
         argv += ["--script", a.script]
+    if a.product:
+        argv += ["--product", a.product]
+    if a.min_details is not None:
+        argv += ["--min-details", str(a.min_details)]
     if a.checkout:
         argv.append("--checkout")
     if not a.banner:
@@ -2110,6 +2114,11 @@ def main():
                     help="종류 필터를 코드로 강제 — 목록에 내 종류 카드가 보이면 그것만 보여 준다 (Jira 241)")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
+    ap.add_argument("--product", default=None, metavar="PRODUCT_ID",
+                    help="전원이 이 상품 상세에서 시작한다 (재구매 시연용, Jira 362). 예) SB000001")
+    ap.add_argument("--min-details", type=int, default=None, metavar="N",
+                    help="구매·이탈이 열리는 상세 조회 수 문턱 (기본 3). --product 로 상품을 "
+                         "못박고 바로 사게 할 때 1 로 낮춘다 — 시연 데이터 생성 전용 (Jira 362)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
@@ -2130,9 +2139,13 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
-    global CHECKOUT_ENABLED, BANNER_VISIBLE
+    global CHECKOUT_ENABLED, BANNER_VISIBLE, MIN_DETAILS_BEFORE_LEAVE
     CHECKOUT_ENABLED = bool(a.checkout)
     BANNER_VISIBLE = bool(a.banner)
+    if a.min_details is not None:
+        # 문턱은 모듈 전역이라 여기서 갈아 끼운다. 평가용 실행에서는 쓰지 않는다 —
+        # "사람은 몇 개는 보고 산다" 는 전제가 깨진다
+        MIN_DETAILS_BEFORE_LEAVE = a.min_details
     global PREFER_CATEGORY, PREFER_STRICT, PREFER_FILTER
     PREFER_FILTER = a.prefer_filter
     PREFER_STRICT = a.prefer_strict
@@ -2237,15 +2250,20 @@ def main():
             deep = catalog and rng.random() < DEEP_LINK_P
             if a.entry != "auto":
                 deep = a.entry == "detail"
+            # --product 로 상품을 못박으면 전원이 그 상세에서 시작한다. 재구매 시연에 쓴다 —
+            # 재구매 마트 key 에 simulation_run_id 가 있어(dw-schema §4.15) 같은 run_id 로 두 번
+            # 돌려야 한 사람의 두 구매가 묶이는데, 어떤 상품을 살지는 LLM 이 정해서 같은 상품을
+            # 두 번 사게 만들 방법이 없었다 (Jira 362).
+            pinned = a.product or None
             entry = entry_url(a.url, a.scenario_id, simulation_run_id,
-                              product_id=rng.choice(catalog) if deep else None)
+                              product_id=pinned or (rng.choice(catalog) if deep else None))
 
             page.goto(entry, wait_until="networkidle")
 
             # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
             # AboutProduct.tsx 크래시는 2026-09-02 고쳐졌다. 이 방어는 이제
             # 대부분 놀지만, 놀고 있다는 것 자체가 확인이라 남긴다
-            if deep and not page.locator('[data-log-action="add_to_cart"]').count():
+            if (deep or pinned) and not page.locator('[data-log-action="add_to_cart"]').count():
                 print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
                 page.goto(LIST_URL, wait_until="networkidle")
                 page.wait_for_timeout(800)
