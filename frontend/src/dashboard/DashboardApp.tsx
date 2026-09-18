@@ -353,7 +353,7 @@ export default function DashboardApp() {
           <ReviewsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'ingredients' ? (
-          <IngredientsScreen productId={productId} onProductChange={setProductId} />
+          <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'register' ? <RegisterScreen /> : null}
         {screen === 'feedback' ? <FeedbackScreen /> : null}
