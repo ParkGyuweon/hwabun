@@ -20,7 +20,27 @@ pipeline {
         booleanParam(
             name: 'DEPLOY_TO_EC2',
             defaultValue: false,
-            description: 'CI 성공 후 EC2의 backend/shop-backend/mysql/recommend/prometheus/grafana를 배포합니다.'
+            description: '변경 경로를 자동 판별해 EC2 서비스를 배포합니다. 특정 서비스만 배포하려면 아래 항목을 선택하세요.'
+        )
+        booleanParam(
+            name: 'DEPLOY_FRONTEND',
+            defaultValue: false,
+            description: '프론트엔드(Nginx)만 재빌드·재기동합니다.'
+        )
+        booleanParam(
+            name: 'DEPLOY_BACKEND',
+            defaultValue: false,
+            description: '수집 백엔드(backend)만 재빌드·재기동합니다.'
+        )
+        booleanParam(
+            name: 'DEPLOY_SHOP_BACKEND',
+            defaultValue: false,
+            description: '쇼핑 백엔드(shop-backend)만 재빌드·재기동하고 MySQL migration을 적용합니다.'
+        )
+        booleanParam(
+            name: 'DEPLOY_RECOMMEND',
+            defaultValue: false,
+            description: '추천 서버(recommend)만 재빌드·재기동합니다.'
         )
         booleanParam(
             name: 'LOAD_DB_SEED',
@@ -55,6 +75,7 @@ pipeline {
                     changeset 'backend/**'
                     changeset 'Jenkinsfile'
                     expression { params.DEPLOY_TO_EC2 }
+                    expression { params.DEPLOY_BACKEND }
                 }
             }
             steps {
@@ -73,6 +94,7 @@ pipeline {
                     changeset 'shop_backend/**'
                     changeset 'Jenkinsfile'
                     expression { params.DEPLOY_TO_EC2 }
+                    expression { params.DEPLOY_SHOP_BACKEND }
                 }
             }
             steps {
@@ -92,6 +114,7 @@ pipeline {
                     changeset 'deploy/nginx.Dockerfile'
                     changeset 'Jenkinsfile'
                     expression { params.DEPLOY_TO_EC2 }
+                    expression { params.DEPLOY_FRONTEND }
                 }
             }
             steps {
@@ -125,7 +148,10 @@ pipeline {
 
         stage('MySQL 스키마 마이그레이션') {
             when {
-                expression { params.DEPLOY_TO_EC2 }
+                anyOf {
+                    expression { params.DEPLOY_TO_EC2 }
+                    expression { params.DEPLOY_SHOP_BACKEND }
+                }
             }
             steps {
                 sh '''
@@ -152,49 +178,71 @@ pipeline {
 
         stage('EC2 배포') {
             when {
-                expression { params.DEPLOY_TO_EC2 }
+                anyOf {
+                    expression { params.DEPLOY_TO_EC2 }
+                    expression { params.DEPLOY_FRONTEND }
+                    expression { params.DEPLOY_BACKEND }
+                    expression { params.DEPLOY_SHOP_BACKEND }
+                    expression { params.DEPLOY_RECOMMEND }
+                }
             }
             steps {
                 sh '''
                     set -eu
                     test -f "$EC2_ENV_FILE"
 
+                    services=""
+                    # 수동 선택은 코드 변경 경로와 관계없이 정확히 해당 서비스만 배포한다.
+                    if [ "${DEPLOY_FRONTEND}" = "true" ]; then
+                        services="$services nginx"
+                    fi
+                    if [ "${DEPLOY_BACKEND}" = "true" ]; then
+                        services="$services backend"
+                    fi
+                    if [ "${DEPLOY_SHOP_BACKEND}" = "true" ]; then
+                        services="$services shop-backend"
+                    fi
+                    if [ "${DEPLOY_RECOMMEND}" = "true" ]; then
+                        services="$services recommend"
+                    fi
+
                     # 최신 커밋이 merge 이후의 일반 커밋이면 HEAD^만 비교할 때
                     # merge에서 들어온 shop_backend 변경을 놓칠 수 있다. 최근 merge의
                     # 첫 부모부터 현재 HEAD까지 누적해 배포 대상 서비스를 계산한다.
-                    latest_merge="$(git log -1 --merges --format='%H' 2>/dev/null || true)"
-                    if [ -n "$latest_merge" ] && git rev-parse --verify "$latest_merge^1" >/dev/null 2>&1; then
-                        changed="$(git diff --name-only "$latest_merge^1" HEAD)"
-                    elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-                        changed="$(git diff --name-only HEAD^ HEAD)"
-                    else
-                        changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-                    fi
-                    services=""
+                    if [ "${DEPLOY_TO_EC2}" = "true" ]; then
+                        latest_merge="$(git log -1 --merges --format='%H' 2>/dev/null || true)"
+                        if [ -n "$latest_merge" ] && git rev-parse --verify "$latest_merge^1" >/dev/null 2>&1; then
+                            changed="$(git diff --name-only "$latest_merge^1" HEAD)"
+                        elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+                            changed="$(git diff --name-only HEAD^ HEAD)"
+                        else
+                            changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+                        fi
 
-                    if printf '%s\\n' "$changed" | grep -Eq '^(backend/|deploy/backend[.]Dockerfile$)'; then
-                        services="$services backend"
-                    fi
-                    if printf '%s\\n' "$changed" | grep -Eq '^(shop_backend/|deploy/shop_backend[.]Dockerfile$)'; then
-                        services="$services shop-backend"
-                    fi
-                    if printf '%s\\n' "$changed" | grep -Eq '^(frontend/|deploy/nginx[.]Dockerfile$|deploy/nginx/)'; then
-                        services="$services nginx"
-                    fi
-                    if printf '%s\\n' "$changed" | grep -Eq '^(batch/|simulator/personas/data/|simulator/feedback/|deploy/recommend[.]Dockerfile$|deploy/recommend-entrypoint[.]sh$)'; then
-                        services="$services recommend"
-                    fi
-                    if printf '%s\\n' "$changed" | grep -Eq '^monitoring/'; then
-                        services="$services prometheus grafana"
-                    fi
-                    if printf '%s\\n' "$changed" | grep -Eq '^deploy/ec2-1/(docker-compose[.]yml|prometheus[.]yml|[.]env[.]example)$'; then
-                        services="$services backend shop-backend mysql recommend prometheus grafana nginx"
-                    fi
-                    # Jenkinsfile 변경은 서비스 선택·Compose 실행 방식을 바꿀 수 있다.
-                    # 수동 빌드에서는 HEAD 한 커밋만 보므로, 바로 전 Compose 변경이
-                    # 누락되지 않게 전체 구성을 재적용한다.
-                    if printf '%s\\n' "$changed" | grep -Eq '^Jenkinsfile$'; then
-                        services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                        if printf '%s\\n' "$changed" | grep -Eq '^(backend/|deploy/backend[.]Dockerfile$)'; then
+                            services="$services backend"
+                        fi
+                        if printf '%s\\n' "$changed" | grep -Eq '^(shop_backend/|deploy/shop_backend[.]Dockerfile$)'; then
+                            services="$services shop-backend"
+                        fi
+                        if printf '%s\\n' "$changed" | grep -Eq '^(frontend/|deploy/nginx[.]Dockerfile$|deploy/nginx/)'; then
+                            services="$services nginx"
+                        fi
+                        if printf '%s\\n' "$changed" | grep -Eq '^(batch/|simulator/personas/data/|simulator/feedback/|deploy/recommend[.]Dockerfile$|deploy/recommend-entrypoint[.]sh$)'; then
+                            services="$services recommend"
+                        fi
+                        if printf '%s\\n' "$changed" | grep -Eq '^monitoring/'; then
+                            services="$services prometheus grafana"
+                        fi
+                        if printf '%s\\n' "$changed" | grep -Eq '^deploy/ec2-1/(docker-compose[.]yml|prometheus[.]yml|[.]env[.]example)$'; then
+                            services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                        fi
+                        # Jenkinsfile 변경은 서비스 선택·Compose 실행 방식을 바꿀 수 있다.
+                        # 수동 빌드에서는 HEAD 한 커밋만 보므로, 바로 전 Compose 변경이
+                        # 누락되지 않게 전체 구성을 재적용한다.
+                        if printf '%s\\n' "$changed" | grep -Eq '^Jenkinsfile$'; then
+                            services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                        fi
                     fi
 
                     services="$(printf '%s\\n' "$services" | xargs -n1 | sort -u | tr '\\n' ' ')"
