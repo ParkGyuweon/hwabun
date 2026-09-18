@@ -12,6 +12,7 @@ import FeedbackScreen from './screens/FeedbackScreen';
 import SettlementScreen from './screens/SettlementScreen';
 import { MotifLine, OriginBadge } from './components';
 import { DEMO_BRAND } from '../mocks/products';
+import NotificationBell from '../components/notifications/NotificationBell';
 import { SCOPE_LABEL } from './lib/scope';
 import type { ScopeKind } from './lib/scope';
 import { useAuth } from '../hooks/useAuth';
@@ -281,6 +282,8 @@ export default function DashboardApp() {
         </div>
 
         <div className="sidebar__foot">
+          {/* 인앱 알림함. 판매자는 새 의견 알림을 받는다 — 누르면 고객의 말 화면으로 */}
+          <NotificationBell role="SELLER" onOpen={() => setScreen('feedback')} />
           {seller ? (
             <div className="sidebar__account">
               <span className="sidebar__account-name" title={seller.email}>

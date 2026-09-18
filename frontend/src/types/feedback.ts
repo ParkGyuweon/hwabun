@@ -119,6 +119,25 @@ export interface Feedback {
   classification_status?: string | null;
   /** 백엔드(GET /api/seller/feedback)에서 온 행. 없으면 로컬 저장 */
   source?: 'backend';
+  /**
+   * 업체 처리 상태 (백엔드 2026-09-18). `status` 는 이 값을 화면 3단계로 옮긴 것이다 —
+   * OPEN → new(업체 확인 대기) · ACKNOWLEDGED → read(업체가 확인했어요) · IMPLEMENTED → reflected(업체가 반영했어요).
+   * 운영 노출 상태(VISIBLE/HIDDEN/DELETED)와는 다른 축이다. 로컬 저장본에는 없다
+   */
+  handling_status?: FeedbackHandlingStatus | null;
+  /** 마지막 응답 이력. 답변(REPLIED)이면 body 가 소비자에게 보이는 글이다 */
+  latest_response?: { action: FeedbackResponseAction; body: string | null; created_at: string } | null;
+}
+
+export type FeedbackHandlingStatus = 'OPEN' | 'ACKNOWLEDGED' | 'IMPLEMENTED';
+/** 판매자 응답 action. REPLIED 는 처리 상태가 아니라 이력이고, 남기면 handlingStatus 는 ACKNOWLEDGED 가 된다 */
+export type FeedbackResponseAction = 'ACKNOWLEDGED' | 'IMPLEMENTED' | 'REPLIED';
+
+/** 서버 처리 상태 → 화면 3단계 */
+export function statusOfHandling(h: string | null | undefined): FeedbackStatus {
+  if (h === 'IMPLEMENTED') return 'reflected';
+  if (h === 'ACKNOWLEDGED') return 'read';
+  return 'new';
 }
 
 /** 고객이 고를 수 있는 축 5개. `other` 는 0.2.0 부터 축이 아니라 "그 축 얘기지만 목록에 없는 불만" 카테고리라 토글에 없다 */
