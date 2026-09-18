@@ -14,6 +14,7 @@ import {
 } from '../../lib/memberProfile';
 import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
 import { fetchBackendOrders } from '../../lib/shopApi';
+import WriteReview from '../review/WriteReview';
 import { useBackdropClose } from '../../hooks/useBackdropClose';
 import type { BackendOrder } from '../../lib/shopApi';
 
@@ -46,6 +47,10 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState<string | null>(null);
 
+  /** 리뷰를 쓰면 그 품목의 `reviewed` 가 바뀌므로 목록을 다시 받는다 */
+  const [ordersNonce, setOrdersNonce] = useState(0);
+  const reloadOrders = useCallback(() => setOrdersNonce((n) => n + 1), []);
+
   useEffect(() => {
     let cancelled = false;
     void fetchBackendOrders().then((result) => {
@@ -62,7 +67,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
     return () => {
       cancelled = true;
     };
-  }, [session.id]);
+  }, [session.id, ordersNonce]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -156,6 +161,25 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
                       {o.paymentProvider === 'PORTONE_TEST' ? '카카오페이 테스트 결제' : '서버 테스트 결제'}
                     </span>
                   </div>
+
+                  {/*
+                    품목마다 리뷰 칸. 리뷰는 산 사람만 쓸 수 있고 그 판정은 서버가 한다 —
+                    여기서는 "무엇을 리뷰할 수 있는지" 를 보여 줄 뿐이다.
+                  */}
+                  {o.items.length > 0 ? (
+                    <ul className="mypage__order-items">
+                      {o.items.map((item) => (
+                        <li key={item.orderItemId} className="mypage__order-item">
+                          <div className="mypage__order-item-name">
+                            {item.productName}
+                            {item.variantLabel ? <span className="mypage__order-item-variant">{item.variantLabel}</span> : null}
+                            <span className="mypage__order-item-qty">{item.quantity}개</span>
+                          </div>
+                          <WriteReview item={item} onWritten={reloadOrders} />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </li>
               ))}
             </ul>

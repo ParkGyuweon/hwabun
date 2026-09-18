@@ -49,6 +49,30 @@ public class OrderItem {
     return quantity;
   }
 
+  /*
+   * 주문 생성 응답이 품목을 같이 싣는다 (`CommerceController.orderView`). 리뷰를 쓰려면 화면이
+   * `order_item_id` 를 알아야 하는데, 그 값을 꺼낼 접근자가 없어서 필요한 것만 연다.
+   */
+  public String getId() {
+    return id;
+  }
+
+  public String getProductId() {
+    return productId;
+  }
+
+  public String getProductName() {
+    return productName;
+  }
+
+  public String getVariantLabel() {
+    return variantLabel;
+  }
+
+  public BigDecimal getLineAmount() {
+    return lineAmount;
+  }
+
   public OrderItem(
     String id,
     String orderId,
