@@ -101,8 +101,7 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback",
-           "write_review")
+           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback")
 # 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
 # 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
 FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
@@ -114,6 +113,9 @@ FEEDBACK_MAX_CHARS = 280
 #     그 제한을 푸는 것은 백엔드 몫이고, 여기는 풀린 뒤를 전제한다.
 # 주문 직후에도 한 번 더 기회를 준다 — 사고 나서 쓰는 것이 가장 자연스러운 자리다.
 FEEDBACK_AFTER_ORDER_P = 0.6
+# 리뷰도 같은 자리에서 쓴다. 피드백보다 높게 둔다 — 리뷰는 상품마다 여러 건이 모여야
+# 대시보드 리뷰 탭이 값어치를 가지는데, 피드백은 몇 건만 있어도 분류를 보여준다.
+REVIEW_AFTER_ORDER_P = 0.8
 # 상세를 충분히 본 뒤에만 연다. 들어가자마자 의견부터 쓰는 사람은 없다.
 FEEDBACK_MIN_SCROLL_PCT = 40
 # 목록 정렬 (Jira 321). 프론트 ProductListPage 의 SortKey 라벨 그대로 — 화면에 보이는 말로 고르게 한다
@@ -1030,6 +1032,31 @@ def find_card(page, target):
     return best
 
 
+ORDER_DONE_SIGNS = (
+    '[data-log-section="purchase_survey"]',   # 장바구니 결제의 완료 화면 (설문)
+    ".survey--done",                          # 설문을 이미 낸 상태
+    ".done__note",                            # 완료 문구 — buy_now 경로도 이건 그린다
+    ".cart__continue",                        # "쇼핑 계속하기"
+)
+
+
+def _wait_order_done(page, timeout_ms=15000):
+    """주문이 끝났다는 신호 중 **하나라도** 보이면 성공으로 본다.
+
+    한 셀렉터에 걸면 그 화면을 안 지나는 경로가 통째로 실패로 찍힌다 (Jira 360).
+    """
+    deadline = time.time() + timeout_ms / 1000.0
+    while time.time() < deadline:
+        for sel in ORDER_DONE_SIGNS:
+            try:
+                if page.locator(sel).count():
+                    return True
+            except Exception:
+                pass
+        page.wait_for_timeout(400)
+    return False
+
+
 def _place_and_survey(page):
     """주문 확인 단계 → 주문 완료(place_order) → 구매 사유 설문. checkout 과 buy_now 가 같이 쓴다 (Jira 321·333).
     ?pay=test 자동 판별(프론트 09-16)로 러너는 결제창 없이 PAID 로 간다."""
@@ -1037,10 +1064,13 @@ def _place_and_survey(page):
     if not place.count() or not click_safe(place.first, page):
         page.go_back(); page.wait_for_timeout(800)
         return False
-    # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다
-    try:
-        page.locator('[data-log-section="purchase_survey"]').first.wait_for(timeout=15000)
-    except Exception:
+    # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다.
+    #
+    # **설문 절 하나로 판정하지 않는다.** `purchase_survey` 는 CartPage 의 완료 화면에서만
+    # 그려지는데(CartPage.tsx), buy_now 는 상세에서 바로 사는 경로라 거기에 닿지 않는다.
+    # 그래서 주문이 PAID 로 끝나도 실패로 찍혔고, `if okd` 안에 있는 주문 직후 단계
+    # (피드백·리뷰)가 아예 안 돌았다 — 실측 4건 전부 (Jira 360).
+    if not _wait_order_done(page):
         return False                             # 결제까지 못 갔다 — purchase 이벤트도 없다
     page.wait_for_timeout(random.randint(1200, 3000))       # 완료 화면을 읽는 시간
     chips = page.locator('[data-log-action="purchase_reason_toggle"]')
@@ -1517,7 +1547,7 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
                     wished_here=False, quick_looks=0, cart_size=0,
                     n_details=0, has_unvisited=True, cart_over=False,
                     sorted_once=False, checkout=None, has_banner=False,
-                    feedback_here=False, purchased=0, reviewed=0):
+                    feedback_here=False):
     """이번 턴에 실제로 의미가 있는 행동만 남긴다.
 
     행동 다섯 개를 매 턴 전부 열어주면 약한 모델은 가장 안전한 scroll 로
@@ -1571,10 +1601,9 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
     checkout = CHECKOUT_ENABLED if checkout is None else checkout
     if checkout and cart_size >= 1 and n_details >= MIN_DETAILS_BEFORE_LEAVE:
         acts.append("checkout")
-    # 리뷰는 **산 뒤에만** 쓸 수 있다 — 백엔드가 order_item_id 로 구매를 검증한다 (Jira 356).
-    # 한 번 쓰면 다시 열지 않는다. 품목당 리뷰 1개라 두 번째는 실패한다
-    if purchased >= 1 and reviewed < 1:
-        acts.append("write_review")
+    # 리뷰는 여기 오지 않는다. 산 뒤에만 쓸 수 있는데(백엔드가 order_item_id 로 검증)
+    # 주문하면 run_one 이 곧바로 break 하므로 `purchased >= 1` 인 턴이 없다 — 행동으로
+    # 두면 선택지에 영원히 안 오른다(실측 125턴 0회). 주문 직후 단계로 옮겼다 (Jira 360).
     if n_details >= MIN_DETAILS_BEFORE_LEAVE or not has_unvisited:
         acts.append("leave")
     return acts
@@ -1731,7 +1760,6 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                                    budget is not None and v > budget
                                    for v in cart_prices.values()),
                                sorted_once=sorted_once,
-                               purchased=purchased, reviewed=reviewed,
                                has_banner=(kind == "list" and bool(read_banner(page))),
                                feedback_here=any(
                                    norm(f) and (norm(f) in norm(here) or norm(here) in norm(f))
@@ -1837,22 +1865,6 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             okd = False
             if verbose:
                 print(f"       [조작 실패] {type(e).__name__}: {str(e)[:70]}")
-        if act == "write_review":
-            # do_action 은 DOM 조작만 한다. 리뷰는 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서
-            # 처리한다. **집계(done/failed)보다 앞이어야 한다** (write_feedback 과 같은 이유)
-            got = None
-            if client:
-                try:
-                    got = write_review(page, client, persona, cache_on, dry)
-                except Exception:
-                    got = None
-            okd = bool(got)
-            if okd:
-                reviewed += 1
-                name, rating, _ = got
-                if verbose:
-                    print(f"       [리뷰] {name[:24]} {rating}점")
-
         if act == "write_feedback":
             # do_action 은 DOM 조작만 한다. 의견은 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서 처리한다.
             # **집계(done/failed)와 history 보다 앞이어야 한다** — 뒤에 두면 성공해도 실패로 세고
@@ -1931,6 +1943,21 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                     feedbacks += 1
                     if verbose:
                         print(f"        의견 남김 [{got[0]}] {got[1][:40]}")
+            # ── 산 뒤에 리뷰 쓰기 ──────────────────────────────────────────
+            # 리뷰도 **행동이 아니라 주문 직후 단계**다. 행동으로 두면 절대 실행되지 않는다 —
+            # 선택지에 오르는 조건이 `purchased >= 1` 인데 주문하면 바로 아래에서 break 로
+            # 세션이 끝나서 그런 턴이 존재하지 않는다. 실측 125턴 중 0회 (Jira 360).
+            # 화면 구조와도 이게 맞다 — 리뷰 칸은 주문 뒤 마이페이지 모달 안에 있다.
+            if client and random.random() < REVIEW_AFTER_ORDER_P:
+                try:
+                    got = write_review(page, client, persona, cache_on, dry)
+                except Exception:
+                    got = None
+                if got:
+                    calls += 1
+                    reviewed += 1
+                    if verbose:
+                        print(f"        리뷰 남김 [{got[0][:24]}] {got[1]}점 {got[2][:32]}")
             cart.clear()
             break                                # 주문하면 세션이 끝난다 (프롬프트와 같은 약속)
         if dry:
@@ -2534,10 +2561,14 @@ def login_member(page, persona_id):
         if not btn.count():
             return False
         btn.first.click()
-        page.wait_for_timeout(600)
-        page.locator("form.auth input[name=email]").fill(MEMBER_EMAIL.format(pid=persona_id.lower()))
-        page.locator("form.auth input[name=password]").fill(MEMBER_PASSWORD)
-        page.locator("form.auth button[type=submit]").click()
+        # 폼은 지연 로딩 청크에 있다(배포본 실측: auth__ 가 products-*.js 에 22회).
+        # 워커 5개가 동시에 붙으면 고정 600ms 로는 못 기다린다 — 20명 중 15명이
+        # 여기서 조용히 실패했다 (Jira 360). 보일 때까지 기다린다.
+        email = page.locator("form.auth input[name=email]")
+        email.first.wait_for(state="visible", timeout=15000)
+        email.first.fill(MEMBER_EMAIL.format(pid=persona_id.lower()))
+        page.locator("form.auth input[name=password]").first.fill(MEMBER_PASSWORD)
+        page.locator("form.auth button[type=submit]").first.click()
         page.locator(".account__btn--me").first.wait_for(timeout=8000)
         page.wait_for_timeout(700)
         return True

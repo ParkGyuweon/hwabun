@@ -65,7 +65,6 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             "recommendation_click",
             "wishlist_toggle",
             "add_to_cart",
-            "scroll_depth",
             "impression_dwell",
             "media_view",
             "quick_look",
@@ -76,7 +75,6 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             "review_filter_apply",
             "review_expand",
             "ingredient_view_mode_change",
-            "scroll_pause",
             "scroll_backtrack",
             "text_selection",
             "text_copy",
@@ -85,7 +83,7 @@ public class EventContractValidator implements ConstraintValidator<ValidEventCon
             "banner_click"
     );
     private static final Set<String> PRODUCT_DETAIL_SCOPED_EVENTS = Set.of(
-            "page_view", "section_view", "section_dwell"
+            "page_view", "section_view", "section_dwell", "scroll_depth", "scroll_pause"
     );
     private static final Set<String> PURCHASE_EVENTS = Set.of(
             "begin_checkout", "purchase", "payment_failed", "purchase_reason_select"
