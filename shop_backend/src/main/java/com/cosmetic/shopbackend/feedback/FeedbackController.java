@@ -33,12 +33,15 @@ public class FeedbackController {
   );
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
+  private final FeedbackClassificationService classifications;
   public FeedbackController(
     JdbcTemplate jdbc,
-    ObjectMapper objectMapper
+    ObjectMapper objectMapper,
+    FeedbackClassificationService classifications
   ) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
+    this.classifications = classifications;
   }
 
   @PostMapping("/reviews")
@@ -158,6 +161,9 @@ public class FeedbackController {
     @RequestParam(required = false) String brandId
   ) {
     requireRole(actor, AccountRole.SELLER);
+    String ownedBrandId = ownedBrandId(actor, brandId);
+    // 조회 요청 시 해당 브랜드의 미분류 건만 즉시 처리해 최신 라벨을 반환한다.
+    classifications.classifyPending(ownedBrandId, null);
     /*
       * 브랜드 필터는 **상품(product.brand_id)** 으로 한다. 예전에는 `order_item` 을 inner join 해서
      * 걸렀는데, 미구매자 의견은 `order_item_id` 가 NULL 이라 그 조인에서 통째로 사라진다 —
@@ -181,7 +187,7 @@ public class FeedbackController {
         "left join member m on m.member_id=f.member_id " +
         "left join feedback_classification fc on fc.feedback_id=f.feedback_id " +
         "where p.brand_id=? and f.status='VISIBLE' order by f.created_at desc",
-      ownedBrandId(actor, brandId)
+      ownedBrandId
     );
     for (Map<String, Object> row : rows) {
       Map<String, Object> classification = classification(
