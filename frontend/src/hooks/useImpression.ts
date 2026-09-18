@@ -58,6 +58,18 @@ interface UseImpressionOptions {
 const impressionKey = (eventName: string, pageViewKey: string, listId: string, productId: string) =>
   `${eventName}:${pageViewKey}:${listId}:${productId}`;
 
+/**
+ * 노출의 출처 (계약 event-properties-schema §3.12-1, 데이터 파트 확정 2026-09-18). 선택 property, 없으면 observed.
+ *
+ *   observed               타이머 경로. 카드가 holdMs 동안 실제로 보였다
+ *   implied_by_click       클릭이 먼저 와서 합성한 노출 (confirmImpressionByClick)
+ *   implied_by_quick_look  퀵룩 열기가 먼저 와서 합성한 노출. 퀵룩은 클릭이 아니다
+ *
+ * 전에는 hold_ms == 0 이 합성의 유일한 표지였다. 그건 임계값이 마침 0 이 아니라서 성립하는 우연이라 파이프라인을
+ * 거기에 묶지 않는다 — 마커가 있으면 임계값이 바뀌어도 분모 정의(dw-schema §4.1)가 안 깨진다.
+ */
+export type ImpressionOrigin = 'observed' | 'implied_by_click' | 'implied_by_quick_look';
+
 interface ConfirmByClickInput {
   pageViewKey: string;
   eventName: UseImpressionOptions['eventName'];
@@ -67,6 +79,8 @@ interface ConfirmByClickInput {
   algorithm?: string;
   recommendationId?: string;
   extraProps?: Record<string, string | number | null | undefined>;
+  /** 무엇이 노출을 확정했는지. 기본 implied_by_click. 퀵룩 경로는 implied_by_quick_look 을 넘긴다 */
+  origin?: Exclude<ImpressionOrigin, 'observed'>;
 }
 
 /**
@@ -92,6 +106,7 @@ export function confirmImpressionByClick({
   algorithm,
   recommendationId,
   extraProps,
+  origin = 'implied_by_click',
 }: ConfirmByClickInput): boolean {
   return trackOnce(impressionKey(eventName, pageViewKey, listId, productId), eventName, {
     product_id: productId,
@@ -102,6 +117,7 @@ export function confirmImpressionByClick({
     ...Object.fromEntries(Object.entries(extraProps ?? {}).filter(([, v]) => v !== undefined)),
     hold_ms: 0,
     visible_ratio: VISIBLE_RATIO,
+    impression_origin: origin,
   });
 }
 
@@ -200,6 +216,7 @@ export function useImpression({
                 // 판정 기준을 같이 남긴다. 목록(300)과 추천(1000)은 분모 정의가 다르다
                 hold_ms: holdMs,
                 visible_ratio: VISIBLE_RATIO,
+                impression_origin: 'observed',
               },
             );
             // 클릭이 먼저 노출을 확정했으면(confirmImpressionByClick) 이미 남아 있다. 체류는 계속 잰다

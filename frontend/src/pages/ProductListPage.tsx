@@ -4,6 +4,7 @@ import QuickLook from '../components/product/QuickLook';
 import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
 import { confirmImpressionByClick, useImpression } from '../hooks/useImpression';
+import type { ImpressionOrigin } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
 import { useRecommendation } from '../hooks/useRecommendation';
@@ -18,6 +19,7 @@ import type { FilterKind } from '../types/log';
 import { categoryKo, concernKo, toKrw } from '../lib/localize';
 import AdBanner from '../components/banner/AdBanner';
 import type { BannerLog } from '../components/banner/AdBanner';
+import { hasBannerImages } from '../lib/bannerCreative';
 import type { BannerAxis } from '../lib/bannerCreative';
 import { skinTypeLabel } from '../lib/format';
 import type { PersonaProfile } from '../types/persona';
@@ -211,17 +213,13 @@ export default function ProductListPage({
       bannerSlots: BANNER_SLOTS,
       reserved: BANNER_RESERVED,
       /*
-       * 히어로 정책. 기본은 `new_brand` 지만 **세션 성향이 잡히면 `top` 으로 바꾼다** (2026-09-17).
+       * 히어로 정책. 언제나 `new_brand` 다 (2026-09-18).
        *
-       * 신규 브랜드 상품은 등록된 완성형 이미지 배너가 있어서, 히어로가 그 상품이면 축 문구가 아예
-       * 그려지지 않는다 (AdBanner: 이미지가 있으면 `banner_type=new_brand` · 값 없음으로 기록한다).
-       * SSAFY Beauty 8종이 전부 그런 상품이라, 정책이 `new_brand` 로 고정돼 있는 한 성분을 아무리
-       * 긁어도 히어로는 같은 이미지였다 — 행동이 배너를 바꾼다는 것이 화면에서 성립하지 않았다.
-       *
-       * 그래서 단서가 없는 첫 방문은 지금처럼 신규 브랜드 이야기를 하고(그게 전용 노출의 목적이다),
-       * 방문자가 취향을 드러내면 그 축으로 말하는 조립 배너로 넘어간다.
+       * 배너는 완성형 이미지가 있는 SSAFY Beauty 상품군에서만 띄운다 (아래 bannerSlots). 성향이 잡히면 `top` 으로
+       * 바꿔 조립 배너를 띄우던 판(2026-09-17)은 조립 배너와 함께 걷어냈다 — 그 판이 세포라 상품을 옛 벡터
+       * 이미지 느낌의 배너로 띄우고 있었다. 축 문구가 배너에 보이지 않으니 축별 CTR 은 이 화면에서 안 나온다.
        */
-      heroPolicy: trait.trait_source === 'coldstart' ? HERO_POLICY : 'top',
+      heroPolicy: HERO_POLICY,
       // 로그인 회원은 피부 프로필이 비어 있어도 회원 id 로 부른다 — 행동 로그(persona_id = 회원 id)와 같은 식별자여야
       // 추천 서버의 세션 상태(좋아요 → 목록 반영)가 이어진다 (AI 파트 요청 2026-09-14, live-demo-runbook §5).
       // 프로필이 비면 속성 쿼리가 없을 뿐, 스위처 페르소나로 떨어지지 않는다.
@@ -257,24 +255,34 @@ export default function ProductListPage({
    */
   const bannerSlots = useMemo(() => {
     const slots: Array<{ product: Product; banner_type: BannerAxis; banner_value: string | null }> = [];
-    if (recommendation.hero) {
-      const hero = productsById.get(recommendation.hero.product_id);
-      if (hero) {
-        slots.push({
-          product: hero,
-          banner_type: recommendation.hero.banner_type as BannerAxis,
-          banner_value: recommendation.hero.banner_value,
-        });
-      }
+    /*
+     * 히어로는 **완성형 배너 이미지가 있는 상품**이어야 한다 (2026-09-18). 추천이 준 히어로가 그 상품군이면 그것,
+     * 아니면 추천 순위에서 처음 만나는 그 상품군, 그것도 없으면 카탈로그 순서에서 고른다. 하나도 없으면 배너 칸이 없다.
+     * 이미지 없는 상품을 CSS 로 조립해 띄우지 않는다.
+     */
+    const candidates = [
+      ...(recommendation.hero ? [recommendation.hero.product_id] : []),
+      ...recommendation.items.map((i) => i.product_id),
+      ...products.map((p) => p.product_id),
+    ];
+    const heroId = candidates.find((id) => productsById.has(id) && hasBannerImages(id));
+    const hero = heroId ? productsById.get(heroId) : undefined;
+    if (hero) {
+      const fromRec = recommendation.hero && recommendation.hero.product_id === hero.product_id ? recommendation.hero : null;
+      slots.push({
+        product: hero,
+        banner_type: (fromRec?.banner_type as BannerAxis | undefined) ?? 'new_brand',
+        banner_value: fromRec?.banner_value ?? null,
+      });
     }
     for (const b of recommendation.banners) {
       const product = productsById.get(b.product_id);
-      if (product) {
+      if (product && hasBannerImages(product.product_id)) {
         slots.push({ product, banner_type: b.banner_type as BannerAxis, banner_value: b.banner_value });
       }
     }
     return slots;
-  }, [recommendation, productsById]);
+  }, [recommendation, productsById, products]);
 
   /**
    * 맞춤 기획전은 추천이다. 노출·클릭을 추천 이벤트로 묶는 식별자와 알고리즘 이름.
@@ -402,7 +410,12 @@ export default function ProductListPage({
    * 클릭·퀵룩 직전에 그 카드의 노출을 확정한다 (useImpression.confirmImpressionByClick).
    * 훅과 같은 pageViewKey·eventName·listId 를 써야 한 번만 남는다.
    */
-  const confirmListImpression = (listId: string, productId: string, position: number) => {
+  const confirmListImpression = (
+    listId: string,
+    productId: string,
+    position: number,
+    origin: Exclude<ImpressionOrigin, 'observed'>,
+  ) => {
     if (listId === 'promo_pick') {
       confirmImpressionByClick({
         pageViewKey: `promo:${recommendIdentityId ?? 'anonymous'}`,
@@ -412,10 +425,11 @@ export default function ProductListPage({
         position,
         algorithm: promoAlgorithm,
         recommendationId: promoRecommendationId,
+        origin,
       });
       return;
     }
-    confirmImpressionByClick({ pageViewKey, eventName: 'product_impression', listId: 'list_grid', productId, position });
+    confirmImpressionByClick({ pageViewKey, eventName: 'product_impression', listId: 'list_grid', productId, position, origin });
   };
 
   /**
@@ -517,7 +531,8 @@ export default function ProductListPage({
     const source = listId === 'promo_pick' ? promo : visible;
     const position =
       source.findIndex((p) => p.product_id === productId) + (listId === 'promo_pick' ? 0 : pageOffset);
-    confirmListImpression(listId, productId, position + 1);
+    // 퀵룩 열기는 클릭이 아니다. 합성 노출의 출처를 따로 적는다
+    confirmListImpression(listId, productId, position + 1, 'implied_by_quick_look');
     track('quick_look', {
       product_id: productId,
       entry_source: listId,
@@ -540,7 +555,7 @@ export default function ProductListPage({
       (listId === 'promo_pick' ? promo : visible).findIndex((p) => p.product_id === productId) +
       (listId === 'promo_pick' ? 0 : pageOffset);
 
-    confirmListImpression(listId, productId, position + 1);
+    confirmListImpression(listId, productId, position + 1, 'implied_by_click');
 
     // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
     if (listId === 'promo_pick' && promoRecommendationId) {

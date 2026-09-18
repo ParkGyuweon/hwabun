@@ -4,7 +4,7 @@
  * 수집 파이프라인(Collector→Kafka→Spark)이 아직 데이터를 흘리기 전이라
  * 두 종류의 값이 섞여 있다. 화면은 이 구분을 배지로 드러낸다.
  *
- * - **실측**: 리뷰 2,000건과 상품 성분 문자열에서 지금 실제로 계산한 값
+ * - **실측**: 리뷰 표본(상품당 100건)과 상품 성분 문자열에서 지금 실제로 계산한 값
  * - **모의**: 행동 지표. 상품 특성(리뷰 수·평점)에 비례하도록 시드 고정으로 생성.
  *   집계 API 가 붙으면 이 모듈의 함수 본문만 fetch 로 바꾸면 된다
  *
@@ -13,32 +13,36 @@
  */
 import vocab from '../../../../contracts/product-feature-vocab.json';
 import { products as catalogData } from '../../mocks/products';
-import { BEHAVIOR_BRAND, FEEDBACK_BRAND } from './scope';
-import reviewsData from '../../mocks/reviews.sample.json';
-import type { Product } from '../../types/product';
-import type { Review } from '../../types/review';
+import { FEEDBACK_BRAND } from './scope';
+import type { Product, SkinType } from '../../types/product';
 import { splitIngredients } from '../../lib/format';
 
 /**
  * 브랜드 대시보드는 **내 브랜드** 상품만 본다.
  *
- * 스코프는 둘이다 (lib/scope.ts, 결정 A). 행동·리뷰 화면은 BEHAVIOR_BRAND(세포라 카탈로그의
- * 실제 브랜드) 상품을, 피드백·등록은 FEEDBACK_BRAND(SSAFY Beauty) 상품을 본다.
+ * 이 모듈은 이제 **고정 브랜드 상품 목록을 내보내지 않는다**. 내 상품은 화면이
+ * `useBrandProducts(brandId, brandName)` 로 받는다. 피드백·등록만 FEEDBACK_BRAND 시드를 쓴다.
  *
  * 다른 브랜드 상품은 이름·절대치를 보이지 않는다는 데이터 경계
  * (collective-insight-data-boundary.md A층). 플랫폼 전체를 분모로 쓰는 지표
  * (주의 성분 보급률 같은 커먼즈)는 `catalogProducts` 를 쓴다.
  */
 export const catalogProducts = catalogData as unknown as Product[];
-/**
- * 성분 갭 표의 "내 라인 보유" 판정 기본값. 대시보드가 브랜드 상품을 넘겨 주면 그쪽이 우선이고,
- * 이것은 넘겨 줄 것이 없을 때의 카탈로그 브랜드다.
- */
-export const brandProducts = catalogProducts.filter((p) => p.brand_name === BEHAVIOR_BRAND);
-export const products = brandProducts;
 /** 피드백·등록 화면의 상품 목록 (SSAFY Beauty) */
 export const feedbackProducts = catalogProducts.filter((p) => p.brand_name === FEEDBACK_BRAND);
-export const reviews = reviewsData as unknown as Review[];
+/**
+ * 대시보드 리뷰 집계가 읽는 행. 판매자 리뷰 API(`GET /api/seller/reviews?brandId=`, sellerReviewsApi.ts)의 응답을
+ * 이 다섯 필드로 줄인 것이다. 번들 표본은 더 이상 없다 — 로그인한 브랜드의 실제 리뷰만 센다.
+ * 본문은 영어·한국어가 섞일 수 있다. 키워드 패턴은 영어라 한국어 본문은 0 으로 잡힌다 (화면에 근사치라고 적는다).
+ * `skin_type` 은 백엔드가 모르면 null 이고, 전부 null 이면 화면이 피부타입별 표를 숨긴다.
+ */
+export interface DashboardReview {
+  product_id: string;
+  rating: number;
+  is_recommended: boolean | null;
+  review_text: string | null;
+  skin_type: SkinType | null;
+}
 
 /* ---------- 시드 고정 난수 ---------- */
 
@@ -124,6 +128,12 @@ const FACTOR_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   { label: '지속력', pattern: /last|all day|long/i },
 ];
 
+function scopeReviews(reviews: DashboardReview[], productId: string | null, mine: Product[]): DashboardReview[] {
+  const ids = new Set(mine.map((p) => p.product_id));
+  if (productId) return ids.has(productId) ? reviews.filter((r) => r.product_id === productId) : [];
+  return reviews.filter((r) => ids.has(r.product_id));
+}
+
 export interface ReviewStats {
   sampleSize: number;
   withText: number;
@@ -135,8 +145,12 @@ export interface ReviewStats {
   factors: Array<{ label: string; count: number; share: number }>;
 }
 
-export function reviewStats(productId: string | null): ReviewStats {
-  const scoped = productId ? reviews.filter((r) => r.product_id === productId) : reviews;
+/**
+ * 내 상품(`mine`)의 리뷰만 센다. 고른 상품이 있으면 그 하나, 없으면 내 상품 전체다.
+ * 고른 id 가 내 상품이 아니면(화면을 오가며 남은 값) 빈 집계다 — 남의 상품 리뷰를 내 것으로 보이지 않는다.
+ */
+export function reviewStats(reviews: DashboardReview[], productId: string | null, mine: Product[]): ReviewStats {
+  const scoped = scopeReviews(reviews, productId, mine);
   const texts = scoped.filter((r) => r.review_text);
 
   const ratingDist = [0, 0, 0, 0, 0];
@@ -171,10 +185,10 @@ export function reviewStats(productId: string | null): ReviewStats {
   };
 }
 
-/** 자극·트러블 언급 비율 상위 상품 (실측) */
-export const troubleRanking = products
+/** 내 상품 중 자극·트러블 언급 비율 상위 (실측) */
+export const troubleRanking = (reviews: DashboardReview[], mine: Product[]) => mine
   .map((p) => {
-    const stats = reviewStats(p.product_id);
+    const stats = reviewStats(reviews, p.product_id, mine);
     return {
       product: p,
       irritationRate: stats.irritationRate,
@@ -327,8 +341,8 @@ export interface SkinReviewRow {
  * 피부 타입별 평점·자극 언급. 리뷰어 skin_type 은 원천에 있어 전부 실측이다.
  * 같은 상품이 건성 4.6 / 지성 3.4 처럼 갈리면 타깃 문구를 갈라 쓸 근거다 (명세 R1·R2).
  */
-export function reviewsBySkinType(productId: string | null): SkinReviewRow[] {
-  const scoped = productId ? reviews.filter((r) => r.product_id === productId) : reviews.filter((r) => products.some((p) => p.product_id === r.product_id));
+export function reviewsBySkinType(reviews: DashboardReview[], productId: string | null, mine: Product[]): SkinReviewRow[] {
+  const scoped = scopeReviews(reviews, productId, mine);
   return ['dry', 'oily', 'combination', 'normal'].map((type) => {
     const rows = scoped.filter((r) => r.skin_type === type);
     const texts = rows.filter((r) => r.review_text);

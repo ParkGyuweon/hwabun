@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { OriginBadge, Panel } from '../components';
-import { MINOR_WEIGHT, catalogProducts, cautionPrevalence, fmt, ingredientStats, ingredientWeights, products } from '../lib/metrics';
+import { MINOR_WEIGHT, catalogProducts, cautionPrevalence, fmt, ingredientStats, ingredientWeights } from '../lib/metrics';
+import { useBrandProducts } from '../lib/useBrandProducts';
 import { useBehavior } from '../lib/useBehavior';
 import { labelKo } from '../../lib/formLabels';
 
@@ -19,16 +20,31 @@ const ko = (name: string) => {
  * 마트의 관심 셋째 열은 체류 ms 가 아니라 "상품 귀속 점수" 다 (계약 E5). 열 제목과 단위가 그에 따라 바뀐다.
  */
 export default function IngredientsScreen({
+  brandId,
+  brandName,
   productId,
   onProductChange,
 }: {
+  brandId: string | null;
+  brandName: string | null;
   productId: string | null;
   onProductChange: (id: string | null) => void;
 }) {
   const { ingredientGap, ingredientInterestKind, source } = useBehavior();
-  const product = products.find((p) => p.product_id === productId) ?? products[0];
-  const stats = ingredientStats(product);
-  const weights = useMemo(() => ingredientWeights(product), [product]);
+  /**
+   * 성분은 **내가 등록한 상품의 전성분**이다.
+   *
+   * 전에는 번들 카탈로그를 `BEHAVIOR_BRAND`(Drunk Elephant)로 걸러 쓰고, 고른 상품이 없으면 그 목록의
+   * 첫 상품으로 물러났다. 어느 브랜드로 로그인하든 남의 상품 전성분이 "실측" 배지를 달고 떴다는 뜻이다.
+   * 사장님은 그것을 내 상품 성분으로 읽고 처방을 판단한다.
+   *
+   * 물러날 곳을 두지 않는다. 내 상품이 없으면 없다고 적는다.
+   */
+  const { products: mine, failed } = useBrandProducts(brandId, brandName);
+  // 고른 것이 없으면 **내 상품 중** 첫 번째. 다른 브랜드로는 넘어가지 않는다
+  const product = mine ? (mine.find((p) => p.product_id === productId) ?? mine[0] ?? null) : null;
+  const stats = useMemo(() => (product ? ingredientStats(product) : null), [product]);
+  const weights = useMemo(() => (product ? ingredientWeights(product) : new Map<string, number>()), [product]);
 
   const gaps = ingredientGap.filter((r) => r.gap);
   const top10 = ingredientGap.filter((r) => r.rank <= 10);
@@ -47,6 +63,25 @@ export default function IngredientsScreen({
 
   const thirdCol = ingredientInterestKind === 'score' ? '상품 귀속' : '체류';
   const third = (v: number) => (ingredientInterestKind === 'score' ? fmt.int(Math.round(v)) : `${(v / 1000).toFixed(1)}초`);
+
+  /**
+   * 내 상품이 없으면 성분 화면은 그릴 것이 없다. 번들 카탈로그로 대신 채우지 않는다 —
+   * 남의 상품 성분을 내 것으로 읽게 만드는 것이 이 화면의 원래 문제였다.
+   */
+  if (mine === null || !product || !stats) {
+    const why = failed
+      ? '상품 목록을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
+      : mine === null
+        ? '상품 목록을 받는 중입니다.'
+        : '등록한 상품이 없습니다. 상품을 등록하면 전성분을 여기서 봅니다.';
+    return (
+      <div className="stack">
+        <Panel title="내 상품 성분 띠" origin="mine" source="real">
+          <p className="fbx-empty">{why}</p>
+        </Panel>
+      </div>
+    );
+  }
 
   return (
     <div className="stack">
@@ -150,7 +185,7 @@ export default function IngredientsScreen({
             <label className="scope__field">
               <span className="scope__label">상품</span>
               <select value={product.product_id} onChange={(e) => onProductChange(e.target.value)} aria-label="상품 선택">
-                {products.map((p) => (
+                {mine.map((p) => (
                   <option key={p.product_id} value={p.product_id}>
                     {p.product_name}
                   </option>
