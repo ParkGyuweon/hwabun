@@ -49,7 +49,7 @@ public class FeedbackController {
   ) {
     requireRole(actor, AccountRole.MEMBER);
     String memberId = actor.accountId();
-    purchasedOrderItem(memberId, req.orderItemId());
+    String productId = purchasedOrderItemProductId(memberId, req.orderItemId());
     if (
       count(
         "select count(*) from review where order_item_id=?",
@@ -61,8 +61,9 @@ public class FeedbackController {
     );
     String id = UUID.randomUUID().toString();
     jdbc.update(
-      "insert into review(review_id,order_item_id,rating,is_recommended,title,body) values(?,?,?,?,?,?)",
+      "insert into review(review_id,product_id,order_item_id,rating,is_recommended,title,body) values(?,?,?,?,?,?,?)",
       id,
+      productId,
       req.orderItemId(),
       req.rating(),
       req.isRecommended(),
@@ -281,17 +282,19 @@ public class FeedbackController {
     return itemIds.isEmpty() ? null : itemIds.get(0);
   }
 
-  private void purchasedOrderItem(String memberId, String itemId) {
-    if (
-      count(
-        "select count(*) from order_item oi join shop_order o on o.order_id=oi.order_id where oi.order_item_id=? and o.member_id=? and o.status='PAID'",
-        itemId,
-        memberId
-      ) == 0
-    ) throw new ResponseStatusException(
+  private String purchasedOrderItemProductId(String memberId, String itemId) {
+    List<String> productIds = jdbc.query(
+      "select oi.product_id from order_item oi join shop_order o on o.order_id=oi.order_id " +
+        "where oi.order_item_id=? and o.member_id=? and o.status='PAID'",
+      (rs, rowNum) -> rs.getString("product_id"),
+      itemId,
+      memberId
+    );
+    if (productIds.isEmpty()) throw new ResponseStatusException(
       HttpStatus.FORBIDDEN,
       "paid purchase required"
     );
+    return productIds.get(0);
   }
 
   private String ownedBrandId(ShopPrincipal actor, String requestedBrandId) {
