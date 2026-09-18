@@ -590,6 +590,12 @@ export async function fetchBackendReviews(productId: string): Promise<Review[]> 
 export interface SellerPulse {
   orders: number;
   revenue: number;
+  /** 팔린 개수 합계. 주문 수와 다르다 — 한 주문에 3개가 들어가면 주문 1, 수량 3 */
+  units: number;
+  /** 한 번이라도 팔린 상품 가짓수 */
+  soldProducts: number;
+  /** 주문 줄 수 (주문 × 상품). 주문 수와 상품 가짓수 사이를 메운다 */
+  orderItems: number;
   reviews: number;
   feedbacks: number;
 }
@@ -648,8 +654,18 @@ export async function fetchSellerPulse(brandId: string): Promise<SellerPulse | n
   try {
     const res = await authFetch('SELLER', `/api/seller/dashboard?brandId=${encodeURIComponent(brandId)}`);
     if (!res.ok) return null;
-    const j = (await res.json()) as Partial<SellerPulse>;
-    return { orders: Number(j.orders ?? 0), revenue: Number(j.revenue ?? 0), reviews: Number(j.reviews ?? 0), feedbacks: Number(j.feedbacks ?? 0) };
+    // 서버 컬럼 이름은 snake_case 다. 예전 서버(새 컬럼이 없는 판본)와도 돌아야 해서 없으면 0 이다.
+    const j = (await res.json()) as Record<string, unknown>;
+    const n = (v: unknown) => Number(v ?? 0);
+    return {
+      orders: n(j.orders),
+      revenue: n(j.revenue),
+      units: n(j.units),
+      soldProducts: n(j.sold_products),
+      orderItems: n(j.order_items),
+      reviews: n(j.reviews),
+      feedbacks: n(j.feedbacks),
+    };
   } catch {
     return null;
   }

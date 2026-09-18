@@ -73,6 +73,12 @@ public class DashboardMartService {
     return shopJdbc.queryForMap(
       "select count(distinct oi.order_id) orders," +
         "coalesce(sum(oi.line_amount),0) revenue," +
+        // 팔린 개수는 주문 수와 다르다. 한 주문에 같은 상품 3개가 들어가면 주문 1, 수량 3 이다.
+        "coalesce(sum(oi.quantity),0) units," +
+        // 몇 가지가 팔렸나. 한 상품만 여러 번 팔린 것과 여러 상품이 골고루 팔린 것은 다른 이야기다
+        "count(distinct oi.product_id) sold_products," +
+        // 주문 줄 수. 주문 수와 상품 종류 사이를 메우는 값이라 같이 낸다
+        "count(*) order_items," +
         "(select count(*) from review r join order_item x on x.order_item_id=r.order_item_id where x.brand_id=?) reviews," +
         "(select count(*) from feedback f join order_item x on x.order_item_id=f.order_item_id where x.brand_id=? and f.status='VISIBLE') feedbacks " +
         "from order_item oi join shop_order o on o.order_id=oi.order_id where oi.brand_id=? and o.status='PAID'",
