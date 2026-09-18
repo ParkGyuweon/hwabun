@@ -1,10 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { fetchSellerFeedback, startFeedbackClassification } from '../../lib/shopApi';
-import { loadBrandId } from '../../lib/brands';
 import { OriginBadge, Panel } from '../components';
 import InsightCard from './InsightCard';
-import { feedbackProducts as products } from '../lib/metrics';
-import { FEEDBACK_BRAND } from '../lib/scope';
+import { useBrandProducts } from '../lib/useBrandProducts';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, feedbackSource, updateFeedback } from '../../lib/feedbackStore';
 import { findAdTerms } from '../../lib/adTerms';
@@ -53,8 +51,11 @@ const STATUS_KO = { new: '새 의견', read: '읽음', reflected: '반영' } as 
  * 집계 grain 은 계약대로 (product_id, axis_id, category_id). 상품·축·카테고리는 전부 필터다.
  * 금지어가 걸린 행은 접어 두고 눌러야 본문을 보여준다. 집계에서는 빼지 않는다.
  */
-export default function FeedbackScreen() {
+export default function FeedbackScreen({ brandId, brandName }: { brandId: string | null; brandName: string | null }) {
   const all = useFeedback();
+  // 상품 목록은 로그인한 브랜드가 등록한 것. 전에는 번들 카탈로그의 SSAFY Beauty 8종으로 고정돼 있었다
+  const { products: mine0 } = useBrandProducts(brandId, brandName);
+  const products = useMemo(() => mine0 ?? [], [mine0]);
   /**
    * 백엔드 피드백(GET /api/seller/feedback)을 로컬 저장본과 합친다.
    * 브랜드 id 는 대시보드 로그인 때 저장된 값. 없거나 백엔드가 없으면 로컬만 보인다.
@@ -63,13 +64,12 @@ export default function FeedbackScreen() {
   /** 분류를 걸어 놓고 결과를 기다리는 중. 제한 시간 안에 안 끝나면 지금 있는 데이터를 그대로 둔다 */
   const [classifying, setClassifying] = useState(false);
   useEffect(() => {
-    const brandId = loadBrandId();
-    if (!brandId) return;
+    if (!brandId || !brandName) return;
     let alive = true;
     let timer: number | undefined;
 
     const pull = async (): Promise<boolean> => {
-      const rows = await fetchSellerFeedback(brandId, FEEDBACK_BRAND);
+      const rows = await fetchSellerFeedback(brandId, brandName);
       if (!alive || !rows) return false;
       setRemote(rows);
       // 백엔드 행이 하나도 PENDING 이 아니면 끝난 것. 행이 없어도 기다릴 이유가 없다
@@ -103,12 +103,13 @@ export default function FeedbackScreen() {
       alive = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, []);
+  }, [brandId, brandName]);
   const mine = useMemo(() => {
-    const local = feedbackForBrand(all, FEEDBACK_BRAND);
+    // 번들 시드(SSAFY Beauty 30건)는 로그인한 브랜드가 그 이름일 때만 섞인다. 다른 브랜드에는 남의 피드백이다
+    const local = brandName ? feedbackForBrand(all, brandName) : [];
     const seen = new Set(local.map((f) => f.feedback_id));
     return [...remote.filter((f) => !seen.has(f.feedback_id)), ...local];
-  }, [all, remote]);
+  }, [all, remote, brandName]);
 
   /** 배지. 백엔드 행이나 이 사이트에서 쓴 글이 있으면 실측, 전부 번들 샘플이면 시드 */
   const source = useMemo(() => feedbackSource(mine), [mine]);
@@ -236,7 +237,7 @@ export default function FeedbackScreen() {
           : `${categoryLabel(first[0])}: ${named(firstProductIds)}.`,
       routes,
     };
-  }, [mine]);
+  }, [mine, products]);
 
   const productName = (id: string) => products.find((p) => p.product_id === id)?.product_name ?? id;
   const reflect = (f: Feedback) => {
@@ -272,7 +273,7 @@ export default function FeedbackScreen() {
       </div>
 
       {/* AI 요약. 원문 목록보다 위 — 사장님은 결론부터 본다. 상품 필터를 그대로 따른다 */}
-      <InsightCard brandId={loadBrandId()} productId={productId === 'all' ? null : productId} />
+      <InsightCard brandId={brandId} productId={productId === 'all' ? null : productId} />
 
       {verdict ? (
         <section className="verdict verdict--mine">
@@ -529,7 +530,7 @@ export default function FeedbackScreen() {
                   {f.status === 'reflected' ? (
                     <blockquote className="fbx-card__reply">
                       <span>{f.reply ?? '답글 없이 반영'}</span>
-                      <small>{FEEDBACK_BRAND} · {f.replied_at?.slice(0, 10)}</small>
+                      <small>{brandName ?? ''} · {f.replied_at?.slice(0, 10)}</small>
                     </blockquote>
                   ) : (
                     <div className="fbx-card__actions">

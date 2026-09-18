@@ -8,7 +8,6 @@ import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { useBehavior } from '../lib/useBehavior';
-import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
@@ -30,7 +29,16 @@ function bestRepurchaseName(rp: Repurchase, products: ProductMetrics[]): string 
   return products.find((x) => x.product.product_id === best[0])?.product.product_name ?? best[0];
 }
 
-export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (screen: string) => void }) {
+export default function OverviewScreen({
+  days,
+  brandName,
+  onGo,
+}: {
+  days: number;
+  /** 로그인한 브랜드 이름. 피드백 시드는 이 이름과 같은 것만 센다 — 못 받았으면 아무것도 안 센다 */
+  brandName: string | null;
+  onGo?: (screen: string) => void;
+}) {
   const m = useBehavior();
   const { overview, previous, daily: series, standardFunnel, productMetrics, repurchase, source } = m;
   const insights = useMemo(() => rankInsights(m), [m]);
@@ -38,7 +46,7 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
   const rest = insights.slice(1, 4);
 
   const all = useFeedback();
-  const fb = useMemo(() => feedbackForBrand(all, FEEDBACK_BRAND), [all]);
+  const fb = useMemo(() => (brandName ? feedbackForBrand(all, brandName) : []), [all, brandName]);
   const fbTop = useMemo(() => {
     const map = new Map<string, number>();
     for (const f of fb) for (const l of labelsOf(f)) map.set(l.category_id, (map.get(l.category_id) ?? 0) + 1);
@@ -173,7 +181,7 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
         <Kpi
           label="피드백 최다 언급"
           value={fbTop ? categoryLabel(fbTop[0]) : '없음'}
-          sub={fbTop ? `언급 ${fbTop[1]} · ${FEEDBACK_BRAND} ${fb.length}건` : ''}
+          sub={fbTop ? `언급 ${fbTop[1]} · 피드백 ${fb.length}건` : '내 브랜드 피드백이 아직 없습니다'}
           source={feedbackSource(fb)}
         />
       </div>
