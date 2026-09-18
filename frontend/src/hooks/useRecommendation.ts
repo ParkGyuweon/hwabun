@@ -52,7 +52,7 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
   const axesKey = axes.join(',');
   const profileKey = profile ? `${profile.skin_type ?? ''}/${profile.skin_tone ?? ''}/${profile.hair_color ?? ''}/${profile.eye_color ?? ''}` : '';
   const key = identityId ? `${identityId}|${k}|${bannerSlots}|${reserved}|${heroPolicy ?? 'top'}|${axesKey}|${profileKey}` : null;
-  const [server, setServer] = useState<{ key: string; response: RecommendResponse } | null>(null);
+  const [server, setServer] = useState<{ key: string; identityId: string; response: RecommendResponse } | null>(null);
 
   useEffect(() => {
     if (!key || !identityId) return;
@@ -67,7 +67,7 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
       })
       .then((res) => {
         if (controller.signal.aborted) return;
-        if (res) setServer({ key, response: res });
+        if (res) setServer({ key, identityId, response: res });
       });
     return () => controller.abort();
     // key 가 입력 전부를 담는다. axes 배열 참조가 바뀌어도 내용이 같으면 다시 부르지 않는다
@@ -80,11 +80,18 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
    * 지난 방문에서 가격만 보던 회원이 새 세션을 콜드스타트로 시작하던 것을 닫는다.
    * 세션 점수가 임계를 넘으면 그쪽이 계속 우선이고, 이 값은 세션이 약할 때만 축을 정한다 (`decideTrait`).
    *
-   * **같은 값이면 다시 넣지 않는다.** `setTraitProfile` 은 무조건 notify 하고, 성향이 바뀌면 `axes` 가
-   * 바뀌어 요청 key 가 바뀐다. 매번 넣으면 응답 → 성향 → 재요청 → 응답 이 그치지 않는다.
+   * **같은 값이면 다시 넣지 않는다.** `setTraitProfile` 은 성향이 바뀌면 `axes` 를 바꾸고, `axes` 는 요청
+   * key 에 들어 있다. 매번 넣으면 응답 → 성향 → 재요청 → 응답 이 그치지 않는다.
+   *
+   * **키가 달라졌다고 이미 섞은 값을 되돌리지 않는다** (2026-09-18). 전에는 `server.key === key` 일 때만
+   * 값을 읽어서, 섞은 성향이 축을 바꾸는 순간 키가 달라지고 → 값이 `null` 로 떨어지고 → 축이 되돌아오고 →
+   * 키가 원래대로 돌아와 값이 다시 살아나는 왕복이 렌더 속도로 돌았다. `appliedLongTerm` 은 같은 값의
+   * 연속 적용만 막아서 `값 → null → 값` 은 매번 통과했다. 로그인 회원 화면이 React #185
+   * (Maximum update depth exceeded)로 죽던 것이 이것이다 (에이전트 실측 09-18 · 20명 중 15명 로그인 실패).
+   * 장기 성향은 **그 사람의 값**이지 이번 요청의 산물이 아니므로, 신원이 같으면 마지막 응답 값을 유지한다.
    */
   const appliedLongTerm = useRef<string | null>(null);
-  const longTerm = server && server.key === key ? (server.response.long_term_trait ?? null) : null;
+  const longTerm = server && server.identityId === identityId ? (server.response.long_term_trait ?? null) : null;
   useEffect(() => {
     const stamp = longTerm ? JSON.stringify(longTermScores(longTerm)) : null;
     if (stamp === appliedLongTerm.current) return;

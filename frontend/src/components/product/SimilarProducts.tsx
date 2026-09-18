@@ -5,6 +5,7 @@ import StarRating from '../common/StarRating';
 import { formatCount } from '../../lib/format';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
 import { setNextProductViewEntry, track } from '../../lib/logger';
+import { displayReviewCount, useReviewCounts } from '../../lib/reviewStore';
 import type { Product } from '../../types/product';
 
 const PLACEHOLDER = '/images/product-placeholder.svg';
@@ -34,6 +35,8 @@ export default function SimilarProducts({
   algorithm,
   onSelect,
 }: SimilarProductsProps) {
+  // 카드가 적는 숫자는 우리가 가진 리뷰 수다 (lib/reviewStore)
+  const reviewCounts = useReviewCounts();
 
   /**
    * 노출은 공용 훅에 맡긴다. 판정 기준(hold_ms·visible_ratio)을 한 곳에서
@@ -119,8 +122,10 @@ export default function SimilarProducts({
               {product.rating !== null ? (
                 <span className="similar__rating">
                   <StarRating value={product.rating} size="sm" />
-                  {product.review_count !== null ? (
-                    <span className="similar__count">{formatCount(product.review_count)}</span>
+                  {displayReviewCount(product.product_id, product.review_count, reviewCounts) !== null ? (
+                    <span className="similar__count">
+                      {formatCount(displayReviewCount(product.product_id, product.review_count, reviewCounts) ?? 0)}
+                    </span>
                   ) : null}
                 </span>
               ) : null}

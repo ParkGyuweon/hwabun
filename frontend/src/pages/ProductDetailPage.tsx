@@ -12,6 +12,7 @@ import type { ReviewFilter, ReviewSort } from '../components/review/ReviewFilter
 import ReviewList from '../components/review/ReviewList';
 import FeedbackPanel from '../components/feedback/FeedbackPanel';
 import { calcReviewStats, splitIngredients } from '../lib/format';
+import { displayReviewCount, useReviewCounts } from '../lib/reviewStore';
 import { track } from '../lib/logger';
 import { useSectionView } from '../hooks/useSectionView';
 import { useScrollDepth } from '../hooks/useScrollDepth';
@@ -91,6 +92,8 @@ export default function ProductDetailPage({
   }, [reviews, filter, sort, persona]);
 
   const stats = useMemo(() => calcReviewStats(reviews), [reviews]);
+  // 카드에 적힌 숫자와 같은 값 (lib/reviewStore). 목록에서 본 건수와 상세가 다르면 안 된다
+  const reviewCount = displayReviewCount(product.product_id, product.review_count, useReviewCounts());
   const ingredientCount = splitIngredients(product.ingredients).length;
 
   /** 추천 노출과 클릭을 같은 요청으로 묶는 식별자. 추천 API 가 붙으면 서버 발급값으로 교체한다 */
@@ -179,7 +182,7 @@ export default function ProductDetailPage({
           Ratings &amp; Reviews
         </h2>
 
-        <ReviewSummary stats={stats} totalReviewCount={product.review_count} />
+        <ReviewSummary stats={stats} totalReviewCount={reviewCount} />
 
         <ReviewFilterBar
           persona={persona}

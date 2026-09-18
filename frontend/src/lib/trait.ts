@@ -260,8 +260,24 @@ export function ingestForTrait(eventName: EventName, props: Props, now = Date.no
   notify();
 }
 
+/** 장기 성향 점수가 같은가. 참조가 달라도 값이 같으면 성향은 안 바뀐 것이다 */
+function sameLongTerm(a: Partial<TraitScores> | null, b: Partial<TraitScores> | null): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  return TRAIT_KINDS.every((k) => (a[k] ?? null) === (b[k] ?? null));
+}
+
+/**
+ * 값이 그대로면 알리지 않는다.
+ *
+ * `notify` 는 `axes` 를 다시 계산하게 하고 `axes` 는 추천 요청 key 에 들어간다. 같은 값으로 알리면
+ * 아무것도 안 바뀌었는데 재요청이 돌고, 부르는 쪽이 매 렌더 부르면 렌더 루프가 된다 (React #185).
+ * 부르는 쪽(`useRecommendation`·`App`)도 각자 막지만 store 에서 한 번 더 끊는다.
+ */
 export function setTraitProfile(patch: Partial<TraitProfile>): void {
-  profile = { ...profile, ...patch };
+  const next = { ...profile, ...patch };
+  if (next.hasSkinProfile === profile.hasSkinProfile && sameLongTerm(next.longTerm, profile.longTerm)) return;
+  profile = next;
   notify();
 }
 

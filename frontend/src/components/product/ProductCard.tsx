@@ -3,6 +3,7 @@ import PriceTag from './PriceTag';
 import { badgeKo } from '../../lib/localize';
 import { IMAGE_WIDTH_CARD, sizedImage } from '../../lib/image';
 import { formatCount } from '../../lib/format';
+import { displayReviewCount, useReviewCounts } from '../../lib/reviewStore';
 import type { Product } from '../../types/product';
 import type { LogContentKind } from '../../types/log';
 
@@ -38,6 +39,9 @@ export default function ProductCard({
   onQuickLook,
 }: ProductCardProps) {
   const badges = product.badges ?? [];
+  // 카드 숫자는 **우리가 가진 리뷰 수**다. 카탈로그의 원천 리뷰 수(수천 건)를 적으면 상세와 어긋난다
+  const reviewCounts = useReviewCounts();
+  const reviewCount = displayReviewCount(product.product_id, product.review_count, reviewCounts);
 
   return (
     <li
@@ -73,8 +77,8 @@ export default function ProductCard({
         {product.rating !== null ? (
           <span className="card__rating">
             <StarRating value={product.rating} size="sm" />
-            {product.review_count !== null ? (
-              <span className="card__count">{formatCount(product.review_count)}</span>
+            {reviewCount !== null ? (
+              <span className="card__count">{formatCount(reviewCount)}</span>
             ) : null}
           </span>
         ) : (
