@@ -210,8 +210,18 @@ export default function ProductListPage({
       k: PROMO_SIZE,
       bannerSlots: BANNER_SLOTS,
       reserved: BANNER_RESERVED,
-      // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
-      heroPolicy: HERO_POLICY,
+      /*
+       * 히어로 정책. 기본은 `new_brand` 지만 **세션 성향이 잡히면 `top` 으로 바꾼다** (2026-09-17).
+       *
+       * 신규 브랜드 상품은 등록된 완성형 이미지 배너가 있어서, 히어로가 그 상품이면 축 문구가 아예
+       * 그려지지 않는다 (AdBanner: 이미지가 있으면 `banner_type=new_brand` · 값 없음으로 기록한다).
+       * SSAFY Beauty 8종이 전부 그런 상품이라, 정책이 `new_brand` 로 고정돼 있는 한 성분을 아무리
+       * 긁어도 히어로는 같은 이미지였다 — 행동이 배너를 바꾼다는 것이 화면에서 성립하지 않았다.
+       *
+       * 그래서 단서가 없는 첫 방문은 지금처럼 신규 브랜드 이야기를 하고(그게 전용 노출의 목적이다),
+       * 방문자가 취향을 드러내면 그 축으로 말하는 조립 배너로 넘어간다.
+       */
+      heroPolicy: trait.trait_source === 'coldstart' ? HERO_POLICY : 'top',
       // 로그인 회원은 피부 프로필이 비어 있어도 회원 id 로 부른다 — 행동 로그(persona_id = 회원 id)와 같은 식별자여야
       // 추천 서버의 세션 상태(좋아요 → 목록 반영)가 이어진다 (AI 파트 요청 2026-09-14, live-demo-runbook §5).
       // 프로필이 비면 속성 쿼리가 없을 뿐, 스위처 페르소나로 떨어지지 않는다.

@@ -44,7 +44,7 @@ export const HERO_POLICY: 'top' | 'new_brand' = 'new_brand';
  * 배너 뽑는 규칙(`bannerCreative`·`BANNER_RESERVED`·축 선택·**로그에 적는 축**)을 바꾸면 이 값을 올린다.
  * 올리지 않으면 전후 비교가 한 덩어리로 뭉개진다.
  */
-export const BANNER_POLICY_VERSION = 'banner-2026-09-15';
+export const BANNER_POLICY_VERSION = 'banner-2026-09-17';
 
 /*
  * 판 이력
@@ -57,6 +57,10 @@ export const BANNER_POLICY_VERSION = 'banner-2026-09-15';
  *                        완성형 배너는 브랜드 크리에이티브라 축 문구 배너가 아니고, PDRN 처럼 어휘집에 없는
  *                        토큰은 어떤 규칙으로도 banner_value 가 될 수 없다. 축 값은 조립 배너에만 기록한다.
  *                        → 이 판부터 new_brand 노출이 한 번 더 늘고, 축별 CTR 은 조립 배너만 본다
+ *   banner-2026-09-17    성향이 잡히면 히어로 정책을 `top` 으로 (ProductListPage). 신규 브랜드 상품은 완성형
+ *                        이미지라 축 문구가 안 그려져서, `new_brand` 고정이면 행동이 배너를 못 바꿨다.
+ *                        기본 축 순서에서 성분을 4→2번째로, 성향 임계값 2.0→1.5. (탐색 비율은 0.2 그대로 — Q5 검사 하한)
+ *                        → 이 판부터 조립 배너(축 문구) 노출이 늘고 new_brand 노출이 준다
  *   banner-2026-09-15    추천 서버 `hero_for(axes)` 반영 (AI Jira 304, 프론트 요청 09-14 §1). 히어로 `banner_type` 이
  *                        클라이언트 `axes` 순서(세션 성향)를 먼저 따른다. 이 판부터 서버 경로에서도 성향 축 배너가
  *                        노출되므로 `banner_daily` 의 `trait_source × banner_type` CTR 표본이 처음 쌓인다.

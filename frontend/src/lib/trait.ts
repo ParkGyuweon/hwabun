@@ -38,16 +38,26 @@ export const TRAIT_KINDS: readonly TraitKind[] = [
 export type TraitScores = Record<TraitKind, number>;
 
 /**
- * 이 값 미만이면 "성향 없음" 으로 본다. AI 기본축(concern·segment)으로 간다.
- * 필터 한 번(1.0)으로는 못 넘고, 필터 + 문구 선택이나 체류 몇 초가 쌓여야 넘는다.
- * 측정 전 초기값이다 — `trait_snapshot` 이 쌓이면 재조정한다.
+ * 이 값 미만이면 "성향 없음" 으로 본다.
+ *
+ * 2.0 → 1.5 (2026-09-17). 2.0 은 **작정하고 한 행동 하나로는 못 넘는 값**이었다. 성분을 한 번 긁으면 1.5 라
+ * 임계값에 못 미쳐 배너가 그대로였고, 같은 문장을 여러 번 긁어도 중복 제거에 걸려 점수가 안 올랐다.
+ * 사용자가 보기에는 "아무리 긁어도 반응이 없다" 였다.
+ * 1.5 는 뚜렷한 행동 하나(성분 드래그·전성분 펼치기+@)로 넘고, 필터 한 번(1.0)으로는 여전히 안 넘는다.
  */
-export const TRAIT_THRESHOLD = 2.0;
+export const TRAIT_THRESHOLD = 1.5;
 
 /**
  * 성향을 알아도 이 비율은 다른 축을 준다 (`trait_source: 'explore'`).
  * 이게 없으면 "성향 추정이 맞았는지" 를 영영 못 가린다. AI 파트도 20% 면 충분하다고 했다.
  * 세션당 한 번 정해 고정한다 — 새로고침마다 바뀌면 같은 사람의 배너가 흔들린다.
+ *
+ * **0.2 를 유지한다 (2026-09-18).** 한때 "가끔 안 바뀐다" 체감을 줄이려고 0.1 로 내렸다가 되돌렸다.
+ * Q5 `banner_explore_impression_share_is_near_twenty_percent` 가 실사용자 탐색 비중을 0.1~0.3 으로 검사하는데,
+ * 0.1 은 그 하한선 위에 정확히 걸터앉는 값이라 표본 100건에서 두 번에 한 번꼴로 실패한다 (p=0.1 이항, 9건 이하
+ * 40%대). 검사가 실패하면 그날 배치가 발행까지 못 간다. 계약(`event-properties-schema.md`)도 "20% 탐색군" 이고,
+ * 이 20% 는 성향 축 효과를 비교할 대조군이라 줄이면 유의성이 떨어진다 (AI 회신 09-18).
+ * 체감 원인은 탐색 비율이 아니라 축 순환·같은 상품 재노출 쪽이다 — 그건 따로 본다.
  */
 export const EXPLORE_RATIO = 0.2;
 
@@ -69,8 +79,19 @@ const TRAIT_AXES: Record<TraitKind, BannerType[]> = {
   participate: [],
 };
 
-/** 성향이 없거나 남는 칸을 채우는 순서. AI 권고(concern·segment 먼저) */
-const DEFAULT_AXES: BannerType[] = ['concern', 'segment', 'price_bin', 'ingredient'];
+/**
+ * 성향이 없거나 남는 칸을 채우는 순서.
+ *
+ * 성분을 넷째에서 **둘째로** 당겼다 (2026-09-17). 전에는 `concern → segment → price_bin → ingredient` 라
+ * 성분이 맨 뒤였다. 배너 줄은 이 순서로 축을 순환해 채우므로 성분 칸이 늘 마지막이었고, 칸이 모자라면
+ * 아예 안 나왔다.
+ *
+ * **맨 앞으로 두지는 않았다.** 히어로는 값이 있는 첫 축을 쓰는데, 성분을 1순위로 두면 성향이 없을 때도
+ * 성분 문구가 나가서 드래그 전후가 똑같아진다. 그러면 "행동이 배너를 바꾼다" 는 것이 화면에서 사라진다.
+ * 기본은 고민으로 두고, 성분을 긁으면 성향이 성분 축을 1순위로 올린다 (TRAIT_AXES). 그래야 바뀌는 것이
+ * 보인다.
+ */
+const DEFAULT_AXES: BannerType[] = ['concern', 'ingredient', 'segment', 'price_bin'];
 
 const STORAGE_KEY = 'hwabun.trait.v1';
 const MAX_ENTRIES = 400;
