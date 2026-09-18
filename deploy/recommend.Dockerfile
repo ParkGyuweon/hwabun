@@ -56,7 +56,7 @@ COPY frontend/src/types/log.ts /app/frontend/src/types/log.ts
 COPY simulator/generator/demo_live.py      simulator/generator/gen_behavior_logs.py      simulator/generator/recommend_client.py                             /app/simulator/generator/
 COPY simulator/personas/data/persona_style.json /app/simulator/personas/data/persona_style.json
 COPY frontend/src/mocks/products.sample.json      frontend/src/mocks/products.ssafy-beauty.json                             /app/frontend/src/mocks/
-COPY simulator/feedback/banned_terms.py /app/simulator/feedback/banned_terms.py
+COPY simulator/feedback/banned_terms.py      simulator/feedback/classify_feedback.py                             /app/simulator/feedback/
 COPY deploy/recommend-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && mkdir -p /data
 
