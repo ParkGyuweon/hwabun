@@ -1,6 +1,5 @@
 package com.cosmetic.shopbackend.feedback;
 
-import com.cosmetic.shopbackend.brand.BrandRepository;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import java.util.Map;
@@ -16,14 +15,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/seller/feedback")
 public class FeedbackClassificationController {
 
-  private final BrandRepository brands;
   private final FeedbackClassificationService classifications;
 
-  public FeedbackClassificationController(
-    BrandRepository brands,
-    FeedbackClassificationService classifications
-  ) {
-    this.brands = brands;
+  public FeedbackClassificationController(FeedbackClassificationService classifications) {
     this.classifications = classifications;
   }
 
@@ -49,13 +43,10 @@ public class FeedbackClassificationController {
     if (actor == null || actor.role() != AccountRole.SELLER) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "seller role required");
     }
-    String ownedBrandId = brands.findAllBySeller_Id(actor.accountId()).stream()
-      .findFirst()
-      .map(brand -> brand.getId())
-      .orElseThrow(() -> new ResponseStatusException(
-        HttpStatus.FORBIDDEN,
-        "brand access denied"
-      ));
+    String ownedBrandId = actor.brandId();
+    if (ownedBrandId == null || ownedBrandId.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand claim required");
+    }
     if (requestedBrandId != null && !requestedBrandId.isBlank() &&
       !ownedBrandId.equals(requestedBrandId)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand access denied");

@@ -23,6 +23,17 @@ class JwtTokenServiceTest {
   }
 
   @Test
+  void issueAndParseRoundTripPreservesSellerBrandClaim() {
+    JwtTokenService service = new JwtTokenService(SECRET, 60_000);
+
+    ShopPrincipal principal = service.parse(
+      service.issue("seller-42", AccountRole.SELLER, "brand-42")
+    );
+
+    assertEquals("brand-42", principal.brandId());
+  }
+
+  @Test
   void rejectsTokenSignedWithDifferentSecret() {
     JwtTokenService issuer = new JwtTokenService(SECRET, 60_000);
     JwtTokenService parser = new JwtTokenService(
