@@ -99,7 +99,7 @@ class EventControllerTest {
     @Test
     void appliesPageScopedProductIdRulesAtTheHttpBoundary() throws Exception {
         when(publisher.publish(anyString(), anyList()))
-                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(2)));
+                .thenReturn(CompletableFuture.completedFuture(new PublishSummary(4)));
 
         MvcResult asyncResult = mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -124,10 +124,26 @@ class EventControllerTest {
                                       "actor_type": "user", "environment": "local", "properties": {}
                                     },
                                     {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-list-scroll-depth",
+                                      "event_name": "scroll_depth", "intent": "exposure",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 3,
+                                      "page_type": "product_list", "product_id": null,
+                                      "actor_type": "user", "environment": "local", "properties": {}
+                                    },
+                                    {
+                                      "schema_version": "0.2.0-draft", "event_id": "evt-list-scroll-pause",
+                                      "event_name": "scroll_pause", "intent": "interest",
+                                      "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
+                                      "page_view_id": "page-view-001", "sequence_no": 4,
+                                      "page_type": "product_list", "product_id": null,
+                                      "actor_type": "user", "environment": "local", "properties": {}
+                                    },
+                                    {
                                       "schema_version": "0.2.0-draft", "event_id": "evt-platform-page",
                                       "event_name": "page_view", "intent": "session",
                                       "occurred_at": "2026-08-27T14:30:00Z", "session_id": "session-001",
-                                      "page_view_id": "page-view-001", "sequence_no": 3,
+                                      "page_view_id": "page-view-001", "sequence_no": 5,
                                       "page_type": "product_list", "product_id": null,
                                       "actor_type": "user", "environment": "local", "properties": {}
                                     }
@@ -139,7 +155,7 @@ class EventControllerTest {
 
         mockMvc.perform(asyncDispatch(asyncResult))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.accepted").value(2))
+                .andExpect(jsonPath("$.accepted").value(4))
                 .andExpect(jsonPath("$.rejected").value(1))
                 .andExpect(jsonPath("$.rejections[0].event_index").value(1))
                 .andExpect(jsonPath("$.rejections[0].event_id").value("evt-detail-section"))
