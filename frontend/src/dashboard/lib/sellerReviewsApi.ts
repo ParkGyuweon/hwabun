@@ -14,15 +14,32 @@ import { authFetch } from '../../lib/auth';
 import type { SkinType } from '../../types/product';
 import type { DashboardReview } from './metrics';
 
-export type SellerReviewsRead = { kind: 'ready'; rows: DashboardReview[] } | { kind: 'unavailable' };
+/** 집계용 다섯 필드에 화면이 원문을 보여 주는 데 필요한 것을 더한 행 */
+export interface SellerReview extends DashboardReview {
+  review_id: string;
+  product_name: string | null;
+  review_title: string | null;
+  /** "2026-09-18" 까지만 쓴다. 시각은 화면에 안 적는다 */
+  submission_date: string | null;
+  /** 구매 이력이 있는 리뷰인지. 시드 리뷰는 false */
+  is_purchaser: boolean;
+}
+
+export type SellerReviewsRead = { kind: 'ready'; rows: SellerReview[] } | { kind: 'unavailable' };
 
 const SKIN_TYPES: ReadonlySet<string> = new Set(['dry', 'oily', 'combination', 'normal']);
 
-function asRow(x: unknown): DashboardReview | null {
+function asRow(x: unknown): SellerReview | null {
   if (!x || typeof x !== 'object') return null;
   const r = x as Record<string, unknown>;
   if (typeof r.productId !== 'string' || typeof r.rating !== 'number') return null;
+  const when = typeof r.submissionTime === 'string' ? r.submissionTime.slice(0, 10) : null;
   return {
+    review_id: typeof r.reviewId === 'string' ? r.reviewId : `${r.productId}:${String(r.submissionTime ?? '')}:${r.rating}`,
+    product_name: typeof r.productName === 'string' ? r.productName : null,
+    review_title: typeof r.reviewTitle === 'string' && r.reviewTitle.trim() ? r.reviewTitle : null,
+    submission_date: when,
+    is_purchaser: r.isPurchaser === true || r.isPurchaser === 1,
     product_id: r.productId,
     rating: r.rating,
     // MySQL tinyint(1) 은 JdbcTemplate 을 거치면 true/false 대신 1/0 으로 올 수 있다 (shopApi.ts 의 리뷰 매핑과 같은 처리)
@@ -49,7 +66,7 @@ export async function fetchSellerReviews(brandId: string): Promise<SellerReviews
     if (!res.ok) return { kind: 'unavailable' };
     const rows = rowsOf(await res.json());
     if (rows === null) return { kind: 'unavailable' };
-    return { kind: 'ready', rows: rows.map(asRow).filter((r): r is DashboardReview => r !== null) };
+    return { kind: 'ready', rows: rows.map(asRow).filter((r): r is SellerReview => r !== null) };
   } catch {
     return { kind: 'unavailable' };
   }

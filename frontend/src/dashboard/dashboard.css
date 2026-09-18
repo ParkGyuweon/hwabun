@@ -2317,3 +2317,110 @@ table.data tr:hover td {
   background: rgba(0, 0, 0, 0.06);
   color: var(--ink-faint, rgba(0, 0, 0, 0.55));
 }
+
+/* ---------- 공개 리뷰 원문 (ReviewsScreen) ---------- */
+
+.reviews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviews__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.reviews__item:last-child {
+  border-bottom: 0;
+}
+
+.reviews__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.reviews__stars {
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+.reviews__rating {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.reviews__product {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+
+.reviews__product--link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.reviews__product--link:hover {
+  color: var(--ink);
+}
+
+.reviews__tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.reviews__tag--no {
+  color: #b3261e;
+  border-color: currentColor;
+}
+
+.reviews__when {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.reviews__title {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reviews__body {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+
+.table__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.data tr.is-hit td {
+  background: rgba(0, 0, 0, 0.04);
+}
