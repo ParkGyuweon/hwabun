@@ -61,14 +61,16 @@ public class FeedbackController {
     );
     String id = UUID.randomUUID().toString();
     jdbc.update(
-      "insert into review(review_id,product_id,order_item_id,rating,is_recommended,title,body) values(?,?,?,?,?,?,?)",
+      "insert into review(review_id,product_id,order_item_id,rating,is_recommended,title,body,skin_type_snapshot,skin_tone_snapshot,hair_color_snapshot,eye_color_snapshot) " +
+        "select ?,?,?,?,?,?,?,m.skin_type_code,m.skin_tone_code,m.hair_color_code,m.eye_color_code from member m where m.member_id=?",
       id,
       productId,
       req.orderItemId(),
       req.rating(),
       req.isRecommended(),
       req.title(),
-      req.body()
+      req.body(),
+      memberId
     );
     return Map.of("reviewId", id, "status", "PUBLISHED");
   }
@@ -93,9 +95,13 @@ public class FeedbackController {
     return jdbc.queryForList(
       "select r.review_id reviewId,r.product_id productId,p.product_name productName, " +
         "r.order_item_id orderItemId,r.rating,r.is_recommended isRecommended, " +
-        "r.title,r.body,r.status,r.created_at createdAt, " +
+        "r.title reviewTitle,r.body reviewText,coalesce(r.skin_type_snapshot,m.skin_type_code) skinType, " +
+        "r.created_at submissionTime, " +
         "case when r.order_item_id is not null then true else false end isPurchaser " +
         "from review r join product p on p.product_id=r.product_id " +
+        "left join order_item oi on oi.order_item_id=r.order_item_id " +
+        "left join shop_order o on o.order_id=oi.order_id " +
+        "left join member m on m.member_id=o.member_id " +
         "where p.brand_id=? and r.status='PUBLISHED' order by r.created_at desc",
       ownedBrandId
     );
