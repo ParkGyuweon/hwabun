@@ -24,7 +24,7 @@ ssh -i ~/Downloads/J15A306T.pem ubuntu@j15a306.p.ssafy.io \
 | `kafka_state.connected` | true, `broker_errors` 안 늘어남 (09-15 17:40 부터 EC2-2 브로커 `j15a306a.p.ssafy.io:9092` 에 연결됨) | 브로커 미기동 또는 `.env` 호스트 오류(EC2-1 자기 주소면 틀림). 인프라 |
 | `sessions.personas_in_memory` | 시연 트래픽 뒤 > 0 | 이벤트가 안 들어옴 = Kafka. `--http` 보험(§2-B) |
 | `catalog_sync.last` | `replaced 0 · seed_kept 200 · added/unchanged 8` | `replaced` 가 크면 옛 이미지 |
-| `user_trait.source` / `rows` / `rows_by_actor_type` | `dw_mysql:mysql/dw`(09-16 저녁부터). 첫 적재 전엔 `rows 0`·`{}` 가 정상. 적재 뒤 `rows_by_actor_type.synthetic` 이 잡혀야 페르소나 장기 성향이 산다(346 — 이전엔 `actor_type='user'` 만 읽어 영원히 0) | `rows 0` 이 계속이면 민우님 발행 Job 미실행. `max_age_days` 는 시연용 60(.env, 재생 로그 날짜 08-28), 시연 뒤 14 |
+| `user_trait.source` / `rows` / `rows_by_actor_type` | `dw_mysql:mysql/dw`. **09-18 첫 적재 완료 — rows 964,299**. `rows_by_actor_type.synthetic` 이 잡혀야 페르소나 장기 성향이 산다(346 — 이전엔 `actor_type='user'` 만 읽어 영원히 0) | `rows 0` 으로 돌아가면 발행이 실패한 것. `max_age_days` 는 시연용 60(.env, 재생 로그 날짜 08-28), 시연 뒤 14 |
 | `/pipeline/stats` `spark.reachable` / `dw.tables` / `dashboard_url` | true · 22 · `https://j15a306.p.ssafy.io/dashboard.html` (09-17 10:36) | Spark 는 EC2-2 18080(!297), dw 는 백엔드 CI 스키마, 대시보드는 .env |
 | 컨테이너 어휘집 | `vocab 0.7 [0, 26000, 46000, 66000, 105000]` | 백엔드 재배포가 옛 브랜치로 되돌린 것(§6) |
 | 응답 `hero.hero_policy_version` | `hero-2026-09-15` | 307 이전 이미지 |
@@ -102,7 +102,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 ## 2-1. 파이프라인 화면 `/pipeline` (Jira 337, 09-16)
 
 `/live` 가 "추천 상태에 반영됐다" 는 마지막 층을 깊게 보는 화면이라면, `/pipeline` 은 다섯 층을 얕게 이어 본다 —
-**① 사이트 활동(페르소나 PC / 에이전트 PA / 실사용자) → ② Kafka 파티션(브로커 끝 오프셋·소비 위치·lag) → ③ Spark(워커·실행 앱) → ④ dw 마트 7개(행 수·갱신) → ⑤ 대시보드(상태 반영·링크)**.
+**① 사이트 활동(페르소나 PC / 에이전트 PA / 실사용자) → ② Kafka 파티션(브로커 끝 오프셋·소비 위치·lag) → ③ Spark(워커·실행 앱) → ④ dw 마트 22개(행 수·갱신) → ⑤ 대시보드(상태 반영·링크)**.
 리허설(09-17)에서 로그가 어디까지 흘렀는지 짚는 용도. 다른 파트 자원은 전부 읽기만 한다. 접근은 `/live` 와 같다(컨테이너 8300, 터널).
 
 | 칸 | 출처 | 지금(09-16) | 켜려면 |
@@ -110,7 +110,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 | ① 활동 | Kafka 소비자가 받은 모든 메시지(상태 필터 전) | 됨 | — |
 | ② Kafka | 같은 group 의 두 번째 Consumer(구독 안 함)로 워터마크·committed | 됨 | — |
 | ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **동작 (09-17 10:33)** — 민우님 !297 로 EC2-2 가 `SPARK_MASTER_UI_BIND_IP` 로 마스터 UI 를 열었고, EC2-1 `.env` `SPARK_MASTER_UI=http://j15a306a.p.ssafy.io:18080`(Kafka 와 같은 공개 호스트명 — 사설 IP 172.26.1.194 는 무응답) · 실측 워커 1 · 코어 2 · ALIVE | `/json` 은 `/json/` 로 302 하지만 urllib 이 따라간다. 컨테이너 재생성만(재빌드 없음) |
-| ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **연결 (09-17)** — 스키마 22 테이블 인식, 행 0(첫 적재 전). 마트 목록은 `DW_PROJECTION_MARTS`(기본 7) | 민우님 발행 Job → 행 수. projection 이 22개면 EC2-1 .env 에도 같은 목록 |
+| ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **적재됨 (09-18)** — 22 테이블 중 **21종에 행**. `funnel_daily_kpi` 만 0행(Q4 가 NOT NULL 컬럼에 NULL 을 내 발행이 막힘, 데이터 파트 몫). 마트 목록은 `DW_PROJECTION_MARTS`(기본 22) | 0행이 늘면 발행 실패. 마트별 산출 시각은 `mart_processed_at` 로 본다 |
 | ⑤ 대시보드 | `DASHBOARD_URL` 링크 | **링크 (09-17)** — `https://j15a306.p.ssafy.io/dashboard.html`(프론트 별도 엔트리, SELLER 로그인) | 백엔드 마트 API 7개(!296, ec2-1-deploy) 배포 뒤 숫자 붙이기(AI 후속) |
 
 버튼 둘. **▶ 페르소나 시작**은 `/live` 와 같은 `POST /live/demo/start`(9,900명·KRW·이어 보내기). 상태 줄 한글은 09-17(344)부터 안 깨진다. **▶ 에이전트 100명**은 발표 노트북의 런처
