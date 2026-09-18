@@ -416,6 +416,93 @@ def persona_style(p):
     return sc
 
 
+# ── 성분 드래그 (Jira 351) ────────────────────────────────────────────────
+#  화장품에서 성분은 구매 판단의 상위 요인이라, 사용자는 모르는 성분명을 만나면
+#  그 부분만 긁어 따로 검색한다. "어느 문장을 긁었는가" 는 클릭보다 관심 대상을
+#  정확히 짚는 신호다. 프론트 useTextSelection.ts 가 실사용자에게서 이걸 받고,
+#  생성기는 같은 모양을 페르소나에게서 만든다.
+#
+#  ⚠ 두 가지를 프론트와 반드시 맞춘다.
+#    1) 사전은 contracts/product-feature-vocab.json **하나**를 같이 쓴다. 따로 만들면
+#       표준 명칭이 갈려 "이 성분을 긁은 사람" 과 "이 성분이 든 상품" 이 조인되지 않는다.
+#    2) matched_ingredients 는 **그 상품이 실제로 가진 성분**에서만 고른다. 없는 성분을
+#       실으면 ingredient_weekly_interest 마트(matched_ingredients 를 explode)가 거짓이 된다.
+_PRODUCT_INGREDIENTS = {}   # product_id -> [(표준 성분명, position_weight)]
+_VOCAB_VERSION = None
+
+
+def load_ingredients():
+    """상품별 성분과 어휘집 판을 읽는다. 없으면 드래그는 성분 없이 난다."""
+    global _VOCAB_VERSION
+    if os.path.exists(FEATURE_VOCAB):
+        _VOCAB_VERSION = json.load(open(FEATURE_VOCAB, encoding="utf-8")).get("version")
+    if not os.path.exists(PRODUCT_INGREDIENT):
+        log("product_ingredient.csv 없음 — 드래그에 성분을 싣지 않는다")
+        return
+    import csv
+    with open(PRODUCT_INGREDIENT, encoding="utf-8", newline="") as fp:
+        for row in csv.DictReader(fp):
+            try:
+                weight = float(row.get("position_weight") or 0.0)
+            except ValueError:
+                weight = 0.0
+            _PRODUCT_INGREDIENTS.setdefault(row["product_id"], []).append(
+                (row["ingredient"], max(weight, 0.01)))
+    log(f"상품별 성분 로드 {len(_PRODUCT_INGREDIENTS):,}개 상품 (어휘집 {_VOCAB_VERSION})")
+
+
+def pick_ingredients(product_id, rng):
+    """긁은 구간에 걸린 성분. 전성분에서 앞에 놓인 것일수록 자주 걸린다.
+
+    position_weight 는 전성분 배합 순서 기반이라 그대로 뽑기 가중치로 쓴다.
+    한 번 긁으면 보통 성분 하나지만, 나란히 적힌 둘이 같이 걸리기도 한다.
+    """
+    pool = _PRODUCT_INGREDIENTS.get(product_id)
+    if not pool:
+        return []
+    weights = np.array([w for _, w in pool], dtype=float)
+    take = min(len(pool), 1 if rng.random() < 0.78 else 2)
+    idx = rng.choice(len(pool), size=take, replace=False, p=weights / weights.sum())
+    return sorted({pool[int(i)][0] for i in np.atleast_1d(idx)})
+
+
+def selection_kind(content_kind, matched_count):
+    """계약 §3.6. 프론트 useTextSelection.ts 의 selectionKindOf 와 같은 규칙이다.
+
+    사전 매칭이 있으면 그것이 우선이다 — 리뷰 문장에서 성분명을 긁어도 성분 관심이다.
+    성향 표(user-trait-weights.json)가 이 값으로 가격·고민·성분 성향을 센다.
+    """
+    if matched_count > 0:
+        return "ingredient"
+    return {
+        "ingredient_list": "ingredient", "ingredient_callout": "ingredient",
+        "price": "price",
+        "clinical_claim": "claim", "highlight_badge": "claim", "what_it_is": "claim",
+        "usage_guide": "usage",
+    }.get(content_kind, "other")
+
+
+def emit_selection(e, gid, rng, SC, section, content_kind, content_ref, with_ingredients):
+    """드래그 한 번, 그리고 확률로 복사까지.
+
+    프론트는 같은 선택에 대해 text_selection 뒤 text_copy 를 남긴다(useTextSelection).
+    복사는 페이지 밖으로 들고 나갈 만큼 관심이 있었다는 뜻이라 더 무겁게 본다.
+    긁은 원문은 계약상 보내지 않는다 — 사전에 걸린 표준 명칭만 싣는다.
+    """
+    matched = pick_ingredients(gid, rng) if with_ingredients else []
+    props = dict(section_id=section, content_kind=content_kind, content_ref=content_ref,
+                 text_length=int(rng.integers(20, 200)), truncated=False,
+                 selection_kind=selection_kind(content_kind, len(matched)))
+    if matched:
+        props.update(matched_ingredients=matched, matched_count=len(matched),
+                     vocab_version=_VOCAB_VERSION)
+    e.tick()
+    e.emit("text_selection", gid, **props)
+    if rng.random() < SC["p_text_copy"]:
+        e.tick(200, 2000)
+        e.emit("text_copy", gid, **props)
+
+
 # ── 이벤트 intent — log.ts 의 EVENT_INTENT 를 그대로 읽는다 ────────────────
 #    사본을 두면 프론트가 이벤트를 추가했을 때 조용히 어긋난다.
 _W = BW.load()
@@ -729,18 +816,13 @@ def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
             if rng.random() < SC["p_accordion"]:
                 e.tick(); e.emit("accordion_toggle", gid, section_id=section,
                                  content_kind="ingredient_list", action="expand")
+            # 설명 문구를 긁는다. 이 섹션의 블록 중 하나를 고른다 — 향·제형 성향이
+            # 오래 머무는 자리다(STYLE_EFFECT 의 scent 가 p_text_selection 을 올린다).
+            # 성분 상자(ingredient_list·ingredient_callout)에 걸리면 성분이 같이 잡힌다.
             if rng.random() < SC["p_text_selection"]:
-                tlen = int(rng.integers(20, 200))
-                e.tick(); e.emit("text_selection", gid, section_id=section,
-                                 content_kind="product_meta", content_ref="category",
-                                 text_length=tlen, truncated=False)
-                # 고른 텍스트를 실제로 복사. 프론트는 같은 선택에 대해
-                # text_selection 뒤 copy 이벤트로 남긴다 (useTextSelection)
-                if rng.random() < SC["p_text_copy"]:
-                    e.tick(200, 2000)
-                    e.emit("text_copy", gid, section_id=section,
-                           content_kind="product_meta", content_ref="category",
-                           text_length=tlen, truncated=False)
+                kind, ref = blocks[int(rng.integers(0, len(blocks)))]
+                emit_selection(e, gid, rng, SC, section, kind, ref,
+                               with_ingredients=kind in ("ingredient_list", "ingredient_callout"))
         # 성분 표시 방식 전환. 성분을 신경 쓰는 페르소나일수록 자주 바꿔 본다
         # (SC 의 p_accordion 이 성향 6축의 ingredient 로 이미 조정돼 있다)
         if engaged and section == "ingredients":
@@ -749,6 +831,12 @@ def visit_detail(e, gid, product, rec_ids, rng, depth_target, engaged,
                     e.tick(300, 3000)
                     e.emit("ingredient_view_mode_change", gid,
                            section_id=section, mode=m)
+            # 전성분에서 모르는 성분명을 긁는다. 성분을 따지는 페르소나일수록 자주
+            # 긁는다 (STYLE_EFFECT 의 ingredient 가 p_ingredient_selection 을 2.2배까지).
+            # 프론트 실측에서도 이 섹션의 드래그는 content_kind=ingredient_list 로 잡힌다.
+            if rng.random() < SC["p_ingredient_selection"]:
+                emit_selection(e, gid, rng, SC, section, "ingredient_list", None,
+                               with_ingredients=True)
 
         if engaged and section == "product_hero":
             for idx in range(int(rng.integers(2, 8))):
@@ -1652,6 +1740,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
         log("  skin_type 분포: " + " · ".join(f"{k} {v}" for k, v in sorted(st.items(), key=lambda x: -x[1])))
 
     load_style()
+    load_ingredients()
     hp = None
     if behavior == BEHAVIOR_HIDDEN:
         sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
