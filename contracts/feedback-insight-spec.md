@@ -110,10 +110,20 @@ SELLER 권한 · 브랜드 소유 검사 (`/api/seller/feedback` 와 같은 규�
 - 금지어(`contracts/feedback-banned-terms.json` · `cosmetic-claim-banned-terms.json`)는 요약 문장에도 적용한다.
 - 원문 인용(`evidence.quote`)은 한 문장, 개인 식별 정보 없이.
 
-## 5. 정해야 할 것 (회신 대기)
+## 5. 결정된 것 (AI 파트 회신 09-18)
 
-1. 저장 위치: 백엔드 테이블(`feedback_insight`)인지, 추천 서비스가 들고 있고 백엔드가 프록시하는지.
-2. 원문 전달 시점: 저장 즉시인지 06:00·버튼 때 한꺼번인지. 프론트 동작엔 차이가 없지만 "버튼 눌렀는데 방금 쓴 글이 빠졌다" 가 생기는지 알아야 한다.
-3. `refresh` 를 동기(200)로 갈지 비동기(202)로 갈지.
-4. 화면 한 줄 해설(각 탭 지표의 자연어 풀이)을 같은 사이클에 태울지, 별도 API 로 갈지.
-5. 비구매자 피드백 403 해제 (`S15P21A306-fe-feedback-open` 브랜치 또는 백엔드 구현). 풀리기 전엔 `preBuyDropReasons` 가 항상 빈 배열이다.
+| # | 내용 | 결정 |
+|---|---|---|
+| 저장·조회 | 어디에 두나 | **백엔드 DB.** 브랜드×상품×기간 조회는 마트 API 가 이미 하는 일. 서빙 서버는 생성만 하고 상태를 갖지 않는다 |
+| 생성 | LLM 취합 잡 | **서빙 서버.** 처방 API 의 GMS 클라이언트·스위치·금지어 검증·JSON 스키마 강제를 그대로 쓴다 |
+| 빈도 | 언제 만드나 | **06:00 일 1회 + 즉시 반영 버튼만.** "N건 넘으면 즉시" 는 비용 예측이 안 돼 하지 않는다 |
+| 분류 | `feedback_classification` PENDING 채우기 | 서빙 서버가 라벨만 돌려주고(`POST /api/feedback/classify`) **DB 는 백엔드가 쓴다.** 별도 문서 |
+| 화면 해설 | 탭 지표의 자연어 풀이 | **새 엔드포인트 `/api/insight/explain`.** 처방 API 확장은 하지 않는다. 이 문서 범위 밖 |
+| 이벤트 | `feedback_submit` · `review_submit` | **만들지 않는다.** `log.ts`·이벤트 계약에도 없다. `feature-spec-status.md` 항목은 정리한다 |
+
+## 6. 아직 정해야 할 것 (백엔드 회신 대기)
+
+1. 원문 전달 시점: 저장 즉시인지 06:00·버튼 때 한꺼번인지. "버튼 눌렀는데 방금 쓴 글이 빠졌다" 가 생기는지 알아야 한다.
+2. `refresh` 를 동기(200)로 갈지 비동기(202)로 갈지. 프론트는 둘 다 받는다.
+3. 백엔드 테이블 이름·컬럼 (제안 `feedback_insight`: brand_id · product_id NULL · generated_at · source · summary_json · evidence_json · model).
+4. 비구매자 피드백 403 해제 (`S15P21A306-fe-feedback-open` MR !335). 풀리기 전엔 `preBuyDropReasons` 가 항상 빈 배열이다.
