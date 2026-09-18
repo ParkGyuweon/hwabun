@@ -7,6 +7,7 @@ import VariantPicker from './VariantPicker';
 import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
 import { setWished, useWished } from '../../lib/wishlist';
+import { displayReviewCount, useReviewCounts } from '../../lib/reviewStore';
 import type { Product, ProductVariant } from '../../types/product';
 import { MAX_CART_QUANTITY } from '../../types/cart';
 import type { CartItem } from '../../types/cart';
@@ -47,6 +48,8 @@ export default function ProductSummary({
   const [quantity, setQuantity] = useState(1);
   // 세션 동안 기억한다 — 찜 뒤 뒤로 갔다 와도 하트가 켜져 있어야 한다 (lib/wishlist)
   const loved = useWished(product.product_id);
+  // 리뷰 절이 실제로 그리는 건수와 같은 숫자여야 한다 (lib/reviewStore)
+  const reviewCount = displayReviewCount(product.product_id, product.review_count, useReviewCounts());
   const [addedAt, setAddedAt] = useState<number | null>(null);
 
   const changeQuantity = (next: number) => {
@@ -126,7 +129,7 @@ export default function ProductSummary({
       <p className="summary__brand">{product.brand_name}</p>
       <h1 className="summary__name">{product.product_name}</h1>
 
-      {product.rating !== null && product.review_count !== null ? (
+      {product.rating !== null && reviewCount !== null ? (
         <div className="summary__rating">
           <StarRating value={product.rating} />
           <span className="summary__rating-value">{product.rating.toFixed(2)}</span>
@@ -136,7 +139,7 @@ export default function ProductSummary({
             data-log-action="jump_to_reviews"
             onClick={onReviewLinkClick}
           >
-            리뷰 {formatCount(product.review_count)}건
+            리뷰 {formatCount(reviewCount)}건
           </button>
         </div>
       ) : (
