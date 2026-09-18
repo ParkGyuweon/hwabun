@@ -46,7 +46,8 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
 
   // 병목 단계 분포: 내 라인에서 가장 많이 막히는 단계
   const bottleneckCount = eligible.reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.bottleneck]: (acc[p.bottleneck] ?? 0) + 1 }), {});
-  const topBottleneck = (Object.entries(bottleneckCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'cart') as ProductMetrics['bottleneck'];
+  // 셀 상품이 없으면 "가장 많이 막히는 단계"도 없다. 'cart' 로 채우면 없는 병목이 생긴다 (2026-09-18)
+  const topBottleneck = (Object.entries(bottleneckCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as ProductMetrics['bottleneck'] | null;
   // 이탈 지점을 모르는 상품은 세지 않는다. 임의의 기본값('product_hero')으로 채우면 없는 결론이 생긴다
   const exitCount = eligible.reduce<Record<string, number>>(
     (acc, p) => (p.exitContent ? { ...acc, [p.exitContent]: (acc[p.exitContent] ?? 0) + 1 } : acc),
@@ -63,8 +64,8 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
       <div className="grid grid--kpi">
         <Kpi
           label="가장 많이 막히는 단계"
-          value={STEP_KO[topBottleneck]}
-          sub={`상품 ${bottleneckCount[topBottleneck] ?? 0}개 (상세 200건 이상 ${eligible.length}개 중)`}
+          value={topBottleneck ? STEP_KO[topBottleneck] : '-'}
+          sub={topBottleneck ? `상품 ${bottleneckCount[topBottleneck] ?? 0}개 (상세 200건 이상 ${eligible.length}개 중)` : '상세 200건 이상인 상품이 아직 없습니다'}
           source={source.products}
         />
         <Kpi
