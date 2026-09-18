@@ -33,10 +33,15 @@ public class FeedbackController {
   );
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
-
-  public FeedbackController(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+  private final FeedbackClassificationService classifications;
+  public FeedbackController(
+    JdbcTemplate jdbc,
+    ObjectMapper objectMapper,
+    FeedbackClassificationService classifications
+  ) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
+    this.classifications = classifications;
   }
 
   @PostMapping("/reviews")
@@ -78,6 +83,23 @@ public class FeedbackController {
         "join product p on p.product_id=oi.product_id join brand b on b.brand_id=p.brand_id " +
         "where oi.product_id=? and r.status='PUBLISHED' and p.status='ACTIVE' and b.status='ACTIVE' order by r.created_at desc",
       productId
+    );
+  }
+
+  @GetMapping("/seller/reviews")
+  public List<Map<String, Object>> sellerReviews(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @RequestParam(required = false) String brandId
+  ) {
+    String ownedBrandId = ownedBrandId(actor, brandId);
+    return jdbc.queryForList(
+      "select r.review_id reviewId,r.product_id productId,p.product_name productName, " +
+        "r.order_item_id orderItemId,r.rating,r.is_recommended isRecommended, " +
+        "r.title,r.body,r.status,r.created_at createdAt, " +
+        "case when r.order_item_id is not null then true else false end isPurchaser " +
+        "from review r join product p on p.product_id=r.product_id " +
+        "where p.brand_id=? and r.status='PUBLISHED' order by r.created_at desc",
+      ownedBrandId
     );
   }
 
@@ -124,6 +146,8 @@ public class FeedbackController {
       req.productId(),
       "axisId",
       axisId,
+      "isPurchaser",
+      orderItemId != null,
       "status",
       "VISIBLE",
       "classificationStatus",
@@ -134,13 +158,14 @@ public class FeedbackController {
   @GetMapping("/seller/feedback")
   public List<Map<String, Object>> sellerFeedback(
     @AuthenticationPrincipal ShopPrincipal actor,
-    @RequestParam String brandId
+    @RequestParam(required = false) String brandId
   ) {
     requireRole(actor, AccountRole.SELLER);
-    String sellerId = actor.accountId();
-    owns(sellerId, brandId);
+    String ownedBrandId = ownedBrandId(actor, brandId);
+    // 조회 요청 시 해당 브랜드의 미분류 건만 즉시 처리해 최신 라벨을 반환한다.
+    classifications.classifyPending(ownedBrandId, null);
     /*
-     * 브랜드 필터는 **상품(product.brand_id)** 으로 한다. 예전에는 `order_item` 을 inner join 해서
+      * 브랜드 필터는 **상품(product.brand_id)** 으로 한다. 예전에는 `order_item` 을 inner join 해서
      * 걸렀는데, 미구매자 의견은 `order_item_id` 가 NULL 이라 그 조인에서 통째로 사라진다 —
      * 사장님이 "안 산 사람이 뭐라 했는지" 를 영영 볼 수 없었다.
      *
@@ -150,7 +175,7 @@ public class FeedbackController {
     List<Map<String, Object>> rows = jdbc.queryForList(
       "select f.feedback_id feedbackId,f.order_item_id orderItemId,f.product_id productId, " +
         "coalesce(oi.product_name_snapshot,p.product_name) productName, " +
-        "case when f.order_item_id is null then false else true end purchased, " +
+        "case when f.order_item_id is not null then true else false end isPurchaser, " +
         "f.member_id authorMemberId, " +
         "m.skin_type_code authorSkinTypeCode,m.skin_tone_code authorSkinToneCode, " +
         "m.hair_color_code authorHairColorCode,m.eye_color_code authorEyeColorCode, " +
@@ -162,7 +187,7 @@ public class FeedbackController {
         "left join member m on m.member_id=f.member_id " +
         "left join feedback_classification fc on fc.feedback_id=f.feedback_id " +
         "where p.brand_id=? and f.status='VISIBLE' order by f.created_at desc",
-      brandId
+      ownedBrandId
     );
     for (Map<String, Object> row : rows) {
       Map<String, Object> classification = classification(
@@ -274,17 +299,17 @@ public class FeedbackController {
     );
   }
 
-  private void owns(String sellerId, String brandId) {
-    if (
-      count(
-        "select count(*) from brand where brand_id=? and seller_account_id=?",
-        brandId,
-        sellerId
-      ) == 0
-    ) throw new ResponseStatusException(
-      HttpStatus.FORBIDDEN,
-      "brand access denied"
-    );
+  private String ownedBrandId(ShopPrincipal actor, String requestedBrandId) {
+    requireRole(actor, AccountRole.SELLER);
+    String ownedBrandId = actor.brandId();
+    if (ownedBrandId == null || ownedBrandId.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand claim required");
+    }
+    if (requestedBrandId != null && !requestedBrandId.isBlank() &&
+      !ownedBrandId.equals(requestedBrandId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand access denied");
+    }
+    return ownedBrandId;
   }
 
   private int count(String sql, Object... args) {

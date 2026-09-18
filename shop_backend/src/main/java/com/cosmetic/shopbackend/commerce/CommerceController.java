@@ -179,8 +179,8 @@ public class CommerceController {
         rs.getString("currency"),
         rs.getString("payment_id"),
         rs.getString("payment_provider"),
-        rs.getTimestamp("paid_at") == null ? null : rs.getTimestamp("paid_at").toLocalDateTime(),
-        rs.getTimestamp("created_at").toLocalDateTime(),
+        rs.getObject("paid_at", java.time.LocalDateTime.class),
+        rs.getObject("created_at", java.time.LocalDateTime.class),
         rs.getInt("item_count"),
         itemsByOrder.getOrDefault(rs.getString("order_id"), List.of())
       ),

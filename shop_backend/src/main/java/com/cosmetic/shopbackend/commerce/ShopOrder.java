@@ -112,7 +112,7 @@ public class ShopOrder {
   public void paid() {
     if (status == Status.CREATED) {
       status = Status.PAID;
-      paidAt = LocalDateTime.now();
+      paidAt = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
     }
   }
 
