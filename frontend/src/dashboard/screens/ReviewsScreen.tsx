@@ -1,14 +1,15 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BarList, Kpi, OriginBadge, Panel } from '../components';
 import { SKIN_TYPE_KO, fmt, reviewStats, reviewsBySkinType, troubleRanking } from '../lib/metrics';
+import { fetchSellerReviews } from '../lib/sellerReviewsApi';
+import type { SellerReviewsRead } from '../lib/sellerReviewsApi';
 import { useBrandProducts } from '../lib/useBrandProducts';
 
 /**
- * 소비자 평가와 자극·트러블. 전부 리뷰 표본 실측이다.
+ * 소비자 평가와 자극·트러블. 전부 로그인한 브랜드 상품의 실제 리뷰(판매자 리뷰 API) 실측이다.
  *
- * 2026-09-18: 고정 브랜드(`BEHAVIOR_BRAND` = Drunk Elephant) 상품 목록을 걷어냈다. 이 화면이 세는 리뷰는
- * **로그인한 브랜드가 등록한 상품**의 것뿐이다. 내 상품이 없거나 내 상품에 리뷰가 없으면 그렇다고 적는다 —
- * 남의 브랜드 리뷰로 채우지 않는다.
+ * 2026-09-18: 고정 브랜드(`BEHAVIOR_BRAND` = Drunk Elephant) 표본을 걷어냈다. 내 상품이 없거나 리뷰가 없거나
+ * API 를 못 읽으면 그렇다고 적는다 — 남의 브랜드 리뷰나 번들 표본으로 채우지 않는다.
  */
 export default function ReviewsScreen({
   brandId,
@@ -23,9 +24,26 @@ export default function ReviewsScreen({
 }) {
   const { products: mine, failed } = useBrandProducts(brandId, brandName);
   const products = useMemo(() => mine ?? [], [mine]);
-  const stats = useMemo(() => reviewStats(productId, products), [productId, products]);
-  const bySkin = useMemo(() => reviewsBySkinType(productId, products).filter((r) => r.n >= 5), [productId, products]);
-  const ranking = useMemo(() => troubleRanking(products), [products]);
+  // 로그인한 브랜드의 리뷰를 이 화면이 열릴 때 받는다. 받기 전이면 null. 브랜드가 바뀌면 다시 받는다
+  const [loaded, setLoaded] = useState<{ brand: string; read: SellerReviewsRead } | null>(null);
+  const read = loaded !== null && loaded.brand === brandId ? loaded.read : null;
+  const reviews = read?.kind === 'ready' ? read.rows : null;
+  useEffect(() => {
+    let alive = true;
+    if (brandId === null) return;
+    void fetchSellerReviews(brandId).then((r) => {
+      if (alive) setLoaded({ brand: brandId, read: r });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [brandId]);
+  const rows = useMemo(() => reviews ?? [], [reviews]);
+  const stats = useMemo(() => reviewStats(rows, productId, products), [rows, productId, products]);
+  const bySkin = useMemo(() => reviewsBySkinType(rows, productId, products).filter((r) => r.n >= 5), [rows, productId, products]);
+  const ranking = useMemo(() => troubleRanking(rows, products), [rows, products]);
+  // 백엔드가 피부 타입을 하나도 모르면 표를 그릴 근거가 없다. 빈 표 대신 숨긴다
+  const hasSkinType = rows.some((r) => r.skin_type !== null);
   // 결론은 리뷰 20건 이상인 타입끼리만 비교한다. 5건짜리 평점 차이는 우연이다
   const solid = bySkin.filter((r) => r.n >= 20);
   const hi = solid.length > 1 ? solid.reduce((a, b) => (a.avgRating >= b.avgRating ? a : b)) : null;
@@ -39,11 +57,15 @@ export default function ReviewsScreen({
    * 내 상품이 없으면 셀 리뷰가 없다. 번들 표본의 다른 브랜드로 대신 채우지 않는다 —
    * 남의 리뷰 평점을 내 것으로 읽게 만드는 것이 이 화면의 원래 문제였다.
    */
-  if (mine === null || mine.length === 0) {
+  if (mine === null || mine.length === 0 || reviews === null) {
     const why = failed
       ? '상품 목록을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
       : mine === null
         ? '상품 목록을 받는 중입니다.'
+        : read === null
+          ? '리뷰를 받는 중입니다.'
+          : read.kind === 'unavailable'
+            ? '리뷰를 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
         : '등록한 상품이 없습니다. 상품을 등록하면 그 상품의 리뷰가 여기 집계됩니다.';
     return (
       <div className="stack">
@@ -143,10 +165,11 @@ export default function ReviewsScreen({
               hint: fmt.pct(f.share, 0),
             }))}
           />
-          <p className="note">영문 표현 패턴 근사치</p>
+          <p className="note">영문 표현 패턴 근사치 · 한국어 본문은 잡히지 않는다</p>
         </Panel>
       </div>
 
+      {hasSkinType ? (
       <Panel title="피부 타입별 평점 · 자극 언급" source="real" aside="n<5 제외 · n<20 흐림 · 결론은 n≥20 만">
         <div className="table-wrap">
           <table className="data">
@@ -173,6 +196,7 @@ export default function ReviewsScreen({
           </table>
         </div>
       </Panel>
+      ) : null}
 
       <Panel title="자극·트러블 언급 상위 상품" source="real" fold aside="언급 비율 합 기준">
         <div className="table-wrap">
