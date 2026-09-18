@@ -8,20 +8,27 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class FeedbackClassificationService {
 
   private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+  private static final Logger log = LoggerFactory.getLogger(FeedbackClassificationService.class);
   private final JdbcTemplate jdbc;
   private final FeedbackClassificationClient classifier;
   private final TransactionTemplate transactions;
   private final tools.jackson.databind.ObjectMapper objectMapper;
+  private final Executor executor;
+  private final AtomicBoolean running = new AtomicBoolean(false);
   private final int batchSize;
 
   public FeedbackClassificationService(
@@ -29,13 +36,41 @@ public class FeedbackClassificationService {
     FeedbackClassificationClient classifier,
     PlatformTransactionManager transactionManager,
     tools.jackson.databind.ObjectMapper objectMapper,
+    @org.springframework.beans.factory.annotation.Qualifier("feedbackClassificationExecutor") Executor executor,
     @Value("${shop.feedback.classify.batch-size:200}") int batchSize
   ) {
     this.jdbc = jdbc;
     this.classifier = classifier;
     this.transactions = new TransactionTemplate(transactionManager);
     this.objectMapper = objectMapper;
+    this.executor = executor;
     this.batchSize = batchSize;
+  }
+
+  /**
+   * 분류 작업을 백그라운드에서 시작한다. 한 컨테이너에서 스케줄러와 수동 요청이
+   * 같은 미분류 건을 동시에 추천 서버로 보내지 않도록 전체 실행을 하나로 직렬화한다.
+   */
+  public boolean startAsync(String brandId, Integer requestedLimit) {
+    if (!running.compareAndSet(false, true)) return false;
+    executor.execute(() -> {
+      try {
+        RunResult result = classifyPending(brandId, requestedLimit);
+        log.info(
+          "feedback classification async status={} selected={} completed={} failed={} brandId={}",
+          result.status(), result.selected(), result.completed(), result.failed(), brandId
+        );
+      } catch (RuntimeException exception) {
+        log.error("feedback classification async failed brandId={}", brandId, exception);
+      } finally {
+        running.set(false);
+      }
+    });
+    return true;
+  }
+
+  public boolean isRunning() {
+    return running.get();
   }
 
   public RunResult classifyPending(String brandId, Integer requestedLimit) {
