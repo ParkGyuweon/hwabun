@@ -101,7 +101,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - Q1 `raw_sink_job`. Kafka 를 읽어 Raw Parquet 으로 적재합니다. Structured Streaming 이라 체크포인트로 오프셋을 이어받고, 파싱에 실패한 레코드도 원문을 남깁니다.
 - Q2 `clean_events_job`. 스키마와 의미를 검증하고 `event_id` 정본을 골라 cleaned / bad / duplicate 세 갈래로 나눕니다.
 - Q3 `derive_facts_job`. 세션화와 Fact 6종(상품, 구매, 구매사유, 리뷰, 섹션 체류, 콘텐츠 관심), Dimension 2종(dim_product, dim_brand)을 만듭니다.
-- Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 22종이 DW 발행 대상이고, `banner_daily`·`category_price_reference`·`cross_brand_daily` 는 Parquet 으로만 둡니다.
+- Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 22종이 DW 발행 대상이고, `banner_daily`·`category_price_reference`·`cross_brand_daily` 는 Parquet 으로만 둡니다. `analytics_baseline` (`dw-schema.md` §4.13) 은 기준선 기간을 인자로 준 실행에서만 만들어져 상시 25종에 넣지 않습니다 — 코드에는 출력 경로가 26개인데 평소 25개만 생기는 이유입니다.
 - Q5 `validate_pipeline_job`. 품질 검증 160개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속을 확인합니다.
 - 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`, 그리고 대시보드 마트 조회 계약 `dashboard-mart-api-spec.md`
 - Job 이 실제로 읽는 계약 파일도 같이 관리합니다. `event-schema.json`(Q2), `purchase-reason-trait-map.json`(Q4·Q5), `user-trait-weights.json`(Q4), `dw/build_ddl.py` 와 `dw/schema.sql`(DDL 생성, projection 이 역참조)
