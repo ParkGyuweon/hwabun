@@ -239,9 +239,9 @@ public class DashboardMartService {
             "coalesce(sum(session_count),0) session_count," +
             "coalesce(sum(unique_user_count),0) unique_user_count," +
             "coalesce(sum(product_interest_score),0) product_interest_score," +
-            // §4.1: product_ctr · detail_entry_rate 의 분모는 노출 **Event 수** 다. 세션이 아니다.
-            ratio("product_click_count", "product_impression_count", "product_ctr") + "," +
-            ratio("product_view_count", "product_impression_count", "detail_entry_rate") + "," +
+            // §4.1: product_ctr · detail_entry_rate 의 분모는 세 노출 합계인 impression_count(Event 수)다. 세션이 아니다.
+            ratio("product_click_count", "impression_count", "product_ctr") + "," +
+            ratio("product_view_count", "impression_count", "detail_entry_rate") + "," +
             // §4.1: 담기율 분모는 detail_view_sessions. product_view_sessions 로 나누면 1.0 을 넘는다 (Jira 277).
             ratio("add_to_cart_sessions", "detail_view_sessions", "add_to_cart_rate") + "," +
             "min(mart_processed_at) mart_processed_at " +
