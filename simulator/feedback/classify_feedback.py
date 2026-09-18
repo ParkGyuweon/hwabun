@@ -56,7 +56,11 @@ from collections import Counter, defaultdict
 
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+# CLI 로 쓸 때만 필요하다. 추천 서버가 이 모듈을 import 하므로(Jira 353) 실패해도 넘어간다.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 sys.path.insert(0, BD)
 from banned_terms import BannedTerms  # noqa: E402  금지어 대조 — LLM 없음
 

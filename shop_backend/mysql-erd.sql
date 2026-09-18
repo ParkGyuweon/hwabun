@@ -136,7 +136,7 @@ CREATE TABLE review (
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id) REFERENCES order_item(order_item_id) ON DELETE RESTRICT, UNIQUE KEY uq_review_source_external(source,external_id), CHECK((source='SEED_CATALOG' AND order_item_id IS NULL) OR (source='SHOP' AND order_item_id IS NOT NULL)), CHECK(rating BETWEEN 1 AND 5)
 );
 CREATE TABLE feedback (
- feedback_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, order_item_id VARCHAR(64) NOT NULL, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',
+ feedback_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, order_item_id VARCHAR(64) NULL, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id,product_id) REFERENCES order_item(order_item_id,product_id) ON DELETE RESTRICT, FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT,
  UNIQUE KEY uq_feedback_member_product_axis(member_id,product_id,axis_id), INDEX ix_feedback_product_axis(product_id,axis_id), INDEX ix_feedback_order_item_status(order_item_id,status)

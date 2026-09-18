@@ -551,3 +551,141 @@
   padding-top: 14px;
   border-top: 1px solid var(--color-line-soft, var(--color-line));
 }
+
+/* ---------- 주문 품목 · 리뷰 쓰기 ---------- */
+
+.mypage__order-items {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--color-line-soft, rgba(0, 0, 0, 0.08));
+  display: grid;
+  gap: 10px;
+}
+
+.mypage__order-item {
+  display: grid;
+  gap: 6px;
+}
+
+.mypage__order-item-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.mypage__order-item-variant,
+.mypage__order-item-qty {
+  font-size: 12px;
+  color: var(--color-ink-soft, rgba(0, 0, 0, 0.55));
+}
+
+.writereview__open {
+  justify-self: start;
+  appearance: none;
+  border: 1px solid var(--color-line, rgba(0, 0, 0, 0.15));
+  background: var(--color-surface, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.writereview__open:hover {
+  border-color: var(--color-ink, #111);
+}
+
+.writereview__done {
+  font-size: 12px;
+  color: var(--color-ink-soft, rgba(0, 0, 0, 0.55));
+}
+
+.writereview {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-line, rgba(0, 0, 0, 0.15));
+  border-radius: 10px;
+  background: var(--color-surface, #fff);
+}
+
+.writereview__stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.writereview__stars button {
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 1px;
+  /* 안 고른 별도 자리를 지켜야 별 다섯 개의 줄이 흔들리지 않는다 */
+  color: var(--color-line, rgba(0, 0, 0, 0.2));
+}
+
+.writereview__stars button.is-on {
+  color: #f5a524;
+}
+
+.writereview__rating {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--color-ink-soft, rgba(0, 0, 0, 0.55));
+}
+
+.writereview__body {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.writereview__error {
+  margin: 0;
+  font-size: 12px;
+  color: #c0392b;
+}
+
+.writereview__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.writereview__cancel,
+.writereview__send {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.writereview__cancel {
+  border: 1px solid var(--color-line, rgba(0, 0, 0, 0.15));
+  background: none;
+  color: inherit;
+}
+
+.writereview__send {
+  border: 0;
+  background: var(--color-ink, #111);
+  color: #fff;
+  font-weight: 600;
+}
+
+.writereview__send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

@@ -57,7 +57,11 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
     if (!canSubmit) return;
     setSendError(null);
     /*
-     * 백엔드에 있는 상품이면 서버로 보낸다. 서버가 이 고객의 결제 완료 주문을 확인하고, 없으면 403 이 정상이다.
+     * 백엔드에 있는 상품이면 서버로 보낸다.
+     *
+     * **구매하지 않아도 보낼 수 있다** (2026-09-17). 예전에는 서버가 결제 완료 주문을 요구해 403 이었고,
+     * 그래서 살까 말까 하며 묻고 싶은 사람의 말이 사장님에게 영영 닿지 않았다. 지금은 누구나 보내고,
+     * 산 사람인지는 서버가 기록해 대시보드가 "구매자 / 미구매" 배지로 적는다.
      *
      * 판정은 `backend_brand_id` 로 한다. `source` 로 보면 안 된다 — 프론트가 이미 아는 상품(번들 카탈로그에
      * 있는 것)은 백엔드 값을 얹어도 `source` 를 `seed_catalog` 로 **일부러 남긴다**(productRegistry
@@ -70,9 +74,11 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
       const r = await submitFeedbackBackend({ productId: product.product_id, axisId, body: text.trim() });
       if (!r.ok) {
         setSendError(
-          r.status === 403
-            ? '구매한 상품에만 의견을 남길 수 있습니다. 주문·결제 뒤에 다시 시도해 주세요.'
-            : `보내지 못했습니다. ${r.reason}`,
+          r.status === 401
+            ? '로그인하면 사장님께 의견을 보낼 수 있습니다.'
+            : r.status === 409
+              ? '이 주제로는 이미 의견을 보내셨습니다. 다른 주제를 골라 보세요.'
+              : `보내지 못했습니다. ${r.reason}`,
         );
         return;
       }

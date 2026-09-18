@@ -31,6 +31,7 @@ simulator/**
 !simulator/generator/gen_behavior_logs.py
 !simulator/generator/recommend_client.py
 !simulator/feedback/banned_terms.py
+!simulator/feedback/classify_feedback.py
 # /live 시연 구동 (Jira 335): Dockerfile 의 COPY 와 짝. 여기 없으면 빌드가 "not found" 로 멎는다
 !simulator/generator/demo_live.py
 !simulator/generator/gen_behavior_logs.py

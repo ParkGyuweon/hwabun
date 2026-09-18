@@ -2227,3 +2227,93 @@ table.data tr:hover td {
 .ai__acts li + li {
   margin-top: 6px;
 }
+
+/* ---------- 기간 선택 (주문 화면) ---------- */
+
+.daterange {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.daterange__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.daterange__presets button {
+  appearance: none;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  background: var(--surface, #fff);
+  color: var(--ink-faint, inherit);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.daterange__presets button:hover {
+  color: var(--ink, inherit);
+}
+
+.daterange__presets button.is-active {
+  background: var(--brand, #111);
+  border-color: var(--brand, #111);
+  color: #fff;
+  font-weight: 600;
+}
+
+.daterange__calendar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+
+.daterange__calendar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-faint, inherit);
+}
+
+.daterange__calendar input[type='date'] {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+
+.daterange__done {
+  appearance: none;
+  border: 0;
+  background: var(--brand, #111);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 의견 작성자가 산 사람인지. 두 말은 무게가 달라서 한눈에 갈라 보이게 한다 */
+.fbx-card__buyer {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+
+.fbx-card__buyer--no {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-faint, rgba(0, 0, 0, 0.55));
+}

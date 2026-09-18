@@ -148,7 +148,6 @@ class EventValidationTest {
                 Map.entry("recommendation_click", "comparison"),
                 Map.entry("wishlist_toggle", "conversion"),
                 Map.entry("add_to_cart", "conversion"),
-                Map.entry("scroll_depth", "exposure"),
                 Map.entry("impression_dwell", "exposure"),
                 Map.entry("media_view", "interest"),
                 Map.entry("quick_look", "interest"),
@@ -159,7 +158,6 @@ class EventValidationTest {
                 Map.entry("review_filter_apply", "validation"),
                 Map.entry("review_expand", "validation"),
                 Map.entry("ingredient_view_mode_change", "validation"),
-                Map.entry("scroll_pause", "interest"),
                 Map.entry("scroll_backtrack", "comparison"),
                 Map.entry("text_selection", "validation"),
                 Map.entry("text_copy", "validation"),
@@ -183,7 +181,9 @@ class EventValidationTest {
         List<ActivityEvent> events = List.of(
                 eventWithProductId("page_view", "session", "product_detail", null),
                 eventWithProductId("section_view", "interest", "product_detail", null),
-                eventWithProductId("section_dwell", "interest", "product_detail", null)
+                eventWithProductId("section_dwell", "interest", "product_detail", null),
+                eventWithProductId("scroll_depth", "exposure", "product_detail", null),
+                eventWithProductId("scroll_pause", "interest", "product_detail", null)
         );
 
         for (ActivityEvent event : events) {
@@ -200,6 +200,8 @@ class EventValidationTest {
                 eventWithProductId("page_view", "session", "product_list", null),
                 eventWithProductId("section_view", "interest", "product_list", null),
                 eventWithProductId("section_dwell", "interest", "product_list", null),
+                eventWithProductId("scroll_depth", "exposure", "product_list", null),
+                eventWithProductId("scroll_pause", "interest", "product_list", null),
                 eventWithProductId("page_view", "session", "cart", null)
         );
 
@@ -215,7 +217,9 @@ class EventValidationTest {
         List<ActivityEvent> events = List.of(
                 eventWithProductId("page_view", "session", "product_list", ""),
                 eventWithProductId("section_view", "interest", "product_list", " "),
-                eventWithProductId("section_dwell", "interest", "product_list", "")
+                eventWithProductId("section_dwell", "interest", "product_list", ""),
+                eventWithProductId("scroll_depth", "exposure", "product_list", " "),
+                eventWithProductId("scroll_pause", "interest", "product_list", "")
         );
 
         for (ActivityEvent event : events) {

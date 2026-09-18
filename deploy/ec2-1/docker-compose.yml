@@ -25,7 +25,7 @@ services:
       SERVER_PORT: "8090"
       SHOP_BACKEND_JWT_SECRET: ${SHOP_BACKEND_JWT_SECRET:?Set SHOP_BACKEND_JWT_SECRET in .env}
       SHOP_BACKEND_JWT_EXPIRATION_MS: ${SHOP_BACKEND_JWT_EXPIRATION_MS:-900000}
-      SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+      SHOP_BACKEND_MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shop_backend}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul&connectionTimeZone=Asia/Seoul&forceConnectionTimeZoneToSession=true
       SHOP_BACKEND_MYSQL_USER: ${MYSQL_USER:-shop_backend}
       SHOP_BACKEND_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
       DASHBOARD_MART_MYSQL_URL: jdbc:mysql://${DW_MYSQL_HOST:-mysql}:${DW_MYSQL_PORT:-3306}/${DW_MYSQL_DB:-dw}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
@@ -110,6 +110,9 @@ services:
       DEMO_CURRENCY: ${DEMO_CURRENCY:-KRW}
       SPARK_MASTER_UI: ${SPARK_MASTER_UI:-}
       DASHBOARD_URL: ${DASHBOARD_URL:-}
+      # /pipeline 의 dw 칸이 행 수를 세는 대상 (Jira 359). 비우면 pipeline_stats.py 내장 22종.
+      # EC2-2 의 발행 대상과 같은 목록이어야 한다 — 다르면 발행은 됐는데 화면에 안 잡힌다.
+      DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-}
       NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
     volumes:
       - recommend-data:/data

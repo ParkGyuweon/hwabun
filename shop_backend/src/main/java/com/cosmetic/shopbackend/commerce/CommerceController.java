@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -96,12 +97,68 @@ public class CommerceController {
     String paymentProvider,
     java.time.LocalDateTime paidAt,
     java.time.LocalDateTime createdAt,
-    int itemCount
+    int itemCount,
+    /**
+     * 주문에 든 품목. 리뷰를 쓰려면 `POST /api/reviews` 가 `orderItemId` 를 요구하는데, 주문 목록이
+     * 주문 단위 합계만 주고 있어서 화면이 그 값을 알 방법이 없었다 — 산 사람이 리뷰를 못 쓰고 있었다.
+     */
+    List<OrderItemResponse> items
+  ) {}
+
+  /** `reviewed` 는 이미 리뷰를 쓴 품목인지. 한 품목에 리뷰는 하나다(서버가 409 로 막는다) */
+  public record OrderItemResponse(
+    String orderItemId,
+    String productId,
+    String productName,
+    String variantLabel,
+    int quantity,
+    BigDecimal lineAmount,
+    boolean reviewed
   ) {}
 
   @GetMapping("/orders")
   public List<OrderResponse> orders(@AuthenticationPrincipal ShopPrincipal actor) {
     requireMember(actor);
+    String memberId = actor.accountId();
+
+    /*
+     * 품목을 같이 내려 준다. 리뷰를 쓰려면 `POST /api/reviews` 가 `orderItemId` 를 요구하는데 주문 목록이
+     * 주문 단위 합계(itemCount)만 주고 있어서, 화면이 "무엇을 리뷰할 수 있는지" 를 알 방법이 없었다.
+     * 산 사람이 리뷰를 못 쓰고 있던 것이 이것 때문이다.
+     *
+     * 주문마다 따로 부르지 않고 한 번에 읽어 메모리에서 묶는다 (따로 부르면 N+1).
+     * `reviewed` 는 이미 쓴 품목인지 — 한 품목에 리뷰는 하나이고 서버가 409 로 막는다.
+     */
+    Map<String, List<OrderItemResponse>> itemsByOrder = new LinkedHashMap<>();
+    jdbc
+      .query(
+        """
+        select oi.order_id,oi.order_item_id,oi.product_id,oi.product_name_snapshot,
+               oi.variant_label_snapshot,oi.quantity,oi.line_amount,
+               case when r.review_id is null then 0 else 1 end reviewed
+        from order_item oi
+        join shop_order o on o.order_id=oi.order_id
+        left join review r on r.order_item_id=oi.order_item_id
+        where o.member_id=? and o.status='PAID'
+        order by oi.order_id,oi.order_item_id
+        """,
+        (rs, rowNum) ->
+          Map.entry(
+            rs.getString("order_id"),
+            new OrderItemResponse(
+              rs.getString("order_item_id"),
+              rs.getString("product_id"),
+              rs.getString("product_name_snapshot"),
+              rs.getString("variant_label_snapshot"),
+              rs.getInt("quantity"),
+              rs.getBigDecimal("line_amount"),
+              rs.getInt("reviewed") == 1
+            )
+          ),
+        memberId
+      )
+      .forEach(entry -> itemsByOrder.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue()));
+
     return jdbc.query(
       """
       select o.order_id,o.status,o.total_amount,o.paid_amount,o.currency,
@@ -122,11 +179,12 @@ public class CommerceController {
         rs.getString("currency"),
         rs.getString("payment_id"),
         rs.getString("payment_provider"),
-        rs.getTimestamp("paid_at") == null ? null : rs.getTimestamp("paid_at").toLocalDateTime(),
-        rs.getTimestamp("created_at").toLocalDateTime(),
-        rs.getInt("item_count")
+        rs.getObject("paid_at", java.time.LocalDateTime.class),
+        rs.getObject("created_at", java.time.LocalDateTime.class),
+        rs.getInt("item_count"),
+        itemsByOrder.getOrDefault(rs.getString("order_id"), List.of())
       ),
-      actor.accountId()
+      memberId
     );
   }
 
@@ -309,11 +367,26 @@ public class CommerceController {
   }
 
   private OrderResponse orderView(ShopOrder order) {
-    int itemCount = orderItems
-      .findByOrderId(order.getId())
+    List<OrderItem> lines = orderItems.findByOrderId(order.getId());
+    int itemCount = lines.stream().mapToInt(OrderItem::getQuantity).sum();
+    /*
+     * 방금 만든 주문이라 리뷰는 아직 없다 — `reviewed` 는 전부 false 다. 주문 목록(`GET /api/orders`)은
+     * 리뷰 유무를 질의로 확인하지만 여기는 생성 직후 응답이라 그럴 필요가 없다.
+     */
+    List<OrderItemResponse> items = lines
       .stream()
-      .mapToInt(OrderItem::getQuantity)
-      .sum();
+      .map(line ->
+        new OrderItemResponse(
+          line.getId(),
+          line.getProductId(),
+          line.getProductName(),
+          line.getVariantLabel(),
+          line.getQuantity(),
+          line.getLineAmount(),
+          false
+        )
+      )
+      .toList();
     return new OrderResponse(
       order.getId(),
       order.getStatus().name(),
@@ -324,7 +397,8 @@ public class CommerceController {
       order.getPaymentProvider(),
       order.getPaidAt(),
       order.getCreatedAt(),
-      itemCount
+      itemCount,
+      items
     );
   }
 

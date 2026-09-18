@@ -76,6 +76,22 @@ class SellerOrderControllerTest {
   }
 
   @Test
+  @DisplayName("결제 시각은 정각(0초)이어도 초 자리가 사라지지 않는다")
+  void keepsSecondsEvenWhenZero() {
+    jdbc.update(
+      "insert into shop_order values (?,?,?,?,?,?)",
+      "O9", "M1", "PAID", "KRW",
+      java.sql.Timestamp.valueOf(TODAY + " 09:30:00"), // 초가 정각 — LocalDateTime.toString() 이면 "09:30" 으로 잘린다
+      java.sql.Timestamp.valueOf(TODAY + " 09:29:00")
+    );
+    line("I9", "O9", "SB1", BRAND, "토닝 패드", 1, 16_100);
+
+    Map<?, ?> order = (Map<?, ?>) ((List<?>) call(null, null).get("orders")).getFirst();
+
+    assertEquals(TODAY + "T09:30:00", order.get("ordered_at"));
+  }
+
+  @Test
   @DisplayName("한 주문의 여러 줄은 한 주문으로 접고 수량·금액을 더한다")
   void foldsLinesIntoOneOrder() {
     paidOrder("O1");

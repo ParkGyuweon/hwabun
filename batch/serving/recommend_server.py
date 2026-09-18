@@ -103,7 +103,8 @@ from user_vector import UserVector                             # noqa: E402
 from catalog_registry import (Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
-import prescription as rx                                               # noqa: E402
+import prescription as rx
+import feedback_classify as fc                                               # noqa: E402
 from live_stats import LiveStats, LIVE_HTML, log_tail                  # noqa: E402  (Jira 295 실시간 현황)
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
@@ -761,7 +762,8 @@ def health():
                                         for k, v in _last_sync.items()} if _last_sync else None)}
                              if SHOP_BACKEND_URL else None),
             "user_trait": _user_traits.health(),                 # 장기 성향 표 출처·행 수 (Jira 306)
-            "prescription": _rx_health(),                        # 처방 LLM 스위치·호출 수 (Jira 325)
+            "prescription": _rx_health(),
+        "feedback_classify": _fc_health(),                        # 처방 LLM 스위치·호출 수 (Jira 325)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
@@ -939,6 +941,83 @@ def prescription_llm_switch(body: LlmSwitch):
     global _rx_enabled
     _rx_enabled = bool(body.enabled)
     return _rx_health()
+
+
+# ── 고객 피드백 분류 (Jira 353) ────────────────────────────────────────────
+# 백엔드가 feedback_classification 의 PENDING·FAILED 를 집어서 부른다. **DB 는 여기서 안 쓴다** —
+# 라벨만 돌려주고 쓰기는 테이블 주인인 shop_backend 가 한다 (2026-09-18 합의).
+# 처방과 스위치를 나눈 이유: 처방은 비용 때문에 시연 직전에만 켜지만, 분류는 매일 06:00 배치가 부른다.
+_fc_enabled = fc.ENABLED_DEFAULT
+_fc_client = None
+_fc_client_tried = False
+_fc_stats = {"llm_calls": 0, "items": 0, "failed": 0, "refused_off": 0}
+
+
+def _fc_deps():
+    global _fc_client, _fc_client_tried
+    if not _fc_client_tried:
+        _fc_client = rx.make_client()          # 처방과 같은 GMS 키를 쓴다
+        _fc_client_tried = True
+    return _fc_client
+
+
+class FeedbackItem(BaseModel):
+    feedback_id: str
+    product_id: Optional[str] = None
+    axis_id: str
+    body: str
+
+
+class FeedbackClassifyInput(BaseModel):
+    items: List[FeedbackItem]
+
+
+def _fc_health() -> dict:
+    return {"enabled": _fc_enabled,
+            "key_present": bool(os.environ.get("GMS_KEY") or os.environ.get("GMS_API_KEY")),
+            "model": fc.MODEL, **_fc_stats}
+
+
+@app.post("/api/feedback/classify")
+def feedback_classify(body: FeedbackClassifyInput):
+    """피드백 여러 건을 분류해 라벨만 돌려준다. 축은 고객이 고른 값이라 그대로 받는다 (계약 0.2.0)."""
+    if not body.items:
+        return {"results": []}
+    if not _fc_enabled:
+        _fc_stats["refused_off"] += 1
+        raise HTTPException(503, {"code": "LLM_UNAVAILABLE",
+                                  "message": "피드백 분류 LLM 이 꺼져 있습니다 (FEEDBACK_CLASSIFY_LLM=off 또는 /api/feedback/classify/llm)"})
+    client = _fc_deps()
+    if client is None:
+        _fc_stats["refused_off"] += 1
+        raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "GMS 키가 없습니다"})
+    items = [it.model_dump() for it in body.items]
+    # 상품명은 프롬프트 참고용이다 (펌프가 있는 상품인지 등). 카탈로그에 없으면 빈 값으로 둔다.
+    e = get_engine()
+    names = {}
+    for it in items:
+        pid = it.get("product_id")
+        if pid and pid not in names:
+            i = e.index.get(pid)
+            names[pid] = e.products[i].get("product_name", "") if i is not None else ""
+    results = fc.classify_items(items, client, names=names)
+    _fc_stats["items"] += len(results)
+    _fc_stats["failed"] += sum(1 for r in results if r["status"] == "FAILED")
+    _fc_stats["llm_calls"] += sum(1 for r in results if r["status"] == "COMPLETED")
+    return {"results": results}
+
+
+@app.get("/api/feedback/classify/llm")
+def feedback_llm_state():
+    return _fc_health()
+
+
+@app.post("/api/feedback/classify/llm")
+def feedback_llm_switch(body: LlmSwitch):
+    """분류 LLM 켜기/끄기. 재배포 없이. 내부망 전용이라 인증은 없다 — nginx 가 밖에 열지 않는다"""
+    global _fc_enabled
+    _fc_enabled = bool(body.enabled)
+    return _fc_health()
 
 
 @app.post("/api/events")

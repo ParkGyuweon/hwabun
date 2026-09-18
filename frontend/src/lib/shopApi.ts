@@ -312,6 +312,18 @@ export type CheckoutResult = { ok: true; orderId: string; status: string } | Api
 export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null } | ApiFailure;
 export type ConfirmResult = { ok: true; orderId: string; status: string; paidAt: string | null } | ApiFailure;
 
+/** 주문에 든 품목. 리뷰를 쓰려면 `orderItemId` 가 필요하다 */
+export interface BackendOrderItem {
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  variantLabel: string | null;
+  quantity: number;
+  lineAmount: number;
+  /** 이미 리뷰를 쓴 품목. 한 품목에 리뷰는 하나다 (서버가 409 로 막는다) */
+  reviewed: boolean;
+}
+
 export interface BackendOrder {
   orderId: string;
   status: string;
@@ -323,6 +335,8 @@ export interface BackendOrder {
   paidAt: string | null;
   createdAt: string;
   itemCount: number;
+  /** 옛 서버(품목을 안 주는 판본)와도 돌아야 해서 없으면 빈 배열 */
+  items: BackendOrderItem[];
 }
 
 export type OrderListResult = { ok: true; orders: BackendOrder[] } | ApiFailure;
@@ -334,7 +348,37 @@ export async function fetchBackendOrders(): Promise<OrderListResult> {
     const res = await authFetch('MEMBER', '/api/orders');
     if (!res.ok) return fail(res);
     const rows = (await res.json()) as BackendOrder[];
-    return { ok: true, orders: Array.isArray(rows) ? rows : [] };
+    if (!Array.isArray(rows)) return { ok: true, orders: [] };
+    // 품목을 안 주는 옛 서버와도 돌아야 한다 — 없으면 빈 배열로 채워 화면이 `undefined` 를 훑지 않게 한다
+    return { ok: true, orders: rows.map((o) => ({ ...o, items: Array.isArray(o.items) ? o.items : [] })) };
+  } catch {
+    return offline();
+  }
+}
+
+export type ReviewSubmitResult = { ok: true; reviewId: string } | ApiFailure;
+
+/**
+ * `POST /api/reviews` — 산 사람만 쓸 수 있다. 서버가 그 `orderItemId` 가 이 회원의 결제 완료 주문인지
+ * 직접 확인하고, 아니면 403 이다. 이미 쓴 품목이면 409.
+ */
+export async function submitReview(input: {
+  orderItemId: string;
+  rating: number;
+  isRecommended: boolean | null;
+  title: string | null;
+  body: string;
+}): Promise<ReviewSubmitResult> {
+  if (!hasMemberSession()) return { ok: false, status: 401, reason: '고객 로그인이 없습니다' };
+  try {
+    const res = await authFetch('MEMBER', '/api/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return fail(res);
+    const body = (await res.json()) as { reviewId?: string };
+    return { ok: true, reviewId: String(body.reviewId ?? '') };
   } catch {
     return offline();
   }
@@ -487,6 +531,8 @@ interface SellerFeedbackRow {
   productId: string;
   productName: string;
   authorMemberId: string;
+  /** 산 사람의 의견인지. 옛 서버는 안 준다 */
+  purchased?: boolean;
   authorSkinTypeCode: string | null;
   authorSkinToneCode: string | null;
   axisId: string;
@@ -534,6 +580,8 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       hidden_by_default: Boolean(r.hiddenByDefault),
       brand_name: brandName,
       profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
+      // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
+      purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
       status: 'new',
       reply: null,
       replied_at: null,
@@ -586,6 +634,12 @@ export async function fetchBackendReviews(productId: string): Promise<Review[]> 
 export interface SellerPulse {
   orders: number;
   revenue: number;
+  /** 팔린 개수 합계. 주문 수와 다르다 — 한 주문에 3개가 들어가면 주문 1, 수량 3 */
+  units: number;
+  /** 한 번이라도 팔린 상품 가짓수 */
+  soldProducts: number;
+  /** 주문 줄 수 (주문 × 상품). 주문 수와 상품 가짓수 사이를 메운다 */
+  orderItems: number;
   reviews: number;
   feedbacks: number;
 }
@@ -644,8 +698,18 @@ export async function fetchSellerPulse(brandId: string): Promise<SellerPulse | n
   try {
     const res = await authFetch('SELLER', `/api/seller/dashboard?brandId=${encodeURIComponent(brandId)}`);
     if (!res.ok) return null;
-    const j = (await res.json()) as Partial<SellerPulse>;
-    return { orders: Number(j.orders ?? 0), revenue: Number(j.revenue ?? 0), reviews: Number(j.reviews ?? 0), feedbacks: Number(j.feedbacks ?? 0) };
+    // 서버 컬럼 이름은 snake_case 다. 예전 서버(새 컬럼이 없는 판본)와도 돌아야 해서 없으면 0 이다.
+    const j = (await res.json()) as Record<string, unknown>;
+    const n = (v: unknown) => Number(v ?? 0);
+    return {
+      orders: n(j.orders),
+      revenue: n(j.revenue),
+      units: n(j.units),
+      soldProducts: n(j.sold_products),
+      orderItems: n(j.order_items),
+      reviews: n(j.reviews),
+      feedbacks: n(j.feedbacks),
+    };
   } catch {
     return null;
   }

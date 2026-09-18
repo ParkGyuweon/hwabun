@@ -102,6 +102,14 @@ export interface Feedback {
   /** 사장님이 반영하며 남긴 한 줄. 소비자에게 그대로 보인다 (루프 ④) */
   reply: string | null;
   replied_at: string | null;
+  /**
+   * 이 의견을 쓴 사람이 그 상품을 샀는지.
+   *
+   * 의견은 **사지 않아도 보낼 수 있다** — 살까 말까 하며 묻고 싶은 사람이 가장 많고, 그 말이 사장님에게
+   * 가장 쓸모 있다. 다만 산 사람의 말과 안 산 사람의 말은 무게가 달라서 화면이 구분해 적는다.
+   * `undefined` 는 "모른다" 다 (옛 서버 응답·로컬 저장본).
+   */
+  purchased?: boolean;
   /** 백엔드(GET /api/seller/feedback)에서 온 행. 없으면 로컬 저장 */
   source?: 'backend';
 }

@@ -1,5 +1,7 @@
 package com.cosmetic.shopbackend.identity;
 
+import com.cosmetic.shopbackend.brand.Brand;
+import com.cosmetic.shopbackend.brand.BrandRepository;
 import com.cosmetic.shopbackend.security.JwtTokenService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -7,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +23,7 @@ public class IdentityController {
   private final AdminAccountRepository admins;
   private final PasswordEncoder encoder;
   private final JwtTokenService tokens;
+  private final BrandRepository brands;
 
   public IdentityController(
     SellerAccountRepository s,
@@ -28,11 +32,24 @@ public class IdentityController {
     PasswordEncoder e,
     JwtTokenService t
   ) {
+    this(s, m, a, e, t, null);
+  }
+
+  @Autowired
+  public IdentityController(
+    SellerAccountRepository s,
+    MemberRepository m,
+    AdminAccountRepository a,
+    PasswordEncoder e,
+    JwtTokenService t,
+    BrandRepository b
+  ) {
     sellers = s;
     members = m;
     admins = a;
     encoder = e;
     tokens = t;
+    brands = b;
   }
 
   public record RegisterMember(
@@ -245,13 +262,20 @@ public class IdentityController {
     AccountRole role,
     AccountStatus status
   ) {
+    String brandId = null;
+    if (role == AccountRole.SELLER && brands != null) {
+      brandId = brands.findAllBySeller_Id(id).stream()
+        .map(Brand::getId)
+        .findFirst()
+        .orElse(null);
+    }
     return new AccountResponse(
       id,
       email,
       name,
       role.name(),
       status.name(),
-      tokens.issue(id, role)
+      tokens.issue(id, role, brandId)
     );
   }
 }
