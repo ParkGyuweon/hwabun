@@ -221,6 +221,14 @@ function buildEvents() {
     filled.push(name);
   }
 
+  const missingRows = contract.filter(name => !seen.has(name));
+  if (missingRows.length) {
+    throw new Error(
+      `Event 설명 표 누락: ${missingRows.join(', ')} `
+      + '(contracts/event-properties-schema.md §2 또는 FILL을 갱신한다)',
+    );
+  }
+
   const bySection = new Map();
   for (const r of rows) {
     if (!bySection.has(r.section)) bySection.set(r.section, []);

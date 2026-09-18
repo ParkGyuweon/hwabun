@@ -755,6 +755,38 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_name": {
+            "enum": [
+              "product_impression",
+              "recommendation_impression",
+              "banner_impression"
+            ]
+          }
+        },
+        "required": [
+          "event_name"
+        ]
+      },
+      "then": {
+        "properties": {
+          "properties": {
+            "properties": {
+              "impression_origin": {
+                "type": "string",
+                "enum": [
+                  "observed",
+                  "implied_by_click",
+                  "implied_by_quick_look"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

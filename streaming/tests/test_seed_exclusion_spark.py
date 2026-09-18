@@ -9,6 +9,7 @@ except ImportError:  # Spark integration runs in the project Spark image.
 
 from streaming.jobs.build_marts_job import (
     EXECUTION_AXES,
+    _product_daily_kpi,
     _observed_events,
     build_mart_frames,
 )
@@ -280,6 +281,37 @@ class SeedExclusionSparkTest(unittest.TestCase):
         )
         if funnel["click_to_view_rate"] is not None:
             self.assertLessEqual(funnel["click_to_view_rate"], 1.0)
+
+    def test_no_detail_path_produces_zero_not_null_funnel_counts(self):
+        """상세 진입이 없는 grain도 projection용 count 세 개는 0이어야 한다."""
+
+        frames = build_mart_frames(
+            self._empty_sessionized(),
+            self._product_fact([
+                self._event("i1", "product_impression", "S1", False, 1),
+                self._event("c1", "product_click", "S1", False, 2),
+            ]),
+            "Asia/Seoul",
+        )
+
+        funnel = frames["funnel_daily_kpi"].first()
+        self.assertEqual(0, funnel["direct_click_sessions"])
+        self.assertEqual(0, funnel["direct_click_cart_sessions"])
+        self.assertEqual(0, funnel["click_through_detail_sessions"])
+
+    def test_product_currency_representative_is_deterministic(self):
+        """혼입은 Q5 실패 대상이지만 대표값은 입력 순서에 따라 바뀌지 않는다."""
+
+        krw = self._event("v1", "product_view", "S1", False, 1)
+        usd = self._event("v2", "product_view", "S2", False, 2)
+        krw["currency"] = "KRW"
+        usd["currency"] = "USD"
+
+        forward = _product_daily_kpi(self._product_fact([usd, krw])).first()
+        reverse = _product_daily_kpi(self._product_fact([krw, usd])).first()
+
+        self.assertEqual("KRW", forward["currency"])
+        self.assertEqual(forward["currency"], reverse["currency"])
 
     def test_seed_rows_stay_out_of_the_funnel_fact(self):
         product_fact = self._product_fact(

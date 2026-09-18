@@ -260,6 +260,56 @@ class PersonaSegmentMartSparkTest(unittest.TestCase):
 
         self.assertLessEqual(row["detail_entry_rate"], 1.0)
 
+    def test_ambiguous_axis_value_keeps_the_cross_segment_deterministic(self):
+        """한 페르소나에 같은 축 값이 둘이면 교차 축이 입력 순서에 흔들리면 안 된다.
+
+        단일 축 행은 bridge 원본이 그대로 내려가지만, 교차 축은 축마다 대표값을 하나
+        골라 합친다(`_persona_segments`). `F.first` 였을 때는 그 대표값이 셔플 순서를
+        따라가 `dry|fair` 와 `oily|fair` 가 실행마다 갈렸다. 통화 대표값과 같은 이유로
+        결정적으로 고른다.
+        """
+        facts = [
+            self._event("PC1", "S1", "product_impression"),
+            self._event("PC1", "S1", "product_view"),
+        ]
+        rows = [
+            ("PC1", "skin_type", "oily"),
+            ("PC1", "skin_type", "dry"),
+            ("PC1", "skin_tone", "fair"),
+        ]
+
+        picked = set()
+        for bridge_rows in (rows, list(reversed(rows))):
+            mart = _persona_segment_daily_kpi(
+                self._facts(facts), self._bridge(bridge_rows)
+            )
+            picked |= {
+                r["segment_value"]
+                for r in mart.where(
+                    "segment_type = 'skin_type_x_skin_tone'"
+                ).collect()
+            }
+
+        # 순서를 뒤집어도 교차 축 값은 하나여야 한다
+        self.assertEqual({"dry|fair"}, picked)
+
+    def test_ambiguous_axis_keeps_both_single_axis_rows(self):
+        """교차 축 대표값을 고르는 것이 단일 축 행을 지워서는 안 된다."""
+        facts = [self._event("PC1", "S1", "product_view")]
+        bridge = self._bridge([
+            ("PC1", "skin_type", "oily"),
+            ("PC1", "skin_type", "dry"),
+            ("PC1", "skin_tone", "fair"),
+        ])
+
+        mart = _persona_segment_daily_kpi(self._facts(facts), bridge)
+        values = {
+            r["segment_value"]
+            for r in mart.where("segment_type = 'skin_type'").collect()
+        }
+
+        self.assertEqual({"dry", "oily"}, values)
+
 
 if __name__ == "__main__":
     unittest.main()

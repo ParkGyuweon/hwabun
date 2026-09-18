@@ -862,7 +862,9 @@ def _product_daily_kpi(
         F.sum(
             F.when(F.col("event_name") == "purchase", F.col("item_revenue"))
         ).cast("decimal(18,2)").alias("revenue_amount"),
-        F.first("currency", ignorenulls=True).alias("currency"),
+        # 통화 혼입은 Q5가 별도로 실패시킨다. 실패 보고서와 재계산 결과 자체는
+        # 입력 파티션 순서에 흔들리지 않아야 하므로 대표값은 결정적으로 고른다.
+        F.min("currency").alias("currency"),
         F.countDistinct(F.col("user_id")).alias("unique_user_count"),
         F.countDistinct(F.col("session_id")).alias("session_count"),
         F.current_timestamp().alias("mart_processed_at"),
@@ -910,6 +912,10 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     from pyspark.sql import functions as F
 
     group_columns = ["funnel_date_kst", "product_id", *EXECUTION_AXES]
+    # detail_entry_path 는 상세를 열지 않은 세션에서 의도적으로 NULL 이다.
+    # 일반 == 비교는 그 세션을 False 가 아닌 NULL 로 만들어, 그룹 전체가 해당하면
+    # sum 결과까지 NULL 로 전파한다. 경로 없음은 direct click 이 아니라는 뜻이다.
+    is_direct_entry = F.col("detail_entry_path").eqNullSafe(F.lit("direct_click"))
     result = funnel_session_df.groupBy(*group_columns).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
@@ -922,12 +928,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         ).cast("long").alias("quick_look_cart_sessions"),
         # 직접 클릭 계열은 배타다 — "퀵룩 없이 상세로 직행했나". 둘 다면 먼저 한 쪽.
         F.sum(
-            (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+            is_direct_entry.cast("int")
         ).cast("long").alias("direct_click_sessions"),
         F.sum(
             (
-                (F.col("detail_entry_path") == F.lit("direct_click"))
-                & F.col("reached_add_to_cart")
+                is_direct_entry & F.col("reached_add_to_cart")
             ).cast("int")
         ).cast("long").alias("direct_click_cart_sessions"),
         # "클릭한 세션 중 상세로 간 세션". direct_click 만으로는 부족하다 —
@@ -938,7 +943,7 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         F.sum(
             (
                 F.col("reached_click")
-                & (F.col("detail_entry_path") == F.lit("direct_click"))
+                & is_direct_entry
             ).cast("int")
         ).cast("long").alias("click_through_detail_sessions"),
         F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
@@ -1203,9 +1208,15 @@ def _persona_segments(bridge_df: Any) -> Any:
         & ~F.col("segment_value").isin(*MISSING_SEGMENT_VALUES)
     ).select("persona_id", "segment_type", "segment_value")
 
+    # 한 페르소나에 같은 축 값이 둘 이상이면 `F.first` 는 셔플 순서를 따라가 재계산이
+    # 갈린다. 통화 대표값(`_product_daily_kpi`)과 같은 이유로 결정적으로 고른다.
+    #
+    # 값이 섞인 것 자체는 bridge 입력의 문제다. Q5 는 bridge 를 입력으로 받지 않아
+    # (검증 Job 인자에 없다) 여기서 그 혼입을 잡을 수 없고, 잡는 자리는 bridge 를
+    # 만드는 쪽이다. 마트는 대표값을 결정적으로 고르는 데까지만 책임진다.
     wide = base.groupBy("persona_id").pivot(
         "segment_type", list(SEGMENT_TYPES)
-    ).agg(F.first("segment_value", ignorenulls=True))
+    ).agg(F.min("segment_value"))
     cross = wide.where(
         F.col("skin_type").isNotNull() & F.col("skin_tone").isNotNull()
     ).select(
