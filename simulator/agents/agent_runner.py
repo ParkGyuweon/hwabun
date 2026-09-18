@@ -101,7 +101,7 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback")
+           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback", "select_text")
 # 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
 # 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
 FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
@@ -1309,6 +1309,60 @@ def do_action(page, act, target, scroll_center=None):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
 
+    if a == "select_text":
+        # 성분 섹션의 글을 긁는다. 프론트 useTextSelection 이 selectionchange 를 350ms
+        # 디바운스해서 text_selection 을 남긴다 — 진짜 마우스 드래그가 아니어도 잡힌다.
+        # 성분을 중요시하는 사람이 성분명을 긁어 보는 행동이고, 대시보드의 "드래그 TOP 10"
+        # 과 처방 문장이 이 값을 읽는다 (Jira 363).
+        sec = page.locator('[data-log-section="ingredients"]')
+        if not sec.count():
+            return False
+        try:
+            sec.first.scroll_into_view_if_needed(timeout=4000)
+            page.wait_for_timeout(random.randint(400, 1200))   # 눈으로 훑는 시간
+            # **아코디언을 먼저 편다.** 접혀 있으면 성분 칩이 DOM 에 없어서 머리글 글자를
+            # 긁게 되고, 그러면 어휘집에 안 걸려 matched_count 가 0 이 된다 (실측).
+            tog = sec.first.locator('[data-log-action="accordion_toggle"]')
+            if tog.count() and tog.first.get_attribute("aria-expanded") == "false":
+                click_safe(tog.first, page)
+                page.wait_for_timeout(random.randint(500, 1100))
+            # **성분 이름 하나를 통째로 긁는다.** 무작위 부분 문자열로 자르면 어휘집에
+            # 안 걸려 matched_count 가 0 이 되고, 대시보드의 드래그 TOP 10 은 어휘집에
+            # 맞은 것만 세므로 화면에 아무것도 안 뜬다 (실측에서 확인).
+            ok = sec.first.evaluate("""(el) => {
+              const items = el.querySelectorAll('.chip-list li');
+              let node = null;
+              if (items.length) {
+                node = items[Math.floor(Math.random() * items.length)];
+              } else {
+                const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                const parts = [];
+                let n;
+                while ((n = walk.nextNode())) {
+                  if (n.textContent && n.textContent.trim().length > 3) parts.push(n.parentElement);
+                }
+                if (!parts.length) return false;
+                node = parts[Math.floor(Math.random() * parts.length)];
+              }
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              return sel.toString().trim().length >= 2;
+            }""")
+            if not ok:
+                return False
+            page.wait_for_timeout(700)          # 디바운스(350ms)를 넘긴다
+            # 긁은 김에 복사까지 하는 사람이 있다. 복사는 더 무거운 관심 신호다
+            if random.random() < 0.3:
+                page.keyboard.press("Control+C")
+                page.wait_for_timeout(random.randint(200, 600))
+        except Exception:
+            return False
+        return True
+
+
     if a == "scroll":
         # 바닥에 닿았으면 위로 올린다. 아래로만 굴리면 화면이 안 바뀌어
         # "볼 것이 없다" 로 읽히고, 실제로 위쪽에 안 본 상품이 남아 있다
@@ -1575,6 +1629,9 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
             acts.insert(1, "buy_now")
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
+        # 성분을 긁어 보는 행동. 상세에서는 늘 열어 둔다 — 성분을 중요시하는 사람이
+        # 고르고, 그렇지 않은 사람은 안 고른다. 대시보드의 드래그 TOP 10 이 이 값이다
+        acts.append("select_text")
         # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
         if not wished_here:
             acts.append("wishlist_toggle")
@@ -2016,6 +2073,10 @@ def run_parallel(a):
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
         argv += ["--script", a.script]
+    if a.product:
+        argv += ["--product", a.product]
+    if a.min_details is not None:
+        argv += ["--min-details", str(a.min_details)]
     if a.checkout:
         argv.append("--checkout")
     if not a.banner:
@@ -2110,6 +2171,11 @@ def main():
                     help="종류 필터를 코드로 강제 — 목록에 내 종류 카드가 보이면 그것만 보여 준다 (Jira 241)")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
+    ap.add_argument("--product", default=None, metavar="PRODUCT_ID",
+                    help="전원이 이 상품 상세에서 시작한다 (재구매 시연용, Jira 362). 예) SB000001")
+    ap.add_argument("--min-details", type=int, default=None, metavar="N",
+                    help="구매·이탈이 열리는 상세 조회 수 문턱 (기본 3). --product 로 상품을 "
+                         "못박고 바로 사게 할 때 1 로 낮춘다 — 시연 데이터 생성 전용 (Jira 362)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
@@ -2130,9 +2196,13 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
-    global CHECKOUT_ENABLED, BANNER_VISIBLE
+    global CHECKOUT_ENABLED, BANNER_VISIBLE, MIN_DETAILS_BEFORE_LEAVE
     CHECKOUT_ENABLED = bool(a.checkout)
     BANNER_VISIBLE = bool(a.banner)
+    if a.min_details is not None:
+        # 문턱은 모듈 전역이라 여기서 갈아 끼운다. 평가용 실행에서는 쓰지 않는다 —
+        # "사람은 몇 개는 보고 산다" 는 전제가 깨진다
+        MIN_DETAILS_BEFORE_LEAVE = a.min_details
     global PREFER_CATEGORY, PREFER_STRICT, PREFER_FILTER
     PREFER_FILTER = a.prefer_filter
     PREFER_STRICT = a.prefer_strict
@@ -2237,15 +2307,20 @@ def main():
             deep = catalog and rng.random() < DEEP_LINK_P
             if a.entry != "auto":
                 deep = a.entry == "detail"
+            # --product 로 상품을 못박으면 전원이 그 상세에서 시작한다. 재구매 시연에 쓴다 —
+            # 재구매 마트 key 에 simulation_run_id 가 있어(dw-schema §4.15) 같은 run_id 로 두 번
+            # 돌려야 한 사람의 두 구매가 묶이는데, 어떤 상품을 살지는 LLM 이 정해서 같은 상품을
+            # 두 번 사게 만들 방법이 없었다 (Jira 362).
+            pinned = a.product or None
             entry = entry_url(a.url, a.scenario_id, simulation_run_id,
-                              product_id=rng.choice(catalog) if deep else None)
+                              product_id=pinned or (rng.choice(catalog) if deep else None))
 
             page.goto(entry, wait_until="networkidle")
 
             # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
             # AboutProduct.tsx 크래시는 2026-09-02 고쳐졌다. 이 방어는 이제
             # 대부분 놀지만, 놀고 있다는 것 자체가 확인이라 남긴다
-            if deep and not page.locator('[data-log-action="add_to_cart"]').count():
+            if (deep or pinned) and not page.locator('[data-log-action="add_to_cart"]').count():
                 print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
                 page.goto(LIST_URL, wait_until="networkidle")
                 page.wait_for_timeout(800)
