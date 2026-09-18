@@ -862,7 +862,9 @@ def _product_daily_kpi(
         F.sum(
             F.when(F.col("event_name") == "purchase", F.col("item_revenue"))
         ).cast("decimal(18,2)").alias("revenue_amount"),
-        F.first("currency", ignorenulls=True).alias("currency"),
+        # 통화 혼입은 Q5가 별도로 실패시킨다. 실패 보고서와 재계산 결과 자체는
+        # 입력 파티션 순서에 흔들리지 않아야 하므로 대표값은 결정적으로 고른다.
+        F.min("currency").alias("currency"),
         F.countDistinct(F.col("user_id")).alias("unique_user_count"),
         F.countDistinct(F.col("session_id")).alias("session_count"),
         F.current_timestamp().alias("mart_processed_at"),
@@ -910,6 +912,10 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     from pyspark.sql import functions as F
 
     group_columns = ["funnel_date_kst", "product_id", *EXECUTION_AXES]
+    # detail_entry_path 는 상세를 열지 않은 세션에서 의도적으로 NULL 이다.
+    # 일반 == 비교는 그 세션을 False 가 아닌 NULL 로 만들어, 그룹 전체가 해당하면
+    # sum 결과까지 NULL 로 전파한다. 경로 없음은 direct click 이 아니라는 뜻이다.
+    is_direct_entry = F.col("detail_entry_path").eqNullSafe(F.lit("direct_click"))
     result = funnel_session_df.groupBy(*group_columns).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
@@ -922,12 +928,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         ).cast("long").alias("quick_look_cart_sessions"),
         # 직접 클릭 계열은 배타다 — "퀵룩 없이 상세로 직행했나". 둘 다면 먼저 한 쪽.
         F.sum(
-            (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+            is_direct_entry.cast("int")
         ).cast("long").alias("direct_click_sessions"),
         F.sum(
             (
-                (F.col("detail_entry_path") == F.lit("direct_click"))
-                & F.col("reached_add_to_cart")
+                is_direct_entry & F.col("reached_add_to_cart")
             ).cast("int")
         ).cast("long").alias("direct_click_cart_sessions"),
         # "클릭한 세션 중 상세로 간 세션". direct_click 만으로는 부족하다 —
@@ -938,7 +943,7 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         F.sum(
             (
                 F.col("reached_click")
-                & (F.col("detail_entry_path") == F.lit("direct_click"))
+                & is_direct_entry
             ).cast("int")
         ).cast("long").alias("click_through_detail_sessions"),
         F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),

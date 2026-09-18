@@ -8,6 +8,7 @@ status 1 when a pipeline invariant is broken.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from dataclasses import dataclass
@@ -58,6 +59,33 @@ DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
 DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
+
+# validate_frames 의 이름과 contracts/dw/build_ddl.py 의 Mart 이름을 한 곳에서
+# 연결한다. 이 22종이 MySQL projection allowlist와 같은 범위다.
+PROJECTION_MART_FRAMES = {
+    "product_daily_kpi": "product_daily",
+    "brand_daily_kpi": "brand_daily",
+    "funnel_daily_kpi": "funnel_daily",
+    "persona_segment_daily_kpi": "persona_segment_daily",
+    "brand_price_band_daily_kpi": "price_band_daily",
+    "product_repurchase_daily": "product_repurchase",
+    "brand_repurchase_daily": "brand_repurchase",
+    "purchase_reason_daily": "purchase_reason",
+    "ingredient_weekly_interest": "ingredient_weekly",
+    "product_exit_daily": "product_exit_daily",
+    "segment_content_daily": "segment_content_daily",
+    "friction_daily": "friction_daily",
+    "exit_daily": "exit_daily",
+    "entry_source_daily": "entry_source_daily",
+    "content_daily_kpi": "content_daily",
+    "content_conversion_daily": "content_conversion",
+    "behavior_conversion_daily": "behavior_conversion",
+    "event_daily": "event_daily",
+    "segment_price_band_daily_kpi": "segment_price_band",
+    "brand_cohort_dim": "brand_cohort",
+    "commons_cohort_weekly": "commons_cohort",
+    "user_trait_daily": "user_trait_daily",
+}
 
 # Mart 실행 축. build_marts_job.EXECUTION_AXES 와 같아야 한다.
 EXECUTION_AXES = (
@@ -528,6 +556,58 @@ def _check(name: str, passed: bool, details: str) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
 
 
+def _load_dw_contract_rules() -> Any:
+    """Load the DDL generator so Q5 and projection share one NULL policy."""
+
+    path = Path(__file__).resolve().parents[2] / "contracts" / "dw" / "build_ddl.py"
+    spec = importlib.util.spec_from_file_location("dw_contract_rules_for_q5", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"DW contract rules could not be loaded: {path}")
+    rules = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rules)
+    return rules
+
+
+def _projection_not_null_violations(frames: dict[str, Any]) -> dict[str, int]:
+    """Return non-zero NULL counts for every loaded projection Mart column."""
+
+    from pyspark.sql import functions as F
+
+    rules = _load_dw_contract_rules()
+    if set(PROJECTION_MART_FRAMES) != set(rules.GRAINS):
+        missing = sorted(set(rules.GRAINS) - set(PROJECTION_MART_FRAMES))
+        extra = sorted(set(PROJECTION_MART_FRAMES) - set(rules.GRAINS))
+        raise RuntimeError(
+            f"projection Mart mapping differs from build_ddl.GRAINS: missing={missing}, extra={extra}"
+        )
+
+    violations: dict[str, int] = {}
+    excluded = set(getattr(rules, "EXCLUDED_COLUMNS", {}))
+    for mart, frame_name in PROJECTION_MART_FRAMES.items():
+        frame = frames.get(frame_name)
+        if frame is None:
+            continue
+        grain = rules.GRAINS[mart]
+        required = [
+            column for column in frame.columns
+            if (mart, column) not in excluded
+            and not rules.is_nullable(column, grain, mart)
+        ]
+        if not required:
+            continue
+        counts = frame.agg(*[
+            F.sum(F.when(F.col(column).isNull(), 1).otherwise(0))
+            .cast("long")
+            .alias(column)
+            for column in required
+        ]).first()
+        for column in required:
+            count = counts[column] or 0
+            if count:
+                violations[f"{mart}.{column}"] = count
+    return violations
+
+
 def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
     """Measure the row-preserving product-to-brand snapshot contract."""
 
@@ -661,6 +741,16 @@ def validate_frames(
     }
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+
+    projection_nulls = _projection_not_null_violations(frames)
+    checks.append(_check(
+        "projection_marts_not_null_columns_have_no_nulls",
+        not projection_nulls,
+        "violations=" + (
+            ", ".join(f"{name}:{count}" for name, count in sorted(projection_nulls.items()))
+            if projection_nulls else "none"
+        ),
+    ))
 
     checks.append(
         _check(
@@ -1169,10 +1259,10 @@ def validate_frames(
         )
         .agg(
             F.sum(
-                (F.col("detail_entry_path") == F.lit("quick_look")).cast("int")
+                F.col("detail_entry_path").eqNullSafe(F.lit("quick_look")).cast("int")
             ).cast("long").alias("_quick_look_entry_sessions"),
             F.sum(
-                (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+                F.col("detail_entry_path").eqNullSafe(F.lit("direct_click")).cast("int")
             ).cast("long").alias("_direct_click_sessions"),
             F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("_detail_view_sessions"),
         )
@@ -1191,7 +1281,10 @@ def validate_frames(
     # click_to_view_rate 의 분자는 분모의 부분집합이라야 한다 (§4.5).
     # direct_click 만으로 세면 클릭 없이 상세를 연 세션이 분자에만 들어간다.
     invalid_click_through = funnel_daily.where(
-        (F.col("click_through_detail_sessions") > F.col("click_sessions"))
+        F.col("click_through_detail_sessions").isNull()
+        | F.col("click_sessions").isNull()
+        | F.col("direct_click_sessions").isNull()
+        | (F.col("click_through_detail_sessions") > F.col("click_sessions"))
         | (F.col("click_through_detail_sessions") > F.col("direct_click_sessions"))
         | (F.col("click_through_detail_sessions") < 0)
     ).count()
@@ -1376,7 +1469,7 @@ def validate_frames(
         f"unmatched_rows={product_dimension_gap}",
     ))
 
-    # 통화는 grain 이 아니라 대표값 한 개다 (F.first). 한 상품·하루에 통화가
+    # 통화는 grain 이 아니라 대표값 한 개다 (결정적인 F.min). 한 상품·하루에 통화가
     # 섞이면 revenue_amount 가 두 통화를 그냥 더하고 currency 는 하나만 보고한다.
     # grain 에 올리면 통화 없는 조회 행과 결제 행이 갈려 Mart 가 깨지므로
     # 여기서 혼합 자체를 막는다 (Jira 303 통화 전환 경계일 대비).
@@ -1689,6 +1782,7 @@ def validate_frames(
     invalid_price_rows = category_price.where(
         F.col("reference_median_price").isNull()
         | (F.col("reference_median_price") <= 0)
+        | F.col("reference_source").isNull()
         | ~F.col("reference_source").isin("category", "global_fallback")
     ).count()
     checks.append(
@@ -1709,7 +1803,10 @@ def validate_frames(
         "banner_daily configured grain is unique",
     ))
     invalid_banner_counts = banner_daily.where(
-        (F.col("click_count") > F.col("impression_count"))
+        F.col("click_count").isNull()
+        | F.col("impression_count").isNull()
+        | F.col("skip_count").isNull()
+        | (F.col("click_count") > F.col("impression_count"))
         | (F.col("skip_count") < 0)
         | (
             (F.col("impression_count") == 0)
@@ -1717,7 +1814,10 @@ def validate_frames(
         )
         | (
             (F.col("impression_count") > 0)
-            & ~F.col("banner_ctr").between(0, 1)
+            & (
+                F.col("banner_ctr").isNull()
+                | ~F.col("banner_ctr").between(0, 1)
+            )
         )
     ).count()
     checks.append(_check(
@@ -1725,7 +1825,10 @@ def validate_frames(
         invalid_banner_counts == 0,
         f"invalid_rows={invalid_banner_counts}",
     ))
-    invalid_banner_values = banner_daily.where(~F.col("banner_value_is_valid")).count()
+    invalid_banner_values = banner_daily.where(
+        F.col("banner_value_is_valid").isNull()
+        | ~F.col("banner_value_is_valid")
+    ).count()
     checks.append(_check(
         "banner_value_uses_source_vocabulary",
         invalid_banner_values == 0,
@@ -1742,6 +1845,7 @@ def validate_frames(
         F.col("banner_type").isNull()
         | F.col("banner_slot").isNull()
         | (F.col("banner_slot") <= 0)
+        | F.col("trait_source").isNull()
         | ~F.col("trait_source").isin("session", "profile", "coldstart", "explore")
         | ((F.col("banner_type") == "new_brand") & F.col("banner_value").isNotNull())
         | ((F.col("banner_type") != "new_brand") & F.col("banner_value").isNull())
