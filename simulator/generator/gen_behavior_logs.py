@@ -75,6 +75,13 @@ FRONTEND_REGISTERED = os.path.join(ROOT, "frontend", "src", "mocks", "products.s
 # 등록 브랜드 상품 id — 카탈로그를 만들 때 채운다. 리뷰가 없어 페르소나의 구매 후보에 못 드는 상품들이다.
 REGISTERED_IDS = set()
 PROPERTIES_CONTRACT = os.path.join(ROOT, "contracts", "event-properties-schema.md")
+# 상품별 성분 — 드래그로 긁는 성분은 **그 상품이 실제로 가진 것**이어야 한다.
+# 없는 성분을 실으면 ingredient_weekly_interest 마트(matched_ingredients 를 explode)가
+# "이 성분을 긁은 사람" 과 "이 성분이 든 상품" 을 엉뚱하게 잇는다.
+PRODUCT_INGREDIENT = os.path.join(ROOT, "batch", "ingest", "data", "serving", "product_ingredient.csv")
+# 성분 사전 — 프론트 useTextSelection.ts 와 **같은 파일**을 쓴다. 따로 만들면
+# 표준 명칭이 갈려 사람 로그와 생성기 로그가 같은 성분으로 안 묶인다.
+FEATURE_VOCAB = os.path.join(ROOT, "contracts", "product-feature-vocab.json")
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "batch", "jobs"))
 import behavior_weights as BW
@@ -319,6 +326,9 @@ SCENARIO = {
     "p_scroll_pause": 0.55,
     "p_accordion": 0.50,
     "p_text_selection": 0.35,
+    # [미정] 성분 섹션에서 성분명을 긁을 확률. p_text_selection(설명 문구를 긁는 것)과
+    #   나눈 이유는 성향이 다른 축을 타기 때문이다 — 성분 성향은 이쪽, 향 성향은 저쪽.
+    "p_ingredient_selection": 0.40,
     "p_variant_select": 0.40,
     "p_review_filter": 0.50,
     "p_scroll_backtrack": 0.25,
@@ -365,7 +375,7 @@ SCENARIO = {
 # ══════════════════════════════════════════════════════════════════════════
 STYLE_EFFECT = {
     # 축 -> (확률 키, 최대 배율). 점수 0.5 에서 1.0배, 1.0 에서 최대 배율이 된다
-    "ingredient":  [("p_accordion", 1.8), ("p_text_selection", 2.2), ("dwell_x_ingredients", 2.2)],
+    "ingredient":  [("p_accordion", 1.8), ("p_ingredient_selection", 2.2), ("dwell_x_ingredients", 2.2)],
     "price":       [("p_variant_select", 2.0), ("dwell_x_product_hero", 1.6)],
     "texture":     [("p_scroll_pause", 1.4), ("dwell_x_about_product", 1.5)],
     "scent":       [("p_text_selection", 1.4), ("dwell_x_about_product", 1.4)],
