@@ -22,7 +22,8 @@ const MAX_IMAGE_BYTES = 400 * 1024;
 
 /**
  * 상품 등록 · 왼쪽은 계약 `product-registration-spec.md` 의 입력 필드, 오른쪽은
- * **실제 쇼핑몰 상세 페이지** 를 iframe 으로 띄운 미리보기다.
+ * **실제 쇼핑몰 상세 페이지의 본문** 을 iframe 으로 띄운 미리보기다 (쇼핑몰이 `preview=1` 이면 헤더·로그인 같은
+ * 사이트 껍데기를 빼고 상품 부분만 그린다, App.tsx).
  *
  * 폼이 바뀌면 초안을 localStorage 에 쓰고, 쇼핑몰(`/?product=DRAFT&preview=1`)이 storage
  * 이벤트로 그대로 다시 그린다. 미리보기용 컴포넌트를 따로 만들지 않는 이유는 그러면 언젠가
@@ -267,7 +268,7 @@ export default function RegisterScreen() {
         <div className="register__preview">
           <div className="register__preview-head">
             <strong>고객이 보게 될 상세 페이지</strong>
-            <span>실제 쇼핑몰 화면입니다. 입력하면 바로 바뀝니다.</span>
+            <span>쇼핑몰 상세 페이지의 상품 부분입니다. 입력하면 바로 바뀝니다.</span>
             <button type="button" className="chip" onClick={() => setPreviewKey((k) => k + 1)}>새로고침</button>
           </div>
           <iframe
