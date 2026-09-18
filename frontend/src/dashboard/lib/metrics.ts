@@ -13,7 +13,6 @@
  */
 import vocab from '../../../../contracts/product-feature-vocab.json';
 import { products as catalogData } from '../../mocks/products';
-import { FEEDBACK_BRAND } from './scope';
 import type { Product, SkinType } from '../../types/product';
 import { splitIngredients } from '../../lib/format';
 
@@ -21,15 +20,13 @@ import { splitIngredients } from '../../lib/format';
  * 브랜드 대시보드는 **내 브랜드** 상품만 본다.
  *
  * 이 모듈은 이제 **고정 브랜드 상품 목록을 내보내지 않는다**. 내 상품은 화면이
- * `useBrandProducts(brandId, brandName)` 로 받는다. 피드백·등록만 FEEDBACK_BRAND 시드를 쓴다.
+ * `useBrandProducts(brandId, brandName)` 로 받는다. 피드백·등록도 마찬가지다 (2026-09-18, FEEDBACK_BRAND 삭제).
  *
  * 다른 브랜드 상품은 이름·절대치를 보이지 않는다는 데이터 경계
  * (collective-insight-data-boundary.md A층). 플랫폼 전체를 분모로 쓰는 지표
  * (주의 성분 보급률 같은 커먼즈)는 `catalogProducts` 를 쓴다.
  */
 export const catalogProducts = catalogData as unknown as Product[];
-/** 피드백·등록 화면의 상품 목록 (SSAFY Beauty) */
-export const feedbackProducts = catalogProducts.filter((p) => p.brand_name === FEEDBACK_BRAND);
 /**
  * 대시보드 리뷰 집계가 읽는 행. 판매자 리뷰 API(`GET /api/seller/reviews?brandId=`, sellerReviewsApi.ts)의 응답을
  * 이 다섯 필드로 줄인 것이다. 번들 표본은 더 이상 없다 — 로그인한 브랜드의 실제 리뷰만 센다.

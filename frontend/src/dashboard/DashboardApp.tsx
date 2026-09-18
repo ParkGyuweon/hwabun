@@ -346,7 +346,7 @@ export default function DashboardApp() {
           </div>
         ) : null}
 
-        {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
+        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'content' ? <ContentScreen brandName={brand?.name ?? ''} /> : null}
@@ -359,7 +359,7 @@ export default function DashboardApp() {
           <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'register' ? <RegisterScreen /> : null}
-        {screen === 'feedback' ? <FeedbackScreen /> : null}
+        {screen === 'feedback' ? <FeedbackScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'settlement' ? <SettlementScreen brandId={brand?.id ?? null} /> : null}
       </main>
     </div>
@@ -384,8 +384,8 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
   const { anyReal } = useBehavior();
   const label = SCOPE_LABEL[scope];
   const live = scope === 'behavior' && anyReal;
-  // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다
-  const brand = scope === 'feedback' ? label.brand : (brandName ?? '');
+  // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다 (피드백 스코프도 2026-09-18 부터)
+  const brand = brandName ?? label.brand;
   const source = live ? '행동 마트 실측 · 로그인한 브랜드' : label.source;
   return (
     <p className="main__scope" title={source}>
