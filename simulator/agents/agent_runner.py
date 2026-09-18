@@ -950,6 +950,29 @@ def norm(s):
     return re.sub(r"[^0-9a-z가-힣]", "", str(s).lower())
 
 
+# 프론트 노출 훅이 요소가 50% 보인 채 300ms 머물러야 이벤트를 낸다
+# (frontend/src/hooks/useImpression.ts 의 VISIBLE_RATIO · DEFAULT_HOLD_MS).
+# Playwright 의 click() 은 스크롤한 뒤 곧바로 누르므로 그 300ms 가 지나지 않고,
+# 결과가 "노출 없는 클릭" 이다 — 분모 0 에 분자 1 이라 CTR 이 1 을 넘는다 (Jira 354).
+# 사람도 카드를 보고 나서 누르므로, 누르기 전에 화면에 올리고 머문다.
+IMPRESSION_HOLD_MS = 300
+DWELL_BEFORE_CLICK_MS = (520, 900)      # 유지 시간보다 넉넉히. 아래끝도 300 을 넘긴다
+
+
+def dwell_then_click(loc, page, hold=None):
+    """요소를 화면에 올리고 노출이 날 만큼 머문 뒤 누른다.
+
+    스크롤이 실패해도 클릭은 시도한다 — 노출을 못 남기는 것이 클릭을 못 하는 것보다 낫다.
+    """
+    try:
+        loc.scroll_into_view_if_needed(timeout=2000)
+    except Exception:
+        pass
+    lo, hi = DWELL_BEFORE_CLICK_MS
+    page.wait_for_timeout(hold if hold is not None else random.randint(lo, hi))
+    return click_safe(loc, page)
+
+
 def click_safe(loc, page):
     """겹친 요소 때문에 막히는 클릭을 뚫는다.
 
@@ -1158,9 +1181,11 @@ def do_action(page, act, target, scroll_center=None):
         if card is None:
             return False
         try:
-            card.hover(timeout=2000)
+            card.hover(timeout=2000)          # hover 가 카드를 화면에 올린다
         except Exception:
             pass
+        # 올린 자리에서 머문다 — 요약을 열기 전에 그 카드의 노출이 먼저 나야 한다 (Jira 354)
+        page.wait_for_timeout(random.randint(*DWELL_BEFORE_CLICK_MS))
         btn = card.locator(".card__quicklook")
         if not btn.count() or not click_safe(btn.first, page):
             return False
@@ -1220,7 +1245,9 @@ def do_action(page, act, target, scroll_center=None):
                 return False
         except Exception:
             return False
-        if not click_safe(hit.first, page):
+        # 배너도 같은 노출 훅을 쓴다. 머물지 않으면 banner_impression 이 안 나
+        # banner_click 과 짝이 안 맞는다 (Jira 354)
+        if not dwell_then_click(hit.first, page):
             return False
         page.wait_for_timeout(1400)                  # 상세로 넘어간다 — banner_click 은 프론트가 남긴다
         return True
@@ -1271,7 +1298,8 @@ def do_action(page, act, target, scroll_center=None):
         card = find_card(page, target)
         if card is None:
             return False                         # 화면에 없는 상품을 지어냈다
-        if not click_safe(card.locator(".card__link").first, page):
+        # 카드를 화면에 올리고 머문 뒤 누른다 — 그래야 product_impression 이 먼저 난다 (Jira 354)
+        if not dwell_then_click(card.locator(".card__link").first, page):
             return False
         page.wait_for_timeout(1400)
         return True

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from decimal import Decimal
 import importlib.util
 import math
 from pathlib import Path
@@ -82,6 +83,14 @@ def identifier(value: str) -> str:
     return f"`{value}`"
 
 
+def _decimal_spec(sql_type: str) -> tuple[int, int]:
+    """``DECIMAL(18,2)`` -> (18, 2)."""
+    match = re.fullmatch(r"DECIMAL\((\d+),(\d+)\)", sql_type)
+    if not match:
+        raise ProjectionError(f"Unsupported SQL type: {sql_type}")
+    return int(match[1]), int(match[2])
+
+
 @dataclass(frozen=True)
 class Column:
     name: str
@@ -121,6 +130,16 @@ class Column:
             if type(value) is not bool:
                 raise invalid()
             value = int(value)
+        elif self.sql_type.startswith("DECIMAL("):
+            # build_ddl 이 decimal(18,2) 를 내보내므로(:52) 여기도 받아야 한다.
+            # 없으면 backend_paid_value 를 가진 재구매 Mart 가 발행 단계에서 죽는다 (Jira 355).
+            # pyarrow 는 decimal128 을 Decimal 로 준다 — float 은 받지 않는다(반올림이 조용히 생긴다).
+            if not isinstance(value, Decimal) or not value.is_finite():
+                raise invalid()
+            precision, scale = _decimal_spec(self.sql_type)
+            digits = value.as_tuple()
+            if -digits.exponent > scale or len(digits.digits) > precision:
+                raise invalid()
         else:
             raise ProjectionError(f"Unsupported SQL type: {self.sql_type}")
         return value
@@ -133,6 +152,9 @@ class Contract:
     create_sql: str
     mart: str = MART
     uses_surrogate_key: bool = True
+    # 계약 dw-schema.md §7.2.1 — Mart 에는 있지만 발행에서 빼는 컬럼.
+    # 목록은 build_ddl.EXCLUDED_COLUMNS 가 정본이고 여기서 그대로 읽는다 (Jira 355).
+    excluded: frozenset[str] = frozenset()
 
     @property
     def names(self):
@@ -185,7 +207,13 @@ def load_contract(path: Path = DEFAULT_DDL, mart: str = MART) -> Contract:
     for column in columns:
         if column.nullable != rules.is_nullable(column.name, list(grain), mart):
             raise ProjectionError(f"DDL NULL policy differs: {column.name}")
-    return Contract(columns, grain, match[0], mart, uses_surrogate_key=surrogate)
+    # §7.2.1 제외 컬럼. 하드코딩하지 않는다 — 다음 제외 컬럼이 생겨도 여기가 안 깨진다
+    excluded = frozenset(
+        column for (excluded_mart, column) in getattr(rules, "EXCLUDED_COLUMNS", {})
+        if excluded_mart == mart
+    )
+    return Contract(columns, grain, match[0], mart, uses_surrogate_key=surrogate,
+                    excluded=excluded)
 
 
 def partition_columns_for(mart: str) -> tuple[str, ...]:
@@ -208,6 +236,8 @@ def arrow_type(column: Column):
              "TINYINT(1)": pa.bool_()}
     if column.sql_type.startswith("VARCHAR("):
         return pa.string()
+    if column.sql_type.startswith("DECIMAL("):
+        return pa.decimal128(*_decimal_spec(column.sql_type))
     if column.sql_type not in types:
         raise ProjectionError(f"Unsupported SQL type: {column.sql_type}")
     return types[column.sql_type]
@@ -251,11 +281,16 @@ class ParquetSnapshot:
                     if value != "__HIVE_DEFAULT_PARTITION__":
                         date.fromisoformat(value)
                     partitions[name] = pa.date32()
-            if set(fields) | set(partitions) != set(expected):
+            # 계약이 뺀 컬럼(§7.2.1)은 Mart 에 있는 것이 맞다. 없어야 하는 것이 아니라
+            # 발행하지 않을 뿐이라, 초과분으로 세면 발행이 막힌다 (Jira 355)
+            present = set(fields) | set(partitions)
+            if (present - set(expected)) - contract.excluded or set(expected) - present:
                 raise ProjectionError("Parquet columns differ from DW DDL")
             if set(fields) & set(partitions):
                 raise ProjectionError("Partition column also stored in file")
             for name, dtype in (fields | partitions).items():
+                if name in contract.excluded:
+                    continue                      # DDL 에 없으므로 대조할 target 이 없다
                 target = expected[name]
                 timestamp_ok = (pa.types.is_timestamp(dtype) and pa.types.is_timestamp(target)
                                 and dtype.unit in {"ms", "us"} and dtype.tz in {None, "UTC"})
