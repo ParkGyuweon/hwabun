@@ -556,6 +556,62 @@ def _check(name: str, passed: bool, details: str) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
 
 
+IMPRESSION_EVENTS = (
+    "product_impression",
+    "recommendation_impression",
+    "banner_impression",
+)
+
+
+def _impression_origin_values() -> list[str]:
+    """`event-schema.json` 이 허용하는 `impression_origin` 값을 읽는다.
+
+    Q2·수집기는 손으로 쓴 규칙이라 이 property 를 모른다. 런타임에서 값을 보는 곳이
+    Q5 뿐이므로, 목록을 여기에 적어 두지 않고 계약 파일에서 그대로 읽는다.
+    """
+
+    path = Path(__file__).resolve().parents[2] / "contracts" / "event-schema.json"
+    with open(path, encoding="utf-8") as handle:
+        schema = json.load(handle)
+    for branch in schema.get("allOf", []):
+        names = branch.get("if", {}).get("properties", {}).get("event_name", {}).get("enum")
+        if set(names or ()) != set(IMPRESSION_EVENTS):
+            continue
+        declared = (
+            branch.get("then", {})
+            .get("properties", {}).get("properties", {})
+            .get("properties", {}).get("impression_origin", {})
+            .get("enum")
+        )
+        if declared:
+            return list(declared)
+    raise RuntimeError(f"impression_origin enum not declared for impressions: {path}")
+
+
+def _impression_origin_report(cleaned: Any) -> dict[str, Any]:
+    """노출 3종의 `impression_origin` 분포와 계약 위반 값을 센다."""
+
+    from pyspark.sql import functions as F
+
+    allowed = _impression_origin_values()
+    origin = F.get_json_object(F.col("properties_json"), "$.impression_origin")
+    rows = (
+        cleaned.where(F.col("event_name").isin(*IMPRESSION_EVENTS))
+        .select(origin.alias("impression_origin"))
+        .groupBy("impression_origin")
+        .count()
+        .collect()
+    )
+    counts = {(r["impression_origin"] or "(없음)"): r["count"] for r in rows}
+    invalid = {k: v for k, v in counts.items() if k != "(없음)" and k not in allowed}
+    return {
+        "allowed": allowed,
+        "counts": counts,
+        "invalid": invalid,
+        "invalid_rows": sum(invalid.values()),
+    }
+
+
 def _load_dw_contract_rules() -> Any:
     """Load the DDL generator so Q5 and projection share one NULL policy."""
 
@@ -893,6 +949,20 @@ def validate_frames(
             "cleaned_has_no_null_event_id",
             cleaned.where(F.col("event_id").isNull()).count() == 0,
             "canonical rows require event_id",
+        )
+    )
+    # 노출 합성 마커 (event-properties-schema.md §3.12-1). 선택 property 라 없는 것은
+    # 정상이고, 실려 있으면 enum 을 강제한다. Q2·수집기는 이 property 를 모르므로
+    # 런타임에서 값을 보는 곳이 여기뿐이다. 분포는 합성 비중 실측 근거로 남긴다.
+    origin = _impression_origin_report(cleaned)
+    checks.append(
+        _check(
+            "impression_origin_values_follow_contract",
+            origin["invalid_rows"] == 0,
+            f"invalid_rows={origin['invalid_rows']}; "
+            f"invalid={origin['invalid'] or 'none'}; "
+            f"distribution={origin['counts']}; "
+            f"allowed={origin['allowed']}",
         )
     )
     checks.append(
