@@ -66,47 +66,13 @@
 | ③-2 **Q2** | Raw → cleaned / bad / duplicate | ✅ | 원천 10,699,084 → 정제 10,366,104 · **bad 2.4%** |
 | ③-3 **Q3** | 세션화 · Fact 8종 · Dimension 2종 | ✅ | purchase_fact 39,821 · product_fact 1,853,063 · funnel_session 982,762 |
 | ③-4 **Q4** | Fact → **Mart 22종** | ✅ | user_trait_daily 964,299 · content_daily 43,927 · event_daily 24,229 … |
-| ③-5 **Q5** | 품질 검증 | ⚠️ | **146 통과 / 13 실패** (아래 §2-1) |
-| ③-6 발행 | Mart → dw MySQL (staging→검증→원자적 스왑) | 🟡 | 수동 실행으로 **2종 발행** — `user_trait_daily` 964,299 · `brand_daily_kpi` 2,755. 나머지 20종은 아래 §2-1 |
+| ③-5 **Q5** | 품질 검증 | ⚠️ | **146 통과 / 13 실패** — 실패 행은 전부 한 자리 수 |
+| ③-6 발행 | Mart → dw MySQL (staging→검증→원자적 스왑) | 🟡 | **2종 발행 완료** — `user_trait_daily` 964,299 · `brand_daily_kpi` 2,755 |
 | ④-1 추천 | Kafka 구독으로 세션 상태 실시간 반영 | ✅ | LTR 239트리 · 피처 20개 · 응답 p50 1.2ms (09-14 노트북 실측) |
 | ④-2 장기 성향 | dw `user_trait_daily` → 응답 `long_term_trait` | ✅ | 22 테이블 접속 · **964,299행 적재 완료** |
 | ⑤ 대시보드 | 마트 API 7개 → 11개 화면 | 🟡 | 프론트·계약 완료, 백엔드 마트 API 배포 대기 |
 
-**자동화** — EC2-2 systemd 타이머가 매일 18:00 UTC(= 03:00 KST) Q2→Q3→Q4→Q5→발행을 한 번에 돌린다. 09-18 실행은 3시간 14분 뒤 Q5 에서 멈췄다.
-
-### 2-1. 지금 막혀 있는 한 곳
-
-마트는 **22종 전부 만들어져 있다.** dw 로 옮기는 마지막 단계만 검증 게이트에 걸려 있다. 실패 13건의 원인은 셋으로 갈린다.
-
-| 깨진 것 | 출처 | 정체 |
-| --- | --- | --- |
-| `product_daily` 비율 3행 (ctr 1.15·2.33·1.18) | `agent_llm` | 에이전트가 목록 노출 없이 상세로 직행 → 클릭 > 노출 |
-| `banner_daily` ctr>1 1행 | `python_batch` | 생성기 배너 동선 |
-| `purchase_fact` USD 1행 / 39,821 | `actor_type=user` | 실사용자 1명, 옛 프론트 번들 추정 |
-
-1,036만 건 중 13건이 22개 마트 전부의 발행을 막는 구조다.
-
----
-
-### 2-2. 발행을 막는 두 번째 벽
-
-수동으로 발행을 돌려 보니 게이트가 하나 더 있었다.
-
-`build_marts_job` 이 쓰는 `product_daily_kpi` Parquet 에는 `revenue_amount` · `currency` 가 있다.
-그런데 이 둘은 **계약이 일부러 dw 에서 뺀 컬럼**이다 — `contracts/dw-schema.md` §7.2.1,
-이유는 §6-4 "행동 로그 기반 금액으로 매출·정산을 합산하지 않는다"(기획의 정산 원칙과 같다).
-
-문제는 `dw_projection_source.py:255` 가 Parquet 컬럼과 DDL 컬럼을 **완전 일치**로만 비교한다는 것이다.
-
-```python
-if set(fields) | set(partitions) != set(expected):
-    raise ProjectionError("Parquet columns differ from DW DDL")
-```
-
-계약이 정의한 "빼는 컬럼" 개념이 코드에 없어서, 의도적으로 뺀 두 컬럼이 오히려 발행을 막는다.
-projection 은 첫 실패에서 중단하므로 그 뒤 19종은 시도조차 되지 않았다.
-
----
+**자동화** — EC2-2 systemd 타이머가 매일 18:00 UTC(= 03:00 KST) 에 Q2→Q3→Q4→Q5→발행을 한 번에 돌린다. 09-18 실행은 3시간 14분 걸렸다.
 
 ## 3. 팀 구성과 담당
 
