@@ -80,7 +80,7 @@ public class DashboardMartService {
         // 주문 줄 수. 주문 수와 상품 종류 사이를 메우는 값이라 같이 낸다
         "count(*) order_items," +
         "(select count(*) from review r join order_item x on x.order_item_id=r.order_item_id where x.brand_id=?) reviews," +
-        "(select count(*) from feedback f join order_item x on x.order_item_id=f.order_item_id where x.brand_id=? and f.status='VISIBLE') feedbacks " +
+        "(select count(*) from feedback f join product x on x.product_id=f.product_id where x.brand_id=? and f.status='VISIBLE') feedbacks " +
         "from order_item oi join shop_order o on o.order_id=oi.order_id where oi.brand_id=? and o.status='PAID'",
       brandId,
       brandId,

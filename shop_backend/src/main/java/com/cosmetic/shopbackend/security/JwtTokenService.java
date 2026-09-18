@@ -28,14 +28,18 @@ public class JwtTokenService {
   }
 
   public String issue(String accountId, AccountRole role) {
+    return issue(accountId, role, null);
+  }
+
+  public String issue(String accountId, AccountRole role, String brandId) {
     Instant now = Instant.now();
-    return Jwts.builder()
+    JwtBuilder builder = Jwts.builder()
       .subject(accountId)
       .claim("role", role.name())
       .issuedAt(Date.from(now))
-      .expiration(Date.from(now.plusMillis(expirationMs)))
-      .signWith(key)
-      .compact();
+      .expiration(Date.from(now.plusMillis(expirationMs)));
+    if (brandId != null && !brandId.isBlank()) builder.claim("brand_id", brandId);
+    return builder.signWith(key).compact();
   }
 
   public ShopPrincipal parse(String token) {
@@ -46,7 +50,8 @@ public class JwtTokenService {
       .getPayload();
     return new ShopPrincipal(
       c.getSubject(),
-      AccountRole.valueOf(c.get("role", String.class))
+      AccountRole.valueOf(c.get("role", String.class)),
+      c.get("brand_id", String.class)
     );
   }
 }
