@@ -15,7 +15,7 @@
 | 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 12개), 플랫폼 운영 화면 |
 | 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(그중 22종 발행) |
 | AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
-| 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 159개 |
+| 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 160개 |
 
 기준일 2026-09-18. 아래 수치는 이 날짜에 레포와 배포 서버에서 직접 확인한 값입니다.
 
@@ -34,7 +34,7 @@
  세 갈래가 같은 스키마                          Q2 clean_events                   │
  frontend/src/types/log.ts (43종)              Q3 derive_facts                 DW MySQL
  contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      22 테이블
-                                               Q5 validate     (검사 159개)      ▲
+                                               Q5 validate     (검사 160개)      ▲
                                                      │                          │
                                                      └── dw projection ─────────┘
                                                          staging→검증→원자적 스왑
@@ -102,7 +102,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - Q2 `clean_events_job`. 스키마와 의미를 검증하고 `event_id` 정본을 골라 cleaned / bad / duplicate 세 갈래로 나눕니다.
 - Q3 `derive_facts_job`. 세션화와 Fact 6종(상품, 구매, 구매사유, 리뷰, 섹션 체류, 콘텐츠 관심), Dimension 2종(dim_product, dim_brand)을 만듭니다.
 - Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 22종이 DW 발행 대상이고, `banner_daily`·`category_price_reference`·`cross_brand_daily` 는 Parquet 으로만 둡니다.
-- Q5 `validate_pipeline_job`. 품질 검증 159개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속을 확인합니다.
+- Q5 `validate_pipeline_job`. 품질 검증 160개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속을 확인합니다.
 - 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`, 그리고 대시보드 마트 조회 계약 `dashboard-mart-api-spec.md`
 - Job 이 실제로 읽는 계약 파일도 같이 관리합니다. `event-schema.json`(Q2), `purchase-reason-trait-map.json`(Q4·Q5), `user-trait-weights.json`(Q4), `dw/build_ddl.py` 와 `dw/schema.sql`(DDL 생성, projection 이 역참조)
 - 노출 정의 통일. 노출 이벤트 셋(product, recommendation, banner)을 CTR 분모에 합산하고, 뒤로가기 재조회는 상세 진입에서 뺍니다.
@@ -308,7 +308,7 @@ S15P21A306/
 │   │   ├── clean_events_job.py            Q2 검증·중복 제거
 │   │   ├── derive_facts_job.py            Q3 세션화·Fact 6종·Dimension 2종
 │   │   ├── build_marts_job.py             Q4 퍼널 세션 Fact · Mart 25종 (발행 대상 22종)
-│   │   ├── validate_pipeline_job.py       Q5 품질 검증 159개
+│   │   ├── validate_pipeline_job.py       Q5 품질 검증 160개
 │   │   ├── publish_user_trait_job.py      dw projection 진입점 (staging→검증→원자적 스왑)
 │   │   ├── dw_projection_source.py        Parquet 읽기·DDL 대조
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 재사용 어댑터
