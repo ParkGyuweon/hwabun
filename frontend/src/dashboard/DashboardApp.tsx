@@ -394,7 +394,7 @@ function MartNote() {
   return (
     <p>
       <span className="sidebar__mart">
-        v0.3 · 이벤트 36종 기준
+        v0.3 · 이벤트 43종 기준
       </span>
       <br />
       {line}
