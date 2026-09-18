@@ -76,6 +76,12 @@ function selectionKindOf(contentKind: string | null, matchedCount: number): 'ing
 /** 이보다 짧으면 드래그가 아니라 클릭하다 미끄러진 것으로 본다 */
 const MIN_LENGTH = 2;
 
+/**
+ * 같은 글자를 다시 긁었을 때 새 관심으로 치는 최소 간격.
+ * 드래그 한 번이 끝나고 다시 잡기까지의 시간보다 넉넉히 길고, 곰곰이 다시 보는 간격보다는 짧다.
+ */
+const REPEAT_MS = 2_000;
+
 
 /** 드래그 도중 selectionchange 가 연달아 오므로 손을 뗀 뒤로 미룬다 */
 const SETTLE_MS = 350;
@@ -109,13 +115,24 @@ export function useTextSelection(pageViewKey: string) {
     let settleTimer: number | undefined;
     /** 같은 선택이 유지되는 동안 반복해서 남기지 않는다 */
     let lastReported = '';
+    let lastReportedAt = 0;
 
     const emit = (eventName: 'text_selection' | 'text_copy') => {
       const current = readSelection();
       if (current === null) return;
 
-      if (eventName === 'text_selection' && current.text === lastReported) return;
+      /*
+       * 중복 제거는 **드래그 중 손이 흔들리는 것**을 걸러내려고 둔 것이다. 드래그하는 동안
+       * selectionchange 가 수십 번 오는데 그걸 다 남기면 한 번 긁은 것이 스무 번이 된다.
+       *
+       * 그런데 시간 제한이 없어서, 같은 성분을 곰곰이 다시 긁는 것까지 통째로 버렸다. 사용자에게는
+       * "아무리 긁어도 반응이 없다" 로 보인다 — 성향 점수가 첫 한 번에서 멈추기 때문이다.
+       * 같은 글자라도 REPEAT_MS 가 지난 뒤면 다시 센다. 그건 손 떨림이 아니라 또 한 번의 관심이다.
+       */
+      const now = Date.now();
+      if (eventName === 'text_selection' && current.text === lastReported && now - lastReportedAt < REPEAT_MS) return;
       lastReported = current.text;
+      lastReportedAt = now;
 
       // 원문 대신 사전에 걸린 성분의 표준 명칭만 싣는다 (데이터 계약)
       const matched = matchIngredients(current.text);

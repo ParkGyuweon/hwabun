@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { track, trackOnce } from '../lib/logger';
+import { hasTrackedOnce, track, trackOnce } from '../lib/logger';
 import type { EventName } from '../types/log';
 
 /** 카드 면적의 이 비율 이상이 화면에 들어와야 노출로 본다 */
@@ -54,6 +54,57 @@ interface UseImpressionOptions {
  * 대상 요소는 `data-product-id` 와 `data-position` 을 갖고 있어야 한다.
  * 컨테이너 ref 를 돌려주므로 목록 루트에 붙이면 된다.
  */
+/** 한 방문 안에서 같은 카드의 노출을 한 번만 세는 키. 훅과 클릭 확정이 같은 키를 써야 둘이 겹치지 않는다 */
+const impressionKey = (eventName: string, pageViewKey: string, listId: string, productId: string) =>
+  `${eventName}:${pageViewKey}:${listId}:${productId}`;
+
+interface ConfirmByClickInput {
+  pageViewKey: string;
+  eventName: UseImpressionOptions['eventName'];
+  listId: string;
+  productId: string;
+  position: number | null;
+  algorithm?: string;
+  recommendationId?: string;
+  extraProps?: Record<string, string | number | null | undefined>;
+}
+
+/**
+ * **클릭했다면 본 것이다.** 클릭 직전에 그 카드의 노출이 아직 안 남았으면 여기서 먼저 남긴다.
+ *
+ * 노출은 카드가 `holdMs`(300·1000ms) 동안 보여야 확정되는데 클릭은 그 자리에서 남는다. 카드가 나타나고
+ * 300ms 안에 누르면 클릭만 있고 노출이 없어서, 마트의 클릭률이 1 을 넘고 Q5 검사가
+ * `product_daily_rates_follow_contract` 로 그 날 배치를 막는다 (데이터 파트 2026-09-18).
+ * 빨리 누르는 사람도, 스크롤 직후 바로 누르는 에이전트도 같은 틈에 들어간다. 로거 단계에서
+ * 노출 ≥ 클릭을 보장하는 것이 가장 작은 수정이다 — 이벤트 이름·필수 속성은 그대로다.
+ *
+ * `hold_ms: 0` 으로 남긴다. 판정 기준을 함께 싣는 규칙(위 DEFAULT_HOLD_MS 설명) 그대로, "시간이 아니라
+ * 클릭으로 확정된 노출" 이라는 뜻이다. 재집계 때 300ms 기준으로 걸러내고 싶으면 이 값으로 가를 수 있다.
+ *
+ * 같은 키를 훅이 쓰므로 뒤늦게 타이머가 돌아도 두 번 남지 않는다.
+ */
+export function confirmImpressionByClick({
+  pageViewKey,
+  eventName,
+  listId,
+  productId,
+  position,
+  algorithm,
+  recommendationId,
+  extraProps,
+}: ConfirmByClickInput): boolean {
+  return trackOnce(impressionKey(eventName, pageViewKey, listId, productId), eventName, {
+    product_id: productId,
+    list_id: listId,
+    position,
+    ...(algorithm ? { algorithm } : {}),
+    ...(recommendationId ? { recommendation_id: recommendationId } : {}),
+    ...Object.fromEntries(Object.entries(extraProps ?? {}).filter(([, v]) => v !== undefined)),
+    hold_ms: 0,
+    visible_ratio: VISIBLE_RATIO,
+  });
+}
+
 export function useImpression({
   pageViewKey,
   eventName,
@@ -142,7 +193,7 @@ export function useImpression({
             if (!productId) return;
 
             const fired = trackOnce(
-              `${eventName}:${pageViewKey}:${listId}:${productId}`,
+              impressionKey(eventName, pageViewKey, listId, productId),
               eventName,
               {
                 ...baseProps(el),
@@ -151,7 +202,8 @@ export function useImpression({
                 visible_ratio: VISIBLE_RATIO,
               },
             );
-            if (fired) impressed.add(el);
+            // 클릭이 먼저 노출을 확정했으면(confirmImpressionByClick) 이미 남아 있다. 체류는 계속 잰다
+            if (fired || hasTrackedOnce(impressionKey(eventName, pageViewKey, listId, productId))) impressed.add(el);
           }, holdMs);
 
           timers.set(el, id);

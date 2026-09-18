@@ -110,6 +110,13 @@ export interface Feedback {
    * `undefined` 는 "모른다" 다 (옛 서버 응답·로컬 저장본).
    */
   purchased?: boolean;
+  /**
+   * 분류기가 이 행까지 왔는지 (`PENDING` | `COMPLETED` | `FAILED`). 백엔드 행에만 있다.
+   *
+   * `labels` 가 비었다는 것만으로는 "아직 안 돌았다" 와 "돌았는데 걸린 게 없다" 를 못 가른다.
+   * 화면이 분류 완료를 기다리다 멈출 시점을 이 값으로 정한다.
+   */
+  classification_status?: string | null;
   /** 백엔드(GET /api/seller/feedback)에서 온 행. 없으면 로컬 저장 */
   source?: 'backend';
 }

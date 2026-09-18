@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
-import { fetchSellerFeedback } from '../../lib/shopApi';
+import { fetchSellerFeedback, startFeedbackClassification } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import { OriginBadge, Panel } from '../components';
+import InsightCard from './InsightCard';
 import { feedbackProducts as products } from '../lib/metrics';
 import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -21,6 +22,10 @@ import type { Feedback } from '../../types/feedback';
 type AxisFilter = string | 'all' | 'pending';
 
 const PENDING = '__pending__';
+
+/** 분류 결과 재조회 간격·제한 시간. 끝나지 않아도 여기서 멈추고 지금 있는 것을 그대로 보여준다 */
+const POLL_MS = 2500;
+const WAIT_MS = 30_000;
 
 /** 축 → 담당 (명세 F1). 축 하나가 한 팀으로 간다 */
 const ROUTE: Record<string, { key: 'formula' | 'packaging' | 'pricing'; label: string }> = {
@@ -55,15 +60,48 @@ export default function FeedbackScreen() {
    * 브랜드 id 는 대시보드 로그인 때 저장된 값. 없거나 백엔드가 없으면 로컬만 보인다.
    */
   const [remote, setRemote] = useState<Feedback[]>([]);
+  /** 분류를 걸어 놓고 결과를 기다리는 중. 제한 시간 안에 안 끝나면 지금 있는 데이터를 그대로 둔다 */
+  const [classifying, setClassifying] = useState(false);
   useEffect(() => {
     const brandId = loadBrandId();
     if (!brandId) return;
     let alive = true;
-    void fetchSellerFeedback(brandId, FEEDBACK_BRAND).then((rows) => {
-      if (alive && rows) setRemote(rows);
-    });
+    let timer: number | undefined;
+
+    const pull = async (): Promise<boolean> => {
+      const rows = await fetchSellerFeedback(brandId, FEEDBACK_BRAND);
+      if (!alive || !rows) return false;
+      setRemote(rows);
+      // 백엔드 행이 하나도 PENDING 이 아니면 끝난 것. 행이 없어도 기다릴 이유가 없다
+      return !rows.some((f) => f.classification_status === 'PENDING');
+    };
+
+    void (async () => {
+      // 202(방금 걸었다)든 409(이미 돈다)든 정상이다. 엔드포인트가 없으면 그냥 한 번 읽고 끝낸다
+      const start = await startFeedbackClassification(brandId);
+      if (!alive) return;
+      if (start === 'unavailable') {
+        await pull();
+        return;
+      }
+      setClassifying(true);
+      const deadline = Date.now() + WAIT_MS;
+      const step = async () => {
+        if (!alive) return;
+        const done = await pull();
+        if (!alive) return;
+        if (done || Date.now() >= deadline) {
+          setClassifying(false);
+          return;
+        }
+        timer = window.setTimeout(step, POLL_MS);
+      };
+      await step();
+    })();
+
     return () => {
       alive = false;
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, []);
   const mine = useMemo(() => {
@@ -229,8 +267,12 @@ export default function FeedbackScreen() {
         </label>
         <p className="scope__meta">
           {total}건 · 새 의견 {fresh} · 반영 {reflected} · 어휘 {FEEDBACK_VOCAB_VERSION}
+          {classifying ? ' · 분류 처리 중입니다' : ''}
         </p>
       </div>
+
+      {/* AI 요약. 원문 목록보다 위 — 사장님은 결론부터 본다. 상품 필터를 그대로 따른다 */}
+      <InsightCard brandId={loadBrandId()} productId={productId === 'all' ? null : productId} />
 
       {verdict ? (
         <section className="verdict verdict--mine">

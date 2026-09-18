@@ -114,6 +114,58 @@ export function useReviewSkinTypes(): Map<string, SkinType[]> {
   return map;
 }
 
+let reviewCounts: Map<string, number> | null = null;
+let countsPending: Promise<Map<string, number>> | null = null;
+
+/**
+ * 상품별 리뷰 건수 (`/reviews/_counts.json`).
+ *
+ * 카탈로그의 `review_count` 는 원천 사이트의 리뷰 수(수천 건)라, 카드에는 16,118 이 뜨는데 상세에는
+ * 10건이 그려졌다 (2026-09-18 팀 확인). 화면이 적는 숫자는 **우리가 실제로 가진 리뷰 수**여야 한다.
+ * 상품당 건수가 10 → 100 으로 바뀌어도 이 파일이 따라오므로 화면은 다시 손대지 않는다.
+ */
+export function loadReviewCounts(): Promise<Map<string, number>> {
+  if (reviewCounts) return Promise.resolve(reviewCounts);
+  if (countsPending) return countsPending;
+  countsPending = getJson<Record<string, number>>('_counts', {}).then((obj) => {
+    reviewCounts = new Map(Object.entries(obj));
+    countsPending = null;
+    return reviewCounts;
+  });
+  return countsPending;
+}
+
+const EMPTY_COUNT_MAP = new Map<string, number>();
+
+export function useReviewCounts(): Map<string, number> {
+  const [counts, setCounts] = useState<Map<string, number>>(reviewCounts ?? EMPTY_COUNT_MAP);
+  useEffect(() => {
+    if (reviewCounts) return;
+    let alive = true;
+    void loadReviewCounts().then((m) => {
+      if (alive) setCounts(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return counts;
+}
+
+/**
+ * 화면에 적을 리뷰 수.
+ *
+ * 샘플 조각이 있는 상품은 **가진 건수**를, 없는 상품(시드 8종·백엔드 상품·등록 상품)은 카탈로그 값을 쓴다.
+ * 조각이 아직 안 도착했으면 카탈로그 값으로 그리다가 도착하면 바뀐다 — 숫자가 비었다 채워지는 것보다 낫다.
+ */
+export function displayReviewCount(
+  productId: string,
+  catalogCount: number | null,
+  counts: Map<string, number>,
+): number | null {
+  return counts.get(productId) ?? catalogCount;
+}
+
 export function useAuthorCounts(): Map<string, number> {
   const [counts, setCounts] = useState<Map<string, number>>(authorCounts ?? EMPTY_COUNTS);
   useEffect(() => {
