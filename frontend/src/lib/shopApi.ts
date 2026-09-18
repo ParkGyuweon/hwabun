@@ -509,6 +509,14 @@ export async function checkoutOnBackend(items: CartItem[], idempotencyKey: strin
 
 export type FeedbackSubmitResult = { ok: true; feedbackId: string } | ApiFailure;
 
+export type FeedbackClassifyResult = {
+  ok: true;
+  status: string;
+  selected: number;
+  completed: number;
+  failed: number;
+} | ApiFailure;
+
 /** POST /api/feedback. 백엔드가 이 고객의 PAID 주문을 직접 확인한다. 없으면 403 이 정상이다 */
 export async function submitFeedbackBackend(input: { productId: string; axisId: string; body: string }): Promise<FeedbackSubmitResult> {
   if (!hasMemberSession()) return { ok: false, status: 0, reason: '고객 로그인이 없습니다' };
@@ -531,7 +539,8 @@ interface SellerFeedbackRow {
   productId: string;
   productName: string;
   authorMemberId: string;
-  /** 산 사람의 의견인지. 옛 서버는 안 준다 */
+  /** 산 사람의 의견인지. 옛 서버는 purchased로 줄 수 있다 */
+  isPurchaser?: boolean;
   purchased?: boolean;
   authorSkinTypeCode: string | null;
   authorSkinToneCode: string | null;
@@ -548,6 +557,27 @@ interface SellerFeedbackRow {
   bannedTerms: string[];
   classificationStatus: string;
   hiddenByDefault: boolean;
+}
+
+/** POST /api/seller/feedback/classify. 해당 브랜드의 PENDING·FAILED 피드백을 즉시 분류한다. */
+export async function classifySellerFeedbackBackend(brandId: string): Promise<FeedbackClassifyResult> {
+  try {
+    const res = await authFetch('SELLER', `/api/seller/feedback/classify?brandId=${encodeURIComponent(brandId)}`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) return fail(res);
+    const result = (await res.json()) as Omit<Extract<FeedbackClassifyResult, { ok: true }>, 'ok'>;
+    return {
+      ok: true,
+      status: result.status,
+      selected: Number(result.selected ?? 0),
+      completed: Number(result.completed ?? 0),
+      failed: Number(result.failed ?? 0),
+    };
+  } catch {
+    return offline();
+  }
 }
 
 /** GET /api/seller/feedback?brandId= 를 화면 타입(Feedback)으로. 분류 전이면 labels 가 빈 배열로 온다 */
@@ -581,7 +611,9 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       brand_name: brandName,
       profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
       // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
-      purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
+      purchased: typeof r.isPurchaser === 'boolean'
+        ? r.isPurchaser
+        : typeof r.purchased === 'boolean' ? r.purchased : undefined,
       status: 'new',
       reply: null,
       replied_at: null,

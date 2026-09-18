@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { fetchSellerFeedback } from '../../lib/shopApi';
+import { classifySellerFeedbackBackend, fetchSellerFeedback } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import { OriginBadge, Panel } from '../components';
 import { feedbackProducts as products } from '../lib/metrics';
@@ -59,9 +59,18 @@ export default function FeedbackScreen() {
     const brandId = loadBrandId();
     if (!brandId) return;
     let alive = true;
-    void fetchSellerFeedback(brandId, FEEDBACK_BRAND).then((rows) => {
-      if (alive && rows) setRemote(rows);
-    });
+    void (async () => {
+      const rows = await fetchSellerFeedback(brandId, FEEDBACK_BRAND);
+      if (!alive || !rows) return;
+      setRemote(rows);
+
+      // 화면을 열었을 때만 미분류 건을 즉시 처리하고, 처리 후 최신 라벨을 다시 읽는다.
+      if (!rows.some(isUnclassified)) return;
+      const result = await classifySellerFeedbackBackend(brandId);
+      if (!alive || !result.ok || result.selected === 0) return;
+      const refreshed = await fetchSellerFeedback(brandId, FEEDBACK_BRAND);
+      if (alive && refreshed) setRemote(refreshed);
+    })();
     return () => {
       alive = false;
     };
