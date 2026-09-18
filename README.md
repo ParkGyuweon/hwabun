@@ -1,8 +1,6 @@
 # 화분 (HWABUN)
 
-> 고객 피드백으로 함께 성장하는 뷰티 추천 플랫폼
-
-여러 소규모 뷰티 브랜드를 한 쇼핑몰에 모아 소비자에게 맞춤 추천하고, 브랜드에는 고객 피드백과 교차 브랜드 인사이트를 주는 참여형 뷰티 커머스 플랫폼입니다.
+> 여러 소규모 뷰티 브랜드를 한 쇼핑몰에 모아 소비자에게 맞춤 추천하고, 브랜드에는 고객 피드백과 교차 브랜드 인사이트를 제공하는 참여형 뷰티 커머스 플랫폼
 
 소규모 뷰티 브랜드는 고객 의견을 제품에 반영하고 팬덤을 만들 시간도 도구도 없습니다. 화분은 그 일을 플랫폼 기능으로 만듭니다.
 
@@ -15,9 +13,9 @@
 | | 산출물 |
 | --- | --- |
 | 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드 11화면, 플랫폼 운영 화면 |
-| 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 22종 → DW MySQL |
-| AI | 상품 벡터 148차원, 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
-| 검증 | 페르소나 9,900명 합성 로그 1,030만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 159개 |
+| 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(그중 22종 발행) |
+| AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
+| 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 159개 |
 
 기준일 2026-09-18. 아래 수치는 이 날짜에 레포와 배포 서버에서 직접 확인한 값입니다.
 
@@ -35,7 +33,7 @@
                                               Q1 raw_sink   (상시)              │                 · 마트 API 7개
  세 갈래가 같은 스키마                          Q2 clean_events                   │
  frontend/src/types/log.ts (43종)              Q3 derive_facts                 DW MySQL
- contracts/event-properties-schema.md          Q4 build_marts  → 마트 22종      22 테이블
+ contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      22 테이블
                                                Q5 validate     (검사 159개)      ▲
                                                      │                          │
                                                      └── dw projection ─────────┘
@@ -99,10 +97,11 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 
 - Q1 `raw_sink_job`. Kafka 를 읽어 Raw Parquet 으로 적재합니다. Structured Streaming 이라 체크포인트로 오프셋을 이어받고, 파싱에 실패한 레코드도 원문을 남깁니다.
 - Q2 `clean_events_job`. 스키마와 의미를 검증하고 `event_id` 정본을 골라 cleaned / bad / duplicate 세 갈래로 나눕니다.
-- Q3 `derive_facts_job`. 세션화와 Fact 8종(상품, 구매, 구매사유, 리뷰, 섹션 체류, 콘텐츠 관심, 퍼널 세션), Dimension 2종을 만듭니다.
-- Q4 `build_marts_job`. 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 22종을 집계합니다.
+- Q3 `derive_facts_job`. 세션화와 Fact 6종(상품, 구매, 구매사유, 리뷰, 섹션 체류, 콘텐츠 관심), Dimension 2종(dim_product, dim_brand)을 만듭니다.
+- Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 22종이 DW 발행 대상이고, `banner_daily`·`category_price_reference`·`cross_brand_daily` 는 Parquet 으로만 둡니다.
 - Q5 `validate_pipeline_job`. 품질 검증 159개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속을 확인합니다.
-- 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`
+- 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`, 그리고 대시보드 마트 조회 계약 `dashboard-mart-api-spec.md`
+- Job 이 실제로 읽는 계약 파일도 같이 관리합니다. `event-schema.json`(Q2), `purchase-reason-trait-map.json`(Q4·Q5), `user-trait-weights.json`(Q4), `dw/build_ddl.py` 와 `dw/schema.sql`(DDL 생성, projection 이 역참조)
 - 노출 정의 통일. 노출 이벤트 셋(product, recommendation, banner)을 CTR 분모에 합산하고, 뒤로가기 재조회는 상세 진입에서 뺍니다.
 - 로컬 Kafka·Spark compose 를 만들었습니다 (`infra/`).
 
@@ -116,14 +115,61 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 
 ### 박규원 · AI
 
-- 오프라인 배치 `batch/jobs/`. 상품 벡터 148차원 인코딩(9블록, 어휘집 0.7), 페르소나 속성 친화도, CF 아이템 동시발생, LTR 학습 결합(HistGradientBoosting 239트리·피처 20개), MMR 다양성, 신규 브랜드 전용 슬롯을 만듭니다.
-- 평가 3축 분리. 오프라인(leave-last-out), 리뷰 재생, 동적 시뮬레이션. 홀드아웃은 2세트로 두고 a 에서 고른 뒤 b 에서 확인합니다.
-- 추천 서버 `batch/serving/` 8300. `GET /api/recommend`(items 10 + hero), `POST/DELETE /api/products`(등록하면 카탈로그에 바로 편입), `POST /api/events`, `POST /api/prescription`(대시보드 처방 문장), `POST /api/catalog/sync`, `/health`, 시연 화면 `/live` 와 `/pipeline` 을 제공합니다.
-- 실시간 상태. Kafka `activity-events` 를 별도 컨슈머 그룹으로 구독하고 수동 커밋과 `event_id` dedupe 로 세션 상태를 초 단위로 갱신합니다.
-- 장기 성향. DW `user_trait_daily` 를 읽어 추천 응답에 `long_term_trait` 을 싣습니다. DW MySQL → 스냅샷 → null 3단 폴백
-- 시뮬레이터 `simulator/`. 페르소나 9,900명 합성 로그(1인당 약 600건, 성향 6축이 행동 확률을 바꿉니다)와 에이전트 100명(Playwright + LLM 으로 실제 브라우저를 조작)을 돌립니다.
-- 고객 피드백 분류. 계약 0.2.0(어휘 5축 20종 + other, 금지어 599개)을 따릅니다. 고객이 고른 축 안에서 카테고리를 전부 고르고 건당 호출은 1회이며, 사람 정답 50건 대비 F1 94% 입니다.
-- 상품 등록 계약과 어휘집, 한국어 폼 라벨, 배너 축 6종을 만들었습니다.
+추천 모델과 추천 서버, 그리고 그 둘을 검증할 트래픽을 만드는 시뮬레이터를 맡습니다.
+
+**오프라인 배치 `batch/jobs/`** (파일 37개, 테스트 13개)
+
+- 상품 벡터 148차원 인코딩. 어휘집 `product-feature-vocab.json` 0.7 기준으로 멀티핫 블록 8종(`secondary_category`, `tertiary_category`, `concern`, `ingredient`, `clean`, `texture`, `price_bin`, `brand`)에 스칼라 `rating` 을 더합니다. 블록별 IDF 와 가중치는 문서 빈도에서 계산합니다.
+- 페르소나 속성 친화도 4,000행. 상품 200개 × 세그먼트 20개를 lift 로 냅니다.
+- CF 아이템 동시발생 `item_cooc.npz`(200×200 + 지지자 수). 학습·평가 누출을 막도록 seed 구간만 씁니다.
+- LTR 학습 결합. HistGradientBoosting 트리 239개, 피처 20개, 학습 표본 5,954명 231,005행입니다(`ltr_model_meta.json`). 학습과 서빙이 `ltr_features.py` 한 파일을 같이 씁니다.
+- 노출 정책, MMR 다양성, 신규 브랜드 전용 슬롯(`reserve_slots`), 콜드스타트 폴백
+- `regenerate_all.py` 가 상품부터 서빙 산출물까지 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
+
+**평가**
+
+- 축 3개를 분리합니다. 오프라인 leave-last-out(`eval_persona_feature.py`), 실제 리뷰 이력 순차 재생(`eval_review_replay.py`), 동적 시뮬레이션(`eval_dynamic.py`)
+- 홀드아웃은 2세트(각 2,000명)로 두고 a 에서 고른 뒤 b 에서 확인합니다. 정답 정본은 `eval_metadata.py` 가 한 곳에서 만들어 세 축이 같은 문제를 풀게 합니다.
+- 행동 생성이 추천 점수를 베끼지 않도록 `hidden_preference.py` 로 통제합니다.
+
+**추천 서버 `batch/serving/` 8300** (테스트 11개 파일, 내부 전용)
+
+| 라우트 | 하는 일 |
+| --- | --- |
+| `GET /api/recommend` | items 10개 + hero. `persona_id` 가 없으면 익명 콜드스타트 |
+| `POST /api/products` · `DELETE /api/products/{id}` · `GET /api/products/{id}` | 등록 상품을 계약 검사·인코딩해 카탈로그에 바로 편입, 판매 중단 |
+| `POST /api/events` | 행동 이벤트로 세션 상태 갱신 |
+| `POST /api/catalog/sync` | 쇼핑몰 백엔드 ACTIVE 상품 동기화 (5분 주기) |
+| `POST /api/prescription` · `GET`·`POST /api/prescription/llm` | 대시보드 처방 문장과 LLM 런타임 스위치 |
+| `POST /api/sessions/compact` | 세션 이벤트 로그 압축 |
+| `GET /health` | 모델·카탈로그·Kafka·DW 상태 |
+| `GET /live` · `/live/stats` · `POST /live/demo/start`·`/stop` | 시연 화면과 재생 제어 |
+| `GET /pipeline` · `/pipeline/stats` | 다섯 층(활동·Kafka·Spark·DW·대시보드)을 한 화면에서 읽기 전용으로 |
+
+- 실시간 상태(`kafka_state.py`). `activity-events` 를 별도 컨슈머 그룹으로 구독하고 수동 커밋과 `event_id` dedupe 로 세션 상태를 초 단위로 갱신합니다.
+- 세션 영속화(`session_store.py`). 이벤트 로그를 append 하고 기동할 때 재생하며, 주기적으로 compact 합니다.
+- 장기 성향(`user_trait.py`). DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다. DW MySQL → 스냅샷 → null 3단 폴백이고, `actor_type` 이 `user` 와 `synthetic` 인 행을 모두 읽어 `identity_scope` 로 가릅니다.
+- 배너·히어로 조립(`banners.py`). 요청 `axes` 순서를 따르고 축 값의 출처(session·profile·coldstart)를 `reason` 으로 남깁니다.
+
+**시뮬레이터 `simulator/`**
+
+- 페르소나 생성기. 9,900명 분량 합성 로그를 만듭니다. 1인당 약 1,060건이고 9,900명이면 약 1,049만 건입니다(KRW 캐시 실측). 리뷰에서 뽑은 성향 6축(ingredient, price, texture, scent, sensitivity, review_lean)이 행동 확률과 체류를 바꿉니다. 성향은 "어떻게 보는가"만 정하고 "무엇을 고르는가"에는 관여하지 않습니다. 추천 점수가 쓰는 축과 겹치면 순환이 되기 때문입니다.
+- 결제까지 이어지는 동선(`add_to_cart` → `begin_checkout` → `purchase` → `purchase_reason_select`), 재구매 쌍, `--limit` 층화 표본, `GEN_NOW` 기준 시각
+- LLM 에이전트 100명(`agent_runner.py`). Playwright 로 실제 브라우저를 띄워 사이트를 조작하므로 프론트 로거를 그대로 타고 수집기로 들어갑니다. 둘러보기·정렬·배너 클릭·주문·구매 후 의견까지 합니다.
+- `demo_live.py` 가 캐시를 Kafka 로 produce 하고, `shuffle_sessions.py` 가 페르소나 라운드로빈으로 세션을 섞어 초반에 전원이 나타나게 합니다.
+
+**고객 피드백 분류**
+
+- 계약 `feedback-classification.md` 0.2.0. 축 5종(efficacy, texture, scent, packaging, value)은 고객이 화면에서 고르고, 분류기는 그 축 안의 카테고리 20종과 `other` 중에서만 고릅니다. 건당 호출 1회, 라벨은 다중입니다.
+- 채점(50건, 도달 가능 정답 49건 기준): 정밀도 93.7 · 재현율 94.9 · **F1 94.3** · 라벨 집합 완전 일치 88%
+- 금지어 599개(`feedback-banned-terms.json`)를 대조해 `hidden_by_default` 를 정합니다. 이 단계에는 LLM 을 쓰지 않습니다.
+
+**그 밖에**
+
+- 상품 등록 계약(`product-registration-spec.md`)과 인코딩 어휘집, 등록 폼 한국어 라벨
+- 배너 축 6종(`category`, `clean`, `concern`, `ingredient`, `price_bin`, `segment`)
+- 상품·리뷰 한국어화 산출물(`build_ko_catalog.py`, `build_reviews_ko_files.py`, `merge_reviews_ko.py`)
+- 백엔드 적재용 정규화 테이블 6종과 DDL(`export_backend_tables.py`)
 
 LLM 을 쓰는 곳은 셋이고 경로가 다릅니다.
 
@@ -177,13 +223,20 @@ docker compose -f infra/kafka/docker-compose.yml -f infra/spark/docker-compose.y
 # 2. Q1 상시 가동 (Kafka → Raw Parquet)
 pwsh infra/spark/run-pipeline.ps1 -Action start-q1      # bash 판: infra/spark/run-pipeline.sh
 
-# 3. Q2~Q5 배치
+# 3. 로그를 다 흘려보낸 뒤 Q1 을 세운다
+#    Q1 이 append 하는 중에 Q2 가 스냅샷을 읽으면 결과가 흔들린다
+pwsh infra/spark/run-pipeline.ps1 -Action stop-q1
+
+# 4. Q2~Q5 배치
 pwsh infra/spark/run-pipeline.ps1 -Action run-batch     # -From q3 로 중간부터
 
-# 4. 추천 서버
+# 5. Q5 만 다시 (마트를 고친 뒤 검증만 볼 때)
+pwsh infra/spark/run-pipeline.ps1 -Action validate
+
+# 6. 추천 서버
 python -m uvicorn batch.serving.recommend_server:app --host 127.0.0.1 --port 8300
 
-# 5. 프론트
+# 7. 프론트
 cd frontend && npm install && npm run dev               # 5173
 ```
 
@@ -293,8 +346,8 @@ S15P21A306/
 │   ├── jobs/
 │   │   ├── raw_sink_job.py                Q1 Kafka → Raw Parquet
 │   │   ├── clean_events_job.py            Q2 검증·중복 제거
-│   │   ├── derive_facts_job.py            Q3 세션화·Fact 8종·Dimension 2종
-│   │   ├── build_marts_job.py             Q4 Mart 22종
+│   │   ├── derive_facts_job.py            Q3 세션화·Fact 6종·Dimension 2종
+│   │   ├── build_marts_job.py             Q4 퍼널 세션 Fact · Mart 25종 (발행 대상 22종)
 │   │   ├── validate_pipeline_job.py       Q5 품질 검증 159개
 │   │   ├── publish_user_trait_job.py      dw projection 진입점 (staging→검증→원자적 스왑)
 │   │   ├── dw_projection_source.py        Parquet 읽기·DDL 대조
