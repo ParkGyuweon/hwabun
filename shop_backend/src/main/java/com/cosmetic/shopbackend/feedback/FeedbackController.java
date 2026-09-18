@@ -93,7 +93,7 @@ public class FeedbackController {
       "select r.review_id reviewId,r.product_id productId,p.product_name productName, " +
         "r.order_item_id orderItemId,r.rating,r.is_recommended isRecommended, " +
         "r.title,r.body,r.status,r.created_at createdAt, " +
-        "true isPurchaser " +
+        "case when r.order_item_id is not null then true else false end isPurchaser " +
         "from review r join product p on p.product_id=r.product_id " +
         "where p.brand_id=? and r.status='PUBLISHED' order by r.created_at desc",
       ownedBrandId
