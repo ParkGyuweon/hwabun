@@ -28,8 +28,11 @@ export default function SegmentsScreen() {
 
   // 표본 50 미만 칸은 비교에서 뺀다 (명세 §3-1)
   const shown = segmentMatrix.flatMap((r) => r.cells.map((c) => ({ type: r.type, ...c }))).filter((c) => c.sessions >= 50);
-  const best = shown.length > 0 ? shown.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
-  const bestType = segmentByType && segmentByType.length > 0 ? segmentByType.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
+  // 0 끼리는 순위가 없다. 담기율이 전부 0 이면 "최고 전환 고객군"도 없다 (2026-09-18)
+  const converting = shown.filter((c) => c.cartRate > 0);
+  const best = converting.length > 0 ? converting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
+  const typesConverting = (segmentByType ?? []).filter((t) => t.cartRate > 0);
+  const bestType = typesConverting.length > 0 ? typesConverting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
 
   const cells: Record<string, Record<string, { value: number; n: number }>> = {};
   for (const r of segmentMatrix) {
@@ -63,7 +66,12 @@ export default function SegmentsScreen() {
             source="none"
           />
         ) : (
-          <Kpi label="최고 전환 고객군" value="-" sub="표본 50 이상인 칸이 없습니다" source={source.grid} />
+          <Kpi
+            label="최고 전환 고객군"
+            value="-"
+            sub={shown.length > 0 ? '표본 50 이상인 칸에서 담은 고객이 아직 없습니다' : '표본 50 이상인 칸이 없습니다'}
+            source={source.grid}
+          />
         )}
         <Kpi
           label="내 피부 타입 리뷰 필터"

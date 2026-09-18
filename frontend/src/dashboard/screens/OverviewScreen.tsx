@@ -21,18 +21,27 @@ import { categoryLabel, labelsOf } from '../../types/feedback';
  *
  * 숫자는 useBehavior() 가 준다. 마트가 붙어 있으면 실측, 아니면 모의. 배지가 그 차이를 적는다.
  */
-/** 구매 고객 10명 이상인 상품 중 재구매율 최고. 표본이 얇은 상품이 1위에 오르는 것을 막는다 */
-function bestRepurchaseName(rp: Repurchase, products: ProductMetrics[]): string {
+/**
+ * 구매 고객 10명 이상인 상품 중 재구매율 최고. 표본이 얇은 상품이 1위에 오르는 것을 막는다.
+ *
+ * **재구매가 한 건도 없으면 1위도 없다.** 전에는 rate 가 전부 0 이어도 정렬 첫 번째 상품을 "최고"로 적어서,
+ * 브랜드 재구매율 0.0% 옆에 상품 이름이 실측 배지를 달고 떴다 (2026-09-18). 0% 끼리는 순위가 없다.
+ */
+function bestRepurchase(rp: Repurchase, products: ProductMetrics[]): { name: string; rate: number } | null {
   const best = [...rp.products.entries()]
-    .filter(([, r]) => r.rate !== null && r.buyerCount >= 10)
+    .filter(([, r]) => r.rate !== null && r.rate > 0 && r.buyerCount >= 10)
     .sort((a, b) => (b[1].rate ?? 0) - (a[1].rate ?? 0))[0];
-  if (!best) return '-';
-  return products.find((x) => x.product.product_id === best[0])?.product.product_name ?? best[0];
+  if (!best) return null;
+  return {
+    name: products.find((x) => x.product.product_id === best[0])?.product.product_name ?? best[0],
+    rate: best[1].rate ?? 0,
+  };
 }
 
 export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (screen: string) => void }) {
   const m = useBehavior();
   const { overview, previous, daily: series, standardFunnel, productMetrics, repurchase, source } = m;
+  const best = repurchase ? bestRepurchase(repurchase, productMetrics) : null;
   const insights = useMemo(() => rankInsights(m), [m]);
   const top = insights[0];
   const rest = insights.slice(1, 4);
@@ -119,8 +128,8 @@ export default function OverviewScreen({ days, onGo }: { days: number; onGo?: (s
           />
           <Kpi
             label="상품 재구매 최고"
-            value={bestRepurchaseName(repurchase, productMetrics)}
-            sub="구매 고객 10명 이상인 상품 중"
+            value={best ? best.name : '-'}
+            sub={best ? `재구매율 ${fmt.pct(best.rate)} · 구매 고객 10명 이상인 상품 중` : '구매 고객 10명 이상인 상품 중 다시 산 고객이 아직 없습니다'}
             source="real"
           />
         </div>

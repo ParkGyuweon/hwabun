@@ -17,8 +17,9 @@ export default function BehaviorScreen() {
   const { frictionByLocation, frictionCounts, entryConversion, intentFunnel, eventVolumes, quickExitRate, overview, source } = useBehavior();
 
   // 머뭇거림(hover_dwell)은 막힌 것과 다른 축이라 결론에서 뺀다
-  const worst = [...frictionByLocation].filter((f) => f.event !== 'hover_dwell').sort((a, b) => b.count - a.count)[0];
-  const best = [...entryConversion].sort((a, b) => b.cartRate - a.cartRate)[0];
+  // 0 끼리는 순위가 없다. 한 번도 안 일어난 자리를 "가장 많이 막힌 자리"로 세우지 않는다 (2026-09-18)
+  const worst = [...frictionByLocation].filter((f) => f.event !== 'hover_dwell' && f.count > 0).sort((a, b) => b.count - a.count)[0];
+  const best = [...entryConversion].filter((e) => e.cartRate > 0).sort((a, b) => b.cartRate - a.cartRate)[0];
   const base = entryConversion.find((e) => e.source === 'list_grid') ?? entryConversion[0];
 
   return (
