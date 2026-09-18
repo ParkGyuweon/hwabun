@@ -42,9 +42,13 @@ class DashboardCommerceSummaryTest {
       "create table order_item (order_item_id varchar(64), order_id varchar(64), product_id varchar(64)," +
         "brand_id varchar(64), quantity int, line_amount decimal(18,0))"
     );
+    shop.execute("create table product (product_id varchar(64), brand_id varchar(64))");
     shop.execute("create table review (review_id varchar(64), order_item_id varchar(64))");
-    shop.execute("create table feedback (feedback_id varchar(64), order_item_id varchar(64), status varchar(32))");
+    shop.execute("create table feedback (feedback_id varchar(64), product_id varchar(64), order_item_id varchar(64), status varchar(32))");
     shop.update("insert into brand values (?,?)", BRAND, SELLER);
+    shop.update("insert into product values (?,?)", "P1", BRAND);
+    shop.update("insert into product values (?,?)", "P2", BRAND);
+    shop.update("insert into product values (?,?)", "P9", BRAND);
     // DW 는 이 테스트에서 쓰지 않는다. 연결이 없으면 마트 엔드포인트만 503 이고 요약은 쇼핑몰 DB 만 읽는다.
     service = new DashboardMartService(shop, new DashboardMartJdbcProvider("", "", ""));
   }
