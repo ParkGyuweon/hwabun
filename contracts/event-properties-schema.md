@@ -85,12 +85,14 @@ Event.product_id
 
 | event_name | intent | 의미 | 주요 활용 |
 | --- | --- | --- | --- |
-| `product_impression` | `exposure` | 상품 카드 유효 노출 | 상품 CTR 분모 |
+| `product_impression` | `exposure` | 상품 카드 유효 노출 또는 클릭·Quick Look으로 확정된 합성 노출 | 상품 CTR 분모 |
 | `impression_dwell` | `exposure` | 유효 노출 카드의 체류시간 | 노출 품질 |
 | `product_click` | `comparison` | 상품 카드 클릭 | 상품 CTR 분자 |
-| `recommendation_impression` | `exposure` | 추천 카드 유효 노출 | 추천 CTR 분모 |
+| `recommendation_impression` | `exposure` | 추천 카드 유효 노출 또는 추천 클릭으로 확정된 합성 노출 | 추천 CTR 분모 |
 | `recommendation_snapshot` | `exposure` | 추천 목록 순위 스냅샷 | 위치 편향 분석 |
 | `recommendation_click` | `comparison` | 추천 카드 클릭 | 추천 CTR 분자 |
+| `banner_impression` | `session` | 히어로 배너 노출 또는 배너 클릭으로 확정된 합성 노출 | 배너 CTR 분모 |
+| `banner_click` | `interest` | 히어로 배너 클릭 | 배너 CTR 분자 |
 | `quick_look` | `interest` | 상품 요약 창 열림 | 상세 진입 전 관심 |
 | `quick_look_close` | `interest` | 상품 요약 창 닫힘 | 요약 창 체류·행동 |
 | `filter_change` | `comparison` | 상품 필터 변경 | 탐색 기준 |
@@ -258,6 +260,19 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 서비스가 하고, 같은 노출·클릭 쌍에는 같은 값을 싣는다. DATA는 배정하지 않고 비중과
 노출·클릭 일치만 검증한다.
 
+### 3.12-1 `impression_origin`
+
+`observed`, `implied_by_click`
+
+세 노출 Event(`product_impression`, `recommendation_impression`, `banner_impression`)에
+필수로 싣는다. 화면에서 정상 관측한 노출은 `observed`, 선행 노출 없이 클릭이 발생해
+클릭 직전에 보강한 노출은 `implied_by_click`이다. 합성 노출은 대응 클릭과 같은 세션·
+상품·노출 위치 식별자를 사용하며 CTR과 노출 분모에 포함한다.
+
+`product_impression`과 `recommendation_impression`의 합성 노출은 실측 체류가 없으므로
+`hold_ms: 0`을 싣는다. `banner_impression`에는 `hold_ms` 필드가 없으므로 0 여부를
+세 노출의 공통 합성 판정 기준으로 사용하지 않고 `impression_origin`만 사용한다.
+
 ### 3.13 배너 값과 slot 규칙
 
 `banner_slot`은 1 이상의 정수다. 추천 API 응답의 `slot`은 Event 발행 시 이 이름으로
@@ -343,11 +358,11 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
+| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`, `impression_origin: observed\|implied_by_click`; top-level `product_id` 필수 | `policy_version: string` |
 | `banner_click` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
-| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number` | `impression_area: string`, `dedupe_key: string` |
+| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: observed\|implied_by_click` | `impression_area: string`, `dedupe_key: string` |
 | `product_click` | 없음 | `list_id: string`, `position: integer`, `entry_source: string`, `impression_event_id: string`, `context_product_id: string` |
-| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number` | `section_id: string`, `context_product_id: string` |
+| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: observed\|implied_by_click` | `section_id: string`, `context_product_id: string` |
 | `recommendation_click` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string` | `section_id: string`, `impression_event_id: string`, `context_product_id: string` |
 | `impression_dwell` | `list_id: string`, `position: integer`, `visible_ms: integer` | `recommendation_id: string`, `algorithm: string`, `context_product_id: string` |
 | `recommendation_snapshot` | `recommendation_id: string`, `list_id: string`, `algorithm: string`, `size: integer`, `ranking: object[]` | 없음 |

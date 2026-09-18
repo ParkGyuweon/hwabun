@@ -533,6 +533,10 @@ input = product_event_fact, purchase_fact, dim_product
 **노출 Event는 셋이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
 하나에 노출 Event를 정확히 하나만 낸다.
 
+선행 노출 없이 클릭이 발생해 클릭 직전에 보강한 합성 노출
+(`impression_origin=implied_by_click`)도 관측 노출과 동일하게 `impression_count`와
+CTR 분모에 포함한다. 합성 여부는 분석용 구분이지 분모 제외 조건이 아니다.
+
 | 자리 | 노출 Event |
 | --- | --- |
 | 목록 그리드 | `product_impression` |
