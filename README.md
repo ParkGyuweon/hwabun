@@ -55,7 +55,7 @@
 
 | 이름 | 역할 | 소유 영역 |
 | --- | --- | --- |
-| 강하린 | 기획 (PM) | 주차별 평가 보고서, 팀 문서, 일정 |
+| 강하린 | 기획 (PM) | 프로젝트 일정·업무 관리 · 서비스 기획 · 발표/영상 콘텐츠 제작 |
 | 추유림 | 프론트엔드 | `frontend/` (195) · `docs/dashboard/` (60) |
 | 최열음 | 백엔드 | `shop_backend/` (47) · `backend/` (30) · `monitoring/` (6) · `Jenkinsfile` |
 | 이은솔 | 데이터 | `streaming/` (128) · `contracts/` (135) · `infra/` (16) |
@@ -64,10 +64,12 @@
 
 ### 강하린 · 기획 (PM)
 
-- 서비스 방향 수립. "소규모 브랜드가 고객 의견을 제품에 반영하는 일을 쉽게 만든다"를 축으로 잡고, 여러 브랜드를 모아야 하는 이유(추천 후보 확보와 교차 발견)를 정리했습니다.
-- MUST/SHOULD 기능을 분류하고 통합 인사이트 우선순위 8종을 골랐습니다.
-- 매출·정산 원칙 확정. 정산은 주문 DB 기준으로 하고, 행동 로그의 `purchase` 는 전환 분석에만 씁니다.
-- 주차별 평가 보고서를 씁니다 (`1차 평가/`).
+- 서비스 기획 및 방향성 구체화. 타깃 사용자를 정의하고 핵심 가치와 서비스 구조를 설계했습니다. 국내 소규모 뷰티 브랜드의 현황·문제점과 데이터 인프라 필요성을 조사했습니다.
+- 프로젝트 브랜딩. HWABUN·BLOOM 서비스 콘셉트와 슬로건, 디자인 방향을 수립했습니다.
+- 프로젝트 관리. 주차별 일정과 업무 우선순위를 관리하고, 파트별 진행 상황과 통합 일정을 조율합니다.
+- 주요 기능 기획. 사용자 Flow 를 정리하고 핵심 기능을 정의해 MUST/SHOULD 우선순위를 정했습니다.
+- 발표 자료 제작. 기획 발표 PPT 구성과 발표 스토리라인을 설계하고 디자인했습니다.
+- 영상 포트폴리오 제작. HWABUN 홍보영상 시나리오·스토리보드를 기획하고 키컷과 영상을 제작했습니다.
 
 ### 추유림 · 프론트엔드
 
@@ -117,59 +119,15 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 
 추천 모델과 추천 서버, 그리고 그 둘을 검증할 트래픽을 만드는 시뮬레이터를 맡습니다.
 
-**오프라인 배치 `batch/jobs/`** (파일 37개, 테스트 13개)
-
-- 상품 벡터 148차원 인코딩. 어휘집 `product-feature-vocab.json` 0.7 기준으로 멀티핫 블록 8종(`secondary_category`, `tertiary_category`, `concern`, `ingredient`, `clean`, `texture`, `price_bin`, `brand`)에 스칼라 `rating` 을 더합니다. 블록별 IDF 와 가중치는 문서 빈도에서 계산합니다.
-- 페르소나 속성 친화도 4,000행. 상품 200개 × 세그먼트 20개를 lift 로 냅니다.
-- CF 아이템 동시발생 `item_cooc.npz`(200×200 + 지지자 수). 학습·평가 누출을 막도록 seed 구간만 씁니다.
-- LTR 학습 결합. HistGradientBoosting 트리 239개, 피처 20개, 학습 표본 5,954명 231,005행입니다(`ltr_model_meta.json`). 학습과 서빙이 `ltr_features.py` 한 파일을 같이 씁니다.
-- 노출 정책, MMR 다양성, 신규 브랜드 전용 슬롯(`reserve_slots`), 콜드스타트 폴백
-- `regenerate_all.py` 가 상품부터 서빙 산출물까지 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
-
-**평가**
-
-- 축 3개를 분리합니다. 오프라인 leave-last-out(`eval_persona_feature.py`), 실제 리뷰 이력 순차 재생(`eval_review_replay.py`), 동적 시뮬레이션(`eval_dynamic.py`)
-- 홀드아웃은 2세트(각 2,000명)로 두고 a 에서 고른 뒤 b 에서 확인합니다. 정답 정본은 `eval_metadata.py` 가 한 곳에서 만들어 세 축이 같은 문제를 풀게 합니다.
-- 행동 생성이 추천 점수를 베끼지 않도록 `hidden_preference.py` 로 통제합니다.
-
-**추천 서버 `batch/serving/` 8300** (테스트 11개 파일, 내부 전용)
-
-| 라우트 | 하는 일 |
-| --- | --- |
-| `GET /api/recommend` | items 10개 + hero. `persona_id` 가 없으면 익명 콜드스타트 |
-| `POST /api/products` · `DELETE /api/products/{id}` · `GET /api/products/{id}` | 등록 상품을 계약 검사·인코딩해 카탈로그에 바로 편입, 판매 중단 |
-| `POST /api/events` | 행동 이벤트로 세션 상태 갱신 |
-| `POST /api/catalog/sync` | 쇼핑몰 백엔드 ACTIVE 상품 동기화 (5분 주기) |
-| `POST /api/prescription` · `GET`·`POST /api/prescription/llm` | 대시보드 처방 문장과 LLM 런타임 스위치 |
-| `POST /api/sessions/compact` | 세션 이벤트 로그 압축 |
-| `GET /health` | 모델·카탈로그·Kafka·DW 상태 |
-| `GET /live` · `/live/stats` · `POST /live/demo/start`·`/stop` | 시연 화면과 재생 제어 |
-| `GET /pipeline` · `/pipeline/stats` | 다섯 층(활동·Kafka·Spark·DW·대시보드)을 한 화면에서 읽기 전용으로 |
-
-- 실시간 상태(`kafka_state.py`). `activity-events` 를 별도 컨슈머 그룹으로 구독하고 수동 커밋과 `event_id` dedupe 로 세션 상태를 초 단위로 갱신합니다.
-- 세션 영속화(`session_store.py`). 이벤트 로그를 append 하고 기동할 때 재생하며, 주기적으로 compact 합니다.
-- 장기 성향(`user_trait.py`). DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다. DW MySQL → 스냅샷 → null 3단 폴백이고, `actor_type` 이 `user` 와 `synthetic` 인 행을 모두 읽어 `identity_scope` 로 가릅니다.
-- 배너·히어로 조립(`banners.py`). 요청 `axes` 순서를 따르고 축 값의 출처(session·profile·coldstart)를 `reason` 으로 남깁니다.
-
-**시뮬레이터 `simulator/`**
-
-- 페르소나 생성기. 9,900명 분량 합성 로그를 만듭니다. 1인당 약 1,060건이고 9,900명이면 약 1,049만 건입니다(KRW 캐시 실측). 리뷰에서 뽑은 성향 6축(ingredient, price, texture, scent, sensitivity, review_lean)이 행동 확률과 체류를 바꿉니다. 성향은 "어떻게 보는가"만 정하고 "무엇을 고르는가"에는 관여하지 않습니다. 추천 점수가 쓰는 축과 겹치면 순환이 되기 때문입니다.
-- 결제까지 이어지는 동선(`add_to_cart` → `begin_checkout` → `purchase` → `purchase_reason_select`), 재구매 쌍, `--limit` 층화 표본, `GEN_NOW` 기준 시각
-- LLM 에이전트 100명(`agent_runner.py`). Playwright 로 실제 브라우저를 띄워 사이트를 조작하므로 프론트 로거를 그대로 타고 수집기로 들어갑니다. 둘러보기·정렬·배너 클릭·주문·구매 후 의견까지 합니다.
-- `demo_live.py` 가 캐시를 Kafka 로 produce 하고, `shuffle_sessions.py` 가 페르소나 라운드로빈으로 세션을 섞어 초반에 전원이 나타나게 합니다.
-
-**고객 피드백 분류**
-
-- 계약 `feedback-classification.md` 0.2.0. 축 5종(efficacy, texture, scent, packaging, value)은 고객이 화면에서 고르고, 분류기는 그 축 안의 카테고리 20종과 `other` 중에서만 고릅니다. 건당 호출 1회, 라벨은 다중입니다.
-- 채점(50건, 도달 가능 정답 49건 기준): 정밀도 93.7 · 재현율 94.9 · **F1 94.3** · 라벨 집합 완전 일치 88%
-- 금지어 599개(`feedback-banned-terms.json`)를 대조해 `hidden_by_default` 를 정합니다. 이 단계에는 LLM 을 쓰지 않습니다.
-
-**그 밖에**
-
-- 상품 등록 계약(`product-registration-spec.md`)과 인코딩 어휘집, 등록 폼 한국어 라벨
-- 배너 축 6종(`category`, `clean`, `concern`, `ingredient`, `price_bin`, `segment`)
-- 상품·리뷰 한국어화 산출물(`build_ko_catalog.py`, `build_reviews_ko_files.py`, `merge_reviews_ko.py`)
-- 백엔드 적재용 정규화 테이블 6종과 DDL(`export_backend_tables.py`)
+- 상품 벡터 148차원. 어휘집 0.7 기준 멀티핫 블록 8종(카테고리 2·고민·성분·클린·제형·가격대·브랜드) + 스칼라 `rating`. 블록 가중치는 문서 빈도에서 계산합니다.
+- 추천 점수. 콘텐츠 유사도에 페르소나 속성 친화도 4,000행과 CF 동시발생(200×200)을 얹고 LTR 로 결합합니다. 트리 239개·피처 20개, 학습 5,954명 231,005행. 학습과 서빙이 `ltr_features.py` 를 같이 씁니다.
+- 노출 정책. MMR 다양성, 신규 브랜드 전용 슬롯, 콜드스타트 폴백. `regenerate_all.py` 가 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
+- 평가 축 3개 분리. 오프라인 leave-last-out, 리뷰 이력 순차 재생, 동적 시뮬레이션. 홀드아웃 2세트(각 2,000명)로 a 에서 고르고 b 에서 확인합니다.
+- 추천 서버 `batch/serving/` 8300, 라우트 17개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장, 카탈로그 동기화, 시연 화면 `/live`·`/pipeline`
+- 실시간 상태. `activity-events` 를 별도 컨슈머 그룹으로 구독해 세션 상태를 초 단위로 갱신하고, DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다.
+- 시뮬레이터. 페르소나 9,900명 합성 로그(약 1,049만 건)와 LLM 에이전트 100명. 에이전트는 Playwright 로 실제 브라우저를 띄워 프론트 로거를 그대로 탑니다. 성향 6축이 "어떻게 보는가"만 바꾸고 "무엇을 고르는가"에는 관여하지 않습니다.
+- 고객 피드백 분류. 축 5종은 고객이 고르고 분류기는 그 축 안 카테고리 20종에서만 고릅니다. 사람 정답 50건 대비 F1 94.3, 금지어 599개 대조
+- 상품 등록 계약·어휘집·한국어 폼 라벨, 배너 축 6종, 상품·리뷰 한국어화, 백엔드 적재용 테이블 6종과 DDL
 
 LLM 을 쓰는 곳은 셋이고 경로가 다릅니다.
 
