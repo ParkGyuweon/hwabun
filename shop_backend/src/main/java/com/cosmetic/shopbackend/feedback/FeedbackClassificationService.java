@@ -53,19 +53,25 @@ public class FeedbackClassificationService {
    */
   public boolean startAsync(String brandId, Integer requestedLimit) {
     if (!running.compareAndSet(false, true)) return false;
-    executor.execute(() -> {
-      try {
-        RunResult result = classifyPending(brandId, requestedLimit);
-        log.info(
-          "feedback classification async status={} selected={} completed={} failed={} brandId={}",
-          result.status(), result.selected(), result.completed(), result.failed(), brandId
-        );
-      } catch (RuntimeException exception) {
-        log.error("feedback classification async failed brandId={}", brandId, exception);
-      } finally {
-        running.set(false);
-      }
-    });
+    try {
+      executor.execute(() -> {
+        try {
+          RunResult result = classifyPending(brandId, requestedLimit);
+          log.info(
+            "feedback classification async status={} selected={} completed={} failed={} brandId={}",
+            result.status(), result.selected(), result.completed(), result.failed(), brandId
+          );
+        } catch (RuntimeException exception) {
+          log.error("feedback classification async failed brandId={}", brandId, exception);
+        } finally {
+          running.set(false);
+        }
+      });
+    } catch (RuntimeException exception) {
+      running.set(false);
+      log.warn("feedback classification async submission rejected brandId={}", brandId, exception);
+      return false;
+    }
     return true;
   }
 
