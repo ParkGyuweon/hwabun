@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { fetchSellerFeedback } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import { OriginBadge, Panel } from '../components';
+import InsightCard from './InsightCard';
 import { feedbackProducts as products } from '../lib/metrics';
 import { FEEDBACK_BRAND } from '../lib/scope';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -231,6 +232,9 @@ export default function FeedbackScreen() {
           {total}건 · 새 의견 {fresh} · 반영 {reflected} · 어휘 {FEEDBACK_VOCAB_VERSION}
         </p>
       </div>
+
+      {/* AI 요약. 원문 목록보다 위 — 사장님은 결론부터 본다. 상품 필터를 그대로 따른다 */}
+      <InsightCard brandId={loadBrandId()} productId={productId === 'all' ? null : productId} />
 
       {verdict ? (
         <section className="verdict verdict--mine">

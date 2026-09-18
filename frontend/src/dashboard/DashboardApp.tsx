@@ -9,6 +9,7 @@ import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import FeedbackScreen from './screens/FeedbackScreen';
+import SettlementScreen from './screens/SettlementScreen';
 import { MotifLine, OriginBadge } from './components';
 import { DEMO_BRAND } from '../mocks/products';
 import { SCOPE_LABEL } from './lib/scope';
@@ -33,7 +34,8 @@ type ScreenKey =
   | 'reviews'
   | 'ingredients'
   | 'register'
-  | 'feedback';
+  | 'feedback'
+  | 'settlement';
 
 /**
  * 왼쪽 메뉴 한 칸. 화면 9개를 **브랜드가 묻는 질문 6개**로 묶는다.
@@ -78,6 +80,10 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     section: 'orders', tab: '주문', scope: 'feedback',
     title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 원장 그대로',
   },
+  settlement: {
+    section: 'orders', tab: '정산', scope: 'feedback',
+    title: '얼마를 받나', desc: '월별 정산 · 결제 완료 주문의 합 · 수수료 0%',
+  },
   segments: {
     section: 'customers', tab: '고객군', scope: 'behavior',
     title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지',
@@ -114,7 +120,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; screens: ScreenKey[] }> 
   { key: 'detail', label: '상세페이지', screens: ['content', 'behavior'] },
   { key: 'products', label: '상품', screens: ['products'] },
   // 주문은 행동 마트가 아니라 쇼핑몰 원장을 읽는다. DW 적재와 무관하게 값이 찬다
-  { key: 'orders', label: '주문', screens: ['orders'] },
+  { key: 'orders', label: '주문', screens: ['orders', 'settlement'] },
   { key: 'customers', label: '고객', screens: ['segments'] },
   { key: 'voice', label: '고객의 말', screens: ['reviews', 'feedback'] },
   { key: 'market', label: '시장', screens: ['ingredients'] },
@@ -351,6 +357,7 @@ export default function DashboardApp() {
         ) : null}
         {screen === 'register' ? <RegisterScreen /> : null}
         {screen === 'feedback' ? <FeedbackScreen /> : null}
+        {screen === 'settlement' ? <SettlementScreen brandId={brand?.id ?? null} /> : null}
       </main>
     </div>
     </BehaviorProvider>
