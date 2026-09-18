@@ -4,6 +4,7 @@ import QuickLook from '../components/product/QuickLook';
 import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
 import { confirmImpressionByClick, useImpression } from '../hooks/useImpression';
+import type { ImpressionOrigin } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
 import { useRecommendation } from '../hooks/useRecommendation';
@@ -402,7 +403,12 @@ export default function ProductListPage({
    * 클릭·퀵룩 직전에 그 카드의 노출을 확정한다 (useImpression.confirmImpressionByClick).
    * 훅과 같은 pageViewKey·eventName·listId 를 써야 한 번만 남는다.
    */
-  const confirmListImpression = (listId: string, productId: string, position: number) => {
+  const confirmListImpression = (
+    listId: string,
+    productId: string,
+    position: number,
+    origin: Exclude<ImpressionOrigin, 'observed'>,
+  ) => {
     if (listId === 'promo_pick') {
       confirmImpressionByClick({
         pageViewKey: `promo:${recommendIdentityId ?? 'anonymous'}`,
@@ -412,10 +418,11 @@ export default function ProductListPage({
         position,
         algorithm: promoAlgorithm,
         recommendationId: promoRecommendationId,
+        origin,
       });
       return;
     }
-    confirmImpressionByClick({ pageViewKey, eventName: 'product_impression', listId: 'list_grid', productId, position });
+    confirmImpressionByClick({ pageViewKey, eventName: 'product_impression', listId: 'list_grid', productId, position, origin });
   };
 
   /**
@@ -517,7 +524,8 @@ export default function ProductListPage({
     const source = listId === 'promo_pick' ? promo : visible;
     const position =
       source.findIndex((p) => p.product_id === productId) + (listId === 'promo_pick' ? 0 : pageOffset);
-    confirmListImpression(listId, productId, position + 1);
+    // 퀵룩 열기는 클릭이 아니다. 합성 노출의 출처를 따로 적는다
+    confirmListImpression(listId, productId, position + 1, 'implied_by_quick_look');
     track('quick_look', {
       product_id: productId,
       entry_source: listId,
@@ -540,7 +548,7 @@ export default function ProductListPage({
       (listId === 'promo_pick' ? promo : visible).findIndex((p) => p.product_id === productId) +
       (listId === 'promo_pick' ? 0 : pageOffset);
 
-    confirmListImpression(listId, productId, position + 1);
+    confirmListImpression(listId, productId, position + 1, 'implied_by_click');
 
     // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
     if (listId === 'promo_pick' && promoRecommendationId) {
