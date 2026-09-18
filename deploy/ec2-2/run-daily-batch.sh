@@ -70,8 +70,10 @@ for job in clean_events_job derive_facts_job build_marts_job; do
   submit "$job"
 done
 
-# Q5 is a report, not a gate. It checks 160 conditions across the Marts, and a
-# handful of bad rows used to abort the run before the publish step below
+# Q5 is a report, not a gate. It checks every Mart invariant that
+# validate_pipeline_job defines -- 162 of them on 2026-09-18, and the count grows
+# as the data part adds checks, so read that number as a snapshot. A handful of
+# bad rows used to abort the run before the publish step below
 # (set -e), leaving 22 correct Marts unpublished and the dashboard blank. On
 # 2026-09-18 that was 13 failures, 7 of them from one real user on a stale
 # frontend bundle. Record the failure, publish anyway, and keep it in the exit
