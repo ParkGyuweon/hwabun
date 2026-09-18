@@ -451,6 +451,17 @@ def _duplicate_count(df: Any, columns: list[str]) -> int:
 EXPLORE_MIN_SAMPLE_SIZE = 100
 EXPLORE_SHARE_RANGE = (0.1, 0.3)
 
+# 세션 안에서 대응 노출이 없는 `product_click` 의 정상 범위.
+#
+# 기준선은 두 데이터셋 실측이다 — 생성기 300명 7.63%(104/1,363, AI 파트 측정),
+# e2e-336-final 8.12%(365/4,494). 생성기 가드가 grain 단위(날짜·브랜드·상품·실행축)라
+# 세션 단위 짝맞춤은 보장하지 않아서 남는 값이고, 되돌아가기·딥링크 경로가 원인이다.
+# 실사용자 트래픽은 프론트 합성으로 0 에 가까우므로 섞일수록 내려가야 정상이다.
+#
+# 검사가 아니라 경고로 둔다. 생성기가 약속한 적 없는 조건이라 실패로 잡으면 남의
+# 데이터를 틀렸다고 하는 것이 된다. 이 값을 넘으면 프론트 합성이 안 먹는 신호다.
+PRODUCT_CLICK_UNMATCHED_WARN_RATIO = 0.12
+
 
 def _banner_explore_share(impressions: Any) -> dict[str, Any]:
     """실사용자 배너 노출에서 탐색 배정 비중을 잰다.
@@ -703,24 +714,47 @@ def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
     }
 
 
-def _unmatched_banner_click_count(product_fact: Any) -> int:
-    """A click must match an impression in the same session and banner grain."""
+def _unmatched_click_count(
+    product_fact: Any,
+    click_event: str,
+    impression_event: str,
+    keys: list[str],
+) -> dict[str, int]:
+    """세션 안에서 대응 노출이 없는 클릭을 센다.
+
+    프론트가 클릭 직전에 노출을 합성하므로(`useImpression.confirmImpressionByClick`)
+    이 값은 0 이어야 한다. 조인 키는 쌍마다 다르다 — 계약상 **필수**인 property 만
+    넣는다. 선택 property 를 키에 넣으면 그 값을 싣지 않는 생산자의 정상 로그가
+    통째로 미매칭으로 잡힌다.
+    """
 
     from pyspark.sql import functions as F
 
-    columns = ["session_id", "product_id", "banner_type", "banner_value", "banner_slot"]
-    clicks = product_fact.where(F.col("event_name") == "banner_click").alias("click")
+    clicks = product_fact.where(F.col("event_name") == click_event).alias("click")
     impressions = (
-        product_fact.where(F.col("event_name") == "banner_impression")
-        .select(*columns, "trait_source")
+        product_fact.where(F.col("event_name") == impression_event)
+        .select(*keys)
         .dropDuplicates()
         .alias("impression")
     )
     condition = F.lit(True)
-    for name in columns:
+    for name in keys:
         condition = condition & F.col(f"click.{name}").eqNullSafe(F.col(f"impression.{name}"))
-    condition = condition & F.col("click.trait_source").eqNullSafe(F.col("impression.trait_source"))
-    return clicks.join(impressions, condition, "left_anti").count()
+    total = clicks.count()
+    unmatched = clicks.join(impressions, condition, "left_anti").count()
+    return {"total": total, "unmatched": unmatched}
+
+
+def _unmatched_banner_click_count(product_fact: Any) -> int:
+    """A click must match an impression in the same session and banner grain."""
+
+    keys = [
+        "session_id", "product_id", "banner_type", "banner_value", "banner_slot",
+        "trait_source",
+    ]
+    return _unmatched_click_count(
+        product_fact, "banner_click", "banner_impression", keys
+    )["unmatched"]
 
 
 def validate_frames(
@@ -1910,6 +1944,46 @@ def validate_frames(
         unmatched_clicks == 0,
         f"unmatched_clicks={unmatched_clicks}",
     ))
+    # 추천 쌍은 네 키가 모두 계약상 필수(§4.2)라 조인이 100% 성립한다. 두 데이터셋
+    # 실측이 0/144·0/497 이라 바로 검사로 둔다.
+    recommendation_match = _unmatched_click_count(
+        product_fact,
+        "recommendation_click",
+        "recommendation_impression",
+        ["session_id", "product_id", "recommendation_id", "list_id"],
+    )
+    checks.append(_check(
+        "recommendation_click_matches_impression_in_session",
+        recommendation_match["unmatched"] == 0,
+        f"unmatched_clicks={recommendation_match['unmatched']}"
+        f"/{recommendation_match['total']}; "
+        "key=session_id·product_id·recommendation_id·list_id",
+    ))
+    # 상품 쌍은 `list_id` 가 `product_click` 의 선택 property 라 키에 넣을 수 없다
+    # (생성기·프론트 어느 쪽도 싣지 않는다). 세션·상품까지만 보고 경고로 남긴다.
+    product_match = _unmatched_click_count(
+        product_fact,
+        "product_click",
+        "product_impression",
+        ["session_id", "product_id"],
+    )
+    product_unmatched_ratio = (
+        product_match["unmatched"] / product_match["total"]
+        if product_match["total"] else 0.0
+    )
+    # 경고가 안 떠도 값 자체는 매 실행 남긴다 — 추세가 기준선 재조정의 근거다.
+    counts["product_click_unmatched"] = product_match["unmatched"]
+    counts["product_click_total"] = product_match["total"]
+    if product_unmatched_ratio > PRODUCT_CLICK_UNMATCHED_WARN_RATIO:
+        warnings.append({
+            "check": "product_click_unmatched_share_is_above_baseline",
+            "detail": (
+                f"unmatched={product_match['unmatched']}/{product_match['total']} "
+                f"({product_unmatched_ratio:.2%}) > "
+                f"{PRODUCT_CLICK_UNMATCHED_WARN_RATIO:.0%}; "
+                "프론트 클릭 직전 노출 합성이 동작하는지 본다"
+            ),
+        })
     banner_facts = product_fact.where(F.col("event_name").isin("banner_impression", "banner_click"))
     invalid_banner_facts = banner_facts.where(
         F.col("banner_type").isNull()
