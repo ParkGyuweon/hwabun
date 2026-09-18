@@ -1320,21 +1320,32 @@ def do_action(page, act, target, scroll_center=None):
         try:
             sec.first.scroll_into_view_if_needed(timeout=4000)
             page.wait_for_timeout(random.randint(400, 1200))   # 눈으로 훑는 시간
+            # **아코디언을 먼저 편다.** 접혀 있으면 성분 칩이 DOM 에 없어서 머리글 글자를
+            # 긁게 되고, 그러면 어휘집에 안 걸려 matched_count 가 0 이 된다 (실측).
+            tog = sec.first.locator('[data-log-action="accordion_toggle"]')
+            if tog.count() and tog.first.get_attribute("aria-expanded") == "false":
+                click_safe(tog.first, page)
+                page.wait_for_timeout(random.randint(500, 1100))
+            # **성분 이름 하나를 통째로 긁는다.** 무작위 부분 문자열로 자르면 어휘집에
+            # 안 걸려 matched_count 가 0 이 되고, 대시보드의 드래그 TOP 10 은 어휘집에
+            # 맞은 것만 세므로 화면에 아무것도 안 뜬다 (실측에서 확인).
             ok = sec.first.evaluate("""(el) => {
-              const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-              const parts = [];
-              let n;
-              while ((n = walk.nextNode())) {
-                if (n.textContent && n.textContent.trim().length > 3) parts.push(n);
+              const items = el.querySelectorAll('.chip-list li');
+              let node = null;
+              if (items.length) {
+                node = items[Math.floor(Math.random() * items.length)];
+              } else {
+                const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                const parts = [];
+                let n;
+                while ((n = walk.nextNode())) {
+                  if (n.textContent && n.textContent.trim().length > 3) parts.push(n.parentElement);
+                }
+                if (!parts.length) return false;
+                node = parts[Math.floor(Math.random() * parts.length)];
               }
-              if (!parts.length) return false;
-              const node = parts[Math.floor(Math.random() * parts.length)];
-              const len = node.textContent.length;
-              const from = Math.floor(Math.random() * Math.max(1, len - 8));
-              const to = Math.min(len, from + 6 + Math.floor(Math.random() * 24));
               const range = document.createRange();
-              range.setStart(node, from);
-              range.setEnd(node, to);
+              range.selectNodeContents(node);
               const sel = window.getSelection();
               sel.removeAllRanges();
               sel.addRange(range);
