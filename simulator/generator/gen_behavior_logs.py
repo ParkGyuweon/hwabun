@@ -1134,6 +1134,82 @@ def validate_property_contract(events):
     return result
 
 
+# ── grain 단위 노출·클릭 가드 (Jira 358, 데이터 파트 요청 2026-09-18) ──────
+#
+# 총량이 맞아도 특정 grain 에서 클릭 > 노출이 날 수 있다. Q5 는 마트 grain
+# (event_date_kst, brand_id, product_id, 실행축) 으로 보므로 총량 점검으로는 안 잡힌다.
+# 09-18 리포트의 banner_daily ctr>1 1행이 python_batch 로 잡힌 것이 그 예다.
+#
+# 분자가 분모보다 크면 대시보드에 "클릭률 233%" 가 뜨고 사장님이 그 화면 전체를 못 믿는다.
+# 같은 사고가 Jira 277 에서 이미 났다 (add_to_cart_rate 1,248행 중 323행이 1.0 초과).
+#
+# 프론트는 A안(클릭이 있으면 노출 1을 합성)으로 이 문제를 로거에서 막지만, 생성기는
+# 프론트 로거를 타지 않으므로 여기서 직접 막는다.
+CTR_PAIRS = (
+    ("product_impression", "product_click"),
+    ("recommendation_impression", "recommendation_click"),
+    ("banner_impression", "banner_click"),
+)
+
+
+def _grain_of(event):
+    """Q5·마트가 보는 grain. 날짜는 occurred_at 의 날짜 부분으로 근사한다.
+
+    정제가 KST 로 옮기므로 경계에서 하루가 어긋날 수 있다. 여기서 잡고 싶은 것은
+    "같은 상품·같은 날에 노출 없이 클릭이 났다" 이고 경계 오차는 그 판정을 뒤집지 않는다.
+    """
+    p = event.get("properties") or {}
+    return (
+        (event.get("occurred_at") or "")[:10],
+        p.get("brand_id"),
+        event.get("product_id") or p.get("product_id"),
+        p.get("actor_type"), p.get("source"), p.get("generator_type"),
+        p.get("scenario_id"), p.get("simulation_run_id"),
+    )
+
+
+def check_ctr_grains(events):
+    """grain 마다 노출 >= 클릭 인지 본다. 어긋난 grain 목록을 돌려준다."""
+    from collections import Counter
+
+    bad = []
+    for impression_name, click_name in CTR_PAIRS:
+        imps, clks = Counter(), Counter()
+        for e in events:
+            name = e.get("event_name")
+            if name == impression_name:
+                imps[_grain_of(e)] += 1
+            elif name == click_name:
+                clks[_grain_of(e)] += 1
+        for grain, n_click in clks.items():
+            n_imp = imps.get(grain, 0)
+            if n_click > n_imp:
+                bad.append({"pair": f"{click_name} > {impression_name}",
+                            "grain": grain, "clicks": n_click, "impressions": n_imp})
+    return bad
+
+
+def validate_ctr_grains(events, strict=True):
+    """클릭이 노출을 넘는 grain 이 있으면 파일로 내보내기 전에 멈춘다.
+
+    계약 위반(validate_property_contract)과 같은 강도로 다룬다 — 어긋난 로그가 파일에
+    들어가면 3시간 뒤 Q5 에서야 드러나고, 그때는 마트를 다시 만들어야 한다.
+    """
+    bad = check_ctr_grains(events)
+    if not bad:
+        return bad
+    head = bad[0]
+    detail = (f"{head['pair']} — 클릭 {head['clicks']} vs 노출 {head['impressions']}"
+              f" · grain {head['grain']}")
+    if strict:
+        raise ValueError(
+            f"grain 단위 노출·클릭 위반 {len(bad):,}건: {detail}"
+            " (허용하려면 --allow-ctr-grain-violations)"
+        )
+    log(f"[경고] grain 단위 노출·클릭 위반 {len(bad):,}건 — {detail}")
+    return bad
+
+
 # ── 노출 정책 ────────────────────────────────────────────────────────────
 #
 # 사람은 위에 있는 것을 본다. 그런데 지금까지 이 생성기는 전원에게 같은 인기순
@@ -1662,7 +1738,7 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
          generator_type=DEFAULT_GENERATOR_TYPE, behavior=BEHAVIOR_RULE,
          pref_profile="default", pref_seed=0, exposure=EXPOSURE_POPULAR,
          recommend_url=None, banner_slots=BANNER_SLOTS, reserved=0, hero=BANNER_HERO,
-         sample=SAMPLE_STRATIFIED):
+         sample=SAMPLE_STRATIFIED, allow_ctr_grain_violations=False):
     global RECO
     RECO = None
     if recommend_url:
@@ -1791,7 +1867,10 @@ def main(limit, show, out, post=None, rps=0, include_agents=False, quick_look=Tr
     log(f"이벤트 {len(sink):,}건 — {time.time()-t0:.1f}초")
 
     property_result = validate_property_contract(sink)
+    ctr_grain_bad = validate_ctr_grains(sink, strict=not allow_ctr_grain_violations)
     log(f"Event Properties 계약 {property_result['checked']:,}건 통과")
+    if not ctr_grain_bad:
+        log("grain 단위 노출·클릭 통과 (상품·추천·배너 3종)")
 
     if out:
         with open(out, "w", encoding="utf-8") as f:
@@ -1865,6 +1944,8 @@ if __name__ == "__main__":
     ap.add_argument("--sample", choices=(SAMPLE_STRATIFIED, SAMPLE_HEAD), default=SAMPLE_STRATIFIED,
                     help="--limit 표본 방식. stratified: stratum 비례 층화(기본, Jira 318). head: 파일 앞 N명(옛 동작)")
     ap.add_argument("--show", type=int, default=0)
+    ap.add_argument("--allow-ctr-grain-violations", action="store_true",
+                    help="grain 단위 노출<클릭 을 경고만 하고 통과 (기본은 중단, Jira 358)")
     ap.add_argument("--out", default=None,
                     help="jsonl 저장 경로. 생략하면 파일로 안 쓴다")
     ap.add_argument("--post", default=None, metavar="URL",
@@ -1932,4 +2013,5 @@ if __name__ == "__main__":
         reserved=a.reserved,
         hero=a.hero,
         sample=a.sample,
+        allow_ctr_grain_violations=a.allow_ctr_grain_violations,
     )
