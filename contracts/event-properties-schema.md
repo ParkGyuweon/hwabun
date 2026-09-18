@@ -264,14 +264,26 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 `observed`, `implied_by_click`
 
-세 노출 Event(`product_impression`, `recommendation_impression`, `banner_impression`)에
-필수로 싣는다. 화면에서 정상 관측한 노출은 `observed`, 선행 노출 없이 클릭이 발생해
+세 노출 Event(`product_impression`, `recommendation_impression`, `banner_impression`)의
+선택 property다. 화면에서 정상 관측한 노출은 `observed`, 선행 노출 없이 클릭이 발생해
 클릭 직전에 보강한 노출은 `implied_by_click`이다. 합성 노출은 대응 클릭과 같은 세션·
 상품·노출 위치 식별자를 사용하며 CTR과 노출 분모에 포함한다.
 
-`product_impression`과 `recommendation_impression`의 합성 노출은 실측 체류가 없으므로
-`hold_ms: 0`을 싣는다. `banner_impression`에는 `hold_ms` 필드가 없으므로 0 여부를
-세 노출의 공통 합성 판정 기준으로 사용하지 않고 `impression_origin`만 사용한다.
+**property가 없으면 `observed`로 간주한다.** 합성 노출은 이 property가 도입된 뒤에
+생기는 동작이므로 값이 없는 과거 로그는 전부 실제 관측 노출이고, 이 기본값은 추정이
+아니라 사실이다. 필수로 두면 Raw 전량이 `bad_events`로 빠지고 Front·수집기·시뮬레이터가
+같은 시점에 배포돼야 하므로 선택으로 둔다. 값이 실려 있으면 enum을 강제한다.
+
+세 노출 Event는 공통 노출 Hook(`frontend/src/hooks/useImpression.ts`)을 쓰므로 `hold_ms`와
+`visible_ratio`를 함께 싣는다. `banner_impression`도 2026-09-17 배너 전환 이후 같은 Hook을
+탄다. 합성 노출은 실측 체류가 없어 `hold_ms: 0`이지만 체류 0이 합성과 동치는 아니므로
+(관측 노출도 0이 나올 수 있다) 합성 판정에는 `impression_origin`만 쓴다.
+
+`visible_ratio`는 측정값이 아니라 노출로 인정하는 **판정 임계값**이다. 세 노출 Event 모두
+`0.5` 상수이며 `IntersectionObserver`의 threshold와 같은 값을 그대로 싣는다. 카드가 실제로
+얼마나 보였는지를 뜻하지 않으므로 노출 품질 지표나 가중치로 쓰지 않는다. 합성 노출도 같은
+상수를 싣되, 클릭으로 확정한 노출은 가시성 검사를 거치지 않았다는 사실을 `impression_origin`
+이 대신 말한다.
 
 ### 3.13 배너 값과 slot 규칙
 
@@ -358,11 +370,11 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`, `impression_origin: string`; top-level `product_id` 필수 | `policy_version: string` |
+| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string`, `impression_origin: string`, `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number`, `algorithm: string`, `recommendation_id: string` |
 | `banner_click` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
-| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: string` | `impression_area: string`, `dedupe_key: string` |
+| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number` | `impression_area: string`, `dedupe_key: string`, `impression_origin: string` |
 | `product_click` | 없음 | `list_id: string`, `position: integer`, `entry_source: string`, `impression_event_id: string`, `context_product_id: string` |
-| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number`, `impression_origin: string` | `section_id: string`, `context_product_id: string` |
+| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number` | `section_id: string`, `context_product_id: string`, `impression_origin: string` |
 | `recommendation_click` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string` | `section_id: string`, `impression_event_id: string`, `context_product_id: string` |
 | `impression_dwell` | `list_id: string`, `position: integer`, `visible_ms: integer` | `recommendation_id: string`, `algorithm: string`, `context_product_id: string` |
 | `recommendation_snapshot` | `recommendation_id: string`, `list_id: string`, `algorithm: string`, `size: integer`, `ranking: object[]` | 없음 |

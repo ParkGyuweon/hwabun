@@ -39,7 +39,9 @@ class PropertyContractCoverageTest(unittest.TestCase):
             "product_impression",
             "recommendation_impression",
         ):
-            self.assertIn("impression_origin", self.spec[event_name]["all"])
+            # 선택 property라 required 목록(`all`)에는 없고, 값이 실렸을 때
+            # 타입·enum을 강제하도록 `types`에만 있어야 한다.
+            self.assertNotIn("impression_origin", self.spec[event_name]["all"])
             self.assertEqual(
                 "string",
                 self.spec[event_name]["types"]["impression_origin"],
@@ -118,16 +120,18 @@ class PropertyContractCoverageTest(unittest.TestCase):
         self.assertEqual([], result["invalid_types"])
         self.assertEqual([], result["invalid_enums"])
 
-    def test_impression_origin_is_required(self) -> None:
+    def test_impression_origin_is_optional(self) -> None:
+        """값이 없는 과거 로그는 위반이 아니다 (없으면 `observed`로 간주)."""
         event = self._product_impression()
         del event["properties"]["impression_origin"]
 
         result = check_properties([event], self.spec, self.enums)
 
-        self.assertIn(
+        self.assertNotIn(
             (("product_impression", "impression_origin"), 1),
             result["missing"],
         )
+        self.assertEqual([], result["missing"])
 
     def test_impression_origin_rejects_unknown_value(self) -> None:
         event = self._product_impression(impression_origin="synthetic")
