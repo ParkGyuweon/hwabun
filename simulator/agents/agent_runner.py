@@ -882,7 +882,7 @@ def parse_action(text):
     return obj if isinstance(obj, dict) and obj.get("action") else None
 
 
-def ask(client, system, user, cache_on, dry):
+def ask(client, system, user, cache_on, dry, expect_action=True):
     """LLM 에게 다음 행동을 묻는다.
 
     dry=True 면 호출하지 않고 프롬프트만 보여준다 (크레딧 0).
@@ -894,6 +894,8 @@ def ask(client, system, user, cache_on, dry):
         print("─" * 70)
         print(user)
         print("─" * 70)
+        if not expect_action:
+            return {"rating": 5, "axis": "향", "body": "(dry-run) " + "샘플 " * 6}, 0
         return {"action": "scroll", "target": None, "reason": "(dry-run)"}, 0
 
     key = hashlib.md5((system + "\x00" + user).encode()).hexdigest()
@@ -930,7 +932,10 @@ def ask(client, system, user, cache_on, dry):
         why = "토큰 잘림" if finish == "length" else "파싱 실패"
         print(f"       [{why}] {txt[:110]}")
         return None, 1
-    if obj.get("action") not in ACTIONS:
+    # 행동을 묻는 호출만 action 을 검사한다. 리뷰·피드백은 {"rating"/"axis", "body"} 를
+    # 받으므로 action 이 없다 — 예전에는 여기서 무조건 거절돼 **한 번도 성공한 적이 없다**
+    # (Jira 361). 글을 받는 호출은 expect_action=False 로 부른다.
+    if expect_action and obj.get("action") not in ACTIONS:
         print(f"       [모르는 action] {obj.get('action')!r}")
         return None, 1
     if cache_on:
@@ -1194,7 +1199,7 @@ def write_review(page, client, persona, cache_on, dry):
         "별점은 실제 만족도대로. 다 5점을 주지 않는다.",
         "본문은 %d자 이내, %d자 이상." % (REVIEW_MAX_CHARS, REVIEW_MIN_CHARS),
     ])
-    obj = ask(client, sys_p, usr_p, cache_on, dry)
+    obj, _used = ask(client, sys_p, usr_p, cache_on, dry, expect_action=False)
     if not obj:
         return None
     try:
@@ -1277,7 +1282,7 @@ def write_feedback(page, client, persona, product_name, cache_on, dry):
         "고를 수 있는 주제: %s" % " / ".join(labels),
         "본문은 %d자 이내." % FEEDBACK_MAX_CHARS,
     ])
-    obj = ask(client, sys_p, usr_p, cache_on, dry)
+    obj, _used = ask(client, sys_p, usr_p, cache_on, dry, expect_action=False)
     if not obj:
         return None
     label = str(obj.get("axis") or "").strip()
