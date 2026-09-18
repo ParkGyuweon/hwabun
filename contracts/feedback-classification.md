@@ -1,7 +1,7 @@
 # 고객 피드백 분류 계약
 
-> 2026-09-08 · 어휘 `feedback-category-vocab.json` `0.2.0-draft` (0.1.0 → 0.2.0: **축은 고객 입력** `axis_id` · 건당 단일 → **다중 라벨** `labels[]`·`primary` · `off_axis_hint` · `other` 는 축이 아니라 카테고리 · 집계 단위 = 언급 수)
-> 관련: [`feedback-category-vocab.json`](feedback-category-vocab.json) (실행 계약 — 축·카테고리 목록) · [`feedback-banned-terms.json`](feedback-banned-terms.json) (실행 계약 — 금지어, Jira 202) · `simulator/feedback/classify_feedback.py` (분류기, Jira 201) · `docs/planning/feature-spec-status.md` (브랜드 대시보드 "고객 피드백")
+> 2026-09-18 (서빙 §6 추가) · 2026-09-08 · 어휘 `feedback-category-vocab.json` `0.2.0-draft` (0.1.0 → 0.2.0: **축은 고객 입력** `axis_id` · 건당 단일 → **다중 라벨** `labels[]`·`primary` · `off_axis_hint` · `other` 는 축이 아니라 카테고리 · 집계 단위 = 언급 수)
+> 관련: [`feedback-category-vocab.json`](feedback-category-vocab.json) (실행 계약 — 축·카테고리 목록) · [`feedback-banned-terms.json`](feedback-banned-terms.json) (실행 계약 — 금지어, Jira 202) · `simulator/feedback/classify_feedback.py` (분류기·오프라인 CLI, Jira 201) · `batch/serving/feedback_classify.py` + `recommend_server.py` (서빙 §6, Jira 353) · `docs/planning/feature-spec-status.md` (브랜드 대시보드 "고객 피드백")
 
 소비자가 상품에 대해 **사장님에게 보내는 개선 요청**을 축·카테고리로 자동 분류하는
 입력 → 처리 → 출력을 정의한다. 리뷰가 아니다.
@@ -117,14 +117,82 @@ FE 가 임시로 둔 8종과의 대응: 향→`scent` · 용기→`packaging` ·
 비교 프롬프트 한 줄을 넣으면 파편, 빼면 과병합으로 오갔다. 고정 목록에서는 넷이
 구조적으로 사라진다. 30건 시험에서 목록 밖 답 0건.
 
-## 6. 어휘 변경 규칙
+## 6. 서빙 — 백엔드 배치가 부르는 엔드포인트
+
+분류기는 추천 서버(8300)에 실려 있다. **내부망 전용**이다 — nginx 가 `/api/feedback/*` 을 밖으로
+열지 않는다. 프론트는 이 엔드포인트를 직접 부르지 않는다. GMS 키를 브라우저에 내보내지 않기
+위해서다 (처방과 같은 이유, `prescription-api-spec.md` §1).
+
+### 6.1 `POST /api/feedback/classify`
+
+```json
+{"items": [{"feedback_id": "fb_0001", "product_id": "P427406",
+            "axis_id": "texture", "body": "펌프가 자꾸 막혀요"}]}
+```
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `feedback_id` | ● | 응답을 되짚는 열쇠. 서버는 뜻을 보지 않고 그대로 돌려준다 |
+| `axis_id` | ● | **고객이 고른 축**. 서버가 다시 고르지 않는다 (§3) |
+| `body` | ● | 주관식 원문 |
+| `product_id` | | 상품명을 프롬프트 참고로 넣기 위한 값(펌프가 있는 제형인지 등). 카탈로그에 없으면 빈 이름으로 돈다 — **분류가 상품으로 갈라지지 않는다** (§4) |
+
+응답:
+
+```json
+{"results": [{"feedback_id": "fb_0001", "status": "COMPLETED",
+              "labels": [{"axis_id": "texture", "category_id": "pump_clog"}],
+              "primary_category_id": "pump_clog", "off_axis_hint": null,
+              "banned_terms": [], "hidden_by_default": false,
+              "classifier": "gpt-4.1-nano", "vocab_version": "0.2.0"}]}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `status` | `COMPLETED` 또는 `FAILED`. **건별**이다 |
+| `labels[]` | `(axis_id, category_id)` 쌍. 순서는 두드러진 순서 (§5-1) |
+| `primary_category_id` | `labels[0].category_id`. `FAILED` 면 `null` |
+| `off_axis_hint` | 다른 축 얘기로 보이면 그 축의 **id**. 재분류는 하지 않는다 |
+| `banned_terms[]` · `hidden_by_default` | 금지어 대조 결과 (§5-4). LLM 과 무관 |
+| `classifier` · `vocab_version` | 어느 모델·어느 어휘로 붙었는지. 어휘 개정 뒤 재분류 대상을 고르는 값이다 (§7) |
+| `error` | `FAILED` 일 때만. 예) `unknown axis_id: 'skin'` · `empty body` |
+
+**한 건이 실패해도 나머지는 돌아온다.** 배치 200건 중 3건이 죽으면 197건은 `COMPLETED` 로 온다 —
+`status` 를 건별로 보고 `FAILED` 만 다음 배치에서 다시 넣는다. `items` 가 비면 `200 {"results": []}` 다.
+
+**서버는 DB 를 쓰지 않는다.** 라벨만 돌려주고 저장은 테이블 주인인 `shop_backend` 가 한다
+(2026-09-18 합의). 분류 결과를 어느 컬럼에 넣는지는 백엔드 몫이다.
+
+### 6.2 스위치
+
+| | |
+|---|---|
+| `GET /api/feedback/classify/llm` | `{enabled, key_present, model, llm_calls, items, failed, refused_off}` |
+| `POST /api/feedback/classify/llm` | `{"enabled": false}` 로 끈다. 재배포 없이 |
+| `FEEDBACK_CLASSIFY_LLM` | 기동 기본값. `off`·`0`·`false`·`no` 만 끔으로 읽는다. **기본은 on** |
+
+꺼져 있거나 GMS 키가 없으면 `503 {"code": "LLM_UNAVAILABLE"}` 다. 처방(`PRESCRIPTION_LLM`)과
+스위치를 나눈 이유: 처방은 비용 때문에 시연 직전에만 켜지만, 분류는 매일 새벽 배치가 부른다.
+
+### 6.3 호출 시점
+
+| | |
+|---|---|
+| 매일 1회 | `SHOP_FEEDBACK_CLASSIFY_CRON` (기본 `0 0 6 * * *` — 06:00). `PENDING`·`FAILED` 를 집어서 부른다 |
+| 사장님 "즉시 갱신" | 버튼을 누르면 그때 바로 한 번 더. 피드백이 들어올 때마다 부르지 않는다 |
+| 한 번에 | `SHOP_FEEDBACK_CLASSIFY_BATCH_SIZE` (기본 200) |
+| 응답 대기 | `RECOMMEND_FEEDBACK_TIMEOUT_MS` (기본 30,000) |
+
+건당 LLM 1회다 (§5-1). 하루에 여러 번 돌리거나 피드백마다 부르면 GMS 비용이 건수에 비례해 늘어난다.
+
+## 7. 어휘 변경 규칙
 
 1. 카테고리 **추가**는 `schema_version` patch 를 올린다 (`0.1.0` → `0.1.1`). 기존 id 는 유지.
 2. 카테고리 **이름 변경**은 `label` 만 바꾼다. id 는 바꾸지 않는다.
 3. 카테고리 **삭제·병합·id 변경**은 minor 를 올리고, 기존 분류 행의 재분류 여부를 MR 에 적는다.
 4. 추가 후보는 `other` 에 쌓인 원문에서 고른다. 한 상품·한 사람의 표현이 아니라 여러 상품에 걸쳐 반복되는 문제만 올린다.
 
-## 7. 아직 아닌 것
+## 8. 아직 아닌 것
 
 - 시연 데이터(`simulator/feedback/data/`)의 `intended_axis` 는 생성 때 지시한 축이고 0.2.0 부터 **`axis_id` 입력 자리에 그대로 쓴다** (고객이 고른 축에 해당). `generator` 는 생성 흔적이라 계약 필드가 아니다.
 - `scent_strong` 과 `scent_artificial` 은 한 문장에 같이 나오는 일이 많다("인공적이고 강해서"). 사장님이 고칠 것이 같으면 합칠 후보다. 시연 99건에서 판단하지 않고 실데이터가 쌓이면 본다.

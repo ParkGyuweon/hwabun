@@ -339,6 +339,16 @@ def _write_report(path: Path | None, rendered: str) -> int:
     return 0
 
 
+def _note_error(target_report: dict, error: BaseException) -> None:
+    """DB 예외 메시지에는 값·접속 정보가 섞일 수 있다. 안전한 검증 메시지와
+    숫자 오류 코드만 남긴다."""
+    target_report["error_type"] = type(error).__name__
+    if isinstance(error, ProjectionError):
+        target_report["error"] = str(error)
+    elif error.args and isinstance(error.args[0], int):
+        target_report["db_error_code"] = error.args[0]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -394,45 +404,59 @@ def main(argv=None):
                             allow_empty=args.allow_empty, tls_ca=os.getenv("DW_MYSQL_SSL_CA") or None)
             connection = connect(config)
 
+        # 한 종이 실패해도 나머지를 계속 발행한다. 발행은 마트마다 staging + RENAME 으로
+        # 원자적이라(publish), 중간에 실패한 종은 **직전 내용을 그대로 유지**한다. 예전에는
+        # 첫 실패가 루프를 통째로 끝내서, 목록 4번째 funnel_daily_kpi 하나가 뒤 18종을
+        # 같이 막았다 — 대시보드 전체가 빈 화면이 되는 경로였다 (2026-09-18, Jira 359).
+        failed_marts = []
         for mart in marts:
             current_report = report if len(marts) == 1 else {
                 "mart": mart, "status": "failed", "published": False,
             }
-            contract = load_contract(args.ddl, mart)
-            source_path = args.source if args.source is not None else source_path_for(args.source_root, mart)
-            source = ParquetSnapshot(source_path, contract)
-            if args.emit_jsonl is not None:
-                rows = read_user_trait_snapshot(source, args.batch_size)
-                current_report.update(
-                    jsonl_path=str(args.emit_jsonl),
-                    jsonl_rows=write_user_trait_jsonl(rows, args.emit_jsonl, args.allow_empty),
-                    jsonl_emitted=True,
-                )
-            if args.jsonl_only:
-                current_report.update(status="jsonl_emitted", published=False)
-            else:
-                publish(
-                    source,
-                    MysqlStore(connection, config.database, contract),
-                    config,
-                    current_report,
-                    mart=mart,
-                )
+            try:
+                contract = load_contract(args.ddl, mart)
+                source_path = (args.source if args.source is not None
+                               else source_path_for(args.source_root, mart))
+                source = ParquetSnapshot(source_path, contract)
+                if args.emit_jsonl is not None:
+                    rows = read_user_trait_snapshot(source, args.batch_size)
+                    current_report.update(
+                        jsonl_path=str(args.emit_jsonl),
+                        jsonl_rows=write_user_trait_jsonl(rows, args.emit_jsonl, args.allow_empty),
+                        jsonl_emitted=True,
+                    )
+                if args.jsonl_only:
+                    current_report.update(status="jsonl_emitted", published=False)
+                else:
+                    publish(
+                        source,
+                        MysqlStore(connection, config.database, contract),
+                        config,
+                        current_report,
+                        mart=mart,
+                    )
+            except Exception as error:
+                if len(marts) == 1:
+                    raise                      # 단일 마트는 예전과 똑같이 밖으로 던진다
+                _note_error(current_report, error)
+                failed_marts.append(mart)
             if len(marts) > 1:
                 report["marts"][mart] = current_report
 
         if len(marts) > 1:
-            report.update(status="jsonl_emitted" if args.jsonl_only else "published",
-                          published=False if args.jsonl_only else True)
+            done = [m for m in marts if m not in failed_marts]
+            if args.jsonl_only:
+                report.update(status="jsonl_emitted", published=False)
+            elif not failed_marts:
+                report.update(status="published", published=True)
+            else:
+                # 일부만 나갔다. 종료 코드는 0 이 아니어야 타이머·CI 가 실패로 본다
+                report.update(status="partially_published" if done else "failed",
+                              published=bool(done), failed_marts=failed_marts)
+                code = 1
     except Exception as error:
-        # DB exception messages can contain values or connection details. Emit
-        # only safe validation messages and numeric DB error codes.
         target_report = current_report
-        target_report["error_type"] = type(error).__name__
-        if isinstance(error, ProjectionError):
-            target_report["error"] = str(error)
-        elif error.args and isinstance(error.args[0], int):
-            target_report["db_error_code"] = error.args[0]
+        _note_error(target_report, error)
         if "marts" in report and target_report is not report:
             mart = target_report.get("mart", "unknown")
             report["marts"][mart] = target_report

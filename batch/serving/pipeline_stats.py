@@ -36,13 +36,15 @@ from collections import Counter, deque
 
 # EC2-2 projection 기본 allowlist (streaming/jobs/dw_projection_source.py) 와 같은 22개.
 # EC2-1 은 EC2-2 의 .env 를 공유하지 않으므로 여기에도 기본값을 둔다.
-MARTS = tuple((os.environ.get("DW_PROJECTION_MARTS") or
-               "user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,"
-               "brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,"
-               "persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,"
-               "brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,"
-               "segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,"
-               "content_conversion_daily,behavior_conversion_daily,event_daily").split(","))
+_MARTS_ENV = (os.environ.get("DW_PROJECTION_MARTS") or
+              "user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,"
+              "brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,"
+              "persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,"
+              "brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,"
+              "segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,"
+              "content_conversion_daily,behavior_conversion_daily,event_daily")
+# 쉼표 뒤 공백으로 적어도 되게 한다 — 안 벗기면 " brand_daily_kpi" 로 조회해 0행으로 보인다
+MARTS = tuple(m for m in (x.strip() for x in _MARTS_ENV.split(",")) if m)
 CONVERSION_EVENTS = ("add_to_cart", "begin_checkout", "purchase")
 
 
