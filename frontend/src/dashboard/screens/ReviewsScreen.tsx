@@ -1,16 +1,31 @@
+import { useMemo } from 'react';
 import { BarList, Kpi, OriginBadge, Panel } from '../components';
-import { SKIN_TYPE_KO, fmt, products, reviewStats, reviewsBySkinType, troubleRanking } from '../lib/metrics';
+import { SKIN_TYPE_KO, fmt, reviewStats, reviewsBySkinType, troubleRanking } from '../lib/metrics';
+import { useBrandProducts } from '../lib/useBrandProducts';
 
-/** 소비자 평가와 자극·트러블. 이 화면은 전부 리뷰 2,000건 실측이다 */
+/**
+ * 소비자 평가와 자극·트러블. 전부 리뷰 표본 실측이다.
+ *
+ * 2026-09-18: 고정 브랜드(`BEHAVIOR_BRAND` = Drunk Elephant) 상품 목록을 걷어냈다. 이 화면이 세는 리뷰는
+ * **로그인한 브랜드가 등록한 상품**의 것뿐이다. 내 상품이 없거나 내 상품에 리뷰가 없으면 그렇다고 적는다 —
+ * 남의 브랜드 리뷰로 채우지 않는다.
+ */
 export default function ReviewsScreen({
+  brandId,
+  brandName,
   productId,
   onProductChange,
 }: {
+  brandId: string | null;
+  brandName: string | null;
   productId: string | null;
   onProductChange: (id: string | null) => void;
 }) {
-  const stats = reviewStats(productId);
-  const bySkin = reviewsBySkinType(productId).filter((r) => r.n >= 5);
+  const { products: mine, failed } = useBrandProducts(brandId, brandName);
+  const products = useMemo(() => mine ?? [], [mine]);
+  const stats = useMemo(() => reviewStats(productId, products), [productId, products]);
+  const bySkin = useMemo(() => reviewsBySkinType(productId, products).filter((r) => r.n >= 5), [productId, products]);
+  const ranking = useMemo(() => troubleRanking(products), [products]);
   // 결론은 리뷰 20건 이상인 타입끼리만 비교한다. 5건짜리 평점 차이는 우연이다
   const solid = bySkin.filter((r) => r.n >= 20);
   const hi = solid.length > 1 ? solid.reduce((a, b) => (a.avgRating >= b.avgRating ? a : b)) : null;
@@ -19,6 +34,25 @@ export default function ReviewsScreen({
   const scopeLabel = productId
     ? (products.find((p) => p.product_id === productId)?.product_name ?? productId)
     : '전체 상품';
+
+  /**
+   * 내 상품이 없으면 셀 리뷰가 없다. 번들 표본의 다른 브랜드로 대신 채우지 않는다 —
+   * 남의 리뷰 평점을 내 것으로 읽게 만드는 것이 이 화면의 원래 문제였다.
+   */
+  if (mine === null || mine.length === 0) {
+    const why = failed
+      ? '상품 목록을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
+      : mine === null
+        ? '상품 목록을 받는 중입니다.'
+        : '등록한 상품이 없습니다. 상품을 등록하면 그 상품의 리뷰가 여기 집계됩니다.';
+    return (
+      <div className="stack">
+        <Panel title="리뷰" source="real">
+          <p className="note">{why}</p>
+        </Panel>
+      </div>
+    );
+  }
 
   return (
     <div className="stack">
@@ -41,7 +75,7 @@ export default function ReviewsScreen({
         <p className="scope__meta">
           리뷰 {fmt.int(stats.sampleSize)}건 · 본문 있는 리뷰 {fmt.int(stats.withText)}건
         </p>
-        <p className="scope__note">상품당 리뷰 10건. 건수를 함께 볼 것.</p>
+        <p className="scope__note">{stats.sampleSize === 0 ? '이 범위에 리뷰가 아직 없습니다.' : '내 상품 리뷰만 셉니다. 건수를 함께 볼 것.'}</p>
       </div>
 
       {hi && lo && split >= 0.5 ? (
@@ -152,7 +186,7 @@ export default function ReviewsScreen({
               </tr>
             </thead>
             <tbody>
-              {troubleRanking.slice(0, 10).map((row) => (
+              {ranking.slice(0, 10).map((row) => (
                 <tr key={row.product.product_id}>
                   <td className="is-name" title={row.product.product_name}>
                     {row.product.product_name}
