@@ -2083,6 +2083,151 @@ table.data tr:hover td {
   opacity: 0.75;
 }
 
+/* ---------- 정산 (SettlementScreen) ---------- */
+
+.settle__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settle__notice {
+  margin-bottom: 12px;
+}
+
+.settle__status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.settle__status--completed {
+  border-color: transparent;
+  background: var(--brand-soft, rgba(122, 160, 96, 0.16));
+  color: var(--ink);
+}
+
+/* ---------- AI 고객 목소리 요약 (InsightCard) ---------- */
+
+.ai__aside {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai__stamp {
+  white-space: nowrap;
+}
+
+.ai__notice {
+  margin-bottom: 10px;
+}
+
+.ai__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.ai__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  animation: ai-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.ai__cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 960px) {
+  .ai__cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai__h {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.ai__list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.ai__list li:last-child {
+  border-bottom: 0;
+}
+
+.ai__count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.ai__sub {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.ai__sub-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.ai__col--act {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--brand-soft, rgba(122, 160, 96, 0.12));
+}
+
+.ai__acts {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.ai__acts li + li {
+  margin-top: 6px;
+}
+
 /* ---------- 기간 선택 (주문 화면) ---------- */
 
 .daterange {

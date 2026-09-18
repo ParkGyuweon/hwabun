@@ -20,10 +20,10 @@ public class FeedbackClassificationScheduler {
     zone = "Asia/Seoul"
   )
   public void classifyDaily() {
-    FeedbackClassificationService.RunResult result = classifications.classifyPending(null, null);
-    log.info(
-      "feedback classification batch status={} selected={} completed={} failed={}",
-      result.status(), result.selected(), result.completed(), result.failed()
-    );
+    if (!classifications.startAsync(null, null)) {
+      log.info("feedback classification batch skipped because another run is in progress");
+    } else {
+      log.info("feedback classification batch accepted");
+    }
   }
 }

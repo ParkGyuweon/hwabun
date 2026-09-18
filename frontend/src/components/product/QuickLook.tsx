@@ -9,6 +9,7 @@ import { formatCount } from '../../lib/format';
 import { track } from '../../lib/logger';
 import { useBackdropClose } from '../../hooks/useBackdropClose';
 import { setWished, useWished } from '../../lib/wishlist';
+import { displayReviewCount, useReviewCounts } from '../../lib/reviewStore';
 import type { Product, ProductVariant } from '../../types/product';
 import type { CartItem } from '../../types/cart';
 
@@ -38,6 +39,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
   const [addedAt, setAddedAt] = useState<number | null>(null);
   // 세션 동안 기억한다 (lib/wishlist). 상세에서 찜한 것도 여기 켜진다
   const loved = useWished(product.product_id);
+  // 카드·상세와 같은 숫자를 적는다 — 우리가 가진 리뷰 수 (lib/reviewStore)
+  const reviewCount = displayReviewCount(product.product_id, product.review_count, useReviewCounts());
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // 렌더 중에는 Date.now() 를 부르지 않는다. 실제 진입 시각은 이펙트에서 채운다 (useExitSummary 와 동일)
@@ -174,8 +177,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
           {product.rating !== null ? (
             <p className="qlook__meta">
               <StarRating value={product.rating} size="sm" />
-              {product.review_count !== null ? (
-                <span>리뷰 {formatCount(product.review_count)}건</span>
+              {reviewCount !== null ? (
+                <span>리뷰 {formatCount(reviewCount)}건</span>
               ) : null}
             </p>
           ) : null}

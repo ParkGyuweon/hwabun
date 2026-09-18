@@ -18,6 +18,7 @@ import { deriveSkinTypesFromReviews } from '../src/lib/skinTypes.ts';
  *   /reviews/{product_id}.json   그 상품의 리뷰 (번역 반영, 없으면 `[]`)
  *   /reviews/_authors.json       작성자별 리뷰 수 (2건 이상만). "이 리뷰어의 다른 리뷰 n개" 표시용
  *   /reviews/_skin_types.json    상품별 리뷰어 피부 타입 (lib/skinTypes 규칙). 목록 페이지의 페르소나 매칭 근거
+ *   /reviews/_counts.json        상품별 리뷰 건수. 카드가 적는 숫자와 상세가 그리는 리뷰 수를 같게 한다
  */
 
 interface RawReview {
@@ -41,6 +42,7 @@ const KO = join(here, '..', '..', 'contracts', 'localization', 'reviews-ko.json'
 export const REVIEWS_PREFIX = '/reviews/';
 export const AUTHORS_FILE = '_authors';
 export const SKIN_TYPES_FILE = '_skin_types';
+export const COUNTS_FILE = '_counts';
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -48,6 +50,8 @@ interface Built {
   byProduct: Map<string, string>;
   authors: string;
   skinTypes: string;
+  /** 상품별 리뷰 건수. 카드·요약이 "전체 몇 건" 대신 **실제 가진 건수**를 적는다 */
+  counts: string;
 }
 
 let built: Built | null = null;
@@ -79,13 +83,15 @@ function build(): Built {
   const skinTypes = JSON.stringify(
     Object.fromEntries([...groups].map(([id, list]) => [id, deriveSkinTypesFromReviews(list).types]).filter(([, t]) => (t as string[]).length > 0)),
   );
-  built = { byProduct, authors, skinTypes };
+  const counts = JSON.stringify(Object.fromEntries([...groups].map(([id, list]) => [id, list.length])));
+  built = { byProduct, authors, skinTypes, counts };
   return built;
 }
 
 function lookup(name: string): string | null {
   if (name === AUTHORS_FILE) return build().authors;
   if (name === SKIN_TYPES_FILE) return build().skinTypes;
+  if (name === COUNTS_FILE) return build().counts;
   if (!SAFE_ID.test(name)) return null;
   return build().byProduct.get(name) ?? '[]';
 }
@@ -114,6 +120,7 @@ export function reviewChunks(): Plugin {
       }
       this.emitFile({ type: 'asset', fileName: `reviews/${AUTHORS_FILE}.json`, source: authors });
       this.emitFile({ type: 'asset', fileName: `reviews/${SKIN_TYPES_FILE}.json`, source: build().skinTypes });
+      this.emitFile({ type: 'asset', fileName: `reviews/${COUNTS_FILE}.json`, source: build().counts });
     },
   };
 }

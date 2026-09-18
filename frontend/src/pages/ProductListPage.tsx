@@ -3,7 +3,7 @@ import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
 import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
-import { useImpression } from '../hooks/useImpression';
+import { confirmImpressionByClick, useImpression } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
 import { useRecommendation } from '../hooks/useRecommendation';
@@ -210,8 +210,18 @@ export default function ProductListPage({
       k: PROMO_SIZE,
       bannerSlots: BANNER_SLOTS,
       reserved: BANNER_RESERVED,
-      // 서버 호출도 같은 값: banner_slots=1&reserved=0&hero=new_brand (AI 회신 2026-09-10)
-      heroPolicy: HERO_POLICY,
+      /*
+       * 히어로 정책. 기본은 `new_brand` 지만 **세션 성향이 잡히면 `top` 으로 바꾼다** (2026-09-17).
+       *
+       * 신규 브랜드 상품은 등록된 완성형 이미지 배너가 있어서, 히어로가 그 상품이면 축 문구가 아예
+       * 그려지지 않는다 (AdBanner: 이미지가 있으면 `banner_type=new_brand` · 값 없음으로 기록한다).
+       * SSAFY Beauty 8종이 전부 그런 상품이라, 정책이 `new_brand` 로 고정돼 있는 한 성분을 아무리
+       * 긁어도 히어로는 같은 이미지였다 — 행동이 배너를 바꾼다는 것이 화면에서 성립하지 않았다.
+       *
+       * 그래서 단서가 없는 첫 방문은 지금처럼 신규 브랜드 이야기를 하고(그게 전용 노출의 목적이다),
+       * 방문자가 취향을 드러내면 그 축으로 말하는 조립 배너로 넘어간다.
+       */
+      heroPolicy: trait.trait_source === 'coldstart' ? HERO_POLICY : 'top',
       // 로그인 회원은 피부 프로필이 비어 있어도 회원 id 로 부른다 — 행동 로그(persona_id = 회원 id)와 같은 식별자여야
       // 추천 서버의 세션 상태(좋아요 → 목록 반영)가 이어진다 (AI 파트 요청 2026-09-14, live-demo-runbook §5).
       // 프로필이 비면 속성 쿼리가 없을 뿐, 스위처 페르소나로 떨어지지 않는다.
@@ -389,6 +399,26 @@ export default function ProductListPage({
   });
 
   /**
+   * 클릭·퀵룩 직전에 그 카드의 노출을 확정한다 (useImpression.confirmImpressionByClick).
+   * 훅과 같은 pageViewKey·eventName·listId 를 써야 한 번만 남는다.
+   */
+  const confirmListImpression = (listId: string, productId: string, position: number) => {
+    if (listId === 'promo_pick') {
+      confirmImpressionByClick({
+        pageViewKey: `promo:${recommendIdentityId ?? 'anonymous'}`,
+        eventName: recommendIdentityId ? 'recommendation_impression' : 'product_impression',
+        listId,
+        productId,
+        position,
+        algorithm: promoAlgorithm,
+        recommendationId: promoRecommendationId,
+      });
+      return;
+    }
+    confirmImpressionByClick({ pageViewKey, eventName: 'product_impression', listId: 'list_grid', productId, position });
+  };
+
+  /**
    * 배너·히어로 클릭 — `banner_click` + `product_click` (2026-09-17 전환). entry_source 는 계약 enum 안의 promo_pick 을 쓴다.
    * 축·값은 AdBanner 가 **실제로 그린 것** 기준으로 넘겨준다 (완성형이면 new_brand · banner_value null). 노출과 같은 값이어야
    * 칸별·축별 CTR 조인이 성립한다. 히어로는 항상 slot 1 이라 응답과 어긋나도 1 로 싣는다 — position 이 비면 계약 위반이다.
@@ -405,6 +435,23 @@ export default function ProductListPage({
         : (recommendation.banners.find((b) => b.product_id === productId) ?? null);
 
     const slot = banner?.slot ?? 1;
+    // 눌렀다면 본 것이다. 노출 타이머보다 먼저 누른 클릭도 분모에 들어가야 배너 CTR 이 1 을 안 넘는다
+    confirmImpressionByClick({
+      pageViewKey: `hero:${recommendIdentityId ?? 'anonymous'}:${trait.trait_source}`,
+      eventName: 'banner_impression',
+      listId,
+      productId,
+      position: slot,
+      algorithm: bannerAlgorithm,
+      recommendationId: promoRecommendationId,
+      extraProps: {
+        banner_type: logged.banner_type,
+        banner_value: logged.banner_value,
+        banner_slot: slot,
+        trait_source: trait.trait_source,
+        policy_version: BANNER_POLICY_VERSION,
+      },
+    });
     track('banner_click', {
       product_id: productId,
       banner_type: logged.banner_type,
@@ -470,6 +517,7 @@ export default function ProductListPage({
     const source = listId === 'promo_pick' ? promo : visible;
     const position =
       source.findIndex((p) => p.product_id === productId) + (listId === 'promo_pick' ? 0 : pageOffset);
+    confirmListImpression(listId, productId, position + 1);
     track('quick_look', {
       product_id: productId,
       entry_source: listId,
@@ -491,6 +539,8 @@ export default function ProductListPage({
     const position =
       (listId === 'promo_pick' ? promo : visible).findIndex((p) => p.product_id === productId) +
       (listId === 'promo_pick' ? 0 : pageOffset);
+
+    confirmListImpression(listId, productId, position + 1);
 
     // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
     if (listId === 'promo_pick' && promoRecommendationId) {

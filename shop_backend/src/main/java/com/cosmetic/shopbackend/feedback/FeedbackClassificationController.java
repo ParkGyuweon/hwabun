@@ -4,6 +4,7 @@ import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,21 +23,21 @@ public class FeedbackClassificationController {
   }
 
   @PostMapping("/classify")
-  public Map<String, Object> classify(
+  public ResponseEntity<Map<String, Object>> classify(
     @AuthenticationPrincipal ShopPrincipal actor,
     @RequestParam(required = false) String brandId
   ) {
     String ownedBrandId = ownedBrandId(actor, brandId);
-    FeedbackClassificationService.RunResult result = classifications.classifyPending(
-      ownedBrandId,
-      null
-    );
-    return Map.of(
-      "status", result.status(),
-      "selected", result.selected(),
-      "completed", result.completed(),
-      "failed", result.failed()
-    );
+    if (!classifications.startAsync(ownedBrandId, null)) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+        "status", "IN_PROGRESS",
+        "message", "feedback classification is already running"
+      ));
+    }
+    return ResponseEntity.accepted().body(Map.of(
+      "status", "ACCEPTED",
+      "message", "feedback classification started"
+    ));
   }
 
   private String ownedBrandId(ShopPrincipal actor, String requestedBrandId) {

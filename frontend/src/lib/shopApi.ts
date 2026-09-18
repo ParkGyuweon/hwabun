@@ -550,6 +550,32 @@ interface SellerFeedbackRow {
   hiddenByDefault: boolean;
 }
 
+/**
+ * 분류 시작 결과.
+ *
+ * `started` 는 이번 호출로 분류가 걸렸다는 뜻이고 `running` 은 이미 돌고 있다는 뜻이다. 둘 다 정상이라
+ * 화면은 구분 없이 "결과를 기다린다" 로 이어간다. `unavailable` 은 서버가 이 엔드포인트를 아직 안 주는
+ * 경우(404)까지 포함한다 — 그때도 화면은 죽지 않고 지금 있는 데이터를 그대로 그린다.
+ */
+export type ClassifyStart = 'started' | 'running' | 'unavailable';
+
+/**
+ * POST /api/seller/feedback/classify?brandId=
+ *
+ * 202 든 409 든 **오류가 아니다**. 409 는 다른 탭·다른 사장님이 이미 돌리고 있다는 뜻이라,
+ * 실패로 적으면 정상 상황에 오류가 뜬다.
+ */
+export async function startFeedbackClassification(brandId: string): Promise<ClassifyStart> {
+  try {
+    const res = await authFetch('SELLER', `/api/seller/feedback/classify?brandId=${encodeURIComponent(brandId)}`, { method: 'POST' });
+    if (res.status === 202) return 'started';
+    if (res.status === 409) return 'running';
+    return 'unavailable';
+  } catch {
+    return 'unavailable';
+  }
+}
+
 /** GET /api/seller/feedback?brandId= 를 화면 타입(Feedback)으로. 분류 전이면 labels 가 빈 배열로 온다 */
 export async function fetchSellerFeedback(brandId: string, brandName: string): Promise<Feedback[] | null> {
   try {
@@ -582,6 +608,7 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
       // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
       purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
+      classification_status: r.classificationStatus ?? null,
       status: 'new',
       reply: null,
       replied_at: null,
@@ -712,5 +739,72 @@ export async function fetchSellerPulse(brandId: string): Promise<SellerPulse | n
     };
   } catch {
     return null;
+  }
+}
+
+/* ------------------------------------------------------------------ 정산 (판매자) */
+
+/**
+ * `settlement` 한 행. 서버(`GET /api/settlements`)가 테이블 컬럼을 그대로 준다 (snake_case).
+ * `settlement_month` 는 그 달 1일 (`2026-09-01`). 수수료는 기획상 0% 라 `net_amount === gross_amount` 다.
+ */
+export interface Settlement {
+  settlement_id: string;
+  brand_id: string;
+  settlement_month: string;
+  currency: string;
+  gross_amount: number;
+  fee_amount: number;
+  net_amount: number;
+  status: 'PENDING' | 'COMPLETED';
+  completed_at: string | null;
+  completed_by: string | null;
+}
+
+/** 월별 정산 목록. 최신 달이 앞. 못 읽으면 null — 빈 배열은 "정산이 없다" 라서 구분한다 */
+export async function fetchSettlements(brandId: string): Promise<Settlement[] | null> {
+  try {
+    const res = await authFetch('SELLER', `/api/settlements?brandId=${encodeURIComponent(brandId)}`);
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<Record<string, unknown>>;
+    if (!Array.isArray(rows)) return null;
+    return rows.map((r) => ({
+      settlement_id: String(r.settlement_id ?? ''),
+      brand_id: String(r.brand_id ?? ''),
+      settlement_month: String(r.settlement_month ?? '').slice(0, 10),
+      currency: String(r.currency ?? 'KRW'),
+      gross_amount: Number(r.gross_amount ?? 0),
+      fee_amount: Number(r.fee_amount ?? 0),
+      net_amount: Number(r.net_amount ?? 0),
+      status: r.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING',
+      completed_at: r.completed_at ? String(r.completed_at) : null,
+      completed_by: r.completed_by ? String(r.completed_by) : null,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export type GenerateSettlementResult =
+  | { kind: 'ok'; settlementId: string; netAmount: number }
+  /** 이미 완료된 달. 서버가 409 를 준다 — 완료된 정산은 다시 계산하지 않는다 */
+  | { kind: 'completed' }
+  | { kind: 'failed' };
+
+/**
+ * `POST /api/settlements/generate?brandId=&month=YYYY-MM`.
+ * 그 달의 결제 완료 품목 중 아직 정산에 안 들어간 것을 더한다. 매일 02:00 배치가 같은 일을 하므로
+ * 이 버튼은 "지금 바로 다시 세기" 다.
+ */
+export async function generateSettlement(brandId: string, month: string): Promise<GenerateSettlementResult> {
+  try {
+    const q = new URLSearchParams({ brandId, month });
+    const res = await authFetch('SELLER', `/api/settlements/generate?${q.toString()}`, { method: 'POST' });
+    if (res.status === 409) return { kind: 'completed' };
+    if (!res.ok) return { kind: 'failed' };
+    const j = (await res.json()) as { settlementId?: string; netAmount?: number };
+    return { kind: 'ok', settlementId: String(j.settlementId ?? ''), netAmount: Number(j.netAmount ?? 0) };
+  } catch {
+    return { kind: 'failed' };
   }
 }

@@ -12,7 +12,7 @@
 
 | | 산출물 |
 | --- | --- |
-| 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드 11화면, 플랫폼 운영 화면 |
+| 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 12개), 플랫폼 운영 화면 |
 | 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(그중 22종 발행) |
 | AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
 | 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 159개 |
@@ -75,14 +75,15 @@
 
 한 코드베이스에서 엔트리 3개를 빌드합니다. 로그가 여기서 출발합니다.
 
-- 쇼핑몰 BLOOM (`index.html`). 상품 목록·상세·장바구니·주문·결제(PortOne)·리뷰·피드백에 추천 카드와 신규 브랜드 히어로 배너를 붙였습니다.
-- 브랜드 대시보드 (`dashboard.html`). 개요, 행동, 콘텐츠, 고객군, 성분, 리뷰, 피드백, 상품, 상품등록, 주문, 내 상품까지 11개 화면입니다.
+- 쇼핑몰 BLOOM (`index.html`). 상품 목록·상세·장바구니·주문·결제(PortOne)·리뷰(구매자만)·피드백에 추천 카드와 신규 브랜드 히어로 배너를 붙였습니다.
+- 브랜드 대시보드 (`dashboard.html`). 사장님이 묻는 질문 순서로 메뉴 8개(요약 · 상세페이지 · 상품 · 주문 · 고객 · 고객의 말 · 시장 · 상품 등록)이고, 그 안에 탭 화면 12개(콘텐츠·마찰, 주문·정산, 공개 리뷰·받은 피드백 등)가 있습니다. 상세페이지 처방 문장은 AI 서버(`/api/prescription`)가 답하면 그 문장을, 아니면 규칙 표 문장을 씁니다 — 화면이 비는 순간이 없게 한 구조입니다.
 - 플랫폼 운영 화면 (`platform.html`).
 - 행동 로거 (`src/lib/logger.ts`). 이벤트 43종을 조립해 버퍼에 담고 전송하며, 429/502/503 은 백오프로 재시도합니다. 이벤트 스키마 `src/types/log.ts` 는 AI·데이터가 직접 import 해서 가중치를 맞추는 단일 출처입니다.
 - 수집 훅 (`src/hooks/`). 스크롤 깊이·정지·되돌아 읽기, 섹션 노출과 체류, 텍스트 선택·복사, 주목 신호(hover/rage/dead click), 이탈 요약을 잡습니다.
 - 화면마다 그 자리에 그 이벤트를 둔 근거를 `docs/analytics/behavior-log-design.md` 에 남겼습니다.
 - B2B 대시보드 시장 조사와 지표별 산출 근거를 정리했습니다 (`docs/dashboard/`).
-- 상품 등록 폼을 추천이 요구하는 스키마에 맞춰 구현하고, 대시보드에서 목 데이터를 전부 걷어냈습니다(값이 없으면 0, "-", "없음").
+- 상품 등록 폼을 추천이 요구하는 스키마에 맞춰 구현했습니다. 대시보드는 행동 지표(마트) · 주문·정산·공개 리뷰(쇼핑몰 원장)를 실측으로 읽고, 값이 없으면 0, "-", "없음"입니다. 받은 피드백 탭에만 시연용 시드 30건이 "시드" 배지를 달고 남아 있습니다.
+- 고객 목소리 AI 요약 카드(매일 06:00 자동 + "즉시 반영" 버튼)와 정산 화면(월별 정산 · 수수료 0%)을 붙였습니다. AI 요약은 백엔드·추천 서비스 API 연결 대기 중이라 그때까지 "연결 전"으로 표시합니다 (`contracts/feedback-insight-spec.md`).
 
 ### 최열음 · 백엔드
 
@@ -123,7 +124,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - 추천 점수. 콘텐츠 유사도에 페르소나 속성 친화도 4,000행과 CF 동시발생(200×200)을 얹고 LTR 로 결합합니다. 트리 239개·피처 20개, 학습 5,954명 231,005행. 학습과 서빙이 `ltr_features.py` 를 같이 씁니다.
 - 노출 정책. MMR 다양성, 신규 브랜드 전용 슬롯, 콜드스타트 폴백. `regenerate_all.py` 가 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
 - 평가 축 3개 분리. 오프라인 leave-last-out, 리뷰 이력 순차 재생, 동적 시뮬레이션. 홀드아웃 2세트(각 2,000명)로 a 에서 고르고 b 에서 확인합니다.
-- 추천 서버 `batch/serving/` 8300, 라우트 17개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장, 카탈로그 동기화, 시연 화면 `/live`·`/pipeline`
+- 추천 서버 `batch/serving/` 8300, 라우트 20개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장, 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/pipeline`
 - 실시간 상태. `activity-events` 를 별도 컨슈머 그룹으로 구독해 세션 상태를 초 단위로 갱신하고, DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다.
 - 시뮬레이터. 페르소나 9,900명 합성 로그(약 1,049만 건)와 LLM 에이전트 100명. 에이전트는 Playwright 로 실제 브라우저를 띄워 프론트 로거를 그대로 탑니다. 성향 6축이 "어떻게 보는가"만 바꾸고 "무엇을 고르는가"에는 관여하지 않습니다.
 - 고객 피드백 분류. 축 5종은 고객이 고르고 분류기는 그 축 안 카테고리 20종에서만 고릅니다. 사람 정답 50건 대비 F1 94.3, 금지어 599개 대조
@@ -134,7 +135,7 @@ LLM 을 쓰는 곳은 셋이고 경로가 다릅니다.
 | 무엇 | 경로 | 실행 형태 |
 | --- | --- | --- |
 | 대시보드 처방 문장 | 추천 서버 `POST /api/prescription` → GMS | 서비스 안, 런타임 스위치로 on/off |
-| 고객 피드백 분류 | `classify_feedback.py` → GMS 직접 | 오프라인 CLI |
+| 고객 피드백 분류 | 추천 서버 `POST /api/feedback/classify` → GMS · 배치는 `classify_feedback.py` → GMS 직접 | 서비스 안(백엔드 배치가 호출) · 오프라인 CLI |
 | 에이전트 PA | `agent_runner.py` → GMS 직접 | 오프라인 CLI |
 
 ## 3. 기술 스택
@@ -271,7 +272,8 @@ S15P21A306/
 │   │                                        · feedback · seller · settlements · admin                 → 8090
 │   │                                        그 외 /api (= /api/events)                                → 8080
 │   ├── .env.development · .env.production · .env.example
-│   ├── plugins/image-cache.ts · scripts/   (warm-images, 상품 이미지 수집)
+│   ├── plugins/   image-cache.ts · review-chunks.ts (Vite 플러그인)
+│   ├── scripts/   build-personas · build-products · build-reviews · collect-product-content · warm-images (시드·이미지 수집)
 │   ├── public/  brand/ · images/ · icons.svg
 │   └── src/
 │       ├── main.tsx · App.tsx · index.css
@@ -281,10 +283,10 @@ S15P21A306/
 │       ├── hooks/     useImpression · useInteractionSignals · useExitSummary · useTextSelection
 │       │              useAuth · useCatalog · useRecommendation · useFeedback …
 │       ├── pages/     ProductListPage · ProductDetailPage · CartPage
-│       ├── dashboard/ DashboardApp.tsx · screens/(11개) · lib/(martApi · martAdapter) · css 4종
+│       ├── dashboard/ DashboardApp.tsx · screens/(12개) · lib/(martApi · martAdapter · insightApi · prescription) · css 4종
 │       ├── platform/  PlatformApp.tsx · lib
 │       ├── components/ account · auth · banner · cart · common · devtools · feedback · layout · product · review
-│       ├── mocks/     상품·리뷰·페르소나·피드백 샘플 JSON
+│       ├── mocks/     SSAFY Beauty 카탈로그 · 시연용 시드(피드백 30건 등) · 스크립트 산출 샘플 JSON
 │       └── styles/
 │
 ├── backend/                           Spring Boot 수집 서버 8080 (백엔드)
