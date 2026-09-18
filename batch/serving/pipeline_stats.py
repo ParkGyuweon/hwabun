@@ -324,13 +324,13 @@ ul{list-style:none;margin:4px 0 0;padding:0;flex:1 1 auto;min-height:0;overflow:
   </div>
 </div>
 <div class="bottom">
- <div class="card"><div class="k">최근 60초 · 초당 사이트 활동 메시지</div><canvas id="spark" width="1200" height="92"></canvas></div>
+ <div class="card"><div class="k">최근 60초 · 초당 사이트 활동 메시지</div><canvas id="spark"></canvas></div>
  <div class="card"><div class="k">방금 상태가 바뀐 사용자</div><ul id="recent"></ul></div>
 </div>
 <script>
 const $=id=>document.getElementById(id);const fmt=n=>(n==null?'-':Number(n).toLocaleString('ko-KR'));
 function dot(id,st){const e=$(id);e.className='dot '+(st||'')}
-function draw(series){const c=$('spark'),ctx=c.getContext('2d');const W=c.width,H=c.height;ctx.clearRect(0,0,W,H);const max=Math.max(1,...series);const bw=W/series.length;ctx.fillStyle='#A8C96E';series.forEach((v,i)=>{const h=Math.round(v/max*(H-16));ctx.fillRect(i*bw+1,H-h,Math.max(1,bw-2),h)});ctx.fillStyle='#6B7280';ctx.font='11px Pretendard,sans-serif';ctx.fillText('max '+max+'/s',4,12)}
+function draw(series){const c=$('spark'),ctx=c.getContext('2d');/* 표시 크기가 flex 로 변하므로 그리기 버퍼를 맞춘다 — 안 맞추면 그림이 늘어난다 */const r=c.getBoundingClientRect(),d=window.devicePixelRatio||1;const cw=Math.max(1,Math.round(r.width*d)),ch=Math.max(1,Math.round(r.height*d));if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}ctx.setTransform(1,0,0,1,0,0);const W=c.width,H=c.height;ctx.clearRect(0,0,W,H);const max=Math.max(1,...series);const bw=W/series.length;ctx.fillStyle='#A8C96E';series.forEach((v,i)=>{const h=Math.round(v/max*(H-16));ctx.fillRect(i*bw+1,H-h,Math.max(1,bw-2),h)});ctx.fillStyle='#6B7280';ctx.font=(11*d)+'px Pretendard,sans-serif';ctx.fillText('max '+max+'/s',4*d,14*d)}
 async function tick(){try{const d=await (await fetch('/pipeline/stats',{cache:'no-store'})).json();
  const A=d.activity,ac=A.actors;$('act').innerHTML=fmt(A.total)+'<small>건</small>';$('act10').textContent='10초 평균 '+(ac.persona.per_sec_10s_avg+ac.agent.per_sec_10s_avg+ac.real.per_sec_10s_avg).toFixed(1)+'/s · 활동 주체 '+fmt(A.users)+'명';
  for(const a of ['persona','agent','real']){$('a_'+a).textContent=fmt(ac[a].users)+'명 · '+fmt(ac[a].total)+'건'+(ac[a].per_sec_10s_avg?(' · +'+ac[a].per_sec_10s_avg+'/s'):'')}
