@@ -1208,9 +1208,15 @@ def _persona_segments(bridge_df: Any) -> Any:
         & ~F.col("segment_value").isin(*MISSING_SEGMENT_VALUES)
     ).select("persona_id", "segment_type", "segment_value")
 
+    # 한 페르소나에 같은 축 값이 둘 이상이면 `F.first` 는 셔플 순서를 따라가 재계산이
+    # 갈린다. 통화 대표값(`_product_daily_kpi`)과 같은 이유로 결정적으로 고른다.
+    #
+    # 값이 섞인 것 자체는 bridge 입력의 문제다. Q5 는 bridge 를 입력으로 받지 않아
+    # (검증 Job 인자에 없다) 여기서 그 혼입을 잡을 수 없고, 잡는 자리는 bridge 를
+    # 만드는 쪽이다. 마트는 대표값을 결정적으로 고르는 데까지만 책임진다.
     wide = base.groupBy("persona_id").pivot(
         "segment_type", list(SEGMENT_TYPES)
-    ).agg(F.first("segment_value", ignorenulls=True))
+    ).agg(F.min("segment_value"))
     cross = wide.where(
         F.col("skin_type").isNotNull() & F.col("skin_tone").isNotNull()
     ).select(
