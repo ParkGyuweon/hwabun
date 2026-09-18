@@ -90,37 +90,8 @@ body {
   height: 22px;
 }
 
-.site-header__nav {
-  gap: 24px;
-  font-size: 12px;
-  color: var(--color-ink);
-  /* 카테고리가 7개다. 좁은 폭에서는 줄을 바꾸지 않고 이 안에서만 가로로 밀린다 —
-     페이지 전체가 가로 스크롤되면 안 된다 */
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow-x: auto;
-  white-space: nowrap;
-  scrollbar-width: none;
-}
-
-.site-header__nav::-webkit-scrollbar {
-  display: none;
-}
-
 .site-header__account {
   flex: none;
-}
-
-.site-header__nav button {
-  padding: 0;
-  border-bottom: 0;
-  opacity: 0.8;
-  transition: opacity 0.15s;
-}
-
-.site-header__nav button:hover {
-  opacity: 1;
-  border-bottom: 0;
 }
 
 .site-header__account {
