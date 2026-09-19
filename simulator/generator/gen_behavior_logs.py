@@ -523,8 +523,14 @@ DETAIL_LAYOUT = [
                           ("clinical_claim", None), ("persona_match", "skin_type"),
                           ("persona_match", "concerns"), ("product_meta", "category"),
                           ("product_meta", "size")]),
+    # 전성분 아코디언은 실제 화면도 contentKind 를 안 싣는다
+    # (frontend/src/pages/ProductDetailPage.tsx:141~150) — None 이 맞다.
     ("ingredients",      [(None, None)]),
-    ("how_to_use",       [(None, None)]),
+    # 사용법 아코디언은 실제 화면이 usage_guide 를 싣는다 (같은 파일 153행,
+    # `<Accordion title="How to Use" sectionId="how_to_use" contentKind="usage_guide">`).
+    # 여기가 None 이면 합성 로그에만 usage_guide 가 없어 대시보드 콘텐츠 화면의
+    # '사용법' 행이 통째로 빈다 (Jira 364, 09-19 dw 실측 0건).
+    ("how_to_use",       [("usage_guide", None)]),
     ("similar_products", [("recommendation_card", "__rec__")]),
     ("reviews",          [("review_stats", None), ("review_filter", None),
                           ("user_review", None)]),

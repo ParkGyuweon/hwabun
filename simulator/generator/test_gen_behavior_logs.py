@@ -111,6 +111,30 @@ class SyntheticEventMetadataTest(unittest.TestCase):
         self.assertNotIn("content_kind", events[0]["properties"])
         self.assertNotIn("content_ref", events[0]["properties"])
 
+    def test_how_to_use_section_carries_usage_guide_content_kind(self):
+        """사용법 아코디언은 실제 화면이 content_kind=usage_guide 를 싣는다
+        (frontend/src/pages/ProductDetailPage.tsx:153). 합성 로그가 None 이면 대시보드
+        콘텐츠 화면의 '사용법' 행이 통째로 빈다 — 09-19 dw 에서 usage_guide 0건이었다 (Jira 364).
+        같은 자리의 전성분 아코디언은 실제 화면도 안 실으므로 None 이 맞다."""
+        events = []
+        emitter = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0),
+                          np.random.default_rng(1), self.context)
+        product = {"variants": [], "cat": "Moisturizers", "price": 30.0}
+        # depth 100 이어야 how_to_use 까지 내려간다 (n_sec = 섹션 수 x depth/100)
+        visit_detail(emitter, "P2", product, [], np.random.default_rng(2), depth_target=100,
+                     engaged=False, entry_source="in_app")
+
+        by_section = {}
+        for e in events:
+            if e["event_name"] != "section_view":
+                continue
+            by_section.setdefault(e["properties"]["section_id"], set()).add(
+                e["properties"].get("content_kind"))
+
+        self.assertIn("how_to_use", by_section)
+        self.assertEqual({"usage_guide"}, by_section["how_to_use"])
+        self.assertEqual({None}, by_section["ingredients"])
+
     def test_product_view_carries_recommendation_ids_when_entered_from_card(self):
         """추천 카드로 들어간 상세의 product_view 는 recommendation_id / list_id / position 을
         싣는다 (Jira 210). 안 실리면 데이터가 세션 순서로 추정해야 한다."""
