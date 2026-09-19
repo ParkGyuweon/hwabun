@@ -102,10 +102,31 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
            "sort_list", "checkout", "click_banner", "buy_now", "write_feedback", "select_text")
-# 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
-# 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
-FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
-                 "용기·포장": "packaging", "가격": "value"}
+# 피드백 축 — **계약 파일에서 읽는다.** 베껴 두면 조용히 어긋난다 (Jira 367).
+# 09-19 실측: 러너가 "효과·발림성·가격" 을 들고 있었는데 계약·화면은 "효능·사용감·용량·가격" 이라
+# 다섯 중 셋이 안 맞았다. 러너는 이 라벨로 button[aria-label="…"] 을 찾으므로 못 찾으면 예외가
+# 나고 write_feedback 이 None 을 돌려주며 조용히 넘어간다. 그래서 shop_backend feedback 테이블에
+# 에이전트가 남긴 행이 한 건도 없었다 — 러너 로그에는 아무 표시도 안 났다.
+# 화면 버튼의 aria-label 은 contracts/feedback-category-vocab.json 의 axes[].label 이고
+# (frontend/src/types/feedback.ts 가 그 파일을 그대로 import 한다), 서버가 받는 값은 axes[].id 다.
+FEEDBACK_AXES_PATH = os.path.join(ROOT, "contracts", "feedback-category-vocab.json")
+# 계약 파일을 못 읽을 때만 쓰는 대체값 (2026-09-19 기준). 여기도 계약과 같아야 한다
+FEEDBACK_AXES_FALLBACK = {"효능": "efficacy", "사용감": "texture", "향": "scent",
+                          "용기·포장": "packaging", "용량·가격": "value"}
+
+
+def load_feedback_axes(path=FEEDBACK_AXES_PATH):
+    """{화면 라벨: 서버 축 id}. 파일이 없거나 모양이 다르면 대체값."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            axes = json.load(f).get("axes") or []
+        got = {str(a["label"]): str(a["id"]) for a in axes if a.get("label") and a.get("id")}
+        return got or dict(FEEDBACK_AXES_FALLBACK)
+    except Exception:
+        return dict(FEEDBACK_AXES_FALLBACK)
+
+
+FEEDBACK_AXES = load_feedback_axes()
 FEEDBACK_MAX_CHARS = 280
 # 피드백은 구매와 무관하다 (사용자 결정 09-17). 안 산 사람의 의견이 판매자에게는 더 아플 때가
 # 많다. 그래서 둘러보는 중에도 남길 수 있게 행동 목록에 둔다.
@@ -1258,15 +1279,17 @@ def write_feedback(page, client, persona, product_name, cache_on, dry):
     축은 계약 고정 목록이다. 지어내면 백엔드가 400 을 준다. 화면 라벨로 고르게 하고
     FEEDBACK_AXES 로 되옮긴다.
 
-    돌려주는 것: 보냈으면 (축 id, 글), 못 보냈으면 None.
+    돌려주는 것: `(결과, 이유)`. 보냈으면 `((축 id, 글), "")`, 못 보냈으면 `(None, 이유)`.
+    **이유를 반드시 돌려준다.** 예전에는 None 하나만 줘서 축 라벨이 화면과 어긋난 채로
+    한 달 가까이 0건이 나가는 동안 아무 표시도 안 났다 (Jira 367).
     """
     panel = page.locator(".feedback")
     if panel.count() == 0:
-        return None
+        return None, "패널 없음"
     try:
         panel.first.scroll_into_view_if_needed(timeout=4000)
     except Exception:
-        return None
+        return None, "패널이 안 보임"
 
     labels = list(FEEDBACK_AXES)
     concerns = ", ".join(persona.get("concerns") or []) or "없음"
@@ -1284,25 +1307,38 @@ def write_feedback(page, client, persona, product_name, cache_on, dry):
     ])
     obj, _used = ask(client, sys_p, usr_p, cache_on, dry, expect_action=False)
     if not obj:
-        return None
+        return None, "LLM 응답 없음"
     label = str(obj.get("axis") or "").strip()
     body = str(obj.get("body") or "").strip()[:FEEDBACK_MAX_CHARS]
-    if label not in FEEDBACK_AXES or len(body) < 10:
-        return None
+    if label not in FEEDBACK_AXES:
+        return None, "축 밖 라벨 %r" % label
+    if len(body) < 10:
+        return None, "본문이 너무 짧음"
 
+    # 라벨이 화면 버튼과 어긋나면 여기서 갈린다. 계약에서 읽은 라벨이니 어긋나면 화면이 바뀐 것
+    axis_btn = panel.locator('button[aria-label="%s"]' % label).first
+    if axis_btn.count() == 0:
+        return None, "화면에 없는 축 버튼 %r (계약 %s)" % (label, os.path.basename(FEEDBACK_AXES_PATH))
     try:
-        panel.locator('button[aria-label="%s"]' % label).first.click(timeout=4000)
+        axis_btn.click(timeout=4000)
         page.wait_for_timeout(random.randint(200, 700))
         page.fill("#feedback-body", body, timeout=4000)
         page.wait_for_timeout(random.randint(400, 1500))     # 쓰고 잠깐 읽어 보는 시간
         btn = panel.locator("button.feedback__submit").first
         if btn.is_disabled():
-            return None
+            return None, "보내기 버튼이 잠김"
         btn.click(timeout=4000)
         page.wait_for_timeout(random.randint(600, 1600))
+    except Exception as e:
+        return None, "조작 실패 %s" % type(e).__name__
+    # 화면이 오류를 적었으면 서버가 거절한 것이다 (401 로그인 · 409 같은 축 중복)
+    err = panel.locator(".feedback__error, .feedback__send-error").first
+    try:
+        if err.count() and (err.inner_text(timeout=1000) or "").strip():
+            return None, "서버 거절: %s" % err.inner_text(timeout=1000).strip()[:60]
     except Exception:
-        return None
-    return FEEDBACK_AXES[label], body
+        pass
+    return (FEEDBACK_AXES[label], body), ""
 
 
 def do_action(page, act, target, scroll_center=None):
@@ -1789,6 +1825,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     feedbacks = 0            # 산 뒤에 남긴 의견 수
+    feedback_failed = 0      # 시도했는데 못 남긴 횟수. 0건이 조용히 지나가지 않게 센다 (Jira 367)
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
     broken = 0
@@ -1936,13 +1973,17 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             # do_action 은 DOM 조작만 한다. 의견은 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서 처리한다.
             # **집계(done/failed)와 history 보다 앞이어야 한다** — 뒤에 두면 성공해도 실패로 세고
             # 다음 턴 프롬프트가 "(실패)" 라는 틀린 사실을 본다.
-            got = None
+            got, why = None, "LLM 클라이언트 없음"
             if client:
                 try:
-                    got = write_feedback(page, client, persona, here or "이 제품", cache_on, dry)
-                except Exception:
-                    got = None
+                    got, why = write_feedback(page, client, persona, here or "이 제품", cache_on, dry)
+                except Exception as e:
+                    got, why = None, "예외 %s" % type(e).__name__
             okd = bool(got)
+            if not okd:
+                feedback_failed += 1
+                if verbose:
+                    print(f"       [의견 못 남김] {why}")
             if okd:
                 calls += 1
                 feedbacks += 1
@@ -2002,14 +2043,18 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=15000)
                     page.wait_for_timeout(random.randint(600, 1800))
-                    got = write_feedback(page, client, persona, name, cache_on, dry)
-                except Exception:
-                    got = None
+                    got, why = write_feedback(page, client, persona, name, cache_on, dry)
+                except Exception as e:
+                    got, why = None, "예외 %s" % type(e).__name__
                 if got:
                     calls += 1
                     feedbacks += 1
                     if verbose:
                         print(f"        의견 남김 [{got[0]}] {got[1][:40]}")
+                else:
+                    feedback_failed += 1
+                    if verbose:
+                        print(f"        의견 못 남김 — {why}")
             # ── 산 뒤에 리뷰 쓰기 ──────────────────────────────────────────
             # 리뷰도 **행동이 아니라 주문 직후 단계**다. 행동으로 두면 절대 실행되지 않는다 —
             # 선택지에 오르는 조건이 `purchased >= 1` 인데 주문하면 바로 아래에서 break 로
@@ -2030,7 +2075,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
     return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased,
-                feedbacks=feedbacks,
+                feedbacks=feedbacks, feedback_failed=feedback_failed,
                 banner_clicks=banner_clicks, broken=broken, reviewed=reviewed)
 
 
@@ -2282,8 +2327,10 @@ def main():
         print(f"판단 근거 {dec_path}")
 
     from playwright.sync_api import sync_playwright
+    # run_one 이 돌려주는 key 는 전부 여기 있어야 한다 — 없으면 아래 합산 루프가 조용히 버린다.
+    # feedbacks 가 빠져 있어서 "의견 0건" 이 요약에 한 번도 안 찍혔다 (Jira 367)
     tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, banner_clicks=0, broken=0,
-               reviewed=0)
+               reviewed=0, feedbacks=0, feedback_failed=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -2366,7 +2413,10 @@ def main():
     dt = time.time() - t0
     print()
     print("=" * 60)
-    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건 / 배너 클릭 {tot['banner_clicks']}건 / 리뷰 {tot['reviewed']}건")
+    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건"
+          f" / 배너 클릭 {tot['banner_clicks']}건 / 리뷰 {tot['reviewed']}건 / 의견 {tot['feedbacks']}건")
+    if tot.get("feedback_failed"):
+        print(f"  ⚠ 의견을 못 남긴 시도 {tot['feedback_failed']}회 — 이유는 --verbose 로 보입니다")
     if tot.get("broken"):
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회"
               f" — AboutProduct.tsx 크래시는 2026-09-02 고쳐졌으므로 다른 원인입니다")
