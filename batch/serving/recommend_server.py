@@ -71,6 +71,11 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
     v0.3 프롬프트 · gpt-4.1-mini · 온도 0 · json_schema 강제 → §6 자동 거부 → 저장(prescriptions.jsonl).
     응답 {prescription|null, rejected_by[], cached, model, prompt_version}. GMS_KEY 없으면 503.
 
+대시보드 한 마디 (Jira 365) — POST /api/headline
+    화면 하나의 섹션별 숫자를 받아 **서술문** 한 줄씩 돌려준다. 처방이 "무엇을 하세요" 라면 이쪽은
+    "지금 무슨 일이 일어나고 있나" 다. 지시문이 섞이면 거부한다 — 할 일은 처방 자리다.
+    계약 contracts/headline-api-spec.md. 거부되거나 GMS_KEY 가 없으면 규칙 문장(origin="rule")을 준다.
+
 배포 (Jira 219): deploy/recommend.Dockerfile · deploy/ec2-1 compose 의 `recommend` 서비스 (8300, 내부 전용).
     등록 상품은 /data 볼륨. WORKERS=1 — 상태가 프로세스 메모리라 워커를 늘리면 답이 갈린다.
 """
@@ -104,6 +109,7 @@ from catalog_registry import (Registry, RegistrationError, derive,  # noqa: E402
                               grow_square, grow_vector, validate)
 from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: E402
 import prescription as rx
+import headline as hl                                                   # noqa: E402  (Jira 365 한 마디)
 import feedback_classify as fc                                               # noqa: E402
 from live_stats import LiveStats, LIVE_HTML, log_tail                  # noqa: E402  (Jira 295 실시간 현황)
 import catalog_sync                                                     # noqa: E402  (Jira 222)
@@ -763,6 +769,7 @@ def health():
                              if SHOP_BACKEND_URL else None),
             "user_trait": _user_traits.health(),                 # 장기 성향 표 출처·행 수 (Jira 306)
             "prescription": _rx_health(),
+            "headline": headline_stats(),                          # 화면·섹션 한 마디 (Jira 365)
         "feedback_classify": _fc_health(),                        # 처방 LLM 스위치·호출 수 (Jira 325)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
@@ -919,6 +926,50 @@ def prescribe(body: rx.PrescriptionInput,
         raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "GMS_KEY 가 없어 처방 문장을 만들 수 없습니다"})
     _rx_stats["llm_calls"] += 1
     return rx.prescribe(body, client, store, force=force, model=model)
+
+
+# ── 화면·섹션별 한 마디 (Jira 365) ─────────────────────────────────────────
+# 처방과 같은 GMS 키·같은 스위치를 쓴다. 과금되는 자리를 둘로 늘리지 않는다.
+_hl_store: Optional[hl.Store] = None
+_hl_stats = {"llm_calls": 0, "cache_hits": 0, "rule_fallbacks": 0}
+
+
+def _hl_deps():
+    global _hl_store
+    if _hl_store is None:
+        _hl_store = hl.Store()
+    return _hl_store, _rx_deps()[1]
+
+
+@app.post("/api/headline")
+def headline_lines(body: hl.HeadlineInput,
+                   force: bool = Query(False, description="저장본이 있어도 다시 생성"),
+                   model: str = Query(hl.MODEL)):
+    """대시보드 화면 하나의 한 마디 (contracts/headline-api-spec.md, Jira 365).
+
+    숫자는 프론트가 화면에 그린 문자열 그대로 보낸다 — 서버는 계산하지 않는다.
+    비교·변화 판단은 `comparisons` 에 넣어 보낸 문장 안에서만 쓸 수 있다.
+    **503 을 내지 않는다.** 키가 없거나 문장이 거부되면 규칙 문장(origin="rule")으로 답한다 —
+    설명 한 줄 때문에 화면이 비면 표만 남아 읽을 사람이 더 막힌다."""
+    store, client = _hl_deps()
+    key = hl.store_key(body, model)
+    if not force and store.get(key):
+        _hl_stats["cache_hits"] += 1
+        return dict(store.get(key), cached=True)
+    use = client if _rx_enabled else None          # 처방 스위치를 같이 따른다
+    if use is not None:
+        _hl_stats["llm_calls"] += 1
+    env = hl.headline(body, use, store, force=force, model=model)
+    if env.get("origin") == "rule":
+        _hl_stats["rule_fallbacks"] += 1
+    return env
+
+
+@app.get("/api/headline/stats")
+def headline_stats():
+    return {"model": hl.MODEL, "prompt_version": hl.PROMPT_VERSION,
+            "llm_enabled": _rx_enabled, "key_present": bool(os.environ.get("GMS_KEY") or os.environ.get("GMS_API_KEY")),
+            **_hl_stats}
 
 
 class LlmSwitch(BaseModel):
