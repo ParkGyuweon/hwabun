@@ -102,7 +102,7 @@ POST /api/headline?force=false&model=gpt-4.1-mini
 | `banned_term:<낱말>` | 웹 분석 용어(전환율·퍼널·이탈률·리텐션·CTA·UX·세션·임프레션)와 효능 단정. 목록은 `contracts/cosmetic-claim-banned-terms.json` |
 | `functional_only:<낱말>` | 기능성 심사 기록이 없는데 기능성 표현을 씀 |
 | `no_such_number:<값>` | 입력에 없는 숫자. 업계 평균·경쟁사·벤치마크를 지어내는 것을 막는다 |
-| `unsupported_comparison:<섹션>:<말>` | 그 섹션의 `comparisons` 에 없는 비교·변화 판단. **섹션별로 본다** — 옆 섹션이 "늘었습니다" 를 가졌다고 이 섹션이 쓸 수 있는 것은 아니다 |
+| `unsupported_comparison:<섹션>:<말>` | 그 섹션의 `comparisons` 에 없는 비교·변화 판단. **섹션별로 본다** — 옆 섹션이 "늘었습니다" 를 가졌다고 이 섹션이 쓸 수 있는 것은 아니다. **두 숫자를 나눠 만든 크기 주장("두 배"·"절반"·"배 이상")도 여기서 막는다** — 한글 수사라 숫자 대조로는 안 잡힌다. 한 줄 안의 모든 표현을 본다 |
 | `imperative:<어미>` | 지시문. 할 일은 처방 자리다 |
 | `section_mismatch:<id>` | 섹션이 빠졌거나 없는 id 를 만들었다 |
 | `off_topic:<id>` | 섹션 줄에 그 섹션 이름도, 그 섹션 값의 이름도 없다 |

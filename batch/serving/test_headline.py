@@ -127,6 +127,21 @@ class CheckTest(unittest.TestCase):
         fails, _ = hl.check(OK_OUT, inp())
         self.assertEqual([], fails)
 
+    def test_derived_magnitude_claim_is_rejected(self):
+        """입력은 "1,120건에서 1,360건으로 늘었습니다" 뿐이다. 나눠서 만든 "두 배" 는
+        아라비아 숫자가 없어 숫자 대조로는 안 잡힌다 (09-19 실호출에서 실제로 나왔다)."""
+        bad = copy.deepcopy(OK_OUT)
+        bad["headline"] = "최근 14일 상세를 본 방문이 1,360건으로 두 배 이상 늘었습니다."
+        fails, _ = hl.check(bad, inp())
+        self.assertTrue(any(f.startswith("unsupported_comparison") and "두 배" in f for f in fails), fails)
+
+    def test_all_matches_are_checked_not_just_the_first(self):
+        """앞의 정당한 말이 뒤의 지어낸 말을 가리면 안 된다"""
+        bad = copy.deepcopy(OK_OUT)
+        bad["sections"][0]["line"] = "상세를 본 방문이 1,360건으로 늘었고 절반이 사람입니다."
+        fails, _ = hl.check(bad, inp())
+        self.assertTrue(any("절반" in f for f in fails), fails)
+
     def test_imperative_is_rejected(self):
         bad = copy.deepcopy(OK_OUT)
         bad["sections"][1]["line"] = "담은 방문이 141건이니 장바구니 버튼을 위로 올리세요."
