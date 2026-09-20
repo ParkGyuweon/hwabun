@@ -135,6 +135,14 @@ class CheckTest(unittest.TestCase):
         fails, _ = hl.check(bad, inp())
         self.assertTrue(any(f.startswith("unsupported_comparison") and "두 배" in f for f in fails), fails)
 
+    def test_magnitude_adverb_is_rejected(self):
+        """입력은 "1,120건에서 1,360건으로 늘었습니다" 뿐이다. "크게" 는 입력이 안 한 크기 판단이다.
+        09-20 실호출에서 "680건에서 4,163건으로 크게 늘었습니다" 로 나왔다."""
+        bad = copy.deepcopy(OK_OUT)
+        bad["headline"] = "최근 14일 상세를 본 방문이 1,360건으로 크게 늘었습니다."
+        fails, _ = hl.check(bad, inp())
+        self.assertTrue(any(f.startswith("unsupported_comparison") and "크게" in f for f in fails), fails)
+
     def test_all_matches_are_checked_not_just_the_first(self):
         """앞의 정당한 말이 뒤의 지어낸 말을 가리면 안 된다"""
         bad = copy.deepcopy(OK_OUT)
@@ -188,7 +196,7 @@ class CheckTest(unittest.TestCase):
         bad = copy.deepcopy(OK_OUT)
         bad["headline"] = "최근 14일 — 상세를 본 방문이 1,360건입니다."
         fails, _ = hl.check(bad, inp())
-        self.assertIn("em_dash", fails)
+        self.assertIn("em_dash:__screen__", fails)   # 어느 줄인지 같이 적는다
 
     def test_shape_mismatch_is_rejected(self):
         fails, _ = hl.check({"headline": "한 줄입니다."}, inp())
@@ -222,14 +230,26 @@ class FlowTest(unittest.TestCase):
         self.assertEqual(1, client.calls)
         self.assertTrue(env["input_hash"].startswith("sha256:"))
 
-    def test_rejected_output_falls_back_to_rule_lines(self):
+    def test_only_the_offending_line_falls_back(self):
+        """한 줄의 낱말 하나 때문에 멀쩡한 나머지 줄을 버리지 않는다"""
         bad = copy.deepcopy(OK_OUT)
         bad["sections"][1]["line"] = "담은 방문은 141건으로 업계 평균 320건에 못 미칩니다."
         env, _ = run(bad)
-        self.assertEqual("rule", env["origin"])
-        self.assertTrue(env["rejected_by"])
-        self.assertEqual(3, len(env["sections"]))          # 화면은 비지 않는다
+        self.assertEqual("mixed", env["origin"])
+        self.assertTrue(any(f.startswith("no_such_number:cart") for f in env["rejected_by"]), env["rejected_by"])
+        by = {s["id"]: s for s in env["sections"]}
+        self.assertEqual("rule", by["cart"]["origin"])
+        self.assertEqual("llm", by["traffic"]["origin"])   # 멀쩡한 줄은 그대로
+        self.assertEqual(OK_OUT["sections"][0]["line"], by["traffic"]["line"])
+        self.assertEqual(3, len(env["sections"]))
         self.assertTrue(all(s["line"] for s in env["sections"]))
+
+    def test_broken_shape_falls_back_whole(self):
+        """모양이 깨졌으면 줄을 고를 수 없으니 통째로 규칙 문장"""
+        env, _ = run({"headline": "한 줄입니다."})
+        self.assertEqual("rule", env["origin"])
+        self.assertEqual(["shape"], env["rejected_by"])
+        self.assertEqual(3, len(env["sections"]))
 
     def test_no_client_falls_back_without_calling_llm(self):
         env = hl.headline(inp(), None, hl.Store(os.path.join(_TMP, "nc.jsonl")))
