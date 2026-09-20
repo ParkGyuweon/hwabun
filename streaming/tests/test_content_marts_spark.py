@@ -175,7 +175,7 @@ class ContentMartSparkTest(unittest.TestCase):
         """분자를 분모 모집단으로 제한한다 (§4.4).
 
         Quick Look 으로 상세를 연 세션은 콘텐츠를 읽고도 퍼널의 product_view 에
-        없다. 제한하지 않으면 비율이 1.0 을 넘는다 — Jira 277 에서 실제로 났던
+        없다. 제한하지 않으면 비율이 1.0 을 넘는다 — 실제로 났던
         분자·분모 모집단 불일치와 같은 유형이다.
         """
         rows = self._content_df([
@@ -452,7 +452,7 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(result.count(), result.select(*key).distinct().count())
 
 
-    # ── 겹침 제외 체류 (Jira 338) ──────────────────────────────────────
+    # ── 겹침 제외 체류 ──────────────────────────────────────
     def test_co_visible_sum_is_aggregated_alongside_the_total(self):
         """총합과 겹침 제외 합계를 나란히 낸다. 총합을 대체하지 않는다 (§4.4)."""
         content = self._content_df([
@@ -494,7 +494,7 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(1000, row["co_visible_le2_dwell_ms_sum"])
 
 
-    # ── 성분·리뷰 세션의 0 채우기 (Jira 336) ───────────────────────────
+    # ── 성분·리뷰 세션의 0 채우기 ───────────────────────────
     def test_non_matching_content_kinds_report_zero_not_null(self):
         """cta·price 같은 행은 성분 집계에 짝이 없어 조인이 NULL 을 낸다.
 

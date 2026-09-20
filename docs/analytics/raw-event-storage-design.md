@@ -2,7 +2,7 @@
 
 작성일: 2026-09-02
 
-대상 Jira: `[DATA] Raw Event Log 저장 구성`
+대상 작업: `[DATA] Raw Event Log 저장 구성`
 
 상태: 계약 분리 완료, 현재 Parquet PoC와 목표 Delta 구조 검증 대기
 

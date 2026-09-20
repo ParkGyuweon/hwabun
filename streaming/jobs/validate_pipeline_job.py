@@ -1551,7 +1551,7 @@ def validate_frames(
     ))
 
     # product_daily_kpi — 지금까지 grain 유일성 하나만 검사했다. 비율 네 개가
-    # 검증 없이 나가는 동안 add_to_cart_rate 가 1.0 을 넘고 있었다 (Jira 277).
+    # 검증 없이 나가는 동안 add_to_cart_rate 가 1.0 을 넘고 있었다.
     invalid_product_counts = product_daily.where(
         (F.col("product_view_sessions") < 0)
         | (F.col("quick_look_sessions") < 0)
@@ -1630,7 +1630,7 @@ def validate_frames(
     # 통화는 grain 이 아니라 대표값 한 개다 (결정적인 F.min). 한 상품·하루에 통화가
     # 섞이면 revenue_amount 가 두 통화를 그냥 더하고 currency 는 하나만 보고한다.
     # grain 에 올리면 통화 없는 조회 행과 결제 행이 갈려 Mart 가 깨지므로
-    # 여기서 혼합 자체를 막는다 (Jira 303 통화 전환 경계일 대비).
+    # 여기서 혼합 자체를 막는다 (통화 전환 경계일 대비).
     mixed_currency_groups = (
         product_fact.where(
             F.col("currency").isNotNull()

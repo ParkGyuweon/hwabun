@@ -17,7 +17,7 @@ class CleanEventsWriteSparkTest(unittest.TestCase):
     """거부도 중복도 없는 실행에서 Q2 출력이 다시 읽히는지 본다.
 
     bad_events 와 duplicate_events 는 정상 실행에서 0행이다. 그때 partitionBy 로 쓰면
-    `_SUCCESS` 만 남아 Q5 가 UNABLE_TO_INFER_SCHEMA 로 죽는다 (Jira 235 실행 검증에서 발견).
+    `_SUCCESS` 만 남아 Q5 가 UNABLE_TO_INFER_SCHEMA 로 죽는다 (실행 검증에서 발견).
     """
 
     @classmethod

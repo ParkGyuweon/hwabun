@@ -95,7 +95,7 @@ class EventFactsSparkTest(unittest.TestCase):
             ["product_id", "category_id", "brand_id"],
         )
 
-    # ── 겹침 제외 체류 (Jira 338) ──────────────────────────────────────
+    # ── 겹침 제외 체류 ──────────────────────────────────────
     def _dwell_row(self, event_id, dwell_ms, co_visible):
         blocks = "" if co_visible is None else ', "co_visible_blocks": %d' % co_visible
         return (
