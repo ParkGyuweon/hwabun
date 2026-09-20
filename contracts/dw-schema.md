@@ -626,6 +626,17 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 `section_dwell_agg`와 동시에 합산하지 않는다. `content_interest_fact`가
 `section_dwell_agg`를 이미 병합한 결과라 둘을 더하면 같은 체류가 두 번 들어간다.
 
+**`section_view_sessions`는 그 섹션을 조회한 세션만 센다.** 체류·드래그만 남기고
+`section_view`가 없는 세션은 제외한다. 따라서 **`section_view_sessions <=
+section_view_count`가 항상 성립한다.** 제외하지 않으면 "본 사람이 조회 수보다 많다"가
+화면에 뜬다 — 2026-09-20 운영 Mart에서 성분 줄이 조회 23,285 · 세션 26,715였다.
+제외된 세션의 체류·드래그는 `dwell_ms_sum`·`text_selection_count`에 그대로 남는다.
+빠지는 것은 "봤다"는 집계뿐이다.
+
+입력의 `content_kind`가 비어 있을 때 섹션 정본 라벨로 채우는 규칙은
+`processed-schema.md` §3에 있다 — **여기서 다시 채우지 않는다.** 두 곳에서 채우면
+기준이 갈린다.
+
 **`product_view_sessions`·`ingredient_view_sessions`·`review_view_sessions`는
 상품 단위다.** key에 `content_kind`가 있어도 이 셋은 `content_kind`마다 같은 값이
 반복된다. 분모가 "이 상품을 본 세션"이라서다. 행 단위로 세면 `user_review` 행이

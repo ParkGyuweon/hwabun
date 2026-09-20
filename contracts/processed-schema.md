@@ -87,6 +87,25 @@ session_id
 Nullable grain 컬럼은 집계할 때 NULL-safe equality를 사용한다. NULL을 임의의 실제
 ID로 바꿔 저장하지 않는다.
 
+**`content_kind`가 비어 있으면 섹션 정본 라벨로 채운다.** 한 `section_id`에 나타난
+non-null `content_kind`가 **정확히 하나일 때만** 그 값으로 채우고, 둘 이상이면 비워
+둔 채로 남긴다. 화면이 조회 Event에는 라벨을 싣지 않고 같은 섹션의 드래그·복사
+Event에만 싣는 경우가 있는데(`ingredients`·`how_to_use`), `content_kind`가 grain
+컬럼이라 그대로 두면 한 섹션이 두 행으로 갈린다. 갈리면 한쪽은 조회만, 다른 쪽은
+드래그만 갖게 되어 `dw-schema.md` §4.4의 `section_view_sessions <=
+section_view_count`가 깨진다. 2026-09-20 운영 Mart에서 `ingredient_list`가 조회 0 ·
+세션 3,430으로 나온 것이 이 모양이고, 같은 날 `section_view_count` 위반 2,494행 중
+2,413행이 여기서 나왔다.
+
+라벨이 여러 개인 섹션(`about_product` 8종 · `product_hero` 4종 · `reviews` 3종)은
+어느 것으로 채울지 정할 근거가 없어 건드리지 않는다. 관측된 라벨이 하나뿐일 때만
+쓰므로 없는 사실을 만들지 않는다. 대표값은 결정적으로 고른다 — 셔플 순서를 타는
+방식으로 고르면 재계산 결정성이 깨진다.
+
+`section_dwell_agg`와 `content_interest_fact`는 **같은 맵을 공유한다.** 각자 만들면
+같은 입력에서도 두 갈래가 어긋날 수 있고, 어긋나면 이 규칙이 막으려던 분리가
+그대로 생긴다.
+
 ## 4. `bad_events`
 
 입력은 `raw_events`다. JSON 파싱, 필수값, 타입 또는 semantic validation에 실패한
