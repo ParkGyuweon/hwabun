@@ -218,6 +218,27 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(2, row["section_view_sessions"])
         self.assertEqual(2000.0, row["avg_dwell_ms_per_session"])
 
+    def test_sessions_without_a_view_are_not_counted_as_viewers(self):
+        """조회 없이 체류·드래그만 남긴 세션은 "본 세션" 이 아니다.
+
+        세면 section_view_sessions > section_view_count 가 되어 화면에 "본 사람이
+        조회 수보다 많다" 가 뜬다. 운영 마트에서 성분 줄이 조회 23,285 · 세션
+        26,715 로 나온 것이 이 모양이다 (§4.4).
+        """
+        rows = self._content_df([
+            self._content("S1", "ingredient_list", views=1),
+            self._content("S2", "ingredient_list", views=0),
+        ])
+        funnel = self._funnel_df([self._session("S1"), self._session("S2")])
+
+        row = _content_daily_kpi(rows, funnel, "Asia/Seoul").collect()[0]
+
+        self.assertEqual(1, row["section_view_count"])
+        self.assertEqual(1, row["section_view_sessions"])
+        self.assertLessEqual(
+            row["section_view_sessions"], row["section_view_count"]
+        )
+
     def test_matched_ingredients_are_counted_not_listed(self):
         rows = self._content_df([self._content("S1", "ingredient_list")])
         funnel = self._funnel_df([self._session("S1")])
