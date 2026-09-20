@@ -223,7 +223,7 @@ class PersonaSegmentMartSparkTest(unittest.TestCase):
         self.assertEqual(2.5, row["avg_interest_score"])
 
 
-    # ── 노출 분모 (Jira 336 · 104만 건에서 6행 실패한 자리) ────────────
+    # ── 노출 분모 (104만 건에서 6행 실패한 자리) ────────────
     def test_impression_sessions_count_all_three_surfaces(self):
         """노출 Event 는 셋이다 (§4.1).
 

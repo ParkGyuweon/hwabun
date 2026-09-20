@@ -86,7 +86,7 @@ Delta의 `MERGE`(증분 갱신)와 스키마 진화를 쓸 일이 없고, 트랜
 `actor_type = synthetic`이라 그 축으로는 갈리지 않는다. PA가 `agent_llm`,
 PC가 `python_batch`다. `actor_type`에 값을 더하지 않는 이유는 그 축이 모든 Mart의
 key에 있어서, enum이 바뀌면 전 Mart의 grain이 같이 바뀌기 때문이다.
-`generator_type`도 2026-09-16부터 모든 Mart의 key에 있으므로(Jira 324) 화면은
+`generator_type`도 2026-09-16부터 모든 Mart의 key에 있으므로 화면은
 이 축으로 PA를 걸러낼 수 있다.
 
 모든 비율은 `numerator / NULLIF(denominator, 0)`으로 계산한다. Kafka payload의
@@ -258,7 +258,7 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 | `caution_ingredient_count` | int | Y | 주의 성분 수 |
 | `updated_at` | timestamp | Y | 갱신 시각 |
 
-가격 정본은 **원화**다 (Jira 302). 추천 어휘집 0.7의 `price_bin` 경계가 원화이므로
+가격 정본은 **원화**다. 추천 어휘집 0.7의 `price_bin` 경계가 원화이므로
 카탈로그가 달러로 남으면 가격대 Mart가 환율을 다시 들고 있어야 한다. 환율이 여러 곳에
 흩어지면 같은 상품이 화면·추천·대시보드에서 다른 가격대로 잡힌다.
 
@@ -272,7 +272,7 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 **행동 Event의 금액 정본도 원화로 확정했다** (S15P21A306-303, 2026-09-16 프론트
 합의). 신규 Event는 담기·빼기에 `unit_price` + `currency='KRW'`를 쓰고,
 `cart_value`·`order_value`·`paid_value`·`items[].unit_price`도 원화로 싣는다.
-생성기는 `--currency KRW`에서 이 형식을 지원하며(Jira 334), 환산은 이 Dimension과
+생성기는 `--currency KRW`에서 이 형식을 지원하며, 환산은 이 Dimension과
 같은 `price_krw_of` 규칙을 쓴다. 생성기의 기본 통화 전환은 AI 파트와 별도로 합의한다.
 
 **Fact·Mart는 금액을 환산하지 않는다.** 받은 값을 그대로 싣고 `currency`를 함께
@@ -290,7 +290,7 @@ source = batch/ingest/data/products_200.json, 입점 브랜드 등록 상품, Pr
 그 Fact가 §4.15·§4.16·§4.17 셋의 공통 입력이라 한 번 검사하면 셋이 다 덮인다.
 
 **기존 2026-09-11 재생 데이터는 `currency`가 전부 NULL이다.** 당시 생성기가
-`add_to_cart`에 `price_usd`만 싣고 `currency`를 보내지 않았기 때문이다. Jira 336에서
+`add_to_cart`에 `price_usd`만 싣고 `currency`를 보내지 않았기 때문이다. 이후
 원화 로그를 전체 재생성해 `unit_price` + `currency='KRW'`로 교체한다. 재생성 전까지
 통화 검사는 **NULL을 통과시키고 값이 둘 이상일 때만 실패**한다 — 값이 없는 것과
 섞인 것은 다르다.
@@ -439,7 +439,7 @@ source = dim_product, contracts/product-feature-vocab.json
 | `category_price_reference`, `brand_cohort_dim` | 해당 없음 | 카탈로그 파생이라 Event를 읽지 않는다 |
 | `commons_cohort_weekly` | 해당 없음 | 시드를 이미 뺀 `brand_daily_kpi`를 입력으로 쓴다 |
 
-`user_trait_daily`의 시드 유지는 **결정됐다** (2026-09-15, Jira 306). 실회원에게는
+`user_trait_daily`의 시드 유지는 **결정됐다** (2026-09-15). 실회원에게는
 시드가 없고, Persona 응답에 주입된 선호가 드러나는 것은 시연에서 보여주려는 바이므로
 Mart에서 빼지 않는다. **대신 서빙에서 `identity_scope`로 가른다** — 추천 서버는
 `actor_type IN ('user','synthetic')` 행을 읽고 `identity_scope`를 `account` → `persona` 순으로
@@ -459,7 +459,7 @@ source·실행 축이 다른 행이 여럿이면 소비자가 `window_end_date` 
 `hist:{run}:{persona}:{product}` 형태이고, restock은 `#restock{n}`이 붙는다
 (`gen_behavior_logs.py` `history_session_id`).
 
-**이 세션은 `is_seeded=false`다** (2026-09-16, Jira 327). 시드로 두면 위 표의 제외
+**이 세션은 `is_seeded=false`다** (2026-09-16). 시드로 두면 위 표의 제외
 규칙에 걸려 `product_repurchase_daily`·`brand_repurchase_daily`·`purchase_reason_daily`가
 다시 0행이 되기 때문이다. 데이터 파트 요청으로 그렇게 정했다.
 
@@ -523,7 +523,7 @@ input = product_event_fact, purchase_fact, dim_product
 `product_view_sessions`를 분모로 두면 Quick Look에서 담은 세션이 분자에만 들어가
 비율이 1.0을 넘는다. 실제로 그랬다 — 데이터 235 재생에서 1,248행 중 323행(26%)이
 1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 235에서 고쳤는데 상품 Mart가
-빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다 (Jira 277).
+빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다.
 
 `product_ctr`와 `detail_entry_rate`의 분모는 `impression_count`로 **Event 수**다.
 세션 수가 아니다. 노출 대비 클릭·상세 진입은 노출 하나하나를 모수로 보는 지표이고,
@@ -1010,7 +1010,7 @@ input = sessionized_events
 브랜드를 모르는 조회(`brand_id`가 NULL이거나 Dimension에 없는 상품)는 어느 브랜드에도
 귀속하지 않는다. 직전 상품이나 세션의 첫 상품으로 추정하지 않는다
 
-`generator_type`은 2026-09-16(Jira 324)에 grain에 들어갔다. 커밋 82afffe가 실행 축을
+`generator_type`은 2026-09-16에 grain에 들어갔다. 커밋 82afffe가 실행 축을
 정리할 때 구현된 Mart 7종만 갱신해 이 Mart가 4축으로 남아 있었고, PC(`python_batch`)와
 PA(`agent_llm`)의 교차 유입 세션이 한 행에 합쳐지고 있었다 — `actor_type`은 둘 다
 `synthetic`이라 구분이 안 된다(§2).
@@ -1465,7 +1465,7 @@ MySQL projection에서 `content_kind`는 nullable로 선언된다. 이 Mart는 �
 (`dashboard-mart-api-spec.md` §3 E4). 교차 축이 필요해지면 §4.6처럼 별도 행으로 낸다.
 
 **현재 재생 데이터에서는 한 칸만 찬다.** 등장하는 persona 1,000명이 전원
-`combination`이다. 층화 표본 재생성(Jira 318)이 반영된 로그로 다시 돌려야 네 타입이
+`combination`이다. 층화 표본 재생성이 반영된 로그로 다시 돌려야 네 타입이
 모두 나온다. Mart 구조와 단위 테스트는 그와 무관하다.
 
 ### 4.26 `segment_price_band_daily_kpi`
@@ -1489,7 +1489,7 @@ input = product_event_fact, dim_product, bridge_persona_segment
 
 **§4.6·§4.6-1 중 어느 쪽에도 축을 얹을 수 없어서 나눈 Mart다.** 세션 하나는 여러
 가격대의 상품을 밟고 동시에 `skin_type` 행과 `skin_tone` 행에 들어간다. 축을 더하면
-그 축을 걷어낸 합계가 같은 세션을 여러 번 센다. 같은 함정이 Jira 235에서 실제로
+그 축을 걷어낸 합계가 같은 세션을 여러 번 센다. 같은 함정이 실제로
 났다 — 브랜드 세션을 상품 Mart 합산으로 구했다가 876행이 336행으로 정정됐다.
 
 **세 Mart를 서로 대체하지 않는다.** `price_bin`을 걷어낸 합계는 §4.6과 같지 않고,
@@ -1514,7 +1514,7 @@ Event 경로에 없으므로 임의 귀속은 없는 사실을 만들어 낸다.
 가격 구간은 `contracts/product-feature-vocab.json`의 `price_bin_edges`를 읽는다.
 숫자를 여기에 복제하지 않는다 — 추천 CBF 피처·배너 축·상품 등록 화면이 같은 값을
 쓰므로 갈라지면 같은 이름의 가격대가 두 벌이 된다. 현재 어휘집 0.7 기준 원화
-`[0, 26000, 46000, 66000, 105000]`이다(Jira 302).
+`[0, 26000, 46000, 66000, 105000]`이다.
 
 **표본 미달 셀을 지우지 않는다.** 화면이 `n<50`을 비우고 `n<200`을 흐리게 표시한다
 (`frontend/src/dashboard/screens/SegmentsScreen.tsx`의 기존 격자와 같은 기준).
@@ -1530,9 +1530,9 @@ A층이다.
 fixture 테스트로만 덮인다(§4.10의 `banner_type` 커버리지 한계와 같은 성격).
 
 **현재 재생 데이터에서는 격자가 한 줄만 찬다.** 등장 persona 1,000명이 전원
-`combination`·`light`다. 층화 표본 재생성(Jira 318 반영 완료, 로그 재생성 대기)이
+`combination`·`light`다. 층화 표본 재생성(반영 완료, 로그 재생성 대기)이
 된 로그로 다시 돌려야 4타입 × 5밴드가 찬다. `purchase_sessions`도 생성기가 결제를
-내기 시작해야 0을 벗어난다(Jira 312).
+내기 시작해야 0을 벗어난다.
 
 ### 4.27 `event_daily`
 
@@ -1579,7 +1579,7 @@ Job과 별도 서빙 경로가 필요한데, 배치 Mart는 전부 MySQL project
 
 **미구현이고, 현재 정의로는 E6를 채울 수 없다.** key에 `brand_id`가 없어
 `dashboard-mart-api-spec.md` §3 E6의 "브랜드 필터 가능해야 한다"를 못 맞춘다.
-E6의 `event_volumes`는 §4.27 `event_daily`가 채운다(Jira 323). 이 절은 운영
+E6의 `event_volumes`는 §4.27 `event_daily`가 채운다. 이 절은 운영
 모니터링용 정의로 남긴다 — 실행 축도 4종이라 구현하려면 `generator_type`을
 먼저 넣어야 한다(§2).
 
@@ -1731,7 +1731,7 @@ DDL을 다시 생성한다.
 
 **비율 컬럼은 빼지 않는다.** count에서 다시 나눌 수 있지만, 분모 규칙이 계약에만
 있어서 소비자가 틀릴 수 있다. 실제로 그 실수가 났다 — `product_daily_kpi`의
-`add_to_cart_rate`가 1,248행 중 323행에서 1.0을 넘었고 원인이 분모였다(Jira 277).
+`add_to_cart_rate`가 1,248행 중 323행에서 1.0을 넘었고 원인이 분모였다.
 비율을 값으로 실어 보내는 것이 그 규칙을 소비자에게 전달하는 방법이다.
 
 ### 7.3 타입 매핑

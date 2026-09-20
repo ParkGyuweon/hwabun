@@ -17,7 +17,7 @@ class BannerExploreShareSparkTest(unittest.TestCase):
 
     추천 서버는 `explore` 를 내보내지 않고(batch/serving/banners.py 의 trait_source
     계약), 합성 로그의 `explore` 는 생성기가 정한 값이다. 합성 로그에 화면 동작
-    비율을 요구하면 통과할 수 있는 입력이 존재하지 않는다 (Jira 235 실행 검증).
+    비율을 요구하면 통과할 수 있는 입력이 존재하지 않는다 (실행 검증).
     """
 
     @classmethod

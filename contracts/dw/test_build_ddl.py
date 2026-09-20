@@ -265,7 +265,7 @@ class GeneratedSchemaTest(unittest.TestCase):
                 self.assertIn("DEFAULT CHARSET=utf8mb4", block)
 
     def test_purchase_marts_are_no_longer_unverified(self):
-        """재구매 계열이 실데이터로 검증됐다 (Jira 336, 2026-09-17).
+        """재구매 계열이 실데이터로 검증됐다 (2026-09-17).
 
         생성기가 purchase 를 만들지 않던 시절에는 0행이라 "실데이터 미검증"
         주석이 붙었다. 327·345·349 로 구매 이력 세션이 생기면서 104만 건

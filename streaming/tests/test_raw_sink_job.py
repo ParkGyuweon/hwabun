@@ -415,7 +415,7 @@ class PaymentEnumContractTest(unittest.TestCase):
             )
         )
 
-        # currency 는 2026-09-16 에 필수로 올렸다 (Jira 303). 금액 Event 는
+        # currency 는 2026-09-16 에 필수로 올렸다. 금액 Event 는
         # 통화 없이 해석할 수 없다 (dw-schema §3.2).
         self.assertEqual(
             {"order_id", "items", "payment_method", "paid_value",

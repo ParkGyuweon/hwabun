@@ -51,7 +51,7 @@ class SeedExclusionSparkTest(unittest.TestCase):
     """시드 Event는 주입된 선호 표식이라 행동 Mart 집계에서 빠져야 한다.
 
     긍정 시드는 조회 없이 담기만, 부정 시드는 담기 없는 조회를 낸다. 그대로 두면
-    전환 지표의 분자와 분모를 양방향으로 왜곡한다 (Jira 235 실행 검증: 전체 세션의
+    전환 지표의 분자와 분모를 양방향으로 왜곡한다 (실행 검증: 전체 세션의
     57%가 시드였고 brand_daily 876행 중 603행이 담기 > 조회였다).
     """
 
@@ -183,7 +183,7 @@ class SeedExclusionSparkTest(unittest.TestCase):
         호출부(build_mart_frames)에만 두면 Mart 함수를 직접 부르는 경로가 다른 값을
         낸다. Q5 의 brand_daily_is_deterministic_from_inputs 가 원본 Fact 에서
         _brand_daily_kpi 를 재계산해 대조하므로, 그 경로가 어긋나면 Mart 는 자기
-        입력으로부터 재현되지 않는다 (Jira 235 실행 검증에서 542행 불일치로 드러남).
+        입력으로부터 재현되지 않는다 (실행 검증에서 542행 불일치로 드러남).
         """
         from streaming.jobs.build_marts_job import _brand_daily_kpi
 

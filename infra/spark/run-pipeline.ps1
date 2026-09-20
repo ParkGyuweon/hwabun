@@ -4,7 +4,7 @@ param(
     [string]$Action = 'status',
 
     # 시작 단계. Q2 는 cleaned_events 를 통째로 다시 만들어 오래 걸리므로,
-    # Fact·Mart 만 고쳤을 때 되돌릴 이유가 없다 (Jira 277 에서 81분을 버렸다).
+    # Fact·Mart 만 고쳤을 때 되돌릴 이유가 없다 (에서 81분을 버렸다).
     [ValidateSet('q2', 'q3', 'q4')]
     [string]$From = 'q2'
 )

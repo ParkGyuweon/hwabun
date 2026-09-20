@@ -101,7 +101,7 @@ class BrandKpiMartsSparkTest(unittest.TestCase):
 
         목록에서 Quick Look 을 열어 PDP 없이 담는 건 화면에 있는 정상 동선이다.
         분모를 product_view 로 두면 분자에만 잡혀 담기율이 1.0 을 넘는다
-        (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 이 경로).
+        (실행 검증: 담기 6,029쌍 중 2,356쌍이 이 경로).
         """
         event_date = date(2026, 9, 8)
         product_fact = self.spark.createDataFrame(
@@ -338,7 +338,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
         """Quick Look 으로만 담은 세션도 분모에 들어가야 담기율이 1.0 을 넘지 않는다.
 
         브랜드 Mart 는 데이터 235 에서 고쳤는데 상품 Mart 가 빠져 있었다.
-        재생 데이터에서 1,248행 중 323행이 1.0 을 넘었고 최댓값이 6.0 이었다 (Jira 277).
+        재생 데이터에서 1,248행 중 323행이 1.0 을 넘었고 최댓값이 6.0 이었다.
         """
         facts = self._facts([
             # 세션 1: 노출 → Quick Look → 담기. 상품 상세는 안 열었다

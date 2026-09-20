@@ -89,7 +89,7 @@ validate_pipeline() {
 }
 
 # 시작 단계를 고른다. Q2 는 cleaned_events 를 통째로 다시 만들어 오래 걸리므로,
-# Fact·Mart 만 고쳤을 때 되돌릴 이유가 없다 (Jira 277 에서 81분을 버렸다).
+# Fact·Mart 만 고쳤을 때 되돌릴 이유가 없다 (에서 81분을 버렸다).
 #   run-batch      Q2~Q5 (기본)
 #   run-batch q3   Q3~Q5 — cleaned_events 를 그대로 쓴다
 #   run-batch q4   Q4~Q5 — Fact 까지 그대로 쓴다

@@ -750,7 +750,7 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
     )
 
 
-# 가격 정본은 원화다 (Jira 302). 추천 어휘집 0.7 의 price_bin 경계가 원화라
+# 가격 정본은 원화다. 추천 어휘집 0.7 의 price_bin 경계가 원화라
 # 카탈로그도 같은 단위여야 Mart 가 환율을 다시 들고 있지 않아도 된다.
 # 규칙은 ``batch/jobs/product_encoder.price_krw_of`` 와 같아야 한다 — 두 곳이
 # 갈리면 같은 상품이 추천과 대시보드에서 다른 가격대로 잡힌다.
@@ -976,7 +976,7 @@ def _build_dim_brand(dim_product_df: Any, commons_hash_salt: str) -> Any:
 
 # 겹쳐 보인 체류로 보지 않는 동시 노출 블록 수의 상한.
 # 값의 뜻은 생성기·프론트가 정한다 — 재생 데이터에서는 한 섹션에서 펼친
-# 블록 수라서 2 가 나오지 않고 사실상 1 만 걸린다 (Jira 338).
+# 블록 수라서 2 가 나오지 않고 사실상 1 만 걸린다.
 CO_VISIBLE_CLEAN_MAX = 2
 
 CONTENT_GROUP_COLUMNS = (

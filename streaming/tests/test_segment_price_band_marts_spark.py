@@ -212,7 +212,7 @@ class SegmentPriceBandMartSparkTest(unittest.TestCase):
     def test_catalog_currency_wins_over_the_event_column(self):
         """product_event_fact 에도 currency 가 있지만 뜻이 다르다 (결제 시점 통화).
 
-        이름이 겹쳐 Join 뒤 참조가 모호해지는 것을 Jira 277 에서 겪었다.
+        이름이 겹쳐 Join 뒤 참조가 모호해지는 것을 실제로 겪었다.
         """
         rows = self._mart(
             self._facts([self._event("S1", "product_view")]),
