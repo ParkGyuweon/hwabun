@@ -203,7 +203,7 @@ def default_simulation_run_id(now=None):
     return f"run_{ts.strftime('%Y%m%dT%H%M%SZ')}"
 
 
-def entry_url(base, scenario_id, simulation_run_id, product_id=None):
+def entry_url(base, scenario_id, simulation_run_id, product_id=None, persona_id=None):
     """프론트 진입 주소에 synthetic 표시를 붙인다.
 
     프론트 로거는 **개발 서버에서만** 이 파라미터를 인정한다. 배포 화면에서도
@@ -224,6 +224,12 @@ def entry_url(base, scenario_id, simulation_run_id, product_id=None):
         # 프론트가 이미 지원하는 진입 경로다 (App.tsx initialProductId).
         # 검색·광고로 상세에 바로 떨어지는 실제 유입에 해당한다
         query["product"] = product_id
+    if persona_id:
+        # **첫 렌더부터 주인을 정한다** (App.tsx requestedPersonaId, dev 10dd3b3).
+        # 이게 없으면 App.tsx 가 personas[0](PA00001) 로 시작하고, 딥링크 상세의
+        # product_view 가 그 사람 몫으로 찍혀 게이트에 버려진다. 담기는 전환 뒤라 살아남아
+        # 마트에서 add_to_cart_sessions > detail_view_sessions 가 된다 (Jira 372).
+        query["persona"] = persona_id
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
@@ -2359,10 +2365,17 @@ def main():
             # 돌려야 한 사람의 두 구매가 묶이는데, 어떤 상품을 살지는 LLM 이 정해서 같은 상품을
             # 두 번 사게 만들 방법이 없었다 (Jira 362).
             pinned = a.product or None
+            # 주소로 사람을 정해서 들어간다. 딥링크(상세로 바로)는 첫 화면이 곧 상품 상세라
+            # 전환을 기다릴 여유가 없다 — 주소에 안 실으면 그 상세 조회가 버려진다 (Jira 372).
             entry = entry_url(a.url, a.scenario_id, simulation_run_id,
-                              product_id=pinned or (rng.choice(catalog) if deep else None))
+                              product_id=pinned or (rng.choice(catalog) if deep else None),
+                              persona_id=p["persona_id"])
 
             page.goto(entry, wait_until="networkidle")
+            # 주소로 정해졌으면 첫 화면부터 이 사람 로그다. 확인하고 게이트를 먼저 연다 —
+            # 확인 없이 열면 프론트가 파라미터를 무시했을 때 남의 로그를 주워 담는다
+            if persona_matches(page, p["persona_id"]):
+                gate["persona_id"] = p["persona_id"]
 
             # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
             # AboutProduct.tsx 크래시는 2026-09-02 고쳐졌다. 이 방어는 이제
@@ -2709,6 +2722,22 @@ def login_member(page, persona_id):
         return True
     except Exception:
         return False
+
+
+def persona_matches(page, persona_id):
+    """주소로 정한 페르소나가 첫 화면에 실제로 적용됐는지 본다 (Jira 372).
+
+    스위처 라벨은 피부 타입·톤만 보여 주고 persona_id 는 아바타에 **끝 두 자리**로만 나온다
+    (PersonaSwitcher.tsx `persona__avatar` = `persona_id.slice(-2)`). 러너가 쓰는
+    PA00001~PA00100 은 끝 두 자리가 서로 달라 이 비교로 충분하다.
+
+    확인 없이 게이트를 열면 프론트가 `?persona=` 를 무시했을 때 남의 로그를 주워 담는다.
+    """
+    try:
+        shown = (page.locator(".persona__avatar").first.inner_text(timeout=2000) or "").strip()
+    except Exception:
+        return False
+    return bool(shown) and shown == persona_id[-2:]
 
 
 def switch_persona(page, persona_id):
