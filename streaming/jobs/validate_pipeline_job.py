@@ -448,6 +448,60 @@ def _duplicate_count(df: Any, columns: list[str]) -> int:
     return df.groupBy(*columns).count().where(F.col("count") > 1).count()
 
 
+def _differing_columns(
+    stored: Any, expected: Any, key_columns: list[str], columns: list[str]
+) -> str:
+    """재계산이 어긋났을 때 어느 컬럼인지 한 번의 패스로 센다.
+
+    `differing_rows` 만으로는 원인을 좁힐 수 없다 — 2026-09-20 운영 리포트가
+    `differing_rows=5824` 한 줄만 남겨 어느 컬럼이 흔들렸는지 알 수 없었다.
+    값이 흔들린 것인지 grain 이 한쪽에만 있는 것인지도 구분되지 않는다.
+
+    grain 컬럼에는 NULL 이 있다 (`brand_id`·`section_id`·`content_kind`·실행축).
+    평범한 equi-join 으로는 그 행이 한 건도 맞지 않아 "전 컬럼이 전부 어긋남"
+    으로 보인다. NULL-safe 로 맞춰야 값 차이와 grain 차이가 갈린다.
+    """
+
+    from functools import reduce
+    from pyspark.sql import functions as F
+
+    keys = [c for c in key_columns if c in columns]
+    values = [c for c in columns if c not in keys]
+    if not keys or not values:
+        return ""
+
+    left = stored.select(*columns).withColumn("_l", F.lit(1)).alias("l")
+    right = expected.select(*columns).withColumn("_r", F.lit(1)).alias("r")
+    condition = reduce(
+        lambda x, y: x & y,
+        [F.col(f"l.{name}").eqNullSafe(F.col(f"r.{name}")) for name in keys],
+    )
+    matched = F.col("_l").isNotNull() & F.col("_r").isNotNull()
+    counted = left.join(right, condition, "full_outer").agg(
+        F.sum(F.when(~matched, 1).otherwise(0)).alias("_unmatched"),
+        *[
+            F.sum(
+                F.when(
+                    matched
+                    & ~F.col(f"l.{name}").eqNullSafe(F.col(f"r.{name}")), 1
+                ).otherwise(0)
+            ).alias(name)
+            for name in values
+        ],
+    ).collect()[0].asDict()
+
+    parts: list[str] = []
+    unmatched = counted.pop("_unmatched") or 0
+    if unmatched:
+        parts.append(f"grain_only_on_one_side={unmatched}")
+    parts.extend(
+        f"{name}={count}"
+        for name, count in sorted(counted.items(), key=lambda kv: -(kv[1] or 0))
+        if count
+    )
+    return " · ".join(parts)
+
+
 EXPLORE_MIN_SAMPLE_SIZE = 100
 EXPLORE_SHARE_RANGE = (0.1, 0.3)
 
@@ -2577,26 +2631,37 @@ def validate_frames(
         "content_daily_kpi": (
             content_daily,
             _content_daily_kpi(content_interest, funnel_session, time_zone),
+            content_key,
         ),
         "content_conversion_daily": (
             content_conversion,
             _content_conversion_daily(content_interest, funnel_session, time_zone),
+            ["event_date_kst", "brand_id", "product_id", "content_kind",
+             *EXECUTION_AXES],
         ),
         "behavior_conversion_daily": (
             behavior_conversion,
             _behavior_conversion_daily(sessionized, funnel_session, time_zone),
+            ["event_date_kst", "brand_id", "product_id", "event_name",
+             *EXECUTION_AXES],
         ),
     }
-    for name, (stored, expected) in content_rebuilt.items():
+    for name, (stored, expected, grain) in content_rebuilt.items():
         columns = [c for c in stored.columns if c != "mart_processed_at"]
         difference = (
             expected.select(*columns).exceptAll(stored.select(*columns)).count()
             + stored.select(*columns).exceptAll(expected.select(*columns)).count()
         )
+        detail = f"differing_rows={difference}; mart_processed_at excluded"
+        if difference:
+            # 실패했을 때만 한 패스 더 쓴다. 통과하는 배치에 비용을 얹지 않는다.
+            where = _differing_columns(stored, expected, grain, columns)
+            if where:
+                detail = f"{detail}; {where}"
         checks.append(_check(
             f"{name}_is_deterministic_from_inputs",
             difference == 0,
-            f"differing_rows={difference}; mart_processed_at excluded",
+            detail,
         ))
 
     # ── E6 마찰·이탈·유입 Mart (dw-schema §4.21·§4.22·§4.23) ──────────────
