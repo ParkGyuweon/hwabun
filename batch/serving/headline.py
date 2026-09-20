@@ -50,7 +50,10 @@ JUDGEMENT = re.compile(
     r"|좋(다|습니다|고|은)|나쁘(다|고|습니다)|부족(하|합니다)|많(습니다|은 편)|적(습니다|은 편)"
     r"|올랐|떨어졌|늘었|줄었|개선|악화"
     r"|(한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇)\s?배|곱절|절반|갑절"
-    r"|배\s?(이상|가까이|넘게|가량))")
+    r"|배\s?(이상|가까이|넘게|가량)"
+    # 크기 부사도 같은 부류다. 입력이 "680건에서 4,163건으로 늘었습니다" 라고만 했는데
+    # 모델이 "크게 늘었습니다" 라고 쓴다. 숫자를 안 지어냈을 뿐 크기 판단은 입력이 안 한 말이다
+    r"|크게|훨씬|대폭|급격히|급증|급감|눈에 띄게|두드러지게|살짝|소폭)")
 
 
 # ── 입력 (§3) ──────────────────────────────────────────────────────────────
@@ -96,6 +99,7 @@ SYSTEM = """당신은 화장품 브랜드 대시보드의 화면 설명 한 줄�
 - 입력에 없는 숫자. 업계 평균, 경쟁사 수치, 벤치마크를 만들어 넣지 않는다.
 - 입력에 없는 비교·변화 판단. "늘었다", "줄었다", "높다", "낮다", "좋다" 는 입력의 비교 문장에 그 말이 있을 때만 쓴다. 값 하나만 받았으면 그 값이 큰지 작은지 말하지 않는다.
 - 두 숫자를 나눠 만든 크기 주장. "두 배", "절반", "배 이상" 같은 말은 입력 문장에 그대로 있을 때만 쓴다. 680 과 1,436 을 받았다고 "두 배" 라고 쓰지 않는다.
+- 크기를 재는 부사. "크게", "훨씬", "대폭", "급격히", "소폭" 도 입력 문장에 그대로 있을 때만 쓴다. 숫자 두 개를 보고 큰지 작은지 정하지 않는다.
 - 인과 단정. 같이 움직였다는 사실만 관찰됐다.
 
 문장 규칙
@@ -209,80 +213,102 @@ def topic_words(s: Section) -> set[str]:
     return out
 
 
-def check(out: dict, inp: HeadlineInput) -> tuple[list[str], list[str]]:
-    """(rejected_by, needs_evidence). rejected_by 가 비어 있으면 통과."""
+def _line_problems(sid: str, line: str, inp: HeadlineInput, said: str, names: set) -> tuple[list[str], list[str]]:
+    """한 줄만 본다. (그 줄의 거부 코드, 실증 필요 꼬리표)
+
+    **줄 단위로 보는 이유.** 전체를 이어 붙여 검사하면 한 줄의 낱말 하나 때문에 여섯 줄이
+    통째로 버려진다. 읽기 보조 문장에는 과한 벌이다 — 걸린 줄만 규칙 문장으로 바꾸면 된다.
+    """
+    out: list[str] = []
+    t = (line or "").strip()
+
+    hit_b, hit_f, hit_e = rx.claim_terms().scan(t, inp.brand.functional_certified)
+    if hit_b:
+        out.append(f"banned_term:{sid}:" + ",".join(hit_b[:3]))
+    if hit_f:
+        out.append(f"functional_only:{sid}:" + ",".join(hit_f[:3]))
+
+    bad_n = [n for n in _numbers_in(t) if n not in inp_numbers_cache(inp)]
+    if bad_n:
+        out.append(f"no_such_number:{sid}:" + ",".join(f"{n:g}" for n in bad_n[:3]))
+
+    # 한 줄에 걸린 말이 여럿일 수 있다. 첫 것만 보면 "…에서 늘었고 두 배 이상입니다" 처럼
+    # 앞의 정당한 말이 뒤의 지어낸 말을 가려 준다. 전부 본다.
+    bad_j = [m.group(0) for m in JUDGEMENT.finditer(t) if m.group(0) not in said]
+    if bad_j:
+        out.append(f"unsupported_comparison:{sid}:{bad_j[0]}")
+
+    m = IMPERATIVE.search(t)
+    if m:
+        out.append(f"imperative:{sid}:{m.group(0)}")
+
+    if len(t) > MAX_LINE_CHARS:
+        out.append(f"too_long:{sid}:{len(t)}")
+    elif len(re.split(r"(?<=[.!?])\s+", t)) > 1:
+        out.append(f"two_sentences:{sid}")
+
+    # 섹션 줄은 그 섹션 이야기를 해야 한다. 이름을 통째로 넣으라고 하면 표 제목을 그대로
+    # 베끼게 되니, 낱말 하나만 겹치면 통과시킨다. 화면 줄에는 적용하지 않는다
+    if names and not any(w in t for w in names):
+        out.append(f"off_topic:{sid}")
+
+    if "—" in t or "–" in t:
+        out.append(f"em_dash:{sid}")
+    return out, hit_e
+
+
+_num_cache: dict[int, set] = {}
+
+
+def inp_numbers_cache(inp: HeadlineInput) -> set:
+    """같은 입력으로 줄마다 다시 훑지 않는다"""
+    k = id(inp)
+    if k not in _num_cache:
+        _num_cache.clear()
+        _num_cache[k] = input_numbers(inp)
+    return _num_cache[k]
+
+
+def check_lines(out: dict, inp: HeadlineInput) -> tuple[list[str], list[str], dict]:
+    """(rejected_by, needs_evidence, 줄별 거부). 줄별 거부의 key 는 섹션 id 와 "__screen__"."""
     if not isinstance(out, dict) or set(out) != {"headline", "sections"}:
-        return ["shape"], []
+        return ["shape"], [], {}
     head, secs = out["headline"], out["sections"]
-    if not isinstance(head, str) or not isinstance(secs, list) \
-            or not all(isinstance(s, dict) and isinstance(s.get("id"), str) and isinstance(s.get("line"), str)
+    if not isinstance(head, str) or not isinstance(secs, list)             or not all(isinstance(s, dict) and isinstance(s.get("id"), str) and isinstance(s.get("line"), str)
                        for s in secs):
-        return ["shape"], []
+        return ["shape"], [], {}
 
     want = [s.id for s in inp.sections]
     got = [s["id"] for s in secs]
     if sorted(got) != sorted(want):
-        return ["section_mismatch:" + ",".join(sorted(set(want) ^ set(got))[:3])], []
+        return ["section_mismatch:" + ",".join(sorted(set(want) ^ set(got))[:3])], [], {}
 
-    fails: list[str] = []
     lines = {s["id"]: s["line"] for s in secs}
-    joined = " ".join([head] + list(lines.values()))
-
-    # 1·2·3 금지 표현 · 기능성 · 실증 필요 (처방과 같은 목록)
-    hit_b, hit_f, hit_e = rx.claim_terms().scan(joined, inp.brand.functional_certified)
-    if hit_b:
-        fails.append("banned_term:" + ",".join(hit_b[:3]))
-    if hit_f:
-        fails.append("functional_only:" + ",".join(hit_f[:3]))
-    needs_evidence = hit_e
-
-    # 4 없는 숫자
-    allowed = input_numbers(inp)
-    bad = [n for n in _numbers_in(joined) if n not in allowed]
-    if bad:
-        fails.append("no_such_number:" + ",".join(f"{n:g}" for n in bad[:3]))
-
-    # 5 없는 비교·변화 판단 — **그 섹션의** 비교 문장에 그 말이 있어야 한다.
-    # 섹션을 안 가르고 전체에서 찾으면, 옆 섹션이 "늘었습니다" 를 가졌다는 이유로
-    # 비교 문장이 없는 섹션까지 "늘었습니다" 를 쓸 수 있게 된다.
     all_said = " ".join(c for s in inp.sections for c in s.comparisons)
-    scoped = [(s.id, lines[s.id], " ".join(s.comparisons)) for s in inp.sections]
-    scoped.append(("__screen__", head, all_said))
-    # 한 줄에 걸린 말이 여럿일 수 있다. 첫 것만 보면 "…에서 늘었고 두 배 이상입니다" 처럼
-    # 앞의 정당한 말이 뒤의 지어낸 말을 가려 준다. 전부 본다.
-    for sid, line, said in scoped:
-        bad = [m.group(0) for m in JUDGEMENT.finditer(line) if m.group(0) not in said]
-        if bad:
-            fails.append(f"unsupported_comparison:{sid}:{bad[0]}")
-            break
 
-    # 6 지시문 금지 — 할 일은 처방 자리다
-    m = IMPERATIVE.search(joined)
-    if m:
-        fails.append("imperative:" + m.group(0))
-
-    # 7 한 줄 길이·문장 수 — 마침표는 끝에 하나뿐이어야 한 문장이다
-    for sid, line in list(lines.items()) + [("__screen__", head)]:
-        t = line.strip()
-        if len(t) > MAX_LINE_CHARS:
-            fails.append(f"too_long:{sid}:{len(t)}")
-            break
-        if len(re.split(r"(?<=[.!?])\s+", t)) > 1:
-            fails.append(f"two_sentences:{sid}")
-            break
-
-    # 8 섹션 줄은 그 섹션 이야기를 해야 한다.
-    # 이름을 통째로 넣으라고 하면 "상세페이지에서 오래 보는 곳은" 같은 표 제목을 그대로 베끼게 된다.
-    # 사람 말로 옮기라고 해 놓고 베끼기를 강요하는 꼴이라, 낱말 하나만 겹치면 통과시킨다.
+    per: dict = {}
+    fails: list[str] = []
+    needs: list[str] = []
     for s in inp.sections:
-        if not any(w in lines[s.id] for w in topic_words(s)):
-            fails.append("off_topic:" + s.id)
-            break
+        # 비교·변화 판단은 **그 섹션의** 문장 안에서만. 섹션을 안 가르면 옆 섹션이
+        # "늘었습니다" 를 가졌다는 이유로 비교 문장 없는 섹션까지 쓸 수 있게 된다
+        p, e = _line_problems(s.id, lines[s.id], inp, " ".join(s.comparisons), topic_words(s))
+        if p:
+            per[s.id] = p
+            fails += p
+        needs += e
+    p, e = _line_problems("__screen__", head, inp, all_said, set())
+    if p:
+        per["__screen__"] = p
+        fails += p
+    needs += e
+    return fails, list(dict.fromkeys(needs)), per
 
-    # 9 줄표
-    if "—" in joined or "–" in joined:
-        fails.append("em_dash")
-    return fails, needs_evidence
+
+def check(out: dict, inp: HeadlineInput) -> tuple[list[str], list[str]]:
+    """(rejected_by, needs_evidence). rejected_by 가 비어 있으면 통과."""
+    fails, needs, _ = check_lines(out, inp)
+    return fails, needs
 
 
 # ── 규칙 폴백 ──────────────────────────────────────────────────────────────
@@ -342,6 +368,7 @@ def envelope(inp: HeadlineInput, model, **extra) -> dict:
 
 
 def generate(inp: HeadlineInput, client, model=MODEL, temperature=0.0):
+    """(출력 dict 또는 None, 거부 코드, 실증 꼬리표, 원문, 줄별 거부)"""
     ids = [s.id for s in inp.sections]
     r = client.chat.completions.create(
         model=model, temperature=temperature,
@@ -352,9 +379,9 @@ def generate(inp: HeadlineInput, client, model=MODEL, temperature=0.0):
     try:
         out = json.loads(raw)
     except Exception:
-        return None, ["shape"], [], raw
-    fails, needs = check(out, inp)
-    return (out if not fails else None), fails, needs, raw
+        return None, ["shape"], [], raw, {}
+    fails, needs, per = check_lines(out, inp)
+    return out, fails, needs, raw, per
 
 
 def headline(inp: HeadlineInput, client, store: Optional[rx.Store], force=False, model=MODEL,
@@ -375,13 +402,29 @@ def headline(inp: HeadlineInput, client, store: Optional[rx.Store], force=False,
     if client is None:
         return envelope(inp, model, rejected_by=["llm_unavailable"],
                         **(dict(rule_lines(inp), origin="rule") if fallback else {}))
-    out, fails, needs, raw = generate(inp, client, model=model)
-    if out is not None:
+    out, fails, needs, raw, per = generate(inp, client, model=model)
+    if out is None or "shape" in fails or any(f.startswith("section_mismatch") for f in fails):
+        # 모양이 깨졌으면 줄을 고를 수가 없다. 통째로 규칙 문장
+        rec = envelope(inp, model, key=key, rejected_by=fails, needs_evidence=needs, raw=raw,
+                       **(dict(rule_lines(inp), origin="rule") if fallback else {}))
+    elif not fails:
         rec = envelope(inp, model, key=key, origin="llm", headline=out["headline"], sections=out["sections"],
                        rejected_by=[], needs_evidence=needs)
     else:
-        rec = envelope(inp, model, key=key, rejected_by=fails, needs_evidence=needs, raw=raw,
-                       **(dict(rule_lines(inp), origin="rule") if fallback else {}))
+        # **걸린 줄만 바꾼다.** 한 줄의 낱말 하나 때문에 멀쩡한 다섯 줄을 버리지 않는다.
+        rule = rule_lines(inp)
+        rule_by_id = {r["id"]: r["line"] for r in rule["sections"]}
+        llm_by_id = {r["id"]: r["line"] for r in out["sections"]}
+        sections = [{"id": sid,
+                     "line": (rule_by_id[sid] if sid in per else llm_by_id[sid]),
+                     "origin": ("rule" if sid in per else "llm")}
+                    for sid in (s.id for s in inp.sections)]
+        head = rule["headline"] if "__screen__" in per else out["headline"]
+        rec = envelope(inp, model, key=key, origin="mixed", headline=head, sections=sections,
+                       rejected_by=fails, needs_evidence=needs, raw=raw,
+                       headline_origin=("rule" if "__screen__" in per else "llm"))
+        if not fallback:
+            rec = envelope(inp, model, key=key, rejected_by=fails, needs_evidence=needs, raw=raw)
     if store is not None:
         store.put(rec)
     return rec
