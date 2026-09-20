@@ -1525,7 +1525,12 @@ def _content_daily_kpi(
     per_content = content.groupBy(*content_key).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.sum("view_count").cast("long").alias("section_view_count"),
-        F.countDistinct("session_id").cast("long").alias("section_view_sessions"),
+        # 조회가 있는 세션만 센다. 체류·드래그만 남기고 section_view 가 없는
+        # 세션까지 세면 section_view_sessions > section_view_count 가 되어
+        # "본 사람이 조회 수보다 많다" 가 나온다 (dw-schema.md §4.4).
+        F.countDistinct(
+            F.when(F.col("view_count") > 0, F.col("session_id"))
+        ).cast("long").alias("section_view_sessions"),
         # 합이 NULL 이 되는 경우(모든 입력이 NULL)를 0 으로 맞춘다. 체류 0 은
         # "머물지 않았다" 이지 "모른다" 가 아니라서 계약이 N 으로 선언했다.
         F.coalesce(F.sum("dwell_ms_sum"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
