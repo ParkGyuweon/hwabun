@@ -93,7 +93,12 @@ export default function ProductDetailPage({
 
   const stats = useMemo(() => calcReviewStats(reviews), [reviews]);
   // 카드에 적힌 숫자와 같은 값 (lib/reviewStore). 목록에서 본 건수와 상세가 다르면 안 된다
-  const reviewCount = displayReviewCount(product.product_id, product.review_count, useReviewCounts());
+  const catalogReviewCount = displayReviewCount(product.product_id, product.review_count, useReviewCounts());
+  /**
+   * 고객이 실제로 쓴 리뷰(백엔드)가 정적 표본 위에 더해지면 화면 목록이 카드 숫자보다 많아진다 (2026-09-21).
+   * 그때 "표시 중 1건 / 전체 0건" 처럼 적으면 거꾸로 읽힌다. 받은 것을 전부 그리고 있으면 총계는 목록 길이다.
+   */
+  const reviewCount = catalogReviewCount !== null && reviews.length >= catalogReviewCount ? null : catalogReviewCount;
   const ingredientCount = splitIngredients(product.ingredients).length;
 
   /** 추천 노출과 클릭을 같은 요청으로 묶는 식별자. 추천 API 가 붙으면 서버 발급값으로 교체한다 */

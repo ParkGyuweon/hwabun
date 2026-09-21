@@ -253,8 +253,17 @@ export default function App() {
     ensureBackendDetail(productId);
   }, [productId, products]);
 
+  /**
+   * 백엔드에 있는 상품이면 **source 와 상관없이** 실제 리뷰를 받는다 (2026-09-21).
+   *
+   * 전에는 `source === 'backend'` 일 때만 불렀다. 그런데 프론트가 정적으로 아는 208개(SSAFY Beauty 8 + 세포라 200)는
+   * `mergeWithLocal` 이 정적 사본의 `source`(seed_catalog)를 유지해서, 그 상품에 고객이 실제로 쓴 리뷰는
+   * 서버에 저장되고도 화면에 한 번도 뜨지 않았다 (배포본 SB000007: API 1건 · 화면 0건, 유림님 제보).
+   * "백엔드에 있는가" 는 `backend_brand_id` 가 말해 준다 (productRegistry 주석). 정적 세포라 리뷰는 그대로 두고 앞에 붙인다.
+   */
+  const inBackend = Boolean(product && (product.source === 'backend' || product.backend_brand_id));
   useEffect(() => {
-    if (!product || product.source !== 'backend') {
+    if (!product || !inBackend) {
       setBackendReviews([]);
       return;
     }
@@ -265,9 +274,16 @@ export default function App() {
     return () => {
       alive = false;
     };
-    // 상세가 늦게 도착하면 product 객체만 바뀌고 id 는 같다 — 그때 리뷰를 다시 부르지 않는다
+    // 상세가 늦게 도착하면 product 객체만 바뀌고 id 는 같다 — 그때 리뷰를 다시 부르지 않는다.
+    // 백엔드 목록이 늦게 와서 inBackend 가 false → true 로 바뀌면 그때 한 번 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.product_id, product?.source]);
+  }, [product?.product_id, inBackend]);
+
+  /** 화면에 그리는 리뷰. 고객이 실제로 쓴 것(최신순)을 앞에, 정적 세포라 표본을 뒤에 */
+  const shownReviews = useMemo(
+    () => (product?.source === 'backend' ? backendReviews : backendReviews.length > 0 ? [...backendReviews, ...productReviews] : productReviews),
+    [product?.source, backendReviews, productReviews],
+  );
 
   /**
    * 장바구니에 담긴 상품. 추천 자리에서 뺀다.
@@ -969,7 +985,7 @@ export default function App() {
           {preview ? null : <Breadcrumb items={product.category} onHome={goHome} />}
           <ProductDetailPage
             product={product}
-            reviews={product?.source === 'backend' ? backendReviews : productReviews}
+            reviews={shownReviews}
             authorReviewCounts={authorReviewCounts}
             similar={similar}
             persona={persona}
