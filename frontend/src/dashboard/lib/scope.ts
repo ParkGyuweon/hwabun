@@ -22,7 +22,7 @@ export const SCOPE_LABEL: Record<ScopeKind, { brand: string; what: string; sourc
   behavior: {
     brand: '',
     what: '고객 행동 기록',
-    source: '내 브랜드 고객이 쇼핑몰에서 한 행동',
+    source: '내 고객의 쇼핑몰 행동',
   },
   feedback: {
     brand: '',

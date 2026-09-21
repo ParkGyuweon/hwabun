@@ -61,16 +61,22 @@ function CohortBadge({ cohort }: { cohort: CohortM }) {
     return (
       <section className="cohort cohort--suppressed" aria-label="비슷한 브랜드와 비교">
         <p className="cohort__eyebrow">비슷한 브랜드와 비교 · {week}</p>
-        <p className="cohort__line">
-          <strong>표본 부족</strong> · 나와 비슷한 브랜드({group})가 아직 5곳이 안 되거나 한 브랜드에 치우쳐 있어 비교 숫자를 내지 않습니다.
+        <p className="cohort__line" title={`비슷한 브랜드(${group})가 5곳 미만이거나 한 곳에 치우쳐 숫자를 내지 않습니다. 다른 브랜드 이름·숫자는 보이지 않습니다`}>
+          <strong>표본 부족</strong> · 비슷한 브랜드가 아직 5곳 미만
         </p>
-        <p className="note">비슷한 브랜드가 더 모이면 여기에 내 위치가 보입니다. 다른 브랜드의 이름이나 숫자는 어디에도 보이지 않습니다.</p>
       </section>
     );
   }
   return (
     <section className={`cohort${cohort.sampleSufficient ? '' : ' is-thin'}`} aria-label="비슷한 브랜드와 비교">
-      <p className="cohort__eyebrow">
+      <p
+        className="cohort__eyebrow"
+        title={
+          cohort.sampleSufficient
+            ? '중간값 = 비슷한 브랜드를 한 줄로 세웠을 때 가운데 값. 다른 브랜드 이름·개별 숫자는 보이지 않습니다'
+            : '이 주는 비슷한 브랜드의 방문이 적어 참고만 해 주세요. 다른 브랜드 이름·개별 숫자는 보이지 않습니다'
+        }
+      >
         비슷한 브랜드 {fmt.int(cohort.brandCount)}곳과 비교 · {group} · {week}
       </p>
       <ul className="cohort__metrics">
@@ -88,11 +94,6 @@ function CohortBadge({ cohort }: { cohort: CohortM }) {
           );
         })}
       </ul>
-      <p className="note">
-        {cohort.sampleSufficient
-          ? '중간값은 비슷한 브랜드들을 한 줄로 세웠을 때 가운데 브랜드의 값입니다. 다른 브랜드의 이름이나 개별 숫자는 보이지 않습니다.'
-          : '이 주에는 비슷한 브랜드들의 방문이 적어 참고만 해 주세요. 다른 브랜드의 이름이나 개별 숫자는 보이지 않습니다.'}
-      </p>
     </section>
   );
 }
@@ -140,57 +141,47 @@ export default function SegmentsScreen() {
           <Kpi
             label="가장 많이 담는 고객군"
             value={cellName(best.type, best.tone)}
-            sub={`상세를 본 방문 ${fmt.int(best.sessions)}건 중 ${fmt.pct(best.cartRate)}가 담았습니다`}
+            sub={`상세 ${fmt.int(best.sessions)}건 중 ${fmt.pct(best.cartRate)}`}
             source="real"
           />
         ) : bestType ? (
           <Kpi
             label="가장 많이 담는 피부 타입"
             value={SKIN_TYPE_KO[bestType.type] ?? bestType.type}
-            sub={`상세를 본 방문 ${fmt.int(bestType.sessions)}건 중 ${fmt.pct(bestType.cartRate)}가 담았습니다 · 피부 톤까지 나눈 표는 준비 중`}
+            sub={`${fmt.int(bestType.sessions)}건 중 ${fmt.pct(bestType.cartRate)} · 톤 표 준비 중`}
             source="real"
           />
         ) : best ? (
           <Kpi
             label="가장 많이 담는 고객군"
             value={cellName(best.type, best.tone)}
-            sub={`상세를 본 방문 ${fmt.int(best.sessions)}건 중 ${fmt.pct(best.cartRate)}가 담았습니다`}
+            sub={`상세 ${fmt.int(best.sessions)}건 중 ${fmt.pct(best.cartRate)}`}
             source="none"
           />
         ) : (
           <Kpi
             label="가장 많이 담는 고객군"
             value="-"
-            sub={
-              noSegments
-                ? '고객군별 기록을 아직 받지 못했습니다'
-                : shown.length > 0
-                  ? `방문 ${MIN_CELL_VISITS}건이 넘는 고객군 중 장바구니에 담은 고객이 아직 없습니다`
-                  : `방문 ${MIN_CELL_VISITS}건이 넘는 고객군이 아직 없어 판단하지 않습니다`
-            }
+            sub={noSegments ? '아직 기록 없음' : shown.length > 0 ? '담은 고객 아직 없음' : `방문 ${MIN_CELL_VISITS}건 넘는 칸 없음`}
             source={source.grid}
           />
         )}
         <Kpi
           label="내 피부 타입 리뷰만 골라 본 고객"
           value={fmt.pct(sameSkinFilterRate)}
-          sub={sameSkinFilterRate === 0 ? '리뷰를 걸러 본 기록이 아직 없습니다' : "리뷰를 걸러 본 방문 중 '나와 같은 피부 타입'을 고른 비율"}
+          sub={sameSkinFilterRate === 0 ? '아직 기록 없음' : '리뷰 걸러 본 방문 중'}
           source={source.behaviors}
         />
-        <Kpi label="고객군을 나누는 기준" value="4 × 5" sub="피부 타입 4가지 × 피부 톤 5단계 = 20칸" source="real" />
+        <Kpi label="고객군을 나누는 기준" value="4 × 5" sub="피부 타입 4 × 피부 톤 5" source="real" />
       </div>
 
       <Panel
         title="피부 타입 × 피부 톤 · 장바구니에 담은 비율"
         source={source.grid}
-        aside={`방문 ${MIN_CELL_VISITS}건 미만인 칸은 비움 · ${THIN_VISITS}건 미만은 흐림`}
+        aside={`${MIN_CELL_VISITS}건 미만 비움 · ${THIN_VISITS}건 미만 흐림`}
       >
         {segmentMatrix.length === 0 ? (
-          <p className="note">
-            {noSegments
-              ? '고객군별 기록을 아직 받지 못했습니다. 피부 정보를 등록한 고객이 내 상품 상세를 보면 여기에 칸이 채워집니다.'
-              : '피부 타입과 톤까지 나눈 표는 계산이 아직 준비되지 않았습니다. 준비되면 자동으로 채워집니다.'}
-          </p>
+          <p className="note">{noSegments ? '아직 기록이 없습니다' : '계산 준비 중입니다'}</p>
         ) : (
           <Heatmap
             rows={segmentMatrix.map((r) => ({ key: r.type, label: SKIN_TYPE_KO[r.type] }))}
@@ -205,17 +196,14 @@ export default function SegmentsScreen() {
             }}
           />
         )}
-        <p className="note">
-          칸의 숫자는 그 고객군이 상세를 본 뒤 장바구니에 담은 비율입니다. 복합성 고객은 피부 타입보다 피부 톤에 따라 반응이 더 갈리는
-          편이라, 복합성 행은 톤 칸끼리 비교하세요. 비어 있는 칸은 방문이 {MIN_CELL_VISITS}건이 안 돼 아직 판단하기 이릅니다.
-        </p>
+        <p className="note">복합성 행은 톤끼리 비교하세요</p>
         {source.segments === 'real' && segmentByType && segmentByType.length > 0 ? (
           <table className="table">
             <thead>
               <tr>
-                <th>피부 타입만으로 나눔</th>
-                <th>상세를 본 방문</th>
-                <th>담은 비율</th>
+                <th title="피부 타입만으로 나눈 값">피부 타입</th>
+                <th>상세 방문</th>
+                <th title="상세를 본 뒤 담은 비율">담기</th>
               </tr>
             </thead>
             <tbody>
@@ -236,25 +224,21 @@ export default function SegmentsScreen() {
       <Panel
         title="가격대별 반응"
         source={source.priceBands}
-        aside={bandBest ? `가장 잘 담는 가격대: ${priceBinKo(bandBest.bin)} · ${fmt.pct(bandBest.cartRate ?? 0)}` : '내 상품을 가격대로 나눠 본 것'}
+        aside={bandBest ? `최고 ${priceBinKo(bandBest.bin)} · ${fmt.pct(bandBest.cartRate ?? 0)}` : '내 상품을 가격대로 나눔'}
       >
         {bandRows.length === 0 ? (
-          <p className="note">
-            {source.priceBands === 'none'
-              ? '가격대별 기록은 계산이 아직 준비되지 않았습니다. 준비되면 자동으로 채워집니다.'
-              : '이 기간에 가격대별로 셀 기록이 아직 없습니다. 고객이 내 상품 상세를 보면 채워집니다.'}
-          </p>
+          <p className="note">{source.priceBands === 'none' ? '계산 준비 중입니다' : '아직 기록이 없습니다'}</p>
         ) : (
           <>
             <table className="table">
               <thead>
                 <tr>
-                  <th>가격대</th>
+                  <th title="'가격 미입력'은 가격이 등록되지 않은 상품">가격대</th>
                   <th>내 상품</th>
-                  <th>상세를 본 방문</th>
-                  <th>상세까지 들어온 비율</th>
-                  <th>담은 비율</th>
-                  <th>구매한 비율</th>
+                  <th title="한 고객이 여러 가격대를 보면 가격대마다 한 번씩 셉니다. 더해서 전체 방문으로 읽지 마세요">상세 방문</th>
+                  <th title="상품을 보고 상세까지 들어온 비율">상세 진입</th>
+                  <th title="상세를 본 뒤 담은 비율">담기</th>
+                  <th title="상세를 본 뒤 구매한 비율">구매</th>
                 </tr>
               </thead>
               <tbody>
@@ -262,7 +246,7 @@ export default function SegmentsScreen() {
                   <tr
                     key={b.bin ?? 'null'}
                     className={b.sessions < THIN_VISITS ? 'is-thin' : ''}
-                    title={b.sessions < THIN_VISITS ? `상세를 본 방문 ${fmt.int(b.sessions)}건 · ${THIN_VISITS}건이 안 돼 참고만 해 주세요` : undefined}
+                    title={b.sessions < THIN_VISITS ? `방문 ${THIN_VISITS}건 미만 · 참고만` : undefined}
                   >
                     <td>{priceBinKo(b.bin)}</td>
                     <td>{fmt.int(b.productCount)}개</td>
@@ -276,11 +260,6 @@ export default function SegmentsScreen() {
                 ))}
               </tbody>
             </table>
-            <p className="note">
-              내 상품을 가격대로 나눠, 각 가격대 상품의 상세를 본 고객 중 장바구니에 담거나 구매한 비율입니다. 한 고객이 여러 가격대 상품을 보면
-              가격대마다 한 번씩 세므로 방문 수를 더해 전체 방문으로 읽지 마세요. 흐린 줄은 방문이 {THIN_VISITS}건이 안 돼 참고만 해 주세요.
-              {bandRows.some((b) => b.bin === null) ? ' "가격 미입력"은 가격이 등록되지 않은 상품들의 반응입니다.' : ''}
-            </p>
           </>
         )}
       </Panel>
@@ -288,50 +267,39 @@ export default function SegmentsScreen() {
       <Panel
         title="피부 타입 × 가격대 · 장바구니에 담은 비율"
         source={source.segmentPriceGrid}
-        aside={`방문 ${MIN_CELL_VISITS}건 미만인 칸은 비움 · ${THIN_VISITS}건 미만은 흐림`}
+        aside={
+          <span title={`방문 ${MIN_CELL_VISITS}건 미만 칸은 비움 · ${THIN_VISITS}건 미만은 흐림`}>
+            {priceGridFilled}/20칸 · {MIN_CELL_VISITS}건 미만 비움
+          </span>
+        }
       >
         {segmentPriceGrid.length === 0 ? (
-          <p className="note">
-            {source.segmentPriceGrid === 'none'
-              ? '피부 타입과 가격대를 함께 나눈 표는 계산이 아직 준비되지 않았습니다. 준비되면 자동으로 채워집니다.'
-              : '이 기간에 피부 타입과 가격대로 나눠 셀 기록이 아직 없습니다.'}
-          </p>
+          <p className="note">{source.segmentPriceGrid === 'none' ? '계산 준비 중입니다' : '아직 기록이 없습니다'}</p>
         ) : (
-          <>
-            <Heatmap
-              rows={segmentPriceGrid.map((r) => ({ key: r.type, label: SKIN_TYPE_KO[r.type] ?? r.type }))}
-              cols={PRICE_BIN_ORDER.map((b) => ({ key: b, label: priceBinKo(b) }))}
-              cells={priceCells}
-              format={(v) => fmt.pct(v)}
-            />
-            <p className="note">
-              {priceGridFilled === 0
-                ? `20칸 중 방문 ${MIN_CELL_VISITS}건이 넘는 칸이 아직 없습니다. 피부 정보를 등록한 고객이 더 다녀가면 채워집니다.`
-                : priceGridFilled < 8
-                  ? `20칸 중 ${priceGridFilled}칸만 찼습니다. 피부 정보를 등록한 고객이 아직 일부 타입에 몰려 있어 비어 있는 칸이 많은 것이 정상입니다.`
-                  : '어느 피부 타입 고객이 어느 가격대에서 잘 담는지 봅니다. 비어 있는 칸은 방문이 적어 아직 판단하기 이릅니다.'}
-            </p>
-          </>
+          <Heatmap
+            rows={segmentPriceGrid.map((r) => ({ key: r.type, label: SKIN_TYPE_KO[r.type] ?? r.type }))}
+            cols={PRICE_BIN_ORDER.map((b) => ({ key: b, label: priceBinKo(b) }))}
+            cells={priceCells}
+            format={(v) => fmt.pct(v)}
+          />
         )}
       </Panel>
 
-      <Panel title="고객군별 가장 오래 본 글" source={source.topContent} fold aside="'무엇을 보고 사나' 화면을 고객군별로 나눈 것">
+      <Panel title="고객군별 가장 오래 본 글" source={source.topContent} fold aside="고객군별로 나눠 봄">
         <table className="table">
           <thead>
             <tr>
               <th>고객군</th>
               <th>가장 오래 본 글</th>
               <th>그다음</th>
-              <th>가장 오래 본 글에 쓴 시간 비중</th>
+              <th title="그 고객군이 글을 읽은 전체 시간 중 가장 오래 본 글에 쓴 몫">시간 비중</th>
             </tr>
           </thead>
           <tbody>
             {segmentTopContent.length === 0 ? (
               <tr>
                 <td colSpan={4} className="note">
-                  {noSegments
-                    ? '고객군별 기록을 아직 받지 못했습니다. 피부 정보를 등록한 고객이 상세페이지 글을 읽으면 채워집니다.'
-                    : '고객군별로 어떤 글을 오래 봤는지 계산이 아직 준비되지 않았습니다. 준비되면 자동으로 채워집니다.'}
+                  {noSegments ? '아직 기록이 없습니다' : '계산 준비 중입니다'}
                 </td>
               </tr>
             ) : null}
@@ -347,10 +315,7 @@ export default function SegmentsScreen() {
             ))}
           </tbody>
         </table>
-        <p className="note">
-          시간 비중은 그 고객군이 상세페이지 글을 읽은 전체 시간 중 가장 오래 본 글에 쓴 몫입니다. 고객군마다 오래 보는 글이 다르면,
-          고객군별로 다른 상세페이지·광고 문구를 쓸 근거가 됩니다.
-        </p>
+        <p className="note">고객군마다 다르면 문구를 나눠 쓰세요</p>
       </Panel>
     </div>
   );

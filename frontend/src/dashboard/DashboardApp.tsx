@@ -63,47 +63,47 @@ interface ScreenDef {
 const SCREENS: Record<ScreenKey, ScreenDef> = {
   overview: {
     section: 'overview', tab: '요약', scope: 'behavior',
-    title: '지금 손봐야 할 것', desc: '오늘 하나만 고친다면 이것입니다',
+    title: '지금 손봐야 할 것', desc: '오늘 고칠 것 하나',
   },
   content: {
     section: 'detail', tab: '무엇을 보고 사나', scope: 'behavior',
-    title: '무엇을 보고 사나', desc: '상세페이지의 어떤 글이 고객을 담게 만드나',
+    title: '무엇을 보고 사나', desc: '담게 만드는 설명 글',
   },
   behavior: {
     section: 'detail', tab: '어디서 막히나', scope: 'behavior',
-    title: '막히는 곳', desc: '고객이 화면에서 헤매는 자리 · 상품이 싫다는 뜻이 아닙니다',
+    title: '막히는 곳', desc: '고객이 헤매는 자리',
   },
   products: {
     section: 'products', tab: '상품', scope: 'behavior',
-    title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점',
+    title: '상품마다 어디서 멈추나', desc: '상품별 이탈 지점',
   },
   orders: {
     section: 'orders', tab: '주문', scope: 'feedback',
-    title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 주문 기록 그대로',
+    title: '무엇이 팔렸나', desc: '결제 완료된 주문',
   },
   settlement: {
     section: 'orders', tab: '정산', scope: 'feedback',
-    title: '얼마를 받나', desc: '월별 정산 · 결제 완료 주문의 합 · 수수료 0%',
+    title: '얼마를 받나', desc: '월별 정산 · 수수료 0%',
   },
   segments: {
     section: 'customers', tab: '고객군', scope: 'behavior',
-    title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지',
+    title: '누가 사나', desc: '피부 타입·톤별 담기',
   },
   reviews: {
     section: 'voice', tab: '공개 리뷰', scope: 'behavior',
-    title: '공개 리뷰', desc: '피부 타입에 따라 갈리는 평가와 자극 언급',
+    title: '공개 리뷰', desc: '피부 타입별 평가',
   },
   feedback: {
     section: 'voice', tab: '받은 피드백', scope: 'feedback',
-    title: '고객이 고쳐 달라는 것', desc: '고객이 직접 고른 항목과 그 안의 이유',
+    title: '고객이 고쳐 달라는 것', desc: '고객이 고른 개선점',
   },
   ingredients: {
     section: 'market', tab: '성분', scope: 'behavior',
-    title: '고객이 찾는 성분', desc: '많이 찾는데 내 상품에는 없는 성분',
+    title: '고객이 찾는 성분', desc: '찾는데 내 상품엔 없는 성분',
   },
   register: {
     section: 'register', tab: '상품 등록', scope: 'feedback',
-    title: '상품 등록', desc: '입력하면 고객 화면 그대로 미리보기',
+    title: '상품 등록', desc: '고객 화면 미리보기',
   },
 };
 
@@ -237,7 +237,7 @@ export default function DashboardApp() {
         ) : null}
         {brands.kind === 'unavailable' ? (
           <p className="sidebar__brand-note">
-            {brands.reason === 'server' ? '연결이 끊겨 내 브랜드를 불러오지 못했습니다. 잠시 후 새로 고쳐 주세요' : '로그인이 만료되었습니다. 다시 로그인해 주세요'}
+            {brands.reason === 'server' ? '브랜드를 못 불러왔습니다' : '다시 로그인해 주세요'}
           </p>
         ) : null}
 
@@ -273,7 +273,7 @@ export default function DashboardApp() {
         {/* 공통 쇼핑몰 바로가기. 진열은 브랜드가 고르지 않는다 — 몰이 하나다 */}
         <div className="sidebar__shop">
           <p className="sidebar__shop-label">고객이 보는 곳</p>
-          <p className="sidebar__shop-state">HWABUN 통합 쇼핑몰 · 내 상품이 함께 진열됩니다</p>
+          <p className="sidebar__shop-state">HWABUN 통합 쇼핑몰</p>
           <div className="sidebar__shop-actions">
             <a className="sidebar__settings" href="/" target="_blank" rel="noopener">
               쇼핑몰 보기 ↗
@@ -386,7 +386,7 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
   const live = scope === 'behavior' && anyReal;
   // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다 (피드백 스코프도 2026-09-18 부터)
   const brand = brandName ?? (label.brand || '브랜드 확인 중');
-  const source = live ? '내 쇼핑몰에서 실제로 생긴 기록' : label.source;
+  const source = live ? '내 쇼핑몰 실제 기록' : label.source;
   return (
     <p className="main__scope" title={source}>
       <span className="main__scope-what">{label.what}</span>
@@ -401,11 +401,11 @@ function MartNote() {
   const state = useMartState();
   const { anyReal, martProcessedAt } = useBehavior();
   let line: string;
-  if (state === 'idle') line = '브랜드가 정해지면 고객 행동 기록을 불러옵니다';
-  else if (state === 'loading') line = '고객 행동 기록을 불러오는 중입니다';
-  else if (anyReal) line = martProcessedAt ? `데이터 기준: ${fmtProcessedAt(martProcessedAt)}` : '고객 행동 기록을 불러왔습니다';
-  else if (state === 'ready') line = '이 기간에는 내 브랜드 고객 행동 기록이 아직 없어 행동 숫자가 0으로 보입니다. 고객이 상품을 보기 시작하면 채워집니다';
-  else line = '고객 행동 기록을 불러오지 못해 행동 숫자가 0으로 보입니다. 주문·리뷰·성분은 정상입니다';
+  if (state === 'idle') line = '브랜드를 고르면 불러옵니다';
+  else if (state === 'loading') line = '행동 기록을 불러오는 중';
+  else if (anyReal) line = martProcessedAt ? `데이터 기준: ${fmtProcessedAt(martProcessedAt)}` : '행동 기록을 불러왔습니다';
+  else if (state === 'ready') line = '이 기간 행동 기록이 없습니다';
+  else line = '행동 기록을 못 불러왔습니다';
   return (
     <p>
       <span className="sidebar__mart">

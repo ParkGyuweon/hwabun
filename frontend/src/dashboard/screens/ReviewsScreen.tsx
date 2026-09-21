@@ -96,16 +96,16 @@ export default function ReviewsScreen({
   if (brandId === null || mine === null || mine.length === 0 || reviews === null) {
     const why =
       brandId === null
-        ? '판매자로 로그인하면 내 상품에 달린 리뷰가 여기 보입니다.'
+        ? '판매자로 로그인해 주세요'
         : failed
-          ? '상품 목록을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
+          ? '불러오지 못했습니다. 다시 열어 주세요'
           : mine === null
-            ? '상품 목록을 받는 중입니다.'
+            ? '불러오는 중'
             : read === null
-              ? '리뷰를 받는 중입니다.'
+              ? '불러오는 중'
               : read.kind === 'unavailable'
-                ? '리뷰를 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
-                : '등록한 상품이 없습니다. 상품을 등록하고 고객이 리뷰를 남기면 여기 모입니다.';
+                ? '불러오지 못했습니다. 다시 열어 주세요'
+                : '등록한 상품이 없습니다';
     return (
       <div className="stack">
         <Panel title="공개 리뷰" source="real">
@@ -134,10 +134,7 @@ export default function ReviewsScreen({
           </select>
         </label>
         <p className="scope__meta">
-          리뷰 {fmt.int(stats.sampleSize)}건 · 그중 글을 쓴 리뷰 {fmt.int(stats.withText)}건
-        </p>
-        <p className="scope__note">
-          {stats.sampleSize === 0 ? '이 상품에는 리뷰가 아직 없습니다.' : '내 상품에 달린 리뷰만 셉니다. 건수가 적으면 비율은 참고만 하세요.'}
+          리뷰 {fmt.int(stats.sampleSize)}건 · 글 있는 리뷰 {fmt.int(stats.withText)}건
         </p>
       </div>
 
@@ -145,25 +142,25 @@ export default function ReviewsScreen({
         <Kpi
           label="평균 평점"
           value={stats.sampleSize === 0 ? '-' : stats.avgRating.toFixed(2)}
-          sub={stats.sampleSize === 0 ? '아직 리뷰가 없어 낼 수 없습니다' : `리뷰 ${fmt.int(stats.sampleSize)}건의 평균 (5점 만점)`}
+          sub={stats.sampleSize === 0 ? '리뷰 없음' : '5점 만점'}
           source="real"
         />
         <Kpi
           label="추천 비율"
           value={stats.sampleSize === 0 ? '-' : fmt.pct(stats.recommendRate)}
-          sub={stats.sampleSize === 0 ? '아직 리뷰가 없어 낼 수 없습니다' : '"추천해요" 에 표시한 리뷰의 비율'}
+          sub={stats.sampleSize === 0 ? '리뷰 없음' : '"추천해요" 표시 비율'}
           source="real"
         />
         <Kpi
           label="자극 언급"
           value={stats.withText === 0 ? '-' : fmt.pct(stats.irritationRate)}
-          sub={stats.withText === 0 ? '글을 쓴 리뷰가 없어 낼 수 없습니다' : '따가움·화끈거림·가려움 같은 말이 든 리뷰의 비율'}
+          sub={stats.withText === 0 ? '글 있는 리뷰 없음' : '따가움·가려움 등 언급'}
           source="real"
         />
         <Kpi
           label="트러블 언급"
           value={stats.withText === 0 ? '-' : fmt.pct(stats.troubleRate)}
-          sub={stats.withText === 0 ? '글을 쓴 리뷰가 없어 낼 수 없습니다' : '뾰루지·붉어짐 같은 말이 든 리뷰의 비율'}
+          sub={stats.withText === 0 ? '글 있는 리뷰 없음' : '뾰루지·붉어짐 등 언급'}
           source="real"
         />
       </div>
@@ -175,9 +172,7 @@ export default function ReviewsScreen({
       >
         {scoped.length === 0 ? (
           <p className="note">
-            {productId
-              ? '이 상품에 달린 리뷰가 아직 없습니다. 고객이 리뷰를 남기면 여기 보입니다.'
-              : '내 상품에 달린 리뷰가 아직 없습니다. 고객이 리뷰를 남기면 여기 보입니다.'}
+            {productId ? '이 상품에는 아직 리뷰가 없습니다' : '아직 리뷰가 없습니다'}
           </p>
         ) : (
           <>
@@ -206,11 +201,11 @@ export default function ReviewsScreen({
                       {r.is_recommended === true ? <span className="reviews__tag">추천</span> : null}
                       {r.is_recommended === false ? <span className="reviews__tag reviews__tag--no">비추천</span> : null}
                       {r.skin_type ? <span className="reviews__tag">{SKIN_TYPE_KO[r.skin_type] ?? r.skin_type}</span> : null}
-                      {r.is_purchaser ? <span className="reviews__tag" title="이 상품을 결제한 고객이 쓴 리뷰입니다">구매 고객</span> : null}
+                      {r.is_purchaser ? <span className="reviews__tag" title="이 상품을 결제한 고객">구매 고객</span> : null}
                       <span className="reviews__when">{r.submission_date ?? ''}</span>
                     </div>
                     {r.review_title ? <p className="reviews__title">{r.review_title}</p> : null}
-                    <p className="reviews__body">{r.review_text?.trim() ? r.review_text : '(본문 없이 별점만 남겼습니다)'}</p>
+                    <p className="reviews__body">{r.review_text?.trim() ? r.review_text : '(별점만 남김)'}</p>
                   </li>
                 );
               })}
@@ -224,9 +219,9 @@ export default function ReviewsScreen({
         )}
       </Panel>
 
-      <Panel title="상품별 리뷰 요약" source="real" aside="리뷰 많은 순 · 상품을 누르면 그 상품 리뷰만 봅니다">
+      <Panel title="상품별 리뷰 요약" source="real" aside="리뷰 많은 순 · 눌러서 보기">
         {byProduct.length === 0 ? (
-          <p className="note">아직 리뷰가 달린 상품이 없습니다. 고객이 리뷰를 남기면 상품별로 여기 정리됩니다.</p>
+          <p className="note">아직 리뷰가 없습니다</p>
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -236,8 +231,8 @@ export default function ReviewsScreen({
                   <th>리뷰 수</th>
                   <th>평균 평점</th>
                   <th>추천 비율</th>
-                  <th>자극 언급</th>
-                  <th>트러블 언급</th>
+                  <th title="리뷰 글에 따가움·가려움 같은 낱말이 있는 비율 · 영어 리뷰만">자극 언급</th>
+                  <th title="리뷰 글에 뾰루지·붉어짐 같은 낱말이 있는 비율 · 영어 리뷰만">트러블 언급</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,10 +260,6 @@ export default function ReviewsScreen({
             </table>
           </div>
         )}
-        <p className="note">
-          자극·트러블 언급은 리뷰 글에 그런 낱말이 있는지만 봅니다. 지금은 영어로 쓴 리뷰에서만 찾고, 한국어 리뷰는 아직 세지
-          않습니다. "글 없음" 은 별점만 남기고 글은 안 쓴 리뷰뿐이라는 뜻입니다.
-        </p>
       </Panel>
 
       {hi && lo && split >= 0.5 ? (
@@ -281,39 +272,34 @@ export default function ReviewsScreen({
           </h2>
           <ul className="verdict__reasons">
             <li>
-              {SKIN_TYPE_KO[hi.type]} 고객 리뷰 {hi.n}건, {SKIN_TYPE_KO[lo.type]} 고객 리뷰 {lo.n}건. 평점 차이 {split.toFixed(1)}점
+              {SKIN_TYPE_KO[hi.type]} 리뷰 {hi.n}건 · {SKIN_TYPE_KO[lo.type]} 리뷰 {lo.n}건 · 차이 {split.toFixed(1)}점
             </li>
             {lo.irritationRate > hi.irritationRate + 0.05 ? (
               <li>
-                {SKIN_TYPE_KO[lo.type]} 고객 리뷰 중 자극을 말한 비율 {fmt.pct(lo.irritationRate, 0)} · {SKIN_TYPE_KO[hi.type]} 고객은{' '}
-                {fmt.pct(hi.irritationRate, 0)}
+                자극 언급 {SKIN_TYPE_KO[lo.type]} {fmt.pct(lo.irritationRate, 0)} · {SKIN_TYPE_KO[hi.type]} {fmt.pct(hi.irritationRate, 0)}
               </li>
             ) : null}
           </ul>
           <p className="verdict__action">
             <span className="verdict__unit">홍보 문구</span>
-            홍보 문구와 리뷰 정렬을 {SKIN_TYPE_KO[hi.type]} 고객 기준으로 두고, {SKIN_TYPE_KO[lo.type]} 고객에게는 사용 주의 안내를
-            붙이세요
+            {SKIN_TYPE_KO[hi.type]} 기준으로 쓰고, {SKIN_TYPE_KO[lo.type]}에는 주의 안내
           </p>
-          <p className="verdict__sample">리뷰 {fmt.int(stats.sampleSize)}건을 보고 낸 결론입니다</p>
+          <p className="verdict__sample">리뷰 {fmt.int(stats.sampleSize)}건 기준</p>
         </section>
       ) : null}
 
       <div className="grid grid--2">
         <Panel title={`평점 분포 · ${scopeLabel}`} source="real">
           {stats.sampleSize === 0 ? (
-            <p className="note">아직 리뷰가 없어 별점 분포를 그릴 수 없습니다.</p>
+            <p className="note">아직 리뷰가 없습니다</p>
           ) : (
             <BarList items={stats.ratingDist.map((count, i) => ({ label: `${i + 1}점`, value: count })).reverse()} />
           )}
         </Panel>
 
-        <Panel title="리뷰에 자주 나오는 이야기" source="real" aside="리뷰 글에 그 낱말이 있는지만 봅니다">
+        <Panel title="리뷰에 자주 나오는 이야기" source="real" aside="영어 리뷰 글 기준">
           {stats.withText === 0 || stats.factors.every((f) => f.count === 0) ? (
-            <p className="note">
-              리뷰 글에서 보습감·향·발림성 같은 표현을 찾지 못했습니다. 지금은 영어로 쓴 리뷰에서만 찾고, 한국어 리뷰는 아직 세지
-              않습니다.
-            </p>
+            <p className="note">찾은 표현이 없습니다</p>
           ) : (
             <BarList
               items={stats.factors.map((f) => ({
@@ -329,21 +315,18 @@ export default function ReviewsScreen({
       <Panel
         title="피부 타입별 평점 · 자극 언급"
         source={hasSkinType ? 'real' : 'none'}
-        aside={hasSkinType ? '리뷰 20건 미만인 타입은 흐리게 · 참고만' : '기록 없음'}
+        aside={hasSkinType ? '20건 미만은 흐리게' : '기록 없음'}
       >
         {!hasSkinType ? (
-          <p className="note">
-            리뷰를 남긴 고객 중 피부 타입을 알려 준 사람이 아직 없어 표를 만들 수 없습니다. 고객이 회원 정보에 피부 타입을
-            넣고 리뷰를 남기면 채워집니다.
-          </p>
+          <p className="note">피부 타입을 알려 준 고객이 아직 없습니다</p>
         ) : bySkin.length === 0 ? (
-          <p className="note">이 상품 리뷰에는 피부 타입이 기록된 것이 아직 없습니다.</p>
+          <p className="note">피부 타입 기록이 없습니다</p>
         ) : (
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
-                  <th>고객 피부 타입</th>
+                  <th>피부 타입</th>
                   <th>평균 평점</th>
                   <th>자극 언급</th>
                   <th>리뷰 수</th>
@@ -364,9 +347,6 @@ export default function ReviewsScreen({
             </table>
           </div>
         )}
-        {hasSkinType && bySkin.length > 0 ? (
-          <p className="note">타입별로 평가가 갈린다는 결론은 두 타입 모두 리뷰 20건 이상일 때만 위에 띄웁니다.</p>
-        ) : null}
       </Panel>
     </div>
   );

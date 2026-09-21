@@ -81,16 +81,16 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
     const rx = rxs[r.kind];
     const tags: string[] = [];
     if (rx?.origin === 'llm') tags.push('AI가 쓴 문장');
-    if (rx?.needsEvidence.length) tags.push(`근거 자료가 필요한 표현: ${rx.needsEvidence.join('·')}`);
+    if (rx?.needsEvidence.length) tags.push(`근거 필요: ${rx.needsEvidence.join('·')}`);
     return {
       verb: r.verb,
       what: r.ko,
       why:
         r.verb === 'up'
-          ? `이 글을 본 사람은 평균보다 ${r.conversionLift.toFixed(1)}배 더 담았는데, 상세페이지를 연 사람 중 ${fmt.pct(r.viewRate)}만 여기까지 내려왔습니다.`
-          : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데, 본 사람이 평균보다 덜 담았습니다. 읽고도 마음이 안 움직인 글입니다.`,
+          ? `평균의 ${r.conversionLift.toFixed(1)}배 담는데, 본 사람은 ${fmt.pct(r.viewRate)}뿐`
+          : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 담기는 평균 아래`,
       num: `${r.conversionLift.toFixed(1)}배`,
-      unit: '이 글을 본 사람의 담기 비율 (평균 = 1.0배)',
+      unit: '담기 배수 (평균 1.0)',
       how: rx?.rx?.how,
       basis: rx?.rx?.basis,
       verify: rx?.rx?.verify,
@@ -117,97 +117,81 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         <h2 className="verdict__headline">{headline}</h2>
         <ul className="verdict__reasons">
           {noData ? (
-            <li>고객이 내 상품 상세페이지를 열고 글을 읽기 시작하면, 어떤 글이 담기에 도움이 되는지 여기서 알려 드립니다.</li>
+            <li>기록이 쌓이면 여기에 나옵니다</li>
           ) : (
             <li>
-              상세페이지 안에서 읽는 글 {rows.length}종을 <b>본 사람이 더 담았는지</b>로 줄 세운 결과입니다.
+              글 {rows.length}종을 <b>담기 배수</b>로 줄 세운 결과
             </li>
           )}
-          {!noData && liftPending ? (
-            <li>지금은 몇 명이 봤는지·얼마나 오래 읽었는지만 있고, 본 사람이 더 담았는지는 계산이 준비되는 대로 채워집니다.</li>
-          ) : null}
+          {!noData && liftPending ? <li>담기 배수는 계산 준비 중</li> : null}
           {best && !liftPending ? (
             <li>
-              가장 잘 먹히는 글은 {best.ko}입니다. 본 사람이 평균보다 {best.conversionLift.toFixed(1)}배 더 담았습니다.
+              가장 잘 먹히는 글: {best.ko} · {best.conversionLift.toFixed(1)}배
             </li>
           ) : null}
         </ul>
       </section>
 
-      <Panel title="지금 할 일" source={source.contentLift} aside="글을 본 사람이 더 담았는지가 기준">
+      <Panel
+        title="지금 할 일"
+        source={source.contentLift}
+        aside={
+          <span
+            title={`1.0배 = 내 브랜드 평균 담기율 · 1.0배 미만은 손보기, 1.5배 이상인데 절반도 못 봤으면 위로 올리기 · 지시 문장: AI ${llmCount}건 · 규칙 ${ruleCount}건`}
+          >
+            담기 배수 기준
+          </span>
+        }
+      >
         {actions.length > 0 ? (
           <Actions items={actions} />
         ) : (
           <p className="note">
-            {noData
-              ? '아직 할 일이 없습니다. 고객이 상세페이지 글을 읽은 기록이 쌓이면 여기에 "위로 올리세요" · "손보세요" 목록이 생깁니다.'
-              : liftPending
-                ? '몇 명이 봤는지는 알지만, 본 사람이 더 담았는지 계산이 아직 준비되지 않아 할 일을 고르지 않았습니다. 준비되면 자동으로 채워집니다.'
-                : '손볼 글도, 위로 올릴 글도 없습니다. 지금 순서를 그대로 두셔도 됩니다.'}
+            {noData ? '아직 할 일이 없습니다' : liftPending ? '담기 배수 계산 준비 중입니다' : '지금 순서를 그대로 두세요'}
           </p>
         )}
-        <p className="note">
-          1.0배는 그 글을 본 사람의 담기 비율이 내 브랜드 전체 평균과 같다는 뜻입니다. 1.0배가 안 되면 손볼 글, 1.5배 이상인데 절반도 못
-          본 글은 위로 올릴 글로 골랐습니다. 지시 문장은 이 화면 숫자만으로 쓰지 않고, 고객군·성분·막히는 곳 화면에서 모은 근거까지
-          모아 만듭니다. 근거는 각 줄을 펼치면 나옵니다.
-          {llmCount > 0
-            ? ` 지시 문장 ${llmCount}건은 AI가 썼고, ${ruleCount}건은 미리 정해 둔 규칙으로 만들었습니다.`
-            : ' 지시 문장은 미리 정해 둔 규칙으로 만들었습니다. AI가 연결되면 그 문장으로 바뀝니다.'}
-        </p>
       </Panel>
 
       <div className="grid grid--kpi">
         <Kpi
           label="가장 잘 먹히는 글"
           value={best && !liftPending ? best.ko : '-'}
-          sub={
-            best && !liftPending
-              ? `본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다`
-              : noData
-                ? '상세페이지 글을 읽은 기록이 아직 없습니다'
-                : '본 사람이 더 담았는지 계산이 아직 준비되지 않았습니다'
-          }
+          sub={best && !liftPending ? `평균의 ${best.conversionLift.toFixed(1)}배 담기` : noData ? '아직 기록 없음' : '계산 준비 중'}
           source={source.contentLift}
         />
         <Kpi
           label="손봐야 할 글"
           value={firstFix ? firstFix.ko : '없음'}
-          sub={
-            firstFix
-              ? '오래 읽는데 담기는 평균보다 적습니다'
-              : noData
-                ? '상세페이지 글을 읽은 기록이 아직 없습니다'
-                : liftPending
-                  ? '담기 비율 계산이 준비되면 고릅니다'
-                  : '평균보다 담기가 낮은 글이 없습니다'
-          }
+          sub={firstFix ? '오래 읽는데 담기는 평균 아래' : noData ? '아직 기록 없음' : liftPending ? '계산 준비 중' : '담기 낮은 글 없음'}
           source={source.contentLift}
         />
         <Kpi
           label="고객이 가장 많이 드래그한 성분"
           value={topScrape ? labelKo(topScrape.name) : '-'}
-          sub={topScrape ? `${fmt.int(topScrape.count)}회 · 관심이 가장 큰 성분` : '고객이 성분 이름을 드래그한 기록이 아직 없습니다'}
+          sub={topScrape ? `${fmt.int(topScrape.count)}회 드래그` : '아직 기록 없음'}
           source={source.scraped}
         />
         <Kpi
           label="전성분을 펼쳐 본 방문"
           value={expand ? fmt.pct(expand.doneRate) : '-'}
-          sub={expand ? '상세페이지를 연 방문 중' : '전성분을 펼친 기록이 아직 없습니다'}
+          sub={expand ? '상세를 연 방문 중' : '아직 기록 없음'}
           source={source.behaviors}
         />
       </div>
 
-      <Panel title="상세페이지 글 10종 전부" source={source.content} fold aside="내 브랜드 상품의 상세페이지 안만">
-        <p className="panel__lead">
-          목록 카드·장바구니·메뉴처럼 상세페이지 밖의 것은 빼고, <b>상세페이지 안에서 읽는 글 10종</b>만 셌습니다.
-        </p>
+      <Panel
+        title="상세페이지 글 10종 전부"
+        source={source.content}
+        fold
+        aside={<span title={`${fmt.int(THIN_VIEWS)}건 미만 본 글은 흐리게 표시`}>상세페이지 안의 글만</span>}
+      >
         <table className="table">
           <thead>
             <tr>
               <th>글</th>
-              <th>몇 명이 봤나</th>
-              <th>얼마나 오래 읽나</th>
-              <th>본 사람의 담기 비율</th>
+              <th title="그 글이 화면에 보인 방문 ÷ 상세를 연 방문">본 비율</th>
+              <th title="그 글에 머문 시간 ÷ 상세를 연 방문">읽은 시간</th>
+              <th title="그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율">담기 배수</th>
               <th>할 일</th>
             </tr>
           </thead>
@@ -215,7 +199,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="note">
-                  아직 기록이 없습니다. 고객이 내 상품 상세페이지를 열어 글을 읽으면 여기에 한 줄씩 채워집니다.
+                  아직 기록이 없습니다
                 </td>
               </tr>
             ) : null}
@@ -236,15 +220,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               ))}
           </tbody>
         </table>
-        <p className="note">
-          흐린 행은 그 글을 본 방문이 {fmt.int(THIN_VIEWS)}건이 안 돼 아직 판단하기 이릅니다.
-          {source.content === 'real' && liftPending
-            ? ' 몇 명이 봤는지와 얼마나 오래 읽었는지는 실제 기록이고, 본 사람의 담기 비율은 계산이 아직 준비되지 않아 비워 두었습니다. 준비되면 자동으로 채워집니다.'
-            : ''}
-        </p>
-
         <details className="fold">
-          <summary>두 축을 한 장에 겹쳐 보기 · 오래 읽는 것과 담게 만드는 것은 다릅니다</summary>
+          <summary>읽은 시간 × 담기 배수 한눈에 보기</summary>
           <Scatter
             points={rows.map((c) => ({
               label: c.ko,
@@ -253,46 +230,28 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               n: c.sampleSize,
             }))}
           />
-          <p className="note">
-            오른쪽 아래(오래 읽는데 안 담는다)가 손볼 곳, 왼쪽 위(짧게 읽는데 담게 만든다)가 위로 올릴 곳입니다. 원이 클수록 그 글을
-            본 방문이 많습니다.
-          </p>
+          <p className="note">오른쪽 아래가 손볼 곳, 왼쪽 위가 올릴 곳</p>
         </details>
 
         <details className="defn">
-          <summary>숫자의 정의와 글 고른 기준</summary>
+          <summary>숫자의 정의</summary>
           <dl className="defn__list">
             <dt>무엇을 셌나</dt>
-            <dd>
-              상세페이지 안에서 읽는 글 <b>10종</b>입니다. 성분 목록·성분 특징·임상 결과·사용자 리뷰·평점 분포·제품 소개·추가
-              설명·사용법·브랜드 소개·상품 이미지를 넣었고, 목록 카드·장바구니·메뉴처럼 상세페이지 밖의 것은 뺐습니다.
-            </dd>
-            <dt>몇 명이 봤나</dt>
-            <dd>그 글이 화면에 한 번이라도 보인 방문 ÷ 상세페이지를 연 방문.</dd>
-            <dt>얼마나 오래 읽나</dt>
-            <dd>
-              그 글에 머문 시간을 모두 더해 상세페이지를 연 방문 수로 나눈 값입니다. 한 화면에 글이 3개 이상 겹쳐 보인 시간은 어느 글을
-              읽은 것인지 알 수 없어 빼고 셉니다.
-            </dd>
-            <dt>본 사람의 담기 비율</dt>
-            <dd>
-              그 글을 본 방문의 담기 비율 ÷ 내 브랜드 전체 담기 비율. 1.0배면 평균과 같고, 1.6배면 그 글을 본 사람이 평균보다 1.6배 더
-              담았다는 뜻입니다. <b>같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다</b> · 살 마음이 큰 사람이 성분을 더 볼 수도
-              있습니다.
-            </dd>
+            <dd>상세페이지 안에서 읽는 글 10종. 목록 카드·장바구니·메뉴는 제외.</dd>
+            <dt>본 비율</dt>
+            <dd>그 글이 화면에 보인 방문 ÷ 상세를 연 방문.</dd>
+            <dt>읽은 시간</dt>
+            <dd>그 글에 머문 시간 ÷ 상세를 연 방문. 글 3개 이상 겹친 시간은 제외.</dd>
+            <dt>담기 배수</dt>
+            <dd>그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
             <dt>기록 수</dt>
-            <dd>그 글이 한 번이라도 보인 방문 수입니다. {fmt.int(THIN_VIEWS)}건이 안 되면 흐리게, 50건이 안 되면 그림에서 뺍니다.</dd>
-            <dt>지금 상태</dt>
-            <dd>
-              몇 명이 봤는지·얼마나 오래 읽었는지는 지금 실제 기록으로 셉니다. 본 사람의 담기 비율은 계산이 준비되는 대로 채워지고,
-              그때 이 표의 표시도 함께 바뀝니다.
-            </dd>
+            <dd>그 글이 보인 방문 수. {fmt.int(THIN_VIEWS)}건 미만은 흐리게, 50건 미만은 그림에서 제외.</dd>
           </dl>
         </details>
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} fold aside="긁은 글 원문은 저장하지 않고 성분 이름만 셉니다">
+        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} fold aside={<span title="긁은 글 원문은 저장하지 않습니다">성분 이름만 셈</span>}>
           <BarList
             items={scrapedIngredients.map((i) => ({
               label: labelKo(i.name),
@@ -300,27 +259,28 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               hint: i.copyCount === null ? undefined : `복사 ${i.copyCount}회`,
             }))}
           />
-          <p className="note">
-            드래그 횟수는 관심의 크기입니다. 설명이 어려운지는 그 성분 부분에서 위로 되돌아가 다시 읽었는지·그냥 나갔는지·담았는지를
-            함께 봐야 알 수 있고, 그 계산이 준비되면 여기에 붙습니다.
-          </p>
         </Panel>
 
-        <Panel title="이 행동을 한 사람은 더 담나" source={source.behaviors} fold aside="한 방문과 안 한 방문 비교">
+        <Panel
+          title="이 행동을 한 사람은 더 담나"
+          source={source.behaviors}
+          fold
+          aside={<span title="같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다">한 방문과 안 한 방문 비교</span>}
+        >
           <table className="table">
             <thead>
               <tr>
                 <th>행동</th>
-                <th>한 방문</th>
-                <th>했을 때 담기 비율</th>
-                <th>안 했을 때</th>
+                <th title="상세를 연 방문 중 이 행동을 한 비율">한 방문</th>
+                <th title="이 행동을 한 방문의 담기 비율">했을 때 담기</th>
+                <th title="이 행동을 안 한 방문의 담기 비율">안 했을 때</th>
               </tr>
             </thead>
             <tbody>
               {validationBehaviors.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="note">
-                    아직 기록이 없습니다. 고객이 전성분을 펼치거나 리뷰를 걸러 보기 시작하면 여기에 채워집니다.
+                    아직 기록이 없습니다
                   </td>
                 </tr>
               ) : null}
@@ -336,7 +296,6 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               ))}
             </tbody>
           </table>
-          <p className="note">같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다.</p>
         </Panel>
       </div>
     </div>
