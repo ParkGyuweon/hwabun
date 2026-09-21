@@ -1562,8 +1562,9 @@ def validate_frames(
         | (F.col("detail_view_sessions") > F.col("session_count"))
         | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
         | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
-        # 분모는 두 노출의 합이다. 추천 카드 클릭도 product_click 이라
-        # product_impression 만 보면 1 을 넘는다 (§4.1, 프론트 확인 2026-09-17).
+        # 분모는 노출 세 Event 의 합이다 (IMPRESSION_EVENTS · §4.1, 프론트 확인
+        # 2026-09-17). 추천 카드 클릭도 product_click 이라 product_impression 만
+        # 보면 1 을 넘는다. 아래 줄이 합산 정의 자체도 같이 본다.
         | (F.col("product_click_count") > F.col("impression_count"))
         | (F.col("impression_count")
            != F.col("product_impression_count")
@@ -1677,8 +1678,8 @@ def validate_frames(
     ).count()
 
     # product_daily_kpi · funnel_daily_kpi 재계산 결정성. 두 Mart 에만 없었다.
-    # 235 에서 시드 필터를 Mart 함수 밖(호출부)에 뒀다가 brand_daily 가 542행
-    # 어긋났던 것과 같은 함정을 잡는다.
+    # 시드 필터를 Mart 함수 밖(호출부)에 뒀다가 brand_daily 가 542행 어긋났던
+    # 것과 같은 함정을 잡는다.
     try:
         from .behavior_weights import load as load_behavior_weights
     except ImportError:
@@ -2626,7 +2627,7 @@ def validate_frames(
     ))
 
     # 재계산 결정성. 시드 제외가 Mart 함수 안에 있는지를 이 검사가 잡는다 —
-    # 235 에서 필터를 호출부에 뒀다가 brand_daily 가 542행 어긋났다.
+    # 필터를 호출부에 뒀다가 brand_daily 가 542행 어긋난 적이 있다.
     content_rebuilt = {
         "content_daily_kpi": (
             content_daily,
