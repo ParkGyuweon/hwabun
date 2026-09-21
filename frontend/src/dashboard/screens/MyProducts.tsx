@@ -93,8 +93,8 @@ export default function MyProducts({ brandId, brandName }: { brandId: string | n
 
   if (failed) {
     return (
-      <Panel title="내가 등록한 상품" source="real" aside="-">
-        <p className="note">쇼핑몰 서버를 읽지 못했습니다. 잠시 뒤 새로고침해 주세요.</p>
+      <Panel title="내가 등록한 상품" source="real">
+        <p className="note">상품 목록을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.</p>
       </Panel>
     );
   }
@@ -110,16 +110,16 @@ export default function MyProducts({ brandId, brandName }: { brandId: string | n
   if (list.length === 0) {
     return (
       <Panel title="내가 등록한 상품" source="real" aside="0개">
-        <p className="note">아직 등록한 상품이 없습니다. 왼쪽 "상품 등록" 에서 첫 상품을 올리면 여기에 보입니다.</p>
+        <p className="note">아직 등록한 상품이 없습니다. 왼쪽 메뉴 "상품 등록" 에서 첫 상품을 올리면 여기에 보입니다.</p>
       </Panel>
     );
   }
 
   const salesAside = ordersFailed
-    ? '판매량을 읽지 못했습니다'
+    ? '판매량은 읽지 못했습니다. 잠시 뒤 다시 열어 주세요'
     : orders === null
       ? '판매량 받는 중'
-      : `오늘 ${fmt.int(totals.today)}개 · 이번 달 ${fmt.int(totals.month)}개 · 누적 ${fmt.int(totals.total)}개 팔림`;
+      : `오늘 ${fmt.int(totals.today)}개 · 이번 달 ${fmt.int(totals.month)}개 · 지금까지 ${fmt.int(totals.total)}개 팔림`;
 
   return (
     <Panel title="내가 등록한 상품" source="real" aside={`${list.length}개 · ${salesAside}`}>
@@ -148,8 +148,8 @@ export default function MyProducts({ brandId, brandName }: { brandId: string | n
                 </p>
                 {orders !== null ? (
                   <p className="myproducts__sales">
-                    오늘 <b>{fmt.int(s.today)}</b>개 · 이번 달 <b>{fmt.int(s.month)}</b>개 · 누적 <b>{fmt.int(s.total)}</b>개
-                    {s.total > 0 ? ` · ${fmt.int(s.amount)}원` : ' · 아직 안 팔림'}
+                    오늘 <b>{fmt.int(s.today)}</b>개 · 이번 달 <b>{fmt.int(s.month)}</b>개 · 지금까지 <b>{fmt.int(s.total)}</b>개
+                    {s.total > 0 ? ` · 매출 ${fmt.int(s.amount)}원` : ' · 아직 팔린 적 없음'}
                   </p>
                 ) : null}
               </div>
@@ -158,7 +158,7 @@ export default function MyProducts({ brandId, brandName }: { brandId: string | n
           );
         })}
       </ul>
-      {orders !== null ? <p className="note">판매량은 결제 완료 주문 기준 · 쇼핑몰 원장 실측. 많이 팔린 순.</p> : null}
+      {orders !== null ? <p className="note">판매량은 결제가 끝난 주문 기준입니다. 많이 팔린 순으로 보여 줍니다.</p> : null}
     </Panel>
   );
 }

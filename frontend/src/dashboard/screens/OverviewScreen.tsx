@@ -67,9 +67,12 @@ export default function OverviewScreen({
   const delta = (cur: number, prev: number | undefined | null) => {
     if (prev === undefined || prev === null) return '';
     const d = (cur - prev) * 100;
-    if (Math.abs(d) < 0.05) return ' · 직전 기간과 같음';
-    return ` · 직전 기간 대비 ${d > 0 ? '+' : ''}${d.toFixed(1)}%p`;
+    if (Math.abs(d) < 0.05) return ' · 바로 앞 기간과 같습니다';
+    return ` · 바로 앞 기간보다 ${Math.abs(d).toFixed(1)}%p ${d > 0 ? '올랐습니다' : '내렸습니다'}`;
   };
+  /** 행동 기록이 하나도 없을 때 비율 카드 아래에 적는 이유. 0.0% 를 "정말 0" 으로 읽지 않게 한다 */
+  const noBehavior = overview.detailViews === 0 && overview.sessions === 0;
+  const emptyWhy = '아직 고객 행동 기록이 없어 0으로 보입니다. 고객이 상품을 보기 시작하면 채워집니다';
 
   /**
    * 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다.
@@ -105,7 +108,7 @@ export default function OverviewScreen({
         <section className="headline" aria-label="지금 상황 한 마디">
           <p className="headline__eyebrow">
             지금 무슨 일이 · 최근 {days}일
-            {headlineOrigin(headline) === 'rule' ? <span className="headline__tag" title="문장을 만들지 못해 값을 그대로 나열했습니다">값 그대로</span> : null}
+            {headlineOrigin(headline) === 'rule' ? <span className="headline__tag" title="이번에는 문장으로 풀지 못해 숫자만 그대로 적었습니다">숫자 그대로</span> : null}
           </p>
           <p className="headline__line">{headline.headline}</p>
           {headline.sections.length > 0 ? (
@@ -114,7 +117,7 @@ export default function OverviewScreen({
                 <li key={s.id}>
                   <span className="headline__label">{sectionLabel.get(s.id) ?? s.id}</span>
                   <span>{s.line}</span>
-                  {lineOrigin(headline, s) === 'rule' ? <span className="headline__tag" title="이 줄은 값을 그대로 나열했습니다">값 그대로</span> : null}
+                  {lineOrigin(headline, s) === 'rule' ? <span className="headline__tag" title="이 줄은 숫자만 그대로 적었습니다">숫자 그대로</span> : null}
                 </li>
               ))}
             </ul>
@@ -123,8 +126,8 @@ export default function OverviewScreen({
       ) : null}
       {pulse ? (
         <div className="grid grid--kpi">
-          <Kpi label="백엔드 주문" value={fmt.int(pulse.orders)} sub="결제 완료 기준 · shop_backend 실측" source="real" />
-          <Kpi label="백엔드 매출" value={`${Math.round(pulse.revenue).toLocaleString('ko-KR')}원`} sub="결제 완료 합계" source="real" />
+          <Kpi label="주문" value={`${fmt.int(pulse.orders)}건`} sub={pulse.orders > 0 ? '결제가 끝난 주문 수 · 전체 기간' : '결제가 끝난 주문이 아직 없습니다. 첫 주문이 들어오면 채워집니다'} source="real" />
+          <Kpi label="매출" value={`${Math.round(pulse.revenue).toLocaleString('ko-KR')}원`} sub={pulse.revenue > 0 ? '결제가 끝난 주문의 합계 · 전체 기간' : '결제가 끝난 주문이 아직 없어 0원입니다'} source="real" />
           {/*
             주문 수만 보면 "5건" 이 5개인지 50개인지 알 수 없다. 팔린 개수와 가짓수를 따로 적는다 —
             한 상품이 5번 팔린 것과 다섯 상품이 하나씩 팔린 것은 다음에 할 일이 다르다.
@@ -132,17 +135,17 @@ export default function OverviewScreen({
           <Kpi
             label="판매 수량"
             value={`${fmt.int(pulse.units)}개`}
-            sub={pulse.orders > 0 ? `주문 ${fmt.int(pulse.orders)}건 · 한 주문에 평균 ${(pulse.units / pulse.orders).toFixed(1)}개` : '결제 완료 기준'}
+            sub={pulse.orders > 0 ? `주문 ${fmt.int(pulse.orders)}건 · 한 주문에 평균 ${(pulse.units / pulse.orders).toFixed(1)}개` : '결제가 끝난 주문이 아직 없어 0개입니다'}
             source="real"
           />
           <Kpi
             label="팔린 상품 가짓수"
-            value={`${fmt.int(pulse.soldProducts)}개`}
-            sub={`주문 줄 ${fmt.int(pulse.orderItems)}건 · 한 번이라도 팔린 상품`}
+            value={`${fmt.int(pulse.soldProducts)}가지`}
+            sub={pulse.soldProducts > 0 ? `한 번이라도 팔린 상품 종류 · 주문에 담긴 상품 줄 ${fmt.int(pulse.orderItems)}건` : '아직 팔린 상품이 없습니다'}
             source="real"
           />
-          <Kpi label="백엔드 리뷰" value={fmt.int(pulse.reviews)} sub="구매 고객이 남긴 리뷰" source="real" />
-          <Kpi label="백엔드 피드백" value={fmt.int(pulse.feedbacks)} sub="구매 고객이 남긴 의견" source="real" />
+          <Kpi label="리뷰" value={`${fmt.int(pulse.reviews)}건`} sub={pulse.reviews > 0 ? '구매한 고객이 남긴 리뷰' : '구매한 고객이 남긴 리뷰가 아직 없습니다'} source="real" />
+          <Kpi label="받은 의견" value={`${fmt.int(pulse.feedbacks)}건`} sub={pulse.feedbacks > 0 ? '구매한 고객이 보낸 의견' : '구매한 고객이 보낸 의견이 아직 없습니다'} source="real" />
         </div>
       ) : null}
       {/*
@@ -153,26 +156,30 @@ export default function OverviewScreen({
         <div className="grid grid--kpi">
           <Kpi
             label="브랜드 재구매율"
-            value={repurchase.brand.rate === null ? '-' : fmt.pct(repurchase.brand.rate)}
-            sub={`구매 고객 ${fmt.int(repurchase.brand.buyerCount)}명 중 ${fmt.int(repurchase.brand.repeatBuyerCount)}명이 다시 샀습니다 · 최근 ${repurchase.brand.windowDays}일`}
+            value={repurchase.brand.rate === null ? '아직 없음' : fmt.pct(repurchase.brand.rate)}
+            sub={
+              repurchase.brand.rate === null
+                ? `최근 ${repurchase.brand.windowDays}일 안에 구매한 고객이 없어 비율을 낼 수 없습니다`
+                : `구매 고객 ${fmt.int(repurchase.brand.buyerCount)}명 중 ${fmt.int(repurchase.brand.repeatBuyerCount)}명이 다시 샀습니다 · 최근 ${repurchase.brand.windowDays}일`
+            }
             source="real"
           />
           <Kpi
-            label="재구매 간격"
-            value={repurchase.brand.medianDays === null ? '-' : `${Math.round(repurchase.brand.medianDays)}일`}
-            sub="다시 산 고객의 구매 사이 간격 중앙값"
+            label="다시 사기까지 걸린 날"
+            value={repurchase.brand.medianDays === null ? '아직 없음' : `${Math.round(repurchase.brand.medianDays)}일`}
+            sub={repurchase.brand.medianDays === null ? '두 번 이상 산 고객이 생기면 첫 구매와 다음 구매 사이 날수를 보여 드립니다' : '두 번 이상 산 고객이 첫 구매 뒤 다음 구매까지 걸린 날수 (가운데 값)'}
             source="real"
           />
           <Kpi
             label="다시 사려고 산 주문"
-            value={fmt.int(repurchase.brand.declaredRestockOrders)}
-            sub={`설문에서 "다시 사려고" 를 고른 주문 · 관측 재구매 ${fmt.int(repurchase.brand.repeatBuyerCount)}명과 갈리는 만큼이 행동 추론의 한계`}
+            value={`${fmt.int(repurchase.brand.declaredRestockOrders)}건`}
+            sub={`구매할 때 "다시 사려고요" 를 고른 주문 · 실제로 두 번 이상 산 고객 ${fmt.int(repurchase.brand.repeatBuyerCount)}명과 비교해 보세요`}
             source="real"
           />
           <Kpi
-            label="상품 재구매 최고"
-            value={best ? best.name : '-'}
-            sub={best ? `재구매율 ${fmt.pct(best.rate)} · 구매 고객 10명 이상인 상품 중` : '구매 고객 10명 이상인 상품 중 다시 산 고객이 아직 없습니다'}
+            label="가장 많이 다시 사는 상품"
+            value={best ? best.name : '아직 없음'}
+            sub={best ? `다시 산 비율 ${fmt.pct(best.rate)} · 구매 고객 10명 이상인 상품 중` : '구매 고객이 10명 이상인 상품 중 다시 산 고객이 아직 없습니다. 재구매가 생기면 여기에 상품 이름이 뜹니다'}
             source="real"
           />
         </div>
@@ -193,7 +200,7 @@ export default function OverviewScreen({
             {top.action}
           </p>
           <p className="verdict__sample">
-            표본 {fmt.int(top.n)} · 신뢰도 {top.confidence}
+            기록 {fmt.int(top.n)}건을 보고 낸 판단 · 믿을 만한 정도 {top.confidence}
             {onGo ? (
               <button type="button" className="verdict__go" onClick={() => onGo(top.screen)}>
                 근거 화면으로
@@ -201,44 +208,59 @@ export default function OverviewScreen({
             ) : null}
           </p>
         </section>
-      ) : null}
+      ) : (
+        <section className="verdict verdict--mine">
+          <p className="verdict__eyebrow">
+            지금 손봐야 할 것 <OriginBadge kind="mine" />
+          </p>
+          <h2 className="verdict__headline">아직 판단을 내릴 만큼 기록이 모이지 않았습니다</h2>
+          <ul className="verdict__reasons">
+            <li>
+              {noBehavior
+                ? '이 기간에는 내 상품을 본 고객 기록이 없습니다. 고객이 상품 상세를 보기 시작하면 결론이 생깁니다.'
+                : '상세페이지 설명 글 하나를 200명 넘게 읽거나, 한 고객군의 방문이 200건을 넘으면 그때부터 결론을 냅니다.'}
+            </li>
+          </ul>
+          <p className="verdict__action">지금은 아래 주문·매출 숫자와 방문 추이만 참고해 주세요.</p>
+        </section>
+      )}
 
       <div className="grid grid--kpi">
         <Kpi
-          label="상세 → 담기 전환율"
+          label="상세를 보고 담은 비율"
           value={fmt.pct(overview.cartRate)}
-          sub={`상세 조회 ${fmt.int(overview.detailViews)} 기준${delta(overview.cartRate, previous?.cartRate)}`}
+          sub={noBehavior ? emptyWhy : `상품 상세를 본 ${fmt.int(overview.detailViews)}번 중 장바구니에 담은 비율${delta(overview.cartRate, previous?.cartRate)}`}
           source={source.overview}
         />
         <Kpi
-          label="정보 확인 도달률"
+          label="성분·리뷰까지 읽은 비율"
           value={fmt.pct(overview.infoRate)}
-          sub={`상세에서 성분·리뷰를 확인한 비율. 우리만 재는 값${delta(overview.infoRate, previous?.infoRate)}`}
+          sub={noBehavior ? emptyWhy : `상세를 본 고객 중 성분이나 리뷰까지 확인한 비율${delta(overview.infoRate, previous?.infoRate)}`}
           source={source.overview}
         />
         <Kpi
-          label="담았다 뺀 비율"
+          label="담았다가 뺀 비율"
           value={fmt.pct(overview.removalRate)}
-          sub={`가장 명확한 부정 신호${delta(overview.removalRate, previous?.removalRate)}`}
+          sub={noBehavior ? emptyWhy : `장바구니에 담은 뒤 다시 뺀 비율 · 가장 분명한 망설임 신호${delta(overview.removalRate, previous?.removalRate)}`}
           source={source.overview}
         />
         <Kpi
-          label="피드백 최다 언급"
-          value={fbTop ? categoryLabel(fbTop[0]) : '없음'}
-          sub={fbTop ? `언급 ${fbTop[1]} · 피드백 ${fb.length}건` : '내 브랜드 피드백이 아직 없습니다'}
+          label="고객 의견에서 가장 많이 나온 말"
+          value={fbTop ? categoryLabel(fbTop[0]) : '아직 없음'}
+          sub={fbTop ? `${fbTop[1]}번 나왔습니다 · 받은 의견 ${fb.length}건` : '구매한 고객이 보낸 의견이 아직 없습니다. 의견이 들어오면 가장 많이 나온 항목을 보여 드립니다'}
           source={feedbackSource(fb)}
         />
       </div>
 
       {rest.length > 0 ? (
-        <Panel title="다음 후보" source={source.content} aside="점수 = 편차 × ln(표본)">
+        <Panel title="그다음에 볼 것" source={source.content} aside="차이가 크고 기록이 많은 순서">
           <ul className="insight-list">
             {rest.map((i) => (
               <li key={i.id}>
                 <button type="button" className={`insight-list__item insight-list__item--${i.origin}`} onClick={() => onGo?.(i.screen)}>
                   <span className="insight-list__head">{i.headline}</span>
                   <span className="insight-list__meta">
-                    <OriginBadge kind={i.origin} /> {i.unit} · 표본 {fmt.int(i.n)} · {i.confidence}
+                    <OriginBadge kind={i.origin} /> {i.unit} · 기록 {fmt.int(i.n)}건 · 믿을 만한 정도 {i.confidence}
                   </span>
                 </button>
               </li>
@@ -248,13 +270,13 @@ export default function OverviewScreen({
       ) : null}
 
       <div className="grid grid--2">
-        <Panel title={`방문 추이 · 최근 ${days}일`} source={source.overview} aside="축은 0부터">
+        <Panel title={`날짜별 방문 수 · 최근 ${days}일`} source={source.overview} aside="눈금은 0부터">
           <LineChart points={series.map((d) => ({ label: d.label, value: d.visits }))} />
         </Panel>
         <Panel
-          title="퍼널"
+          title="구매까지 가는 단계"
           source={source.funnel}
-          aside={source.funnel === 'real' ? '상품 합산 세션 · 구매 이벤트 생성 전이라 장바구니까지' : '구매 이벤트 생성 전이라 장바구니까지'}
+          aside="상품을 보고 장바구니에 담기까지 · 단계마다 남은 방문 수"
         >
           <Funnel steps={standardFunnel} />
         </Panel>
@@ -262,31 +284,31 @@ export default function OverviewScreen({
 
       <details className="fold">
         <summary>
-          범용 지표 · 방문 {fmt.int(overview.sessions)} · 상세 조회 {fmt.int(overview.detailViews)} · 이탈률{' '}
-          {overview.bounceRate === null ? '-' : fmt.pct(overview.bounceRate)}
+          기본 숫자 · 방문 {fmt.int(overview.sessions)}번 · 상품 상세 본 횟수 {fmt.int(overview.detailViews)}번 · 그냥 나간 비율{' '}
+          {overview.bounceRate === null ? '아직 없음' : fmt.pct(overview.bounceRate)}
         </summary>
         <div className="grid grid--kpi fold__body">
-          <Kpi label="방문" value={fmt.int(overview.sessions)} sub="기간 합계" />
-          <Kpi label="상세 조회" value={fmt.int(overview.detailViews)} />
-          <Kpi label="상세 진입률" value={fmt.pct(overview.detailRate)} sub="노출 대비" />
+          <Kpi label="방문" value={`${fmt.int(overview.sessions)}번`} sub={noBehavior ? '이 기간에 내 상품을 본 방문이 아직 없습니다' : `최근 ${days}일 동안 내 상품을 본 방문 수`} />
+          <Kpi label="상품 상세 본 횟수" value={`${fmt.int(overview.detailViews)}번`} sub={noBehavior ? '아직 상품 상세를 본 기록이 없습니다' : '상품 상세페이지가 열린 횟수'} />
+          <Kpi label="목록에서 상세로 들어온 비율" value={fmt.pct(overview.detailRate)} sub={noBehavior ? emptyWhy : '상품이 목록에 보인 횟수 중 상세까지 들어온 비율'} />
           <Kpi
-            label="상세 이탈률"
-            value={overview.bounceRate === null ? '-' : fmt.pct(overview.bounceRate)}
-            sub={overview.bounceRate === null ? '마트에 이탈률이 없습니다. 3초 이탈이 오면 여기에 씁니다' : '추가 행동 없이 이탈'}
+            label="상세만 보고 그냥 나간 비율"
+            value={overview.bounceRate === null ? '아직 없음' : fmt.pct(overview.bounceRate)}
+            sub={overview.bounceRate === null ? '이 숫자는 아직 모으지 않습니다. 준비되면 여기에 보여 드립니다' : '상세페이지를 열고 아무 행동 없이 나간 비율'}
           />
         </div>
-        <Panel title="관심도 TOP 5" source={source.products} fold aside="행동 가중 합산 (담기 3.0 · 클릭 1.0 · 제거 −2.0)">
+        <Panel title="고객이 가장 관심 보인 상품 5개" source={source.products} fold aside="담기·클릭은 더하고 담았다 뺀 것은 빼서 매긴 점수">
           <BarList
             items={productMetrics.slice(0, 5).map((p) => ({
               label: p.product.product_name,
               sub: p.product.brand_name,
               value: p.interestScore,
-              hint: `담기 ${p.addToCart}`,
+              hint: `담기 ${p.addToCart}번`,
             }))}
             rank
           />
           <p className="note">
-            관심도 = 행동별 발생 수 × 가중치. 가중치의 단일 출처는 frontend/src/types/log.ts 이며 값은 초기 가설입니다.
+            관심 점수는 장바구니 담기 1번을 3점, 상품 클릭 1번을 1점으로 더하고, 담았다가 뺀 1번은 2점을 뺀 값입니다. 점수 자체보다 순서를 보시면 됩니다.
           </p>
         </Panel>
       </details>

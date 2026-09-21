@@ -96,19 +96,19 @@ export interface ProductMetrics {
 
 /** 이탈 지점 → 이유 힌트 (규칙 R-1c·e·h). 단정하지 않는다 */
 export const EXIT_HINT: Record<NonNullable<ProductMetrics['exitContent']>, { ko: string; hint: string }> = {
-  ingredient_list: { ko: '성분 목록', hint: '기피 성분 발견 가능성' },
-  usage_guide: { ko: '사용법', hint: '설명 난이도 가능성' },
-  user_review: { ko: '리뷰', hint: '부정 리뷰 노출 가능성' },
-  similar_products: { ko: '유사 상품', hint: '대체 탐색 가능성' },
-  product_hero: { ko: '첫 화면', hint: '목록 카드와 기대 불일치 가능성' },
-  price: { ko: '가격', hint: '가격 저항 가능성' },
+  ingredient_list: { ko: '성분 목록', hint: '피하는 성분을 봤을 수 있습니다' },
+  usage_guide: { ko: '사용법', hint: '설명이 어려웠을 수 있습니다' },
+  user_review: { ko: '리뷰', hint: '안 좋은 리뷰를 봤을 수 있습니다' },
+  similar_products: { ko: '유사 상품', hint: '다른 상품과 비교하러 갔을 수 있습니다' },
+  product_hero: { ko: '첫 화면', hint: '목록에서 기대한 것과 달랐을 수 있습니다' },
+  price: { ko: '가격', hint: '가격이 부담됐을 수 있습니다' },
 };
 
 export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
-  click: '노출 → 클릭',
-  detail: '클릭 → 상세',
-  info: '상세 → 정보 확인',
-  cart: '정보 확인 → 담기',
+  click: '보이고 → 누르기',
+  detail: '누르고 → 상세 보기',
+  info: '상세 → 성분·리뷰 확인',
+  cart: '성분·리뷰 확인 → 담기',
 };
 
 /** 리뷰 본문에서 찾을 표현. 데이터셋 리뷰가 영문이라 영문 패턴을 쓴다 */

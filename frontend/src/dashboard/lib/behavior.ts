@@ -23,6 +23,56 @@ import vocab from '../../../../contracts/product-feature-vocab.json';
 
 export type Src = 'real' | 'none';
 
+/**
+ * 행동 이름 → 사장님이 읽는 한국어. "행동별 기록 건수" 목록이 쓴다.
+ * 데이터 파트와 맞춘 영문 이름은 화면에 그대로 내지 않는다.
+ */
+export const EVENT_KO: Record<EventName, string> = {
+  login: '로그인',
+  session_start: '방문 시작',
+  page_view: '화면 열기',
+  product_view: '상품 상세 보기',
+  product_impression: '상품이 화면에 보임',
+  navigation_click: '메뉴 이동',
+  product_click: '상품 누르기',
+  section_view: '글 구간이 화면에 보임',
+  section_dwell: '글 구간에 머묾',
+  accordion_toggle: '접힌 정보 펼치기',
+  recommendation_impression: '추천 상품이 보임',
+  recommendation_click: '추천 상품 누르기',
+  banner_impression: '배너가 보임',
+  banner_click: '배너 누르기',
+  wishlist_toggle: '찜하기',
+  add_to_cart: '장바구니 담기',
+  view_cart: '장바구니 보기',
+  begin_checkout: '결제 시작',
+  purchase: '구매',
+  purchase_reason_select: '구매 이유 고르기',
+  payment_failed: '결제 실패·취소',
+  exit_summary: '나가기 전 마지막 화면',
+  scroll_depth: '얼마나 내려 읽었나',
+  impression_dwell: '상품 카드가 보인 시간',
+  recommendation_snapshot: '추천 순서 기록',
+  media_view: '사진·영상 보기',
+  quick_look: '빠른 보기 열기',
+  quick_look_close: '빠른 보기 닫기',
+  remove_from_cart: '장바구니에서 빼기',
+  variant_select: '옵션 고르기',
+  quantity_change: '수량 바꾸기',
+  review_filter_apply: '리뷰 걸러 보기',
+  review_expand: '리뷰 더 보기',
+  ingredient_view_mode_change: '전성분 펼쳐 보기',
+  sort_change: '정렬 바꾸기',
+  filter_change: '조건으로 좁히기',
+  scroll_pause: '읽다가 멈춤',
+  scroll_backtrack: '위로 되돌아가 다시 읽음',
+  text_selection: '글자 긁기',
+  text_copy: '글자 복사',
+  hover_dwell: '누르기 전 머뭇거림',
+  rage_click: '연달아 누름',
+  dead_click: '눌러도 반응 없음',
+};
+
 export interface Overview {
   sessions: number;
   impressions: number;

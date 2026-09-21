@@ -69,7 +69,7 @@ const SECTION_KO: Record<string, string> = {
 };
 
 const FRICTION_KO: Record<string, { ko: string; meaning: string }> = {
-  dead_click: { ko: '눌러도 아무 일이 없었습니다', meaning: '반응을 기대하고 눌렀는데 아무 일도 없었습니다' },
+  dead_click: { ko: '눌러도 아무 일이 없었습니다', meaning: '반응을 기대하고 눌렀는데 아무 일도 없었습니다. 눌리는 것처럼 보이는 자리일 수 있습니다' },
   rage_click: { ko: '같은 자리를 여러 번 눌렀습니다', meaning: '눌렀는데 반응이 없어 다시 눌렀습니다' },
   scroll_backtrack: { ko: '위로 다시 올려 읽었습니다', meaning: '한 번 읽고 이해가 안 돼 다시 봤을 수 있습니다' },
   hover_dwell: { ko: '누르기 전에 머뭇거렸습니다', meaning: '커서를 얹고 망설였습니다' },
@@ -79,11 +79,11 @@ const ENTRY_KO: Record<string, string> = {
   similar_products: '유사 상품 추천',
   promo_pick: '맞춤 기획전',
   list_grid: '목록',
-  quick_look: '퀵룩에서',
+  quick_look: '빠른 보기에서',
   search: '검색',
   banner: '배너',
-  hero: '히어로',
-  direct: '직접 진입',
+  hero: '첫 화면 큰 배너',
+  direct: '주소로 바로 들어옴',
 };
 
 const EXIT_KINDS: ProductMetrics['exitContent'][] = ['ingredient_list', 'usage_guide', 'user_review', 'similar_products', 'product_hero', 'price'];
@@ -329,11 +329,11 @@ function toFriction(p: FrictionPayload, base: BehaviorMetrics) {
  * 망설임(hesitation)·막힘(friction)·세션 경계(session)는 단계가 아니라 빼고, 막힘은 옆 패널이 따로 센다.
  */
 const INTENT_STEPS: Array<{ label: IntentClass; ko: string }> = [
-  { label: 'exposure', ko: '노출' },
-  { label: 'interest', ko: '열람' },
-  { label: 'comparison', ko: '비교' },
-  { label: 'validation', ko: '확인' },
-  { label: 'conversion', ko: '전환' },
+  { label: 'exposure', ko: '상품이 보임' },
+  { label: 'interest', ko: '열어 봄' },
+  { label: 'comparison', ko: '비교함' },
+  { label: 'validation', ko: '성분·리뷰 확인' },
+  { label: 'conversion', ko: '담기·구매' },
 ];
 
 function toIntentFunnel(volumes: Array<{ event_name: string; event_count: number }>): Array<{ label: string; ko: string; value: number }> {
@@ -437,11 +437,11 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
       out = {
         ...out,
         standardFunnel: [
-          { label: '상품 노출', value: ov.funnel.impression_sessions },
-          { label: '상품 클릭', value: ov.funnel.click_sessions },
-          { label: '상세 조회', value: ov.funnel.product_view_sessions },
-          { label: '정보 확인', value: ov.funnel.information_view_sessions },
-          { label: '장바구니', value: ov.funnel.add_to_cart_sessions },
+          { label: '상품이 보임', value: ov.funnel.impression_sessions },
+          { label: '상품을 누름', value: ov.funnel.click_sessions },
+          { label: '상세를 봄', value: ov.funnel.product_view_sessions },
+          { label: '성분·리뷰 확인', value: ov.funnel.information_view_sessions },
+          { label: '장바구니에 담음', value: ov.funnel.add_to_cart_sessions },
         ],
       };
       src.funnel = 'real';

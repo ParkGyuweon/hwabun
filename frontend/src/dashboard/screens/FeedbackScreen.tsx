@@ -9,7 +9,6 @@ import { findAdTerms } from '../../lib/adTerms';
 import { skinTypeLabel, humanizeAttribute } from '../../lib/format';
 import {
   FEEDBACK_INPUT_AXES,
-  FEEDBACK_VOCAB_VERSION,
   categoryDesc,
   categoryLabel,
   isUnclassified,
@@ -46,7 +45,10 @@ const AXIS_COLOR: Record<string, string> = {
 };
 
 /** 업체 처리 상태 문구 (백엔드 계약 2026-09-18). new=OPEN · read=ACKNOWLEDGED · reflected=IMPLEMENTED */
-const STATUS_KO = { new: '업체 확인 대기', read: '업체가 확인했어요', reflected: '업체가 반영했어요' } as const;
+const STATUS_KO = { new: '아직 안 봤어요', read: '확인했어요', reflected: '반영했어요' } as const;
+
+/** 분류기가 아직 종류를 정하지 못한 글에 붙이는 이름. 화면 곳곳에서 같은 말을 쓴다 */
+const PENDING_LABEL = '종류 나누는 중';
 
 /**
  * 고객 피드백. 결론 한 줄 → 축 분포 → 카테고리 표 → 원문 순으로 내려간다.
@@ -63,6 +65,8 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
    * 브랜드 id 는 대시보드 로그인 때 저장된 값. 없거나 백엔드가 없으면 로컬만 보인다.
    */
   const [remote, setRemote] = useState<Feedback[]>([]);
+  /** 마지막 읽기가 실패했는지. 빈 화면에 "없다" 대신 "못 읽었다" 를 적기 위해 기억한다 */
+  const [remoteFailed, setRemoteFailed] = useState(false);
   /** 분류를 걸어 놓고 결과를 기다리는 중. 제한 시간 안에 안 끝나면 지금 있는 데이터를 그대로 둔다 */
   const [classifying, setClassifying] = useState(false);
   useEffect(() => {
@@ -72,7 +76,12 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
 
     const pull = async (): Promise<boolean> => {
       const rows = await fetchSellerFeedback(brandId, brandName);
-      if (!alive || !rows) return false;
+      if (!alive) return false;
+      if (!rows) {
+        setRemoteFailed(true);
+        return false;
+      }
+      setRemoteFailed(false);
       setRemote(rows);
       // 백엔드 행이 하나도 PENDING 이 아니면 끝난 것. 행이 없어도 기다릴 이유가 없다
       return !rows.some((f) => f.classification_status === 'PENDING');
@@ -231,12 +240,12 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
       .filter(Boolean);
     return {
       headline: second
-        ? `${categoryLabel(first[0])} 언급 ${first[1]} · ${categoryLabel(second[0])} 언급 ${second[1]}`
-        : `${categoryLabel(first[0])} 언급 ${first[1]}`,
+        ? `${categoryLabel(first[0])} ${first[1]}건 · ${categoryLabel(second[0])} ${second[1]}건`
+        : `${categoryLabel(first[0])} ${first[1]}건`,
       reason:
         first[1] >= 5 && firstProducts >= 2
-          ? `${categoryLabel(first[0])}: ${named(firstProductIds)}에서 반복. 한 상품 문제가 아닙니다.`
-          : `${categoryLabel(first[0])}: ${named(firstProductIds)}.`,
+          ? `${categoryLabel(first[0])}: ${named(firstProductIds)}에서 되풀이됩니다. 한 상품만의 문제가 아닙니다.`
+          : `${categoryLabel(first[0])}: ${named(firstProductIds)}에서 나왔습니다.`,
       routes,
     };
   }, [mine, products]);
@@ -290,7 +299,13 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
   };
 
   const axisLabelOf = (id: AxisFilter) =>
-    id === 'all' ? '전체' : id === 'pending' ? '분류 대기' : (FEEDBACK_INPUT_AXES.find((a) => a.id === id)?.label ?? id);
+    id === 'all' ? '전체' : id === 'pending' ? PENDING_LABEL : (FEEDBACK_INPUT_AXES.find((a) => a.id === id)?.label ?? id);
+
+  /** 빈 목록에 적는 말. 못 읽었으면 그렇다고, 아니면 어디서 들어오는지 */
+  const emptyText =
+    remoteFailed && mine.length === 0
+      ? '고객 의견을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
+      : '아직 들어온 의견이 없습니다. 고객이 쇼핑몰 상품 페이지에서 "의견 남기기" 로 보낸 글이 여기에 모입니다.';
 
   return (
     <div className="stack">
@@ -307,8 +322,8 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
           </select>
         </label>
         <p className="scope__meta">
-          {total}건 · 확인 대기 {fresh} · 반영 {reflected} · 어휘 {FEEDBACK_VOCAB_VERSION}
-          {classifying ? ' · 분류 처리 중입니다' : ''}
+          고객 의견 {total}건 · 아직 안 본 것 {fresh}건 · 반영한 것 {reflected}건
+          {classifying ? ' · 새 의견을 종류별로 나누는 중입니다' : ''}
         </p>
       </div>
 
@@ -332,9 +347,9 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         </section>
       ) : null}
 
-      <Panel title="상품별" source={source} aside="상품을 누르면 그 상품만, 카테고리를 누르면 그 상품의 그 불만만">
+      <Panel title="상품별 의견" source={source} aside="상품을 누르면 그 상품 의견만, 불만 종류를 누르면 그 종류만 봅니다">
         {byProduct.length === 0 ? (
-          <p className="fbx-empty">아직 없습니다. 쇼핑몰 상품 페이지에서 들어온 글이 여기 쌓입니다.</p>
+          <p className="fbx-empty">{emptyText}</p>
         ) : (
           <ul className="fbx-products">
             {byProduct.map((p) => {
@@ -353,7 +368,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                     <span className="fbx-product__name">{productName(p.id)}</span>
                     <span className="fbx-product__n">
                       <b>{p.list.length}</b>건
-                      {p.fresh > 0 ? <span className="fbx-table__new">새 {p.fresh}</span> : null}
+                      {p.fresh > 0 ? <span className="fbx-table__new">안 본 글 {p.fresh}</span> : null}
                     </span>
                   </button>
                   <div className="fbx-product__cats">
@@ -386,7 +401,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                           setCategory(active && category === PENDING ? null : PENDING);
                         }}
                       >
-                        분류 대기 <span className="fbx-cat__n">{p.pending}</span>
+                        {PENDING_LABEL} <span className="fbx-cat__n">{p.pending}</span>
                       </button>
                     ) : null}
                   </div>
@@ -397,7 +412,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         )}
       </Panel>
 
-      <Panel title="축별 건수" source={source} fold aside={`${scoped.length}건`}>
+      <Panel title="불만 종류별 건수" source={source} fold aside={`의견 ${scoped.length}건`}>
         <div className="fbx-axes">
           <div className="fbx-stack" aria-hidden="true">
             {FEEDBACK_INPUT_AXES.map((a) => {
@@ -440,7 +455,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                   className={`fbx-axis fbx-axis--pending${axis === 'pending' ? ' is-active' : ''}`}
                   onClick={() => pickAxis('pending')}
                 >
-                  분류 대기 <span className="fbx-axis__n">{axisCounts.get(PENDING)}</span>
+                  {PENDING_LABEL} <span className="fbx-axis__n">{axisCounts.get(PENDING)}</span>
                 </button>
               </li>
             ) : null}
@@ -448,20 +463,20 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         </div>
       </Panel>
 
-      <Panel title={`${axisLabelOf(axis)} · 카테고리`} source={source} fold aside="행을 누르면 원문만 추립니다">
+      <Panel title={`${axisLabelOf(axis)} · 세부 불만`} source={source} fold aside="줄을 누르면 그 불만의 원문만 봅니다">
         {categories.length === 0 ? (
-          <p className="fbx-empty">아직 없습니다. 쇼핑몰 상품 페이지에서 들어온 글이 여기 쌓입니다.</p>
+          <p className="fbx-empty">{emptyText}</p>
         ) : (
           <div className="table-wrap">
             <table className="fbx-table">
               <thead>
                 <tr>
-                  <th>카테고리</th>
+                  <th>불만 종류</th>
                   <th>담당</th>
-                  <th className="is-num" title="한 글에 불만이 둘이면 두 칸에 각 1. 합이 글 수를 넘을 수 있습니다">언급</th>
+                  <th className="is-num" title="한 글에 불만이 둘 들어 있으면 둘 다에 1씩 셉니다. 그래서 합이 글 수보다 많을 수 있습니다">언급 수</th>
                   <th style={{ width: '22%' }} aria-label="비중" />
-                  <th className="is-num">상품</th>
-                  <th className="is-num">새 의견</th>
+                  <th className="is-num">상품 수</th>
+                  <th className="is-num">안 본 글</th>
                 </tr>
               </thead>
               <tbody>
@@ -475,10 +490,10 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       onClick={() => setCategory(category === c.id ? null : c.id)}
                     >
                       <td>
-                        <span className="fbx-table__name">{pending ? '분류 대기' : categoryLabel(c.id)}</span>
+                        <span className="fbx-table__name">{pending ? PENDING_LABEL : categoryLabel(c.id)}</span>
                         {!pending ? (
                           <span className="fbx-table__desc">
-                            {c.id === 'other' ? '이 축 얘기지만 목록에 없는 불만' : categoryDesc(c.id)}
+                            {c.id === 'other' ? '위 종류 어디에도 딱 들어가지 않는 불만' : categoryDesc(c.id)}
                           </span>
                         ) : null}
                       </td>
@@ -499,7 +514,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                         ) : null}
                       </td>
                       <td className="is-num">{c.products}</td>
-                      <td className="is-num">{c.fresh > 0 ? <span className="fbx-table__new">{c.fresh}</span> : '–'}</td>
+                      <td className="is-num">{c.fresh > 0 ? <span className="fbx-table__new">{c.fresh}</span> : '0'}</td>
                     </tr>
                   );
                 })}
@@ -507,20 +522,20 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
             </table>
           </div>
         )}
-        {axis === 'other' ? <p className="note">기타에 같은 문제가 여러 상품에서 반복되면 어휘에 항목을 추가합니다.</p> : null}
+        {axis === 'other' ? <p className="note">기타에 같은 불만이 여러 상품에서 되풀이되면 불만 종류 목록에 새 항목으로 넣어 드립니다.</p> : null}
       </Panel>
 
       {rows.length > 0 ? (
-        <Panel title="원문" source={source} fold aside={`${rows.length}건`}>
+        <Panel title="의견 원문" source={source} fold aside={`의견 ${rows.length}건`}>
           <div className="fbx-inbox__head">
             <h3>
               {productId !== 'all' ? `${productName(productId)} · ` : ''}
-              {category ? (category === PENDING ? '분류 대기' : categoryLabel(category)) : axisLabelOf(axis)}
+              {category ? (category === PENDING ? PENDING_LABEL : categoryLabel(category)) : axisLabelOf(axis)}
             </h3>
-            <small>반영했으면 한 줄 남기세요. 고객 화면에 그대로 갑니다.</small>
+            <small>반영했으면 한 줄 남겨 주세요. 고객 화면에 그대로 보입니다.</small>
             {category ? (
               <button type="button" className="fbx-inbox__reset" onClick={() => setCategory(null)}>
-                카테고리 해제
+                모든 불만 종류 보기
               </button>
             ) : null}
           </div>
@@ -547,7 +562,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       <span key={l.category_id} className="fbx-card__cat">{categoryLabel(l.category_id)}</span>
                     ))}
                     {f.profile ? (
-                      <span title="작성자 피부">
+                      <span title="글 쓴 고객의 피부 타입 · 피부 톤">
                         {skinTypeLabel(f.profile.skin_type)} · {humanizeAttribute(f.profile.skin_tone)}
                       </span>
                     ) : null}
@@ -561,7 +576,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       className="fbx-card__hidden"
                       onClick={() => setRevealed({ ...revealed, [f.feedback_id]: true })}
                     >
-                      금지어 포함 · 눌러서 보기
+                      부적절할 수 있는 표현이 있어 접어 두었습니다 · 눌러서 보기
                     </button>
                   ) : (
                     <p className="fbx-card__body">{f.body}</p>
@@ -575,7 +590,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                     </blockquote>
                   ) : f.status === 'reflected' ? (
                     <blockquote className="fbx-card__reply">
-                      <span>답글 없이 반영</span>
+                      <span>답글 없이 반영했습니다</span>
                       <small>{brandName ?? ''} · {f.replied_at?.slice(0, 10)}</small>
                     </blockquote>
                   ) : null}
@@ -590,7 +605,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       )}
                       <div className={`fbx-reply${hits.length ? ' has-warning' : ''}`}>
                         <input
-                          placeholder="고객에게 보일 답변 한 줄"
+                          placeholder="고객에게 보일 답변 한 줄 (예: 다음 생산분부터 펌프를 바꿉니다)"
                           value={text}
                           aria-label="답변"
                           disabled={busy[f.feedback_id]}
@@ -600,11 +615,11 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                           <p className="fbx-reply__warn">
                             {hits.map((h) => (
                               <span key={h.term}>
-                                <b>{h.term}</b> {h.level === 'forbidden' ? '금지' : h.why}
+                                <b>{h.term}</b> {h.level === 'forbidden' ? '쓸 수 없는 표현' : h.why}
                                 {' · '}
                               </span>
                             ))}
-                            화장품법 제13조
+                            화장품법 제13조(표시·광고 제한)에 걸릴 수 있는 표현입니다
                           </p>
                         ) : null}
                         {actionError[f.feedback_id] ? <p className="fbx-reply__warn">{actionError[f.feedback_id]}</p> : null}

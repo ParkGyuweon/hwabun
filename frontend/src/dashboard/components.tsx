@@ -19,11 +19,11 @@ import type { ReactNode } from 'react';
 export type SourceKind = 'real' | 'seed' | 'none' | 'mock';
 
 const SOURCE_TEXT: Record<SourceKind, { label: string; title: string }> = {
-  real: { label: '실측', title: '백엔드에서 받은 값입니다' },
-  seed: { label: '시드', title: '백엔드에 아직 행이 없어 번들 샘플 파일로 보여 줍니다. 진짜 고객 글이 아닙니다' },
-  none: { label: '없음', title: '아직 쌓인 데이터가 없거나 읽지 못했습니다. 지어낸 값을 대신 보여 주지 않습니다' },
+  real: { label: '실제 기록', title: '내 쇼핑몰에서 실제로 생긴 기록으로 만든 숫자입니다' },
+  seed: { label: '예시', title: '아직 실제 기록이 없어 예시 글을 보여 드립니다. 진짜 고객이 쓴 글이 아닙니다' },
+  none: { label: '아직 없음', title: '아직 쌓인 기록이 없거나 불러오지 못했습니다. 지어낸 값은 보여 드리지 않습니다' },
   // 브랜드 대시보드에는 더 이상 쓰지 않는다. 플랫폼 화면(platform.html)의 시연용 합계에만 남아 있다
-  mock: { label: '모의', title: '화면 모양을 위한 값입니다. 실제 집계가 아닙니다' },
+  mock: { label: '예시 값', title: '화면 모양을 보여 드리기 위한 예시 값입니다. 실제 숫자가 아닙니다' },
 };
 
 export function SourceBadge({ kind }: { kind: SourceKind }) {
@@ -54,10 +54,10 @@ export function SourceBadge({ kind }: { kind: SourceKind }) {
 export type DataOrigin = 'mine' | 'shared';
 
 const ORIGIN_TEXT: Record<DataOrigin, { label: string; title: string }> = {
-  mine: { label: '내 데이터', title: '내 브랜드 로그만으로 나온 값입니다' },
+  mine: { label: '내 브랜드', title: '내 브랜드 고객의 기록만으로 나온 숫자입니다' },
   shared: {
-    label: '전체 브랜드',
-    title: '참여 브랜드가 함께 내놓아야 나오는 값입니다. 내 데이터만으로는 만들 수 없습니다',
+    label: '전체 브랜드 평균',
+    title: '쇼핑몰에 함께 있는 여러 브랜드의 기록을 모아 나온 숫자입니다. 내 브랜드 기록만으로는 알 수 없는 것입니다',
   },
 };
 
@@ -98,7 +98,7 @@ export function VerdictBanner({
       <h2 className="verdict__headline">{headline}</h2>
       <p className="verdict__reason">{reason}</p>
       <p className="verdict__action">{action}</p>
-      <p className="verdict__sample">표본 {sampleSize.toLocaleString()}건</p>
+      <p className="verdict__sample">방문 기록 {sampleSize.toLocaleString()}건을 보고 낸 판단</p>
     </section>
   );
 }
@@ -203,6 +203,10 @@ export function BarList({
   /** 순위 번호를 붙인다. TOP N 목록에만 쓰고 분포 목록에는 쓰지 않는다 */
   rank?: boolean;
 }) {
+  // 비어 있으면 빈 목록 대신 이유를 적는다. 빈 <ul> 은 화면에서 아무것도 안 보여 "고장났나" 로 읽힌다
+  if (items.length === 0) {
+    return <p className="note">아직 보여 드릴 항목이 없습니다. 고객 기록이 쌓이면 여기에 순위가 생깁니다.</p>;
+  }
   const values = items.map((item) => item.value);
   const max = Math.max(1, ...values);
   const min = Math.min(...values);
@@ -255,12 +259,12 @@ export function BarList({
       </ul>
       {mode === 'flat' ? (
         <p className="bars__flat-note">
-          항목 간 차이가 {Math.round(spread * 100)}%로 작아 막대를 생략했습니다. 숫자로 비교하세요.
+          항목끼리 차이가 {Math.round(spread * 100)}%밖에 안 나서 막대는 그리지 않았습니다. 숫자로 비교해 주세요.
         </p>
       ) : null}
       {mode === 'dots' ? (
         <p className="bars__flat-note">
-          세로선은 평균 {fmt(mean)}. 점이 왼쪽이면 평균 아래입니다. 축은 0이 아니라 값 범위입니다.
+          세로선이 평균 {fmt(mean)}입니다. 점이 세로선보다 왼쪽이면 평균보다 낮습니다. 차이를 크게 보이려고 눈금을 값 범위로 좁혔습니다.
         </p>
       ) : null}
     </>
@@ -269,6 +273,10 @@ export function BarList({
 
 /** 깔때기. 단계 사이 전환율을 함께 보여준다 */
 export function Funnel({ steps }: { steps: Array<{ label: string; value: number; note?: string }> }) {
+  // 단계가 하나도 없으면 빈 칸 대신 이유를 적는다
+  if (steps.length === 0) {
+    return <p className="note">아직 고객 행동 기록이 없어 단계를 그릴 수 없습니다. 고객이 상품을 보기 시작하면 채워집니다.</p>;
+  }
   const max = Math.max(1, ...steps.map((step) => step.value));
   return (
     <div className="funnel">
@@ -278,7 +286,7 @@ export function Funnel({ steps }: { steps: Array<{ label: string; value: number;
         return (
           <div key={step.label} className="funnel__step">
             {rate !== null ? (
-              <p className="funnel__rate">↓ {(rate * 100).toFixed(1)}%</p>
+              <p className="funnel__rate" title="앞 단계에서 이 단계까지 넘어온 고객의 비율">↓ {(rate * 100).toFixed(1)}% 넘어옴</p>
             ) : null}
             <div className="funnel__bar" style={{ width: `${(step.value / max) * 100}%` }}>
               <span className="funnel__label">
@@ -346,7 +354,7 @@ export function LineChart({
   const pad = 6;
   // 점이 하나도 없으면 그릴 선도 없다. 0 으로 채운 평평한 선을 그리면 "방문이 0 이었다" 로 읽힌다
   if (points.length === 0) {
-    return <p className="note">아직 쌓인 데이터가 없습니다.</p>;
+    return <p className="note">아직 이 기간의 방문 기록이 없습니다. 고객이 내 상품을 보기 시작하면 날짜별로 선이 그려집니다.</p>;
   }
   const max = Math.max(1, ...points.map((p) => p.value));
   // 축은 0 부터. 아래를 잘라 내면 작은 흔들림이 큰 변화처럼 보인다 (명세 §3-1)
@@ -361,7 +369,7 @@ export function LineChart({
       className="line-chart"
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="기간별 추이"
+      aria-label="날짜별 방문 수 변화"
     >
       <polygon
         points={`${pad},${height - pad} ${path} ${width - pad},${height - pad}`}
@@ -405,7 +413,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
   const y1 = height - pad.b;
 
   const shown = points.filter((p) => p.n >= 50);
-  if (shown.length === 0) return <p className="note">표본 50 이상인 콘텐츠가 없습니다.</p>;
+  if (shown.length === 0) return <p className="note">아직 50번 이상 읽힌 설명 글이 없어 그림을 그리지 않았습니다. 기록이 더 쌓이면 나타납니다.</p>;
 
   // 축 범위. 세로는 lift 1.0 이 항상 가운데 쪽에 오도록 위아래로 같은 폭을 준다
   const maxX = Math.max(...shown.map((p) => p.x)) * 1.12;
@@ -477,7 +485,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
         className="scatter"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="콘텐츠별 주목도와 전환 기여 산점도"
+        aria-label="상세페이지 설명 글마다 읽은 시간과 담기에 준 도움을 점으로 그린 그림"
       >
         <defs>
           <clipPath id="scatter-plot">
@@ -506,18 +514,18 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
         <line className="scatter__ref scatter__ref--strong" x1={x0} y1={cy} x2={x1} y2={cy} />
         <line className="scatter__ref" x1={cx} y1={y0} x2={cx} y2={y1} />
         <text className="scatter__ref-label" x={x1 - 6} y={cy - 8} textAnchor="end">
-          기여 1.0× 기준
+          담기 도움 1.0× = 평균
         </text>
         <text className="scatter__ref-label" x={cx + 6} y={y1 + 16}>
-          평균 체류 {meanX.toFixed(0)}초
+          평균 읽은 시간 {meanX.toFixed(0)}초
         </text>
 
         {/* 사분면 이름 */}
         <text className="scatter__quad" x={x0 + 14} y={y0 + 22}>
-          짧게 보지만 결정에 기여 · 위로 올릴 것
+          잠깐 읽어도 담게 만든다 · 위로 올릴 것
         </text>
         <text className="scatter__quad scatter__quad--fix" x={x1 - 14} y={y1 - 14} textAnchor="end">
-          오래 보지만 안 산다 · 손볼 곳
+          오래 읽는데 담지 않는다 · 손볼 곳
         </text>
 
         {/* 축 */}
@@ -526,10 +534,10 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
           {maxX.toFixed(0)}초
         </text>
         <text className="scatter__axis-name" x={x0} y={height - 8}>
-          가로 · 평균 체류 시간
+          가로 · 고객이 이 글을 읽은 평균 시간
         </text>
         <text className="scatter__axis-name" x={x0 - 44} y={y0 - 22}>
-          세로 · 담기 기여
+          세로 · 담기에 준 도움
         </text>
 
         {/* 점 */}
@@ -543,7 +551,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
               {leader ? <line className="scatter__leader" x1={px} y1={py} x2={anchor === 'end' ? tx : tx} y2={ty - 4} /> : null}
               <circle className="scatter__halo" cx={px} cy={py} r={r + 3} />
               <circle className="scatter__dot" cx={px} cy={py} r={r}>
-                <title>{`${p.label} · 체류 ${p.x.toFixed(1)}초 · 기여 ${p.y.toFixed(1)}× · n=${p.n.toLocaleString('ko-KR')}`}</title>
+                <title>{`${p.label} · 평균 ${p.x.toFixed(1)}초 읽음 · 담기 도움 평균의 ${p.y.toFixed(1)}배 · 읽은 기록 ${p.n.toLocaleString('ko-KR')}건`}</title>
               </circle>
               <text className="scatter__name" x={tx} y={ty} textAnchor={anchor}>
                 {p.label}
@@ -557,9 +565,9 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
       </svg>
 
       <p className="scatter-legend">
-        <span className="scatter-legend__key scatter-legend__key--lift" /> 담기 기여 1.0× 이상
-        <span className="scatter-legend__key scatter-legend__key--fix" /> 1.0× 미만
-        <span className="scatter-legend__size" /> 원 크기 = 표본, 흐린 것은 200 미만
+        <span className="scatter-legend__key scatter-legend__key--lift" /> 이 글을 본 고객이 평균보다 많이 담음 (1.0× 이상)
+        <span className="scatter-legend__key scatter-legend__key--fix" /> 평균보다 적게 담음 (1.0× 미만)
+        <span className="scatter-legend__size" /> 원이 클수록 읽은 고객이 많음 · 흐린 원은 200명 미만
       </p>
     </div>
   );
@@ -609,7 +617,7 @@ export function Heatmap({
                 const cell = cells[r.key]?.[c.key];
                 if (!cell || cell.n < 50) {
                   return (
-                    <td key={c.key} className="heat__cell is-empty" title="표본 50 미만 · 표시하지 않음">
+                    <td key={c.key} className="heat__cell is-empty" title="이 칸은 기록이 50건이 안 돼 아직 비워 두었습니다. 고객이 더 다녀가면 채워집니다">
                       <span className="heat__value">–</span>
                     </td>
                   );
@@ -620,10 +628,10 @@ export function Heatmap({
                     key={c.key}
                     className={`heat__cell${thin ? ' is-thin' : ''}`}
                     style={{ background: `rgb(var(--brand-rgb) / ${0.08 + (cell.value / max) * 0.72})` }}
-                    title={thin ? `n=${cell.n} · 표본 200 미만` : `n=${cell.n}`}
+                    title={thin ? `기록 ${cell.n}건 · 200건이 안 돼 참고만 해 주세요` : `기록 ${cell.n}건`}
                   >
                     <span className="heat__value">{format(cell.value)}</span>
-                    <span className="heat__n">n={cell.n.toLocaleString('ko-KR')}</span>
+                    <span className="heat__n">{cell.n.toLocaleString('ko-KR')}건</span>
                   </td>
                 );
               })}
@@ -710,7 +718,7 @@ export function Actions({ items }: { items: ActionItem[] }) {
               </p>
               {a.basis && a.basis.length > 0 ? (
                 <details className="act__more">
-                  <summary>왜 이렇게 하라는 건지 · 다른 화면에서 모은 근거 {a.basis.length}개</summary>
+                  <summary>왜 이렇게 하라는 건지 · 다른 화면에서 모은 근거 {a.basis.length}가지</summary>
                   <ul className="act__basis">
                     {a.basis.map((b) => (
                       <li key={b.from + b.text}>

@@ -80,11 +80,13 @@ export default function RegisterScreen() {
       const r = await registerProduct(form, editingId ?? undefined);
       if (r.mode === 'backend') {
         setSavedMsg(
-          `${r.product.product_name} 을(를) 백엔드에 등록했습니다.${r.activated ? ' 쇼핑몰에 바로 보입니다.' : ' 승인(ACTIVE) 전이라 쇼핑몰에는 아직 안 보입니다.'}`,
+          `${r.product.product_name} 을(를) 쇼핑몰에 등록했습니다.${r.activated ? ' 쇼핑몰에 바로 보입니다.' : ' 운영자 승인이 끝나면 쇼핑몰에 보입니다.'}`,
         );
       } else {
         setSavedMsg(
-          `${r.product.product_name} 을(를) ${editingId ? '수정' : '등록'}했습니다 (이 브라우저에만 저장). 백엔드 등록은 실패: ${r.reason}`,
+          editingId
+            ? `${r.product.product_name} 을(를) 수정했습니다. 수정 내용은 지금 이 브라우저에서만 보입니다.`
+            : `${r.product.product_name} 을(를) 쇼핑몰에 올리지 못해 이 브라우저에만 저장했습니다. 잠시 뒤 다시 등록해 주세요.`,
         );
       }
       setForm(EMPTY_FORM);
@@ -109,7 +111,7 @@ export default function RegisterScreen() {
     <div className="stack">
       <div className="register">
         <div className="register__form">
-          <Panel title={editingId ? '상품 수정' : '상품 등록'} aside={editingId ? editingId : '새 상품'}>
+          <Panel title={editingId ? '상품 수정' : '상품 등록'} aside={editingId ? `수정 중 · 상품 번호 ${editingId}` : '새 상품'}>
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-name">상품명 *</label>
               <input id="reg-name" className="reg-input" value={form.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="예: 진정 수분 세럼" maxLength={80} />
@@ -123,11 +125,15 @@ export default function RegisterScreen() {
               <div className="reg-field">
                 <label className="reg-label" htmlFor="reg-price">가격 (원) *</label>
                 <input id="reg-price" className="reg-input" type="number" min={0} step={100} value={form.price_krw} onChange={(e) => set('price_krw', e.target.value === '' ? '' : Number(e.target.value))} placeholder="32000" />
-                <p className="reg-hint">고객 화면에는 ${form.price_krw === '' ? '-' : (Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 보입니다 (표시 환율 {KRW_PER_USD}원)</p>
+                <p className="reg-hint">
+                  {form.price_krw === ''
+                    ? `고객 화면에는 달러로 표시됩니다 (1달러 = ${KRW_PER_USD}원으로 계산)`
+                    : `고객 화면에는 $${(Number(form.price_krw) / KRW_PER_USD).toFixed(2)} 로 표시됩니다 (1달러 = ${KRW_PER_USD}원으로 계산)`}
+                </p>
                 {/* 추천 순위는 원화 경계(26,000/46,000/66,000/105,000)로 자른 가격 구간을 쓴다. 환율은 개입하지 않는다 (계약 §4.1 · Jira 302) */}
                 {form.price_krw !== '' ? (
                   <p className="reg-hint">
-                    추천이 읽는 가격 구간: <b>{recommendPriceBin(Number(form.price_krw)).bin}</b> ({recommendPriceBin(Number(form.price_krw)).token} · 원화 경계 그대로, 계약 §4.1)
+                    추천에서는 <b>{recommendPriceBin(Number(form.price_krw)).bin}</b> 가격대 상품으로 묶입니다
                   </p>
                 ) : null}
               </div>
@@ -139,7 +145,7 @@ export default function RegisterScreen() {
                 <select id="reg-sec" className="reg-input" value={form.secondary_category} onChange={(e) => { set('secondary_category', e.target.value); set('tertiary_category', ''); }}>
                   <option value="">선택</option>
                   {SECONDARY_CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>{c.ko} ({c.value})</option>
+                    <option key={c.value} value={c.value}>{c.ko}</option>
                   ))}
                 </select>
               </div>
@@ -148,7 +154,7 @@ export default function RegisterScreen() {
                 <select id="reg-ter" className="reg-input" value={form.tertiary_category} disabled={!form.secondary_category} onChange={(e) => set('tertiary_category', e.target.value)}>
                   <option value="">선택</option>
                   {tertiaries.map((t) => (
-                    <option key={t} value={t}>{labelKo(t)} ({t})</option>
+                    <option key={t} value={t}>{labelKo(t)}</option>
                   ))}
                 </select>
               </div>
@@ -183,7 +189,7 @@ export default function RegisterScreen() {
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-ing">전성분 *</label>
               <textarea id="reg-ing" className="reg-input reg-textarea" rows={4} value={form.ingredients} onChange={(e) => set('ingredients', e.target.value)} placeholder="정제수, 글리세린, 나이아신아마이드, 병풀추출물 … (한글·영문 모두 됩니다. 함량 순서대로)" />
-              <p className="reg-hint">성분은 태그로 받지 않습니다. 추천은 전성분의 순서에서 성분을 읽습니다 (계약 §3.1). 추천이 읽는 성분은 어휘집 30종이고, 그 밖의 성분은 등록은 되지만 추천 점수에는 들어가지 않습니다.</p>
+              <p className="reg-hint">성분은 따로 고르지 않고 전성분에서 읽습니다. 추천은 전성분의 순서(함량 순)를 보고 주요 성분을 파악하며, 추천에 쓰이는 성분은 30가지입니다. 그 밖의 성분도 등록은 되지만 추천 점수에는 반영되지 않습니다.</p>
             </div>
 
             <div className="reg-field">
@@ -193,7 +199,7 @@ export default function RegisterScreen() {
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-hi">앞세울 성분 (줄마다 "성분: 설명")</label>
               <textarea id="reg-hi" className="reg-input reg-textarea" rows={3} value={form.highlighted_ingredients} onChange={(e) => set('highlighted_ingredients', e.target.value)} placeholder={'병풀추출물: 각질 제거 후 진정\n나이아신아마이드: 톤과 결 정돈'} />
-              <p className="reg-hint">상세페이지 표시용입니다. 추천 벡터에는 들어가지 않습니다. 성분은 위 전성분의 순서에서만 읽습니다.</p>
+              <p className="reg-hint">상세 페이지에 보여 주는 용도입니다. 추천에는 반영되지 않습니다. 추천은 위 전성분만 읽습니다.</p>
             </div>
             <div className="reg-row">
               <div className="reg-field">
@@ -213,7 +219,7 @@ export default function RegisterScreen() {
             <div className="reg-field">
               <span className="reg-label">대표 이미지</span>
               <div className="reg-row">
-                <input className="reg-input" value={form.image_url.startsWith('data:') ? '(업로드한 파일)' : form.image_url} onChange={(e) => set('image_url', e.target.value)} placeholder="이미지 URL 또는 파일 업로드" />
+                <input className="reg-input" value={form.image_url.startsWith('data:') ? '(업로드한 파일)' : form.image_url} onChange={(e) => set('image_url', e.target.value)} placeholder="이미지 주소를 붙이거나 오른쪽에서 파일을 올려 주세요" />
                 <input type="file" accept="image/*" onChange={(e) => onImageFile(e.target.files?.[0] ?? null)} />
               </div>
             </div>
@@ -244,14 +250,14 @@ export default function RegisterScreen() {
 
           <Panel title="등록한 상품" aside={`${mine.length}개`}>
             {mine.length === 0 ? (
-              <p className="reg-empty">아직 없습니다. 등록하면 쇼핑몰 목록·상세와 추천 후보에 바로 들어갑니다.</p>
+              <p className="reg-empty">아직 등록한 상품이 없습니다. 위에서 등록하면 쇼핑몰 목록과 추천 후보에 바로 들어갑니다.</p>
             ) : (
               <ul className="reg-list">
                 {mine.map((r) => (
                   <li key={r.product.product_id} className="reg-list__item">
                     <span className="reg-list__name">{r.product.product_name}</span>
                     <span className="reg-list__meta">
-                      {labelKo(r.product.category[2] ?? r.product.category[1] ?? '')} · ${r.product.price_usd} · {r.updated_at.slice(0, 10)}
+                      {labelKo(r.product.category[2] ?? r.product.category[1] ?? '')} · {Math.round(r.product.price_usd * KRW_PER_USD).toLocaleString('ko-KR')}원 · {r.updated_at.slice(0, 10)} 저장
                     </span>
                     <span className="reg-list__actions">
                       <a className="chip" href={`/?product=${r.product.product_id}`} target="_blank" rel="noopener">쇼핑몰에서 보기</a>
@@ -268,7 +274,7 @@ export default function RegisterScreen() {
         <div className="register__preview">
           <div className="register__preview-head">
             <strong>고객이 보게 될 상세 페이지</strong>
-            <span>쇼핑몰 상세 페이지의 상품 부분입니다. 입력하면 바로 바뀝니다.</span>
+            <span>쇼핑몰 상세 페이지의 상품 부분을 그대로 보여 줍니다. 왼쪽에 입력하면 바로 바뀝니다.</span>
             <button type="button" className="chip" onClick={() => setPreviewKey((k) => k + 1)}>새로고침</button>
           </div>
           <iframe
