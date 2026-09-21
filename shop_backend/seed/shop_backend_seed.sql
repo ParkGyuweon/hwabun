@@ -707,6 +707,9 @@ INSERT INTO product_variant (variant_id,product_id,sku_id,label,label_ko,size,si
 ('SB000005-V1','SB000005','SB000005','기본','기본','120g',NULL,'18800','16000','/images/ssafy-beauty/SB000005-m1.webp',NULL,'ACTIVE','0'),
 ('SB000006-V1','SB000006','SB000006','기본','기본','50ml',NULL,'25500','21700','/images/ssafy-beauty/SB000006-m1.webp',NULL,'ACTIVE','0'),
 ('SB000007-V1','SB000007','SB000007','기본','기본','20ml',NULL,'32200','27400','/images/ssafy-beauty/SB000007-m1.webp',NULL,'ACTIVE','0'),
+('SB000001-V2','SB000001','SB000001-140','대용량','대용량','140매 / 310g',NULL,'52000','44200','/images/ssafy-beauty/SB000001-m2.webp',NULL,'ACTIVE','1'),
+('SB000004-V2','SB000004','SB000004-220','대용량','대용량','220ml',NULL,'61000','52000','/images/ssafy-beauty/SB000004-m2.webp',NULL,'ACTIVE','1'),
+('SB000007-V2','SB000007','SB000007-REFILL','리필','리필','20ml',NULL,'24000','20400','/images/ssafy-beauty/SB000007-m2.webp',NULL,'ACTIVE','1'),
 ('SB000008-V1','SB000008','SB000008','기본','기본','1매 / 30g',NULL,'8000','6800','/images/ssafy-beauty/SB000008-m1.webp',NULL,'ACTIVE','0') ON DUPLICATE KEY UPDATE variant_id=VALUES(variant_id),product_id=VALUES(product_id),sku_id=VALUES(sku_id),label=VALUES(label),label_ko=VALUES(label_ko),size=VALUES(size),size_ko=VALUES(size_ko),price_krw=VALUES(price_krw),sale_price_krw=VALUES(sale_price_krw),image_url=VALUES(image_url),swatch_url=VALUES(swatch_url),status=VALUES(status),sort_order=VALUES(sort_order);
 
 -- 주문 불변식: 판매 중인 상품에는 최소 하나의 구매 단위(product_variant)가 있어야 한다.
