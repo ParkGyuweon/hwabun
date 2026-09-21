@@ -246,23 +246,24 @@ li:first-child{background:linear-gradient(90deg,var(--acc-light),transparent);bo
 var $ = function(id){ return document.getElementById(id); };
 var fmt = function(n){ return (n == null ? 0 : n).toLocaleString(); };
 function draw(d){
-  $("personas").innerHTML = fmt(d.personas_touched) + "<small>명</small>";
+  $('personas').innerHTML = fmt(d.personas_touched) + '<small>명</small>';
   var ev = d.events || {};
-  $("eps").innerHTML = fmt(ev.per_sec_10s_avg) + "<small>/s</small>";
-  $("total").textContent = fmt(ev.total);
+  $('eps').innerHTML = fmt(ev.per_sec_10s_avg) + '<small>/s</small>';
+  $('total').textContent = fmt(ev.total);
   var rows = d.recent || [];
-  $("recent").innerHTML = rows.map(function(r){
-    var src = r.source === "kafka" ? ("P" + (r.partition == null ? "?" : r.partition)) : "직접";
-    var events = (r.events || []).join(" · ");
-    return "<li><span class=\"t\">" + r.age_sec + "s 전</span>" +
-           "<span><span class=\"who\">" + r.persona_id + "</span>" +
-           "<span class=\"pill\">" + src + "</span>" +
-           "<span class=\"n\">+" + r.n + "</span>" +
-           "<div class=\"ev\">" + events + "</div></span></li>";
-  }).join("");
+  $('recent').innerHTML = rows.map(function(r){
+    var src = r.source === 'kafka' ? ('P' + (r.partition == null ? '?' : r.partition)) : '직접';
+    var events = (r.events || []).join(' · ');
+    return '<li>' +
+      '<span class=t>' + r.age_sec + 's 전</span>' +
+      '<span><span class=who>' + r.persona_id + '</span>' +
+      '<span class=pill>' + src + '</span>' +
+      '<span class=n>+' + r.n + '</span>' +
+      '<div class=ev>' + events + '</div></span></li>';
+  }).join('');
 }
 function tick(){
-  fetch("/live/stats").then(function(r){ return r.json(); }).then(draw).catch(function(){});
+  fetch('/live/stats').then(function(r){ return r.json(); }).then(draw).catch(function(){});
 }
 tick();
 setInterval(tick, 1000);
