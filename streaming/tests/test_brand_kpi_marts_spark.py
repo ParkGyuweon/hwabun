@@ -337,7 +337,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
     def test_quick_look_cart_counts_against_detail_view_sessions(self):
         """Quick Look 으로만 담은 세션도 분모에 들어가야 담기율이 1.0 을 넘지 않는다.
 
-        브랜드 Mart 는 데이터 235 에서 고쳤는데 상품 Mart 가 빠져 있었다.
+        브랜드 Mart 는 먼저 고쳤는데 상품 Mart 가 빠져 있었다.
         재생 데이터에서 1,248행 중 323행이 1.0 을 넘었고 최댓값이 6.0 이었다.
         """
         facts = self._facts([
