@@ -798,25 +798,6 @@
   border-bottom: 1px solid var(--color-line);
 }
 
-.site-header__promo {
-  padding: 14px var(--space-4);
-  background: var(--color-promo);
-  color: var(--color-promo-ink);
-  font-size: 14px;
-  line-height: 1.4;
-  text-align: center;
-  letter-spacing: 0.01em;
-}
-
-.site-header__promo strong {
-  font-weight: 700;
-}
-
-.site-header__promo-terms {
-  opacity: 0.75;
-  font-size: 13px;
-}
-
 .site-header__main {
   /* 가장 넓은 화면(목록 1400px)에 맞춘다. 본문보다 좁으면 로고가 떠 보인다 */
   max-width: 1400px;
