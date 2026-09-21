@@ -164,16 +164,26 @@ export default function OverviewScreen({
             }
             source="real"
           />
+          {/*
+            간격 중앙값은 서버가 행이 하나일 때만 준다 (DashboardMartService.brandRepurchase — 중앙값은 합산할 수 없다).
+            다시 산 고객은 있는데 간격이 null 이면 "고객이 없다" 가 아니라 "계산이 안 됐다" 다. 둘을 다르게 적는다 (2026-09-21).
+          */}
           <Kpi
             label="다시 사기까지 걸린 날"
-            value={repurchase.brand.medianDays === null ? '아직 없음' : `${Math.round(repurchase.brand.medianDays)}일`}
-            sub={repurchase.brand.medianDays === null ? '두 번 이상 산 고객이 생기면 첫 구매와 다음 구매 사이 날수를 보여 드립니다' : '두 번 이상 산 고객이 첫 구매 뒤 다음 구매까지 걸린 날수 (가운데 값)'}
+            value={repurchase.brand.medianDays === null ? (repurchase.brand.repeatBuyerCount > 0 ? '계산 전' : '아직 없음') : `${Math.round(repurchase.brand.medianDays)}일`}
+            sub={
+              repurchase.brand.medianDays !== null
+                ? '두 번 이상 산 고객이 첫 구매 뒤 다음 구매까지 걸린 날수 (가운데 값)'
+                : repurchase.brand.repeatBuyerCount > 0
+                  ? `다시 산 고객 ${fmt.int(repurchase.brand.repeatBuyerCount)}명은 있지만 구매 사이 날수 계산이 아직 준비되지 않았습니다`
+                  : '두 번 이상 산 고객이 생기면 첫 구매와 다음 구매 사이 날수를 보여 드립니다'
+            }
             source="real"
           />
           <Kpi
-            label="다시 사려고 산 주문"
+            label="'또 사려고요' 라고 답한 주문"
             value={`${fmt.int(repurchase.brand.declaredRestockOrders)}건`}
-            sub={`구매할 때 "다시 사려고요" 를 고른 주문 · 실제로 두 번 이상 산 고객 ${fmt.int(repurchase.brand.repeatBuyerCount)}명과 비교해 보세요`}
+            sub={`주문할 때 구매 이유로 "다시 사려고 산다" 를 고른 주문 수입니다. 실제로 두 번 이상 산 고객은 ${fmt.int(repurchase.brand.repeatBuyerCount)}명이라, 말과 행동이 얼마나 다른지 볼 수 있습니다`}
             source="real"
           />
           <Kpi
