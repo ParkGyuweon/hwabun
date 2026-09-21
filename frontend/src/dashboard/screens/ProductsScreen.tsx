@@ -34,10 +34,9 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
 
   const rows = useMemo(() => {
     const list = [...productMetrics];
-    const cartRate = (p: ProductMetrics) => (p.detailViews === 0 ? 0 : p.addToCart / p.detailViews);
     switch (sort) {
       case 'cartRate':
-        return list.sort((a, b) => cartRate(b) - cartRate(a));
+        return list.sort((a, b) => b.cartRate - a.cartRate);
       case 'remove':
         return list.sort((a, b) => b.removeRate - a.removeRate);
       case 'variant':
@@ -148,7 +147,7 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
                 <th>빠른 보기 → 상세</th>
                 <th>담았다 뺌</th>
                 {showRepurchase ? <th>다시 산 고객</th> : null}
-                <th>상세 본 횟수</th>
+                <th>상세 본 방문</th>
               </tr>
             </thead>
             <tbody>
@@ -176,7 +175,7 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
                       {p.exitContent ? <span className="diag-hint">{EXIT_HINT[p.exitContent].hint}</span> : null}
                     </td>
                     <td>
-                      <b>{fmt.pct(p.detailViews === 0 ? 0 : p.addToCart / p.detailViews)}</b>
+                      <b>{fmt.pct(p.cartRate)}</b>
                     </td>
                     <td>{fmt.pct(p.infoRate, 0)}</td>
                     {/* 모르는 값은 하이픈이다. 0 으로 적으면 "왕복이 없다" 로 읽힌다 */}

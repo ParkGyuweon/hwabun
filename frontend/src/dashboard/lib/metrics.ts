@@ -70,7 +70,14 @@ export interface ProductMetrics {
   product: Product;
   impressions: number;
   clicks: number;
+  /**
+   * 상세를 본 **세션 수** (detail_view_sessions). 문턱(200)과 담기 비율의 분모가 이것이다 (계약 §4.1).
+   * 2026-09-21 까지는 Event 건수(product_view_count)를 넣어서, 8개 상품 전부 세션은 500~768 인데 건수는 200 을 못 넘어
+   * 상품 화면 네 칸이 한꺼번에 비었다 (규원님 실측).
+   */
   detailViews: number;
+  /** 상세를 본 세션 중 장바구니에 담은 세션 비율. 서버 view_to_cart_rate, 없으면 세션끼리 나눈 값 */
+  cartRate: number;
   quickLooks: number;
   ingredientViewRate: number;
   reviewViewRate: number;
