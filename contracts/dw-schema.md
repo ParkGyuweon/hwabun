@@ -1183,14 +1183,22 @@ key = snapshot_week_kst + cohort_key + metric_name + actor_type + source + gener
 input = brand_daily_kpi, brand_cohort_dim
 ```
 
-**실행 축이 NULL 인 행을 한 벌 더 낸다 — 전체(`actor=all`) 값이다.** 축별 행과 같은
-grain 에 축만 비우고 들어간다.
+**실행 축 값이 `all` 인 행을 한 벌 더 낸다 — 전체(`actor=all`) 값이다.** 축별 행과 같은
+grain 에서 실행 축을 모두 걷어내고, 각 축 컬럼에 `all` 을 넣는다.
 
 분위수는 **합칠 수 없기 때문이다.** p50 둘의 가중 평균은 합친 집합의 p50 이 아니다.
 축을 합친 값을 쓰려면 브랜드별 원본 값에서 다시 계산해야 하는데, 그 원본은 Spark 에만
 있고 조회하는 서버에는 없다. 그래서 Mart 가 계산해 내려준다.
 
 **축 컬럼에는 `all` 을 넣는다.** 소비자는 "축이 `all` 인 행 = 전체" 로 읽는다.
+
+이 전체 행은 `actor_type`의 `user`와 `synthetic`을 함께 포함한다. `generator_type`까지 `all`이므로 합성
+행 안에서는 PA(`agent_llm`)와 PC(`python_batch`)도 함께 포함한다. `all`은 Event 원문의 actor 값이 아니라
+Mart 조회를 위한 합산 표시값이다. 시연에서 이를 기본으로 쓰는 이유와 운영 전환 시 합성 트래픽을 제외해야
+하는 제약은 [`dashboard-mart-api-spec.md`](./dashboard-mart-api-spec.md) §1-2가 정본이다.
+
+다른 일반 Mart는 API가 축별 행의 건수를 합산하고 비율을 다시 계산하므로 `all` 행을 물리화하지 않는다.
+이 Mart만 분위수를 합산할 수 없어 브랜드별 원본 값에서 전체 분위수를 다시 계산한 행을 별도로 보관한다.
 
 NULL 을 쓰지 않는 이유가 둘이다. 하나, **NULL 이 이미 다른 뜻을 갖는다** —
 `generator_type` 의 NULL 은 실사용자(Web)다 (§2.2). 거기에 "축을 걷어냄" 을 얹으면 한
