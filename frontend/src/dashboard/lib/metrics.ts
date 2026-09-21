@@ -268,6 +268,21 @@ export interface ContentAttention {
   sampleSize: number;
 }
 
+/**
+ * 가격 구간. 정본은 contracts/product-feature-vocab.json 의 price_bin_edges (어휘집 0.7, 원화 5구간, 반열린 [하한, 상한)).
+ * 마트의 `price_bin` 문자열을 사장님이 읽는 원화 표기로 바꾼다. 순서도 여기서 정한다.
+ */
+export const PRICE_BIN_ORDER = ['~26k', '26k-46k', '46k-66k', '66k-105k', '105k+'] as const;
+export const PRICE_BIN_KO: Record<string, string> = {
+  '~26k': '2.6만원 미만',
+  '26k-46k': '2.6~4.6만원',
+  '46k-66k': '4.6~6.6만원',
+  '66k-105k': '6.6~10.5만원',
+  '105k+': '10.5만원 이상',
+};
+/** null 구간 = 가격이 등록되지 않은 상품들 */
+export const priceBinKo = (bin: string | null) => (bin === null ? '가격 미입력' : PRICE_BIN_KO[bin] ?? bin);
+
 export const SKIN_TYPE_KO: Record<string, string> = {
   dry: '건성',
   oily: '지성',

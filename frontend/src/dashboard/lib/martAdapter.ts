@@ -488,6 +488,58 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
     src.segments = 'real';
     src.grid = 'real';
     src.topContent = 'real';
+
+    /*
+     * 가격 블록 셋 (계약 0.3). 서버가 아직 안 주면(undefined·null) 자리를 비운다 — 모의로 채우지 않는다.
+     * 비교 대상이 다른 브랜드인 코호트는 특히 흉내 내면 안 되는 숫자다.
+     */
+    if (sg.price_bands) {
+      out = {
+        ...out,
+        priceBands: sg.price_bands.map((b) => ({
+          bin: b.price_bin,
+          productCount: b.product_count,
+          sessions: b.detail_view_sessions,
+          cartSessions: b.add_to_cart_sessions,
+          purchaseSessions: b.purchase_sessions,
+          detailEntryRate: b.detail_entry_rate,
+          cartRate: b.view_to_cart_rate,
+          purchaseRate: b.view_to_purchase_rate,
+        })),
+      };
+      src.priceBands = 'real';
+    }
+    if (sg.segment_price_grid) {
+      const types = ['dry', 'oily', 'combination', 'normal'];
+      const cellsOf = sg.segment_price_grid.filter((c) => c.segment_type === 'skin_type');
+      out = {
+        ...out,
+        segmentPriceGrid: types.map((type) => ({
+          type,
+          cells: cellsOf
+            .filter((c) => c.segment_value === type)
+            .map((c) => ({ bin: c.price_bin, sessions: c.detail_view_sessions, cartRate: c.view_to_cart_rate ?? 0 })),
+        })),
+      };
+      src.segmentPriceGrid = 'real';
+    }
+    if (sg.cohort) {
+      const c = sg.cohort;
+      out = {
+        ...out,
+        cohort: {
+          key: c.cohort_key,
+          productBand: c.product_count_band,
+          priceBin: c.dominant_price_bin,
+          weekStart: c.window_start_date,
+          weekEnd: c.window_end_date,
+          brandCount: c.brand_count,
+          suppressed: c.is_suppressed,
+          sampleSufficient: c.is_sample_sufficient,
+          metrics: c.metrics.map((m) => ({ name: m.metric_name, p25: m.p25, p50: m.p50, p75: m.p75, mine: m.my_value, position: m.my_position })),
+        },
+      };
+    }
   }
 
   // E5

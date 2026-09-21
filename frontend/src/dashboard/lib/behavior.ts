@@ -143,6 +143,53 @@ export interface SegmentByType {
   cartRate: number;
 }
 
+/**
+ * 가격대 한 줄 (E4 `price_bands`, brand_price_band_daily_kpi). `bin` 이 null 이면 가격이 없는 상품들의 반응이다 —
+ * 빼면 그 상품들의 반응을 볼 수 없어 행으로 남긴다. 축을 걷어낸 합계는 고객군 합계와 같지 않다 (계약 §3 E4).
+ */
+export interface PriceBandM {
+  bin: string | null;
+  productCount: number;
+  /** 상세를 본 방문. 칸을 비우고 흐리는 기준 */
+  sessions: number;
+  cartSessions: number;
+  purchaseSessions: number;
+  detailEntryRate: number | null;
+  cartRate: number | null;
+  purchaseRate: number | null;
+}
+
+/** 피부 타입 × 가격대 (E4 `segment_price_grid`, S5 히트맵). 마트는 표본 미달 칸을 지우지 않는다 — 화면이 50 미만 비움·200 미만 흐림 */
+export interface SegmentPriceRowM {
+  type: string;
+  cells: Array<{ bin: string | null; sessions: number; cartRate: number }>;
+}
+
+/**
+ * 비슷한 브랜드 묶음(코호트) 속 내 위치 (E4 `cohort`, commons_cohort_weekly). 다른 브랜드를 식별할 값은 없다.
+ * `suppressed` 면 분위 셋이 null 이고 화면은 "표본 부족" 만 적는다. 블록이 없으면(null) 배지 자체를 그리지 않는다 — 모의 금지.
+ */
+export interface CohortM {
+  key: string;
+  /** 상품 수 구간 ("2-3") */
+  productBand: string;
+  /** 주력 가격대 (price_bin) */
+  priceBin: string | null;
+  weekStart: string;
+  weekEnd: string;
+  brandCount: number;
+  suppressed: boolean;
+  sampleSufficient: boolean;
+  metrics: Array<{
+    name: string;
+    p25: number | null;
+    p50: number | null;
+    p75: number | null;
+    mine: number | null;
+    position: 'below_p25' | 'p25_p50' | 'p50_p75' | 'above_p75' | null;
+  }>;
+}
+
 export interface FrictionRow {
   where: string;
   event: string;
@@ -196,6 +243,10 @@ export interface BehaviorSource {
   /** 고객군 4×5 격자 */
   grid: Src;
   topContent: Src;
+  /** 가격대별 반응 (E4 price_bands) */
+  priceBands: Src;
+  /** 피부 타입 × 가격대 (E4 segment_price_grid) */
+  segmentPriceGrid: Src;
   friction: Src;
   entry: Src;
   ingredients: Src;
@@ -217,6 +268,12 @@ export interface BehaviorMetrics {
   segmentByType: SegmentByType[] | null;
   segmentTopContent: SegmentTop[];
   sameSkinFilterRate: number;
+  /** 가격대별 반응. 마트 없으면 빈 배열 (모의 없음) */
+  priceBands: PriceBandM[];
+  /** 피부 타입 × 가격대. 마트 없으면 빈 배열 (모의 없음) */
+  segmentPriceGrid: SegmentPriceRowM[];
+  /** 비슷한 브랜드 대비 내 위치. 마트 없으면 null — 배지를 그리지 않는다 */
+  cohort: CohortM | null;
   frictionByLocation: FrictionRow[];
   frictionCounts: { rage_click: number; dead_click: number; scroll_backtrack: number };
   entryConversion: EntryConversion[];
@@ -247,6 +304,8 @@ export const ALL_NONE: BehaviorSource = {
   segments: 'none',
   grid: 'none',
   topContent: 'none',
+  priceBands: 'none',
+  segmentPriceGrid: 'none',
   friction: 'none',
   entry: 'none',
   ingredients: 'none',
@@ -288,6 +347,9 @@ export function emptyBehavior(): BehaviorMetrics {
     segmentByType: null,
     segmentTopContent: [],
     sameSkinFilterRate: 0,
+    priceBands: [],
+    segmentPriceGrid: [],
+    cohort: null,
     frictionByLocation: [],
     frictionCounts: { rage_click: 0, dead_click: 0, scroll_backtrack: 0 },
     entryConversion: [],

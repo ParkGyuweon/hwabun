@@ -481,6 +481,83 @@ body {
   opacity: 0.8;
 }
 
+/*
+ * 비슷한 브랜드 대비 내 위치 (SegmentsScreen CohortBadge). 다른 브랜드가 섞인 숫자라 띠 색은 전체 브랜드(--accent).
+ * 억제(표본 부족)면 숫자 없이 글만. 표본이 얇으면 카드 전체를 흐린다.
+ */
+.cohort {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 18px 24px;
+  display: grid;
+  gap: 10px;
+}
+
+.cohort.is-thin {
+  opacity: 0.7;
+}
+
+.cohort--suppressed {
+  border-left-color: var(--line);
+}
+
+.cohort__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.cohort__line {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.cohort__metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.cohort__metric {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+}
+
+.cohort__metric--high {
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.cohort__metric--low {
+  box-shadow: inset 3px 0 0 #b3261e;
+}
+
+.cohort__name {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.cohort__pos {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.cohort__nums {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .verdict__eyebrow {
   margin: 0;
   font-size: 11px;
