@@ -330,8 +330,8 @@ class DashboardMartServiceTest {
   }
 
   @Test
-  @DisplayName("actor=all 코호트 분위값은 brand_count 가중 평균으로 합친다")
-  void allActorCohortUsesBrandWeightedQuantiles() {
+  @DisplayName("actor=all 코호트가 여러 실행 행이면 분위값을 만들지 않는다")
+  void allActorCohortDoesNotAverageExecutionRows() {
     segmentDay("2026-09-10", "skin_type", "dry", 10, 1.0D);
     brandDay("2026-09-10", 100, 30, 50, 15, 10);
     insert("dw.brand_cohort_dim", Map.of(
@@ -348,9 +348,10 @@ class DashboardMartServiceTest {
     Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
     Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
 
-    assertEquals(0.25D, decimal(metric.get("p25")), 1e-9);
-    assertEquals(0.35D, decimal(metric.get("p50")), 1e-9);
-    assertEquals(0.45D, decimal(metric.get("p75")), 1e-9);
+    assertNull(metric.get("p25"));
+    assertNull(metric.get("p50"));
+    assertNull(metric.get("p75"));
+    assertNull(metric.get("my_position"));
   }
 
   /* ---------------------------------------------------------------- E5 ingredients */

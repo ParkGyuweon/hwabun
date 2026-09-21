@@ -639,7 +639,19 @@ public class DashboardMartService {
     }
     Map<String, Map<String, Object>> metricsByName = new LinkedHashMap<>();
     for (Map.Entry<String, List<Map<String, Object>>> entry : groupedMetrics.entrySet()) {
-      metricsByName.put(entry.getKey(), q.actor().equals("all") ? weightedCohortRow(entry.getValue()) : entry.getValue().getFirst());
+      List<Map<String, Object>> metricRows = entry.getValue();
+      Map<String, Object> metricRow = metricRows.getFirst();
+      if (q.actor().equals("all") && metricRows.size() > 1) {
+        // p25/p50/p75 are already percentiles, so execution-axis rows cannot be
+        // combined by summing or brand-count weighted averaging. Without the
+        // underlying brand-level values, exposing a fabricated benchmark is worse
+        // than leaving the comparison unavailable.
+        metricRow = new LinkedHashMap<>(metricRow);
+        metricRow.put("p25", null);
+        metricRow.put("p50", null);
+        metricRow.put("p75", null);
+      }
+      metricsByName.put(entry.getKey(), metricRow);
     }
     Map<String, Object> first = rows.getFirst();
     LocalDate windowStart = toLocalDate(first.get("window_start_date"));
@@ -694,25 +706,6 @@ public class DashboardMartService {
       case "information_view_rate" -> doubleOrNull(mine.get("information_view_rate"));
       default -> null;
     };
-  }
-
-  /** actor=all 코호트는 분위값을 합산할 수 없으므로 브랜드 수를 가중치로 평균낸다. */
-  private static Map<String, Object> weightedCohortRow(List<Map<String, Object>> rows) {
-    Map<String, Object> result = new LinkedHashMap<>(rows.getFirst());
-    for (String key : List.of("p25", "p50", "p75")) {
-      double weighted = 0;
-      long weight = 0;
-      for (Map<String, Object> row : rows) {
-        Double value = doubleOrNull(row.get(key));
-        long brands = longOf(row.get("brand_count"));
-        if (value != null && brands > 0) {
-          weighted += value * brands;
-          weight += brands;
-        }
-      }
-      result.put(key, weight == 0 ? null : weighted / weight);
-    }
-    return result;
   }
 
   private static String position(Double value, Double p25, Double p50, Double p75) {
