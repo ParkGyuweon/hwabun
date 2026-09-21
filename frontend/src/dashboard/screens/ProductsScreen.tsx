@@ -22,11 +22,15 @@ function repurchaseCell(r: { buyerCount: number; rate: number | null } | undefin
   return `${fmt.pct(r.rate, 0)} (${r.buyerCount}명)`;
 }
 
+/** 이 수보다 적게 상세를 본 상품은 판단에서 빼고 흐리게 그린다 */
+const MIN_DETAIL_VIEWS = 200;
+
 export default function ProductsScreen({ brandId, brandName }: { brandId: string | null; brandName: string | null }) {
   const { productMetrics, repurchase, source } = useBehavior();
   const showRepurchase = source.purchase === 'real' && repurchase !== null;
   const [sort, setSort] = useState<SortKey>('interest');
-  const eligible = productMetrics.filter((p) => p.detailViews >= 200);
+  const eligible = productMetrics.filter((p) => p.detailViews >= MIN_DETAIL_VIEWS);
+  const noDiag = source.diagnostics === 'none';
 
   const rows = useMemo(() => {
     const list = [...productMetrics];
@@ -57,6 +61,13 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
   const friction = eligible.filter((p) => (p.variantSwitches ?? 0) >= 3).length;
   const highRemove = eligible.filter((p) => p.removeRate >= 0.3).length;
 
+  const tooFew =
+    productMetrics.length === 0
+      ? source.products === 'none'
+        ? '상품별 행동 기록을 아직 받지 못했습니다'
+        : '이 기간에 상세를 본 상품이 없습니다'
+      : `상세를 ${MIN_DETAIL_VIEWS}번 이상 본 상품이 아직 없어 판단하지 않습니다`;
+
   return (
     <div className="stack">
       {/* 등록 정보라 마트와 무관하다. 행동 로그가 없는 브랜드도 여기서는 자기 상품을 본다 */}
@@ -65,17 +76,43 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
         <Kpi
           label="가장 많이 막히는 단계"
           value={topBottleneck ? STEP_KO[topBottleneck] : '-'}
-          sub={topBottleneck ? `상품 ${bottleneckCount[topBottleneck] ?? 0}개 (상세 200건 이상 ${eligible.length}개 중)` : '상세 200건 이상인 상품이 아직 없습니다'}
+          sub={
+            topBottleneck
+              ? `상품 ${bottleneckCount[topBottleneck] ?? 0}개가 여기서 막힙니다 · 상세를 ${MIN_DETAIL_VIEWS}번 이상 본 상품 ${eligible.length}개 중`
+              : tooFew
+          }
           source={source.products}
         />
         <Kpi
-          label="가장 흔한 이탈 지점"
+          label="고객이 가장 많이 나간 자리"
           value={topExit ? EXIT_HINT[topExit].ko : '-'}
-          sub={topExit ? `${exitCount[topExit] ?? 0}개 상품 · ${EXIT_HINT[topExit].hint}` : '이탈 지점 마트가 아직 없습니다'}
+          sub={
+            topExit
+              ? `상품 ${exitCount[topExit] ?? 0}개 · ${EXIT_HINT[topExit].hint}`
+              : noDiag
+                ? '어디서 나갔는지 계산이 아직 준비되지 않았습니다. 준비되면 자동으로 채워집니다'
+                : eligible.length === 0
+                  ? tooFew
+                  : '나간 자리가 기록된 상품이 아직 없습니다'
+          }
           source={source.diagnostics}
         />
-        <Kpi label="옵션 왕복 3회 이상" value={`${friction}개`} sub="용량·색상 사이를 오가는 상품. 막힌 기록" source={source.diagnostics} />
-        <Kpi label="담기 후 제거 30% 이상" value={`${highRemove}개`} sub="배송비·묶음 조건 점검 대상" source={source.products} />
+        <Kpi
+          label="옵션을 3번 넘게 오간 상품"
+          value={noDiag ? '-' : `${friction}개`}
+          sub={
+            noDiag
+              ? '옵션 고르기 기록 계산이 아직 준비되지 않았습니다'
+              : '용량·색상을 골랐다 바꾸기를 반복한 상품. 고르기 어렵다는 신호입니다'
+          }
+          source={source.diagnostics}
+        />
+        <Kpi
+          label="담았다가 뺀 고객이 30% 넘는 상품"
+          value={`${highRemove}개`}
+          sub={eligible.length === 0 ? tooFew : '장바구니에 넣고 다시 뺀 고객이 10명 중 3명이 넘는 상품. 배송비·묶음 조건을 점검해 보세요'}
+          source={source.products}
+        />
       </div>
 
       <Panel
@@ -85,10 +122,10 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
           <span className="chips chips--inline">
             {(
               [
-                ['interest', '관심도'],
-                ['cartRate', '전환율'],
-                ['remove', '제거율'],
-                ['variant', '옵션 왕복'],
+                ['interest', '관심 많은 순'],
+                ['cartRate', '담기 비율 순'],
+                ['remove', '담았다 뺀 비율 순'],
+                ['variant', '옵션 많이 오간 순'],
               ] as Array<[SortKey, string]>
             ).map(([k, label]) => (
               <button key={k} type="button" className={`chip${sort === k ? ' chip--hit' : ''}`} onClick={() => setSort(k)}>
@@ -103,20 +140,29 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
             <thead>
               <tr>
                 <th className="is-name">상품</th>
-                <th>병목 단계</th>
-                <th>이탈 지점</th>
-                <th>상세 → 담기</th>
-                <th>정보 확인</th>
-                <th>옵션 왕복</th>
-                <th>퀵룩 → 상세</th>
-                <th>담기 후 제거</th>
-                {showRepurchase ? <th>재구매</th> : null}
-                <th>표본</th>
+                <th>막히는 단계</th>
+                <th>나간 자리</th>
+                <th>상세 본 뒤 담기</th>
+                <th>성분·리뷰 확인</th>
+                <th>옵션 오간 횟수</th>
+                <th>빠른 보기 → 상세</th>
+                <th>담았다 뺌</th>
+                {showRepurchase ? <th>다시 산 고객</th> : null}
+                <th>상세 본 횟수</th>
               </tr>
             </thead>
             <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={showRepurchase ? 10 : 9} className="note">
+                    {source.products === 'none'
+                      ? '상품별 행동 기록을 아직 받지 못했습니다. 고객이 내 상품을 보기 시작하면 상품마다 한 줄씩 채워집니다.'
+                      : '이 기간에 고객이 상세를 본 내 상품이 없습니다.'}
+                  </td>
+                </tr>
+              ) : null}
               {rows.map((p) => {
-                const thin = p.detailViews < 200;
+                const thin = p.detailViews < MIN_DETAIL_VIEWS;
                 return (
                   <tr key={p.product.product_id} className={thin ? 'is-thin' : ''}>
                     <td className="is-name" title={p.product.product_name}>
@@ -134,10 +180,13 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
                     </td>
                     <td>{fmt.pct(p.infoRate, 0)}</td>
                     {/* 모르는 값은 하이픈이다. 0 으로 적으면 "왕복이 없다" 로 읽힌다 */}
-                    <td className={(p.variantSwitches ?? 0) >= 3 ? 'is-warn' : ''}>
+                    <td className={(p.variantSwitches ?? 0) >= 3 ? 'is-warn' : ''} title={p.variantSwitches === null ? '계산이 아직 준비되지 않았습니다' : '방문 한 번에 옵션을 바꾼 평균 횟수'}>
                       {p.variantSwitches === null ? '-' : `${p.variantSwitches.toFixed(1)}회`}
                     </td>
-                    <td className={p.quickLookToDetail !== null && p.quickLookToDetail < 0.4 ? 'is-warn' : ''}>
+                    <td
+                      className={p.quickLookToDetail !== null && p.quickLookToDetail < 0.4 ? 'is-warn' : ''}
+                      title={p.quickLookToDetail === null ? '계산이 아직 준비되지 않았습니다' : '빠른 보기를 연 고객 중 상세까지 들어온 비율'}
+                    >
                       {p.quickLookToDetail === null ? '-' : fmt.pct(p.quickLookToDetail, 0)}
                     </td>
                     <td className={p.removeRate >= 0.3 ? 'is-warn' : ''}>{fmt.pct(p.removeRate, 0)}</td>
@@ -150,9 +199,10 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
           </table>
         </div>
         <p className="note">
-          병목 = 다섯 단계 중 브랜드 중앙값 대비 가장 낮은 하나. 이탈 지점의 힌트는 가능성이고 단정이 아닙니다. 흐린 행은 상세 조회 200건 미만.
-          {source.products === 'real' && source.diagnostics === 'none'
-            ? ' 수량·전환·제거율은 마트 실측이고, 이탈 지점·옵션 왕복·퀵룩→상세 세 열은 아직 모의입니다 (product_exit_daily 요청 중).'
+          막히는 단계는 노출 → 클릭 → 상세 → 성분·리뷰 확인 → 담기 다섯 단계 중, 내 다른 상품들과 비교해 가장 뒤처진 하나입니다. 나간 자리
+          옆의 짧은 말은 가능성이고 단정이 아닙니다. 흐린 행은 상세를 {MIN_DETAIL_VIEWS}번 미만 본 상품이라 아직 판단하기 이릅니다.
+          {source.products === 'real' && noDiag
+            ? ` 본 횟수·담기 비율·담았다 뺀 비율은 실제 기록이고, 나간 자리·옵션 오간 횟수·빠른 보기→상세 세 칸은 계산이 아직 준비되지 않아 '-'로 두었습니다. 준비되면 자동으로 채워집니다.`
             : ''}
         </p>
       </Panel>

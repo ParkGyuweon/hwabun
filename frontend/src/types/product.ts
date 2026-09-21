@@ -26,6 +26,14 @@ export interface Product {
    * 단일 출처는 mocks/discounts.json. 백엔드 카탈로그가 붙으면 옵션 salePriceKrw 에서 온다.
    */
   sale_price_usd?: number | null;
+  /**
+   * **원화 정가·할인가 그대로** (2026-09-21). 백엔드 카탈로그·상품 등록처럼 원화가 정본인 곳에서 온다.
+   * 화면은 이 값이 있으면 이것을 그리고, 없을 때만 `price_usd` 를 100원 단위로 환산한다 (lib/discount listPriceKrw).
+   * 전에는 원화→달러→원화를 오가며 100원 단위로 반올림해, 서버 33,600원이 정적 사본에서 33,700원으로 잠깐
+   * 보이다가 바뀌는 깜빡임이 났다 (유림님 제보).
+   */
+  price_krw?: number | null;
+  sale_price_krw?: number | null;
   /** 0~1. 배지의 % 는 여기서 계산하지 않고 discountPercent() 로 낸다 */
   discount_rate?: number;
   /** "입점 기념" 처럼 할인 이유 한 마디 */

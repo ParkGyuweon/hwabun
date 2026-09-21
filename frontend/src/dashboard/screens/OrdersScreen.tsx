@@ -5,6 +5,7 @@ import { fetchSellerOrders } from '../../lib/shopApi';
 import type { SellerOrder } from '../../lib/shopApi';
 import { useBrandProducts } from '../lib/useBrandProducts';
 import { categoryKo } from '../../lib/localize';
+import { listPriceKrw } from '../../lib/discount';
 import { DateRangePicker } from '../lib/DateRangePicker';
 import { presetRange } from '../lib/dateRange';
 import type { DateRange } from '../lib/dateRange';
@@ -29,7 +30,7 @@ import type { DateRange } from '../lib/dateRange';
  * `SellerOrderController.text`) 화면도 그대로 보여준다.
  */
 function formatOrderedAt(value: string | null): string {
-  if (!value) return '-';
+  if (!value) return '시각 기록 없음';
   return value.slice(0, 19).replace('T', ' ');
 }
 
@@ -150,12 +151,12 @@ export default function OrdersScreen({
   const won = (v: number) => `${fmt.int(v)}원`;
 
   if (!brandId) {
-    return <Panel title="주문" source="real" aside="-"><p className="note">브랜드를 먼저 고르세요.</p></Panel>;
+    return <Panel title="주문" source="real"><p className="note">판매자로 로그인하면 내 상품이 담긴 주문이 여기 보입니다.</p></Panel>;
   }
   if (failed) {
     return (
-      <Panel title="주문" source="real" aside="-">
-        <p className="note">주문을 읽지 못했습니다. 잠시 뒤 새로고침해 주세요.</p>
+      <Panel title="주문" source="real">
+        <p className="note">주문을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.</p>
       </Panel>
     );
   }
@@ -168,40 +169,40 @@ export default function OrdersScreen({
       <DateRangePicker value={range} onChange={setRange} />
 
       <div className="grid grid--kpi">
-        <Kpi label="기간 매출" value={won(totals.revenue)} sub={`결제 완료 · ${rangeLabel}`} source="real" />
-        <Kpi label="주문 수" value={`${fmt.int(totals.count)}건`} sub="내 브랜드 상품이 포함된 주문" source="real" />
+        <Kpi label="기간 매출" value={won(totals.revenue)} sub={`결제가 끝난 주문 기준 · ${rangeLabel}`} source="real" />
+        <Kpi label="주문 수" value={`${fmt.int(totals.count)}건`} sub="내 브랜드 상품이 하나라도 담긴 주문" source="real" />
         <Kpi
           label="구매 고객 수"
           value={`${fmt.int(totals.buyers)}명`}
-          sub={totals.buyers === 0 ? '구매한 고객이 없습니다' : `한 사람이 평균 ${(totals.count / totals.buyers).toFixed(1)}번 삽니다`}
+          sub={totals.buyers === 0 ? '이 기간에 구매한 고객이 없습니다' : `한 사람이 평균 ${(totals.count / totals.buyers).toFixed(1)}번 샀습니다`}
           source="real"
         />
-        <Kpi label="판매 수량" value={`${fmt.int(totals.units)}개`} sub="주문 수와 다르다 — 한 주문에 여러 개" source="real" />
+        <Kpi label="판매 수량" value={`${fmt.int(totals.units)}개`} sub="한 주문에 여러 개가 담길 수 있어 주문 수와 다릅니다" source="real" />
         <Kpi
           label="평균 주문 금액"
           value={totals.count === 0 ? '-' : won(totals.average)}
-          sub={totals.count === 0 ? '주문이 없습니다' : '내 브랜드 줄의 합 기준'}
+          sub={totals.count === 0 ? '이 기간에 주문이 없어 낼 수 없습니다' : '주문마다 내 브랜드 상품 금액만 더해 평균 낸 값'}
           source="real"
         />
       </div>
 
-      <Panel title={`일별 매출 · ${rangeLabel}`} source="real" aside={daily.length === 0 ? '-' : `${daily.length}일`}>
+      <Panel title={`일별 매출 · ${rangeLabel}`} source="real" aside={daily.length === 0 ? '0일' : `팔린 날 ${daily.length}일`}>
         {daily.length === 0 ? (
-          <p className="note">이 기간에 결제된 주문이 없습니다.</p>
+          <p className="note">이 기간에 결제된 주문이 없습니다. 기간을 넓혀 보세요.</p>
         ) : (
           <BarList items={daily.map(([day, amount]) => ({ label: day.slice(5).replace('-', '/'), value: amount }))} format={won} />
         )}
       </Panel>
 
-      <Panel title="카테고리별 판매" source="real" aside={byCategory.length === 0 ? '-' : `${byCategory.length}개 갈래`}>
+      <Panel title="상품 분류별 판매" source="real" aside={byCategory.length === 0 ? '0개' : `${byCategory.length}개 분류`}>
         {byCategory.length === 0 ? (
-          <p className="note">판매된 상품이 없습니다.</p>
+          <p className="note">이 기간에 팔린 상품이 없습니다.</p>
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>카테고리</th>
-                <th>수량</th>
+                <th>상품 분류</th>
+                <th>판매 수량</th>
                 <th>매출</th>
               </tr>
             </thead>
@@ -218,19 +219,19 @@ export default function OrdersScreen({
         )}
       </Panel>
 
-      <Panel title="주문" source="real" aside={orders.length === 0 ? '-' : `${orders.length}건 · 줄을 누르면 품목`}>
+      <Panel title="주문 목록" source="real" aside={orders.length === 0 ? '0건' : `${orders.length}건 · 줄을 누르면 담긴 상품을 봅니다`}>
         {orders.length === 0 ? (
-          <p className="note">이 기간에 들어온 주문이 없습니다.</p>
+          <p className="note">이 기간에 들어온 주문이 없습니다. 기간을 넓혀 보세요.</p>
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>결제 시각</th>
                 <th>주문번호</th>
-                <th>구매자</th>
-                <th>품목</th>
+                <th>구매 고객</th>
+                <th>담긴 상품</th>
                 <th>수량</th>
-                <th>금액</th>
+                <th>내 브랜드 금액</th>
               </tr>
             </thead>
             <tbody>
@@ -246,7 +247,7 @@ export default function OrdersScreen({
                     </td>
                     <td>{o.buyer_nickname || o.buyer_id}</td>
                     <td>
-                      {o.items[0]?.product_name ?? '-'}
+                      {o.items[0]?.product_name ?? '상품 정보 없음'}
                       {o.items.length > 1 ? ` 외 ${o.items.length - 1}` : ''}
                     </td>
                     <td>{fmt.int(o.item_count)}</td>
@@ -272,18 +273,18 @@ export default function OrdersScreen({
         )}
       </Panel>
 
-      <Panel title="상품별 판매" source="real" aside={byProduct.length === 0 ? '-' : `${byProduct.length}개 상품`}>
+      <Panel title="상품별 판매" source="real" aside={byProduct.length === 0 ? '0개' : `팔린 상품 ${byProduct.length}개 · 매출 많은 순`}>
         {byProduct.length === 0 ? (
-          <p className="note">판매된 상품이 없습니다.</p>
+          <p className="note">이 기간에 팔린 상품이 없습니다.</p>
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>상품</th>
-                <th>수량</th>
+                <th>판매 수량</th>
                 <th>주문 수</th>
                 <th>매출</th>
-                <th>마지막 판매</th>
+                <th>마지막으로 팔린 날</th>
               </tr>
             </thead>
             <tbody>
@@ -296,7 +297,7 @@ export default function OrdersScreen({
                   <td>{fmt.int(p.quantity)}</td>
                   <td>{fmt.int(p.orders)}</td>
                   <td>{won(p.amount)}</td>
-                  <td>{p.last || '-'}</td>
+                  <td>{p.last || '날짜 기록 없음'}</td>
                 </tr>
               ))}
             </tbody>
@@ -307,12 +308,16 @@ export default function OrdersScreen({
       <Panel
         title={`${rangeLabel} 동안 안 팔린 상품`}
         source="real"
-        aside={unsold === null ? '불러오는 중' : unsold.length === 0 ? '없음' : `${unsold.length}개`}
+        aside={unsold === null ? '불러오는 중' : unsold.length === 0 ? '모두 팔렸습니다' : `${unsold.length}개`}
       >
         {unsold === null ? (
           <p className="note">상품 목록을 받는 중입니다.</p>
         ) : unsold.length === 0 ? (
-          <p className="note">등록한 상품이 모두 한 번 이상 팔렸습니다.</p>
+          <p className="note">
+            {(myProducts ?? []).length === 0
+              ? '등록한 상품이 없습니다. 상품을 등록하면 이 기간에 안 팔린 상품을 여기서 알려 드립니다.'
+              : '등록한 상품이 이 기간에 모두 한 번 이상 팔렸습니다.'}
+          </p>
         ) : (
           <>
             <ul className="myproducts">
@@ -327,13 +332,13 @@ export default function OrdersScreen({
                     <p className="myproducts__name">{p.product_name}</p>
                     <p className="myproducts__meta">{p.product_id}</p>
                   </div>
-                  <p className="myproducts__price">-</p>
+                  <p className="myproducts__price">{listPriceKrw(p) > 0 ? won(listPriceKrw(p)) : '가격 미입력'}</p>
                 </li>
               ))}
             </ul>
             <p className="note">
-              이 기간에 결제가 한 건도 없었다는 뜻입니다. 안 팔린 이유는 여기서 알 수 없습니다 — 노출이 없었는지, 보고
-              안 샀는지는 상품 화면에서 봅니다.
+              이 기간에 결제가 한 건도 없었다는 뜻입니다. 안 팔린 이유(고객이 못 봤는지, 보고도 안 샀는지)는 여기서 알 수
+              없고 상품 화면에서 봅니다.
             </p>
           </>
         )}

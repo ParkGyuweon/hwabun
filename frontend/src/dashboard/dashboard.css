@@ -131,6 +131,24 @@ body {
   line-height: 1.6;
 }
 
+/*
+ * 사이드바 안의 알림 패널. 종은 사이드바(232px) 왼쪽 아래에 있는데 패널(360px)은 헤더용으로
+ * "오른쪽 끝 맞춤·아래로 열기" 라서 화면 왼쪽 밖으로 뻗어 잘렸다 (2026-09-21 규원님 제보).
+ * 여기서는 종의 왼쪽에 맞춰 오른쪽으로, 발 부분이라 위로 연다. 사이드바는 backdrop-filter 로
+ * 자기 쌓임 맥락을 만들어 뒤에 오는 본문이 패널을 덮을 수 있어 z-index 를 준다.
+ */
+.sidebar {
+  z-index: 5;
+}
+
+.sidebar .notif__panel {
+  top: auto;
+  bottom: 38px;
+  left: 0;
+  right: auto;
+  width: min(360px, calc(100vw - 48px));
+}
+
 /* 서버 브랜드 선택·등록·상태. 사이드바 브랜드 이름 바로 아래 */
 .sidebar__brand-select {
   margin: 0 12px 6px;
@@ -391,6 +409,153 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/*
+ * 한 마디 (headlineApi.ts). 결론 카드(.verdict) 위에 놓는 서술문. 결론은 "뭘 고칠까", 이건 "무슨 일이 있나" 라
+ * 색 띠를 주지 않고 글자만으로 구분한다. 줄 옆 "값 그대로" 는 LLM 이 문장을 못 만들어 나열한 줄이라는 표시다.
+ */
+.headline {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 24px;
+  display: grid;
+  gap: 8px;
+}
+
+.headline__eyebrow {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.headline__line {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.headline__sections {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.headline__sections li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.headline__label {
+  flex: 0 0 auto;
+  min-width: 64px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.headline__tag {
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+
+/*
+ * 비슷한 브랜드 대비 내 위치 (SegmentsScreen CohortBadge). 다른 브랜드가 섞인 숫자라 띠 색은 전체 브랜드(--accent).
+ * 억제(표본 부족)면 숫자 없이 글만. 표본이 얇으면 카드 전체를 흐린다.
+ */
+.cohort {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 18px 24px;
+  display: grid;
+  gap: 10px;
+}
+
+.cohort.is-thin {
+  opacity: 0.7;
+}
+
+.cohort--suppressed {
+  border-left-color: var(--line);
+}
+
+.cohort__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.cohort__line {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.cohort__metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.cohort__metric {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+}
+
+.cohort__metric--high {
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.cohort__metric--low {
+  box-shadow: inset 3px 0 0 #b3261e;
+}
+
+.cohort__name {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.cohort__pos {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.cohort__nums {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .verdict__eyebrow {

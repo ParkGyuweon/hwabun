@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { effectivePrice, hasDiscount } from '../lib/discount';
+import { effectivePriceKrw, hasDiscount, listPriceKrw } from '../lib/discount';
 import EmptyState from '../components/common/EmptyState';
 import PurchaseSurvey from '../components/cart/PurchaseSurvey';
 import { IMAGE_WIDTH_SWATCH, sizedImage } from '../lib/image';
-import { formatPrice } from '../lib/format';
+import { formatKrw, formatPrice } from '../lib/format';
 import { useSectionView } from '../hooks/useSectionView';
 import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
@@ -79,8 +79,9 @@ export default function CartPage({
   useExitSummary('cart');
 
   // 화면은 할인가 합계. 정가 합계는 이벤트만 쓴다 (lib/checkout.ts orderTotals)
-  const subtotal = items.reduce((sum, item) => sum + effectivePrice(item) * item.quantity, 0);
-  const listTotal = items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0);
+  // 원화 원본이 있으면 그대로 더한다. 달러를 거치면 100원 단위 반올림이 품목마다 붙어 합계가 어긋난다
+  const subtotal = items.reduce((sum, item) => sum + effectivePriceKrw(item) * item.quantity, 0);
+  const listTotal = items.reduce((sum, item) => sum + listPriceKrw(item) * item.quantity, 0);
   const saved = listTotal - subtotal;
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -193,8 +194,8 @@ export default function CartPage({
                   </div>
 
                   <strong className="cart__price">
-                    {formatPrice(effectivePrice(item) * item.quantity)}
-                    {hasDiscount(item) ? <s className="cart__was">{formatPrice(item.price_usd * item.quantity)}</s> : null}
+                    {formatKrw(effectivePriceKrw(item) * item.quantity)}
+                    {hasDiscount(item) ? <s className="cart__was">{formatKrw(listPriceKrw(item) * item.quantity)}</s> : null}
                   </strong>
 
                   <button
@@ -215,12 +216,12 @@ export default function CartPage({
             <dl>
               <div>
                 <dt>상품 {count}개</dt>
-                <dd>{formatPrice(listTotal)}</dd>
+                <dd>{formatKrw(listTotal)}</dd>
               </div>
               {saved > 0 ? (
                 <div className="cart__discount">
                   <dt>할인</dt>
-                  <dd>-{formatPrice(saved)}</dd>
+                  <dd>-{formatKrw(saved)}</dd>
                 </div>
               ) : null}
               <div>
@@ -229,14 +230,14 @@ export default function CartPage({
               </div>
               <div className="cart__total">
                 <dt>합계</dt>
-                <dd>{formatPrice(subtotal)}</dd>
+                <dd>{formatKrw(subtotal)}</dd>
               </div>
             </dl>
             {confirming ? (
               <div className="cart__confirm">
                 <p className="cart__confirm-title">이 주문으로 진행할까요?</p>
                 <p className="cart__confirm-meta">
-                  상품 {count}개 · {formatPrice(subtotal)}
+                  상품 {count}개 · {formatKrw(subtotal)}
                 </p>
                 <button
                   type="button"

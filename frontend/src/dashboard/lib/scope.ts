@@ -21,12 +21,12 @@ export type ScopeKind = 'behavior' | 'feedback';
 export const SCOPE_LABEL: Record<ScopeKind, { brand: string; what: string; source: string }> = {
   behavior: {
     brand: '',
-    what: '행동 데이터',
-    source: '행동 마트 · 로그인한 브랜드',
+    what: '고객 행동 기록',
+    source: '내 브랜드 고객이 쇼핑몰에서 한 행동',
   },
   feedback: {
     brand: '',
-    what: '피드백·상품 등록',
-    source: '쇼핑몰 피드백 · 로그인한 브랜드',
+    what: '주문·피드백·상품 등록',
+    source: '내 브랜드 쇼핑몰 기록',
   },
 };

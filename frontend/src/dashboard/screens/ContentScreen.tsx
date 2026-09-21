@@ -40,6 +40,9 @@ function verbOf(lift: number, viewRate: number): Verb {
 const VERB_PILL: Record<Verb, string> = { up: '위로 올리기', fix: '손보기', keep: '그대로' };
 const ORDER: Record<Verb, number> = { up: 0, fix: 1, keep: 2 };
 
+/** 이 수보다 적게 본 글은 흐리게 그린다. 아직 판단하기 이르다는 표시 */
+const THIN_VIEWS = 500;
+
 export default function ContentScreen({ brandName }: { brandName: string }) {
   const m = useBehavior();
   const { contentAttention, scrapedIngredients, validationBehaviors, source } = m;
@@ -62,6 +65,9 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
   const firstFix = todo.find((r) => r.verb === 'fix');
   // 0 끼리는 순위가 없다. 담기 배수가 0 인 콘텐츠를 "가장 잘 먹히는 것"으로 세우지 않는다 (2026-09-18)
   const best = [...rows].filter((r) => r.conversionLift > 0).sort((a, b) => b.conversionLift - a.conversionLift)[0];
+  const noData = rows.length === 0;
+  // 담기율 배수가 아직 안 와서 전부 1.0 인 상태. 이때는 "그대로 두세요" 가 아니라 "아직 판단 전" 이다
+  const liftPending = source.contentLift === 'none';
 
   // 처방(무엇을 어떻게)은 이 화면 숫자만으로 못 쓴다. 다른 화면의 근거까지 모아 만든다.
   // 먼저 규칙 표(lib/prescription.ts)로 그리고, AI 서버(POST /api/prescription)가 답하면 그 문장으로 바꾼다.
@@ -74,17 +80,17 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
   const actions: ActionItem[] = todo.map((r) => {
     const rx = rxs[r.kind];
     const tags: string[] = [];
-    if (rx?.origin === 'llm') tags.push('AI 문장');
-    if (rx?.needsEvidence.length) tags.push(`실증자료 필요: ${rx.needsEvidence.join('·')}`);
+    if (rx?.origin === 'llm') tags.push('AI가 쓴 문장');
+    if (rx?.needsEvidence.length) tags.push(`근거 자료가 필요한 표현: ${rx.needsEvidence.join('·')}`);
     return {
       verb: r.verb,
       what: r.ko,
       why:
         r.verb === 'up'
-          ? `본 사람이 평균보다 ${r.conversionLift.toFixed(1)}배 더 담았는데, 상세페이지를 연 사람 중 ${fmt.pct(r.viewRate)}만 여기까지 내려왔습니다.`
-          : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 본 사람이 평균보다 덜 담았습니다. 읽고도 마음이 안 움직인 글입니다.`,
+          ? `이 글을 본 사람은 평균보다 ${r.conversionLift.toFixed(1)}배 더 담았는데, 상세페이지를 연 사람 중 ${fmt.pct(r.viewRate)}만 여기까지 내려왔습니다.`
+          : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데, 본 사람이 평균보다 덜 담았습니다. 읽고도 마음이 안 움직인 글입니다.`,
       num: `${r.conversionLift.toFixed(1)}배`,
-      unit: '본 사람의 담기율',
+      unit: '이 글을 본 사람의 담기 비율 (평균 = 1.0배)',
       how: rx?.rx?.how,
       basis: rx?.rx?.basis,
       verify: rx?.rx?.verify,
@@ -96,105 +102,144 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
   const topScrape = scrapedIngredients.find((x) => x.count > 0);
   const expand = validationBehaviors.find((v) => v.event === 'ingredient_view_mode_change') ?? validationBehaviors[0];
 
+  const headline = noData
+    ? '아직 상세페이지 글을 읽은 기록이 없습니다'
+    : liftPending
+      ? '담기 비율 계산이 준비되면 할 일이 나옵니다'
+      : `${firstUp ? `${josa(firstUp.ko, '을/를')} 위로 올리고, ` : ''}${firstFix ? `${josa(firstFix.ko, '을/를')} 손보세요` : '지금 순서를 그대로 두세요'}`;
+
   return (
     <div className="stack">
       <section className="verdict verdict--mine">
         <p className="verdict__eyebrow">
           이 화면이 말하는 것 <OriginBadge kind="mine" />
         </p>
-        <h2 className="verdict__headline">
-          {firstUp ? `${josa(firstUp.ko, '을/를')} 위로 올리고, ` : ''}
-          {firstFix ? `${josa(firstFix.ko, '을/를')} 손보세요` : '지금 순서를 그대로 두세요'}
-        </h2>
+        <h2 className="verdict__headline">{headline}</h2>
         <ul className="verdict__reasons">
-          <li>
-            상세페이지 안에서 읽는 글 {rows.length}종을 <b>본 사람이 더 담았는지</b>로 줄 세운 결과입니다.
-          </li>
-          {best ? (
+          {noData ? (
+            <li>고객이 내 상품 상세페이지를 열고 글을 읽기 시작하면, 어떤 글이 담기에 도움이 되는지 여기서 알려 드립니다.</li>
+          ) : (
             <li>
-              가장 잘 먹히는 것은 {best.ko}입니다. 본 사람이 평균보다 {best.conversionLift.toFixed(1)}배 더 담았습니다.
+              상세페이지 안에서 읽는 글 {rows.length}종을 <b>본 사람이 더 담았는지</b>로 줄 세운 결과입니다.
+            </li>
+          )}
+          {!noData && liftPending ? (
+            <li>지금은 몇 명이 봤는지·얼마나 오래 읽었는지만 있고, 본 사람이 더 담았는지는 계산이 준비되는 대로 채워집니다.</li>
+          ) : null}
+          {best && !liftPending ? (
+            <li>
+              가장 잘 먹히는 글은 {best.ko}입니다. 본 사람이 평균보다 {best.conversionLift.toFixed(1)}배 더 담았습니다.
             </li>
           ) : null}
         </ul>
       </section>
 
-      <Panel title="지금 할 일" source={source.contentLift} aside="본 사람의 담기율이 기준">
-        <Actions items={actions} />
+      <Panel title="지금 할 일" source={source.contentLift} aside="글을 본 사람이 더 담았는지가 기준">
+        {actions.length > 0 ? (
+          <Actions items={actions} />
+        ) : (
+          <p className="note">
+            {noData
+              ? '아직 할 일이 없습니다. 고객이 상세페이지 글을 읽은 기록이 쌓이면 여기에 "위로 올리세요" · "손보세요" 목록이 생깁니다.'
+              : liftPending
+                ? '몇 명이 봤는지는 알지만, 본 사람이 더 담았는지 계산이 아직 준비되지 않아 할 일을 고르지 않았습니다. 준비되면 자동으로 채워집니다.'
+                : '손볼 글도, 위로 올릴 글도 없습니다. 지금 순서를 그대로 두셔도 됩니다.'}
+          </p>
+        )}
         <p className="note">
-          담기율 1.0배는 내 브랜드 전체 평균과 같다는 뜻입니다. 1.0배 미만은 손볼 것, 1.5배 이상인데 절반도 못 본 것은 위로
-          올릴 것으로 골랐습니다. 지시 문장은 이 화면 숫자만으로 쓰지 않고, 고객군·성분·막히는 곳 화면에서 모은 근거까지
+          1.0배는 그 글을 본 사람의 담기 비율이 내 브랜드 전체 평균과 같다는 뜻입니다. 1.0배가 안 되면 손볼 글, 1.5배 이상인데 절반도 못
+          본 글은 위로 올릴 글로 골랐습니다. 지시 문장은 이 화면 숫자만으로 쓰지 않고, 고객군·성분·막히는 곳 화면에서 모은 근거까지
           모아 만듭니다. 근거는 각 줄을 펼치면 나옵니다.
-          {llmCount > 0 ? ` 처방 문장 ${llmCount}건은 AI 서버가 썼고, ${ruleCount}건은 규칙 표입니다.` : ' 처방 문장은 규칙 표입니다. AI 서버가 연결되면 그 문장으로 바뀝니다.'}
+          {llmCount > 0
+            ? ` 지시 문장 ${llmCount}건은 AI가 썼고, ${ruleCount}건은 미리 정해 둔 규칙으로 만들었습니다.`
+            : ' 지시 문장은 미리 정해 둔 규칙으로 만들었습니다. AI가 연결되면 그 문장으로 바뀝니다.'}
         </p>
       </Panel>
 
       <div className="grid grid--kpi">
         <Kpi
-          label="가장 잘 먹히는 콘텐츠"
-          value={best?.ko ?? '-'}
-          sub={best ? `본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다` : '본 사람이 담은 기록이 아직 없습니다'}
+          label="가장 잘 먹히는 글"
+          value={best && !liftPending ? best.ko : '-'}
+          sub={
+            best && !liftPending
+              ? `본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다`
+              : noData
+                ? '상세페이지 글을 읽은 기록이 아직 없습니다'
+                : '본 사람이 더 담았는지 계산이 아직 준비되지 않았습니다'
+          }
           source={source.contentLift}
         />
         <Kpi
-          label="손봐야 할 콘텐츠"
+          label="손봐야 할 글"
           value={firstFix ? firstFix.ko : '없음'}
-          sub={firstFix ? '오래 읽는데 담기는 평균보다 적습니다' : '평균보다 낮은 콘텐츠가 없습니다'}
+          sub={
+            firstFix
+              ? '오래 읽는데 담기는 평균보다 적습니다'
+              : noData
+                ? '상세페이지 글을 읽은 기록이 아직 없습니다'
+                : liftPending
+                  ? '담기 비율 계산이 준비되면 고릅니다'
+                  : '평균보다 담기가 낮은 글이 없습니다'
+          }
           source={source.contentLift}
         />
         <Kpi
           label="고객이 가장 많이 드래그한 성분"
           value={topScrape ? labelKo(topScrape.name) : '-'}
-          sub={topScrape ? `${fmt.int(topScrape.count)}회 · 관심이 가장 큰 성분` : '성분을 드래그한 기록이 아직 없습니다'}
+          sub={topScrape ? `${fmt.int(topScrape.count)}회 · 관심이 가장 큰 성분` : '고객이 성분 이름을 드래그한 기록이 아직 없습니다'}
           source={source.scraped}
         />
         <Kpi
           label="전성분을 펼쳐 본 방문"
           value={expand ? fmt.pct(expand.doneRate) : '-'}
-          sub="상세페이지를 연 방문 중"
+          sub={expand ? '상세페이지를 연 방문 중' : '전성분을 펼친 기록이 아직 없습니다'}
           source={source.behaviors}
         />
       </div>
 
-      <Panel title="콘텐츠 10종 전부" source={source.content} fold aside="내 브랜드 상품의 상세페이지 안만">
+      <Panel title="상세페이지 글 10종 전부" source={source.content} fold aside="내 브랜드 상품의 상세페이지 안만">
         <p className="panel__lead">
-          목록·장바구니 요소는 상세페이지에서 살지 말지 정하는 것과 무관해 빼고, <b>상세페이지 안에서 읽는 글 10종</b>만
-          셌습니다.
+          목록 카드·장바구니·메뉴처럼 상세페이지 밖의 것은 빼고, <b>상세페이지 안에서 읽는 글 10종</b>만 셌습니다.
         </p>
         <table className="table">
           <thead>
             <tr>
-              <th>콘텐츠</th>
+              <th>글</th>
               <th>몇 명이 봤나</th>
               <th>얼마나 오래 읽나</th>
-              <th>본 사람의 담기율</th>
+              <th>본 사람의 담기 비율</th>
               <th>할 일</th>
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="note">
+                  아직 기록이 없습니다. 고객이 내 상품 상세페이지를 열어 글을 읽으면 여기에 한 줄씩 채워집니다.
+                </td>
+              </tr>
+            ) : null}
             {[...rows]
               .sort((a, b) => ORDER[a.verb] - ORDER[b.verb] || b.conversionLift - a.conversionLift)
               .map((c) => (
-                <tr key={c.kind} className={c.sampleSize < 500 ? 'is-thin' : ''}>
-                  <td>
-                    {c.ko} <span className="table__code">{c.kind}</span>
-                  </td>
+                <tr key={c.kind} className={c.sampleSize < THIN_VIEWS ? 'is-thin' : ''}>
+                  <td>{c.ko}</td>
                   <td>{fmt.pct(c.viewRate)}</td>
                   <td>{(c.avgDwellMs / 1000).toFixed(0)}초</td>
                   <td>
-                    <strong>{c.conversionLift.toFixed(1)}배</strong>
+                    <strong>{liftPending ? '-' : `${c.conversionLift.toFixed(1)}배`}</strong>
                   </td>
                   <td>
-                    <span className={`pill pill--${c.verb}`}>{VERB_PILL[c.verb]}</span>
+                    <span className={`pill pill--${c.verb}`}>{liftPending ? '판단 전' : VERB_PILL[c.verb]}</span>
                   </td>
                 </tr>
               ))}
           </tbody>
         </table>
         <p className="note">
-          흐린 행은 본 방문이 500건 미만이라 아직 판단하기에 표본이 얇습니다. 작은 회색 글씨는 데이터 파트와 맞춘 이벤트
-          이름이라 그대로 두었습니다.
-          {source.content === 'real' && source.contentLift === 'none'
-            ? ' 열람·체류·표본은 마트 실측이고, 담기율 배수만 아직 모의입니다 (content_conversion_daily 요청 중).'
+          흐린 행은 그 글을 본 방문이 {fmt.int(THIN_VIEWS)}건이 안 돼 아직 판단하기 이릅니다.
+          {source.content === 'real' && liftPending
+            ? ' 몇 명이 봤는지와 얼마나 오래 읽었는지는 실제 기록이고, 본 사람의 담기 비율은 계산이 아직 준비되지 않아 비워 두었습니다. 준비되면 자동으로 채워집니다.'
             : ''}
         </p>
 
@@ -209,78 +254,79 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             }))}
           />
           <p className="note">
-            오른쪽 아래(오래 읽는데 안 담는다)가 손볼 곳, 왼쪽 위(짧게 읽는데 담게 만든다)가 위로 올릴 곳입니다. 원 크기는
-            표본 수입니다.
+            오른쪽 아래(오래 읽는데 안 담는다)가 손볼 곳, 왼쪽 위(짧게 읽는데 담게 만든다)가 위로 올릴 곳입니다. 원이 클수록 그 글을
+            본 방문이 많습니다.
           </p>
         </details>
 
         <details className="defn">
-          <summary>숫자의 정의와 콘텐츠 선정 기준</summary>
+          <summary>숫자의 정의와 글 고른 기준</summary>
           <dl className="defn__list">
             <dt>무엇을 셌나</dt>
             <dd>
-              상세페이지 콘텐츠 <b>10종</b>. 계약 <code>content_kind</code> 21종 중 상품 상세 안에서 읽는 것만 골랐습니다.
-              넣은 것은 성분 목록·성분 특징·임상 결과·사용자 리뷰·평점 분포·제품 소개·추가 설명·사용법·브랜드 소개·상품
-              이미지입니다. 제외한 것은 목록·장바구니·내비게이션 요소(<code>product_card</code>·<code>cart_item</code>·
-              <code>navigation</code> 등)입니다.
+              상세페이지 안에서 읽는 글 <b>10종</b>입니다. 성분 목록·성분 특징·임상 결과·사용자 리뷰·평점 분포·제품 소개·추가
+              설명·사용법·브랜드 소개·상품 이미지를 넣었고, 목록 카드·장바구니·메뉴처럼 상세페이지 밖의 것은 뺐습니다.
             </dd>
             <dt>몇 명이 봤나</dt>
-            <dd>그 콘텐츠가 화면에 한 번이라도 보인 세션 ÷ 상세페이지를 연 세션.</dd>
+            <dd>그 글이 화면에 한 번이라도 보인 방문 ÷ 상세페이지를 연 방문.</dd>
             <dt>얼마나 오래 읽나</dt>
             <dd>
-              그 콘텐츠의 체류 시간 합계 ÷ 상세 조회 세션 수. <code>section_dwell</code> 이벤트를 <code>content_kind</code>{' '}
-              별로 합산합니다. 한 화면에 블록이 3개 이상 겹쳐 보인 체류(<code>co_visible_blocks &gt; 2</code>)는 어느
-              콘텐츠를 향한 것인지 단정할 수 없어 뺍니다.
+              그 글에 머문 시간을 모두 더해 상세페이지를 연 방문 수로 나눈 값입니다. 한 화면에 글이 3개 이상 겹쳐 보인 시간은 어느 글을
+              읽은 것인지 알 수 없어 빼고 셉니다.
             </dd>
-            <dt>본 사람의 담기율</dt>
+            <dt>본 사람의 담기 비율</dt>
             <dd>
-              그 콘텐츠를 본 세션의 담기율 ÷ 내 브랜드 전체 담기율. 1.0배면 평균과 같고, 1.6배면 그 콘텐츠를 본 사람이
-              평균보다 1.6배 더 담았다는 뜻입니다. <b>같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다</b> · 살 마음이
-              큰 사람이 성분을 더 볼 수도 있습니다.
+              그 글을 본 방문의 담기 비율 ÷ 내 브랜드 전체 담기 비율. 1.0배면 평균과 같고, 1.6배면 그 글을 본 사람이 평균보다 1.6배 더
+              담았다는 뜻입니다. <b>같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다</b> · 살 마음이 큰 사람이 성분을 더 볼 수도
+              있습니다.
             </dd>
-            <dt>표본</dt>
-            <dd>그 콘텐츠가 한 번이라도 보인 세션 수. 500 미만은 흐리게, 50 미만은 그리지 않습니다.</dd>
+            <dt>기록 수</dt>
+            <dd>그 글이 한 번이라도 보인 방문 수입니다. {fmt.int(THIN_VIEWS)}건이 안 되면 흐리게, 50건이 안 되면 그림에서 뺍니다.</dd>
             <dt>지금 상태</dt>
             <dd>
-              체류·표본은 계약에 정의가 있고(<code>content_daily_kpi</code>), 담기율 배수는{' '}
-              <code>contracts/dashboard-mart-api-spec.md</code> §6-2 로 데이터 파트에 요청한 마트에서 옵니다. 마트 응답이
-              오면 배지가 "실측" 으로 바뀝니다.
+              몇 명이 봤는지·얼마나 오래 읽었는지는 지금 실제 기록으로 셉니다. 본 사람의 담기 비율은 계산이 준비되는 대로 채워지고,
+              그때 이 표의 표시도 함께 바뀝니다.
             </dd>
           </dl>
         </details>
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} fold aside="원문 미저장 · 성분 사전 표준명만 (vocab 0.4)">
+        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} fold aside="긁은 글 원문은 저장하지 않고 성분 이름만 셉니다">
           <BarList
             items={scrapedIngredients.map((i) => ({
               label: labelKo(i.name),
               value: i.count,
-              hint: i.copyCount === null ? undefined : `복사 ${i.copyCount}`,
+              hint: i.copyCount === null ? undefined : `복사 ${i.copyCount}회`,
             }))}
           />
           <p className="note">
-            드래그 횟수는 관심의 크기입니다. 설명이 어려운지는 이 성분 구간의 되돌아 읽기·이탈·담기율을 함께 봐야 알 수
-            있고, 그 집계는 데이터 마트가 만들면 여기에 붙습니다.
+            드래그 횟수는 관심의 크기입니다. 설명이 어려운지는 그 성분 부분에서 위로 되돌아가 다시 읽었는지·그냥 나갔는지·담았는지를
+            함께 봐야 알 수 있고, 그 계산이 준비되면 여기에 붙습니다.
           </p>
         </Panel>
 
-        <Panel title="이 행동을 한 사람은 더 담나" source={source.behaviors} fold aside="한 방문 vs 안 한 방문">
+        <Panel title="이 행동을 한 사람은 더 담나" source={source.behaviors} fold aside="한 방문과 안 한 방문 비교">
           <table className="table">
             <thead>
               <tr>
                 <th>행동</th>
                 <th>한 방문</th>
-                <th>했을 때 담기율</th>
+                <th>했을 때 담기 비율</th>
                 <th>안 했을 때</th>
               </tr>
             </thead>
             <tbody>
+              {validationBehaviors.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="note">
+                    아직 기록이 없습니다. 고객이 전성분을 펼치거나 리뷰를 걸러 보기 시작하면 여기에 채워집니다.
+                  </td>
+                </tr>
+              ) : null}
               {validationBehaviors.map((v) => (
                 <tr key={v.event}>
-                  <td>
-                    {v.ko} <span className="table__code">{v.event}</span>
-                  </td>
+                  <td>{v.ko}</td>
                   <td>{fmt.pct(v.doneRate)}</td>
                   <td>
                     <strong>{fmt.pct(v.cartRateWith)}</strong>

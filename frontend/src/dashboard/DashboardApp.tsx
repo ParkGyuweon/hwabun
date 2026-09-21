@@ -79,7 +79,7 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
   },
   orders: {
     section: 'orders', tab: '주문', scope: 'feedback',
-    title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 원장 그대로',
+    title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 주문 기록 그대로',
   },
   settlement: {
     section: 'orders', tab: '정산', scope: 'feedback',
@@ -95,7 +95,7 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
   },
   feedback: {
     section: 'voice', tab: '받은 피드백', scope: 'feedback',
-    title: '고객이 고쳐 달라는 것', desc: '고객이 직접 고른 축과 그 안의 이유',
+    title: '고객이 고쳐 달라는 것', desc: '고객이 직접 고른 항목과 그 안의 이유',
   },
   ingredients: {
     section: 'market', tab: '성분', scope: 'behavior',
@@ -197,7 +197,7 @@ export default function DashboardApp() {
           <img src="/brand/hwabun-mark.png" alt="" width="34" height="34" />
           <div>
             <strong>HWABUN</strong>
-            <span>{brand?.name || DEMO_BRAND}</span>
+            <span>{brand?.name || (brands.kind === 'loading' ? '브랜드 확인 중' : DEMO_BRAND)}</span>
           </div>
         </div>
 
@@ -232,12 +232,12 @@ export default function DashboardApp() {
               }
             }}
           >
-            서버에 브랜드 등록
+            내 브랜드 만들기
           </button>
         ) : null}
         {brands.kind === 'unavailable' ? (
           <p className="sidebar__brand-note">
-            {brands.reason === 'server' ? '서버 미연결 · 브랜드를 못 읽었습니다' : '로그인 만료 · 다시 로그인'}
+            {brands.reason === 'server' ? '연결이 끊겨 내 브랜드를 불러오지 못했습니다. 잠시 후 새로 고쳐 주세요' : '로그인이 만료되었습니다. 다시 로그인해 주세요'}
           </p>
         ) : null}
 
@@ -296,7 +296,7 @@ export default function DashboardApp() {
           ) : null}
           <MartNote />
           {/* 결론 색 범례. 연두 = 내 브랜드 데이터만, 핑크 = 플랫폼 전체(다른 브랜드 포함) 종합 (components DataOrigin) */}
-          <p className="sidebar__legend" aria-label="결론 색 범례">
+          <p className="sidebar__legend" aria-label="숫자 출처 색 안내">
             <OriginBadge kind="mine" />
             <OriginBadge kind="shared" />
           </p>
@@ -385,8 +385,8 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
   const label = SCOPE_LABEL[scope];
   const live = scope === 'behavior' && anyReal;
   // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다 (피드백 스코프도 2026-09-18 부터)
-  const brand = brandName ?? label.brand;
-  const source = live ? '행동 마트 실측 · 로그인한 브랜드' : label.source;
+  const brand = brandName ?? (label.brand || '브랜드 확인 중');
+  const source = live ? '내 쇼핑몰에서 실제로 생긴 기록' : label.source;
   return (
     <p className="main__scope" title={source}>
       <span className="main__scope-what">{label.what}</span>
@@ -401,17 +401,25 @@ function MartNote() {
   const state = useMartState();
   const { anyReal, martProcessedAt } = useBehavior();
   let line: string;
-  if (state === 'loading') line = '마트 지표를 받는 중';
-  else if (anyReal) line = `마트 연결됨${martProcessedAt ? ` · 갱신 ${martProcessedAt.slice(0, 16).replace('T', ' ')}` : ''} · 배지가 화면별 출처`;
-  else if (state === 'ready') line = '마트는 답했지만 이 브랜드·기간에 행이 없습니다 · 행동 지표는 0';
-  else line = '마트에 닿지 못했습니다 · 행동 지표는 0. 리뷰·성분은 실측.';
+  if (state === 'idle') line = '브랜드가 정해지면 고객 행동 기록을 불러옵니다';
+  else if (state === 'loading') line = '고객 행동 기록을 불러오는 중입니다';
+  else if (anyReal) line = martProcessedAt ? `데이터 기준: ${fmtProcessedAt(martProcessedAt)}` : '고객 행동 기록을 불러왔습니다';
+  else if (state === 'ready') line = '이 기간에는 내 브랜드 고객 행동 기록이 아직 없어 행동 숫자가 0으로 보입니다. 고객이 상품을 보기 시작하면 채워집니다';
+  else line = '고객 행동 기록을 불러오지 못해 행동 숫자가 0으로 보입니다. 주문·리뷰·성분은 정상입니다';
   return (
     <p>
       <span className="sidebar__mart">
-        v0.3 · 이벤트 43종 기준
+        고객 행동 기록
       </span>
       <br />
       {line}
     </p>
   );
+}
+
+/** "2026-09-20T18:56:03" → "9월 20일 18:56". 사장님이 읽는 시각이라 날짜 형식을 풀어 쓴다 */
+function fmtProcessedAt(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if (!m) return iso.slice(0, 16).replace('T', ' ');
+  return `${Number(m[2])}월 ${Number(m[3])}일 ${m[4]}:${m[5]}`;
 }

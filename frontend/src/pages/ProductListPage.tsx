@@ -16,7 +16,8 @@ import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
 import { setNextProductViewEntry, track } from '../lib/logger';
 import type { FilterKind } from '../types/log';
-import { categoryKo, concernKo, toKrw } from '../lib/localize';
+import { categoryKo, concernKo } from '../lib/localize';
+import { listPriceKrw } from '../lib/discount';
 import AdBanner from '../components/banner/AdBanner';
 import type { BannerLog } from '../components/banner/AdBanner';
 import { hasBannerImages } from '../lib/bannerCreative';
@@ -77,10 +78,10 @@ const SORT_LABEL: Record<SortKey, string> = {
  */
 const PRICE_BANDS = [
   { key: 'all', label: '전체', test: () => true },
-  { key: 'under30k', label: '3만원 이하', test: (p: Product) => toKrw(p.price_usd) <= 30_000 },
-  { key: '30k-70k', label: '3~7만원', test: (p: Product) => toKrw(p.price_usd) > 30_000 && toKrw(p.price_usd) <= 70_000 },
-  { key: '70k-130k', label: '7~13만원', test: (p: Product) => toKrw(p.price_usd) > 70_000 && toKrw(p.price_usd) <= 130_000 },
-  { key: 'over130k', label: '13만원 이상', test: (p: Product) => toKrw(p.price_usd) > 130_000 },
+  { key: 'under30k', label: '3만원 이하', test: (p: Product) => listPriceKrw(p) <= 30_000 },
+  { key: '30k-70k', label: '3~7만원', test: (p: Product) => listPriceKrw(p) > 30_000 && listPriceKrw(p) <= 70_000 },
+  { key: '70k-130k', label: '7~13만원', test: (p: Product) => listPriceKrw(p) > 70_000 && listPriceKrw(p) <= 130_000 },
+  { key: 'over130k', label: '13만원 이상', test: (p: Product) => listPriceKrw(p) > 130_000 },
 ] as const;
 
 type PriceKey = (typeof PRICE_BANDS)[number]['key'];

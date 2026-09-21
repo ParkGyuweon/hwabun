@@ -128,18 +128,18 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       basis: [
         {
           from: '무엇을 보고 사나',
-          text: `이 글을 본 사람의 담기율이 평균의 ${liftOf('clinical_claim')}배인데, 상세페이지를 연 사람 중 ${viewPct('clinical_claim')}만 여기까지 내려옵니다. 안 보여서 못 먹히고 있습니다.`,
+          text: `이 글을 본 사람은 평균보다 ${liftOf('clinical_claim')}배 더 담는데, 상세페이지를 연 사람 중 ${viewPct('clinical_claim')}만 여기까지 내려옵니다. 안 보여서 못 먹히고 있습니다.`,
         },
         segmentBasis('임상 결과') ?? {
           from: '누가 사나',
-          text: '고객군별 체류 구성에서 임상 결과 비중이 가장 큽니다.',
+          text: '고객군별로 어떤 글을 오래 봤는지 나눠 보면 임상 결과에 쓴 시간이 가장 큽니다.',
         },
         {
           from: '무엇을 보고 사나',
-          text: `전성분을 펼쳐 본 방문의 담기율은 ${fmt.pct(expand?.cartRateWith ?? 0)}, 안 펼친 방문은 ${fmt.pct(expand?.cartRateWithout ?? 0)}입니다. 근거를 찾아 읽는 방문이 담습니다.`,
+          text: `전성분을 펼쳐 본 방문은 ${fmt.pct(expand?.cartRateWith ?? 0)}가 담고, 안 펼친 방문은 ${fmt.pct(expand?.cartRateWithout ?? 0)}가 담습니다. 근거를 찾아 읽는 고객이 담습니다.`,
         },
       ],
-      verify: `열람률 ${viewPct('clinical_claim')} → 50%. 올린 뒤에도 이 글을 본 방문의 담기율이 2.0배 이상이면 위치가 맞았다는 뜻입니다. 열람률만 오르고 담기율이 1.5배 아래로 떨어지면 관심 없는 사람에게도 보인 것이니 되돌리세요.`,
+      verify: `이 글을 본 사람의 비율 ${viewPct('clinical_claim')} → 50%. 올린 뒤에도 이 글을 본 방문의 담기가 평균의 2.0배 이상이면 위치가 맞았다는 뜻입니다. 본 사람만 늘고 담기가 1.5배 아래로 떨어지면 관심 없는 사람에게도 보인 것이니 되돌리세요.`,
     },
 
     ingredient_callout: {
@@ -147,7 +147,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       basis: [
         {
           from: '무엇을 보고 사나',
-          text: `이 글을 본 사람의 담기율이 평균의 ${liftOf('ingredient_callout')}배인데, 열람은 ${viewPct('ingredient_callout')}에 그칩니다.`,
+          text: `이 글을 본 사람은 평균보다 ${liftOf('ingredient_callout')}배 더 담는데, 본 사람은 ${viewPct('ingredient_callout')}에 그칩니다.`,
         },
         {
           from: '고객이 찾는 성분',
@@ -158,7 +158,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
           text: `성분 목록 구간에서 위로 다시 올려 읽은 기록이 ${fmt.int(backtrack?.count ?? 0)}건입니다. 한 번 읽고 이해가 안 됐다는 뜻일 수 있습니다.`,
         },
       ],
-      verify: `열람률 ${viewPct('ingredient_callout')} → 55%, 성분 목록 구간의 되돌아 읽기 ${fmt.int(backtrack?.count ?? 0)}건 → 300건 아래. 두 값이 같이 움직이면 설명이 통한 것입니다.`,
+      verify: `이 글을 본 사람의 비율 ${viewPct('ingredient_callout')} → 55%, 성분 목록에서 위로 되돌아가 다시 읽은 기록 ${fmt.int(backtrack?.count ?? 0)}건 → 300건 아래. 두 값이 같이 움직이면 설명이 통한 것입니다.`,
     },
 
     usage_guide: {
@@ -166,37 +166,37 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       basis: [
         {
           from: '무엇을 보고 사나',
-          text: `${dwellSec('usage_guide')}초나 읽는데 본 사람의 담기율이 평균의 ${liftOf('usage_guide')}배입니다. 읽히긴 하는데 결정으로 이어지지 않습니다.`,
+          text: `${dwellSec('usage_guide')}초나 읽는데, 본 사람의 담기는 평균의 ${liftOf('usage_guide')}배에 그칩니다. 읽히긴 하는데 결정으로 이어지지 않습니다.`,
         },
         {
           from: '무엇을 보고 사나',
-          text: `접힌 정보를 펼친 방문의 담기율은 ${fmt.pct(accordion?.cartRateWith ?? 0)}, 안 펼친 방문은 ${fmt.pct(accordion?.cartRateWithout ?? 0)}입니다. 펼치는 수고를 덜어 주면 더 많은 방문이 이 정보를 봅니다.`,
+          text: `접힌 정보를 펼친 방문은 ${fmt.pct(accordion?.cartRateWith ?? 0)}가 담고, 안 펼친 방문은 ${fmt.pct(accordion?.cartRateWithout ?? 0)}가 담습니다. 펼치는 수고를 덜어 주면 더 많은 고객이 이 정보를 봅니다.`,
         },
         {
           from: '막히는 곳',
           text: `담기 버튼 위에서 머뭇거린 기록이 ${fmt.int(hesitate?.count ?? 0)}건입니다. 마지막까지 안 풀린 질문이 남아 있다는 신호입니다.`,
         },
       ],
-      verify: `평균 읽는 시간 ${dwellSec('usage_guide')}초 → 8초, 담기율 ${liftOf('usage_guide')}배 → 1.0배 이상. 시간이 줄고 담기율이 오르면 찾기 쉬워진 것입니다. 시간만 줄고 담기율이 그대로면 내용을 덜어낸 것이니 되돌리세요.`,
+      verify: `평균 읽는 시간 ${dwellSec('usage_guide')}초 → 8초, 본 사람의 담기 ${liftOf('usage_guide')}배 → 평균(1.0배) 이상. 시간이 줄고 담기가 오르면 찾기 쉬워진 것입니다. 시간만 줄고 담기가 그대로면 내용을 덜어낸 것이니 되돌리세요.`,
     },
 
     what_else: {
-      how: `추가 설명 칸을 빼고, 남길 내용은 성분 특징이나 사용법 안으로 옮기세요. 열 종 중 담기율이 가장 낮은 칸이고, 여기를 지우면 위 글들이 그만큼 위로 올라옵니다.`,
+      how: `추가 설명 칸을 빼고, 남길 내용은 성분 특징이나 사용법 안으로 옮기세요. 열 종 중 본 사람이 가장 덜 담는 칸이고, 여기를 지우면 다른 글들이 그만큼 위로 올라옵니다.`,
       basis: [
         {
           from: '무엇을 보고 사나',
-          text: `본 사람의 담기율이 평균의 ${liftOf('what_else')}배로 열 종 중 가장 낮고, 열람도 ${viewPct('what_else')}에 그칩니다.`,
+          text: `본 사람의 담기가 평균의 ${liftOf('what_else')}배로 열 종 중 가장 낮고, 본 사람도 ${viewPct('what_else')}에 그칩니다.`,
         },
         {
           from: '무엇을 보고 사나',
-          text: `같은 자리에 놓을 수 있는 임상 결과는 담기율이 ${liftOf('clinical_claim')}배입니다. 자리를 바꾸면 그 차이가 그대로 옵니다.`,
+          text: `같은 자리에 놓을 수 있는 임상 결과는 본 사람이 평균보다 ${liftOf('clinical_claim')}배 더 담습니다. 자리를 바꾸면 그 차이가 그대로 옵니다.`,
         },
         {
           from: '막히는 곳',
-          text: `상세페이지를 열고 3초 안에 나간 방문이 ${fmt.pct(m.quickExitRate)}입니다. 페이지가 길수록 끝까지 내려오는 사람이 줄어드니, 담기율 낮은 칸부터 덜어내는 것이 순서입니다.`,
+          text: `상세페이지를 열고 3초 안에 나간 방문이 ${fmt.pct(m.quickExitRate)}입니다. 페이지가 길수록 끝까지 내려오는 사람이 줄어드니, 담기에 도움이 안 되는 칸부터 덜어내는 것이 순서입니다.`,
         },
       ],
-      verify: `뺀 뒤 상세페이지 전체 평균 읽는 시간이 줄지 않아야 합니다. 줄면 필요한 내용을 지운 것입니다. 임상 결과 열람률이 함께 오르면 자리 교체가 통한 것입니다.`,
+      verify: `뺀 뒤 상세페이지 전체 평균 읽는 시간이 줄지 않아야 합니다. 줄면 필요한 내용을 지운 것입니다. 임상 결과를 본 사람의 비율이 함께 오르면 자리 교체가 통한 것입니다.`,
     },
 
     user_review: {
@@ -204,14 +204,14 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       basis: [
         {
           from: '무엇을 보고 사나',
-          text: `내 피부 타입 리뷰만 본 방문의 담기율은 ${fmt.pct(skinFilter?.cartRateWith ?? 0)}, 안 본 방문은 ${fmt.pct(skinFilter?.cartRateWithout ?? 0)}입니다. 그런데 실제로 누른 방문은 ${fmt.pct(skinFilter?.doneRate ?? 0)}뿐입니다.`,
+          text: `내 피부 타입 리뷰만 골라 본 방문은 ${fmt.pct(skinFilter?.cartRateWith ?? 0)}가 담고, 안 그런 방문은 ${fmt.pct(skinFilter?.cartRateWithout ?? 0)}가 담습니다. 그런데 실제로 이 버튼을 누른 방문은 ${fmt.pct(skinFilter?.doneRate ?? 0)}뿐입니다.`,
         },
         {
           from: '누가 사나',
-          text: `리뷰 필터를 쓴 방문 중 ${fmt.pct(m.sameSkinFilterRate, 0)}가 자기 피부 타입을 골랐습니다. 고객이 원하는 기본값이 이미 나와 있습니다.`,
+          text: `리뷰를 걸러 본 방문 중 ${fmt.pct(m.sameSkinFilterRate, 0)}가 자기 피부 타입을 골랐습니다. 고객이 원하는 기본 설정이 이미 나와 있습니다.`,
         },
       ],
-      verify: `필터 사용률 ${fmt.pct(skinFilter?.doneRate ?? 0)} → 40%. 리뷰 구간 이탈이 함께 줄어야 합니다.`,
+      verify: `'내 피부 타입만 보기'를 누른 방문 ${fmt.pct(skinFilter?.doneRate ?? 0)} → 40%. 리뷰를 보다가 그냥 나가는 방문이 함께 줄어야 합니다.`,
     },
 
     ingredient_list: {
@@ -219,14 +219,14 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       basis: [
         {
           from: '무엇을 보고 사나',
-          text: `펼쳐 본 방문의 담기율은 ${fmt.pct(expand?.cartRateWith ?? 0)}, 안 펼친 방문은 ${fmt.pct(expand?.cartRateWithout ?? 0)}입니다. 두 배 넘게 벌어집니다.`,
+          text: `전성분을 펼쳐 본 방문은 ${fmt.pct(expand?.cartRateWith ?? 0)}가 담고, 안 펼친 방문은 ${fmt.pct(expand?.cartRateWithout ?? 0)}가 담습니다.`,
         },
         {
           from: '막히는 곳',
           text: `이 구간에서 위로 다시 올려 읽은 기록이 ${fmt.int(backtrack?.count ?? 0)}건입니다.`,
         },
       ],
-      verify: `펼쳐 보기 실행률 ${fmt.pct(expand?.doneRate ?? 0)} → 40%. 담기율 차이가 그대로 유지되는지 보세요.`,
+      verify: `전성분을 펼쳐 본 방문 ${fmt.pct(expand?.doneRate ?? 0)} → 40%. 펼친 방문과 안 펼친 방문의 담기 차이가 그대로 유지되는지 보세요.`,
     },
 
     product_image: {
@@ -241,7 +241,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
           text: `${dwellSec('product_image')}초만 보고 넘어갑니다. 확대가 막혀 있어 더 볼 수 없었을 가능성이 있습니다.`,
         },
       ],
-      verify: `눌러도 아무 일이 없던 기록 ${fmt.int(deadClick?.count ?? 0)}건 → 100건 아래. 이미지 구간 체류가 함께 늘어야 합니다.`,
+      verify: `눌러도 아무 일이 없던 기록 ${fmt.int(deadClick?.count ?? 0)}건 → 100건 아래. 상품 이미지에 머문 시간이 함께 늘어야 합니다.`,
     },
   };
 }

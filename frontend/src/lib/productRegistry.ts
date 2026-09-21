@@ -187,6 +187,8 @@ export function toProduct(form: RegistrationForm, productId: string, registeredA
     },
     // §4.1 고정 환율. 소수 둘째 자리
     price_usd: Math.round((priceKrw / KRW_PER_USD) * 100) / 100,
+    // 사장님이 적은 원화 그대로. 화면은 이 값을 그린다 — 달러를 거치면 100원 단위로 흔들린다
+    price_krw: priceKrw,
     size: form.size.trim() || null,
     /**
      * §4.2 의 rating 주입은 **인코더 입력**이지 화면 값이 아니다. 화면에 주입값을 보이면
@@ -213,7 +215,7 @@ export function fromProduct(p: Product): RegistrationForm {
     tertiary_category: p.category[2] ?? '',
     highlights: [...p.highlights],
     ingredients: p.ingredients.join(', '),
-    price_krw: Math.round(p.price_usd * KRW_PER_USD),
+    price_krw: typeof p.price_krw === 'number' && p.price_krw > 0 ? p.price_krw : Math.round(p.price_usd * KRW_PER_USD),
     size: p.size ?? '',
     what_it_is: p.description?.what_it_is ?? '',
     suggested_usage: p.description?.suggested_usage ?? '',
@@ -367,6 +369,7 @@ function mergeWithLocal(row: Product): Product {
   return {
     ...local,
     price_usd: row.price_usd > 0 ? row.price_usd : local.price_usd,
+    price_krw: row.price_krw ?? local.price_krw ?? null,
     rating: row.rating ?? local.rating,
     sku_id: row.sku_id ?? local.sku_id,
     variants: row.variants,
@@ -392,7 +395,9 @@ function mergeDetailWithLocal(detail: Product): Product {
     sku_id: detail.sku_id ?? local.sku_id,
     size: detail.size ?? local.size,
     price_usd: detail.price_usd > 0 ? detail.price_usd : local.price_usd,
+    price_krw: detail.price_krw ?? local.price_krw ?? null,
     sale_price_usd: detail.sale_price_usd ?? local.sale_price_usd ?? null,
+    sale_price_krw: detail.sale_price_usd ? (detail.sale_price_krw ?? null) : (local.sale_price_krw ?? null),
     rating: detail.rating ?? local.rating,
     backend_brand_id: detail.backend_brand_id,
     // `source` 는 정적 사본 값 유지 — 위 mergeWithLocal 주석 참고 (리뷰가 백엔드에 없다)

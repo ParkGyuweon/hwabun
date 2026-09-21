@@ -81,12 +81,12 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
   };
 
   if (!brandId) {
-    return <Panel title="정산" source="real" aside="-"><p className="note">브랜드를 먼저 고르세요.</p></Panel>;
+    return <Panel title="정산" source="real"><p className="note">판매자로 로그인하면 내 브랜드 정산이 여기 보입니다.</p></Panel>;
   }
   if (failed) {
     return (
-      <Panel title="정산" source="real" aside="-">
-        <p className="note">정산을 읽지 못했습니다. 잠시 뒤 새로고침해 주세요.</p>
+      <Panel title="정산" source="real">
+        <p className="note">정산을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.</p>
       </Panel>
     );
   }
@@ -99,29 +99,29 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
       <div className="grid grid--kpi">
         <Kpi
           label={`${monthKo(thisMonth)} 정산 예정`}
-          value={totals.current ? won(totals.current.net_amount) : '-'}
+          value={totals.current ? won(totals.current.net_amount) : '아직 없음'}
           sub={
             totals.current
               ? totals.current.status === 'COMPLETED'
-                ? '이번 달 정산이 완료됐습니다'
-                : '결제 완료 품목의 합 · 매일 02:00 갱신'
-              : '아직 이번 달 정산이 만들어지지 않았습니다'
+                ? '이번 달 정산이 지급 완료됐습니다'
+                : '결제가 끝난 주문의 내 상품 금액 합 · 매일 새벽 2시에 새로 셉니다'
+              : '이번 달 결제가 아직 없거나 새벽 2시 정산 전입니다. 아래 "지금 다시 세기" 로 바로 만들 수 있습니다'
           }
           source="real"
         />
         <Kpi
-          label="받을 돈 (미정산 합계)"
+          label="받을 돈 (아직 지급 안 된 합계)"
           value={won(totals.pending)}
-          sub={totals.pending === 0 ? '기다리는 정산이 없습니다' : '운영자가 완료 처리하면 여기서 빠집니다'}
+          sub={totals.pending === 0 ? '지급을 기다리는 정산이 없습니다' : '플랫폼 운영자가 지급을 마치면 여기서 빠집니다'}
           source="real"
         />
         <Kpi
-          label="받은 돈 (완료 누적)"
+          label="받은 돈 (지급 완료 누적)"
           value={won(totals.completed)}
-          sub={totals.lastCompleted ? `마지막 완료 ${monthKo(totals.lastCompleted.settlement_month)}` : '완료된 정산이 아직 없습니다'}
+          sub={totals.lastCompleted ? `마지막 지급 ${monthKo(totals.lastCompleted.settlement_month)}분` : '지급 완료된 정산이 아직 없습니다'}
           source="real"
         />
-        <Kpi label="플랫폼 수수료" value="0%" sub="총 판매액이 그대로 정산액입니다" source="real" />
+        <Kpi label="플랫폼 수수료" value="0%" sub="수수료가 없어 총 판매액이 그대로 정산액입니다" source="real" />
       </div>
 
       <Panel
@@ -129,7 +129,7 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
         source="real"
         aside={
           <div className="settle__actions">
-            <span>{rows.length === 0 ? '-' : `${rows.length}개월`}</span>
+            <span>{rows.length === 0 ? '0개월' : `${rows.length}개월`}</span>
             <button type="button" className="fbx-btn" onClick={recount} disabled={busy} aria-busy={busy}>
               {busy ? '다시 세는 중' : '이번 달 지금 다시 세기'}
             </button>
@@ -139,19 +139,19 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
         {notice ? <p className="note settle__notice" role="status">{notice}</p> : null}
         {rows.length === 0 ? (
           <p className="note">
-            아직 정산이 없습니다. 첫 결제가 들어오면 다음 날 02:00 에 이번 달 정산이 만들어집니다. 기다리지 않으려면 위
-            버튼으로 지금 세어 볼 수 있습니다.
+            아직 정산이 없습니다. 첫 결제가 들어오면 다음 날 새벽 2시에 이번 달 정산이 만들어집니다. 기다리지 않으려면 위
+            "이번 달 지금 다시 세기" 로 바로 만들 수 있습니다.
           </p>
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>정산월</th>
+                <th>정산 월</th>
                 <th>총 판매액</th>
                 <th>수수료</th>
-                <th>정산액</th>
-                <th>상태</th>
-                <th>완료일</th>
+                <th>받을 금액</th>
+                <th>지급 상태</th>
+                <th>지급일</th>
               </tr>
             </thead>
             <tbody>
@@ -168,15 +168,15 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
                       {s.status === 'COMPLETED' ? '지급 완료' : '지급 대기'}
                     </span>
                   </td>
-                  <td>{s.completed_at ? s.completed_at.slice(0, 10) : '-'}</td>
+                  <td>{s.completed_at ? s.completed_at.slice(0, 10) : '지급 전'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
         <p className="note">
-          결제가 끝난 주문의 내 브랜드 품목만 그 달에 들어갑니다. 취소·환불은 아직 정산에서 빼지 않습니다. 완료 처리는
-          운영자가 하고, 완료된 달은 다시 세지 않습니다.
+          결제가 끝난 주문 중 내 브랜드 상품 금액만 그 달 정산에 들어갑니다. 취소·환불은 아직 정산에서 빼지 않습니다.
+          지급 처리는 플랫폼 운영자가 하고, 지급이 끝난 달은 다시 세지 않습니다.
         </p>
       </Panel>
     </div>

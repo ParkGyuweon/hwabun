@@ -16,7 +16,7 @@ createRoot(document.getElementById('root') as HTMLElement).render(
     {/* 브랜드 담당자(SELLER) 로그인 · shop_backend /api/auth */}
     <AuthGate
       role="SELLER"
-      product={{ mark: '/brand/hwabun-mark.png', name: 'HWABUN', tagline: '참여 브랜드 담당자 대시보드' }}
+      product={{ mark: '/brand/hwabun-mark.png', name: 'HWABUN', tagline: '브랜드 사장님을 위한 판매 현황판' }}
     >
       <DashboardApp />
     </AuthGate>

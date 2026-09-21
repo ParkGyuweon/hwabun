@@ -41,11 +41,7 @@ export default function SiteHeader({
 }: SiteHeaderProps) {
   return (
     <header className="site-header">
-      <div className="site-header__promo">
-        <strong>취향이 피어나는 뷰티 쇼핑 공간</strong> · 오늘 담은 상품은 무료배송{' '}
-        <span className="site-header__promo-terms">*3만원 이상 · 기간 한정</span>
-      </div>
-
+      {/* 상단 홍보 띠("취향이 피어나는 … 무료배송")는 2026-09-21 에 뗐다. 몰이 하나고 무료배송 약속도 실제 정책이 아니었다 */}
       <div className="site-header__main">
         <button type="button" className="site-header__logo" onClick={onHome} aria-label="BLOOM 홈">
           {/* 파비콘용으로 줄인 마크(192px). 표시 28px 라 충분하고 원본은 2450px 다 */}

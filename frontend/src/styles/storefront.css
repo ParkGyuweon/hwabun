@@ -674,11 +674,7 @@
   justify-self: end;
 }
 
-/* 얇게: 띠 배너를 빼고 높이를 줄인다. 첫 화면에 상품이 더 많이 들어온다 */
-:root[data-header='mini'] .site-header__promo {
-  display: none;
-}
-
+/* 얇게: 높이를 줄인다. 첫 화면에 상품이 더 많이 들어온다 */
 :root[data-header='mini'] .site-header__main {
   height: 40px;
   gap: 20px;

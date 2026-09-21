@@ -52,24 +52,6 @@ body {
   backdrop-filter: saturate(180%) blur(20px);
 }
 
-.site-header__promo {
-  padding: 7px var(--space-4);
-  font-size: 12px;
-  line-height: 1.4;
-  letter-spacing: 0;
-  background: var(--color-brand-soft);
-  color: #3f4a2e;
-}
-
-.site-header__promo strong {
-  font-weight: 600;
-}
-
-.site-header__promo-terms {
-  opacity: 0.7;
-  font-size: 12px;
-}
-
 .site-header__main {
   max-width: var(--page-max);
   height: 48px;

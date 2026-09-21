@@ -96,7 +96,7 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
       );
     } else {
       setPhase('idle');
-      setNotice('정리 서버에 닿지 못했습니다. 06:00 자동 정리는 그대로 됩니다.');
+      setNotice('AI 정리 기능에 연결하지 못했습니다. 매일 아침 6시 자동 정리는 그대로 됩니다.');
     }
   };
 
@@ -112,9 +112,9 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
         onClick={refresh}
         disabled={!brandId || unavailable || phase !== 'idle' || locked}
         aria-busy={phase !== 'idle'}
-        title={unavailable ? '정리 서버가 연결되면 누를 수 있습니다' : '지금까지 쌓인 리뷰·피드백으로 다시 정리합니다'}
+        title={unavailable ? 'AI 정리 기능이 연결되면 누를 수 있습니다' : '지금까지 쌓인 리뷰·피드백을 읽어 다시 정리합니다'}
       >
-        {phase === 'idle' ? '즉시 반영' : '다시 읽는 중'}
+        {phase === 'idle' ? '지금 다시 정리' : '다시 읽는 중'}
       </button>
     </div>
   );
@@ -133,14 +133,14 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
 
       {unavailable ? (
         <p className="note">
-          아직 정리 서버가 연결되지 않았습니다. 연결되면 매일 06:00 에 리뷰·피드백을 읽어 여기에 정리하고, 위 버튼으로 그
+          AI 정리 기능이 아직 연결되지 않았습니다. 연결되면 매일 아침 6시에 리뷰·피드백을 읽어 여기에 정리하고, 위 버튼으로 그
           자리에서 다시 정리할 수 있습니다. 그 전까지는 아래 원문을 직접 읽어 주세요.
         </p>
       ) : null}
 
       {read.kind === 'empty' ? (
         <p className="note">
-          아직 정리한 내용이 없습니다. 의견이 쌓이면 06:00 에 처음 만들어지고, 지금 만들려면 위 버튼을 누르세요.
+          아직 정리한 내용이 없습니다. 고객 의견이 쌓이면 다음 날 아침 6시에 처음 만들어지고, 지금 바로 만들려면 위 버튼을 누르세요.
         </p>
       ) : null}
 
@@ -153,7 +153,7 @@ function stampOf(read: InsightRead | { kind: 'loading' }): string {
   if (read.kind !== 'ready') return read.kind === 'unavailable' ? '연결 전' : read.kind === 'empty' ? '아직 없음' : '';
   const i = read.insight;
   const at = i.generatedAt.slice(0, 16).replace('T', ' ');
-  const how = i.source === 'manual' ? '직접 반영' : '06:00 자동';
+  const how = i.source === 'manual' ? '직접 요청' : '아침 6시 자동';
   const fresh = i.newSince > 0 ? ` · 이후 새 의견 ${fmt.int(i.newSince)}건` : '';
   return `마지막 정리 ${at} (${how})${fresh}`;
 }
@@ -162,7 +162,7 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
   const { summary, evidence, inputCount } = insight;
   const empty = summary.topComplaints.length === 0 && summary.preBuyDropReasons.length === 0 && summary.actions.length === 0;
   if (empty) {
-    return <p className="note">읽은 글 {fmt.int(inputCount.feedback + inputCount.review)}건에서 정리할 만한 공통점이 아직 없습니다.</p>;
+    return <p className="note">읽은 글 {fmt.int(inputCount.feedback + inputCount.review)}건에서 여러 고객이 함께 말한 공통점이 아직 없습니다. 글이 더 쌓이면 다시 정리합니다.</p>;
   }
   return (
     <div className="ai">
@@ -170,7 +170,7 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
         <section className="ai__col">
           <h3 className="ai__h">가장 많이 나온 불만</h3>
           {summary.topComplaints.length === 0 ? (
-            <p className="note">없음</p>
+            <p className="note">여러 고객이 함께 말한 불만이 없습니다</p>
           ) : (
             <ol className="ai__list">
               {summary.topComplaints.map((c) => (
@@ -199,15 +199,15 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
           )}
           <p className="ai__sub">
             가격 언급{' '}
-            {summary.priceMentionRate === null ? '-' : `${Math.round(summary.priceMentionRate * 100)}%`}
-            <span className="ai__sub-note"> · 글 100개 중 가격을 말한 글의 수</span>
+            {summary.priceMentionRate === null ? '아직 셀 글이 없음' : `${Math.round(summary.priceMentionRate * 100)}%`}
+            <span className="ai__sub-note"> · 읽은 글 100개 중 가격을 말한 글의 수</span>
           </p>
         </section>
 
         <section className="ai__col ai__col--act">
           <h3 className="ai__h">지금 할 일</h3>
           {summary.actions.length === 0 ? (
-            <p className="note">없음</p>
+            <p className="note">지금 바로 할 일은 없습니다</p>
           ) : (
             <ol className="ai__acts">
               {summary.actions.map((a) => (
@@ -221,10 +221,10 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
       <details className="act__more">
         <summary>
           어떤 글을 읽고 정리했나 · 피드백 {fmt.int(inputCount.feedback)} · 리뷰 {fmt.int(inputCount.review)}
-          {evidence.length > 0 ? ` · 근거 ${evidence.length}줄` : ''}
+          {evidence.length > 0 ? ` · 근거가 된 문장 ${evidence.length}줄` : ''}
         </summary>
         {evidence.length === 0 ? (
-          <p className="note">근거 문장을 따로 주지 않았습니다.</p>
+          <p className="note">이번 정리에는 근거로 뽑은 문장이 따로 없습니다.</p>
         ) : (
           <ul className="act__basis">
             {evidence.map((e) => (
@@ -237,7 +237,6 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
         )}
         <p className="ai__sub-note">
           효능이나 원인을 단정하지 않습니다. 글에 나온 말을 세어 모은 것이라, 결정은 원문을 한 번 더 보고 내리세요.
-          {insight.model ? ` · ${insight.model}` : ''}
         </p>
       </details>
     </div>
