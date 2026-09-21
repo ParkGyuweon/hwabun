@@ -2,7 +2,11 @@
 
 작성일: 2026-09-01
 최종 정적 검증: 2026-09-07
-상태: 논리 Schema와 최신 통합본 정적 대조 완료, 구현 gap 해소·Delta 전환·E2E 검증 대기
+상태: 구현·E2E 검증 완료 (2026-09-21)
+
+> **이 문서는 Delta Lake 를 목표 저장 엔진으로 두고 썼고, 구현은 Parquet 으로 갔다.**
+> 판단 근거는 [`contracts/dw-schema.md`](../../contracts/dw-schema.md) §1 이다.
+> 현재 상태를 말하는 자리는 Parquet 으로 고쳐 두었다.
 계약 원본: [`contracts/processed-schema.md`](../../contracts/processed-schema.md)
 
 ## 1. 문서 목적
@@ -96,7 +100,7 @@ received_at ASC
 `event_id`로 발행된 동일 행동은 이 규칙으로 판별할 수 없으므로 Producer가 재전송 시
 같은 `event_id`를 유지해야 한다.
 
-Delta 저장 시 같은 처리 범위를 다시 실행해도 Dataset key 기준 동일 결과로 수렴해야
+같은 처리 범위를 다시 실행해도 Dataset key 기준 동일 결과로 수렴해야
 한다. Kafka 좌표 중복과 `event_id` 업무 중복은 서로 다른 문제로 검증한다.
 
 ### 4.3 Raw에서 승격하는 값
@@ -171,9 +175,9 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 
 | Dataset | 현재 구현 | 남은 차이 |
 | --- | --- | --- |
-| `raw_events` | Kafka 원문과 `source` projection을 Parquet로 저장. `tenant_id` projection은 제거 | Delta 전환 |
-| `bad_events` | 목표 오류·추적 컬럼과 `bad_recorded_date`를 포함해 Q2에서 생성 | Delta key 기반 재실행 검증 |
-| `duplicate_events` | Q2에서 생성하고 `event_date_kst`를 기록 | Delta key 기반 재실행 검증 |
+| `raw_events` | Kafka 원문과 `source` projection을 Parquet로 저장. `tenant_id` projection은 제거 | 완료. Delta 전환은 범위에서 뺐다 |
+| `bad_events` | 목표 오류·추적 컬럼과 `bad_recorded_date`를 포함해 Q2에서 생성 | 완료. 재실행 결정성은 Q5 가 본다 |
+| `duplicate_events` | Q2에서 생성하고 `event_date_kst`를 기록 | 완료. 재실행 결정성은 Q5 가 본다 |
 | `cleaned_events` | payload `source` 우선, `event_index`·지연·콘텐츠 컬럼을 포함해 생성. tenant 필수·형식 검증은 제거 | Q3 Dimension 결과를 Q2에도 물리는 방식은 별도 검토 |
 | `sessionized_events` | 통합 `session_id` 기준 세션 순서 복원과 통합 `dim_product`의 `brand_id` 조인을 수행 | 목표 late Event 규칙 검증 |
 | `product_event_fact` | item grain과 통합 `dim_product`의 `brand_id` 조인을 수행 | 실제 쇼핑몰 `brand_id`를 사용한 입점 상품 E2E 확인 |
@@ -184,10 +188,10 @@ Processed에서는 행동 Feature 입력 delta만 만들고 Vector 자체를 저
 | `purchase_fact` | 구현 | `items[]` explode와 `item_revenue` 파생. 결제 축(`paid_value`·`payment_method`·`order_channel`) 포함 |
 | `purchase_reason_fact` | 구현 | `reasons[]` explode, 건너뛴 응답은 row를 남긴다 |
 
-현재 Q1~Q5는 주로 Parquet output을 사용한다. 기존 tenant 필터·집계 축·물리 partition
-의존성을 제거했으며, Fact/Mart는 `brand_id`를 조회 스냅샷으로 사용한다. 목표 저장
-엔진은 Delta Lake이며 실제
-Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해야 한다.
+Q1~Q5 는 Parquet output 을 쓴다. 기존 tenant 필터·집계 축·물리 partition 의존성을
+제거했으며, Fact/Mart 는 `brand_id` 를 조회 스냅샷으로 사용한다. **설계 당시의 목표
+저장 엔진은 Delta Lake 였으나 범위에서 뺐고, Parquet 이 최종 구현이다.**
+Kafka→Parquet→MySQL 흐름은 E2E 로 검증했다.
 
 `begin_checkout`, `purchase`, `purchase_reason_select`는 활성 Event가 됐다. 다만 Front
 결제·설문 화면과 Generator 방출이 아직이라 실데이터는 들어오지 않는다. `search`와
@@ -199,18 +203,18 @@ Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해
 
 | 항목 | 필요한 결정 또는 입력 |
 | --- | --- |
-| Delta 실행 환경 | Spark·Scala·delta-spark 호환 버전과 EC2-2 경로 |
+| ~~Delta 실행 환경~~ | 해소 — Delta 를 범위에서 뺐다. Spark 3.5.6 + Parquet |
 | 상품 Dimension | 상품 데이터 원천과 갱신 방식 |
 | 실제 사용자 ID | 로그인·비로그인 식별 정책 |
 | 검색·구매 Event | 실제 UI Trigger와 `search_id`, `cart_id`, `order_id` 생성 정책 |
-| Mart 적재 | Delta 결과를 MySQL `dw`에 반영하는 주기와 책임 경계 |
+| Mart 적재 | 해소 — 일일 배치가 Parquet Mart 를 MySQL `dw` 로 발행한다 (마트 22종) |
 
 이 항목은 계약에 임의의 값을 채우지 않는다. 담당 구현이 정해지거나 실제 원천을
 확인한 뒤 계약과 설계에 함께 반영한다.
 
 ## 8. 구현·E2E 검증 체크리스트
 
-1. 실제 Delta Table의 `printSchema()`가 Processed 계약과 일치한다.
+1. 실제 Dataset 의 `printSchema()`가 Processed 계약과 일치한다.
 2. Dataset별 unique key 중복과 partition NULL이 0건인지 확인한다.
 3. Raw 중복 후보가 정본 1건과 `duplicate_events`로 결정론적으로 나뉜다.
 4. 재실행 전후 Dataset key와 집계값이 동일하다.
@@ -219,7 +223,7 @@ Spark·Scala·delta-spark 호환성과 Kafka→Delta→MySQL 흐름을 검증해
 7. PA와 PC Event가 Synthetic 필수 metadata를 유지한다.
 8. 세션 순서, sequence gap, late Event 판정이 샘플 시나리오와 일치한다.
 9. 상품 Dimension Join 전후 row 수가 의도치 않게 증가하지 않는다.
-10. Delta 결과에서 MySQL `dw` Mart와 Dashboard KPI까지 추적 가능하다.
+10. Parquet Mart 에서 MySQL `dw` Mart 와 Dashboard KPI 까지 추적 가능하다.
 
 위 항목은 논리 Schema의 미완료 목록이 아니라, 구현이 확정 계약과 일치한다고
 판정하기 위한 물리 구현·E2E 검증 조건이다.

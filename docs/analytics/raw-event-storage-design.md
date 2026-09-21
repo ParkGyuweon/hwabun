@@ -4,7 +4,11 @@
 
 대상 작업: `[DATA] Raw Event Log 저장 구성`
 
-상태: 계약 분리 완료, 현재 Parquet PoC와 목표 Delta 구조 검증 대기
+상태: Parquet 구현·E2E 검증 완료 (2026-09-21)
+
+> **이 문서는 Delta Lake 를 목표 구조로 두고 썼고, 구현은 Parquet 으로 갔다.**
+> 판단 근거는 [`../../contracts/dw-schema.md`](../../contracts/dw-schema.md) §1 이다.
+> 현재 상태를 말하는 자리는 Parquet 으로 고쳐 두었다.
 
 계약 원본: [`../../contracts/raw-event-schema.md`](../../contracts/raw-event-schema.md)
 
@@ -25,8 +29,8 @@ Frontend / Simulator
 → Backend Collector
 → Kafka activity-events
 → Spark Structured Streaming Q1
-→ Delta Lake raw_events
-→ Delta Lake cleaned_events / marts
+→ Parquet raw_events
+→ Parquet cleaned_events / marts
 → MySQL dw KPI Mart
 → Dashboard
 ```
@@ -39,14 +43,14 @@ sink의 책임이다. 업무 Event 중복 제거와 semantic validation은 Proce
 ## 3. 배포 및 저장소 선택
 
 - EC2-1 서비스 영역에는 Backend, MySQL의 `app`·`dw` schema와 Redis를 둔다.
-- EC2-2 데이터 영역에는 Kafka, Spark와 Delta Lake를 둔다.
-- Delta Lake는 Raw·Processed·Mart의 재처리 기준을 보존한다.
+- EC2-2 데이터 영역에는 Kafka 와 Spark 를 둔다.
+- Parquet 이 Raw·Processed·Mart 의 재처리 기준을 보존한다.
 - MySQL `dw`에는 Dashboard가 직접 조회할 KPI Mart만 선별 적재한다.
 
-별도 S3, EBS 데이터 볼륨 또는 공유 파일시스템이 없는 현재 구성에서는 Delta 파일과
+별도 S3, EBS 데이터 볼륨 또는 공유 파일시스템이 없는 현재 구성에서는 Parquet 파일과
 `_delta_log`를 EC2-2 로컬 파일시스템에 함께 둔다. 이는 서비스와 데이터 영역을
 분리하는 MVP 구조이며 EC2-2 장애·교체를 견디는 HA 구성은 아니다. 공유 저장소를
-도입하기 전에는 여러 EC2에서 하나의 Delta Table을 분산 운영하지 않는다.
+도입하기 전에는 여러 EC2에서 하나의 Dataset 을 분산 운영하지 않는다.
 
 ## 4. 현재 Kafka 연동 기준
 
@@ -68,33 +72,36 @@ idempotence는 Producer 내부 재시도 중복을 줄이지만 같은 `event_id
 
 ## 5. 현재 구현과 목표 구조
 
-| 항목 | 현재 Q1 | 목표 |
+설계 당시 목표는 Delta Lake 였으나 범위에서 뺐다. 아래는 그 대조표를 현재 구현으로
+갱신한 것이다.
+
+| 항목 | 설계 당시 목표 | 현재 구현 |
 | --- | --- | --- |
-| 저장 엔진 | Parquet | Delta Lake |
-| Raw 경로 | `data/raw_events` | EC2-2 Delta root 아래 `raw_events` |
-| Container 경로 | `/opt/project/data/raw_events` | 배포 환경에서 확정 |
-| Checkpoint | `data/checkpoints/raw-events` | Delta root와 분리된 EC2-2 경로 |
-| 쓰기 | append Stream | 물리 key 기준 insert-only `MERGE` |
+| 저장 엔진 | Delta Lake | **Parquet** |
+| Raw 경로 | EC2-2 Delta root 아래 `raw_events` | `data/raw_events` (운영은 `/opt/hwabun/data`) |
+| Container 경로 | 배포 환경에서 확정 | `/opt/project/data/raw_events` |
+| Checkpoint | Delta root와 분리된 EC2-2 경로 | `data/checkpoints/raw-events` |
+| 쓰기 | 물리 key 기준 insert-only `MERGE` | **append Stream.** 중복은 Q2 가 `event_id` 정본으로 수렴시킨다 |
 | Projection | 목표 계약 중 `source` 조회 컬럼 누락 | Raw 계약 전체 컬럼 |
 | 시작 Offset | `earliest` | 신규 query에만 적용 |
 | Data loss | `failOnDataLoss=true` | 유지 |
 
-현재 Q1 경로는 `RAW_EVENTS_PATH`, checkpoint는
-`RAW_EVENTS_CHECKPOINT_PATH`로 override할 수 있다. 현재 로컬 Parquet 경로를 EC2
-목표 저장 방식으로 해석하지 않는다. EC2-2 Delta root와 checkpoint URI는
-Spark·Scala·`delta-spark` 호환 조합 및 실제 배포 경로를 확인한 뒤 적용한다.
+Q1 경로는 `RAW_EVENTS_PATH`, checkpoint 는 `RAW_EVENTS_CHECKPOINT_PATH` 로
+override 할 수 있다. `MERGE` 를 쓰지 않으므로 **Q1 이 exactly-once 를 보장하지
+않는다** — 그 자리는 Q2 가 전체 스냅샷을 다시 읽어 `event_id` 정본을 수렴시키는
+것으로 메운다 (`../../streaming/README.md`).
 
 현재 `streaming/jobs/raw_sink_job.py`는 Raw 계약의 조회 projection 중 `source`를
 별도 컬럼으로 추출하지 않는다. `raw_value`에는 값이 보존되므로 원문 손실은 없지만,
 계약과 실제 출력 Schema의 drift다. `_event_schema()`, `RAW_EVENT_FIELDS`,
 `build_raw_events_frame()`과 컬럼 계약 테스트를 함께 보완해야 한다.
 
-## 6. Delta 적재와 checkpoint 설계
+## 6. 적재와 checkpoint 설계
 
 - Partition은 Event 발생일이 아니라 적재 UTC 날짜인 `raw_ingest_date`를 사용한다.
 - 늦게 도착한 Event도 실제 Raw 적재 날짜 partition에 저장한다.
-- `foreachBatch`에서 micro-batch 내부 물리 key 중복을 먼저 제거한다.
-- Delta Table과 물리 key를 비교해 matched row는 수정하지 않고 unmatched row만 넣는다.
+- 물리 key 중복 제거는 Q2 가 한다 — 같은 Kafka 좌표는 한 건만 남기고, 같은
+  `event_id` 는 `received_at` 이 가장 이른 것을 정본으로 고른다.
 - 정상 재시작은 동일한 checkpoint를 사용한다.
 - 환경·Kafka cluster·Topic 세대가 다르면 checkpoint를 공유하지 않는다.
 - 출력과 checkpoint 경로를 분리하며 하나의 checkpoint를 여러 query가 공유하지 않는다.
@@ -122,6 +129,6 @@ Spark·Scala·`delta-spark` 호환 조합 및 실제 배포 경로를 확인한 
 6. JSON 파싱 실패 record도 원문과 Kafka 좌표를 가진 채 저장되는지 확인한다.
 7. 동일 checkpoint 재시작 시 처리 완료 record를 다시 쓰지 않는지 확인한다.
 8. checkpoint 삭제 후 Replay에서 물리 key 중복이 생기지 않는지 확인한다.
-9. EC2-2 프로세스 재시작 후 Delta Table과 checkpoint가 유지되는지 확인한다.
+9. EC2-2 프로세스 재시작 후 Dataset 과 checkpoint 가 유지되는지 확인한다.
 
 위 검증이 끝나기 전까지 Raw 계약은 Draft로 유지한다.

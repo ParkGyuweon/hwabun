@@ -71,8 +71,9 @@ py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 키를 쓴다.
 
 포맷이 JSONL 인 이유는 의존성이 필요 없고 저장소의 다른 배치 산출물
-(`eval_metadata.jsonl`, `product_feature.jsonl`) 과 같기 때문이다. Delta/Parquet 은
-저장 엔진이 확정된 뒤에 붙인다 (`docs/analytics/dw-design.md` §5).
+(`eval_metadata.jsonl`, `product_feature.jsonl`) 과 같기 때문이다. 배치가 읽는
+bridge 도 JSONL 이고, Parquet 으로 옮길 이유가 아직 없다 — 크기가 작고 Spark 가
+스키마를 명시해 읽는다 (`build_marts_job.load_persona_segments`).
 
 **산출물은 커밋하지 않는다.** 난수가 없어 누가 돌려도 같은 결과가 나오고, 아직 이
 테이블을 읽는 모듈이 없다. 필요할 때 로컬에서 다시 만든다. 9,900명 전량은 약 70MB 다.

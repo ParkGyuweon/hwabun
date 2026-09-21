@@ -215,7 +215,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 | --- | --- | --- |
 | 상단 수량·세션·비율 | `product_daily_kpi` 합산 · 비율 재계산 | 가능 |
 | `funnel` | `funnel_daily_kpi` 합산 | 가능. 담기율 분모 `detail_view_sessions` 는 §6-6 — 상품 단위는 `quick_look_sessions + product_view_sessions` 로 **더할 수 없다**(한 세션이 둘 다 가능). 컬럼이 오기 전까지 프론트 폴백은 `product_view_sessions` |
-| `diagnostics` | `{ exit_content_kind_top, exit_sessions, variant_select_per_session, quick_look_open_detail_rate }` — `product_exit_daily` (dw-schema §4.24) + `product_daily_kpi` 의 `variant_select_count`·`quick_look_close_open_detail_count` | **재료 있음** (0.3 · §6-3 구현됨). 백엔드 구현 전까지는 `null` |
+| `diagnostics` | `{ exit_content_kind_top, exit_sessions, variant_select_per_session, quick_look_open_detail_rate }` — `product_exit_daily` (dw-schema §4.24) + `product_daily_kpi` 의 `variant_select_count`·`quick_look_close_open_detail_count` | **구현됨** (0.3 · §6-3). 마트·백엔드 모두 붙었다 (2026-09-21) |
 
 `diagnostics` 두 비율은 서버가 나눈다. `variant_select_per_session = variant_select_count / product_view_sessions`,
 `quick_look_open_detail_rate = quick_look_close_open_detail_count / quick_look_sessions`. 분모 0 이면 `null`.
@@ -537,9 +537,13 @@ Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가
 
 2026-09-16 까지 이 자리에는 "아직 MySQL 에 없다 · 적재가 끝나기 전까지 `null` 이고 화면은 모의로 그린다"
 가 적혀 있었다. 적재가 끝난 뒤에도 이 문구가 남아 있어 서버가 네 마트를 조회하지 않았고, 세 블록이 비어
-있었다. **마트 상태가 바뀌면 이 절을 같이 고친다.** **E2 `diagnostics` 의 두 컬럼**
-(`variant_select_count`·`quick_look_close_open_detail_count`)은 마트에는 있지만 **Q3 재실행이 필요하다** —
-`close_reason` 을 Fact 에 새로 실어서, 다음 E2E 부터 값이 찬다.
+있었다. **마트 상태가 바뀌면 이 절을 같이 고친다.** **E2 `diagnostics` 의 두 컬럼도 값이 찼다** (2026-09-21 운영 실측).
+`close_reason` 을 Fact 에 싣는 Q3 재실행이 끝났다 — `quick_look_close_open_detail_count`
+6,475행, `variant_select_count` 2,485건(브랜드 6곳)이다.
+
+**`variant_select_count` 는 브랜드마다 0 일 수 있다.** 시연 브랜드 `ssafy-beauty` 는
+전 기간 0 인데 마트 결함이 아니라 그 상품 8개에 옵션 선택 Event 가 없어서다.
+화면이 0 과 `null` 을 구분해 적는다.
 
 #### 5-3. projection 대상이 아닌 것
 
