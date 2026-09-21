@@ -138,7 +138,17 @@ export default function ProductDetailPage({
         <AboutProduct product={product} persona={persona} reviews={reviews} />
       </section>
 
-      <section className="pdp__section pdp__section--tight" data-log-section="ingredients">
+      {/*
+       * 성분·사용법 섹션은 `data-log-content` 를 섹션 자체에도 단다 (2026-09-21, 데이터 요청).
+       * 전에는 아코디언을 펼친 안쪽 블록에만 있어서 섹션의 section_view·section_dwell 은 content_kind 가 비고
+       * 같은 섹션의 text_selection·text_copy 만 ingredient_list 를 실었다. content_kind 가 마트 grain 이라
+       * 한 섹션이 두 행(18,694명 / 0명)으로 갈렸다. about_product 는 안쪽 블록마다 라벨이 있어 문제가 없다.
+       */}
+      <section
+        className="pdp__section pdp__section--tight"
+        data-log-section="ingredients"
+        data-log-content="ingredient_list"
+      >
         <Accordion
           title="Ingredients"
           hint={ingredientCount > 0 ? `${ingredientCount}개` : '정보 없음'}
@@ -149,7 +159,7 @@ export default function ProductDetailPage({
         </Accordion>
       </section>
 
-      <section className="pdp__section pdp__section--tight" data-log-section="how_to_use">
+      <section className="pdp__section pdp__section--tight" data-log-section="how_to_use" data-log-content="usage_guide">
         <Accordion title="How to Use" sectionId="how_to_use" contentKind="usage_guide">
           {product.description?.suggested_usage ? (
             <p className="pdp__prose pdp__prose--pre">{product.description.suggested_usage}</p>
