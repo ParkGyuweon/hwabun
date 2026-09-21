@@ -852,6 +852,47 @@ def _unmatched_banner_click_count(product_fact: Any) -> int:
     )["unmatched"]
 
 
+COHORT_COLLAPSED_GRAIN = ["snapshot_week_kst", "cohort_key", "metric_name"]
+
+
+def _collapsed_cohort_violations(
+    commons_cohort: Any, collapsed_value: str
+) -> dict[str, int]:
+    """축을 걷어낸 전체 행이 축 행을 제대로 덮는지 본다 (dw-schema.md §4.18).
+
+    두 가지를 센다. `missing` 은 축 행이 있는데 전체 행이 없는 코호트, `shrunk` 는
+    전체 행의 브랜드 수가 어느 축 행보다 적은 코호트다. 축을 합쳤는데 브랜드가
+    줄었다면 합치는 과정에서 흘린 것이다.
+
+    **축 행에서 출발해 left join 한다.** 전체 행에서 출발하면 한 건도 없을 때
+    비교할 짝이 없어 검사가 공허히 통과한다 — 2026-09-21 운영 배치가 Mart 수정
+    이전 코드라 전체 행이 0건이었는데 이 검사가 잡지 못했다.
+
+    `generator_type` 이 NULL 인지로 가르면 안 된다. 실사용자(Web) 행도 NULL 이라
+    전체 행으로 오인한다 (§2.2).
+    """
+
+    from pyspark.sql import functions as F
+
+    collapsed = commons_cohort.where(
+        F.col("actor_type") == F.lit(collapsed_value)
+    )
+    per_axis_max = commons_cohort.where(
+        F.col("actor_type") != F.lit(collapsed_value)
+    ).groupBy(*COHORT_COLLAPSED_GRAIN).agg(
+        F.max("brand_count").alias("_axis_max")
+    )
+    paired = per_axis_max.join(
+        collapsed.select(*COHORT_COLLAPSED_GRAIN, "brand_count"),
+        COHORT_COLLAPSED_GRAIN,
+        "left",
+    )
+    return {
+        "missing": paired.where(F.col("brand_count").isNull()).count(),
+        "shrunk": paired.where(F.col("brand_count") < F.col("_axis_max")).count(),
+    }
+
+
 def validate_frames(
     frames: dict[str, Any],
     require_events: bool = False,
@@ -2404,26 +2445,16 @@ def validate_frames(
         except ImportError:
             from build_marts_job import COLLAPSED_AXIS_VALUE
 
-        # 축을 걷어낸 행(`actor_type='all'`)은 그 코호트·주차·지표의 어느 축 행보다
-        # 브랜드를 적게 가질 수 없다. 적으면 합치는 과정에서 브랜드를 흘린 것이다.
-        #
-        # `generator_type` 이 NULL 인지로 가르면 안 된다 — 실사용자(Web) 행도 NULL
-        # 이라 전체 행으로 오인한다.
-        collapsed = commons_cohort.where(
-            F.col("actor_type") == F.lit(COLLAPSED_AXIS_VALUE)
+        collapsed_violations = _collapsed_cohort_violations(
+            commons_cohort, COLLAPSED_AXIS_VALUE
         )
-        per_axis_max = commons_cohort.where(
-            F.col("actor_type") != F.lit(COLLAPSED_AXIS_VALUE)
-        ).groupBy("snapshot_week_kst", "cohort_key", "metric_name").agg(
-            F.max("brand_count").alias("_axis_max")
-        )
-        shrunk = collapsed.join(
-            per_axis_max, ["snapshot_week_kst", "cohort_key", "metric_name"], "inner"
-        ).where(F.col("brand_count") < F.col("_axis_max")).count()
         checks.append(_check(
             "commons_collapsed_rows_cover_every_axis",
-            shrunk == 0,
-            f"shrunk_rows={shrunk}; 축을 걷어낸 행은 어느 축 행보다 브랜드가 적을 수 없다",
+            collapsed_violations["missing"] == 0
+            and collapsed_violations["shrunk"] == 0,
+            f"missing_collapsed_rows={collapsed_violations['missing']}; "
+            f"shrunk_rows={collapsed_violations['shrunk']}; "
+            "축을 걷어낸 행은 축마다 있어야 하고 어느 축 행보다 브랜드가 적을 수 없다",
         ))
 
         # R5 — B층 Mart 는 다른 브랜드에게 보여도 되는 형태여야 한다.

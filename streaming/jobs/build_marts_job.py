@@ -762,6 +762,27 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
     )
 
 
+# 부동소수점 덧셈은 결합법칙이 성립하지 않는다. Spark 는 파티션 부분합을 셔플
+# 도착 순서대로 합치므로, 같은 입력이라도 실행마다 끝자리가 달라진다 —
+# 2026-09-21 운영 리포트에서 `content_daily_kpi` 가 이 이유로 2,975 grain
+# 어긋났고, 같은 코드가 같은 날 한 번은 통과했다. decimal 덧셈은 정확해서
+# 합산 순서와 무관하다.
+DETERMINISTIC_SUM_TYPE = "decimal(38,12)"
+
+
+def _deterministic_sum(column: Any) -> Any:
+    """double 합을 decimal 로 모아 합산 순서와 무관하게 만든다.
+
+    소수 12자리 아래는 버린다. 관심도 점수는 평균과 순위에만 쓰여서 그 자리가
+    결과를 바꾸지 않는다. 재현 가능한 Mart 와 맞바꾼 값이다.
+    """
+
+    from pyspark.sql import functions as F
+
+    expression = F.col(column) if isinstance(column, str) else column
+    return F.sum(expression.cast(DETERMINISTIC_SUM_TYPE))
+
+
 def _safe_ratio(numerator: Any, denominator: Any) -> Any:
     from pyspark.sql import functions as F
 
@@ -881,7 +902,7 @@ def _product_daily_kpi(
                 F.col("event_name") == F.lit(event_name), F.lit(float(weight))
             ).otherwise(F.lit(0.0))
         aggregations.append(
-            F.sum(product_interest_score)
+            _deterministic_sum(product_interest_score)
             .cast("double")
             .alias("product_interest_score")
         )
@@ -1295,7 +1316,7 @@ def _persona_segment_daily_kpi(
                 F.col("event_name") == F.lit(event_name), F.lit(float(weight))
             ).otherwise(F.lit(0.0))
         aggregations.append(
-            F.sum(interest).cast("double").alias("interest_score")
+            _deterministic_sum(interest).cast("double").alias("interest_score")
         )
     else:
         aggregations.append(F.lit(None).cast("double").alias("interest_score"))
@@ -1554,7 +1575,8 @@ def _content_daily_kpi(
             ))),
             F.lit(0),
         ).cast("long").alias("matched_ingredient_count"),
-        F.sum("content_interest_score").cast("double").alias("content_interest_score"),
+        _deterministic_sum("content_interest_score")
+        .cast("double").alias("content_interest_score"),
     )
 
     # 분모와 성분·리뷰 열람 세션은 **상품 단위**라 content_kind 마다 같은 값이 반복된다.
@@ -2789,17 +2811,18 @@ def _ingredient_weekly_interest(
     grouped = signals.groupBy(
         *dimensions, "ingredient_id", "ingredient", "label_ko", "vocab_version"
     ).agg(
-        F.sum("ingredient_interest_score").cast("double").alias(
+        _deterministic_sum("ingredient_interest_score").cast("double").alias(
             "ingredient_interest_score"
         ),
-        F.sum("direct_match_score").cast("double").alias("direct_match_score"),
-        F.sum("product_attributed_score").cast("double").alias(
+        _deterministic_sum("direct_match_score")
+        .cast("double").alias("direct_match_score"),
+        _deterministic_sum("product_attributed_score").cast("double").alias(
             "product_attributed_score"
         ),
         F.countDistinct("event_id").cast("long").alias("contributing_event_count"),
     )
     share_window = Window.partitionBy(*dimensions)
-    denominator = F.sum("ingredient_interest_score").over(share_window)
+    denominator = _deterministic_sum("ingredient_interest_score").over(share_window)
     return (
         grouped.withColumn(
             "ingredient_interest_share",
@@ -3322,7 +3345,7 @@ def _user_trait_daily(sessionized_df: Any, contract: dict[str, Any]) -> Any:
         "actor_type", "source", "scenario_id", "simulation_run_id",
     ]
     scores = expanded.groupBy(*key_columns, "trait").agg(
-        F.sum("event_trait_score").cast("double").alias("trait_score"),
+        _deterministic_sum("event_trait_score").cast("double").alias("trait_score"),
         F.countDistinct("event_id").cast("long").alias("contributing_event_count"),
     )
     rank_window = Window.partitionBy(*key_columns).orderBy(
