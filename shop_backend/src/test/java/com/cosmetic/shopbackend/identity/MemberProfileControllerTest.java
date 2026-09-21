@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cosmetic.shopbackend.security.ShopPrincipal;
@@ -49,7 +51,7 @@ class MemberProfileControllerTest {
 
     MemberProfileController.Profile p = c.update(
       new ShopPrincipal("m-1", AccountRole.MEMBER),
-      new MemberProfileController.Profile("dry", "", null, " brown ")
+      new MemberProfileController.Profile("dry", "", null, "brown")
     );
 
     assertEquals("dry", m.getSkinTypeCode());
@@ -57,6 +59,23 @@ class MemberProfileControllerTest {
     assertNull(m.getHairColorCode());
     assertEquals("brown", m.getEyeColorCode());
     assertEquals("dry", p.skinTypeCode());
+  }
+
+  @Test
+  void rejectsProfileCodeOutsideDefinedVocabularyWithoutPersisting() {
+    MemberRepository members = mock(MemberRepository.class);
+    Member m = member();
+    when(members.findById("m-1")).thenReturn(Optional.of(m));
+    MemberProfileController c = new MemberProfileController(members);
+
+    ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> c.update(
+      new ShopPrincipal("m-1", AccountRole.MEMBER),
+      new MemberProfileController.Profile("sensitive", "light", "brown", "hazel")
+    ));
+
+    assertEquals(400, error.getStatusCode().value());
+    assertEquals("combination", m.getSkinTypeCode());
+    verify(members, never()).save(any(Member.class));
   }
 
   @Test

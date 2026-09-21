@@ -3,6 +3,7 @@ package com.cosmetic.shopbackend.identity;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +23,17 @@ import org.springframework.web.server.ResponseStatusException;
  *   GET /api/members/me/profile   → 200 { skinTypeCode, skinToneCode, hairColorCode, eyeColorCode } (없으면 null)
  *   PUT /api/members/me/profile   { 같은 네 필드 } → 200 저장된 값. 필드를 null 로 보내면 "선택 안 함" 으로 지운다
  *
- * 값 검증은 하지 않는다 — 어휘(contracts/product-form-labels-ko.json segment)는 프론트가 정하고, 리뷰 스냅샷·마트가
- * 이 컬럼을 그대로 읽는다. 길이만 컬럼 크기(32)로 막는다. MEMBER 만. /api/auth/** 가 permitAll 이라 거기 두지 않았다.
+ * 값은 프론트와 같은 어휘만 받는다. 이 컬럼은 리뷰 스냅샷·추천·마트가 그대로 읽으므로, 정의되지 않은 값은
+ * 400으로 거절해 데이터 계약을 지킨다. MEMBER 만. /api/auth/** 가 permitAll 이라 거기 두지 않았다.
  */
 @RestController
 @RequestMapping("/api/members/me/profile")
 public class MemberProfileController {
+
+  private static final Set<String> SKIN_TYPES = Set.of("combination", "dry", "normal", "oily");
+  private static final Set<String> SKIN_TONES = Set.of("fair", "light", "medium", "tan", "deep");
+  private static final Set<String> HAIR_COLORS = Set.of("black", "brown", "blonde", "auburn", "red", "gray");
+  private static final Set<String> EYE_COLORS = Set.of("blue", "brown", "green", "gray", "hazel");
 
   private final MemberRepository members;
 
@@ -55,10 +61,14 @@ public class MemberProfileController {
   @Transactional
   public Profile update(@AuthenticationPrincipal ShopPrincipal actor, @Valid @RequestBody Profile req) {
     Member m = member(actor);
-    m.setSkinTypeCode(blankToNull(req.skinTypeCode()));
-    m.setSkinToneCode(blankToNull(req.skinToneCode()));
-    m.setHairColorCode(blankToNull(req.hairColorCode()));
-    m.setEyeColorCode(blankToNull(req.eyeColorCode()));
+    String skinType = validOrNull(req.skinTypeCode(), SKIN_TYPES, "skinTypeCode");
+    String skinTone = validOrNull(req.skinToneCode(), SKIN_TONES, "skinToneCode");
+    String hairColor = validOrNull(req.hairColorCode(), HAIR_COLORS, "hairColorCode");
+    String eyeColor = validOrNull(req.eyeColorCode(), EYE_COLORS, "eyeColorCode");
+    m.setSkinTypeCode(skinType);
+    m.setSkinToneCode(skinTone);
+    m.setHairColorCode(hairColor);
+    m.setEyeColorCode(eyeColor);
     members.save(m);
     return Profile.of(m);
   }
@@ -72,7 +82,11 @@ public class MemberProfileController {
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found"));
   }
 
-  private static String blankToNull(String s) {
-    return s == null || s.isBlank() ? null : s.trim();
+  private static String validOrNull(String value, Set<String> allowed, String field) {
+    if (value == null || value.isBlank()) return null;
+    if (!allowed.contains(value)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid " + field);
+    }
+    return value;
   }
 }
