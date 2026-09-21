@@ -131,6 +131,24 @@ body {
   line-height: 1.6;
 }
 
+/*
+ * 사이드바 안의 알림 패널. 종은 사이드바(232px) 왼쪽 아래에 있는데 패널(360px)은 헤더용으로
+ * "오른쪽 끝 맞춤·아래로 열기" 라서 화면 왼쪽 밖으로 뻗어 잘렸다 (2026-09-21 규원님 제보).
+ * 여기서는 종의 왼쪽에 맞춰 오른쪽으로, 발 부분이라 위로 연다. 사이드바는 backdrop-filter 로
+ * 자기 쌓임 맥락을 만들어 뒤에 오는 본문이 패널을 덮을 수 있어 z-index 를 준다.
+ */
+.sidebar {
+  z-index: 5;
+}
+
+.sidebar .notif__panel {
+  top: auto;
+  bottom: 38px;
+  left: 0;
+  right: auto;
+  width: min(360px, calc(100vw - 48px));
+}
+
 /* 서버 브랜드 선택·등록·상태. 사이드바 브랜드 이름 바로 아래 */
 .sidebar__brand-select {
   margin: 0 12px 6px;
