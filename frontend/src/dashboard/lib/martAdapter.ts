@@ -86,8 +86,6 @@ const ENTRY_KO: Record<string, string> = {
   direct: '주소로 바로 들어옴',
 };
 
-const EXIT_KINDS: ProductMetrics['exitContent'][] = ['ingredient_list', 'usage_guide', 'user_review', 'similar_products', 'product_hero', 'price'];
-
 /* ---------- 도움 ---------- */
 
 const ratio = (num: number, den: number): number => (den === 0 ? 0 : num / den);
@@ -177,9 +175,8 @@ function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: 
        * 같은 문장을 그대로 읽고 손을 댔다. 없는 것은 하이픈으로 둔다.
        */
       const d = r.diagnostics;
-      const exitContent = (d?.exit_content_kind_top && EXIT_KINDS.includes(d.exit_content_kind_top as ProductMetrics['exitContent'])
-        ? (d.exit_content_kind_top as ProductMetrics['exitContent'])
-        : null);
+      // 마트가 준 종류를 그대로 받는다. 여섯 종만 걸러 받던 흰목록이 마트 660행을 '-' 로 만들었다 (2026-09-21)
+      const exitContent = d?.exit_content_kind_top ?? null;
       if (d) anyDiag = true;
 
       const row: ProductMetrics & { rates: typeof rates } = {
