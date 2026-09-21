@@ -266,6 +266,94 @@ class DashboardMartServiceTest {
     assertNull(service.segments(SELLER, BRAND, FROM, TO, "all").get("same_skin_filter_rate"));
   }
 
+  @Test
+  @DisplayName("가격 블록은 가격 축을 유지한 채 기간을 합산하고 비율을 다시 계산한다")
+  void priceBlocksKeepTheirAxesAndRecomputeRates() {
+    priceBandDay("2026-09-10", "46k-66k", 100, 20, 10, 2, 1);
+    priceBandDay("2026-09-11", "46k-66k", 200, 40, 30, 4, 3);
+    segmentPriceDay("2026-09-10", "skin_type", "combination", "46k-66k", 100, 10, 2, 1);
+
+    Map<String, Object> response = service.segments(SELLER, BRAND, FROM, TO, "all");
+    Map<?, ?> price = ((List<Map<?, ?>>) response.get("price_bands")).getFirst();
+    Map<?, ?> segmentPrice = ((List<Map<?, ?>>) response.get("segment_price_grid")).getFirst();
+
+    assertEquals(300L, number(price.get("impression_sessions")));
+    assertEquals(60L, number(price.get("detail_view_sessions")));
+    assertEquals(6D / 60D, decimal(price.get("view_to_cart_rate")), 1e-9);
+    assertEquals("combination", segmentPrice.get("segment_value"));
+    assertEquals("46k-66k", segmentPrice.get("price_bin"));
+    assertEquals(1D / 10D, decimal(segmentPrice.get("view_to_purchase_rate")), 1e-9);
+  }
+
+  @Test
+  @DisplayName("코호트는 주간 행을 유지하고 억제된 분위값만 비운다")
+  void cohortJoinsBrandDimensionAndPreservesSuppressedRows() {
+    segmentDay("2026-09-10", "skin_type", "dry", 10, 1.0D);
+    brandDay("2026-09-10", 100, 30, 50, 15, 10);
+    brandDay("2026-09-11", 100, 30, 50, 15, 10);
+    insert("dw.brand_cohort_dim", Map.of(
+      "brand_id", BRAND,
+      "brand_hash", "hash",
+      "product_count", 2,
+      "product_count_band", "2-3",
+      "dominant_price_bin", "105k+",
+      "cohort_key", "2-3|105k+",
+      "commons_participating", true
+    ));
+    insert("dw.commons_cohort_weekly", Map.ofEntries(
+      Map.entry("cohort_key", "2-3|105k+"),
+      Map.entry("snapshot_week_kst", "2026-09-07"),
+      Map.entry("metric_name", "view_to_cart_rate"),
+      Map.entry("actor_type", "web"),
+      Map.entry("window_start_date", "2026-09-07"),
+      Map.entry("window_end_date", "2026-09-13"),
+      Map.entry("brand_count", 4),
+      Map.entry("is_suppressed", true),
+      Map.entry("is_sample_sufficient", false),
+      Map.entry("is_dominated", true),
+      Map.entry("p25", 0.1D),
+      Map.entry("p50", 0.2D),
+      Map.entry("p75", 0.3D)
+    ));
+
+    Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
+    Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
+
+    assertEquals("2-3|105k+", cohort.get("cohort_key"));
+    assertEquals("2026-09-07", cohort.get("snapshot_week_kst"));
+    assertEquals(true, cohort.get("is_suppressed"));
+    assertNull(metric.get("p25"));
+    assertNull(metric.get("p50"));
+    assertNull(metric.get("p75"));
+    assertEquals(1D / 3D, decimal(metric.get("my_value")), 1e-9);
+    assertNull(metric.get("my_position"));
+  }
+
+  @Test
+  @DisplayName("actor=all 코호트가 여러 실행 행이면 분위값을 만들지 않는다")
+  void allActorCohortDoesNotAverageExecutionRows() {
+    segmentDay("2026-09-10", "skin_type", "dry", 10, 1.0D);
+    brandDay("2026-09-10", 100, 30, 50, 15, 10);
+    insert("dw.brand_cohort_dim", Map.of(
+      "brand_id", BRAND,
+      "brand_hash", "hash",
+      "product_count", 2,
+      "product_count_band", "2-3",
+      "cohort_key", "2-3|105k+",
+      "commons_participating", true
+    ));
+    insertCohortMetric("web", 2, 0.1D, 0.2D, 0.3D);
+    insertCohortMetric("synthetic", 6, 0.3D, 0.4D, 0.5D);
+
+    Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
+    Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
+
+    assertNull(metric.get("p25"));
+    assertNull(metric.get("p50"));
+    assertNull(metric.get("p75"));
+    assertNull(metric.get("my_position"));
+  }
+
   /* ---------------------------------------------------------------- E5 ingredients */
 
   @Test
@@ -500,6 +588,62 @@ class DashboardMartServiceTest {
     row.put("dwell_sessions", 1);
     row.put("segment_dwell_ms_sum", segmentDwell);
     insert("dw.segment_content_daily", row);
+  }
+
+  private void priceBandDay(String date, String priceBin, int impressions, int detailViews, int productViews, int carts, int purchases) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("brand_id", BRAND);
+    row.put("event_date_kst", date);
+    row.put("price_bin", priceBin);
+    row.put("currency", "KRW");
+    row.put("actor_type", "web");
+    row.put("session_count", impressions);
+    row.put("unique_user_count", productViews);
+    row.put("impression_sessions", impressions);
+    row.put("quick_look_sessions", 0);
+    row.put("product_view_sessions", productViews);
+    row.put("detail_view_sessions", detailViews);
+    row.put("add_to_cart_sessions", carts);
+    row.put("purchase_sessions", purchases);
+    row.put("product_count", 1);
+    insert("dw.brand_price_band_daily_kpi", row);
+  }
+
+  private void segmentPriceDay(String date, String type, String value, String priceBin, int sessions, int detailViews, int carts, int purchases) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("brand_id", BRAND);
+    row.put("event_date_kst", date);
+    row.put("segment_type", type);
+    row.put("segment_value", value);
+    row.put("price_bin", priceBin);
+    row.put("currency", "KRW");
+    row.put("actor_type", "web");
+    row.put("segment_user_count", sessions);
+    row.put("session_count", sessions);
+    row.put("product_view_sessions", sessions);
+    row.put("detail_view_sessions", detailViews);
+    row.put("add_to_cart_sessions", carts);
+    row.put("purchase_sessions", purchases);
+    row.put("product_count", 1);
+    insert("dw.segment_price_band_daily_kpi", row);
+  }
+
+  private void insertCohortMetric(String actorType, int brandCount, double p25, double p50, double p75) {
+    insert("dw.commons_cohort_weekly", Map.ofEntries(
+      Map.entry("cohort_key", "2-3|105k+"),
+      Map.entry("snapshot_week_kst", "2026-09-07"),
+      Map.entry("metric_name", "view_to_cart_rate"),
+      Map.entry("actor_type", actorType),
+      Map.entry("window_start_date", "2026-09-07"),
+      Map.entry("window_end_date", "2026-09-13"),
+      Map.entry("brand_count", brandCount),
+      Map.entry("is_suppressed", false),
+      Map.entry("is_sample_sufficient", true),
+      Map.entry("is_dominated", false),
+      Map.entry("p25", p25),
+      Map.entry("p50", p50),
+      Map.entry("p75", p75)
+    ));
   }
 
   private void insert(String table, Map<String, Object> values) {

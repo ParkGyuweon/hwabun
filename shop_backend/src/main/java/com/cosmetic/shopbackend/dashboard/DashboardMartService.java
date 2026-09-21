@@ -501,6 +501,14 @@ public class DashboardMartService {
 
     List<Map<String, Object>> topContent = read.optional("segment_content_daily", () -> topContent(q));
 
+    List<Map<String, Object>> priceBands = read.optional("brand_price_band_daily_kpi", () -> priceBands(q));
+    List<Map<String, Object>> segmentPriceGrid = read.optional("segment_price_band_daily_kpi", () -> segmentPriceGrid(q));
+    CohortResult cohort = read.optional("brand_cohort_dim", () -> cohort(read, q));
+    Object priceProcessedAt = processedAt(priceBands);
+    Object segmentPriceProcessedAt = processedAt(segmentPriceGrid);
+    stripProcessedAt(priceBands);
+    stripProcessedAt(segmentPriceGrid);
+
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("by_segment", rows);
     body.put("grid", grid.isEmpty() ? null : grid);
@@ -508,12 +516,204 @@ public class DashboardMartService {
     // `review_filter_apply(same_skin_type)` 를 가를 축이 마트에 없다. `behavior_conversion_daily` 는 Event 이름까지만
     // 나누고 필터 값은 싣지 않는다 (dw-schema §4.20). 값을 지어내지 않고 비운다 — 화면은 이 칸만 모의로 남는다.
     body.put("same_skin_filter_rate", null);
+    body.put("price_bands", priceBands);
+    body.put("segment_price_grid", segmentPriceGrid);
+    body.put("cohort", cohort == null ? null : cohort.body());
     return read.envelope(
-      List.of("persona_segment_daily_kpi", "segment_content_daily"),
+      List.of(
+        "persona_segment_daily_kpi",
+        "segment_content_daily",
+        "brand_price_band_daily_kpi",
+        "segment_price_band_daily_kpi",
+        "brand_cohort_dim",
+        "commons_cohort_weekly"
+      ),
       !rows.isEmpty(),
-      processedAt,
+      oldest(processedAt, priceProcessedAt, segmentPriceProcessedAt, cohort == null ? null : cohort.processedAt()),
       body
     );
+  }
+
+  private static Object processedAt(List<Map<String, Object>> rows) {
+    if (rows == null) return null;
+    Object result = null;
+    for (Map<String, Object> row : rows) result = oldest(result, row.get("mart_processed_at"));
+    return result;
+  }
+
+  private static void stripProcessedAt(List<Map<String, Object>> rows) {
+    if (rows == null) return;
+    for (Map<String, Object> row : rows) row.remove("mart_processed_at");
+  }
+
+  private static Object oldest(Object... values) {
+    Object result = null;
+    for (Object value : values) {
+      if (value == null) continue;
+      if (result == null) {
+        result = value;
+      } else if (value instanceof Timestamp next && result instanceof Timestamp current && next.before(current)) {
+        result = value;
+      }
+    }
+    return result;
+  }
+
+  /** 브랜드 × 가격대. 가격 축을 제거하지 않고 기간 합산한 뒤 비율을 다시 계산한다. */
+  private List<Map<String, Object>> priceBands(Query q) {
+    List<Map<String, Object>> rows = many(
+      "select price_bin,currency," +
+        "coalesce(sum(session_count),0) session_count," +
+        "coalesce(sum(product_count),0) product_count," +
+        "coalesce(sum(impression_sessions),0) impression_sessions," +
+        "coalesce(sum(quick_look_sessions),0) quick_look_sessions," +
+        "coalesce(sum(product_view_sessions),0) product_view_sessions," +
+        "coalesce(sum(detail_view_sessions),0) detail_view_sessions," +
+        "coalesce(sum(add_to_cart_sessions),0) add_to_cart_sessions," +
+        "coalesce(sum(purchase_sessions),0) purchase_sessions," +
+        ratio("detail_view_sessions", "impression_sessions", "detail_entry_rate") + "," +
+        ratio("add_to_cart_sessions", "detail_view_sessions", "view_to_cart_rate") + "," +
+        ratio("purchase_sessions", "detail_view_sessions", "view_to_purchase_rate") + "," +
+        "min(mart_processed_at) mart_processed_at " +
+        "from dw.brand_price_band_daily_kpi where " + q.where("event_date_kst") +
+        " group by price_bin,currency",
+      q.args()
+    );
+    return rows;
+  }
+
+  /** 고객군 × 가격대. by_segment와 다른 원본 축을 그대로 유지한다. */
+  private List<Map<String, Object>> segmentPriceGrid(Query q) {
+    List<Map<String, Object>> rows = many(
+      "select segment_type,segment_value,price_bin,currency," +
+        "coalesce(sum(segment_user_count),0) segment_user_count," +
+        "coalesce(sum(session_count),0) session_count," +
+        "coalesce(sum(product_count),0) product_count," +
+        "coalesce(sum(product_view_sessions),0) product_view_sessions," +
+        "coalesce(sum(detail_view_sessions),0) detail_view_sessions," +
+        "coalesce(sum(add_to_cart_sessions),0) add_to_cart_sessions," +
+        "coalesce(sum(purchase_sessions),0) purchase_sessions," +
+        ratio("add_to_cart_sessions", "detail_view_sessions", "view_to_cart_rate") + "," +
+        ratio("purchase_sessions", "detail_view_sessions", "view_to_purchase_rate") + "," +
+        "min(mart_processed_at) mart_processed_at " +
+        "from dw.segment_price_band_daily_kpi where " + q.where("event_date_kst") +
+        " group by segment_type,segment_value,price_bin,currency",
+      q.args()
+    );
+    return rows;
+  }
+
+  /**
+   * B층 코호트. 먼저 브랜드의 cohort_key를 찾고, 그 키의 최신 주간 스냅샷을 읽는다.
+   * commons_cohort_weekly에는 brand_id를 절대 넣지 않는다.
+   */
+  private CohortResult cohort(Read read, Query q) {
+    List<Map<String, Object>> dimensions = many(
+      "select cohort_key,product_count_band,dominant_price_bin,mart_processed_at " +
+        "from dw.brand_cohort_dim where brand_id=?",
+      q.brand()
+    );
+    if (dimensions.isEmpty() || dimensions.getFirst().get("cohort_key") == null) return null;
+
+    Map<String, Object> dim = dimensions.getFirst();
+    String actorClause = q.actorClause();
+    // snapshot_week_kst는 KST 월요일이다. from이 주중이어도 그 주의 스냅샷을 포함한다.
+    LocalDate snapshotFrom = q.from().minusDays(6);
+    Object[] cohortArgs = actorClause.isEmpty()
+      ? new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()) }
+      : new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()), q.actor() };
+    String cohortWhere = "cohort_key=? and snapshot_week_kst between ? and ?" + actorClause;
+    List<Map<String, Object>> rows = many(
+        "select metric_name,snapshot_week_kst,window_start_date,window_end_date,brand_count," +
+        "is_suppressed,is_sample_sufficient,is_dominated,p25,p50,p75,mart_processed_at " +
+        "from dw.commons_cohort_weekly where " + cohortWhere +
+        " and snapshot_week_kst=(select max(snapshot_week_kst) from dw.commons_cohort_weekly where " + cohortWhere + ")" +
+        " order by metric_name,mart_processed_at desc,source,generator_type,scenario_id,simulation_run_id",
+      concat(cohortArgs, cohortArgs)
+    );
+    if (rows.isEmpty()) return null;
+
+    Map<String, List<Map<String, Object>>> groupedMetrics = new LinkedHashMap<>();
+    for (Map<String, Object> row : rows) {
+      groupedMetrics.computeIfAbsent(String.valueOf(row.get("metric_name")), ignored -> new ArrayList<>()).add(row);
+    }
+    Map<String, Map<String, Object>> metricsByName = new LinkedHashMap<>();
+    for (Map.Entry<String, List<Map<String, Object>>> entry : groupedMetrics.entrySet()) {
+      List<Map<String, Object>> metricRows = entry.getValue();
+      Map<String, Object> metricRow = metricRows.getFirst();
+      if (q.actor().equals("all") && metricRows.size() > 1) {
+        // p25/p50/p75 are already percentiles, so execution-axis rows cannot be
+        // combined by summing or brand-count weighted averaging. Without the
+        // underlying brand-level values, exposing a fabricated benchmark is worse
+        // than leaving the comparison unavailable.
+        metricRow = new LinkedHashMap<>(metricRow);
+        metricRow.put("p25", null);
+        metricRow.put("p50", null);
+        metricRow.put("p75", null);
+      }
+      metricsByName.put(entry.getKey(), metricRow);
+    }
+    Map<String, Object> first = rows.getFirst();
+    LocalDate windowStart = toLocalDate(first.get("window_start_date"));
+    LocalDate windowEnd = toLocalDate(first.get("window_end_date"));
+    Query window = new Query(q.brand(), windowStart, windowEnd, q.actor());
+    Map<String, Object> mine = brandPeriodSqlRow(window);
+
+    List<Map<String, Object>> metrics = new ArrayList<>();
+    for (Map<String, Object> row : metricsByName.values()) {
+      boolean suppressed = boolOf(row.get("is_suppressed"));
+      Double p25 = suppressed ? null : doubleOrNull(row.get("p25"));
+      Double p50 = suppressed ? null : doubleOrNull(row.get("p50"));
+      Double p75 = suppressed ? null : doubleOrNull(row.get("p75"));
+      Double myValue = myValue(row.get("metric_name"), mine);
+      Map<String, Object> metric = new LinkedHashMap<>();
+      metric.put("metric_name", row.get("metric_name"));
+      metric.put("p25", p25);
+      metric.put("p50", p50);
+      metric.put("p75", p75);
+      metric.put("my_value", myValue);
+      metric.put("my_position", position(myValue, p25, p50, p75));
+      metrics.add(metric);
+    }
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("cohort_key", dim.get("cohort_key"));
+    body.put("product_count_band", dim.get("product_count_band"));
+    body.put("dominant_price_bin", dim.get("dominant_price_bin"));
+    body.put("snapshot_week_kst", dateText(first.get("snapshot_week_kst")));
+    body.put("window_start_date", dateText(first.get("window_start_date")));
+    body.put("window_end_date", dateText(first.get("window_end_date")));
+    body.put("brand_count", longOf(first.get("brand_count")));
+    body.put("is_suppressed", boolOf(first.get("is_suppressed")));
+    body.put("is_sample_sufficient", boolOf(first.get("is_sample_sufficient")));
+    body.put("is_dominated", boolOf(first.get("is_dominated")));
+    body.put("metrics", metrics);
+
+    Object processed = dimensions.getFirst().get("mart_processed_at");
+    for (Map<String, Object> row : rows) processed = oldest(processed, row.get("mart_processed_at"));
+    return new CohortResult(body, processed);
+  }
+
+  private Map<String, Object> brandPeriodSqlRow(Query q) {
+    return one(brandPeriodSql(q), q.args());
+  }
+
+  private static Double myValue(Object metric, Map<String, Object> mine) {
+    if (longOf(mine.get("row_count")) == 0) return null;
+    return switch (String.valueOf(metric)) {
+      case "detail_entry_rate" -> doubleOrNull(mine.get("detail_entry_rate"));
+      case "view_to_cart_rate" -> doubleOrNull(mine.get("view_to_cart_rate"));
+      case "information_view_rate" -> doubleOrNull(mine.get("information_view_rate"));
+      default -> null;
+    };
+  }
+
+  private static String position(Double value, Double p25, Double p50, Double p75) {
+    if (value == null || p25 == null || p50 == null || p75 == null) return null;
+    if (value < p25) return "below_p25";
+    if (value < p50) return "p25_p50";
+    if (value < p75) return "p50_p75";
+    return "above_p75";
   }
 
   /**
@@ -884,6 +1084,18 @@ public class DashboardMartService {
     return value instanceof Number number ? number.longValue() : 0L;
   }
 
+  private static boolean boolOf(Object value) {
+    if (value instanceof Boolean bool) return bool;
+    if (value instanceof Number number) return number.intValue() != 0;
+    return "true".equalsIgnoreCase(String.valueOf(value));
+  }
+
+  private static LocalDate toLocalDate(Object value) {
+    if (value instanceof Date date) return date.toLocalDate();
+    if (value instanceof LocalDate date) return date;
+    return LocalDate.parse(String.valueOf(value));
+  }
+
   private static Double divide(Object numerator, Object denominator) {
     double d = doubleOf(denominator);
     return d == 0 ? null : doubleOf(numerator) / d;
@@ -933,6 +1145,8 @@ public class DashboardMartService {
     System.arraycopy(right, 0, out, left.length, right.length);
     return out;
   }
+
+  private record CohortResult(Map<String, Object> body, Object processedAt) {}
 
   /* ------------------------------------------------------------------ 요청 해석 */
 
