@@ -111,7 +111,7 @@ from banners import AXES, DEFAULT_AXES, BannerPlanner, pick_reason      # noqa: 
 import prescription as rx
 import headline as hl                                                   # noqa: E402  (Jira 365 한 마디)
 import feedback_classify as fc                                               # noqa: E402
-from live_stats import LiveStats, LIVE_HTML, log_tail                  # noqa: E402  (Jira 295 실시간 현황)
+from live_stats import LiveStats, LIVE_HTML, USERS_HTML, log_tail                  # noqa: E402  (Jira 295 실시간 현황)
 import catalog_sync                                                     # noqa: E402  (Jira 222)
 from session_store import SessionLog                                    # noqa: E402  (Jira 224)
 import kafka_state                                                      # noqa: E402  (Jira 226)
@@ -741,6 +741,16 @@ def pipeline_page():
     """시연 파이프라인 한 화면 (Jira 337) — 사이트 → Kafka → Spark → dw → 대시보드. /live 는 그대로"""
     from fastapi.responses import HTMLResponse
     return HTMLResponse(pipeline_stats.PIPELINE_HTML)
+
+
+@app.get("/live/users", include_in_schema=False)
+def live_users_page():
+    """"방금 상태가 바뀐 사용자" 만 크게 보여 주는 한 페이지 (2026-09-21).
+
+    시연을 컴퓨터 세 대로 나눠 하면서 이 화면만 따로 띄우고 싶다는 요청으로 만들었다.
+    /live 와 같은 /live/stats 를 읽는다 — 새 API 를 만들지 않는다."""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(USERS_HTML)
 
 
 @app.get("/live", include_in_schema=False)

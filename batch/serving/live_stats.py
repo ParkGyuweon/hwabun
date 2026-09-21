@@ -203,6 +203,74 @@ tick();setInterval(tick,1000);
 """
 
 
+
+# ── 상태가 바뀐 사용자만 크게 보여 주는 한 페이지 (2026-09-21) ────────────────
+# 시연을 컴퓨터 세 대로 나눠 하면서 "이 화면만 따로 띄우고 싶다" 는 요청으로 만들었다.
+# /live 와 같은 /live/stats 를 읽는다 — 새 API 를 만들지 않는다.
+USERS_HTML = """<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>상태가 바뀐 사용자</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#faf8f5;--fg:#2b2622;--mute:#8b8179;--line:#e8e1d9;--acc:#a8c96e;--acc-deep:#7d9c46;--acc-light:#eef4e0;--brown:#7a5b43;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;padding:22px 26px;background:var(--bg);color:var(--fg);
+ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+h1{margin:0 0 4px;font-size:22px;letter-spacing:-.4px}
+.sub{margin:0 0 16px;color:var(--mute);font-size:13px}
+.head{display:flex;align-items:baseline;gap:26px;margin-bottom:14px}
+.big{font-size:64px;font-weight:700;letter-spacing:-2px;font-variant-numeric:tabular-nums;line-height:1}
+.big small{font-size:18px;color:var(--mute);font-weight:400;margin-left:6px}
+.k{color:var(--mute);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+ul{list-style:none;margin:8px 0 0;padding:0}
+li{display:grid;grid-template-columns:84px 1fr;gap:14px;padding:10px 2px;border-bottom:1px solid var(--line);
+ font-variant-numeric:tabular-nums;animation:in .35s ease-out}
+li:first-child{background:linear-gradient(90deg,var(--acc-light),transparent);border-radius:8px}
+@keyframes in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.t{color:var(--mute);font-size:14px}
+.who{font-size:17px;font-weight:600;letter-spacing:-.2px;word-break:break-all}
+.ev{color:var(--mute);font-size:13px;margin-top:3px}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;
+ background:var(--acc-light);color:var(--brown);margin-left:8px;font-weight:600}
+.n{color:var(--acc-deep);font-weight:700;margin-left:8px}
+</style></head><body>
+<h1>방금 상태가 바뀐 사용자</h1>
+<p class="sub">이벤트가 추천 상태에 반영된 사람이 실시간으로 올라옵니다 · 1초마다 갱신</p>
+<div class="head">
+  <div><div class="k">상태가 바뀐 사용자</div><div class="big" id="personas">0<small>명</small></div></div>
+  <div><div class="k">초당 반영 이벤트</div><div class="big" id="eps">0<small>/s</small></div></div>
+  <div><div class="k">누적 반영</div><div class="big" id="total">0</div></div>
+</div>
+<div class="card"><ul id="recent"></ul></div>
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var fmt = function(n){ return (n == null ? 0 : n).toLocaleString(); };
+function draw(d){
+  $('personas').innerHTML = fmt(d.personas_touched) + '<small>명</small>';
+  var ev = d.events || {};
+  $('eps').innerHTML = fmt(ev.per_sec_10s_avg) + '<small>/s</small>';
+  $('total').textContent = fmt(ev.total);
+  var rows = d.recent || [];
+  $('recent').innerHTML = rows.map(function(r){
+    var src = r.source === 'kafka' ? ('P' + (r.partition == null ? '?' : r.partition)) : '직접';
+    var events = (r.events || []).join(' · ');
+    return '<li>' +
+      '<span class=t>' + r.age_sec + 's 전</span>' +
+      '<span><span class=who>' + r.persona_id + '</span>' +
+      '<span class=pill>' + src + '</span>' +
+      '<span class=n>+' + r.n + '</span>' +
+      '<div class=ev>' + events + '</div></span></li>';
+  }).join('');
+}
+function tick(){
+  fetch('/live/stats').then(function(r){ return r.json(); }).then(draw).catch(function(){});
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body></html>"""
+
+
 def log_tail(path, nbytes=400):
     """로그 파일의 마지막 줄 (Jira 344).
 
