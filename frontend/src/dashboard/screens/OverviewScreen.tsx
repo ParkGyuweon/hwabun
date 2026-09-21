@@ -111,7 +111,11 @@ export default function OverviewScreen({
 
   return (
     <div className="stack">
-      {headline && headline.origin !== 'none' && headline.headline ? (
+      {/*
+        규칙 문장(origin rule)은 아래 카드 숫자를 한 줄로 되읊는 것뿐이라 그리지 않는다 (2026-09-21 유림님: 구구절절).
+        LLM 이 쓴 문장(llm·mixed)만 보여 준다. 그때도 첫 문장만 펼치고 섹션 줄은 접는다.
+      */}
+      {headline && (headline.origin === 'llm' || headline.origin === 'mixed') && headline.headline ? (
         <section className="headline" aria-label="지금 상황 한 마디">
           <p className="headline__eyebrow">
             지금 무슨 일이 · 최근 {days}일
