@@ -71,11 +71,7 @@ export default function IngredientsScreen({
    * 남의 상품 성분을 내 것으로 읽게 만드는 것이 이 화면의 원래 문제였다.
    */
   if (mine === null || !product || !stats) {
-    const why = failed
-      ? '상품 목록을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
-      : mine === null
-        ? '상품 목록을 받는 중입니다.'
-        : '등록한 상품이 없습니다. 상품을 등록하면 전성분을 여기서 봅니다.';
+    const why = failed ? '상품 목록을 읽지 못했습니다' : mine === null ? '상품 목록을 받는 중입니다' : '등록한 상품이 없습니다';
     return (
       <div className="stack">
         <Panel title="내 상품 성분 띠" origin="mine" source="real">
@@ -104,20 +100,18 @@ export default function IngredientsScreen({
         </h2>
         <p className="verdict__reason">
           {noInterest
-            ? '고객이 상세페이지에서 성분 이름을 긁어 보거나 성분이 든 상품을 보면 관심 순위가 만들어지고, 내 상품 전성분과 맞춰 봅니다.'
-            : `고객 관심 상위 10 성분 중 내 상품에 있는 것 ${ownedTop} · 없는 것 ${Math.max(0, Math.min(10, top10.length) - ownedTop)}${
+            ? '기록이 쌓이면 여기에 나옵니다'
+            : `상위 10 중 있음 ${ownedTop} · 없음 ${Math.max(0, Math.min(10, top10.length) - ownedTop)}${
                 gaps.length > 3 ? ` · 그 외 ${gaps.length - 3}종` : ''
               }`}
         </p>
         {gaps.length > 0 ? (
-          <p className="verdict__action">
-            제품: {josa(ko(gaps[0].name), '이/가')} 든 상품을 검토해 보세요 · 상세페이지: 대신 쓴 성분이 무엇인지 설명해 주세요
+          <p className="verdict__action" title="상세페이지에는 대신 쓴 성분이 무엇인지 설명해 주세요">
+            {josa(ko(gaps[0].name), '이/가')} 든 상품을 검토해 보세요
           </p>
         ) : null}
         <p className="verdict__sample">
-          {source.ingredients === 'real'
-            ? '관심 순위는 쇼핑몰 전체 고객의 실제 기록 · 있는지 없는지는 내 상품 전성분 기준'
-            : '관심 순위는 아직 기록을 받지 못함 · 있는지 없는지는 내 상품 전성분 기준'}
+          {source.ingredients === 'real' ? '관심 순위: 쇼핑몰 전체 · 보유: 내 전성분' : '관심 순위: 기록 전 · 보유: 내 전성분'}
         </p>
       </section>
 
@@ -131,11 +125,22 @@ export default function IngredientsScreen({
           <table className="fbx-table gap-table">
             <thead>
               <tr>
-                <th className="is-num">관심 순위</th>
+                <th className="is-num">순위</th>
                 <th>성분</th>
-                <th className="is-num">긁어 본 횟수</th>
-                <th className="is-num">{thirdCol}</th>
-                <th>내 상품</th>
+                <th className="is-num" title="고객이 성분 이름을 마우스로 긁거나 복사한 횟수 (쇼핑몰 전체)">
+                  긁은 횟수
+                </th>
+                <th
+                  className="is-num"
+                  title={
+                    ingredientInterestKind === 'score'
+                      ? '그 성분이 든 상품을 본 행동을 성분마다 나눠 매긴 점수 (쇼핑몰 전체)'
+                      : '그 성분 부분에 머문 시간 (쇼핑몰 전체)'
+                  }
+                >
+                  {thirdCol}
+                </th>
+                <th title="내 상품 전성분 기준">내 상품</th>
                 <th style={{ width: '18%' }}>함량 위치</th>
               </tr>
             </thead>
@@ -143,7 +148,7 @@ export default function IngredientsScreen({
               {shownGap.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="fbx-empty">
-                    아직 기록이 없습니다. 고객이 상세페이지에서 성분 이름을 긁어 보거나 성분이 든 상품을 보면 여기에 관심 순서대로 채워집니다.
+                    아직 기록이 없습니다
                   </td>
                 </tr>
               ) : null}
@@ -203,16 +208,10 @@ export default function IngredientsScreen({
               : `나머지 ${ingredientGap.length - GAP_PREVIEW}종 더 보기`}
           </button>
         ) : null}
-        {ingredientInterestKind === 'score' && !noInterest ? (
-          <p className="note">
-            긁어 본 횟수 = 고객이 성분 이름을 마우스로 긁거나 복사한 횟수. 상품에서 본 점수 = 그 성분이 든 상품을 본 행동을 성분마다 나눠
-            매긴 점수. 둘 다 쇼핑몰 전체 고객 기준이고, '내 상품' 칸만 내 상품 전성분에서 셉니다.
-          </p>
-        ) : null}
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="내 상품 성분 띠" origin="mine" source="real" fold aside="막대가 길수록 전성분 앞쪽 = 함량이 많은 편">
+        <Panel title="내 상품 성분 띠" origin="mine" source="real" fold aside={<span title="막대가 길수록 전성분 앞쪽에 있어 함량이 많은 편">길수록 함량 많은 편</span>}>
           <div className="scope scope--inline">
             <label className="scope__field">
               <span className="scope__label">상품</span>
@@ -225,11 +224,11 @@ export default function IngredientsScreen({
               </select>
             </label>
             <p className="scope__meta">
-              전성분 {fmt.int(stats.totalCount)}개 · 그중 고객이 자주 찾는 성분 {band.length}개
+              전성분 {fmt.int(stats.totalCount)}개 · 자주 찾는 성분 {band.length}개
             </p>
           </div>
           {band.length === 0 ? (
-            <p className="fbx-empty">고객이 자주 찾는 성분 30종 중 이 상품 전성분에 든 것이 없습니다.</p>
+            <p className="fbx-empty">자주 찾는 성분이 없습니다</p>
           ) : (
             <ul className="band">
               {band.map((b) => (
@@ -259,20 +258,27 @@ export default function IngredientsScreen({
             </ul>
           )}
           {minorTagged.length > 0 ? (
-            <p className="note">
-              미량으로 보이는 성분: {minorTagged.map((mt) => ko(mt.name)).join(' · ')} · 광고 문구에 내세우면 근거 자료를 요구받을 수
-              있습니다
+            <p className="note" title="광고 문구에 내세우면 근거 자료를 요구받을 수 있습니다">
+              미량 추정 {minorTagged.map((mt) => ko(mt.name)).join(' · ')} · 광고 문구 주의
             </p>
           ) : null}
         </Panel>
 
-        <Panel title="확인이 필요한 성분" origin="shared" source="real" fold aside={`${product.product_name} · 쇼핑몰 전체 상품 ${catalogProducts.length}개와 비교`}>
+        <Panel
+          title="확인이 필요한 성분"
+          origin="shared"
+          source="real"
+          fold
+          aside={<span title={`${product.product_name} · 위해 판정이 아니라 민감한 피부 고객이 자주 확인하는 성분입니다`}>전체 {catalogProducts.length}개 상품과 비교</span>}
+        >
           <table className="fbx-table">
             <thead>
               <tr>
                 <th>성분</th>
                 <th>이 상품</th>
-                <th className="is-num">들어 있는 상품 수</th>
+                <th className="is-num" title="쇼핑몰 전체 상품 중 이 성분이 든 상품 수와 비율">
+                  든 상품 수
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -298,9 +304,6 @@ export default function IngredientsScreen({
               })}
             </tbody>
           </table>
-          <p className="note">
-            위해 판정이 아니라 민감한 피부 고객이 자주 확인하는 성분입니다. 오른쪽은 쇼핑몰 전체 상품 중 이 성분이 든 상품 수와 비율입니다.
-          </p>
         </Panel>
       </div>
     </div>

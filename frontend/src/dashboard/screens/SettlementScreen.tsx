@@ -73,25 +73,25 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
       setNotice(`${monthKo(thisMonth)} 정산을 다시 셌습니다 · ${won(r.netAmount)}`);
       await load(brandId);
     } else if (r.kind === 'completed') {
-      setNotice(`${monthKo(thisMonth)} 정산은 이미 완료돼 다시 세지 않습니다.`);
+      setNotice(`${monthKo(thisMonth)} 정산은 이미 지급 완료`);
     } else {
-      setNotice('정산을 다시 세지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+      setNotice('다시 세지 못했습니다. 다시 눌러 주세요');
     }
     setBusy(false);
   };
 
   if (!brandId) {
-    return <Panel title="정산" source="real"><p className="note">판매자로 로그인하면 내 브랜드 정산이 여기 보입니다.</p></Panel>;
+    return <Panel title="정산" source="real"><p className="note">판매자로 로그인해 주세요</p></Panel>;
   }
   if (failed) {
     return (
       <Panel title="정산" source="real">
-        <p className="note">정산을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.</p>
+        <p className="note">불러오지 못했습니다. 다시 열어 주세요</p>
       </Panel>
     );
   }
   if (rows === null) {
-    return <Panel title="정산" source="real" aside="불러오는 중"><p className="note">정산을 받는 중입니다.</p></Panel>;
+    return <Panel title="정산" source="real" aside="불러오는 중"><p className="note">불러오는 중</p></Panel>;
   }
 
   return (
@@ -103,25 +103,25 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
           sub={
             totals.current
               ? totals.current.status === 'COMPLETED'
-                ? '이번 달 정산이 지급 완료됐습니다'
-                : '결제가 끝난 주문의 내 상품 금액 합 · 매일 새벽 2시에 새로 셉니다'
-              : '이번 달 결제가 아직 없거나 새벽 2시 정산 전입니다. 아래 "지금 다시 세기" 로 바로 만들 수 있습니다'
+                ? '지급 완료'
+                : '매일 새벽 2시 갱신'
+              : '결제 없음 또는 새벽 2시 정산 전'
           }
           source="real"
         />
         <Kpi
-          label="받을 돈 (아직 지급 안 된 합계)"
+          label="받을 돈 (지급 대기)"
           value={won(totals.pending)}
-          sub={totals.pending === 0 ? '지급을 기다리는 정산이 없습니다' : '플랫폼 운영자가 지급을 마치면 여기서 빠집니다'}
+          sub={totals.pending === 0 ? '지급 대기 없음' : '지급되면 여기서 빠짐'}
           source="real"
         />
         <Kpi
-          label="받은 돈 (지급 완료 누적)"
+          label="받은 돈 (지급 완료)"
           value={won(totals.completed)}
-          sub={totals.lastCompleted ? `마지막 지급 ${monthKo(totals.lastCompleted.settlement_month)}분` : '지급 완료된 정산이 아직 없습니다'}
+          sub={totals.lastCompleted ? `마지막 지급 ${monthKo(totals.lastCompleted.settlement_month)}분` : '지급 완료 없음'}
           source="real"
         />
-        <Kpi label="플랫폼 수수료" value="0%" sub="수수료가 없어 총 판매액이 그대로 정산액입니다" source="real" />
+        <Kpi label="플랫폼 수수료" value="0%" sub="판매액 = 정산액" source="real" />
       </div>
 
       <Panel
@@ -131,23 +131,20 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
           <div className="settle__actions">
             <span>{rows.length === 0 ? '0개월' : `${rows.length}개월`}</span>
             <button type="button" className="fbx-btn" onClick={recount} disabled={busy} aria-busy={busy}>
-              {busy ? '다시 세는 중' : '이번 달 지금 다시 세기'}
+              {busy ? '다시 세는 중' : '이번 달 다시 세기'}
             </button>
           </div>
         }
       >
         {notice ? <p className="note settle__notice" role="status">{notice}</p> : null}
         {rows.length === 0 ? (
-          <p className="note">
-            아직 정산이 없습니다. 첫 결제가 들어오면 다음 날 새벽 2시에 이번 달 정산이 만들어집니다. 기다리지 않으려면 위
-            "이번 달 지금 다시 세기" 로 바로 만들 수 있습니다.
-          </p>
+          <p className="note">아직 정산이 없습니다. 위 버튼으로 바로 셀 수 있습니다</p>
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>정산 월</th>
-                <th>총 판매액</th>
+                <th title="결제 완료 주문의 내 상품 금액 합 · 취소·환불은 아직 빼지 않음">총 판매액</th>
                 <th>수수료</th>
                 <th>받을 금액</th>
                 <th>지급 상태</th>
@@ -174,10 +171,6 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
             </tbody>
           </table>
         )}
-        <p className="note">
-          결제가 끝난 주문 중 내 브랜드 상품 금액만 그 달 정산에 들어갑니다. 취소·환불은 아직 정산에서 빼지 않습니다.
-          지급 처리는 플랫폼 운영자가 하고, 지급이 끝난 달은 다시 세지 않습니다.
-        </p>
       </Panel>
     </div>
   );

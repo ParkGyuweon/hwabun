@@ -54,12 +54,12 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
           setPhase('idle');
           if (r.insight) setRead({ kind: 'ready', insight: r.insight });
           else await load();
-          setNotice('방금 쌓인 의견까지 읽어 다시 정리했습니다.');
+          setNotice('새 의견까지 읽어 다시 정리했습니다.');
           return;
         }
         if (r.state === 'failed' || Date.now() - startedAt > 60_000) {
           setPhase('idle');
-          setNotice('다시 정리하지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+          setNotice('다시 정리하지 못했습니다. 잠시 뒤 눌러 주세요.');
           await load();
           return;
         }
@@ -78,7 +78,7 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
     if (r.kind === 'done') {
       setRead({ kind: 'ready', insight: r.insight });
       setPhase('idle');
-      setNotice('방금 쌓인 의견까지 읽어 다시 정리했습니다.');
+      setNotice('새 의견까지 읽어 다시 정리했습니다.');
     } else if (r.kind === 'accepted') {
       setPhase('polling');
       poll(r.jobId, Date.now());
@@ -91,12 +91,12 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
       }
       setNotice(
         r.reason === 'nothing_new'
-          ? '마지막 정리 뒤로 새 의견이 없어 그대로 둡니다.'
+          ? '새 의견이 없어 그대로 둡니다.'
           : `방금 정리했습니다. ${r.retryAfterSec ? `${Math.ceil(r.retryAfterSec / 60)}분 뒤` : '잠시 뒤'} 다시 누를 수 있습니다.`,
       );
     } else {
       setPhase('idle');
-      setNotice('AI 정리 기능에 연결하지 못했습니다. 매일 아침 6시 자동 정리는 그대로 됩니다.');
+      setNotice('AI 정리에 연결하지 못했습니다.');
     }
   };
 
@@ -112,7 +112,7 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
         onClick={refresh}
         disabled={!brandId || unavailable || phase !== 'idle' || locked}
         aria-busy={phase !== 'idle'}
-        title={unavailable ? 'AI 정리 기능이 연결되면 누를 수 있습니다' : '지금까지 쌓인 리뷰·피드백을 읽어 다시 정리합니다'}
+        title={unavailable ? 'AI 정리가 연결되면 누를 수 있습니다' : '쌓인 리뷰·피드백을 읽어 다시 정리합니다. 매일 아침 6시에는 자동으로 정리됩니다'}
       >
         {phase === 'idle' ? '지금 다시 정리' : '다시 읽는 중'}
       </button>
@@ -125,24 +125,15 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
       {phase !== 'idle' ? (
         <p className="ai__progress" aria-live="polite">
           <span className="ai__dot" aria-hidden="true" />
-          쌓인 리뷰·피드백을 다시 읽고 있습니다. 보통 몇 초 걸립니다.
+          다시 읽고 있습니다. 몇 초 걸립니다.
         </p>
       ) : null}
 
-      {read.kind === 'loading' ? <p className="note">정리한 내용을 받는 중입니다.</p> : null}
+      {read.kind === 'loading' ? <p className="note">받는 중입니다.</p> : null}
 
-      {unavailable ? (
-        <p className="note">
-          AI 정리 기능이 아직 연결되지 않았습니다. 연결되면 매일 아침 6시에 리뷰·피드백을 읽어 여기에 정리하고, 위 버튼으로 그
-          자리에서 다시 정리할 수 있습니다. 그 전까지는 아래 원문을 직접 읽어 주세요.
-        </p>
-      ) : null}
+      {unavailable ? <p className="note">AI 정리가 아직 연결되지 않았습니다. 아래 원문을 읽어 주세요.</p> : null}
 
-      {read.kind === 'empty' ? (
-        <p className="note">
-          아직 정리한 내용이 없습니다. 고객 의견이 쌓이면 다음 날 아침 6시에 처음 만들어지고, 지금 바로 만들려면 위 버튼을 누르세요.
-        </p>
-      ) : null}
+      {read.kind === 'empty' ? <p className="note">아직 정리한 내용이 없습니다. 위 버튼으로 지금 만들 수 있습니다.</p> : null}
 
       {insight ? <InsightBody insight={insight} /> : null}
     </Panel>
@@ -162,7 +153,7 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
   const { summary, evidence, inputCount } = insight;
   const empty = summary.topComplaints.length === 0 && summary.preBuyDropReasons.length === 0 && summary.actions.length === 0;
   if (empty) {
-    return <p className="note">읽은 글 {fmt.int(inputCount.feedback + inputCount.review)}건에서 여러 고객이 함께 말한 공통점이 아직 없습니다. 글이 더 쌓이면 다시 정리합니다.</p>;
+    return <p className="note">읽은 글 {fmt.int(inputCount.feedback + inputCount.review)}건 · 공통 의견이 아직 없습니다</p>;
   }
   return (
     <div className="ai">
@@ -197,10 +188,8 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
               ))}
             </ol>
           )}
-          <p className="ai__sub">
-            가격 언급{' '}
-            {summary.priceMentionRate === null ? '아직 셀 글이 없음' : `${Math.round(summary.priceMentionRate * 100)}%`}
-            <span className="ai__sub-note"> · 읽은 글 100개 중 가격을 말한 글의 수</span>
+          <p className="ai__sub" title="읽은 글 100개 중 가격을 말한 글의 수">
+            가격 언급 {summary.priceMentionRate === null ? '아직 없음' : `${Math.round(summary.priceMentionRate * 100)}%`}
           </p>
         </section>
 
@@ -220,11 +209,11 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
 
       <details className="act__more">
         <summary>
-          어떤 글을 읽고 정리했나 · 피드백 {fmt.int(inputCount.feedback)} · 리뷰 {fmt.int(inputCount.review)}
-          {evidence.length > 0 ? ` · 근거가 된 문장 ${evidence.length}줄` : ''}
+          읽은 글 · 피드백 {fmt.int(inputCount.feedback)} · 리뷰 {fmt.int(inputCount.review)}
+          {evidence.length > 0 ? ` · 근거 ${evidence.length}줄` : ''}
         </summary>
         {evidence.length === 0 ? (
-          <p className="note">이번 정리에는 근거로 뽑은 문장이 따로 없습니다.</p>
+          <p className="note">따로 뽑은 근거 문장이 없습니다</p>
         ) : (
           <ul className="act__basis">
             {evidence.map((e) => (
@@ -235,8 +224,8 @@ function InsightBody({ insight }: { insight: SellerInsight }) {
             ))}
           </ul>
         )}
-        <p className="ai__sub-note">
-          효능이나 원인을 단정하지 않습니다. 글에 나온 말을 세어 모은 것이라, 결정은 원문을 한 번 더 보고 내리세요.
+        <p className="ai__sub-note" title="효능이나 원인을 단정하지 않습니다. 글에 나온 말을 세어 모은 것입니다">
+          결정은 원문을 한 번 더 보고 내리세요
         </p>
       </details>
     </div>
