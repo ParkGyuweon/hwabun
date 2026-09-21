@@ -101,6 +101,10 @@ IMPRESSION_EVENTS = (
     "banner_impression",
 )
 
+# 상세를 연 것으로 치는 Event. 퀵룩도 상세다 — 담기율 분자가 퀵룩 담기를
+# 포함하므로 분모도 같은 모집단을 세야 한다 (§4.1).
+DETAIL_VIEW_EVENTS = ("product_view", "quick_look")
+
 FUNNEL_PRODUCT_EVENTS = (
     *IMPRESSION_EVENTS,
     "product_click",

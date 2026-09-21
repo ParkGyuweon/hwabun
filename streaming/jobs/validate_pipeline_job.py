@@ -852,6 +852,96 @@ def _unmatched_banner_click_count(product_fact: Any) -> int:
     )["unmatched"]
 
 
+# 실사용자 로그만 보는 검사의 축 값 (dw-schema.md §2.2).
+#
+# 합성에는 같은 불변식을 걸 수 없다. 생성기는 `navigation_source='direct'` 진입을
+# 의도적으로 만들고(2026-09-21 실측 1,085건) 그것은 정상 동작이다. 실사용자 쪽만
+# 화면이 노출을 보강할 수 있다.
+REAL_USER_ACTOR_TYPE = "user"
+
+
+def _real_user_detail_entries_without_impression(
+    product_fact: Any,
+) -> dict[str, int]:
+    """실사용자 상세 진입이 같은 날·브랜드·세션에 노출 Event 를 갖는지 센다.
+
+    **사용자 행동이 아니라 계측 완결성을 보는 검사다.** 링크 공유·북마크로 상세에
+    바로 들어오는 것은 정상이고 오히려 흔한 경로다. 막는 것은 그 진입이 로그에
+    짝을 남기지 않는 것이다 — 화면이 노출을 보강하면(`impression_origin` =
+    `implied_by_*`, event-properties-schema.md §3.12-1) 이 검사는 통과한다.
+
+    세는 grain 이 `detail_entry_rate` 의 분모·분자와 같다. 상세를 연 (날짜·브랜드
+    ·세션) 이 노출을 가진 쪽의 부분집합이어야 그 비율이 1 을 넘지 않는다 —
+    2026-09-21 운영 배치에서 brand 6234 가 노출 4 · 상세 6 으로 1.5 였다.
+
+    **기존 비율 검사가 이걸 대신하지 못한다.** `brand_daily_rates_follow_contract`
+    는 비율이 1 을 넘어야 걸리는데, 그러려면 분모가 작아야 한다. 실사용자
+    트래픽이 조금만 늘면 같은 결함이 조용해진다 — 합성 쪽이 1,085건을 내고도
+    한 번도 안 걸린 이유다.
+    """
+
+    from pyspark.sql import functions as F
+
+    try:
+        from .build_marts_job import DETAIL_VIEW_EVENTS
+    except ImportError:
+        from build_marts_job import DETAIL_VIEW_EVENTS
+
+    real_user = product_fact.where(
+        F.col("actor_type") == F.lit(REAL_USER_ACTOR_TYPE)
+    )
+    per_session = real_user.groupBy(
+        "event_date_kst", "brand_id", "session_id"
+    ).agg(
+        F.max(
+            F.col("event_name").isin(*IMPRESSION_EVENTS).cast("int")
+        ).alias("_impression"),
+        F.max(
+            F.col("event_name").isin(*DETAIL_VIEW_EVENTS).cast("int")
+        ).alias("_detail"),
+    )
+    entries = per_session.where(F.col("_detail") == 1)
+    return {
+        "total": entries.count(),
+        "without_impression": entries.where(F.col("_impression") == 0).count(),
+    }
+
+
+def _real_user_unmatched_clicks(product_fact: Any) -> dict[str, int]:
+    """실사용자 클릭이 세션 안에서 대응 노출과 짝지어지는지 센다.
+
+    두 클릭을 함께 본다. `recommendation_click` 은 네 키가 모두 계약상 필수라
+    노출과 같은 `recommendation_id` 를 써야 하고, `product_click` 은 세션·상품까지만
+    본다 (`list_id` 가 선택 property 라 키에 못 넣는다).
+
+    **`product_click` 쪽이 이 검사가 필요한 이유다.** 전체 `product_click` 은 비율
+    경고(`PRODUCT_CLICK_UNMATCHED_WARN_RATIO`)로만 보는데, 실사용자 로그가 전체의
+    0.011% 라 그 안에서 전부 어긋나도 비율이 움직이지 않는다. 실사용자만 따로
+    0 을 요구해야 보인다.
+    """
+
+    from pyspark.sql import functions as F
+
+    real_user = product_fact.where(
+        F.col("actor_type") == F.lit(REAL_USER_ACTOR_TYPE)
+    )
+    recommendation = _unmatched_click_count(
+        real_user,
+        "recommendation_click",
+        "recommendation_impression",
+        ["session_id", "product_id", "recommendation_id", "list_id"],
+    )
+    product = _unmatched_click_count(
+        real_user, "product_click", IMPRESSION_EVENTS, ["session_id", "product_id"]
+    )
+    return {
+        "recommendation_unmatched": recommendation["unmatched"],
+        "recommendation_total": recommendation["total"],
+        "product_unmatched": product["unmatched"],
+        "product_total": product["total"],
+    }
+
+
 COHORT_COLLAPSED_GRAIN = ["snapshot_week_kst", "cohort_key", "metric_name"]
 
 
@@ -2125,6 +2215,35 @@ def validate_frames(
                 "프론트 클릭 직전 노출 합성이 동작하는지 본다"
             ),
         })
+
+    # ── 실사용자 계측 완결성 ────────────────────────────────────────────
+    # 위 검사들은 합성이 99.99% 라 실사용자 결함을 평균에 묻는다. 2026-09-21
+    # 배치에서 실사용자 이벤트는 전체의 0.011% 인데 Q5 실패 4건 중 3건이 거기서
+    # 나왔고, 그나마 표본이 작아 분모가 뒤집힌 덕에 보였다.
+    detail_entries = _real_user_detail_entries_without_impression(product_fact)
+    counts["real_user_detail_entries"] = detail_entries["total"]
+    counts["real_user_detail_entries_without_impression"] = (
+        detail_entries["without_impression"]
+    )
+    checks.append(_check(
+        "real_user_detail_entry_is_instrumented",
+        detail_entries["without_impression"] == 0,
+        f"without_impression={detail_entries['without_impression']}"
+        f"/{detail_entries['total']}; "
+        "실사용자 상세 진입은 같은 날·브랜드·세션에 노출 Event 를 가져야 한다 "
+        "(관측이든 보강이든)",
+    ))
+
+    real_user_clicks = _real_user_unmatched_clicks(product_fact)
+    checks.append(_check(
+        "real_user_click_matches_impression_in_session",
+        real_user_clicks["recommendation_unmatched"] == 0
+        and real_user_clicks["product_unmatched"] == 0,
+        f"recommendation={real_user_clicks['recommendation_unmatched']}"
+        f"/{real_user_clicks['recommendation_total']}; "
+        f"product={real_user_clicks['product_unmatched']}"
+        f"/{real_user_clicks['product_total']}",
+    ))
     banner_facts = product_fact.where(F.col("event_name").isin("banner_impression", "banner_click"))
     invalid_banner_facts = banner_facts.where(
         F.col("banner_type").isNull()
