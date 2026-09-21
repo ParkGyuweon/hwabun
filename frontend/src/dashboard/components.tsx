@@ -26,7 +26,12 @@ const SOURCE_TEXT: Record<SourceKind, { label: string; title: string }> = {
   mock: { label: '예시 값', title: '화면 모양을 보여 드리기 위한 예시 값입니다. 실제 숫자가 아닙니다' },
 };
 
+/**
+ * 출처 배지. **실제 기록이면 그리지 않는다** (2026-09-21, 규원님·유림님). 이제 거의 모든 칸이 실측이라 "실제 기록" 은
+ * 정보가 아니라 자리만 차지했고, 좁은 카드에서 두 줄로 꺾였다. 예외 상태(예시·아직 없음)만 알린다.
+ */
 export function SourceBadge({ kind }: { kind: SourceKind }) {
+  if (kind === 'real') return null;
   const t = SOURCE_TEXT[kind];
   return (
     <span className={`badge badge--${kind}`} title={t.title}>
