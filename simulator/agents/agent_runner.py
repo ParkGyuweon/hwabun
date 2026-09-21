@@ -126,7 +126,32 @@ def load_feedback_axes(path=FEEDBACK_AXES_PATH):
         return dict(FEEDBACK_AXES_FALLBACK)
 
 
+def load_feedback_hints(path=FEEDBACK_AXES_PATH):
+    """{화면 라벨: "축 설명 — 카테고리·카테고리"}. 없으면 빈 dict.
+
+    **분류기가 고를 수 있는 카테고리를 글쓴이에게 미리 보여 주기 위한 것이다.** 분류기는
+    이 고정 목록에서만 고르고 (계약 `description`), 목록에 없으면 `other` 로 떨어진다.
+    축 이름만 주면 "사용감" 을 고르고도 카테고리 다섯 개 중 어디에도 안 걸리는 문장이 나와서
+    화면에 '기타' 로 뜬다 — 09-19 에이전트 피드백이 그 모양이었다.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            axes = json.load(f).get("axes") or []
+        out = {}
+        for a in axes:
+            label = str(a.get("label") or "")
+            if not label:
+                continue
+            cats = [str(c.get("label")) for c in (a.get("categories") or []) if c.get("label")]
+            desc = str(a.get("desc") or "")
+            out[label] = "%s%s" % (desc, " — 예: " + "·".join(cats) if cats else "")
+        return out
+    except Exception:
+        return {}
+
+
 FEEDBACK_AXES = load_feedback_axes()
+FEEDBACK_HINTS = load_feedback_hints()
 FEEDBACK_MAX_CHARS = 280
 # 피드백은 구매와 무관하다 (사용자 결정 09-17). 안 산 사람의 의견이 판매자에게는 더 아플 때가
 # 많다. 그래서 둘러보는 중에도 남길 수 있게 행동 목록에 둔다.
@@ -1299,16 +1324,27 @@ def write_feedback(page, client, persona, product_name, cache_on, dry):
 
     labels = list(FEEDBACK_AXES)
     concerns = ", ".join(persona.get("concerns") or []) or "없음"
-    sys_p = ("너는 화장품을 산 소비자다. 방금 쓴 제품에 대해 브랜드 사장님에게 의견을 남긴다. "
-             "광고 문구가 아니라 실제로 써 본 사람의 말투로, 구체적인 한 가지를 짚어서 쓴다. "
+    # **리뷰와 프롬프트가 달라야 한다.** 계약이 `polarity` 를 "없음 — 피드백은 사장님에게 보내는
+    # 개선 요청이라 전부 불만·요청으로 본다. 칭찬은 리뷰가 받는다" 로 못박아 두었다
+    # (contracts/feedback-category-vocab.json). 09-19 에이전트는 write_review 와 거의 같은
+    # 프롬프트를 써서 "부드럽게 감겨오는 느낌이 좋아요" 같은 칭찬을 피드백으로 보냈고,
+    # 분류기가 그 축의 불만 카테고리 어디에도 못 붙여 화면에 '기타' 로 떴다.
+    sys_p = ("너는 화장품을 써 본 소비자다. 다른 손님에게 보여 주는 리뷰가 아니라, "
+             "브랜드 사장님만 보는 창구에 **고쳐 달라는 요청**을 남긴다. "
+             "칭찬·총평·별점 이야기는 쓰지 않는다. 불편했던 것 딱 한 가지를 고르고, "
+             "언제 어떻게 불편했는지와 어떻게 바꿔 주면 좋겠는지를 실제 말투로 쓴다. "
+             "배송·고객센터처럼 제품을 고쳐서 해결할 수 없는 것은 쓰지 않는다. "
+             "고른 주제의 보기 중 하나에 실제로 해당하는 불만이어야 한다. "
              'JSON 만 답한다: {"axis": "<보기 중 하나>", "body": "<한국어 2~3문장>"}')
+    menu = NL.join("- %s: %s" % (lb, FEEDBACK_HINTS.get(lb, "")) for lb in labels)
     usr_p = NL.join([
         "제품: %s" % product_name,
         "피부 타입: %s · 피부 톤: %s · 고민: %s" % (
             persona.get("skin_type") or "모름",
             persona.get("skin_tone") or "모름",
             concerns),
-        "고를 수 있는 주제: %s" % " / ".join(labels),
+        "고를 수 있는 주제 (axis 는 왼쪽 이름 그대로):",
+        menu,
         "본문은 %d자 이내." % FEEDBACK_MAX_CHARS,
     ])
     obj, _used = ask(client, sys_p, usr_p, cache_on, dry, expect_action=False)
