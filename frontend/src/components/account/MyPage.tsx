@@ -14,6 +14,7 @@ import {
 } from '../../lib/memberProfile';
 import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
 import { fetchBackendOrders } from '../../lib/shopApi';
+import { saveMemberProfileServer, useSyncMemberProfile } from '../../lib/memberProfileApi';
 import WriteReview from '../review/WriteReview';
 import { useBackdropClose } from '../../hooks/useBackdropClose';
 import type { BackendOrder } from '../../lib/shopApi';
@@ -24,7 +25,9 @@ import type { BackendOrder } from '../../lib/shopApi';
  * 세 덩이만 둔다. 내 정보(이메일·닉네임) · 피부 정보(가입 때 받은 4개, 여기서 고침) · 주문 내역.
  * 피부 정보는 "가입에서 건너뛸 수 있게 하되 나중에 채우고 바꿀 수 있어야 한다" (AI 요청 §1.2) 의 그 자리다.
  *
- * 피부 정보는 아직 브라우저 저장본이고, 주문 내역은 백엔드의 결제 완료 주문만 조회한다.
+ * 피부 정보는 **서버가 정본**이다 (2026-09-21, `/api/members/me/profile`). 열 때 서버 값을 받아 브라우저 사본에 비추고,
+ * 저장은 서버에 먼저 쓴 뒤 사본을 맞춘다. 서버가 없을 때만 사본에 저장하고 그렇다고 적는다.
+ * 주문 내역은 백엔드의 결제 완료 주문만 조회한다.
  *
  * 비밀번호 변경·회원 탈퇴는 백엔드 API 가 없어 넣지 않았다. 빈 버튼을 두는 것보다 없는 것이 낫다.
  *
@@ -41,7 +44,11 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
   const [edit, setEdit] = useState<{ from: MemberProfile; value: MemberProfile } | null>(null);
   const draft: MemberProfile = edit && edit.from === saved ? edit.value : saved;
   const setDraft = (update: (p: MemberProfile) => MemberProfile) => setEdit({ from: saved, value: update(draft) });
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  /** 저장 결과. 서버에 썼는지, 이 브라우저에만 남았는지 사장님이 알아야 한다 */
+  const [saveState, setSaveState] = useState<{ at: number; where: 'server' | 'local'; reason?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  // 열 때 서버 프로필을 받아 사본에 비춘다. 가입 때 보낸 값이 여기서 처음 보인다
+  useSyncMemberProfile(session.id);
 
   const [orders, setOrders] = useState<BackendOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -84,9 +91,18 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
   // 주문 번호 같은 글자를 긁어 복사하다 창이 닫히지 않게 (useBackdropClose)
   const backdrop = useBackdropClose(onClose);
 
-  const save = () => {
-    saveMemberProfile(session.id, draft);
-    setSavedAt(Date.now());
+  const save = async () => {
+    setSaving(true);
+    const result = await saveMemberProfileServer(draft);
+    if (result.ok) {
+      saveMemberProfile(session.id, result.profile);
+      setSaveState({ at: Date.now(), where: 'server' });
+    } else {
+      // 서버가 없으면 이 브라우저에만. 다음에 서버가 살아나면 useSyncMemberProfile 이 올린다
+      saveMemberProfile(session.id, draft);
+      setSaveState({ at: Date.now(), where: 'local', reason: result.reason });
+    }
+    setSaving(false);
   };
 
   return createPortal(
@@ -118,7 +134,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
                 <select
                   value={draft[field] ?? ''}
                   onChange={(e) => {
-                    setSavedAt(null);
+                    setSaveState(null);
                     setDraft((p) => ({ ...p, [field]: e.target.value === '' ? null : e.target.value }));
                   }}
                 >
@@ -133,12 +149,16 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
             ))}
           </div>
           <div className="mypage__actions">
-            <button type="button" className="auth__submit mypage__save" disabled={!dirty} onClick={save}>
-              {dirty ? '피부 정보 저장' : isEmptyProfile(saved) ? '아직 입력한 정보가 없습니다' : '저장됨'}
+            <button type="button" className="auth__submit mypage__save" disabled={!dirty || saving} onClick={() => void save()}>
+              {saving ? '저장 중' : dirty ? '피부 정보 저장' : isEmptyProfile(saved) ? '아직 입력한 정보가 없습니다' : '저장됨'}
             </button>
-            {savedAt ? <span className="mypage__saved">저장했습니다</span> : null}
+            {saveState ? (
+              <span className="mypage__saved">
+                {saveState.where === 'server' ? '저장했습니다' : '서버에 연결되지 않아 이 브라우저에만 저장했습니다'}
+              </span>
+            ) : null}
           </div>
-          <p className="mypage__note">이 브라우저에 저장됩니다. 서버 프로필 저장은 백엔드 API 가 열리면 이어집니다.</p>
+          <p className="mypage__note">내 계정에 저장되어 어느 기기에서 로그인해도 같이 보입니다.</p>
         </section>
 
         <section className="mypage__section">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useSyncMemberProfile } from '../../lib/memberProfileApi';
 import { clearLoginPrompt, useLoginPrompt } from '../../lib/loginPrompt';
 import AuthForm from './AuthForm';
 import MyPage from '../account/MyPage';
@@ -15,6 +16,8 @@ import '../../styles/auth.css';
  */
 export default function AccountMenu() {
   const session = useAuth('MEMBER');
+  // 로그인하면 서버 피부 프로필을 받아 브라우저 사본에 비춘다. 추천·리뷰 필터가 그 사본을 읽는다
+  useSyncMemberProfile(session?.id);
   const [open, setOpen] = useState(false);
   const [mypage, setMypage] = useState(false);
 
