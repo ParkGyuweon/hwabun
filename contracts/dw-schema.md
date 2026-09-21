@@ -1183,6 +1183,20 @@ key = snapshot_week_kst + cohort_key + metric_name + actor_type + source + gener
 input = brand_daily_kpi, brand_cohort_dim
 ```
 
+**실행 축이 NULL 인 행을 한 벌 더 낸다 — 전체(`actor=all`) 값이다.** 축별 행과 같은
+grain 에 축만 비우고 들어간다.
+
+분위수는 **합칠 수 없기 때문이다.** p50 둘의 가중 평균은 합친 집합의 p50 이 아니다.
+축을 합친 값을 쓰려면 브랜드별 원본 값에서 다시 계산해야 하는데, 그 원본은 Spark 에만
+있고 조회하는 서버에는 없다. 그래서 Mart 가 계산해 내려준다.
+
+축 컬럼에 `all` 같은 문자열을 넣지 않고 NULL 로 둔다. 문자열을 넣으면 실제 축 값과
+섞여 필터가 어긋난다. **소비자는 "축이 NULL 인 행 = 전체" 로 읽는다.**
+
+축을 합쳐도 브랜드 수는 늘지 않을 수 있다. 2026-09-21 실측에서 모든 코호트의
+축별 최대 `brand_count` 가 코호트 전체 브랜드 수와 같았고, 억제 비율도 71% 로 동일했다
+— **억제의 원인은 축 분할이 아니라 코호트가 작은 것**이다 (브랜드 56개 / 코호트 17개).
+
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
 | key 전체 | 공통/string | generator/scenario/run만 Y | 코호트 집계 축 |

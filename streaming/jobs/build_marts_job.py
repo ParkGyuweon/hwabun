@@ -3029,7 +3029,19 @@ def _commons_cohort_weekly(
         )
 
     axes = list(EXECUTION_AXES)
-    per_brand = weekly.join(cohorts, ["brand_id"], "inner").groupBy(
+    joined = weekly.join(cohorts, ["brand_id"], "inner")
+
+    # 실행축을 걷어낸 한 벌을 같이 만든다. 분위수는 가중 평균으로 합칠 수 없어
+    # (p50 둘의 평균은 합친 집합의 p50 이 아니다) 축을 합친 값은 **원본 브랜드
+    # 값에서 다시 계산해야** 한다. 원본은 Spark 에만 있으므로 서버가 할 수 없다.
+    #
+    # 축 컬럼은 NULL 로 둔다. `actor_type='all'` 같은 문자열을 넣으면 실제 축 값과
+    # 섞여 필터가 어긋난다. 소비자는 "축이 NULL 인 행 = 전체" 로 읽는다.
+    collapsed = joined
+    for axis in axes:
+        collapsed = collapsed.withColumn(axis, F.lit(None).cast("string"))
+
+    per_brand = joined.unionByName(collapsed).groupBy(
         "cohort_key", "window_start_date", "window_end_date", "brand_id", *axes
     ).agg(*[
         F.sum(F.col(column)).cast("long").alias(column)
