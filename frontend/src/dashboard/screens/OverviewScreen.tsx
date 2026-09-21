@@ -8,6 +8,7 @@ import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { useBehavior } from '../lib/useBehavior';
+import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
@@ -70,8 +71,12 @@ export default function OverviewScreen({
     return ` · 직전 기간 대비 ${d > 0 ? '+' : ''}${d.toFixed(1)}%p`;
   };
 
-  /** 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다 */
-  const [pulse, setPulse] = useState<SellerPulse | null>(null);
+  /**
+   * 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다.
+   * `undefined` 는 아직 답을 못 받은 상태다. 한 마디 요청은 이 값이 정해진 뒤에 만든다 — 먼저 마트만으로 부르고
+   * 주문이 도착해 다시 부르면 입력이 달라져 LLM 을 두 번 태운다.
+   */
+  const [pulse, setPulse] = useState<SellerPulse | null | undefined>(() => (loadBrandId() ? undefined : null));
   useEffect(() => {
     const brandId = loadBrandId();
     if (!brandId) return;
@@ -84,8 +89,38 @@ export default function OverviewScreen({
     };
   }, []);
 
+  /**
+   * 한 마디 (contracts/headline-api-spec.md). 이 화면의 숫자를 그대로 보내 서술문 한 줄과 섹션 줄을 받는다.
+   * 마트가 실측일 때만 부르고, 못 받으면 자리도 없다 — 아래 숫자·결론이 그대로 남아 화면이 비지 않는다.
+   * 개요에만 붙인다 (2026-09-21 결정, headlineApi.ts 머리말).
+   */
+  const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
+  const headlineReq = useMemo(() => (pulse === undefined ? null : buildOverviewHeadlineRequest(m, brand, days, pulse)), [m, brand, days, pulse]);
+  const headline = useHeadline(headlineReq);
+  const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
+
   return (
     <div className="stack">
+      {headline && headline.origin !== 'none' && headline.headline ? (
+        <section className="headline" aria-label="지금 상황 한 마디">
+          <p className="headline__eyebrow">
+            지금 무슨 일이 · 최근 {days}일
+            {headlineOrigin(headline) === 'rule' ? <span className="headline__tag" title="문장을 만들지 못해 값을 그대로 나열했습니다">값 그대로</span> : null}
+          </p>
+          <p className="headline__line">{headline.headline}</p>
+          {headline.sections.length > 0 ? (
+            <ul className="headline__sections">
+              {headline.sections.map((s) => (
+                <li key={s.id}>
+                  <span className="headline__label">{sectionLabel.get(s.id) ?? s.id}</span>
+                  <span>{s.line}</span>
+                  {lineOrigin(headline, s) === 'rule' ? <span className="headline__tag" title="이 줄은 값을 그대로 나열했습니다">값 그대로</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
       {pulse ? (
         <div className="grid grid--kpi">
           <Kpi label="백엔드 주문" value={fmt.int(pulse.orders)} sub="결제 완료 기준 · shop_backend 실측" source="real" />

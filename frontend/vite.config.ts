@@ -37,12 +37,12 @@ export default defineConfig({
       /*
        * 백엔드가 셋이다. 구체적인 경로를 먼저 적어야 '/api' 가 삼키지 않는다.
        *
-       *   recommend    (8300)  추천·처방 문장·카탈로그 동기화                 batch/serving/
+       *   recommend    (8300)  추천·처방 문장·한 마디·카탈로그 동기화                 batch/serving/
        *   shop_backend (8090)  로그인·브랜드·상품·주문·리뷰·피드백·대시보드   shop_backend/
        *   collector    (8080)  행동 로그 수집 /api/events                     backend/
        */
       ...Object.fromEntries(
-        ['/api/recommend', '/api/prescription', '/api/catalog'].map((path) => [
+        ['/api/recommend', '/api/prescription', '/api/headline', '/api/catalog'].map((path) => [
           path,
           // 127.0.0.1: Windows 에서 localhost 는 ::1 을 먼저 시도해 요청마다 2초를 먹는다 (AI 회신 2026-09-11)
           { target: process.env.RECOMMEND_URL || 'http://127.0.0.1:8300', changeOrigin: true },
