@@ -619,6 +619,16 @@ input = content_interest_fact, section_dwell_agg, funnel_session_fact, dim_produ
 
 `dwell_ms_sum`은 `content_interest_fact`를 기본 원천으로 사용한다.
 
+**점수 합은 `decimal(38,12)`로 모은 뒤 double로 되돌린다.** 부동소수점 덧셈은
+결합법칙이 성립하지 않고 Spark는 파티션 부분합을 셔플 도착 순서대로 합치므로,
+그냥 더하면 같은 입력이라도 배치마다 끝자리가 달라진다 — 2026-09-21 운영 리포트에서
+`content_daily_kpi`가 이 이유로 2,975 grain 어긋났고 같은 코드가 같은 날 한 번은
+통과했다. 실측 차이는 1e-16~1e-14 수준이라 화면 값은 바뀌지 않는다. **소수 12자리
+아래를 버리는 대신 Mart가 재현 가능해진다.** 같은 규칙을 `product_interest_score`,
+`interest_score`, `ingredient_interest_score`, `direct_match_score`,
+`product_attributed_score`, `trait_score`에도 적용한다. 금액 컬럼은 원천이 이미
+`decimal(18,2)`라 해당하지 않는다.
+
 `co_visible_le2_dwell_ms_sum`은 같은 원천의 같은 이름 컬럼을 그대로 합산한다.
 한 화면에 블록이 여러 개 보이면 같은 시간이 블록마다 중복 귀속되는데, 그 몫을
 걷어낸 값이다. 산출 규칙과 상한 2의 한계는 `processed-schema.md` §12에 있다 —
