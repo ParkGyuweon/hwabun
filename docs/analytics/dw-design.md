@@ -2,7 +2,15 @@
 
 작성일: 2026-09-02  
 최종 정적 검증: 2026-09-07
-상태: 통합몰 귀속 계약 반영, Spark tenant 의존성 제거 완료. Dimension·Fact·Mart 물리 구현은 후속 작업에서 확정
+상태: Dimension·Fact·Mart 물리 구현 완료 (2026-09-21)
+
+> **이 문서는 Delta Lake 를 전제로 설계됐고, 구현은 Parquet 으로 갔다.** 매 실행이
+> 전체 재계산·전체 덮어쓰기라 Delta 의 `MERGE` 와 스키마 진화를 쓸 일이 없고,
+> 트랜잭션 로그·타임 트래블이 주는 이득보다 의존성과 운용 비용이 컸다. 판단 근거는
+> [`../../contracts/dw-schema.md`](../../contracts/dw-schema.md) §1 이다.
+>
+> 아래에서 "Delta" 로 적힌 저장 계층은 **현재 Parquet** 이다. 설계 당시의 선택지를
+> 남겨 두되, 현재 상태를 말하는 자리는 Parquet 으로 고쳐 두었다.
 
 ## 1. 문서 역할
 
@@ -18,23 +26,28 @@ Spark 처리 근거는 [`spark-processing-design.md`](./spark-processing-design.
 
 ```text
 Backend → Kafka → Spark
-  → Delta raw_events
-  → Delta cleaned_events / Processed Dataset
-  → Delta marts
+  → Parquet raw_events
+  → Parquet cleaned_events / Processed Dataset
+  → Parquet marts
   → MySQL dw schema
   → Dashboard API
 ```
 
 - EC2-1 서비스 영역에는 Backend, MySQL, Redis를 둔다.
-- EC2-2 데이터 영역에는 Kafka, Spark, Delta Lake를 둔다.
-- Delta Lake의 `marts`는 Spark 계산 결과와 재처리 기준을 보존한다.
+- EC2-2 데이터 영역에는 Kafka 와 Spark 를 둔다.
+- Parquet `marts`는 Spark 계산 결과와 재처리 기준을 보존한다.
 - MySQL `dw` schema는 Dashboard가 빠르게 조회할 KPI Mart를 제공한다.
 - 별도 S3/EBS/공유 저장소가 없는 현재 구성은 단일 데이터 EC2 장애를 견디는 HA
   구조가 아니다.
 
-현재 Q1은 로컬 Parquet와 checkpoint를 사용하는 PoC 구현이다. Delta 적재,
-Delta `MERGE`, MySQL serving projection은 아직 구현·검증되지 않았으므로 현재
-Parquet를 최종 저장 방식이나 exactly-once 저장소로 해석하지 않는다.
+Q1 은 로컬 Parquet 와 checkpoint 를 쓴다. 설계 당시에는 PoC 였고 Delta 전환을
+후속으로 뒀으나, Delta 를 범위에서 빼기로 하면서 **이것이 최종 구현이 됐다.**
+MySQL serving projection 은 구현·운영 중이다 (마트 22종 발행).
+
+**다만 Parquet append 를 exactly-once 저장소로 해석하지 않는 것은 그대로다.**
+checkpoint 를 잃고 전체 Replay 하면 이미 저장된 Kafka 좌표와의 원자적 비교·Upsert
+가 없다. Q2 가 전체 스냅샷을 다시 읽어 `event_id` 정본을 수렴시키는 것이 그 자리를
+메운다 (`../../streaming/README.md`).
 
 ## 3. 설계 원칙
 
@@ -71,7 +84,7 @@ Processed 결과로 산출·저장할 수 있는 후보이며, 추천 품질·AI
 | Persona·Scenario | 고객군·실행별 행동 차이 | `persona_segment_daily_kpi`, `segment_price_band_daily_kpi`, Simulation Dimension |
 
 노출률, 실제 구매율, 추천 성과, 콘텐츠 관심도 등 어떤 지표를 최종 채택하더라도
-서로 다른 Processed grain을 먼저 목표 grain으로 집계한 뒤 결합하고, Delta Mart를
+서로 다른 Processed grain을 먼저 목표 grain으로 집계한 뒤 결합하고, Parquet Mart를
 계산 결과의 기준으로, MySQL `dw`를 조회 projection으로 사용하는 원칙은 유지한다.
 
 ### KPI 후보
@@ -113,15 +126,15 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 | --- | --- | --- |
 | Collector payload | 관련 구현 병합 완료. Event 단위, `received_at`, `source`, `request_id`, `event_index` 보강과 Kafka key=`session_id`를 코드에서 재확인 | 실제 Kafka payload E2E 캡처 |
 | Kafka | 기본 topic `activity-events`, key `session_id` | 환경별 설정 확인 |
-| Raw Q1 | 로컬 Parquet + checkpoint, `source` projection 포함, tenant projection 제거 | Delta 전환 및 실제 payload E2E 대조 |
-| Processed | `session_id` 세션 처리, `dim_product.brand_id` Join, `dim_brand` 생성 및 품질 검증 구현 | Delta `printSchema()` E2E 대조 |
-| Delta marts | 상위 소유 주체 축 없이 `brand_id` 스냅샷 유지 | `brand_id` 조회 축과 물리 partition은 후속 작업에서 확정 |
+| Raw Q1 | 로컬 Parquet + checkpoint, `source` projection 포함, tenant projection 제거 | 완료. Delta 전환은 범위에서 뺐다 |
+| Processed | `session_id` 세션 처리, `dim_product.brand_id` Join, `dim_brand` 생성 및 품질 검증 구현 | 완료. Parquet `printSchema()` 대조는 Q5 가 본다 |
+| Parquet marts | 상위 소유 주체 축 없이 `brand_id` 스냅샷 유지 | 완료. `brand_id` 조회 축과 물리 partition 확정 |
 | MySQL `dw` | Dashboard serving 역할 합의 | DDL, 인덱스, 적재 주기, upsert 방식 결정 |
 | 검색·결제 Event | 일부 provisional | 화면·Collector 구현 후 key와 optional 값 재검증 |
 | bad event | Spark 격리분만 관측 가능 | Collector reject 관측은 Backend metric 또는 별도 저장 필요 |
-| 성분·가격 기준 Mart | `ingredient_weekly_interest`, `category_price_reference` Parquet 구현. 성분 없는 상품 제외·세정 가중치 설정·가격 표본 fallback 반영 | 운영 Delta/MySQL projection |
+| 성분·가격 기준 Mart | `ingredient_weekly_interest`, `category_price_reference` Parquet 구현. 성분 없는 상품 제외·세정 가중치 설정·가격 표본 fallback 반영 | `ingredient_weekly_interest` 는 MySQL 발행, `category_price_reference` 는 읽는 화면이 없어 Parquet 전용 |
 | 배너·성향·교차 브랜드 Mart | `banner_daily`, `user_trait_daily`, `cross_brand_daily`, `analytics_baseline` Parquet 구현. 배너 Event 계약과 `trait_source` 포함 | 배너 Event를 실제로 발행하는 FE·Collector 연결 후 값 검증 |
-| 브랜드 KPI Mart | `brand_daily_kpi`를 Fact 기반 브랜드·세션 중복 제거 방식으로 Parquet 구현. grain·상한·비율·재실행 결정성 검증 포함 | 운영 Delta/MySQL projection |
+| 브랜드 KPI Mart | `brand_daily_kpi`를 Fact 기반 브랜드·세션 중복 제거 방식으로 Parquet 구현. grain·상한·비율·재실행 결정성 검증 포함 | 완료. MySQL 발행 중 |
 | 구매 행동 Mart | `product_repurchase_daily`, `brand_repurchase_daily`, `purchase_reason_daily` Parquet 구현. 주문 단위 중복 제거와 다브랜드 이유 귀속 규칙 포함 | 시뮬레이터가 `purchase` Event를 발행한 뒤 실데이터 검증 |
 | 매출·정산 | DW 범위 밖. Backend PAID 주문이 정본이며 금액을 복제하지 않는다 | — |
 | 구매 이유·성향 매핑 | `contracts/purchase-reason-trait-map.json`으로 분리·확정. `purchase_reason_daily`만 읽는다 | 값 변경 시 파일과 버전을 함께 상향 |
@@ -142,15 +155,15 @@ Quick Look은 Funnel 단계가 아니라 상품 노출 뒤 비교 분기다. 기
 4. `items[]`가 상품 row로 explode되고 `order_value`가 상품 수만큼 중복 합산되지
    않는지 본다.
 5. 각 Processed Dataset을 목표 Mart grain으로 먼저 집계해 row 증폭이 없는지 본다.
-6. Delta `marts`와 MySQL `dw`의 key별 row 수·count·rate·amount를 대조한다.
+6. Parquet `marts`와 MySQL `dw`의 key별 row 수·count·rate·amount를 대조한다.
 7. 분모 0인 비율이 NULL이고, count 부재는 0인지 확인한다.
 8. Dashboard API에서 일자·상품·actor/source·simulation run 필터 결과를 대조한다.
-9. checkpoint 삭제와 Kafka replay 후 Delta key 중복 및 KPI 변화 여부를 검증한다.
+9. checkpoint 삭제와 Kafka replay 후 key 중복 및 KPI 변화 여부를 검증한다.
 10. PA `agent_llm`과 PC `python_batch`가 같은 run 차원 규칙으로 분리되는지 본다.
 
 ## 7. 구현 문서 분리 기준
 
 - 논리 grain·key·컬럼 변경: `contracts/dw-schema.md`
-- Delta table property·partition·MERGE 구현: Spark/Delta 구현 문서 또는 코드
+- Parquet partition 과 쓰기 방식: `../../streaming/README.md` 와 Q1~Q4 Job 코드
 - MySQL DDL·인덱스·upsert: Backend/인프라 구현 문서 또는 migration
 - 화면별 기간 비교·정렬·랭킹: Dashboard API/화면 명세
