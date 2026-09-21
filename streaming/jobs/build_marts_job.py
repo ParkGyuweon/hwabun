@@ -896,8 +896,9 @@ def _product_daily_kpi(
             F.col("purchase_count_distinct_order"),
         )
         .drop("purchase_count_distinct_order")
-        # 분모는 두 노출의 합이다. product_impression 만 쓰면 추천 카드에서 온
-        # 클릭이 분자에만 들어가 비율이 1 을 넘는다 (§4.1).
+        # 분모는 노출 세 Event 의 합이다 (IMPRESSION_EVENTS · §4.1).
+        # product_impression 만 쓰면 추천 카드에서 온 클릭이 분자에만 들어가
+        # 비율이 1 을 넘는다.
         .withColumn(
             "impression_count",
             (
