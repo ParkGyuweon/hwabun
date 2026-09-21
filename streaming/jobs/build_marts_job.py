@@ -2982,6 +2982,10 @@ COMMONS_METRICS = (
 )
 
 
+# 실행축을 걷어낸 전체 행의 축 값 (dw-schema.md §4.18).
+COLLAPSED_AXIS_VALUE = "all"
+
+
 def _commons_cohort_weekly(
     brand_daily_df: Any,
     brand_cohort_df: Any,
@@ -3035,11 +3039,17 @@ def _commons_cohort_weekly(
     # (p50 둘의 평균은 합친 집합의 p50 이 아니다) 축을 합친 값은 **원본 브랜드
     # 값에서 다시 계산해야** 한다. 원본은 Spark 에만 있으므로 서버가 할 수 없다.
     #
-    # 축 컬럼은 NULL 로 둔다. `actor_type='all'` 같은 문자열을 넣으면 실제 축 값과
-    # 섞여 필터가 어긋난다. 소비자는 "축이 NULL 인 행 = 전체" 로 읽는다.
+    # 축 컬럼에는 `'all'` 을 넣는다. NULL 을 쓰지 않는 이유가 둘이다.
+    #
+    # 하나, NULL 이 이미 다른 뜻을 갖는다 — `generator_type` 의 NULL 은 실사용자
+    # (Web)다 (dw-schema §2.2). 거기에 "축을 걷어냄" 을 얹으면 한 컬럼의 NULL 이
+    # 두 가지를 뜻해 소비자가 가를 수 없다.
+    #
+    # 둘, `actor_type`·`source` 는 DW 에서 NOT NULL 이다. NULL 로 내면 발행이
+    # 실패하고, 허용하려면 스키마 변경과 마이그레이션이 따라붙는다.
     collapsed = joined
     for axis in axes:
-        collapsed = collapsed.withColumn(axis, F.lit(None).cast("string"))
+        collapsed = collapsed.withColumn(axis, F.lit(COLLAPSED_AXIS_VALUE))
 
     per_brand = joined.unionByName(collapsed).groupBy(
         "cohort_key", "window_start_date", "window_end_date", "brand_id", *axes

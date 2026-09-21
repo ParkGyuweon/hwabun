@@ -2398,11 +2398,22 @@ def validate_frames(
             "commons_cohort_weekly grain=week+cohort+metric+축",
         ))
 
-        # 축을 걷어낸 행(실행축 NULL)은 그 코호트·주차·지표의 어느 축 행보다
+        # 값은 Mart 가 정본이다. 여기에 복제하면 조용히 갈라진다.
+        try:
+            from .build_marts_job import COLLAPSED_AXIS_VALUE
+        except ImportError:
+            from build_marts_job import COLLAPSED_AXIS_VALUE
+
+        # 축을 걷어낸 행(`actor_type='all'`)은 그 코호트·주차·지표의 어느 축 행보다
         # 브랜드를 적게 가질 수 없다. 적으면 합치는 과정에서 브랜드를 흘린 것이다.
-        collapsed = commons_cohort.where(F.col("generator_type").isNull())
+        #
+        # `generator_type` 이 NULL 인지로 가르면 안 된다 — 실사용자(Web) 행도 NULL
+        # 이라 전체 행으로 오인한다.
+        collapsed = commons_cohort.where(
+            F.col("actor_type") == F.lit(COLLAPSED_AXIS_VALUE)
+        )
         per_axis_max = commons_cohort.where(
-            F.col("generator_type").isNotNull()
+            F.col("actor_type") != F.lit(COLLAPSED_AXIS_VALUE)
         ).groupBy("snapshot_week_kst", "cohort_key", "metric_name").agg(
             F.max("brand_count").alias("_axis_max")
         )
