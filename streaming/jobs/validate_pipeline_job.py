@@ -2398,6 +2398,23 @@ def validate_frames(
             "commons_cohort_weekly grain=week+cohort+metric+축",
         ))
 
+        # 축을 걷어낸 행(실행축 NULL)은 그 코호트·주차·지표의 어느 축 행보다
+        # 브랜드를 적게 가질 수 없다. 적으면 합치는 과정에서 브랜드를 흘린 것이다.
+        collapsed = commons_cohort.where(F.col("generator_type").isNull())
+        per_axis_max = commons_cohort.where(
+            F.col("generator_type").isNotNull()
+        ).groupBy("snapshot_week_kst", "cohort_key", "metric_name").agg(
+            F.max("brand_count").alias("_axis_max")
+        )
+        shrunk = collapsed.join(
+            per_axis_max, ["snapshot_week_kst", "cohort_key", "metric_name"], "inner"
+        ).where(F.col("brand_count") < F.col("_axis_max")).count()
+        checks.append(_check(
+            "commons_collapsed_rows_cover_every_axis",
+            shrunk == 0,
+            f"shrunk_rows={shrunk}; 축을 걷어낸 행은 어느 축 행보다 브랜드가 적을 수 없다",
+        ))
+
         # R5 — B층 Mart 는 다른 브랜드에게 보여도 되는 형태여야 한다.
         leaked_identifiers = [
             column for column in commons_cohort.columns

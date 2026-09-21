@@ -168,7 +168,16 @@ class CommonsCohortWeeklySparkTest(unittest.TestCase):
         )
 
     def _row(self, mart, metric):
-        return mart.where(mart["metric_name"] == metric).first()
+        """축별 행. 전체(축 NULL) 행은 `_collapsed_row` 로 따로 본다."""
+        return mart.where(
+            (mart["metric_name"] == metric) & mart["generator_type"].isNotNull()
+        ).first()
+
+    def _collapsed_row(self, mart, metric):
+        """실행축을 걷어낸 전체 행 (Jira 404)."""
+        return mart.where(
+            (mart["metric_name"] == metric) & mart["generator_type"].isNull()
+        ).first()
 
     def test_cohort_with_too_few_brands_is_suppressed(self):
         """R1 — 브랜드 5 미만이면 값을 지운다. 행은 남긴다."""
@@ -184,8 +193,43 @@ class CommonsCohortWeeklySparkTest(unittest.TestCase):
         self.assertIsNone(row["p25"])
         self.assertIsNone(row["p50"])
         self.assertIsNone(row["p75"])
-        # 억제돼도 행은 남는다 — "억제됐다"와 "코호트가 없다"는 다르다
-        self.assertEqual(len(COMMONS_METRICS), mart.count())
+        # 억제돼도 행은 남는다 — "억제됐다"와 "코호트가 없다"는 다르다.
+        # 축별 한 벌 + 실행축을 걷어낸 전체 한 벌이라 두 배다 (Jira 404).
+        self.assertEqual(len(COMMONS_METRICS) * 2, mart.count())
+
+    def test_collapsed_row_is_emitted_with_null_axes(self):
+        """실행축을 걷어낸 전체 행을 한 벌 더 낸다 (Jira 404).
+
+        분위수는 가중 평균으로 합칠 수 없어 (p50 둘의 평균은 합친 집합의 p50 이
+        아니다) 축을 합친 값은 원본 브랜드 값에서 다시 계산해야 한다. 원본은
+        Spark 에만 있으므로 조회하는 서버가 할 수 없다.
+        """
+        brands = [f"b{i}" for i in range(6)]
+        mart = _commons_cohort_weekly(
+            self._dailies([self._daily(b, 300, 200, 40) for b in brands]),
+            self._cohort(brands),
+        )
+
+        collapsed = self._collapsed_row(mart, "view_to_cart_rate")
+
+        self.assertIsNotNone(collapsed)
+        self.assertEqual(6, collapsed["brand_count"])
+        # 축 컬럼에 'all' 같은 문자열을 넣지 않는다 — 실제 축 값과 섞인다
+        for axis in ("actor_type", "source", "generator_type"):
+            self.assertIsNone(collapsed[axis])
+
+    def test_collapsed_row_covers_every_axis(self):
+        """전체 행은 어느 축 행보다 브랜드가 적을 수 없다."""
+        brands = [f"b{i}" for i in range(6)]
+        mart = _commons_cohort_weekly(
+            self._dailies([self._daily(b, 300, 200, 40) for b in brands]),
+            self._cohort(brands),
+        )
+
+        collapsed = self._collapsed_row(mart, "view_to_cart_rate")
+        per_axis = self._row(mart, "view_to_cart_rate")
+
+        self.assertGreaterEqual(collapsed["brand_count"], per_axis["brand_count"])
 
     def test_dominated_cohort_is_suppressed(self):
         """R3 — 한 브랜드가 분모의 50% 를 넘으면 중앙값이 곧 그 브랜드 숫자다."""
