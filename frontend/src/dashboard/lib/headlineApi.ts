@@ -141,6 +141,9 @@ export function buildOverviewHeadlineRequest(
     });
   }
 
+  // 넷이 전부 비면 서버가 no_section 으로 통째 거부한다 — 그때는 부르지 않는다 (규원님 09-21). 처방과 달리 최소 2개 조건은 없다
+  if (sections.length === 0) return null;
+
   return {
     brand: { name: brand.name, product_count: brand.productCount },
     screen: { id: 'overview', label_ko: '한눈에 보기', period_text: `최근 ${periodText}` },
