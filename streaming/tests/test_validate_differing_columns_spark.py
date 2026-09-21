@@ -104,6 +104,29 @@ class DifferingColumnsTest(unittest.TestCase):
             "section_view_count=2 · content_interest_score=1", detail
         )
 
+    def test_reports_duplicate_grains_in_the_recomputed_frame(self):
+        """`exceptAll` 은 다중집합 차이라 값이 같아도 중복이 있으면 차이로 센다.
+
+        grain 으로 조인해 값만 비교하면 이 경우가 안 보인다. 2026-09-21 운영
+        리포트가 differing_rows=5855 인데 상세가 비었던 자리다.
+        """
+        row = (date(2026, 9, 20), None, "P1", 10, 1.5)
+        stored = self._df([row])
+        expected = self._df([row, row])          # 재계산이 같은 행을 두 번 낸다
+
+        detail = _differing_columns(stored, expected, KEY, self._columns())
+
+        self.assertEqual("recomputed_duplicate_grains=1", detail)
+
+    def test_reports_duplicate_grains_in_the_stored_frame(self):
+        row = (date(2026, 9, 20), "B1", "P1", 10, 1.5)
+        stored = self._df([row, row])
+        expected = self._df([row])
+
+        detail = _differing_columns(stored, expected, KEY, self._columns())
+
+        self.assertEqual("stored_duplicate_grains=1", detail)
+
     def test_is_empty_when_nothing_drifted(self):
         rows = [(date(2026, 9, 20), None, "P1", 10, 1.5)]
 
