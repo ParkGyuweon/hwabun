@@ -4,9 +4,10 @@ import PlatformApp from './PlatformApp';
 import AuthGate from '../components/auth/AuthGate';
 import '../dashboard/dashboard.css';
 import '../dashboard/dashboard-themes.css';
-import './platform.css';
-// 시각 레이어. 맨 마지막
+// 시각 레이어
 import '../dashboard/dashboard-apple.css';
+// 플랫폼 전용은 맨 마지막 — 바탕색(--ground)을 시각 레이어 위에서 덮어야 한다
+import './platform.css';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
