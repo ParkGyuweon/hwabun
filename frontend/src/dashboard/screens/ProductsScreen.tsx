@@ -63,9 +63,9 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
   const tooFew =
     productMetrics.length === 0
       ? source.products === 'none'
-        ? '상품별 행동 기록을 아직 받지 못했습니다'
-        : '이 기간에 상세를 본 상품이 없습니다'
-      : `상세를 ${MIN_DETAIL_VIEWS}번 이상 본 상품이 아직 없어 판단하지 않습니다`;
+        ? '아직 기록 없음'
+        : '상세를 본 상품 없음'
+      : `상세 ${MIN_DETAIL_VIEWS}번 이상 본 상품 없음`;
 
   return (
     <div className="stack">
@@ -75,11 +75,7 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
         <Kpi
           label="가장 많이 막히는 단계"
           value={topBottleneck ? STEP_KO[topBottleneck] : '-'}
-          sub={
-            topBottleneck
-              ? `상품 ${bottleneckCount[topBottleneck] ?? 0}개가 여기서 막힙니다 · 상세를 ${MIN_DETAIL_VIEWS}번 이상 본 상품 ${eligible.length}개 중`
-              : tooFew
-          }
+          sub={topBottleneck ? `상품 ${bottleneckCount[topBottleneck] ?? 0}개 · 대상 ${eligible.length}개 중` : tooFew}
           source={source.products}
         />
         <Kpi
@@ -89,27 +85,23 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
             topExit
               ? `상품 ${exitCount[topExit] ?? 0}개${exitHint(topExit).hint ? ` · ${exitHint(topExit).hint}` : ''}`
               : noDiag
-                ? '어디서 나갔는지 계산이 아직 준비되지 않았습니다. 준비되면 자동으로 채워집니다'
+                ? '계산 준비 중'
                 : eligible.length === 0
                   ? tooFew
-                  : '나간 자리가 기록된 상품이 아직 없습니다'
+                  : '기록된 상품 없음'
           }
           source={source.diagnostics}
         />
         <Kpi
           label="옵션을 3번 넘게 오간 상품"
           value={noDiag ? '-' : `${friction}개`}
-          sub={
-            noDiag
-              ? '옵션 고르기 기록 계산이 아직 준비되지 않았습니다'
-              : '용량·색상을 골랐다 바꾸기를 반복한 상품. 고르기 어렵다는 신호입니다'
-          }
+          sub={noDiag ? '계산 준비 중' : '용량·색상 고르기가 어려운 신호'}
           source={source.diagnostics}
         />
         <Kpi
           label="담았다가 뺀 고객이 30% 넘는 상품"
           value={`${highRemove}개`}
-          sub={eligible.length === 0 ? tooFew : '장바구니에 넣고 다시 뺀 고객이 10명 중 3명이 넘는 상품. 배송비·묶음 조건을 점검해 보세요'}
+          sub={eligible.length === 0 ? tooFew : '배송비·묶음 조건 점검'}
           source={source.products}
         />
       </div>
@@ -139,31 +131,29 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
             <thead>
               <tr>
                 <th className="is-name">상품</th>
-                <th>막히는 단계</th>
-                <th>나간 자리</th>
-                <th>상세 본 뒤 담기</th>
-                <th>성분·리뷰 확인</th>
-                <th>옵션 오간 횟수</th>
-                <th>빠른 보기 → 상세</th>
-                <th>담았다 뺌</th>
-                {showRepurchase ? <th>다시 산 고객</th> : null}
-                <th>상세 본 방문</th>
+                <th title="노출 → 클릭 → 상세 → 성분·리뷰 확인 → 담기 중, 내 다른 상품과 비교해 가장 뒤처진 단계">막히는 단계</th>
+                <th title="가장 많이 나간 자리. 옆의 짧은 말은 가능성이고 단정이 아닙니다">나간 자리</th>
+                <th title="상세를 본 방문 중 담은 비율">담기</th>
+                <th title="상세를 본 방문 중 성분·리뷰까지 확인한 비율">성분·리뷰</th>
+                <th title="방문 한 번에 옵션을 바꾼 평균 횟수">옵션 오감</th>
+                <th title="빠른 보기를 연 고객 중 상세까지 들어온 비율">빠른보기→상세</th>
+                <th title="담은 뒤 다시 뺀 비율">담았다 뺌</th>
+                {showRepurchase ? <th title="다시 산 고객 비율 (인원)">재구매</th> : null}
+                <th title={`상세를 본 방문 수. ${MIN_DETAIL_VIEWS}번 미만은 흐리게 표시`}>상세 방문</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={showRepurchase ? 10 : 9} className="note">
-                    {source.products === 'none'
-                      ? '상품별 행동 기록을 아직 받지 못했습니다. 고객이 내 상품을 보기 시작하면 상품마다 한 줄씩 채워집니다.'
-                      : '이 기간에 고객이 상세를 본 내 상품이 없습니다.'}
+                    {source.products === 'none' ? '아직 기록을 받지 못했습니다' : '이 기간에 상세를 본 상품이 없습니다'}
                   </td>
                 </tr>
               ) : null}
               {rows.map((p) => {
                 const thin = p.detailViews < MIN_DETAIL_VIEWS;
                 return (
-                  <tr key={p.product.product_id} className={thin ? 'is-thin' : ''}>
+                  <tr key={p.product.product_id} className={thin ? 'is-thin' : ''} title={thin ? `상세 ${MIN_DETAIL_VIEWS}번 미만 · 아직 판단 전` : undefined}>
                     <td className="is-name" title={p.product.product_name}>
                       {p.product.product_name}
                     </td>
@@ -179,12 +169,12 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
                     </td>
                     <td>{fmt.pct(p.infoRate, 0)}</td>
                     {/* 모르는 값은 하이픈이다. 0 으로 적으면 "왕복이 없다" 로 읽힌다 */}
-                    <td className={(p.variantSwitches ?? 0) >= 3 ? 'is-warn' : ''} title={p.variantSwitches === null ? '계산이 아직 준비되지 않았습니다' : '방문 한 번에 옵션을 바꾼 평균 횟수'}>
+                    <td className={(p.variantSwitches ?? 0) >= 3 ? 'is-warn' : ''} title={p.variantSwitches === null ? '계산 준비 중' : '방문 한 번에 옵션을 바꾼 평균 횟수'}>
                       {p.variantSwitches === null ? '-' : `${p.variantSwitches.toFixed(1)}회`}
                     </td>
                     <td
                       className={p.quickLookToDetail !== null && p.quickLookToDetail < 0.4 ? 'is-warn' : ''}
-                      title={p.quickLookToDetail === null ? '계산이 아직 준비되지 않았습니다' : '빠른 보기를 연 고객 중 상세까지 들어온 비율'}
+                      title={p.quickLookToDetail === null ? '계산 준비 중' : '빠른 보기를 연 고객 중 상세까지 들어온 비율'}
                     >
                       {p.quickLookToDetail === null ? '-' : fmt.pct(p.quickLookToDetail, 0)}
                     </td>
@@ -197,13 +187,6 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
             </tbody>
           </table>
         </div>
-        <p className="note">
-          막히는 단계는 노출 → 클릭 → 상세 → 성분·리뷰 확인 → 담기 다섯 단계 중, 내 다른 상품들과 비교해 가장 뒤처진 하나입니다. 나간 자리
-          옆의 짧은 말은 가능성이고 단정이 아닙니다. 흐린 행은 상세를 {MIN_DETAIL_VIEWS}번 미만 본 상품이라 아직 판단하기 이릅니다.
-          {source.products === 'real' && noDiag
-            ? ` 본 횟수·담기 비율·담았다 뺀 비율은 실제 기록이고, 나간 자리·옵션 오간 횟수·빠른 보기→상세 세 칸은 계산이 아직 준비되지 않아 '-'로 두었습니다. 준비되면 자동으로 채워집니다.`
-            : ''}
-        </p>
       </Panel>
     </div>
   );

@@ -244,8 +244,8 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         : `${categoryLabel(first[0])} ${first[1]}건`,
       reason:
         first[1] >= 5 && firstProducts >= 2
-          ? `${categoryLabel(first[0])}: ${named(firstProductIds)}에서 되풀이됩니다. 한 상품만의 문제가 아닙니다.`
-          : `${categoryLabel(first[0])}: ${named(firstProductIds)}에서 나왔습니다.`,
+          ? `${categoryLabel(first[0])} · ${named(firstProductIds)}에서 되풀이`
+          : `${categoryLabel(first[0])} · ${named(firstProductIds)}`,
       routes,
     };
   }, [mine, products]);
@@ -274,7 +274,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
     const result = await respondToFeedback(f.feedback_id, action, action === 'REPLIED' ? body : undefined);
     setBusy((b) => ({ ...b, [f.feedback_id]: false }));
     if (!result) {
-      setActionError((e) => ({ ...e, [f.feedback_id]: '처리하지 못했습니다. 잠시 뒤 다시 눌러 주세요.' }));
+      setActionError((e) => ({ ...e, [f.feedback_id]: '처리하지 못했습니다. 다시 눌러 주세요' }));
       return;
     }
     setRemote((rows) =>
@@ -304,8 +304,8 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
   /** 빈 목록에 적는 말. 못 읽었으면 그렇다고, 아니면 어디서 들어오는지 */
   const emptyText =
     remoteFailed && mine.length === 0
-      ? '고객 의견을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.'
-      : '아직 들어온 의견이 없습니다. 고객이 쇼핑몰 상품 페이지에서 "의견 남기기" 로 보낸 글이 여기에 모입니다.';
+      ? '불러오지 못했습니다. 다시 열어 주세요'
+      : '아직 들어온 의견이 없습니다';
 
   return (
     <div className="stack">
@@ -323,7 +323,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         </label>
         <p className="scope__meta">
           고객 의견 {total}건 · 아직 안 본 것 {fresh}건 · 반영한 것 {reflected}건
-          {classifying ? ' · 새 의견을 종류별로 나누는 중입니다' : ''}
+          {classifying ? ' · 종류 나누는 중' : ''}
         </p>
       </div>
 
@@ -347,7 +347,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         </section>
       ) : null}
 
-      <Panel title="상품별 의견" source={source} aside="상품을 누르면 그 상품 의견만, 불만 종류를 누르면 그 종류만 봅니다">
+      <Panel title="상품별 의견" source={source} aside="눌러서 좁혀 보기">
         {byProduct.length === 0 ? (
           <p className="fbx-empty">{emptyText}</p>
         ) : (
@@ -463,7 +463,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         </div>
       </Panel>
 
-      <Panel title={`${axisLabelOf(axis)} · 세부 불만`} source={source} fold aside="줄을 누르면 그 불만의 원문만 봅니다">
+      <Panel title={`${axisLabelOf(axis)} · 세부 불만`} source={source} fold aside="줄을 누르면 원문 보기">
         {categories.length === 0 ? (
           <p className="fbx-empty">{emptyText}</p>
         ) : (
@@ -473,7 +473,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                 <tr>
                   <th>불만 종류</th>
                   <th>담당</th>
-                  <th className="is-num" title="한 글에 불만이 둘 들어 있으면 둘 다에 1씩 셉니다. 그래서 합이 글 수보다 많을 수 있습니다">언급 수</th>
+                  <th className="is-num" title="한 글에 불만이 둘이면 둘 다 셉니다">언급 수</th>
                   <th style={{ width: '22%' }} aria-label="비중" />
                   <th className="is-num">상품 수</th>
                   <th className="is-num">안 본 글</th>
@@ -493,7 +493,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                         <span className="fbx-table__name">{pending ? PENDING_LABEL : categoryLabel(c.id)}</span>
                         {!pending ? (
                           <span className="fbx-table__desc">
-                            {c.id === 'other' ? '위 종류 어디에도 딱 들어가지 않는 불만' : categoryDesc(c.id)}
+                            {c.id === 'other' ? '그 밖의 불만' : categoryDesc(c.id)}
                           </span>
                         ) : null}
                       </td>
@@ -522,7 +522,6 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
             </table>
           </div>
         )}
-        {axis === 'other' ? <p className="note">기타에 같은 불만이 여러 상품에서 되풀이되면 불만 종류 목록에 새 항목으로 넣어 드립니다.</p> : null}
       </Panel>
 
       {rows.length > 0 ? (
@@ -532,7 +531,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
               {productId !== 'all' ? `${productName(productId)} · ` : ''}
               {category ? (category === PENDING ? PENDING_LABEL : categoryLabel(category)) : axisLabelOf(axis)}
             </h3>
-            <small>반영했으면 한 줄 남겨 주세요. 고객 화면에 그대로 보입니다.</small>
+            <small>답변은 고객 화면에 그대로 보입니다</small>
             {category ? (
               <button type="button" className="fbx-inbox__reset" onClick={() => setCategory(null)}>
                 모든 불만 종류 보기
@@ -554,15 +553,15 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       옛 서버 응답·로컬 저장본은 이 값이 없어서(undefined) 아무것도 적지 않는다.
                     */}
                     {f.purchased === true ? (
-                      <span className="fbx-card__buyer" title="이 상품을 결제한 고객입니다">구매자</span>
+                      <span className="fbx-card__buyer" title="이 상품을 결제한 고객">구매자</span>
                     ) : f.purchased === false ? (
-                      <span className="fbx-card__buyer fbx-card__buyer--no" title="이 상품을 결제하지 않은 고객입니다">미구매</span>
+                      <span className="fbx-card__buyer fbx-card__buyer--no" title="이 상품을 결제하지 않은 고객">미구매</span>
                     ) : null}
                     {labelsOf(f).map((l) => (
                       <span key={l.category_id} className="fbx-card__cat">{categoryLabel(l.category_id)}</span>
                     ))}
                     {f.profile ? (
-                      <span title="글 쓴 고객의 피부 타입 · 피부 톤">
+                      <span title="피부 타입 · 피부 톤">
                         {skinTypeLabel(f.profile.skin_type)} · {humanizeAttribute(f.profile.skin_tone)}
                       </span>
                     ) : null}
@@ -576,7 +575,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       className="fbx-card__hidden"
                       onClick={() => setRevealed({ ...revealed, [f.feedback_id]: true })}
                     >
-                      부적절할 수 있는 표현이 있어 접어 두었습니다 · 눌러서 보기
+                      부적절할 수 있는 표현 · 눌러서 보기
                     </button>
                   ) : (
                     <p className="fbx-card__body">{f.body}</p>
@@ -605,7 +604,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       )}
                       <div className={`fbx-reply${hits.length ? ' has-warning' : ''}`}>
                         <input
-                          placeholder="고객에게 보일 답변 한 줄 (예: 다음 생산분부터 펌프를 바꿉니다)"
+                          placeholder="고객에게 보일 답변 한 줄"
                           value={text}
                           aria-label="답변"
                           disabled={busy[f.feedback_id]}
@@ -619,7 +618,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                                 {' · '}
                               </span>
                             ))}
-                            화장품법 제13조(표시·광고 제한)에 걸릴 수 있는 표현입니다
+                            화장품법 표시·광고 제한에 걸릴 수 있는 표현
                           </p>
                         ) : null}
                         {actionError[f.feedback_id] ? <p className="fbx-reply__warn">{actionError[f.feedback_id]}</p> : null}

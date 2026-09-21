@@ -70,17 +70,17 @@ export function leakVerdict(steps: FunnelStep[]): Verdict {
   const worst = drops.reduce((a, b) => (a.kept <= b.kept ? a : b));
 
   const ACTION: Record<string, string> = {
-    상품클릭: '목록에 보이는 상품 사진과 이름을 손보세요. 고객 눈에는 띄는데 누르지 않습니다.',
-    상세조회: '상품을 누른 뒤 바로 나가는 고객이 많습니다. 상세페이지 첫 화면과 대표 사진을 확인하세요.',
-    정보확인: '상세까지 왔는데 성분·리뷰를 읽지 않습니다. 성분과 리뷰를 페이지 위쪽으로 올리세요.',
-    장바구니: '성분·리뷰까지 읽었는데 담지 않습니다. 가격·용량·담기 버튼을 점검하세요.',
+    상품클릭: '목록의 상품 사진과 이름을 손보세요',
+    상세조회: '상세페이지 첫 화면과 대표 사진을 확인하세요',
+    정보확인: '성분과 리뷰를 페이지 위쪽으로 올리세요',
+    장바구니: '가격·용량·담기 버튼을 점검하세요',
   };
   const key = worst.to.replace(/\s/g, '');
 
   return {
-    headline: `"${worst.from}"에서 "${worst.to}"로 넘어갈 때 고객이 가장 많이 빠져나갑니다`,
-    reason: `${fmt.int(worst.lost)}명이 이 사이에서 나갔습니다. 앞 단계의 ${fmt.pct(worst.kept)}만 다음 단계로 넘어왔습니다.`,
-    action: ACTION[key] ?? '이 단계의 화면을 다시 살펴보세요.',
+    headline: `"${worst.from}" → "${worst.to}" 사이에서 가장 많이 나갑니다`,
+    reason: `${fmt.int(worst.lost)}명이 나갔고, ${fmt.pct(worst.kept)}만 넘어왔습니다`,
+    action: ACTION[key] ?? '이 단계 화면을 다시 살펴보세요',
     sampleSize: steps[0]?.value ?? 0,
   };
 }
@@ -97,20 +97,20 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
       const dev = Math.min(1, (1 - c.conversionLift) / 0.5);
       const why =
         c.kind === 'usage_guide'
-          ? '설명이 어렵거나 길어서 읽다가 포기했을 수 있습니다'
+          ? '설명이 어렵거나 길 수 있습니다'
           : c.kind.startsWith('ingredient')
-            ? '피하고 싶은 성분을 발견하고 돌아섰을 수 있습니다'
-            : '사야 할 이유가 충분히 보이지 않았을 수 있습니다';
+            ? '피하는 성분을 보고 돌아섰을 수 있습니다'
+            : '살 이유가 잘 안 보였을 수 있습니다';
       out.push({
         id: `content-weak-${c.kind}`,
         origin: 'mine',
         screen: 'content',
-        headline: `오래 읽는데 담지는 않는 설명: ${c.ko}`,
+        headline: `오래 읽는데 담지 않는 설명: ${c.ko}`,
         reasons: [
-          `고객이 평균 ${(c.avgDwellMs / 1000).toFixed(0)}초 동안 읽어 다른 설명보다 오래 봅니다. 그런데 이 글을 읽은 고객이 담는 비율은 평균의 ${c.conversionLift.toFixed(1)}배에 그칩니다 (읽은 기록 ${fmt.int(c.sampleSize)}건)`,
+          `평균 ${(c.avgDwellMs / 1000).toFixed(0)}초 읽지만 담기는 평균의 ${c.conversionLift.toFixed(1)}배 (${fmt.int(c.sampleSize)}건)`,
           why,
         ],
-        action: c.kind === 'usage_guide' ? '단계별 사진과 한 번에 쓰는 양·횟수를 적어 사용법을 다시 쓰세요' : `${c.ko} 부분에 살 이유(시험 결과·같은 피부 고객의 리뷰)를 덧붙이세요`,
+        action: c.kind === 'usage_guide' ? '단계별 사진과 1회 사용량·횟수를 적어 다시 쓰세요' : `${c.ko}에 시험 결과·같은 피부 리뷰를 덧붙이세요`,
         unit: '상세페이지',
         n: c.sampleSize,
         confidence: conf(c.sampleSize, 2),
@@ -128,12 +128,12 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
         id: `content-strong-${c.kind}`,
         origin: 'mine',
         screen: 'content',
-        headline: `잠깐만 읽어도 담기를 ${c.conversionLift.toFixed(1)}배 늘리는 설명: ${c.ko}`,
+        headline: `짧게 읽어도 담기 ${c.conversionLift.toFixed(1)}배: ${c.ko}`,
         reasons: [
-          `상세를 본 고객 중 ${fmt.pct(c.viewRate)}만 이 글까지 읽고, 읽는 시간도 평균 ${(c.avgDwellMs / 1000).toFixed(0)}초로 짧습니다 (읽은 기록 ${fmt.int(c.sampleSize)}건)`,
-          '읽은 고객은 담는데, 읽는 고객 자체가 적다는 뜻입니다',
+          `상세 방문 중 ${fmt.pct(c.viewRate)}만 읽고, 평균 ${(c.avgDwellMs / 1000).toFixed(0)}초로 짧습니다 (${fmt.int(c.sampleSize)}건)`,
+          '읽으면 담는데 읽는 고객이 적습니다',
         ],
-        action: `${josa(c.ko, '을/를')} 상세페이지 위쪽으로 올리고, 상품 목록에도 한 줄로 보여 주세요`,
+        action: `${josa(c.ko, '을/를')} 상세페이지 위쪽과 상품 목록에 올리세요`,
         unit: '상세페이지',
         n: c.sampleSize,
         confidence: conf(c.sampleSize, 1),
@@ -158,10 +158,10 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
         screen: 'segments',
         headline: `${name(best)} 고객이 가장 많이 담습니다`,
         reasons: [
-          `${name(best)} 고객은 ${fmt.pct(best.cartRate)}가 담았고 (방문 ${fmt.int(best.sessions)}번), ${name(worst)} 고객은 ${fmt.pct(worst.cartRate)}만 담았습니다 (방문 ${fmt.int(worst.sessions)}번)`,
+          `${name(best)} ${fmt.pct(best.cartRate)} · ${name(worst)} ${fmt.pct(worst.cartRate)} 담았습니다`,
           top ? `${SKIN_TYPE_KO[best.type]} 고객이 가장 오래 읽는 설명: ${top.top}` : '',
         ].filter(Boolean),
-        action: `상품 소개 문구를 ${name(best)} 고객에게 맞춰 쓰고, ${top ? `${top.top} 설명을 앞에 두세요` : '그 고객이 즐겨 읽는 설명을 앞에 두세요'}`,
+        action: `${name(best)} 고객에 맞춰 문구를 쓰고 ${top ? `${top.top} 설명을` : '즐겨 읽는 설명을'} 앞에 두세요`,
         unit: '타깃·문구',
         n: Math.min(best.sessions, worst.sessions),
         confidence: conf(Math.min(best.sessions, worst.sessions), 2),
@@ -180,9 +180,9 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
       // 성분 관심은 ingredient_weekly_interest — brand 축이 없는 플랫폼 전체 값 (마트 계약 E5)
       origin: 'shared',
       screen: 'ingredients',
-      headline: `고객이 많이 찾는데 내 상품에는 없는 성분: ${gaps.map((g) => labelKo(g.name)).join('·')}`,
-      reasons: gaps.map((g) => `${labelKo(g.name)}: 쇼핑몰 전체에서 관심 ${g.rank}위, 고객이 성분 이름을 ${fmt.int(g.scrapeCount)}번 살펴봤습니다. 이 성분이 든 내 상품은 없습니다`),
-      action: `${josa(labelKo(gaps[0].name), '이/가')} 든 상품을 다음 기획 후보로 두고, 그 전에는 상세페이지에 비슷한 효과를 내는 내 성분을 설명해 주세요`,
+      headline: `많이 찾는데 내 상품엔 없는 성분: ${gaps.map((g) => labelKo(g.name)).join('·')}`,
+      reasons: gaps.map((g) => `${labelKo(g.name)}: 관심 ${g.rank}위 · ${fmt.int(g.scrapeCount)}번 살펴봄 · 내 상품엔 없음`),
+      action: `${josa(labelKo(gaps[0].name), '이/가')} 든 상품을 다음 기획 후보로 두세요`,
       unit: '제품·처방',
       n,
       confidence: n >= 1000 ? '보통' : '낮음',
