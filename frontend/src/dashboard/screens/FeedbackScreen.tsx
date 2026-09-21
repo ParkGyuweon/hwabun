@@ -1,10 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
-import { fetchSellerFeedback, startFeedbackClassification } from '../../lib/shopApi';
-import { loadBrandId } from '../../lib/brands';
+import { fetchSellerFeedback, respondToFeedback, startFeedbackClassification } from '../../lib/shopApi';
 import { OriginBadge, Panel } from '../components';
 import InsightCard from './InsightCard';
-import { feedbackProducts as products } from '../lib/metrics';
-import { FEEDBACK_BRAND } from '../lib/scope';
+import { useBrandProducts } from '../lib/useBrandProducts';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, feedbackSource, updateFeedback } from '../../lib/feedbackStore';
 import { findAdTerms } from '../../lib/adTerms';
@@ -17,7 +15,8 @@ import {
   isUnclassified,
   labelsOf,
 } from '../../types/feedback';
-import type { Feedback } from '../../types/feedback';
+import { statusOfHandling } from '../../types/feedback';
+import type { Feedback, FeedbackHandlingStatus, FeedbackResponseAction } from '../../types/feedback';
 
 type AxisFilter = string | 'all' | 'pending';
 
@@ -46,15 +45,19 @@ const AXIS_COLOR: Record<string, string> = {
   other: 'var(--ink-faint)',
 };
 
-const STATUS_KO = { new: '새 의견', read: '읽음', reflected: '반영' } as const;
+/** 업체 처리 상태 문구 (백엔드 계약 2026-09-18). new=OPEN · read=ACKNOWLEDGED · reflected=IMPLEMENTED */
+const STATUS_KO = { new: '업체 확인 대기', read: '업체가 확인했어요', reflected: '업체가 반영했어요' } as const;
 
 /**
  * 고객 피드백. 결론 한 줄 → 축 분포 → 카테고리 표 → 원문 순으로 내려간다.
  * 집계 grain 은 계약대로 (product_id, axis_id, category_id). 상품·축·카테고리는 전부 필터다.
  * 금지어가 걸린 행은 접어 두고 눌러야 본문을 보여준다. 집계에서는 빼지 않는다.
  */
-export default function FeedbackScreen() {
+export default function FeedbackScreen({ brandId, brandName }: { brandId: string | null; brandName: string | null }) {
   const all = useFeedback();
+  // 상품 목록은 로그인한 브랜드가 등록한 것. 전에는 번들 카탈로그의 SSAFY Beauty 8종으로 고정돼 있었다
+  const { products: mine0 } = useBrandProducts(brandId, brandName);
+  const products = useMemo(() => mine0 ?? [], [mine0]);
   /**
    * 백엔드 피드백(GET /api/seller/feedback)을 로컬 저장본과 합친다.
    * 브랜드 id 는 대시보드 로그인 때 저장된 값. 없거나 백엔드가 없으면 로컬만 보인다.
@@ -63,13 +66,12 @@ export default function FeedbackScreen() {
   /** 분류를 걸어 놓고 결과를 기다리는 중. 제한 시간 안에 안 끝나면 지금 있는 데이터를 그대로 둔다 */
   const [classifying, setClassifying] = useState(false);
   useEffect(() => {
-    const brandId = loadBrandId();
-    if (!brandId) return;
+    if (!brandId || !brandName) return;
     let alive = true;
     let timer: number | undefined;
 
     const pull = async (): Promise<boolean> => {
-      const rows = await fetchSellerFeedback(brandId, FEEDBACK_BRAND);
+      const rows = await fetchSellerFeedback(brandId, brandName);
       if (!alive || !rows) return false;
       setRemote(rows);
       // 백엔드 행이 하나도 PENDING 이 아니면 끝난 것. 행이 없어도 기다릴 이유가 없다
@@ -103,12 +105,13 @@ export default function FeedbackScreen() {
       alive = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, []);
+  }, [brandId, brandName]);
   const mine = useMemo(() => {
-    const local = feedbackForBrand(all, FEEDBACK_BRAND);
+    // 번들 시드(SSAFY Beauty 30건)는 로그인한 브랜드가 그 이름일 때만 섞인다. 다른 브랜드에는 남의 피드백이다
+    const local = brandName ? feedbackForBrand(all, brandName) : [];
     const seen = new Set(local.map((f) => f.feedback_id));
     return [...remote.filter((f) => !seen.has(f.feedback_id)), ...local];
-  }, [all, remote]);
+  }, [all, remote, brandName]);
 
   /** 배지. 백엔드 행이나 이 사이트에서 쓴 글이 있으면 실측, 전부 번들 샘플이면 시드 */
   const source = useMemo(() => feedbackSource(mine), [mine]);
@@ -236,12 +239,50 @@ export default function FeedbackScreen() {
           : `${categoryLabel(first[0])}: ${named(firstProductIds)}.`,
       routes,
     };
-  }, [mine]);
+  }, [mine, products]);
 
   const productName = (id: string) => products.find((p) => p.product_id === id)?.product_name ?? id;
-  const reflect = (f: Feedback) => {
-    const reply = (draft[f.feedback_id] ?? '').trim();
-    updateFeedback(f.feedback_id, { status: 'reflected', reply: reply || null });
+  /** 요청 중인 피드백. 버튼을 잠가 중복 클릭을 막는다 */
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [actionError, setActionError] = useState<Record<string, string>>({});
+
+  /**
+   * 판매자 처리 — 확인 · 답변 · 반영. 백엔드 행은 서버(POST /responses)가 정본이고 201 응답으로 그 행을 바로 갱신한다.
+   * 로컬 시드 행(서버에 없는 시연 데이터)만 예전처럼 브라우저 저장본을 고친다.
+   */
+  const respond = async (f: Feedback, action: FeedbackResponseAction) => {
+    const body = (draft[f.feedback_id] ?? '').trim();
+    if (action === 'REPLIED' && !body) return;
+    if (f.source !== 'backend') {
+      if (action === 'ACKNOWLEDGED') updateFeedback(f.feedback_id, { status: 'read' });
+      else if (action === 'IMPLEMENTED') updateFeedback(f.feedback_id, { status: 'reflected', reply: body || null });
+      else updateFeedback(f.feedback_id, { status: 'read', reply: body });
+      if (action !== 'ACKNOWLEDGED') setDraft({ ...draft, [f.feedback_id]: '' });
+      return;
+    }
+    setBusy((b) => ({ ...b, [f.feedback_id]: true }));
+    setActionError((e) => ({ ...e, [f.feedback_id]: '' }));
+    const result = await respondToFeedback(f.feedback_id, action, action === 'REPLIED' ? body : undefined);
+    setBusy((b) => ({ ...b, [f.feedback_id]: false }));
+    if (!result) {
+      setActionError((e) => ({ ...e, [f.feedback_id]: '처리하지 못했습니다. 잠시 뒤 다시 눌러 주세요.' }));
+      return;
+    }
+    setRemote((rows) =>
+      rows.map((r) =>
+        r.feedback_id === result.feedbackId
+          ? {
+              ...r,
+              handling_status: result.handlingStatus as FeedbackHandlingStatus,
+              status: statusOfHandling(result.handlingStatus),
+              replied_at: result.lastRespondedAt,
+              latest_response: { action: result.response.action as FeedbackResponseAction, body: result.response.body, created_at: result.response.createdAt },
+              reply: result.response.action === 'REPLIED' ? (result.response.body ?? null) : r.reply,
+            }
+          : r,
+      ),
+    );
+    if (action === 'REPLIED') setDraft({ ...draft, [f.feedback_id]: '' });
   };
   const pickAxis = (next: AxisFilter) => {
     setAxis(next);
@@ -266,13 +307,13 @@ export default function FeedbackScreen() {
           </select>
         </label>
         <p className="scope__meta">
-          {total}건 · 새 의견 {fresh} · 반영 {reflected} · 어휘 {FEEDBACK_VOCAB_VERSION}
+          {total}건 · 확인 대기 {fresh} · 반영 {reflected} · 어휘 {FEEDBACK_VOCAB_VERSION}
           {classifying ? ' · 분류 처리 중입니다' : ''}
         </p>
       </div>
 
       {/* AI 요약. 원문 목록보다 위 — 사장님은 결론부터 본다. 상품 필터를 그대로 따른다 */}
-      <InsightCard brandId={loadBrandId()} productId={productId === 'all' ? null : productId} />
+      <InsightCard brandId={brandId} productId={productId === 'all' ? null : productId} />
 
       {verdict ? (
         <section className="verdict verdict--mine">
@@ -526,25 +567,33 @@ export default function FeedbackScreen() {
                     <p className="fbx-card__body">{f.body}</p>
                   )}
 
-                  {f.status === 'reflected' ? (
+                  {/* 남긴 답변은 상태와 무관하게 보인다 — 확인만 하고 답변한 것도, 반영한 것도 */}
+                  {f.reply ? (
                     <blockquote className="fbx-card__reply">
-                      <span>{f.reply ?? '답글 없이 반영'}</span>
-                      <small>{FEEDBACK_BRAND} · {f.replied_at?.slice(0, 10)}</small>
+                      <span>{f.reply}</span>
+                      <small>{brandName ?? ''} · {(f.latest_response?.created_at ?? f.replied_at ?? '').slice(0, 10)}</small>
                     </blockquote>
-                  ) : (
+                  ) : f.status === 'reflected' ? (
+                    <blockquote className="fbx-card__reply">
+                      <span>답글 없이 반영</span>
+                      <small>{brandName ?? ''} · {f.replied_at?.slice(0, 10)}</small>
+                    </blockquote>
+                  ) : null}
+                  {f.status !== 'reflected' ? (
                     <div className="fbx-card__actions">
                       {f.status === 'new' ? (
-                        <button type="button" className="fbx-btn" onClick={() => updateFeedback(f.feedback_id, { status: 'read' })}>
-                          읽음
+                        <button type="button" className="fbx-btn" disabled={busy[f.feedback_id]} onClick={() => void respond(f, 'ACKNOWLEDGED')}>
+                          확인했어요
                         </button>
                       ) : (
                         <span />
                       )}
                       <div className={`fbx-reply${hits.length ? ' has-warning' : ''}`}>
                         <input
-                          placeholder="어떻게 반영했는지 한 줄"
+                          placeholder="고객에게 보일 답변 한 줄"
                           value={text}
-                          aria-label="반영 답글"
+                          aria-label="답변"
+                          disabled={busy[f.feedback_id]}
                           onChange={(e) => setDraft({ ...draft, [f.feedback_id]: e.target.value })}
                         />
                         {hits.length ? (
@@ -558,17 +607,26 @@ export default function FeedbackScreen() {
                             화장품법 제13조
                           </p>
                         ) : null}
+                        {actionError[f.feedback_id] ? <p className="fbx-reply__warn">{actionError[f.feedback_id]}</p> : null}
                       </div>
                       <button
                         type="button"
+                        className="fbx-btn"
+                        disabled={busy[f.feedback_id] || !text.trim() || hits.some((h) => h.level === 'forbidden')}
+                        onClick={() => void respond(f, 'REPLIED')}
+                      >
+                        답변 남기기
+                      </button>
+                      <button
+                        type="button"
                         className="fbx-btn fbx-btn--primary"
-                        disabled={hits.some((h) => h.level === 'forbidden')}
-                        onClick={() => reflect(f)}
+                        disabled={busy[f.feedback_id] || hits.some((h) => h.level === 'forbidden')}
+                        onClick={() => void respond(f, 'IMPLEMENTED')}
                       >
                         반영했어요
                       </button>
                     </div>
-                  )}
+                  ) : null}
                 </li>
               );
             })}

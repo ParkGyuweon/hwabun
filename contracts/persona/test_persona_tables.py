@@ -347,5 +347,62 @@ class TableShape(unittest.TestCase):
         self.assertEqual(tables["persona_profile"][0]["latest_review_label"], hr.NEGATIVE)
 
 
+class SampleCombinationTest(unittest.TestCase):
+    """대역 합치기.
+
+    배치가 읽는 bridge 는 하나다. 에이전트(PA) 를 고객군 Mart 에 실으려면
+    PC 와 한 파일로 합쳐야 한다.
+    """
+
+    def test_parses_a_single_sample_as_before(self):
+        self.assertEqual([("PA", 10)], bp.parse_samples("PA:10"))
+        self.assertEqual([("PC", None)], bp.parse_samples("PC:all"))
+
+    def test_parses_several_bands(self):
+        self.assertEqual(
+            [("PC", None), ("PA", None)], bp.parse_samples("PC:all+PA:all")
+        )
+        # 쉼표도 같은 구분자로 받는다.
+        self.assertEqual(
+            [("PC", None), ("PA", None)], bp.parse_samples("PC:all,PA:all")
+        )
+
+    def test_combined_sample_id_joins_each_band(self):
+        self.assertEqual(
+            "pcall_paall", bp.combined_sample_id(bp.parse_samples("PC:all+PA:all"))
+        )
+        self.assertEqual("pa010", bp.combined_sample_id(bp.parse_samples("PA:10")))
+
+    def test_refuses_to_mix_a_holdout_band(self):
+        """홀드아웃은 평가용으로 분리된 집합이라 Mart 로 가는 bridge 에 섞지 않는다."""
+        for text in ("PC:all+HA:all", "HB:all+PA:all"):
+            with self.assertRaises(ValueError) as caught:
+                bp.parse_samples(text)
+            self.assertIn("홀드아웃", str(caught.exception))
+
+    def test_allows_a_holdout_band_on_its_own(self):
+        self.assertEqual([("HA", None)], bp.parse_samples("HA:all"))
+
+    def test_refuses_the_same_band_twice(self):
+        with self.assertRaises(ValueError):
+            bp.parse_samples("PC:all+PC:100")
+
+    def test_refuses_an_unknown_band(self):
+        with self.assertRaises(ValueError):
+            bp.parse_samples("PC:all+ZZ:all")
+
+    def test_refuses_overlapping_persona_ids(self):
+        """접두가 달라 지금은 안 겹치지만, 겹치면 Mart join 이 행을 불린다."""
+        personas = [{"persona_id": "PA00001"}, {"persona_id": "PA00001"}]
+        with self.assertRaises(ValueError) as caught:
+            bp.assert_unique_persona_ids(personas)
+        self.assertIn("PA00001", str(caught.exception))
+
+    def test_accepts_distinct_persona_ids(self):
+        bp.assert_unique_persona_ids(
+            [{"persona_id": "PC00001"}, {"persona_id": "PA00001"}]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

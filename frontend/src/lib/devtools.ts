@@ -22,3 +22,12 @@ export function isDevtoolsOn(): boolean {
   }
   return navigator.webdriver === true;
 }
+
+/**
+ * 등록 폼 미리보기 (`?preview=1`). 대시보드 상품 등록 화면이 iframe 으로 띄운다.
+ * 상세 페이지 본문만 그리고 사이트 껍데기(헤더·프로모·페르소나 스위처·로그 창)는 안 그린다. 로그는 environment=preview.
+ */
+export function isPreviewMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('preview') === '1';
+}

@@ -750,7 +750,7 @@ def _build_seed_dim_product(catalog_df: Any) -> Any:
     )
 
 
-# 가격 정본은 원화다 (Jira 302). 추천 어휘집 0.7 의 price_bin 경계가 원화라
+# 가격 정본은 원화다. 추천 어휘집 0.7 의 price_bin 경계가 원화라
 # 카탈로그도 같은 단위여야 Mart 가 환율을 다시 들고 있지 않아도 된다.
 # 규칙은 ``batch/jobs/product_encoder.price_krw_of`` 와 같아야 한다 — 두 곳이
 # 갈리면 같은 상품이 추천과 대시보드에서 다른 가격대로 잡힌다.
@@ -976,7 +976,7 @@ def _build_dim_brand(dim_product_df: Any, commons_hash_salt: str) -> Any:
 
 # 겹쳐 보인 체류로 보지 않는 동시 노출 블록 수의 상한.
 # 값의 뜻은 생성기·프론트가 정한다 — 재생 데이터에서는 한 섹션에서 펼친
-# 블록 수라서 2 가 나오지 않고 사실상 1 만 걸린다 (Jira 338).
+# 블록 수라서 2 가 나오지 않고 사실상 1 만 걸린다.
 CO_VISIBLE_CLEAN_MAX = 2
 
 CONTENT_GROUP_COLUMNS = (
@@ -1022,13 +1022,17 @@ def _null_safe_left_join(
     )
 
 
-def _content_events(cleaned_df: Any, event_names: tuple[str, ...]) -> Any:
+def _content_events(
+    cleaned_df: Any,
+    event_names: tuple[str, ...],
+    section_kind_df: Any | None = None,
+) -> Any:
     from pyspark.sql import functions as F
 
     typed = _typed_properties(cleaned_df).where(
         F.col("event_name").isin(*event_names)
     )
-    return typed.select(
+    selected = typed.select(
         "event_date_kst",
         "session_id",
         "page_view_id",
@@ -1058,14 +1062,72 @@ def _content_events(cleaned_df: Any, event_names: tuple[str, ...]) -> Any:
         _prop(F.col("_properties"), "matched_keywords").alias("_matched_keywords"),
         _prop(F.col("_properties"), "vocab_version").alias("vocab_version"),
     )
+    if section_kind_df is None:
+        return selected
+
+    # 라벨 없는 Event 를 섹션 정본으로 채운다. 채우지 않으면 같은 섹션이
+    # content_kind 로 두 그룹으로 갈려 한쪽은 조회만, 다른 쪽은 드래그만 갖는다.
+    # 컬럼 순서는 보존한다 — join 이 키를 맨 앞으로 옮긴다.
+    columns = selected.columns
+    return (
+        selected.join(F.broadcast(section_kind_df), ["section_id"], "left")
+        .withColumn(
+            "content_kind",
+            F.coalesce(F.col("content_kind"), F.col("_section_content_kind")),
+        )
+        .select(*columns)
+    )
+
+
+def _section_content_kind_map(cleaned_df: Any) -> Any:
+    """섹션 하나가 content_kind 한 종류로만 나타나면 그 값을 그 섹션의 정본으로 본다.
+
+    성분 섹션은 화면이 `section_view` 에 `content_kind` 를 싣지 않는데 같은 섹션의
+    `text_selection` 은 싣는다. `content_kind` 가 그룹 키(`CONTENT_GROUP_COLUMNS`)라
+    한 섹션이 두 행으로 갈리고, 드래그만 있는 쪽은 조회 0 에 세션만 남아
+    `section_view_sessions > section_view_count` 가 된다 (dw-schema.md §4.4).
+    `how_to_use` 도 같은 모양이다.
+
+    라벨이 둘 이상인 섹션(`about_product`·`product_hero`·`reviews`)은 어느 것으로
+    채울지 정할 근거가 없어 건드리지 않는다. 관측된 라벨이 하나뿐일 때만 쓰므로
+    없는 사실을 만들지 않는다.
+    """
+
+    from pyspark.sql import functions as F
+
+    labelled = _content_events(
+        cleaned_df, ("section_view", "section_dwell") + CONTENT_INTEREST_EVENTS
+    ).where(
+        F.col("section_id").isNotNull()
+        & (F.length(F.trim(F.col("section_id"))) > 0)
+        & F.col("content_kind").isNotNull()
+        & (F.length(F.trim(F.col("content_kind"))) > 0)
+    )
+    return (
+        labelled.groupBy("section_id")
+        .agg(
+            F.countDistinct("content_kind").alias("_kind_count"),
+            # 라벨이 하나뿐일 때만 쓰므로 min 이 곧 그 하나다. F.first 는 셔플
+            # 순서를 타서 재계산 결정성이 깨진다.
+            F.min("content_kind").alias("_section_content_kind"),
+        )
+        .where(F.col("_kind_count") == 1)
+        .select("section_id", "_section_content_kind")
+    )
 
 
 def _section_dwell_agg(
-    cleaned_df: Any, dim_product_df: Any | None = None
+    cleaned_df: Any,
+    dim_product_df: Any | None = None,
+    section_kind_df: Any | None = None,
 ) -> Any:
     from pyspark.sql import functions as F
 
-    events = _content_events(cleaned_df, ("section_dwell",)).withColumn(
+    if section_kind_df is None:
+        section_kind_df = _section_content_kind_map(cleaned_df)
+    events = _content_events(
+        cleaned_df, ("section_dwell",), section_kind_df
+    ).withColumn(
         "_dwell_ms", F.col("dwell_ms").cast("long")
     )
     grouped = events.groupBy(*CONTENT_GROUP_COLUMNS).agg(
@@ -1120,11 +1182,14 @@ def _content_interest_fact(
     section_dwell_df: Any,
     weights: dict[str, Any],
     dim_product_df: Any | None = None,
+    section_kind_df: Any | None = None,
 ) -> Any:
     from pyspark.sql import functions as F
 
+    if section_kind_df is None:
+        section_kind_df = _section_content_kind_map(cleaned_df)
     event_names = ("section_view",) + CONTENT_INTEREST_EVENTS
-    events = _content_events(cleaned_df, event_names)
+    events = _content_events(cleaned_df, event_names, section_kind_df)
     event_keys = events.select(*CONTENT_GROUP_COLUMNS)
     section_keys = section_dwell_df.select(*CONTENT_GROUP_COLUMNS)
     keys = event_keys.unionByName(section_keys).distinct()
@@ -1299,7 +1364,10 @@ def build_derived_frames(
     dim_product_df: Any | None = None,
     weights: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    section_dwell = _section_dwell_agg(cleaned_df, dim_product_df)
+    # 섹션 정본 라벨은 한 번만 만들어 두 Fact 에 같이 넘긴다. 따로 만들면
+    # 같은 입력에서도 두 갈래가 어긋날 여지가 남는다.
+    section_kind = _section_content_kind_map(cleaned_df)
+    section_dwell = _section_dwell_agg(cleaned_df, dim_product_df, section_kind)
     product_event_fact = _product_event_fact(
         cleaned_df, time_zone, dim_product_df
     )
@@ -1313,7 +1381,7 @@ def build_derived_frames(
         "review_event_fact": _review_event_fact(cleaned_df, dim_product_df),
         "section_dwell_agg": section_dwell,
         "content_interest_fact": _content_interest_fact(
-            cleaned_df, section_dwell, weights, dim_product_df
+            cleaned_df, section_dwell, weights, dim_product_df, section_kind
         ),
     }
 

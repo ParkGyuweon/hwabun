@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Actions, BarList, Kpi, OriginBadge, Panel, Scatter } from '../components';
 import { fmt } from '../lib/metrics';
+import { josa } from '../../lib/format';
 import { useBehavior } from '../lib/useBehavior';
 import { usePrescriptions } from '../lib/prescriptionApi';
 import { labelKo } from '../../lib/formLabels';
@@ -59,7 +60,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
 
   const firstUp = todo.find((r) => r.verb === 'up');
   const firstFix = todo.find((r) => r.verb === 'fix');
-  const best = [...rows].sort((a, b) => b.conversionLift - a.conversionLift)[0];
+  // 0 끼리는 순위가 없다. 담기 배수가 0 인 콘텐츠를 "가장 잘 먹히는 것"으로 세우지 않는다 (2026-09-18)
+  const best = [...rows].filter((r) => r.conversionLift > 0).sort((a, b) => b.conversionLift - a.conversionLift)[0];
 
   // 처방(무엇을 어떻게)은 이 화면 숫자만으로 못 쓴다. 다른 화면의 근거까지 모아 만든다.
   // 먼저 규칙 표(lib/prescription.ts)로 그리고, AI 서버(POST /api/prescription)가 답하면 그 문장으로 바꾼다.
@@ -90,7 +92,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
     };
   });
 
-  const topScrape = scrapedIngredients[0];
+  // 드래그 0회인 성분을 "가장 많이 드래그한 성분"으로 적지 않는다. 기록이 없으면 없다고 적는다
+  const topScrape = scrapedIngredients.find((x) => x.count > 0);
   const expand = validationBehaviors.find((v) => v.event === 'ingredient_view_mode_change') ?? validationBehaviors[0];
 
   return (
@@ -100,8 +103,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           이 화면이 말하는 것 <OriginBadge kind="mine" />
         </p>
         <h2 className="verdict__headline">
-          {firstUp ? `${firstUp.ko}를 위로 올리고, ` : ''}
-          {firstFix ? `${firstFix.ko}을 손보세요` : '지금 순서를 그대로 두세요'}
+          {firstUp ? `${josa(firstUp.ko, '을/를')} 위로 올리고, ` : ''}
+          {firstFix ? `${josa(firstFix.ko, '을/를')} 손보세요` : '지금 순서를 그대로 두세요'}
         </h2>
         <ul className="verdict__reasons">
           <li>
@@ -129,7 +132,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         <Kpi
           label="가장 잘 먹히는 콘텐츠"
           value={best?.ko ?? '-'}
-          sub={best ? `본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다` : ''}
+          sub={best ? `본 사람이 평균보다 ${best.conversionLift.toFixed(1)}배 더 담았습니다` : '본 사람이 담은 기록이 아직 없습니다'}
           source={source.contentLift}
         />
         <Kpi
@@ -141,7 +144,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         <Kpi
           label="고객이 가장 많이 드래그한 성분"
           value={topScrape ? labelKo(topScrape.name) : '-'}
-          sub={topScrape ? `${fmt.int(topScrape.count)}회 · 관심이 가장 큰 성분` : ''}
+          sub={topScrape ? `${fmt.int(topScrape.count)}회 · 관심이 가장 큰 성분` : '성분을 드래그한 기록이 아직 없습니다'}
           source={source.scraped}
         />
         <Kpi

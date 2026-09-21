@@ -172,14 +172,23 @@ def check_enums(tables, rep):
     rep.ok("C")
 
 
+def manifest_bands(manifest):
+    """단일 대역은 `persona_band`, 합친 산출은 `persona_bands` 를 쓴다."""
+    bands = manifest.get("persona_bands")
+    return list(bands) if bands else [manifest["persona_band"]]
+
+
 def check_cohort_consistency(tables, manifest, rep):
-    expected_source = manifest.get("persona_source")
-    expected_cohort = manifest.get("evaluation_cohort")
+    # 대역을 합친 산출은 manifest 가 복수형 키를 쓴다. 행마다
+    # persona_source 가 달라지므로 "manifest 값과 같다" 가 아니라 "manifest 가
+    # 선언한 것 중 하나다" 를 본다. 단일 대역이면 목록 길이가 1 이라 같은 검사다.
+    expected_sources = manifest.get("persona_sources") or [manifest.get("persona_source")]
+    expected_cohorts = manifest.get("evaluation_cohorts") or [manifest.get("evaluation_cohort")]
     profile_cohorts = {}
     for lineno, row in tables["persona_profile"]:
-        if row["persona_source"] != expected_source:
+        if row["persona_source"] not in expected_sources:
             rep.fail("C.source", f"persona_profile:{lineno} persona_source가 manifest와 불일치")
-        if row.get("evaluation_cohort") != expected_cohort:
+        if row.get("evaluation_cohort") not in expected_cohorts:
             rep.fail("C.cohort", f"persona_profile:{lineno} evaluation_cohort가 manifest와 불일치")
         profile_cohorts[row["persona_id"]] = row.get("evaluation_cohort")
 
@@ -433,10 +442,12 @@ def main(argv=None):
 
     product_ids = {p["product_id"] for p in _load_json(PRODUCTS)}
     personas_by_id = {}
-    for config in SOURCE_CONFIGS.values():
+    band_of_persona = {}
+    for band, config in SOURCE_CONFIGS.items():
         for persona in _load_json(config["path"]):
             contracted = apply_source_contract(persona, config)
             personas_by_id[contracted["persona_id"]] = contracted
+            band_of_persona[contracted["persona_id"]] = band
 
     source_personas_by_band = {
         band: {p["persona_id"]: p for p in _load_json(config["path"])}
@@ -445,17 +456,25 @@ def main(argv=None):
     reports = []
     for d in dirs:
         manifest = _load_json(os.path.join(d, "_manifest.json"))
+        source_personas = {}
+        for band in manifest_bands(manifest):
+            source_personas.update(source_personas_by_band[band])
         reports.append(validate_sample(
-            d, product_ids, personas_by_id,
-            source_personas_by_band[manifest["persona_band"]],
+            d, product_ids, personas_by_id, source_personas,
         ))
 
     # 샘플 간 persona_id 교집합 (계약 §11-1 은 모든 Dimension 표본에서 유일하다)
+    # 대역별로 모은다. 표본 단위로 묶으면 합친 산출(pcall_paall)이 그 재료
+    # (pcall·paall)와 겹쳐 보이는데, 같은 사람을 두 번 담은 것이라 교집합이
+    # 아니다. 계약이 막으려는 것은 서로 다른 대역에 같은 persona_id 가 있는
+    # 경우다.
     bands = defaultdict(set)
     for d, rep in zip(dirs, reports):
         manifest = _load_json(os.path.join(d, "_manifest.json"))
+        fallback = manifest_bands(manifest)[0]
         for _, row in _read_jsonl(os.path.join(d, "persona_profile.jsonl")):
-            bands[manifest["persona_band"]].add(row["persona_id"])
+            persona_id = row["persona_id"]
+            bands[band_of_persona.get(persona_id, fallback)].add(persona_id)
     overlaps = band_overlaps(bands)
     for (left, right), overlap in overlaps.items():
         reports[0].fail("D.11-1",

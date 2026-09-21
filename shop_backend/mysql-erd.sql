@@ -137,9 +137,24 @@ CREATE TABLE review (
 );
 CREATE TABLE feedback (
  feedback_id VARCHAR(64) PRIMARY KEY, member_id VARCHAR(64) NOT NULL, product_id VARCHAR(64) NOT NULL, axis_id VARCHAR(32) NOT NULL, order_item_id VARCHAR(64) NULL, body TEXT NOT NULL, status ENUM('VISIBLE','HIDDEN','DELETED') NOT NULL DEFAULT 'VISIBLE',
+ handling_status ENUM('OPEN','ACKNOWLEDGED','IMPLEMENTED') NOT NULL DEFAULT 'OPEN', last_responded_at DATETIME(6) NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  FOREIGN KEY(member_id) REFERENCES member(member_id) ON DELETE RESTRICT, FOREIGN KEY(order_item_id,product_id) REFERENCES order_item(order_item_id,product_id) ON DELETE RESTRICT, FOREIGN KEY(product_id) REFERENCES product(product_id) ON DELETE RESTRICT,
  UNIQUE KEY uq_feedback_member_product_axis(member_id,product_id,axis_id), INDEX ix_feedback_product_axis(product_id,axis_id), INDEX ix_feedback_order_item_status(order_item_id,status)
+);
+CREATE TABLE feedback_response (
+ feedback_response_id VARCHAR(64) PRIMARY KEY, feedback_id VARCHAR(64) NOT NULL, seller_account_id VARCHAR(64) NOT NULL,
+ action ENUM('ACKNOWLEDGED','REPLIED','IMPLEMENTED') NOT NULL, body TEXT NULL, created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ FOREIGN KEY(feedback_id) REFERENCES feedback(feedback_id) ON DELETE CASCADE, FOREIGN KEY(seller_account_id) REFERENCES seller_account(seller_account_id) ON DELETE RESTRICT,
+ CHECK(action <> 'REPLIED' OR body IS NOT NULL), INDEX ix_feedback_response_feedback_created(feedback_id,created_at)
+);
+CREATE TABLE notification (
+ notification_id VARCHAR(64) PRIMARY KEY, recipient_role ENUM('MEMBER','SELLER') NOT NULL, recipient_account_id VARCHAR(64) NOT NULL,
+ type ENUM('FEEDBACK_CREATED','FEEDBACK_ACKNOWLEDGED','FEEDBACK_REPLIED','FEEDBACK_IMPLEMENTED') NOT NULL, feedback_id VARCHAR(64) NULL,
+ title VARCHAR(200) NOT NULL, body VARCHAR(1000) NULL, payload_json JSON NULL, read_at DATETIME(6) NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ FOREIGN KEY(feedback_id) REFERENCES feedback(feedback_id) ON DELETE SET NULL,
+ INDEX ix_notification_recipient_read_created(recipient_role,recipient_account_id,read_at,created_at)
 );
 
 CREATE TABLE product_unmapped_value (

@@ -12,6 +12,7 @@ import FeedbackScreen from './screens/FeedbackScreen';
 import SettlementScreen from './screens/SettlementScreen';
 import { MotifLine, OriginBadge } from './components';
 import { DEMO_BRAND } from '../mocks/products';
+import NotificationBell from '../components/notifications/NotificationBell';
 import { SCOPE_LABEL } from './lib/scope';
 import type { ScopeKind } from './lib/scope';
 import { useAuth } from '../hooks/useAuth';
@@ -77,7 +78,7 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     title: '상품마다 어디서 멈추나', desc: '상품별로 고객이 발길을 돌리는 지점',
   },
   orders: {
-    section: 'orders', tab: '주문', scope: 'ledger',
+    section: 'orders', tab: '주문', scope: 'feedback',
     title: '무엇이 팔렸나', desc: '결제가 끝난 주문 · 쇼핑몰 원장 그대로',
   },
   settlement: {
@@ -89,8 +90,8 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     title: '누가 사나', desc: '피부 타입과 피부 톤에 따라 누가 담는지',
   },
   reviews: {
-    section: 'voice', tab: '공개 리뷰', scope: 'ledger',
-    title: '공개 리뷰', desc: '내 상품에 결제한 회원이 남긴 별점과 원문 · 자극·트러블 언급',
+    section: 'voice', tab: '공개 리뷰', scope: 'behavior',
+    title: '공개 리뷰', desc: '피부 타입에 따라 갈리는 평가와 자극 언급',
   },
   feedback: {
     section: 'voice', tab: '받은 피드백', scope: 'feedback',
@@ -281,6 +282,8 @@ export default function DashboardApp() {
         </div>
 
         <div className="sidebar__foot">
+          {/* 인앱 알림함. 판매자는 새 의견 알림을 받는다 — 누르면 고객의 말 화면으로 */}
+          <NotificationBell role="SELLER" onOpen={() => setScreen('feedback')} />
           {seller ? (
             <div className="sidebar__account">
               <span className="sidebar__account-name" title={seller.email}>
@@ -343,7 +346,7 @@ export default function DashboardApp() {
           </div>
         ) : null}
 
-        {screen === 'overview' ? <OverviewScreen days={days} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
+        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'content' ? <ContentScreen brandName={brand?.name ?? ''} /> : null}
@@ -356,7 +359,7 @@ export default function DashboardApp() {
           <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'register' ? <RegisterScreen /> : null}
-        {screen === 'feedback' ? <FeedbackScreen /> : null}
+        {screen === 'feedback' ? <FeedbackScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'settlement' ? <SettlementScreen brandId={brand?.id ?? null} /> : null}
       </main>
     </div>
@@ -381,8 +384,8 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
   const { anyReal } = useBehavior();
   const label = SCOPE_LABEL[scope];
   const live = scope === 'behavior' && anyReal;
-  // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다
-  const brand = scope === 'feedback' ? label.brand : (brandName ?? '');
+  // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다 (피드백 스코프도 2026-09-18 부터)
+  const brand = brandName ?? label.brand;
   const source = live ? '행동 마트 실측 · 로그인한 브랜드' : label.source;
   return (
     <p className="main__scope" title={source}>

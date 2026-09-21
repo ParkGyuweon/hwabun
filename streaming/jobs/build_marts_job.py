@@ -82,7 +82,7 @@ DIRECT_INGREDIENT_EVENTS = ("text_selection", "text_copy")
 
 # Quick Look은 목록에서 상세를 여는 경로다. 화면에 있는 정상 동선이고 여기서 바로
 # 장바구니에 담을 수 있어서, 퍼널에서 빼면 담기 세션이 조회 세션보다 많아진다
-# (Jira 235 실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
+# (실행 검증: 담기 6,029쌍 중 2,356쌍이 Quick Look 경유).
 # 노출 Event 는 셋이다. 프론트는 카드 하나에 하나만 내는데, 목록 그리드는
 # product_impression, 유사상품·맞춤 기획전은 recommendation_impression,
 # 히어로 배너는 banner_impression 이다 (프론트 !305, 2026-09-17).
@@ -862,7 +862,9 @@ def _product_daily_kpi(
         F.sum(
             F.when(F.col("event_name") == "purchase", F.col("item_revenue"))
         ).cast("decimal(18,2)").alias("revenue_amount"),
-        F.first("currency", ignorenulls=True).alias("currency"),
+        # 통화 혼입은 Q5가 별도로 실패시킨다. 실패 보고서와 재계산 결과 자체는
+        # 입력 파티션 순서에 흔들리지 않아야 하므로 대표값은 결정적으로 고른다.
+        F.min("currency").alias("currency"),
         F.countDistinct(F.col("user_id")).alias("unique_user_count"),
         F.countDistinct(F.col("session_id")).alias("session_count"),
         F.current_timestamp().alias("mart_processed_at"),
@@ -910,6 +912,10 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
     from pyspark.sql import functions as F
 
     group_columns = ["funnel_date_kst", "product_id", *EXECUTION_AXES]
+    # detail_entry_path 는 상세를 열지 않은 세션에서 의도적으로 NULL 이다.
+    # 일반 == 비교는 그 세션을 False 가 아닌 NULL 로 만들어, 그룹 전체가 해당하면
+    # sum 결과까지 NULL 로 전파한다. 경로 없음은 direct click 이 아니라는 뜻이다.
+    is_direct_entry = F.col("detail_entry_path").eqNullSafe(F.lit("direct_click"))
     result = funnel_session_df.groupBy(*group_columns).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
@@ -922,12 +928,11 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         ).cast("long").alias("quick_look_cart_sessions"),
         # 직접 클릭 계열은 배타다 — "퀵룩 없이 상세로 직행했나". 둘 다면 먼저 한 쪽.
         F.sum(
-            (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+            is_direct_entry.cast("int")
         ).cast("long").alias("direct_click_sessions"),
         F.sum(
             (
-                (F.col("detail_entry_path") == F.lit("direct_click"))
-                & F.col("reached_add_to_cart")
+                is_direct_entry & F.col("reached_add_to_cart")
             ).cast("int")
         ).cast("long").alias("direct_click_cart_sessions"),
         # "클릭한 세션 중 상세로 간 세션". direct_click 만으로는 부족하다 —
@@ -938,7 +943,7 @@ def _funnel_daily_kpi(funnel_session_df: Any) -> Any:
         F.sum(
             (
                 F.col("reached_click")
-                & (F.col("detail_entry_path") == F.lit("direct_click"))
+                & is_direct_entry
             ).cast("int")
         ).cast("long").alias("click_through_detail_sessions"),
         F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("detail_view_sessions"),
@@ -1159,7 +1164,7 @@ def _null_safe_semi_join(left: Any, right: Any, columns: list[str]) -> Any:
     return left.join(right, condition, "left_semi")
 
 
-# 피부 세그먼트 축. Jira 277 이 요구하는 세 종류만 낸다. bridge 에는
+# 피부 세그먼트 축. 대시보드가 요구하는 세 종류만 낸다. bridge 에는
 # hair_color·eye_color·review_bucket·persona_source 도 있지만 대시보드 고객군
 # 화면(dashboard-redesign-spec.md §2-3)이 피부 축만 쓴다.
 SEGMENT_TYPES = ("skin_type", "skin_tone")
@@ -1203,9 +1208,15 @@ def _persona_segments(bridge_df: Any) -> Any:
         & ~F.col("segment_value").isin(*MISSING_SEGMENT_VALUES)
     ).select("persona_id", "segment_type", "segment_value")
 
+    # 한 페르소나에 같은 축 값이 둘 이상이면 `F.first` 는 셔플 순서를 따라가 재계산이
+    # 갈린다. 통화 대표값(`_product_daily_kpi`)과 같은 이유로 결정적으로 고른다.
+    #
+    # 값이 섞인 것 자체는 bridge 입력의 문제다. Q5 는 bridge 를 입력으로 받지 않아
+    # (검증 Job 인자에 없다) 여기서 그 혼입을 잡을 수 없고, 잡는 자리는 bridge 를
+    # 만드는 쪽이다. 마트는 대표값을 결정적으로 고르는 데까지만 책임진다.
     wide = base.groupBy("persona_id").pivot(
         "segment_type", list(SEGMENT_TYPES)
-    ).agg(F.first("segment_value", ignorenulls=True))
+    ).agg(F.min("segment_value"))
     cross = wide.where(
         F.col("skin_type").isNotNull() & F.col("skin_tone").isNotNull()
     ).select(
@@ -1514,7 +1525,12 @@ def _content_daily_kpi(
     per_content = content.groupBy(*content_key).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.sum("view_count").cast("long").alias("section_view_count"),
-        F.countDistinct("session_id").cast("long").alias("section_view_sessions"),
+        # 조회가 있는 세션만 센다. 체류·드래그만 남기고 section_view 가 없는
+        # 세션까지 세면 section_view_sessions > section_view_count 가 되어
+        # "본 사람이 조회 수보다 많다" 가 나온다 (dw-schema.md §4.4).
+        F.countDistinct(
+            F.when(F.col("view_count") > 0, F.col("session_id"))
+        ).cast("long").alias("section_view_sessions"),
         # 합이 NULL 이 되는 경우(모든 입력이 NULL)를 0 으로 맞춘다. 체류 0 은
         # "머물지 않았다" 이지 "모른다" 가 아니라서 계약이 N 으로 선언했다.
         F.coalesce(F.sum("dwell_ms_sum"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
@@ -1549,7 +1565,7 @@ def _content_daily_kpi(
     # 분자를 분모의 모집단으로 제한한다. Quick Look 으로 상세를 연 세션은 콘텐츠를
     # 읽고도 퍼널의 product_view 에 없어서, 제한하지 않으면 비율이 1.0 을 넘는다.
     # product_daily_kpi 의 add_to_cart_rate 가 같은 이유로 1,248행 중 323행에서
-    # 1.0 을 넘었다 (Jira 277). 분자와 분모는 같은 모집단을 세야 한다.
+    # 1.0 을 넘었다. 분자와 분모는 같은 모집단을 세야 한다.
     viewed_content = _null_safe_semi_join(
         content, view_sessions, [*product_key, "session_id"]
     )
@@ -1747,7 +1763,7 @@ def _detail_view_sessions(funnel_session_df: Any, time_zone: str) -> Any:
 
     상세는 ``product_view`` 와 ``quick_look`` 의 **합집합**이다. Quick Look 에서
     바로 담을 수 있어서 ``product_view`` 만 분모로 두면 분자와 모집단이 어긋나
-    비율이 1.0 을 넘는다 (Jira 235·277).
+    비율이 1.0 을 넘는다 (277).
 
     ``funnel_session_fact`` 에 ``first_detail_view_at`` 이 없으므로 두 시각 중
     이른 쪽을 쓴다. ``funnel_date_kst`` 는 퍼널 첫 단계(대개 노출)의 날짜라
@@ -2085,7 +2101,7 @@ def _segment_content_daily(
     타입마다 모집단이 다르다.
 
     ``persona_id`` 가 없는 세션은 어느 세그먼트에도 넣지 않는다. 임의 귀속은
-    없는 고객군을 만들어 내는 일이라, 빼는 쪽이 정직하다 (Jira 277 과 같은 규칙).
+    없는 고객군을 만들어 내는 일이라, 빼는 쪽이 정직하다 (과 같은 규칙).
     """
 
     from pyspark.sql import functions as F
@@ -2154,7 +2170,7 @@ def _segment_price_band_daily_kpi(
     축을 더하면 그 축을 걷어낸 합계가 같은 세션을 여러 번 센다. 세션 하나가 여러
     가격대의 상품을 밟고, 동시에 ``skin_type`` 행과 ``skin_tone`` 행에 들어간다.
 
-    같은 함정이 Jira 235 에서 실제로 났다 — 브랜드 세션을 상품 Mart 합산으로 구했다가
+    같은 함정이 실제로 났다 — 브랜드 세션을 상품 Mart 합산으로 구했다가
     876행이 336행으로 정정됐다.
 
     **세 Mart 를 서로 대체하지 않는다.** ``price_bin`` 을 걷어낸 합계는 §4.6 과 같지
@@ -2173,7 +2189,7 @@ def _segment_price_band_daily_kpi(
 
     # 이 Mart 의 통화는 **카탈로그 기준 가격의 단위**다. product_event_fact 에도 같은
     # 이름의 컬럼이 있지만 그쪽은 결제 시점 통화라 뜻이 다르다. 이름이 겹치면 Join 뒤
-    # 참조가 모호해져 실행에서만 터진다 (Jira 277 에서 AMBIGUOUS_REFERENCE 로 겪었다).
+    # 참조가 모호해져 실행에서만 터진다 (에서 AMBIGUOUS_REFERENCE 로 겪었다).
     catalog = dim_product_df.select(
         F.col("product_id").alias("_dim_product_id"),
         _price_bin_column(price_bins).alias("price_bin"),
@@ -3147,7 +3163,7 @@ def _banner_daily(product_fact_df: Any, allowed_values: set[str]) -> Any:
     product_fact_df = _observed_events(product_fact_df)
 
     # 실행 축 5종. cross_brand_daily 와 같은 이유로 generator_type 이 필요하다
-    # — 커밋 82afffe sweep 잔여분 (dw-schema.md §2, Jira 324).
+    # — 커밋 82afffe sweep 잔여분 (dw-schema.md §2).
     group_columns = [
         "event_date_kst", "brand_id", "product_id", "banner_type", "banner_value",
         "banner_slot", "trait_source", "policy_version", *EXECUTION_AXES,

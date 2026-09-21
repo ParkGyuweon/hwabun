@@ -46,7 +46,7 @@ class PriceBinContractTest(unittest.TestCase):
         self.assertEqual([float(e) for e in vocab["price_bin_edges"][1:]], uppers[:-1])
 
     def test_edges_are_won_not_dollars(self):
-        """Jira 302 로 원화 경계가 됐다. 달러 경계가 남아 있으면 화면과 갈린다."""
+        """원화 경계가 됐다. 달러 경계가 남아 있으면 화면과 갈린다."""
         bins = load_price_bins(str(VOCAB_PATH))
         first_upper = bins[0][1]
 
@@ -82,7 +82,7 @@ class PriceBandMartSparkTest(unittest.TestCase):
         """``currency`` 는 product_event_fact 에 실제로 있는 컬럼이다.
 
         결제 시점 통화라 카탈로그 기준 가격의 통화와 뜻이 다르다. 픽스처에서
-        빠뜨렸다가 실데이터 재생에서 AMBIGUOUS_REFERENCE 로 터졌다 (Jira 277).
+        빠뜨렸다가 실데이터 재생에서 AMBIGUOUS_REFERENCE 로 터졌다.
         """
         return (
             date(2026, 9, 8), brand, product, session, "U-" + session, event_name,
@@ -255,7 +255,7 @@ class PriceBandMartSparkTest(unittest.TestCase):
         self.assertEqual(1, mart.first()["detail_view_sessions"])
 
 
-    # ── 노출 분모 (Jira 336) ───────────────────────────────────────────
+    # ── 노출 분모 ───────────────────────────────────────────
     def test_impression_sessions_count_all_three_surfaces(self):
         """노출 Event 는 셋이다 (§4.1). 추천·배너로만 노출된 세션도 분모다.
 

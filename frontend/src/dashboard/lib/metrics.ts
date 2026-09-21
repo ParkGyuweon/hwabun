@@ -4,7 +4,7 @@
  * 수집 파이프라인(Collector→Kafka→Spark)이 아직 데이터를 흘리기 전이라
  * 두 종류의 값이 섞여 있다. 화면은 이 구분을 배지로 드러낸다.
  *
- * - **실측**: 상품 성분 문자열에서 지금 실제로 계산한 값
+ * - **실측**: 리뷰 표본(상품당 100건)과 상품 성분 문자열에서 지금 실제로 계산한 값
  * - **모의**: 행동 지표. 상품 특성(리뷰 수·평점)에 비례하도록 시드 고정으로 생성.
  *   집계 API 가 붙으면 이 모듈의 함수 본문만 fetch 로 바꾸면 된다
  *
@@ -13,23 +13,33 @@
  */
 import vocab from '../../../../contracts/product-feature-vocab.json';
 import { products as catalogData } from '../../mocks/products';
-import { FEEDBACK_BRAND } from './scope';
-import type { Product } from '../../types/product';
+import type { Product, SkinType } from '../../types/product';
 import { splitIngredients } from '../../lib/format';
 
 /**
  * 브랜드 대시보드는 **내 브랜드** 상품만 본다.
  *
  * 이 모듈은 이제 **고정 브랜드 상품 목록을 내보내지 않는다**. 내 상품은 화면이
- * `useBrandProducts(brandId, brandName)` 로 받는다. 피드백·등록만 FEEDBACK_BRAND 시드를 쓴다.
+ * `useBrandProducts(brandId, brandName)` 로 받는다. 피드백·등록도 마찬가지다 (2026-09-18, FEEDBACK_BRAND 삭제).
  *
  * 다른 브랜드 상품은 이름·절대치를 보이지 않는다는 데이터 경계
  * (collective-insight-data-boundary.md A층). 플랫폼 전체를 분모로 쓰는 지표
  * (주의 성분 보급률 같은 커먼즈)는 `catalogProducts` 를 쓴다.
  */
 export const catalogProducts = catalogData as unknown as Product[];
-/** 피드백·등록 화면의 상품 목록 (SSAFY Beauty) */
-export const feedbackProducts = catalogProducts.filter((p) => p.brand_name === FEEDBACK_BRAND);
+/**
+ * 대시보드 리뷰 집계가 읽는 행. 판매자 리뷰 API(`GET /api/seller/reviews?brandId=`, sellerReviewsApi.ts)의 응답을
+ * 이 다섯 필드로 줄인 것이다. 번들 표본은 더 이상 없다 — 로그인한 브랜드의 실제 리뷰만 센다.
+ * 본문은 영어·한국어가 섞일 수 있다. 키워드 패턴은 영어라 한국어 본문은 0 으로 잡힌다 (화면에 근사치라고 적는다).
+ * `skin_type` 은 백엔드가 모르면 null 이고, 전부 null 이면 화면이 피부타입별 표를 숨긴다.
+ */
+export interface DashboardReview {
+  product_id: string;
+  rating: number;
+  is_recommended: boolean | null;
+  review_text: string | null;
+  skin_type: SkinType | null;
+}
 
 /* ---------- 시드 고정 난수 ---------- */
 
@@ -101,6 +111,89 @@ export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
   cart: '정보 확인 → 담기',
 };
 
+/** 리뷰 본문에서 찾을 표현. 데이터셋 리뷰가 영문이라 영문 패턴을 쓴다 */
+const IRRITATION_PATTERN = /irritat|sting|burn|tingl|itch|sensitiv/i;
+const TROUBLE_PATTERN = /break\s?out|breakout|acne|pimple|rash|redness|bumps/i;
+
+const FACTOR_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: '보습감', pattern: /hydrat|moistur/i },
+  { label: '향', pattern: /scent|smell|fragrance/i },
+  { label: '발림성·질감', pattern: /texture|apply|absorb|greasy|sticky/i },
+  { label: '순함', pattern: /gentle|mild|calm|sooth/i },
+  { label: '윤기·톤', pattern: /glow|bright|radian|dewy/i },
+  { label: '가성비', pattern: /price|worth|expensive|value/i },
+  { label: '지속력', pattern: /last|all day|long/i },
+];
+
+function scopeReviews(reviews: DashboardReview[], productId: string | null, mine: Product[]): DashboardReview[] {
+  const ids = new Set(mine.map((p) => p.product_id));
+  if (productId) return ids.has(productId) ? reviews.filter((r) => r.product_id === productId) : [];
+  return reviews.filter((r) => ids.has(r.product_id));
+}
+
+export interface ReviewStats {
+  sampleSize: number;
+  withText: number;
+  avgRating: number;
+  ratingDist: number[];
+  recommendRate: number;
+  irritationRate: number;
+  troubleRate: number;
+  factors: Array<{ label: string; count: number; share: number }>;
+}
+
+/**
+ * 내 상품(`mine`)의 리뷰만 센다. 고른 상품이 있으면 그 하나, 없으면 내 상품 전체다.
+ * 고른 id 가 내 상품이 아니면(화면을 오가며 남은 값) 빈 집계다 — 남의 상품 리뷰를 내 것으로 보이지 않는다.
+ */
+export function reviewStats(reviews: DashboardReview[], productId: string | null, mine: Product[]): ReviewStats {
+  const scoped = scopeReviews(reviews, productId, mine);
+  const texts = scoped.filter((r) => r.review_text);
+
+  const ratingDist = [0, 0, 0, 0, 0];
+  for (const r of scoped) ratingDist[Math.min(4, Math.max(0, Math.round(r.rating) - 1))] += 1;
+
+  const recommended = scoped.filter((r) => r.is_recommended !== null);
+
+  const factors = FACTOR_PATTERNS.map(({ label, pattern }) => {
+    const count = texts.filter((r) => pattern.test(r.review_text as string)).length;
+    return { label, count, share: texts.length === 0 ? 0 : count / texts.length };
+  }).sort((a, b) => b.count - a.count);
+
+  return {
+    sampleSize: scoped.length,
+    withText: texts.length,
+    avgRating: scoped.length === 0 ? 0 : scoped.reduce((s, r) => s + r.rating, 0) / scoped.length,
+    ratingDist,
+    recommendRate:
+      recommended.length === 0
+        ? 0
+        : recommended.filter((r) => r.is_recommended).length / recommended.length,
+    irritationRate:
+      texts.length === 0
+        ? 0
+        : texts.filter((r) => IRRITATION_PATTERN.test(r.review_text as string)).length /
+          texts.length,
+    troubleRate:
+      texts.length === 0
+        ? 0
+        : texts.filter((r) => TROUBLE_PATTERN.test(r.review_text as string)).length / texts.length,
+    factors,
+  };
+}
+
+/** 내 상품 중 자극·트러블 언급 비율 상위 (실측) */
+export const troubleRanking = (reviews: DashboardReview[], mine: Product[]) => mine
+  .map((p) => {
+    const stats = reviewStats(reviews, p.product_id, mine);
+    return {
+      product: p,
+      irritationRate: stats.irritationRate,
+      troubleRate: stats.troubleRate,
+      sampleSize: stats.withText,
+    };
+  })
+  .sort((a, b) => b.troubleRate + b.irritationRate - (a.troubleRate + a.irritationRate));
 
 /* ---------- 성분 분석 (실측) ---------- */
 
@@ -232,6 +325,31 @@ export interface IngredientGapRow {
   gap: boolean;
   /** 보유하지만 전부 미량(위치가중 ≤ 0.3) */
   minor: boolean;
+}
+
+export interface SkinReviewRow {
+  type: string;
+  n: number;
+  avgRating: number;
+  irritationRate: number;
+}
+
+/**
+ * 피부 타입별 평점·자극 언급. 리뷰어 skin_type 은 원천에 있어 전부 실측이다.
+ * 같은 상품이 건성 4.6 / 지성 3.4 처럼 갈리면 타깃 문구를 갈라 쓸 근거다 (명세 R1·R2).
+ */
+export function reviewsBySkinType(reviews: DashboardReview[], productId: string | null, mine: Product[]): SkinReviewRow[] {
+  const scoped = scopeReviews(reviews, productId, mine);
+  return ['dry', 'oily', 'combination', 'normal'].map((type) => {
+    const rows = scoped.filter((r) => r.skin_type === type);
+    const texts = rows.filter((r) => r.review_text);
+    return {
+      type,
+      n: rows.length,
+      avgRating: rows.length === 0 ? 0 : rows.reduce((s, r) => s + r.rating, 0) / rows.length,
+      irritationRate: texts.length === 0 ? 0 : texts.filter((r) => IRRITATION_PATTERN.test(r.review_text as string)).length / texts.length,
+    };
+  });
 }
 
 /* ---------- 막히는 곳 보조 (모의) ---------- */

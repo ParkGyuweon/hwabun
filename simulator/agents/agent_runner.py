@@ -101,11 +101,32 @@ MODEL = "gpt-4.1-nano"          # 실측 5/5 통과. 1회 0.6 크레딧
 # 에이전트가 쓸 수 있는 행동. 여기 없는 것을 답하면 그 턴은 버린다.
 ACTIONS = ("click_product", "scroll", "quick_look", "add_to_cart",
            "wishlist_toggle", "remove_from_cart", "back_to_list", "leave",
-           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback")
-# 피드백 축 — 백엔드 FeedbackController.FEEDBACK_AXES 와 같은 다섯. 계약이 고정 목록이라
-# 지어내면 400 이다. 화면(FeedbackPanel)의 라벨로 고르게 하고 여기서 되옮긴다.
-FEEDBACK_AXES = {"효과": "efficacy", "발림성": "texture", "향": "scent",
-                 "용기·포장": "packaging", "가격": "value"}
+           "sort_list", "checkout", "click_banner", "buy_now", "write_feedback", "select_text")
+# 피드백 축 — **계약 파일에서 읽는다.** 베껴 두면 조용히 어긋난다 (Jira 367).
+# 09-19 실측: 러너가 "효과·발림성·가격" 을 들고 있었는데 계약·화면은 "효능·사용감·용량·가격" 이라
+# 다섯 중 셋이 안 맞았다. 러너는 이 라벨로 button[aria-label="…"] 을 찾으므로 못 찾으면 예외가
+# 나고 write_feedback 이 None 을 돌려주며 조용히 넘어간다. 그래서 shop_backend feedback 테이블에
+# 에이전트가 남긴 행이 한 건도 없었다 — 러너 로그에는 아무 표시도 안 났다.
+# 화면 버튼의 aria-label 은 contracts/feedback-category-vocab.json 의 axes[].label 이고
+# (frontend/src/types/feedback.ts 가 그 파일을 그대로 import 한다), 서버가 받는 값은 axes[].id 다.
+FEEDBACK_AXES_PATH = os.path.join(ROOT, "contracts", "feedback-category-vocab.json")
+# 계약 파일을 못 읽을 때만 쓰는 대체값 (2026-09-19 기준). 여기도 계약과 같아야 한다
+FEEDBACK_AXES_FALLBACK = {"효능": "efficacy", "사용감": "texture", "향": "scent",
+                          "용기·포장": "packaging", "용량·가격": "value"}
+
+
+def load_feedback_axes(path=FEEDBACK_AXES_PATH):
+    """{화면 라벨: 서버 축 id}. 파일이 없거나 모양이 다르면 대체값."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            axes = json.load(f).get("axes") or []
+        got = {str(a["label"]): str(a["id"]) for a in axes if a.get("label") and a.get("id")}
+        return got or dict(FEEDBACK_AXES_FALLBACK)
+    except Exception:
+        return dict(FEEDBACK_AXES_FALLBACK)
+
+
+FEEDBACK_AXES = load_feedback_axes()
 FEEDBACK_MAX_CHARS = 280
 # 피드백은 구매와 무관하다 (사용자 결정 09-17). 안 산 사람의 의견이 판매자에게는 더 아플 때가
 # 많다. 그래서 둘러보는 중에도 남길 수 있게 행동 목록에 둔다.
@@ -182,7 +203,7 @@ def default_simulation_run_id(now=None):
     return f"run_{ts.strftime('%Y%m%dT%H%M%SZ')}"
 
 
-def entry_url(base, scenario_id, simulation_run_id, product_id=None):
+def entry_url(base, scenario_id, simulation_run_id, product_id=None, persona_id=None):
     """프론트 진입 주소에 synthetic 표시를 붙인다.
 
     프론트 로거는 **개발 서버에서만** 이 파라미터를 인정한다. 배포 화면에서도
@@ -203,6 +224,12 @@ def entry_url(base, scenario_id, simulation_run_id, product_id=None):
         # 프론트가 이미 지원하는 진입 경로다 (App.tsx initialProductId).
         # 검색·광고로 상세에 바로 떨어지는 실제 유입에 해당한다
         query["product"] = product_id
+    if persona_id:
+        # **첫 렌더부터 주인을 정한다** (App.tsx requestedPersonaId, dev 10dd3b3).
+        # 이게 없으면 App.tsx 가 personas[0](PA00001) 로 시작하고, 딥링크 상세의
+        # product_view 가 그 사람 몫으로 찍혀 게이트에 버려진다. 담기는 전환 뒤라 살아남아
+        # 마트에서 add_to_cart_sessions > detail_view_sessions 가 된다 (Jira 372).
+        query["persona"] = persona_id
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
@@ -882,7 +909,7 @@ def parse_action(text):
     return obj if isinstance(obj, dict) and obj.get("action") else None
 
 
-def ask(client, system, user, cache_on, dry):
+def ask(client, system, user, cache_on, dry, expect_action=True):
     """LLM 에게 다음 행동을 묻는다.
 
     dry=True 면 호출하지 않고 프롬프트만 보여준다 (크레딧 0).
@@ -894,6 +921,8 @@ def ask(client, system, user, cache_on, dry):
         print("─" * 70)
         print(user)
         print("─" * 70)
+        if not expect_action:
+            return {"rating": 5, "axis": "향", "body": "(dry-run) " + "샘플 " * 6}, 0
         return {"action": "scroll", "target": None, "reason": "(dry-run)"}, 0
 
     key = hashlib.md5((system + "\x00" + user).encode()).hexdigest()
@@ -930,7 +959,10 @@ def ask(client, system, user, cache_on, dry):
         why = "토큰 잘림" if finish == "length" else "파싱 실패"
         print(f"       [{why}] {txt[:110]}")
         return None, 1
-    if obj.get("action") not in ACTIONS:
+    # 행동을 묻는 호출만 action 을 검사한다. 리뷰·피드백은 {"rating"/"axis", "body"} 를
+    # 받으므로 action 이 없다 — 예전에는 여기서 무조건 거절돼 **한 번도 성공한 적이 없다**
+    # (Jira 361). 글을 받는 호출은 expect_action=False 로 부른다.
+    if expect_action and obj.get("action") not in ACTIONS:
         print(f"       [모르는 action] {obj.get('action')!r}")
         return None, 1
     if cache_on:
@@ -1060,18 +1092,23 @@ def _wait_order_done(page, timeout_ms=15000):
 def _place_and_survey(page):
     """주문 확인 단계 → 주문 완료(place_order) → 구매 사유 설문. checkout 과 buy_now 가 같이 쓴다 (Jira 321·333).
     ?pay=test 자동 판별(프론트 09-16)로 러너는 결제창 없이 PAID 로 간다."""
-    place = page.locator('[data-log-action="place_order"]')
-    if not place.count() or not click_safe(place.first, page):
-        page.go_back(); page.wait_for_timeout(800)
-        return False
-    # 서버 주문 + PAID 표시. 로그인이 없거나 서버가 거절하면 완료 화면 대신 오류 문구가 남는다.
-    #
-    # **설문 절 하나로 판정하지 않는다.** `purchase_survey` 는 CartPage 의 완료 화면에서만
-    # 그려지는데(CartPage.tsx), buy_now 는 상세에서 바로 사는 경로라 거기에 닿지 않는다.
-    # 그래서 주문이 PAID 로 끝나도 실패로 찍혔고, `if okd` 안에 있는 주문 직후 단계
-    # (피드백·리뷰)가 아예 안 돌았다 — 실측 4건 전부 (Jira 360).
-    if not _wait_order_done(page):
-        return False                             # 결제까지 못 갔다 — purchase 이벤트도 없다
+    # **buy_now 는 주문 확인 단계를 건너뛴다.** 상세에서 바로 누르면 프론트가 그 자리에서
+    # POST /api/orders (201) → /pay (200) 까지 하고 완료 화면으로 넘어간다 (배포본 실측
+    # 2026-09-18). 그래서 place_order 버튼이 아예 없다. 예전에는 그 버튼이 없으면 곧바로
+    # go_back + False 였고, 완료 화면이 눈앞에 있는데도 주문을 실패로 셌다. 그 때문에
+    # `if okd` 안에 있는 주문 직후 단계(피드백·리뷰)가 통째로 안 돌았다 (Jira 361).
+    if not _wait_order_done(page, timeout_ms=2000):
+        place = page.locator('[data-log-action="place_order"]')
+        if not place.count() or not click_safe(place.first, page):
+            page.go_back(); page.wait_for_timeout(800)
+            return False
+        # 눌렀으면 서버 주문 + PAID 표시를 기다린다. 로그인이 없거나 서버가 거절하면
+        # 완료 화면 대신 오류 문구가 남는다.
+        #
+        # **완료 판정을 한 셀렉터에 걸지 않는다.** `purchase_survey` 는 CartPage 의 완료
+        # 화면에만 있어서, 그것만 보면 다른 경로가 통째로 실패로 찍힌다 (Jira 360).
+        if not _wait_order_done(page):
+            return False                         # 결제까지 못 갔다 — purchase 이벤트도 없다
     page.wait_for_timeout(random.randint(1200, 3000))       # 완료 화면을 읽는 시간
     chips = page.locator('[data-log-action="purchase_reason_toggle"]')
     if chips.count() and random.random() < SURVEY_ANSWER_P:
@@ -1189,7 +1226,7 @@ def write_review(page, client, persona, cache_on, dry):
         "별점은 실제 만족도대로. 다 5점을 주지 않는다.",
         "본문은 %d자 이내, %d자 이상." % (REVIEW_MAX_CHARS, REVIEW_MIN_CHARS),
     ])
-    obj = ask(client, sys_p, usr_p, cache_on, dry)
+    obj, _used = ask(client, sys_p, usr_p, cache_on, dry, expect_action=False)
     if not obj:
         return None
     try:
@@ -1248,15 +1285,17 @@ def write_feedback(page, client, persona, product_name, cache_on, dry):
     축은 계약 고정 목록이다. 지어내면 백엔드가 400 을 준다. 화면 라벨로 고르게 하고
     FEEDBACK_AXES 로 되옮긴다.
 
-    돌려주는 것: 보냈으면 (축 id, 글), 못 보냈으면 None.
+    돌려주는 것: `(결과, 이유)`. 보냈으면 `((축 id, 글), "")`, 못 보냈으면 `(None, 이유)`.
+    **이유를 반드시 돌려준다.** 예전에는 None 하나만 줘서 축 라벨이 화면과 어긋난 채로
+    한 달 가까이 0건이 나가는 동안 아무 표시도 안 났다 (Jira 367).
     """
     panel = page.locator(".feedback")
     if panel.count() == 0:
-        return None
+        return None, "패널 없음"
     try:
         panel.first.scroll_into_view_if_needed(timeout=4000)
     except Exception:
-        return None
+        return None, "패널이 안 보임"
 
     labels = list(FEEDBACK_AXES)
     concerns = ", ".join(persona.get("concerns") or []) or "없음"
@@ -1272,32 +1311,99 @@ def write_feedback(page, client, persona, product_name, cache_on, dry):
         "고를 수 있는 주제: %s" % " / ".join(labels),
         "본문은 %d자 이내." % FEEDBACK_MAX_CHARS,
     ])
-    obj = ask(client, sys_p, usr_p, cache_on, dry)
+    obj, _used = ask(client, sys_p, usr_p, cache_on, dry, expect_action=False)
     if not obj:
-        return None
+        return None, "LLM 응답 없음"
     label = str(obj.get("axis") or "").strip()
     body = str(obj.get("body") or "").strip()[:FEEDBACK_MAX_CHARS]
-    if label not in FEEDBACK_AXES or len(body) < 10:
-        return None
+    if label not in FEEDBACK_AXES:
+        return None, "축 밖 라벨 %r" % label
+    if len(body) < 10:
+        return None, "본문이 너무 짧음"
 
+    # 라벨이 화면 버튼과 어긋나면 여기서 갈린다. 계약에서 읽은 라벨이니 어긋나면 화면이 바뀐 것
+    axis_btn = panel.locator('button[aria-label="%s"]' % label).first
+    if axis_btn.count() == 0:
+        return None, "화면에 없는 축 버튼 %r (계약 %s)" % (label, os.path.basename(FEEDBACK_AXES_PATH))
     try:
-        panel.locator('button[aria-label="%s"]' % label).first.click(timeout=4000)
+        axis_btn.click(timeout=4000)
         page.wait_for_timeout(random.randint(200, 700))
         page.fill("#feedback-body", body, timeout=4000)
         page.wait_for_timeout(random.randint(400, 1500))     # 쓰고 잠깐 읽어 보는 시간
         btn = panel.locator("button.feedback__submit").first
         if btn.is_disabled():
-            return None
+            return None, "보내기 버튼이 잠김"
         btn.click(timeout=4000)
         page.wait_for_timeout(random.randint(600, 1600))
+    except Exception as e:
+        return None, "조작 실패 %s" % type(e).__name__
+    # 화면이 오류를 적었으면 서버가 거절한 것이다 (401 로그인 · 409 같은 축 중복)
+    err = panel.locator(".feedback__error, .feedback__send-error").first
+    try:
+        if err.count() and (err.inner_text(timeout=1000) or "").strip():
+            return None, "서버 거절: %s" % err.inner_text(timeout=1000).strip()[:60]
     except Exception:
-        return None
-    return FEEDBACK_AXES[label], body
+        pass
+    return (FEEDBACK_AXES[label], body), ""
 
 
 def do_action(page, act, target, scroll_center=None):
     """LLM 이 고른 행동을 실제 DOM 조작으로 옮긴다. 성공하면 True"""
     a = act
+
+    if a == "select_text":
+        # 성분 섹션의 글을 긁는다. 프론트 useTextSelection 이 selectionchange 를 350ms
+        # 디바운스해서 text_selection 을 남긴다 — 진짜 마우스 드래그가 아니어도 잡힌다.
+        # 성분을 중요시하는 사람이 성분명을 긁어 보는 행동이고, 대시보드의 "드래그 TOP 10"
+        # 과 처방 문장이 이 값을 읽는다 (Jira 363).
+        sec = page.locator('[data-log-section="ingredients"]')
+        if not sec.count():
+            return False
+        try:
+            sec.first.scroll_into_view_if_needed(timeout=4000)
+            page.wait_for_timeout(random.randint(400, 1200))   # 눈으로 훑는 시간
+            # **아코디언을 먼저 편다.** 접혀 있으면 성분 칩이 DOM 에 없어서 머리글 글자를
+            # 긁게 되고, 그러면 어휘집에 안 걸려 matched_count 가 0 이 된다 (실측).
+            tog = sec.first.locator('[data-log-action="accordion_toggle"]')
+            if tog.count() and tog.first.get_attribute("aria-expanded") == "false":
+                click_safe(tog.first, page)
+                page.wait_for_timeout(random.randint(500, 1100))
+            # **성분 이름 하나를 통째로 긁는다.** 무작위 부분 문자열로 자르면 어휘집에
+            # 안 걸려 matched_count 가 0 이 되고, 대시보드의 드래그 TOP 10 은 어휘집에
+            # 맞은 것만 세므로 화면에 아무것도 안 뜬다 (실측에서 확인).
+            ok = sec.first.evaluate("""(el) => {
+              const items = el.querySelectorAll('.chip-list li');
+              let node = null;
+              if (items.length) {
+                node = items[Math.floor(Math.random() * items.length)];
+              } else {
+                const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                const parts = [];
+                let n;
+                while ((n = walk.nextNode())) {
+                  if (n.textContent && n.textContent.trim().length > 3) parts.push(n.parentElement);
+                }
+                if (!parts.length) return false;
+                node = parts[Math.floor(Math.random() * parts.length)];
+              }
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              return sel.toString().trim().length >= 2;
+            }""")
+            if not ok:
+                return False
+            page.wait_for_timeout(700)          # 디바운스(350ms)를 넘긴다
+            # 긁은 김에 복사까지 하는 사람이 있다. 복사는 더 무거운 관심 신호다
+            if random.random() < 0.3:
+                page.keyboard.press("Control+C")
+                page.wait_for_timeout(random.randint(200, 600))
+        except Exception:
+            return False
+        return True
+
 
     if a == "scroll":
         # 바닥에 닿았으면 위로 올린다. 아래로만 굴리면 화면이 안 바뀌어
@@ -1565,6 +1671,9 @@ def allowed_actions(kind, pct, scroll_run, carted_here, has_more=False,
             acts.insert(1, "buy_now")
         if scroll_run < DETAIL_MAX_SCROLL:    # 다 읽었으면 더는 못 내린다
             acts.append("scroll")
+        # 성분을 긁어 보는 행동. 상세에서는 늘 열어 둔다 — 성분을 중요시하는 사람이
+        # 고르고, 그렇지 않은 사람은 안 고른다. 대시보드의 드래그 TOP 10 이 이 값이다
+        acts.append("select_text")
         # 찜은 상품당 한 번만 연다. 계속 열어두면 담기 대신 찜만 반복한다
         if not wished_here:
             acts.append("wishlist_toggle")
@@ -1722,6 +1831,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
     peeked = []              # 요약만 열어본 상품. 같은 카드를 다시 열지 않게 한다
     quick_looks = 0          # 요약 열어본 횟수. 상한을 넘으면 상세로 가야 한다
     feedbacks = 0            # 산 뒤에 남긴 의견 수
+    feedback_failed = 0      # 시도했는데 못 남긴 횟수. 0건이 조용히 지나가지 않게 센다 (Jira 367)
     scroll_run = 0           # 연속 스크롤 횟수. 상세에서 결정을 강제하는 데 쓴다
     here = ""                # 지금 상세를 보고 있는 상품
     broken = 0
@@ -1869,13 +1979,17 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
             # do_action 은 DOM 조작만 한다. 의견은 글을 쓰려고 LLM 을 한 번 더 부르므로 여기서 처리한다.
             # **집계(done/failed)와 history 보다 앞이어야 한다** — 뒤에 두면 성공해도 실패로 세고
             # 다음 턴 프롬프트가 "(실패)" 라는 틀린 사실을 본다.
-            got = None
+            got, why = None, "LLM 클라이언트 없음"
             if client:
                 try:
-                    got = write_feedback(page, client, persona, here or "이 제품", cache_on, dry)
-                except Exception:
-                    got = None
+                    got, why = write_feedback(page, client, persona, here or "이 제품", cache_on, dry)
+                except Exception as e:
+                    got, why = None, "예외 %s" % type(e).__name__
             okd = bool(got)
+            if not okd:
+                feedback_failed += 1
+                if verbose:
+                    print(f"       [의견 못 남김] {why}")
             if okd:
                 calls += 1
                 feedbacks += 1
@@ -1935,14 +2049,18 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=15000)
                     page.wait_for_timeout(random.randint(600, 1800))
-                    got = write_feedback(page, client, persona, name, cache_on, dry)
-                except Exception:
-                    got = None
+                    got, why = write_feedback(page, client, persona, name, cache_on, dry)
+                except Exception as e:
+                    got, why = None, "예외 %s" % type(e).__name__
                 if got:
                     calls += 1
                     feedbacks += 1
                     if verbose:
                         print(f"        의견 남김 [{got[0]}] {got[1][:40]}")
+                else:
+                    feedback_failed += 1
+                    if verbose:
+                        print(f"        의견 못 남김 — {why}")
             # ── 산 뒤에 리뷰 쓰기 ──────────────────────────────────────────
             # 리뷰도 **행동이 아니라 주문 직후 단계**다. 행동으로 두면 절대 실행되지 않는다 —
             # 선택지에 오르는 조건이 `purchased >= 1` 인데 주문하면 바로 아래에서 break 로
@@ -1963,7 +2081,7 @@ def run_one(page, client, persona, max_turns, cache_on, dry, verbose, script=Non
         if dry:
             break                                # 프롬프트 확인용이므로 한 턴만
     return dict(calls=calls, done=done, failed=failed, carted=carted, purchased=purchased,
-                feedbacks=feedbacks,
+                feedbacks=feedbacks, feedback_failed=feedback_failed,
                 banner_clicks=banner_clicks, broken=broken, reviewed=reviewed)
 
 
@@ -2006,6 +2124,10 @@ def run_parallel(a):
         argv += ["--post", a.post, "--post-timeout", str(a.post_timeout)]
     if a.script:
         argv += ["--script", a.script]
+    if a.product:
+        argv += ["--product", a.product]
+    if a.min_details is not None:
+        argv += ["--min-details", str(a.min_details)]
     if a.checkout:
         argv.append("--checkout")
     if not a.banner:
@@ -2100,6 +2222,11 @@ def main():
                     help="종류 필터를 코드로 강제 — 목록에 내 종류 카드가 보이면 그것만 보여 준다 (Jira 241)")
     ap.add_argument("--debug-screen", action="store_true",
                     help="매 턴 화면 판정과 선택지를 찍는다 (행동이 왜 열렸는지 볼 때)")
+    ap.add_argument("--product", default=None, metavar="PRODUCT_ID",
+                    help="전원이 이 상품 상세에서 시작한다 (재구매 시연용, Jira 362). 예) SB000001")
+    ap.add_argument("--min-details", type=int, default=None, metavar="N",
+                    help="구매·이탈이 열리는 상세 조회 수 문턱 (기본 3). --product 로 상품을 "
+                         "못박고 바로 사게 할 때 1 로 낮춘다 — 시연 데이터 생성 전용 (Jira 362)")
     ap.add_argument("--entry", choices=("auto", "list", "detail"), default="auto",
                     help="시작 화면을 고정한다. 기본 auto 는 페르소나마다 무작위 "
                          "(리허설에서 특정 동선을 재현할 때 쓴다)")
@@ -2120,9 +2247,13 @@ def main():
     ap.add_argument("--post-timeout", type=int, default=40,
                     help="수집 API 응답 대기 초. Kafka 가 없으면 25초쯤 뒤 503 이 온다")
     a = ap.parse_args()
-    global CHECKOUT_ENABLED, BANNER_VISIBLE
+    global CHECKOUT_ENABLED, BANNER_VISIBLE, MIN_DETAILS_BEFORE_LEAVE
     CHECKOUT_ENABLED = bool(a.checkout)
     BANNER_VISIBLE = bool(a.banner)
+    if a.min_details is not None:
+        # 문턱은 모듈 전역이라 여기서 갈아 끼운다. 평가용 실행에서는 쓰지 않는다 —
+        # "사람은 몇 개는 보고 산다" 는 전제가 깨진다
+        MIN_DETAILS_BEFORE_LEAVE = a.min_details
     global PREFER_CATEGORY, PREFER_STRICT, PREFER_FILTER
     PREFER_FILTER = a.prefer_filter
     PREFER_STRICT = a.prefer_strict
@@ -2202,8 +2333,10 @@ def main():
         print(f"판단 근거 {dec_path}")
 
     from playwright.sync_api import sync_playwright
+    # run_one 이 돌려주는 key 는 전부 여기 있어야 한다 — 없으면 아래 합산 루프가 조용히 버린다.
+    # feedbacks 가 빠져 있어서 "의견 0건" 이 요약에 한 번도 안 찍혔다 (Jira 367)
     tot = dict(calls=0, done=0, failed=0, carted=0, purchased=0, banner_clicks=0, broken=0,
-               reviewed=0)
+               reviewed=0, feedbacks=0, feedback_failed=0)
     t0 = time.time()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -2227,15 +2360,27 @@ def main():
             deep = catalog and rng.random() < DEEP_LINK_P
             if a.entry != "auto":
                 deep = a.entry == "detail"
+            # --product 로 상품을 못박으면 전원이 그 상세에서 시작한다. 재구매 시연에 쓴다 —
+            # 재구매 마트 key 에 simulation_run_id 가 있어(dw-schema §4.15) 같은 run_id 로 두 번
+            # 돌려야 한 사람의 두 구매가 묶이는데, 어떤 상품을 살지는 LLM 이 정해서 같은 상품을
+            # 두 번 사게 만들 방법이 없었다 (Jira 362).
+            pinned = a.product or None
+            # 주소로 사람을 정해서 들어간다. 딥링크(상세로 바로)는 첫 화면이 곧 상품 상세라
+            # 전환을 기다릴 여유가 없다 — 주소에 안 실으면 그 상세 조회가 버려진다 (Jira 372).
             entry = entry_url(a.url, a.scenario_id, simulation_run_id,
-                              product_id=rng.choice(catalog) if deep else None)
+                              product_id=pinned or (rng.choice(catalog) if deep else None),
+                              persona_id=p["persona_id"])
 
             page.goto(entry, wait_until="networkidle")
+            # 주소로 정해졌으면 첫 화면부터 이 사람 로그다. 확인하고 게이트를 먼저 연다 —
+            # 확인 없이 열면 프론트가 파라미터를 무시했을 때 남의 로그를 주워 담는다
+            if persona_matches(page, p["persona_id"]):
+                gate["persona_id"] = p["persona_id"]
 
             # 딥링크로 들어간 상세가 렌더되지 않으면 목록으로 되돌린다.
             # AboutProduct.tsx 크래시는 2026-09-02 고쳐졌다. 이 방어는 이제
             # 대부분 놀지만, 놀고 있다는 것 자체가 확인이라 남긴다
-            if deep and not page.locator('[data-log-action="add_to_cart"]').count():
+            if (deep or pinned) and not page.locator('[data-log-action="add_to_cart"]').count():
                 print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
                 page.goto(LIST_URL, wait_until="networkidle")
                 page.wait_for_timeout(800)
@@ -2281,7 +2426,10 @@ def main():
     dt = time.time() - t0
     print()
     print("=" * 60)
-    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건 / 배너 클릭 {tot['banner_clicks']}건 / 리뷰 {tot['reviewed']}건")
+    print(f"  실행 {tot['done']}건 / 실패 {tot['failed']}건 / 장바구니 {tot['carted']}건 / 주문 {tot['purchased']}건"
+          f" / 배너 클릭 {tot['banner_clicks']}건 / 리뷰 {tot['reviewed']}건 / 의견 {tot['feedbacks']}건")
+    if tot.get("feedback_failed"):
+        print(f"  ⚠ 의견을 못 남긴 시도 {tot['feedback_failed']}회 — 이유는 --verbose 로 보입니다")
     if tot.get("broken"):
         print(f"  ⚠ 화면이 비어 복구한 횟수 {tot['broken']}회"
               f" — AboutProduct.tsx 크래시는 2026-09-02 고쳐졌으므로 다른 원인입니다")
@@ -2574,6 +2722,22 @@ def login_member(page, persona_id):
         return True
     except Exception:
         return False
+
+
+def persona_matches(page, persona_id):
+    """주소로 정한 페르소나가 첫 화면에 실제로 적용됐는지 본다 (Jira 372).
+
+    스위처 라벨은 피부 타입·톤만 보여 주고 persona_id 는 아바타에 **끝 두 자리**로만 나온다
+    (PersonaSwitcher.tsx `persona__avatar` = `persona_id.slice(-2)`). 러너가 쓰는
+    PA00001~PA00100 은 끝 두 자리가 서로 달라 이 비교로 충분하다.
+
+    확인 없이 게이트를 열면 프론트가 `?persona=` 를 무시했을 때 남의 로그를 주워 담는다.
+    """
+    try:
+        shown = (page.locator(".persona__avatar").first.inner_text(timeout=2000) or "").strip()
+    except Exception:
+        return False
+    return bool(shown) and shown == persona_id[-2:]
 
 
 def switch_persona(page, persona_id):

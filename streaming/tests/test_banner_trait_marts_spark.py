@@ -175,7 +175,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
         self.assertEqual(1, row["cross_brand_entry_sessions"])
 
     def test_banner_daily_grain_carries_all_five_execution_axes(self):
-        """배너 Mart 도 같은 sweep 잔여분이었다 (Jira 324).
+        """배너 Mart 도 같은 sweep 잔여분이었다.
 
         cross_brand_daily 와 상황이 같다 — 구현돼 있는데 4축으로 남아 있어
         PC 로그와 PA 로그가 한 행에 합쳐진다.
@@ -219,7 +219,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
             self.assertIn(axis, set(result.columns))
 
     def test_generator_types_do_not_merge_into_one_row(self):
-        """PC 로그와 PA 로그가 한 행에 합쳐지면 안 된다 (Jira 324).
+        """PC 로그와 PA 로그가 한 행에 합쳐지면 안 된다.
 
         actor_type 은 둘 다 synthetic 이라 그것만으로는 구분이 안 된다
         (dw-schema.md §2 · persona-schema.md §9). 커밋 82afffe 가 실행 축을
@@ -251,7 +251,7 @@ class BannerTraitMartsSparkTest(unittest.TestCase):
                 self.assertEqual(1, row["cross_brand_entry_sessions"])
 
     def test_grain_carries_all_five_execution_axes(self):
-        """grain 이 다른 Mart 와 같은 실행 축 5종이어야 한다 (Jira 324)."""
+        """grain 이 다른 Mart 와 같은 실행 축 5종이어야 한다."""
         events = self._cross_brand_events([
             ("a1", "S1", 1, "product_view", "P-A", "A", "{}"),
             ("b1", "S1", 2, "product_view", "P-B", "B", "{}"),

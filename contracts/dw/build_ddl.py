@@ -284,7 +284,7 @@ GRAINS = {
 #
 # 비율 컬럼은 빼지 않는다. 분모 규칙이 계약에만 있어서, 소비자가 count 에서 다시
 # 나누면 분모를 틀릴 수 있다. 실제로 그 실수가 났다 — product_daily_kpi 의
-# add_to_cart_rate 가 1,248행 중 323행에서 1.0 을 넘었고 원인이 분모였다 (Jira 277).
+# add_to_cart_rate 가 1,248행 중 323행에서 1.0 을 넘었고 원인이 분모였다.
 # 값으로 실어 보내는 것이 규칙을 전달하는 방법이다.
 EXCLUDED_COLUMNS = {
     ("product_daily_kpi", "revenue_amount"):

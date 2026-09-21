@@ -175,7 +175,7 @@ class ContentMartSparkTest(unittest.TestCase):
         """분자를 분모 모집단으로 제한한다 (§4.4).
 
         Quick Look 으로 상세를 연 세션은 콘텐츠를 읽고도 퍼널의 product_view 에
-        없다. 제한하지 않으면 비율이 1.0 을 넘는다 — Jira 277 에서 실제로 났던
+        없다. 제한하지 않으면 비율이 1.0 을 넘는다 — 실제로 났던
         분자·분모 모집단 불일치와 같은 유형이다.
         """
         rows = self._content_df([
@@ -217,6 +217,27 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(3, row["section_view_count"])
         self.assertEqual(2, row["section_view_sessions"])
         self.assertEqual(2000.0, row["avg_dwell_ms_per_session"])
+
+    def test_sessions_without_a_view_are_not_counted_as_viewers(self):
+        """조회 없이 체류·드래그만 남긴 세션은 "본 세션" 이 아니다.
+
+        세면 section_view_sessions > section_view_count 가 되어 화면에 "본 사람이
+        조회 수보다 많다" 가 뜬다. 운영 마트에서 성분 줄이 조회 23,285 · 세션
+        26,715 로 나온 것이 이 모양이다 (§4.4).
+        """
+        rows = self._content_df([
+            self._content("S1", "ingredient_list", views=1),
+            self._content("S2", "ingredient_list", views=0),
+        ])
+        funnel = self._funnel_df([self._session("S1"), self._session("S2")])
+
+        row = _content_daily_kpi(rows, funnel, "Asia/Seoul").collect()[0]
+
+        self.assertEqual(1, row["section_view_count"])
+        self.assertEqual(1, row["section_view_sessions"])
+        self.assertLessEqual(
+            row["section_view_sessions"], row["section_view_count"]
+        )
 
     def test_matched_ingredients_are_counted_not_listed(self):
         rows = self._content_df([self._content("S1", "ingredient_list")])
@@ -431,7 +452,7 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(result.count(), result.select(*key).distinct().count())
 
 
-    # ── 겹침 제외 체류 (Jira 338) ──────────────────────────────────────
+    # ── 겹침 제외 체류 ──────────────────────────────────────
     def test_co_visible_sum_is_aggregated_alongside_the_total(self):
         """총합과 겹침 제외 합계를 나란히 낸다. 총합을 대체하지 않는다 (§4.4)."""
         content = self._content_df([
@@ -473,7 +494,7 @@ class ContentMartSparkTest(unittest.TestCase):
         self.assertEqual(1000, row["co_visible_le2_dwell_ms_sum"])
 
 
-    # ── 성분·리뷰 세션의 0 채우기 (Jira 336) ───────────────────────────
+    # ── 성분·리뷰 세션의 0 채우기 ───────────────────────────
     def test_non_matching_content_kinds_report_zero_not_null(self):
         """cta·price 같은 행은 성분 집계에 짝이 없어 조인이 NULL 을 낸다.
 

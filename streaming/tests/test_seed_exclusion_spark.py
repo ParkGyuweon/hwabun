@@ -9,6 +9,7 @@ except ImportError:  # Spark integration runs in the project Spark image.
 
 from streaming.jobs.build_marts_job import (
     EXECUTION_AXES,
+    _product_daily_kpi,
     _observed_events,
     build_mart_frames,
 )
@@ -50,7 +51,7 @@ class SeedExclusionSparkTest(unittest.TestCase):
     """시드 Event는 주입된 선호 표식이라 행동 Mart 집계에서 빠져야 한다.
 
     긍정 시드는 조회 없이 담기만, 부정 시드는 담기 없는 조회를 낸다. 그대로 두면
-    전환 지표의 분자와 분모를 양방향으로 왜곡한다 (Jira 235 실행 검증: 전체 세션의
+    전환 지표의 분자와 분모를 양방향으로 왜곡한다 (실행 검증: 전체 세션의
     57%가 시드였고 brand_daily 876행 중 603행이 담기 > 조회였다).
     """
 
@@ -182,7 +183,7 @@ class SeedExclusionSparkTest(unittest.TestCase):
         호출부(build_mart_frames)에만 두면 Mart 함수를 직접 부르는 경로가 다른 값을
         낸다. Q5 의 brand_daily_is_deterministic_from_inputs 가 원본 Fact 에서
         _brand_daily_kpi 를 재계산해 대조하므로, 그 경로가 어긋나면 Mart 는 자기
-        입력으로부터 재현되지 않는다 (Jira 235 실행 검증에서 542행 불일치로 드러남).
+        입력으로부터 재현되지 않는다 (실행 검증에서 542행 불일치로 드러남).
         """
         from streaming.jobs.build_marts_job import _brand_daily_kpi
 
@@ -280,6 +281,37 @@ class SeedExclusionSparkTest(unittest.TestCase):
         )
         if funnel["click_to_view_rate"] is not None:
             self.assertLessEqual(funnel["click_to_view_rate"], 1.0)
+
+    def test_no_detail_path_produces_zero_not_null_funnel_counts(self):
+        """상세 진입이 없는 grain도 projection용 count 세 개는 0이어야 한다."""
+
+        frames = build_mart_frames(
+            self._empty_sessionized(),
+            self._product_fact([
+                self._event("i1", "product_impression", "S1", False, 1),
+                self._event("c1", "product_click", "S1", False, 2),
+            ]),
+            "Asia/Seoul",
+        )
+
+        funnel = frames["funnel_daily_kpi"].first()
+        self.assertEqual(0, funnel["direct_click_sessions"])
+        self.assertEqual(0, funnel["direct_click_cart_sessions"])
+        self.assertEqual(0, funnel["click_through_detail_sessions"])
+
+    def test_product_currency_representative_is_deterministic(self):
+        """혼입은 Q5 실패 대상이지만 대표값은 입력 순서에 따라 바뀌지 않는다."""
+
+        krw = self._event("v1", "product_view", "S1", False, 1)
+        usd = self._event("v2", "product_view", "S2", False, 2)
+        krw["currency"] = "KRW"
+        usd["currency"] = "USD"
+
+        forward = _product_daily_kpi(self._product_fact([usd, krw])).first()
+        reverse = _product_daily_kpi(self._product_fact([krw, usd])).first()
+
+        self.assertEqual("KRW", forward["currency"])
+        self.assertEqual(forward["currency"], reverse["currency"])
 
     def test_seed_rows_stay_out_of_the_funnel_fact(self):
         product_fact = self._product_fact(

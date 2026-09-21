@@ -8,6 +8,7 @@ status 1 when a pipeline invariant is broken.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from dataclasses import dataclass
@@ -58,6 +59,33 @@ DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
 DEFAULT_CROSS_BRAND_DAILY_PATH = "data/marts/cross_brand_daily"
 DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
+
+# validate_frames 의 이름과 contracts/dw/build_ddl.py 의 Mart 이름을 한 곳에서
+# 연결한다. 이 22종이 MySQL projection allowlist와 같은 범위다.
+PROJECTION_MART_FRAMES = {
+    "product_daily_kpi": "product_daily",
+    "brand_daily_kpi": "brand_daily",
+    "funnel_daily_kpi": "funnel_daily",
+    "persona_segment_daily_kpi": "persona_segment_daily",
+    "brand_price_band_daily_kpi": "price_band_daily",
+    "product_repurchase_daily": "product_repurchase",
+    "brand_repurchase_daily": "brand_repurchase",
+    "purchase_reason_daily": "purchase_reason",
+    "ingredient_weekly_interest": "ingredient_weekly",
+    "product_exit_daily": "product_exit_daily",
+    "segment_content_daily": "segment_content_daily",
+    "friction_daily": "friction_daily",
+    "exit_daily": "exit_daily",
+    "entry_source_daily": "entry_source_daily",
+    "content_daily_kpi": "content_daily",
+    "content_conversion_daily": "content_conversion",
+    "behavior_conversion_daily": "behavior_conversion",
+    "event_daily": "event_daily",
+    "segment_price_band_daily_kpi": "segment_price_band",
+    "brand_cohort_dim": "brand_cohort",
+    "commons_cohort_weekly": "commons_cohort",
+    "user_trait_daily": "user_trait_daily",
+}
 
 # Mart 실행 축. build_marts_job.EXECUTION_AXES 와 같아야 한다.
 EXECUTION_AXES = (
@@ -420,8 +448,73 @@ def _duplicate_count(df: Any, columns: list[str]) -> int:
     return df.groupBy(*columns).count().where(F.col("count") > 1).count()
 
 
+def _differing_columns(
+    stored: Any, expected: Any, key_columns: list[str], columns: list[str]
+) -> str:
+    """재계산이 어긋났을 때 어느 컬럼인지 한 번의 패스로 센다.
+
+    `differing_rows` 만으로는 원인을 좁힐 수 없다 — 2026-09-20 운영 리포트가
+    `differing_rows=5824` 한 줄만 남겨 어느 컬럼이 흔들렸는지 알 수 없었다.
+    값이 흔들린 것인지 grain 이 한쪽에만 있는 것인지도 구분되지 않는다.
+
+    grain 컬럼에는 NULL 이 있다 (`brand_id`·`section_id`·`content_kind`·실행축).
+    평범한 equi-join 으로는 그 행이 한 건도 맞지 않아 "전 컬럼이 전부 어긋남"
+    으로 보인다. NULL-safe 로 맞춰야 값 차이와 grain 차이가 갈린다.
+    """
+
+    from functools import reduce
+    from pyspark.sql import functions as F
+
+    keys = [c for c in key_columns if c in columns]
+    values = [c for c in columns if c not in keys]
+    if not keys or not values:
+        return ""
+
+    left = stored.select(*columns).withColumn("_l", F.lit(1)).alias("l")
+    right = expected.select(*columns).withColumn("_r", F.lit(1)).alias("r")
+    condition = reduce(
+        lambda x, y: x & y,
+        [F.col(f"l.{name}").eqNullSafe(F.col(f"r.{name}")) for name in keys],
+    )
+    matched = F.col("_l").isNotNull() & F.col("_r").isNotNull()
+    counted = left.join(right, condition, "full_outer").agg(
+        F.sum(F.when(~matched, 1).otherwise(0)).alias("_unmatched"),
+        *[
+            F.sum(
+                F.when(
+                    matched
+                    & ~F.col(f"l.{name}").eqNullSafe(F.col(f"r.{name}")), 1
+                ).otherwise(0)
+            ).alias(name)
+            for name in values
+        ],
+    ).collect()[0].asDict()
+
+    parts: list[str] = []
+    unmatched = counted.pop("_unmatched") or 0
+    if unmatched:
+        parts.append(f"grain_only_on_one_side={unmatched}")
+    parts.extend(
+        f"{name}={count}"
+        for name, count in sorted(counted.items(), key=lambda kv: -(kv[1] or 0))
+        if count
+    )
+    return " · ".join(parts)
+
+
 EXPLORE_MIN_SAMPLE_SIZE = 100
 EXPLORE_SHARE_RANGE = (0.1, 0.3)
+
+# 세션 안에서 대응 노출이 없는 `product_click` 의 정상 범위.
+#
+# 기준선은 두 데이터셋 실측이다 — 생성기 300명 7.63%(104/1,363, AI 파트 측정),
+# e2e-336-final 8.12%(365/4,494). 생성기 가드가 grain 단위(날짜·브랜드·상품·실행축)라
+# 세션 단위 짝맞춤은 보장하지 않아서 남는 값이고, 되돌아가기·딥링크 경로가 원인이다.
+# 실사용자 트래픽은 프론트 합성으로 0 에 가까우므로 섞일수록 내려가야 정상이다.
+#
+# 검사가 아니라 경고로 둔다. 생성기가 약속한 적 없는 조건이라 실패로 잡으면 남의
+# 데이터를 틀렸다고 하는 것이 된다. 이 값을 넘으면 프론트 합성이 안 먹는 신호다.
+PRODUCT_CLICK_UNMATCHED_WARN_RATIO = 0.12
 
 
 def _banner_explore_share(impressions: Any) -> dict[str, Any]:
@@ -528,6 +621,114 @@ def _check(name: str, passed: bool, details: str) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
 
 
+IMPRESSION_EVENTS = (
+    "product_impression",
+    "recommendation_impression",
+    "banner_impression",
+)
+
+
+def _impression_origin_values() -> list[str]:
+    """`event-schema.json` 이 허용하는 `impression_origin` 값을 읽는다.
+
+    Q2·수집기는 손으로 쓴 규칙이라 이 property 를 모른다. 런타임에서 값을 보는 곳이
+    Q5 뿐이므로, 목록을 여기에 적어 두지 않고 계약 파일에서 그대로 읽는다.
+    """
+
+    path = Path(__file__).resolve().parents[2] / "contracts" / "event-schema.json"
+    with open(path, encoding="utf-8") as handle:
+        schema = json.load(handle)
+    for branch in schema.get("allOf", []):
+        names = branch.get("if", {}).get("properties", {}).get("event_name", {}).get("enum")
+        if set(names or ()) != set(IMPRESSION_EVENTS):
+            continue
+        declared = (
+            branch.get("then", {})
+            .get("properties", {}).get("properties", {})
+            .get("properties", {}).get("impression_origin", {})
+            .get("enum")
+        )
+        if declared:
+            return list(declared)
+    raise RuntimeError(f"impression_origin enum not declared for impressions: {path}")
+
+
+def _impression_origin_report(cleaned: Any) -> dict[str, Any]:
+    """노출 3종의 `impression_origin` 분포와 계약 위반 값을 센다."""
+
+    from pyspark.sql import functions as F
+
+    allowed = _impression_origin_values()
+    origin = F.get_json_object(F.col("properties_json"), "$.impression_origin")
+    rows = (
+        cleaned.where(F.col("event_name").isin(*IMPRESSION_EVENTS))
+        .select(origin.alias("impression_origin"))
+        .groupBy("impression_origin")
+        .count()
+        .collect()
+    )
+    counts = {(r["impression_origin"] or "(없음)"): r["count"] for r in rows}
+    invalid = {k: v for k, v in counts.items() if k != "(없음)" and k not in allowed}
+    return {
+        "allowed": allowed,
+        "counts": counts,
+        "invalid": invalid,
+        "invalid_rows": sum(invalid.values()),
+    }
+
+
+def _load_dw_contract_rules() -> Any:
+    """Load the DDL generator so Q5 and projection share one NULL policy."""
+
+    path = Path(__file__).resolve().parents[2] / "contracts" / "dw" / "build_ddl.py"
+    spec = importlib.util.spec_from_file_location("dw_contract_rules_for_q5", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"DW contract rules could not be loaded: {path}")
+    rules = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rules)
+    return rules
+
+
+def _projection_not_null_violations(frames: dict[str, Any]) -> dict[str, int]:
+    """Return non-zero NULL counts for every loaded projection Mart column."""
+
+    from pyspark.sql import functions as F
+
+    rules = _load_dw_contract_rules()
+    if set(PROJECTION_MART_FRAMES) != set(rules.GRAINS):
+        missing = sorted(set(rules.GRAINS) - set(PROJECTION_MART_FRAMES))
+        extra = sorted(set(PROJECTION_MART_FRAMES) - set(rules.GRAINS))
+        raise RuntimeError(
+            f"projection Mart mapping differs from build_ddl.GRAINS: missing={missing}, extra={extra}"
+        )
+
+    violations: dict[str, int] = {}
+    excluded = set(getattr(rules, "EXCLUDED_COLUMNS", {}))
+    for mart, frame_name in PROJECTION_MART_FRAMES.items():
+        frame = frames.get(frame_name)
+        if frame is None:
+            continue
+        grain = rules.GRAINS[mart]
+        required = [
+            column for column in frame.columns
+            if (mart, column) not in excluded
+            and not rules.is_nullable(column, grain, mart)
+        ]
+        if not required:
+            continue
+        counts = frame.agg(*[
+            F.sum(F.when(F.col(column).isNull(), 1).otherwise(0))
+            .cast("long")
+            .alias(column)
+            for column in required
+        ]).first()
+        for column in required:
+            count = counts[column] or 0
+            if count:
+                violations[f"{mart}.{column}"] = count
+    return violations
+
+
 def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
     """Measure the row-preserving product-to-brand snapshot contract."""
 
@@ -567,24 +768,47 @@ def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
     }
 
 
-def _unmatched_banner_click_count(product_fact: Any) -> int:
-    """A click must match an impression in the same session and banner grain."""
+def _unmatched_click_count(
+    product_fact: Any,
+    click_event: str,
+    impression_event: str,
+    keys: list[str],
+) -> dict[str, int]:
+    """세션 안에서 대응 노출이 없는 클릭을 센다.
+
+    프론트가 클릭 직전에 노출을 합성하므로(`useImpression.confirmImpressionByClick`)
+    이 값은 0 이어야 한다. 조인 키는 쌍마다 다르다 — 계약상 **필수**인 property 만
+    넣는다. 선택 property 를 키에 넣으면 그 값을 싣지 않는 생산자의 정상 로그가
+    통째로 미매칭으로 잡힌다.
+    """
 
     from pyspark.sql import functions as F
 
-    columns = ["session_id", "product_id", "banner_type", "banner_value", "banner_slot"]
-    clicks = product_fact.where(F.col("event_name") == "banner_click").alias("click")
+    clicks = product_fact.where(F.col("event_name") == click_event).alias("click")
     impressions = (
-        product_fact.where(F.col("event_name") == "banner_impression")
-        .select(*columns, "trait_source")
+        product_fact.where(F.col("event_name") == impression_event)
+        .select(*keys)
         .dropDuplicates()
         .alias("impression")
     )
     condition = F.lit(True)
-    for name in columns:
+    for name in keys:
         condition = condition & F.col(f"click.{name}").eqNullSafe(F.col(f"impression.{name}"))
-    condition = condition & F.col("click.trait_source").eqNullSafe(F.col("impression.trait_source"))
-    return clicks.join(impressions, condition, "left_anti").count()
+    total = clicks.count()
+    unmatched = clicks.join(impressions, condition, "left_anti").count()
+    return {"total": total, "unmatched": unmatched}
+
+
+def _unmatched_banner_click_count(product_fact: Any) -> int:
+    """A click must match an impression in the same session and banner grain."""
+
+    keys = [
+        "session_id", "product_id", "banner_type", "banner_value", "banner_slot",
+        "trait_source",
+    ]
+    return _unmatched_click_count(
+        product_fact, "banner_click", "banner_impression", keys
+    )["unmatched"]
 
 
 def validate_frames(
@@ -661,6 +885,16 @@ def validate_frames(
     }
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+
+    projection_nulls = _projection_not_null_violations(frames)
+    checks.append(_check(
+        "projection_marts_not_null_columns_have_no_nulls",
+        not projection_nulls,
+        "violations=" + (
+            ", ".join(f"{name}:{count}" for name, count in sorted(projection_nulls.items()))
+            if projection_nulls else "none"
+        ),
+    ))
 
     checks.append(
         _check(
@@ -803,6 +1037,20 @@ def validate_frames(
             "cleaned_has_no_null_event_id",
             cleaned.where(F.col("event_id").isNull()).count() == 0,
             "canonical rows require event_id",
+        )
+    )
+    # 노출 합성 마커 (event-properties-schema.md §3.12-1). 선택 property 라 없는 것은
+    # 정상이고, 실려 있으면 enum 을 강제한다. Q2·수집기는 이 property 를 모르므로
+    # 런타임에서 값을 보는 곳이 여기뿐이다. 분포는 합성 비중 실측 근거로 남긴다.
+    origin = _impression_origin_report(cleaned)
+    checks.append(
+        _check(
+            "impression_origin_values_follow_contract",
+            origin["invalid_rows"] == 0,
+            f"invalid_rows={origin['invalid_rows']}; "
+            f"invalid={origin['invalid'] or 'none'}; "
+            f"distribution={origin['counts']}; "
+            f"allowed={origin['allowed']}",
         )
     )
     checks.append(
@@ -1169,10 +1417,10 @@ def validate_frames(
         )
         .agg(
             F.sum(
-                (F.col("detail_entry_path") == F.lit("quick_look")).cast("int")
+                F.col("detail_entry_path").eqNullSafe(F.lit("quick_look")).cast("int")
             ).cast("long").alias("_quick_look_entry_sessions"),
             F.sum(
-                (F.col("detail_entry_path") == F.lit("direct_click")).cast("int")
+                F.col("detail_entry_path").eqNullSafe(F.lit("direct_click")).cast("int")
             ).cast("long").alias("_direct_click_sessions"),
             F.sum(F.col("reached_detail_view").cast("int")).cast("long").alias("_detail_view_sessions"),
         )
@@ -1191,7 +1439,10 @@ def validate_frames(
     # click_to_view_rate 의 분자는 분모의 부분집합이라야 한다 (§4.5).
     # direct_click 만으로 세면 클릭 없이 상세를 연 세션이 분자에만 들어간다.
     invalid_click_through = funnel_daily.where(
-        (F.col("click_through_detail_sessions") > F.col("click_sessions"))
+        F.col("click_through_detail_sessions").isNull()
+        | F.col("click_sessions").isNull()
+        | F.col("direct_click_sessions").isNull()
+        | (F.col("click_through_detail_sessions") > F.col("click_sessions"))
         | (F.col("click_through_detail_sessions") > F.col("direct_click_sessions"))
         | (F.col("click_through_detail_sessions") < 0)
     ).count()
@@ -1300,7 +1551,7 @@ def validate_frames(
     ))
 
     # product_daily_kpi — 지금까지 grain 유일성 하나만 검사했다. 비율 네 개가
-    # 검증 없이 나가는 동안 add_to_cart_rate 가 1.0 을 넘고 있었다 (Jira 277).
+    # 검증 없이 나가는 동안 add_to_cart_rate 가 1.0 을 넘고 있었다.
     invalid_product_counts = product_daily.where(
         (F.col("product_view_sessions") < 0)
         | (F.col("quick_look_sessions") < 0)
@@ -1376,10 +1627,10 @@ def validate_frames(
         f"unmatched_rows={product_dimension_gap}",
     ))
 
-    # 통화는 grain 이 아니라 대표값 한 개다 (F.first). 한 상품·하루에 통화가
+    # 통화는 grain 이 아니라 대표값 한 개다 (결정적인 F.min). 한 상품·하루에 통화가
     # 섞이면 revenue_amount 가 두 통화를 그냥 더하고 currency 는 하나만 보고한다.
     # grain 에 올리면 통화 없는 조회 행과 결제 행이 갈려 Mart 가 깨지므로
-    # 여기서 혼합 자체를 막는다 (Jira 303 통화 전환 경계일 대비).
+    # 여기서 혼합 자체를 막는다 (통화 전환 경계일 대비).
     mixed_currency_groups = (
         product_fact.where(
             F.col("currency").isNotNull()
@@ -1689,6 +1940,7 @@ def validate_frames(
     invalid_price_rows = category_price.where(
         F.col("reference_median_price").isNull()
         | (F.col("reference_median_price") <= 0)
+        | F.col("reference_source").isNull()
         | ~F.col("reference_source").isin("category", "global_fallback")
     ).count()
     checks.append(
@@ -1709,7 +1961,10 @@ def validate_frames(
         "banner_daily configured grain is unique",
     ))
     invalid_banner_counts = banner_daily.where(
-        (F.col("click_count") > F.col("impression_count"))
+        F.col("click_count").isNull()
+        | F.col("impression_count").isNull()
+        | F.col("skip_count").isNull()
+        | (F.col("click_count") > F.col("impression_count"))
         | (F.col("skip_count") < 0)
         | (
             (F.col("impression_count") == 0)
@@ -1717,7 +1972,10 @@ def validate_frames(
         )
         | (
             (F.col("impression_count") > 0)
-            & ~F.col("banner_ctr").between(0, 1)
+            & (
+                F.col("banner_ctr").isNull()
+                | ~F.col("banner_ctr").between(0, 1)
+            )
         )
     ).count()
     checks.append(_check(
@@ -1725,7 +1983,10 @@ def validate_frames(
         invalid_banner_counts == 0,
         f"invalid_rows={invalid_banner_counts}",
     ))
-    invalid_banner_values = banner_daily.where(~F.col("banner_value_is_valid")).count()
+    invalid_banner_values = banner_daily.where(
+        F.col("banner_value_is_valid").isNull()
+        | ~F.col("banner_value_is_valid")
+    ).count()
     checks.append(_check(
         "banner_value_uses_source_vocabulary",
         invalid_banner_values == 0,
@@ -1737,11 +1998,52 @@ def validate_frames(
         unmatched_clicks == 0,
         f"unmatched_clicks={unmatched_clicks}",
     ))
+    # 추천 쌍은 네 키가 모두 계약상 필수(§4.2)라 조인이 100% 성립한다. 두 데이터셋
+    # 실측이 0/144·0/497 이라 바로 검사로 둔다.
+    recommendation_match = _unmatched_click_count(
+        product_fact,
+        "recommendation_click",
+        "recommendation_impression",
+        ["session_id", "product_id", "recommendation_id", "list_id"],
+    )
+    checks.append(_check(
+        "recommendation_click_matches_impression_in_session",
+        recommendation_match["unmatched"] == 0,
+        f"unmatched_clicks={recommendation_match['unmatched']}"
+        f"/{recommendation_match['total']}; "
+        "key=session_id·product_id·recommendation_id·list_id",
+    ))
+    # 상품 쌍은 `list_id` 가 `product_click` 의 선택 property 라 키에 넣을 수 없다
+    # (생성기·프론트 어느 쪽도 싣지 않는다). 세션·상품까지만 보고 경고로 남긴다.
+    product_match = _unmatched_click_count(
+        product_fact,
+        "product_click",
+        "product_impression",
+        ["session_id", "product_id"],
+    )
+    product_unmatched_ratio = (
+        product_match["unmatched"] / product_match["total"]
+        if product_match["total"] else 0.0
+    )
+    # 경고가 안 떠도 값 자체는 매 실행 남긴다 — 추세가 기준선 재조정의 근거다.
+    counts["product_click_unmatched"] = product_match["unmatched"]
+    counts["product_click_total"] = product_match["total"]
+    if product_unmatched_ratio > PRODUCT_CLICK_UNMATCHED_WARN_RATIO:
+        warnings.append({
+            "check": "product_click_unmatched_share_is_above_baseline",
+            "detail": (
+                f"unmatched={product_match['unmatched']}/{product_match['total']} "
+                f"({product_unmatched_ratio:.2%}) > "
+                f"{PRODUCT_CLICK_UNMATCHED_WARN_RATIO:.0%}; "
+                "프론트 클릭 직전 노출 합성이 동작하는지 본다"
+            ),
+        })
     banner_facts = product_fact.where(F.col("event_name").isin("banner_impression", "banner_click"))
     invalid_banner_facts = banner_facts.where(
         F.col("banner_type").isNull()
         | F.col("banner_slot").isNull()
         | (F.col("banner_slot") <= 0)
+        | F.col("trait_source").isNull()
         | ~F.col("trait_source").isin("session", "profile", "coldstart", "explore")
         | ((F.col("banner_type") == "new_brand") & F.col("banner_value").isNotNull())
         | ((F.col("banner_type") != "new_brand") & F.col("banner_value").isNull())
@@ -2329,26 +2631,37 @@ def validate_frames(
         "content_daily_kpi": (
             content_daily,
             _content_daily_kpi(content_interest, funnel_session, time_zone),
+            content_key,
         ),
         "content_conversion_daily": (
             content_conversion,
             _content_conversion_daily(content_interest, funnel_session, time_zone),
+            ["event_date_kst", "brand_id", "product_id", "content_kind",
+             *EXECUTION_AXES],
         ),
         "behavior_conversion_daily": (
             behavior_conversion,
             _behavior_conversion_daily(sessionized, funnel_session, time_zone),
+            ["event_date_kst", "brand_id", "product_id", "event_name",
+             *EXECUTION_AXES],
         ),
     }
-    for name, (stored, expected) in content_rebuilt.items():
+    for name, (stored, expected, grain) in content_rebuilt.items():
         columns = [c for c in stored.columns if c != "mart_processed_at"]
         difference = (
             expected.select(*columns).exceptAll(stored.select(*columns)).count()
             + stored.select(*columns).exceptAll(expected.select(*columns)).count()
         )
+        detail = f"differing_rows={difference}; mart_processed_at excluded"
+        if difference:
+            # 실패했을 때만 한 패스 더 쓴다. 통과하는 배치에 비용을 얹지 않는다.
+            where = _differing_columns(stored, expected, grain, columns)
+            if where:
+                detail = f"{detail}; {where}"
         checks.append(_check(
             f"{name}_is_deterministic_from_inputs",
             difference == 0,
-            f"differing_rows={difference}; mart_processed_at excluded",
+            detail,
         ))
 
     # ── E6 마찰·이탈·유입 Mart (dw-schema §4.21·§4.22·§4.23) ──────────────

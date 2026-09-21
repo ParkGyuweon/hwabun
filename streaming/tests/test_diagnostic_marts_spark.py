@@ -270,7 +270,7 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertAlmostEqual(1.0, sum(r["dwell_share"] for r in rows))
 
     def test_sessions_without_a_persona_are_not_attributed(self):
-        """임의 귀속은 없는 고객군을 만들어 낸다 (§4.25 · Jira 277 규칙)."""
+        """임의 귀속은 없는 고객군을 만들어 낸다 (§4.25 규칙)."""
         dwells = self._dwells([
             self._dwell("S1", None, "user_review", 100),
             self._dwell("S2", "PC-1", "user_review", 100),
@@ -362,7 +362,7 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertEqual(result.count(), result.select(*key).distinct().count())
 
 
-    # ── 찜 수 (Jira 338) ───────────────────────────────────────────────
+    # ── 찜 수 ───────────────────────────────────────────────
     def test_wishlist_count_counts_adds_not_toggles(self):
         """찜은 토글이라 추가와 해제가 같은 Event 다.
 
@@ -411,7 +411,7 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertEqual(1, row["wishlist_count"])
 
 
-    # ── 노출 분모 (Jira 336 · 프론트 확정 2026-09-17) ───────────────────
+    # ── 노출 분모 (프론트 확정 2026-09-17) ───────────────────
     def test_ctr_denominator_includes_recommendation_impressions(self):
         """추천 카드 클릭도 product_click 이라 분모에 추천 노출이 있어야 한다.
 

@@ -17,10 +17,13 @@
  *   · 새 상품은 DRAFT 로 만들어져 목록에 안 뜬다. 등록 성공 직후 ACTIVE 로 바꾸는 요청을 한 번 더 보낸다.
  */
 import { authFetch, sessionSnapshot } from './auth';
+import type { AccountRole } from './auth';
 import { loadBrandId } from './brands';
 import { KRW_PER_USD } from './localize';
 import { isNewRegistered } from './newBrandRule';
 import { axisLabel, categoryLabel } from '../types/feedback';
+import { statusOfHandling } from '../types/feedback';
+import type { FeedbackResponseAction } from '../types/feedback';
 import type { CartItem } from '../types/cart';
 import type { Feedback } from '../types/feedback';
 import type { Product, ProductDescription, ProductVariant } from '../types/product';
@@ -548,6 +551,10 @@ interface SellerFeedbackRow {
   bannedTerms: string[];
   classificationStatus: string;
   hiddenByDefault: boolean;
+  /** 업체 처리 상태 (2026-09-18). 옛 서버는 안 준다 */
+  handlingStatus?: string | null;
+  lastRespondedAt?: string | null;
+  latestResponse?: { action: string; body: string | null; createdAt: string } | null;
 }
 
 /**
@@ -609,9 +616,14 @@ export async function fetchSellerFeedback(brandId: string, brandName: string): P
       // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
       purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
       classification_status: r.classificationStatus ?? null,
-      status: 'new',
-      reply: null,
-      replied_at: null,
+      // 처리 상태는 서버 것이다. 옛 서버(handlingStatus 없음)는 전부 '업체 확인 대기'
+      status: statusOfHandling(r.handlingStatus),
+      handling_status: (r.handlingStatus as Feedback['handling_status']) ?? null,
+      latest_response: r.latestResponse
+        ? { action: r.latestResponse.action as FeedbackResponseAction, body: r.latestResponse.body ?? null, created_at: r.latestResponse.createdAt }
+        : null,
+      reply: r.latestResponse?.action === 'REPLIED' ? (r.latestResponse.body ?? null) : null,
+      replied_at: r.lastRespondedAt ?? null,
       source: 'backend',
     }));
   } catch {
@@ -806,5 +818,113 @@ export async function generateSettlement(brandId: string, month: string): Promis
     return { kind: 'ok', settlementId: String(j.settlementId ?? ''), netAmount: Number(j.netAmount ?? 0) };
   } catch {
     return { kind: 'failed' };
+  }
+}
+
+/* ------------------------------------------------------------------ 판매자 피드백 처리 (2026-09-18) */
+
+export interface FeedbackResponseResult {
+  feedbackId: string;
+  handlingStatus: string;
+  lastRespondedAt: string | null;
+  response: { feedbackResponseId: string; action: string; body: string | null; createdAt: string };
+}
+
+/**
+ * `POST /api/seller/feedback/{feedbackId}/responses` — 확인(ACKNOWLEDGED) · 반영(IMPLEMENTED) · 답변(REPLIED, body 필수).
+ * 201 이면 그 응답으로 목록의 행을 바로 갱신한다. 못 하면 null — 화면은 행을 그대로 두고 그렇다고 적는다.
+ */
+export async function respondToFeedback(
+  feedbackId: string,
+  action: FeedbackResponseAction,
+  body?: string,
+): Promise<FeedbackResponseResult | null> {
+  try {
+    const res = await authFetch('SELLER', `/api/seller/feedback/${encodeURIComponent(feedbackId)}/responses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(action === 'REPLIED' ? { action, body: body ?? '' } : { action }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as FeedbackResponseResult;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ 인앱 알림 (2026-09-18) */
+
+export type NotificationType = 'FEEDBACK_CREATED' | 'FEEDBACK_ACKNOWLEDGED' | 'FEEDBACK_REPLIED' | 'FEEDBACK_IMPLEMENTED';
+
+export interface AppNotification {
+  notificationId: string;
+  type: NotificationType | string;
+  title: string;
+  body: string;
+  feedbackId: string | null;
+  payload: { productId?: string; productName?: string } | null;
+  /** null 이면 안 읽음 */
+  readAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * 알림 API. 회원·판매자가 같은 경로를 쓰고 누구에게 어떤 알림이 가는지는 서버가 거른다.
+ * 정기 polling 은 없다 — 세션 복원 · 탭 복귀 · 종 클릭에서만 부른다 (components/notifications/NotificationBell).
+ * 전부 못 읽으면 null 이다. 0 과 "못 읽음" 을 화면이 구분해야 배지를 잘못 지우지 않는다.
+ */
+export async function fetchNotifications(role: AccountRole, limit = 20): Promise<AppNotification[] | null> {
+  try {
+    const res = await authFetch(role, `/api/notifications?limit=${limit}`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { items?: unknown };
+    if (!Array.isArray(body.items)) return null;
+    return (body.items as Array<Record<string, unknown>>).map((n) => ({
+      notificationId: String(n.notificationId ?? ''),
+      type: String(n.type ?? ''),
+      title: typeof n.title === 'string' ? n.title : '',
+      body: typeof n.body === 'string' ? n.body : '',
+      feedbackId: typeof n.feedbackId === 'string' ? n.feedbackId : null,
+      payload: n.payload && typeof n.payload === 'object' ? (n.payload as AppNotification['payload']) : null,
+      readAt: typeof n.readAt === 'string' ? n.readAt : null,
+      createdAt: typeof n.createdAt === 'string' ? n.createdAt : '',
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchUnreadCount(role: AccountRole): Promise<number | null> {
+  try {
+    const res = await authFetch(role, '/api/notifications/unread-count');
+    if (!res.ok) return null;
+    const body = (await res.json()) as { count?: unknown };
+    return typeof body.count === 'number' ? body.count : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 읽음 처리. 서버가 찍은 readAt 을 돌려준다. 못 하면 null */
+export async function markNotificationRead(role: AccountRole, notificationId: string): Promise<string | null> {
+  try {
+    const res = await authFetch(role, `/api/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'PATCH' });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { readAt?: unknown };
+    return typeof body.readAt === 'string' ? body.readAt : new Date().toISOString();
+  } catch {
+    return null;
+  }
+}
+
+/** 전부 읽음. 바뀐 건수를 돌려준다. 못 하면 null */
+export async function markAllNotificationsRead(role: AccountRole): Promise<number | null> {
+  try {
+    const res = await authFetch(role, '/api/notifications/read-all', { method: 'PATCH' });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { updatedCount?: unknown };
+    return typeof body.updatedCount === 'number' ? body.updatedCount : 0;
+  } catch {
+    return null;
   }
 }

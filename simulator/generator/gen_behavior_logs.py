@@ -523,8 +523,14 @@ DETAIL_LAYOUT = [
                           ("clinical_claim", None), ("persona_match", "skin_type"),
                           ("persona_match", "concerns"), ("product_meta", "category"),
                           ("product_meta", "size")]),
+    # 전성분 아코디언은 실제 화면도 contentKind 를 안 싣는다
+    # (frontend/src/pages/ProductDetailPage.tsx:141~150) — None 이 맞다.
     ("ingredients",      [(None, None)]),
-    ("how_to_use",       [(None, None)]),
+    # 사용법 아코디언은 실제 화면이 usage_guide 를 싣는다 (같은 파일 153행,
+    # `<Accordion title="How to Use" sectionId="how_to_use" contentKind="usage_guide">`).
+    # 여기가 None 이면 합성 로그에만 usage_guide 가 없어 대시보드 콘텐츠 화면의
+    # '사용법' 행이 통째로 빈다 (Jira 364, 09-19 dw 실측 0건).
+    ("how_to_use",       [("usage_guide", None)]),
     ("similar_products", [("recommendation_card", "__rec__")]),
     ("reviews",          [("review_stats", None), ("review_filter", None),
                           ("user_review", None)]),
@@ -970,7 +976,10 @@ def browse_list(e, promo, grid, catalog, rng, dwell_ms, first,
                 e.emit("add_to_cart", g, quantity=1, **price_props(catalog, g),
                        entry_source="quick_look")   # 다른 담기 5곳과 같이 가격 속성 (Jira 342)
                 if carted is not None:
-                    carted.append(g)                # 결제 목록에 올릴 수 있게 알린다
+                    # 결제 목록에 올릴 수 있게 알린다. **어느 세션에서 담았는지 같이** 남긴다 —
+                    # 앞선 방문에서 담은 것을 마지막 세션에서 결제하면 마트가 (상품,날짜) 단위로
+                    # 담기 세션 0 · 결제 세션 1 을 보게 된다 (Jira 371)
+                    carted.append((g, e.sid))
             if wished:
                 e.tick(200, 1200, rng=qrng)
                 e.emit("wishlist_toggle", g, action="add", entry_source="quick_look")
@@ -1145,10 +1154,17 @@ def validate_property_contract(events):
 #
 # 프론트는 A안(클릭이 있으면 노출 1을 합성)으로 이 문제를 로거에서 막지만, 생성기는
 # 프론트 로거를 타지 않으므로 여기서 직접 막는다.
+# 분모는 **마트와 같게** 잡는다 (dw-schema.md §4.1 — "노출 Event는 셋이고 분모는 그 합이다").
+# product_click 을 product_impression 하나와만 짝지으면 가드가 실제 화면보다 엄격해진다 —
+# 유사 상품 레일은 카드 하나에 recommendation_impression 만 내고 product_click 을 함께 내기
+# 때문이다(frontend SimilarProducts.tsx select(): confirmImpressionByClick 은 recommendation_impression,
+# 그 뒤 track('product_click')). 그 화면 동선을 생성기가 그대로 만들면 1:1 가드에만 걸린다.
+# recommendation_click · banner_click 은 각자의 CTR 분모가 따로 있으므로 1:1 그대로 둔다.
+IMPRESSION_EVENTS_FOR_CTR = ("product_impression", "recommendation_impression", "banner_impression")
 CTR_PAIRS = (
-    ("product_impression", "product_click"),
-    ("recommendation_impression", "recommendation_click"),
-    ("banner_impression", "banner_click"),
+    (IMPRESSION_EVENTS_FOR_CTR, "product_click"),
+    (("recommendation_impression",), "recommendation_click"),
+    (("banner_impression",), "banner_click"),
 )
 
 
@@ -1173,18 +1189,19 @@ def check_ctr_grains(events):
     from collections import Counter
 
     bad = []
-    for impression_name, click_name in CTR_PAIRS:
+    for impression_names, click_name in CTR_PAIRS:
         imps, clks = Counter(), Counter()
         for e in events:
             name = e.get("event_name")
-            if name == impression_name:
+            if name in impression_names:
                 imps[_grain_of(e)] += 1
             elif name == click_name:
                 clks[_grain_of(e)] += 1
+        label = "+".join(impression_names)
         for grain, n_click in clks.items():
             n_imp = imps.get(grain, 0)
             if n_click > n_imp:
-                bad.append({"pair": f"{click_name} > {impression_name}",
+                bad.append({"pair": f"{click_name} > {label}",
                             "grain": grain, "clicks": n_click, "impressions": n_imp})
     return bad
 
@@ -1613,7 +1630,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
             e.tick(); e.emit("add_to_cart", g, quantity=1,
                              **price_props(catalog, g), content_kind="cta")
-            discovered.append(g)
+            discovered.append((g, e.sid))       # 담은 세션까지 (Jira 371)
         elif rng.random() < SC["wishlist_p_bounce"]:
             e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
 
@@ -1639,8 +1656,18 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     # 발견 구매한 등록 상품 중 결제까지 가는 것 (위 p_new_brand_cart 로 담긴 것들)
     # 담은 것 중 결제까지 가는 것. 목표 상품 외에 담긴 것들(발견 구매 · Quick Look)이 대상이다.
     # 시드는 과거에 이미 산 것이라 뺀다.
-    extra = list(dict.fromkeys(discovered + [g for g in ql_carted if g not in seeds and g != target]))
-    buy_new = [g for g in extra if rng.random() < SC["p_new_brand_buy"]]
+    # `extra` 는 장바구니 화면에 보이는 것 — 앞선 방문에서 담은 것도 들어 있다(장바구니는 세션을 넘는다)
+    extra = list(dict.fromkeys([g for g, _ in discovered]
+                               + [g for g, _ in ql_carted if g not in seeds and g != target]))
+    # **살 수 있는 것은 이 세션에서 담은 것뿐이다** (Jira 371). 앞선 방문에서 담은 것은
+    # 장바구니에 그대로 남는다 — 담아 두고 안 사는 것도 실제 동선이다.
+    # 이걸 안 가르면 결제일에 담기 세션이 0 인 (상품,날짜) 행이 생겨
+    # funnel_daily 의 checkout <= add_to_cart 와 persona_segment 의 purchase <= detail 이 깨진다.
+    # target 은 route 마지막이라 담기와 결제가 이미 같은 세션이다 — 안 바뀐다.
+    here_now = {g for g, sid in discovered if sid == e.sid} | {g for g, sid in ql_carted if sid == e.sid}
+    # **추첨을 먼저 하고 거른다.** `g in here_now` 를 앞에 두면 추첨 횟수가 줄어 기본 RNG 스트림이
+    # 밀리고, 그 뒤 궤적이 통째로 달라진다 (노출·클릭까지 바뀌어 grain 검사가 깨졌다).
+    buy_new = [g for g in extra if rng.random() < SC["p_new_brand_buy"] and g in here_now]
     if regret is not None or buy or buy_new or rng.random() < SC["p_view_cart"]:
         cart = [g for g in seeds] + [target] + extra + ([regret] if regret else [])
         e.new_page("cart")

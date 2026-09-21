@@ -85,12 +85,14 @@ Event.product_id
 
 | event_name | intent | 의미 | 주요 활용 |
 | --- | --- | --- | --- |
-| `product_impression` | `exposure` | 상품 카드 유효 노출 | 상품 CTR 분모 |
+| `product_impression` | `exposure` | 상품 카드 유효 노출 또는 클릭·Quick Look으로 확정된 합성 노출 | 상품 CTR 분모 |
 | `impression_dwell` | `exposure` | 유효 노출 카드의 체류시간 | 노출 품질 |
 | `product_click` | `comparison` | 상품 카드 클릭 | 상품 CTR 분자 |
-| `recommendation_impression` | `exposure` | 추천 카드 유효 노출 | 추천 CTR 분모 |
+| `recommendation_impression` | `exposure` | 추천 카드 유효 노출 또는 추천 클릭으로 확정된 합성 노출 | 추천 CTR 분모 |
 | `recommendation_snapshot` | `exposure` | 추천 목록 순위 스냅샷 | 위치 편향 분석 |
 | `recommendation_click` | `comparison` | 추천 카드 클릭 | 추천 CTR 분자 |
+| `banner_impression` | `session` | 히어로 배너 노출 또는 배너 클릭으로 확정된 합성 노출 | 배너 CTR 분모 |
+| `banner_click` | `interest` | 히어로 배너 클릭 | 배너 CTR 분자 |
 | `quick_look` | `interest` | 상품 요약 창 열림 | 상세 진입 전 관심 |
 | `quick_look_close` | `interest` | 상품 요약 창 닫힘 | 요약 창 체류·행동 |
 | `filter_change` | `comparison` | 상품 필터 변경 | 탐색 기준 |
@@ -258,6 +260,64 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 서비스가 하고, 같은 노출·클릭 쌍에는 같은 값을 싣는다. DATA는 배정하지 않고 비중과
 노출·클릭 일치만 검증한다.
 
+### 3.12-1 `impression_origin`
+
+`observed`, `implied_by_click`, `implied_by_quick_look`
+
+세 노출 Event(`product_impression`, `recommendation_impression`, `banner_impression`)의
+선택 property다. 값은 노출 레코드가 **어디서 왔는지**를 말한다.
+
+| 값 | 뜻 |
+| --- | --- |
+| `observed` | 화면에서 정상 관측한 노출. 노출 Hook 타이머가 `hold_ms` 임계를 채워 확정한다 |
+| `implied_by_click` | 선행 노출 없이 클릭이 발생해 클릭 직전에 보강한 합성 노출 |
+| `implied_by_quick_look` | 선행 노출 없이 Quick Look 열기가 발생해 그 직전에 보강한 합성 노출 |
+
+Quick Look 열기는 클릭이 아니므로 `implied_by_click`으로 적지 않는다. 확정 계기가 달라야
+"카드를 봤다"의 근거를 뒤에서 되짚을 수 있다.
+
+합성 노출은 대응 클릭·Quick Look과 같은 세션·상품·노출 위치 식별자를 사용하며 CTR과
+노출 분모에 포함한다.
+
+**property가 없으면 `observed`로 간주한다.** 필수로 두면 Raw 전량이 `bad_events`로 빠지고
+Front·수집기·시뮬레이터가 같은 시점에 배포돼야 하므로 선택으로 둔다. 값이 실려 있으면
+enum을 강제한다.
+
+**이 기본값은 마커 발행 이전 로그에 대해서만 사실이다.** 합성 노출 자체는 2026-09-18
+프론트 머지(`useImpression.confirmImpressionByClick`)부터 생겼고, 마커는 그보다 늦게
+붙었다(프론트 MR `S15P21A306-fe-impression-origin`). 그 사이에 쌓인 로그는 합성분도
+기본값에 따라 `observed`로 잡히므로, 합성·관측 구분이 필요한 분석은 **마커 발행 시점을
+시작점으로 잡는다.** 구분 없이 분모만 세는 지표(`impression_count`·CTR)는 이 공백의
+영향을 받지 않는다 — 합성 노출도 분모에 포함하는 것이 계약이기 때문이다
+(`dw-schema.md` §4.1).
+
+**소비하는 쪽은 이 property를 필수로 요구하지 않는다.** `event-schema.json`의 required,
+Q2의 거절 조건, Q4의 집계 전제, Q5의 존재 검사 어디에도 넣지 않는다. 값이 없는 로그를
+만드는 생산자가 정상이며(생성기는 가드로 합성 노출 자체를 만들지 않으므로 전부
+`observed`다), 필수로 올리는 순간 그 로그가 전량 격리된다. 값의 타입·enum 검증은
+실려 있을 때만 건다.
+
+세 노출 Event는 공통 노출 Hook(`frontend/src/hooks/useImpression.ts`)을 쓰므로 `hold_ms`와
+`visible_ratio`를 함께 싣는다. `banner_impression`도 2026-09-17 배너 전환 이후 같은 Hook을
+탄다. 합성 노출은 실측 체류가 없어 `hold_ms: 0`을 싣는다.
+
+`hold_ms`는 실측 체류가 아니라 노출로 인정한 **판정 임계값**이다(목록 300ms · 추천
+1000ms 상수). 그래서 현재 구현에서는 관측 노출이 0을 싣는 경우가 없고, `hold_ms == 0`이
+사실상 합성 노출과 일치한다. 그래도 **합성 판정에는 `impression_origin`만 쓴다.** 그
+일치는 임계 상수가 마침 0이 아니어서 성립하는 것이지 계약이 보장하는 성질이 아니다.
+임계값을 0으로 낮추거나 `hold_ms`를 실측값으로 바꾸는 순간 조용히 깨지고, 그때 이미
+쌓인 집계는 되돌릴 수 없다.
+
+`hold_ms == 0`은 **마커 발행 이전 구간을 분석할 때만** 잠정 구분으로 쓴다. 그 구간에는
+`impression_origin`이 없어 다른 단서가 없기 때문이다. 마커가 실린 뒤 구간에는 쓰지
+않는다. 잠정 구분을 쓴 결과에는 그 사실과 대상 기간을 함께 적는다.
+
+`visible_ratio`는 측정값이 아니라 노출로 인정하는 **판정 임계값**이다. 세 노출 Event 모두
+`0.5` 상수이며 `IntersectionObserver`의 threshold와 같은 값을 그대로 싣는다. 카드가 실제로
+얼마나 보였는지를 뜻하지 않으므로 노출 품질 지표나 가중치로 쓰지 않는다. 합성 노출도 같은
+상수를 싣되, 클릭으로 확정한 노출은 가시성 검사를 거치지 않았다는 사실을 `impression_origin`
+이 대신 말한다.
+
 ### 3.13 배너 값과 slot 규칙
 
 `banner_slot`은 1 이상의 정수다. 추천 API 응답의 `slot`은 Event 발행 시 이 이름으로
@@ -343,11 +403,11 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 | event_name | required properties | optional properties |
 | --- | --- | --- |
-| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
+| `banner_impression` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string`, `impression_origin: string`, `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number`, `algorithm: string`, `recommendation_id: string` |
 | `banner_click` | `banner_type: string`, `banner_value: string\|null`, `banner_slot: integer`, `trait_source: string`; top-level `product_id` 필수 | `policy_version: string` |
-| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number` | `impression_area: string`, `dedupe_key: string` |
+| `product_impression` | `list_id: string`, `position: integer`, `hold_ms: integer`, `visible_ratio: number` | `impression_area: string`, `dedupe_key: string`, `impression_origin: string` |
 | `product_click` | 없음 | `list_id: string`, `position: integer`, `entry_source: string`, `impression_event_id: string`, `context_product_id: string` |
-| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number` | `section_id: string`, `context_product_id: string` |
+| `recommendation_impression` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string`, `hold_ms: integer`, `visible_ratio: number` | `section_id: string`, `context_product_id: string`, `impression_origin: string` |
 | `recommendation_click` | `recommendation_id: string`, `list_id: string`, `position: integer`, `algorithm: string` | `section_id: string`, `impression_event_id: string`, `context_product_id: string` |
 | `impression_dwell` | `list_id: string`, `position: integer`, `visible_ms: integer` | `recommendation_id: string`, `algorithm: string`, `context_product_id: string` |
 | `recommendation_snapshot` | `recommendation_id: string`, `list_id: string`, `algorithm: string`, `size: integer`, `ranking: object[]` | 없음 |

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import SiteHeader from './components/layout/SiteHeader';
 import LogPanel from './components/devtools/LogPanel';
 import { isDevtoolsOn } from './lib/devtools';
+import { isPreviewMode } from './lib/devtools';
 import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
@@ -920,8 +921,15 @@ export default function App() {
     navigationSourceRef.current = 'in_app';
   }, [productId, cartOpen]);
 
+  /*
+   * 등록 폼 미리보기(`?preview=1`, 대시보드 iframe)는 **상세 페이지 본문만** 그린다. 헤더·프로모 띠·페르소나 스위처·
+   * 로그인·로그 창은 쇼핑몰의 껍데기지 상품이 아니다 — 사장님이 보려는 건 "내 상품이 어떻게 보이나" 지 사이트 전체가
+   * 아니다 (2026-09-18). 담기·구매도 미리보기에서는 아무 일도 하지 않는다.
+   */
+  const preview = isPreviewMode();
   return (
     <>
+      {preview ? null : (
       <SiteHeader
         personas={personas}
         persona={persona}
@@ -930,9 +938,11 @@ export default function App() {
           setPersonaChosen(true);
         }}
         onHome={goHome}
+        onOpenProduct={openProduct}
         cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
         onCart={openCart}
       />
+      )}
 
       {cartOpen ? (
         <CartPage
@@ -956,7 +966,7 @@ export default function App() {
         />
       ) : product ? (
         <>
-          <Breadcrumb items={product.category} onHome={goHome} />
+          {preview ? null : <Breadcrumb items={product.category} onHome={goHome} />}
           <ProductDetailPage
             product={product}
             reviews={product?.source === 'backend' ? backendReviews : productReviews}
@@ -964,8 +974,8 @@ export default function App() {
             similar={similar}
             persona={persona}
             onSelectProduct={openProduct}
-            onAddToCart={addToCart}
-            onBuyNow={buyNow}
+            onAddToCart={preview ? () => undefined : addToCart}
+            onBuyNow={preview ? () => undefined : buyNow}
             buying={paying}
           />
         </>
@@ -984,7 +994,7 @@ export default function App() {
         />
       )}
 
-      {isDevtoolsOn() ? <LogPanel /> : null}
+      {isDevtoolsOn() && !preview ? <LogPanel /> : null}
     </>
   );
 }

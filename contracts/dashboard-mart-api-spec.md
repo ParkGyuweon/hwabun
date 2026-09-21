@@ -187,11 +187,13 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
   "products": [
     {
       "product_id": "P0001",
-      "product_impression_count": 3200, "product_click_count": 410, "quick_look_count": 60,
+      "product_impression_count": 3200, "recommendation_impression_count": 500,
+      "banner_impression_count": 300, "impression_count": 4000,
+      "product_click_count": 410, "quick_look_count": 60,
       "product_view_count": 380, "add_to_cart_count": 40, "remove_from_cart_count": 6,
       "quick_look_sessions": 55, "product_view_sessions": 340, "add_to_cart_sessions": 38, "remove_from_cart_sessions": 6,
       "session_count": 900, "unique_user_count": 850,
-      "product_ctr": 0.128, "detail_entry_rate": 0.119, "add_to_cart_rate": 0.105, "product_interest_score": 812.5,
+      "product_ctr": 0.103, "detail_entry_rate": 0.095, "add_to_cart_rate": 0.105, "product_interest_score": 812.5,
       "funnel": {
         "impression_sessions": 2900, "click_sessions": 400, "product_view_sessions": 340,
         "information_view_sessions": 210, "add_to_cart_sessions": 38,
@@ -202,6 +204,10 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
   ]
 }
 ```
+
+`product_ctr`와 `detail_entry_rate`의 분모는 `product_impression_count`가 아니라
+`impression_count`다. 이 값은 상품·추천·배너 노출 합계이며 정본은
+`dw-schema.md` §4.1이다. 위 예시는 각각 `410 / 4000`, `380 / 4000`을 반올림했다.
 
 | 블록 | 원천 | 상태 |
 | --- | --- | --- |
@@ -486,7 +492,7 @@ key 는 `dw-schema.md` §4 그대로. **0.3 에서 마트 12종이 신설되고 
 | 마트 | 사용 컬럼 |
 | --- | --- |
 | `brand_daily_kpi` | key 전체, `impression_sessions`, **`click_sessions`** (0.3 · Jira 277 · §6-1 해결), `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, **`detail_view_sessions`** (0.2.1, 데이터 235 수정안 2), `unique_user_count`, `product_count_viewed`, `mart_processed_at` |
-| `product_daily_kpi` | key 전체, `product_impression_count`, `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `quick_look_sessions`, `product_view_sessions`, **`detail_view_sessions`** (0.3), `add_to_cart_sessions`, `remove_from_cart_sessions`, `unique_user_count`, `session_count`, `product_interest_score`, `mart_processed_at` |
+| `product_daily_kpi` | key 전체, `product_impression_count`, `recommendation_impression_count`, `banner_impression_count`, **`impression_count`** (상품·추천·배너 노출 합계), `product_click_count`, `quick_look_count`, `product_view_count`, `add_to_cart_count`, `remove_from_cart_count`, `quick_look_sessions`, `product_view_sessions`, **`detail_view_sessions`** (0.3), `add_to_cart_sessions`, `remove_from_cart_sessions`, `unique_user_count`, `session_count`, `product_ctr`, `detail_entry_rate`, `product_interest_score`, `mart_processed_at` |
 | `product_daily_kpi` (추가) | `purchase_sessions`, `purchase_count`, `purchase_quantity`, **`variant_select_count`**, **`quick_look_close_open_detail_count`** (0.3 · Jira 317 · E2 `diagnostics`) |
 | `funnel_daily_kpi` | key 전체, `impression_sessions`, `quick_look_sessions`, `quick_look_cart_sessions`, `click_sessions`, `product_view_sessions`, `information_view_sessions`, `add_to_cart_sessions`, `detail_view_sessions`, `checkout_sessions`, `purchase_sessions`, `mart_processed_at` |
 | `ingredient_weekly_interest` | 전 컬럼 |

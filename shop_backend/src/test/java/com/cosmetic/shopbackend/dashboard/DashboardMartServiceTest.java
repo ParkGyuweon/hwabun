@@ -80,14 +80,21 @@ class DashboardMartServiceTest {
   /* ---------------------------------------------------------------- E2 products */
 
   @Test
-  @DisplayName("상품 상세 진입율의 분모는 노출 Event 수다 (dw-schema §4.1) — 클릭 수가 아니다")
+  @DisplayName("상품 CTR·상세 진입율의 분모는 세 노출 Event 합계다 (dw-schema §4.1)")
   void productDetailEntryRateDividesByImpressions() {
-    productDay("2026-09-10", "P1", Map.of("product_impression_count", 200, "product_click_count", 50, "product_view_count", 40));
+    productDay("2026-09-10", "P1", Map.of(
+      "product_impression_count", 200,
+      "recommendation_impression_count", 20,
+      "banner_impression_count", 10,
+      "impression_count", 230,
+      "product_click_count", 50,
+      "product_view_count", 40
+    ));
 
     Map<?, ?> row = (Map<?, ?>) ((List<?>) service.products(SELLER, BRAND, FROM, TO, "all").get("products")).getFirst();
 
-    assertEquals(50D / 200D, decimal(row.get("product_ctr")), 1e-9);
-    assertEquals(40D / 200D, decimal(row.get("detail_entry_rate")), 1e-9);
+    assertEquals(50D / 230D, decimal(row.get("product_ctr")), 1e-9);
+    assertEquals(40D / 230D, decimal(row.get("detail_entry_rate")), 1e-9);
   }
 
   @Test

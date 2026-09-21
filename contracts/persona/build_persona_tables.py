@@ -23,6 +23,10 @@ TABLE_SPECS 에 그대로 옮겨 두었고, `validate_persona_tables.py` 가 같
 실행
     py contracts/persona/build_persona_tables.py --sample PA:10
     py contracts/persona/build_persona_tables.py --sample PC:100 --out contracts/persona/data
+    py contracts/persona/build_persona_tables.py --sample PC:all+PA:all
+
+마지막이 합친 산출이다. 배치가 읽는 bridge 는 하나라는 약속을 유지하면서
+에이전트(PA) 를 고객군 Mart 에 싣기 위한 것이다.
 """
 from __future__ import annotations
 
@@ -30,7 +34,7 @@ import argparse
 import json
 import os
 import sys
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -406,6 +410,53 @@ def sample_id(band, size):
     return f"{band.lower()}{'all' if size is None else f'{size:03d}'}"
 
 
+def parse_samples(text):
+    """'PC:all+PA:all' -> [('PC', None), ('PA', None)]. 하나만 주면 길이 1 이다.
+
+    합치는 이유는 배치가 읽는 bridge 가 하나이기 때문이다. 파일을 여러 개
+    받게 하면 운영에서 둘을 계속 맞춰야 하고, 한쪽이 빠져도 조용히 지나간다.
+    """
+
+    specs = [parse_sample(part) for part in text.replace(",", "+").split("+") if part.strip()]
+    if not specs:
+        raise ValueError("--sample 이 비어 있다")
+
+    bands = [band for band, _ in specs]
+    duplicated = sorted({band for band in bands if bands.count(band) > 1})
+    if duplicated:
+        raise ValueError(f"같은 대역을 두 번 줬다: {'·'.join(duplicated)}")
+
+    if len(specs) > 1:
+        # 홀드아웃은 추천 평가용으로 분리해 둔 집합이다 (persona-schema.md §7).
+        # Mart 로 흘러드는 bridge 에 섞으면 평가 대상이 학습·집계에 노출된다.
+        holdout = [b for b in bands if SOURCE_CONFIGS[b]["evaluation_cohort"]]
+        if holdout:
+            raise ValueError(
+                f"홀드아웃 대역은 합치지 않는다: {'·'.join(holdout)}. "
+                "평가용으로 분리된 집합이라 섞으면 홀드아웃이 오염된다"
+            )
+    return specs
+
+
+def combined_sample_id(specs):
+    return "_".join(sample_id(band, size) for band, size in specs)
+
+
+def assert_unique_persona_ids(personas):
+    """대역을 합칠 때 persona_id 가 겹치면 Mart join 이 행을 불린다.
+
+    PA 와 PC 는 접두가 달라 지금은 겹치지 않는다. 원천이 바뀌어 겹치기 시작하면
+    조용히 집계가 부풀 자리라 여기서 막는다.
+    """
+
+    counts = Counter(persona["persona_id"] for persona in personas)
+    duplicated = sorted(pid for pid, n in counts.items() if n > 1)
+    if duplicated:
+        head = ", ".join(duplicated[:5])
+        more = "" if len(duplicated) <= 5 else f" 외 {len(duplicated) - 5}건"
+        raise ValueError(f"대역 간 persona_id 가 겹친다: {head}{more}")
+
+
 def write_tables(tables, out_dir, manifest):
     os.makedirs(out_dir, exist_ok=True)
     for name, rows in tables.items():
@@ -425,25 +476,51 @@ def main(argv=None):
     ap.add_argument("--out", default=DEFAULT_OUT, help="산출 루트 디렉터리")
     args = ap.parse_args(argv)
 
-    band, size = parse_sample(args.sample)
-    config = SOURCE_CONFIGS[band]
-    personas = [apply_source_contract(p, config) for p in _load(SOURCE_FILES[band])]
+    specs = parse_samples(args.sample)
+    personas = []
+    for band, size in specs:
+        config = SOURCE_CONFIGS[band]
+        loaded = [apply_source_contract(p, config) for p in _load(SOURCE_FILES[band])]
+        loaded.sort(key=lambda p: p["persona_id"])
+        if size is not None:
+            loaded = loaded[:size]
+        personas.extend(loaded)
+    assert_unique_persona_ids(personas)
     personas.sort(key=lambda p: p["persona_id"])
-    if size is not None:
-        personas = personas[:size]
 
     product_ids = {p["product_id"] for p in _load(PRODUCTS)}
     tables = build(personas, product_ids)
 
-    sid = sample_id(band, size)
+    bands = [band for band, _ in specs]
+    sources = [SOURCE_CONFIGS[b]["persona_source"] for b in bands]
+    cohorts = [SOURCE_CONFIGS[b]["evaluation_cohort"] for b in bands]
+    source_files = [
+        os.path.relpath(SOURCE_FILES[b], ROOT).replace("\\", "/") for b in bands
+    ]
+    # 대역이 하나면 기존 manifest 모양을 그대로 둔다. 합쳤을 때만 복수형 키를
+    # 쓰고 단수형을 뺀다 — 둘을 같이 두면 어느 쪽이 정본인지 갈린다.
+    origin = (
+        {
+            "persona_band": bands[0],
+            "persona_source": sources[0],
+            "evaluation_cohort": cohorts[0],
+            "persona_source_file": source_files[0],
+        }
+        if len(specs) == 1
+        else {
+            "persona_bands": bands,
+            "persona_sources": sources,
+            "evaluation_cohorts": cohorts,
+            "persona_source_files": source_files,
+        }
+    )
+
+    sid = combined_sample_id(specs)
     out_dir = os.path.join(args.out, sid)
     manifest = {
         "sample_id": sid,
-        "persona_band": band,
-        "persona_source": config["persona_source"],
-        "evaluation_cohort": config["evaluation_cohort"],
+        **origin,
         "persona_count": len(personas),
-        "persona_source_file": os.path.relpath(SOURCE_FILES[band], ROOT).replace("\\", "/"),
         "product_catalog": os.path.relpath(PRODUCTS, ROOT).replace("\\", "/"),
         "product_count": len(product_ids),
         "contract": "contracts/persona-schema.md",

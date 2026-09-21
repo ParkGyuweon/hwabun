@@ -111,6 +111,30 @@ class SyntheticEventMetadataTest(unittest.TestCase):
         self.assertNotIn("content_kind", events[0]["properties"])
         self.assertNotIn("content_ref", events[0]["properties"])
 
+    def test_how_to_use_section_carries_usage_guide_content_kind(self):
+        """사용법 아코디언은 실제 화면이 content_kind=usage_guide 를 싣는다
+        (frontend/src/pages/ProductDetailPage.tsx:153). 합성 로그가 None 이면 대시보드
+        콘텐츠 화면의 '사용법' 행이 통째로 빈다 — 09-19 dw 에서 usage_guide 0건이었다 (Jira 364).
+        같은 자리의 전성분 아코디언은 실제 화면도 안 실으므로 None 이 맞다."""
+        events = []
+        emitter = Emitter(events, "PC00001", datetime(2026, 8, 31, 1, 0, 0),
+                          np.random.default_rng(1), self.context)
+        product = {"variants": [], "cat": "Moisturizers", "price": 30.0}
+        # depth 100 이어야 how_to_use 까지 내려간다 (n_sec = 섹션 수 x depth/100)
+        visit_detail(emitter, "P2", product, [], np.random.default_rng(2), depth_target=100,
+                     engaged=False, entry_source="in_app")
+
+        by_section = {}
+        for e in events:
+            if e["event_name"] != "section_view":
+                continue
+            by_section.setdefault(e["properties"]["section_id"], set()).add(
+                e["properties"].get("content_kind"))
+
+        self.assertIn("how_to_use", by_section)
+        self.assertEqual({"usage_guide"}, by_section["how_to_use"])
+        self.assertEqual({None}, by_section["ingredients"])
+
     def test_product_view_carries_recommendation_ids_when_entered_from_card(self):
         """추천 카드로 들어간 상세의 product_view 는 recommendation_id / list_id / position 을
         싣는다 (Jira 210). 안 실리면 데이터가 세션 순서로 추정해야 한다."""
@@ -332,6 +356,42 @@ class ViewCartCurrencyTest(unittest.TestCase):
             with open(out, encoding="utf-8") as f:
                 return [json.loads(ln) for ln in f if ln.strip()]
 
+    def test_checkout_only_buys_what_this_session_carted(self):
+        """마트는 (상품, 날짜) 단위로 distinct 세션을 센다. 앞선 방문에서 담은 것을 마지막
+        세션에서 결제하면 결제일에 담기 세션이 0 이 되어 funnel 의 checkout <= add_to_cart 와
+        persona_segment 의 purchase <= detail 이 깨진다 (Jira 371, 데이터 파트 Q5 판정).
+        시드 Event 는 마트가 빼므로 여기서도 뺀다."""
+        import collections, datetime
+        events = self._run("KRW")
+        KST = datetime.timedelta(hours=9)
+        cart, ck, det, pur = (collections.defaultdict(set) for _ in range(4))
+        for d in events:
+            pr = d.get("properties") or {}
+            if pr.get("seeded"):
+                continue
+            ts = d.get("occurred_at")
+            if not ts:
+                continue
+            day = (datetime.datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S") + KST).date()
+            sid, name = d.get("session_id"), d.get("event_name")
+            gids = [d["product_id"]] if d.get("product_id") else []
+            if name in ("purchase", "begin_checkout"):
+                gids = [i.get("product_id") for i in (pr.get("items") or []) if i.get("product_id")] or gids
+            for g in gids:
+                if name == "add_to_cart":
+                    cart[(g, day)].add(sid)
+                elif name == "begin_checkout":
+                    ck[(g, day)].add(sid)
+                elif name == "purchase":
+                    pur[(g, day)].add(sid)
+                elif name in ("product_view", "quick_look"):
+                    det[(g, day)].add(sid)
+        self.assertTrue(pur, "결제가 한 건도 없으면 이 검사가 무의미하다")
+        self.assertEqual([], [k for k in ck if ck[k] - cart.get(k, set())],
+                         "담지 않은 상품을 결제한 (상품, 날짜)")
+        self.assertEqual([], [k for k in pur if pur[k] - det.get(k, set())],
+                         "상세를 안 열고 산 (상품, 날짜)")
+
     def test_view_cart_carries_currency_in_both_modes(self):
         for currency, value_type in (("USD", float), ("KRW", int)):
             with self.subTest(currency=currency):
@@ -425,6 +485,39 @@ class ViewCartCurrencyTest(unittest.TestCase):
                                     and x["properties"].get("navigation_source") == "history_back"
                                     and x["page_view_id"] != ev["page_view_id"] for x in v))
 
+
+
+@unittest.skipIf(np is None, "numpy is required for the simulator generator")
+class CtrGuardTest(unittest.TestCase):
+    """분모는 마트와 같게 노출 세 Event 의 합이다 (dw-schema.md §4.1, Jira 371).
+
+    유사 상품 레일은 카드 하나에 recommendation_impression 만 내고 product_click 을 함께
+    낸다 (frontend SimilarProducts.tsx). 1:1 로 짝지으면 실제 화면 동선이 가드에 걸린다."""
+
+    def _ev(self, name, product_id):
+        return {"event_name": name, "product_id": product_id,
+                "occurred_at": "2026-09-20T01:00:00.000Z", "properties": {"generator_type": "python_batch"}}
+
+    def test_recommendation_impression_backs_a_product_click(self):
+        bad = gen.check_ctr_grains([self._ev("recommendation_impression", "P1"),
+                                    self._ev("product_click", "P1")])
+        self.assertEqual([], bad)
+
+    def test_banner_impression_backs_a_product_click(self):
+        bad = gen.check_ctr_grains([self._ev("banner_impression", "P1"),
+                                    self._ev("product_click", "P1")])
+        self.assertEqual([], bad)
+
+    def test_click_without_any_impression_is_still_caught(self):
+        bad = gen.check_ctr_grains([self._ev("product_click", "P1")])
+        self.assertEqual(1, len(bad), bad)
+        self.assertIn("product_click >", bad[0]["pair"])
+
+    def test_recommendation_click_still_needs_its_own_impression(self):
+        """추천 CTR 분모는 recommendation_impression 하나다 — 여기까지 넓히지 않는다"""
+        bad = gen.check_ctr_grains([self._ev("product_impression", "P1"),
+                                    self._ev("recommendation_click", "P1")])
+        self.assertEqual(1, len(bad), bad)
 
 
 class ResolveNowTest(unittest.TestCase):
