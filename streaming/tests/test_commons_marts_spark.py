@@ -168,15 +168,15 @@ class CommonsCohortWeeklySparkTest(unittest.TestCase):
         )
 
     def _row(self, mart, metric):
-        """축별 행. 전체(축 NULL) 행은 `_collapsed_row` 로 따로 본다."""
+        """축별 행. 전체(`actor_type='all'`) 행은 `_collapsed_row` 로 따로 본다."""
         return mart.where(
-            (mart["metric_name"] == metric) & mart["generator_type"].isNotNull()
+            (mart["metric_name"] == metric) & (mart["actor_type"] != "all")
         ).first()
 
     def _collapsed_row(self, mart, metric):
         """실행축을 걷어낸 전체 행 (Jira 404)."""
         return mart.where(
-            (mart["metric_name"] == metric) & mart["generator_type"].isNull()
+            (mart["metric_name"] == metric) & (mart["actor_type"] == "all")
         ).first()
 
     def test_cohort_with_too_few_brands_is_suppressed(self):
@@ -197,7 +197,7 @@ class CommonsCohortWeeklySparkTest(unittest.TestCase):
         # 축별 한 벌 + 실행축을 걷어낸 전체 한 벌이라 두 배다 (Jira 404).
         self.assertEqual(len(COMMONS_METRICS) * 2, mart.count())
 
-    def test_collapsed_row_is_emitted_with_null_axes(self):
+    def test_collapsed_row_is_emitted_with_the_all_sentinel(self):
         """실행축을 걷어낸 전체 행을 한 벌 더 낸다 (Jira 404).
 
         분위수는 가중 평균으로 합칠 수 없어 (p50 둘의 평균은 합친 집합의 p50 이
@@ -214,9 +214,10 @@ class CommonsCohortWeeklySparkTest(unittest.TestCase):
 
         self.assertIsNotNone(collapsed)
         self.assertEqual(6, collapsed["brand_count"])
-        # 축 컬럼에 'all' 같은 문자열을 넣지 않는다 — 실제 축 값과 섞인다
+        # NULL 이 아니라 'all' 이다. generator_type 의 NULL 은 실사용자(Web)를
+        # 뜻해서, NULL 로 두면 전체 행과 실사용자 행을 가를 수 없다.
         for axis in ("actor_type", "source", "generator_type"):
-            self.assertIsNone(collapsed[axis])
+            self.assertEqual("all", collapsed[axis])
 
     def test_collapsed_row_covers_every_axis(self):
         """전체 행은 어느 축 행보다 브랜드가 적을 수 없다."""
