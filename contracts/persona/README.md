@@ -60,6 +60,16 @@ py -m unittest discover -s contracts/persona -t contracts/persona -p "test_*.py"
 `contracts/persona/data/<sample_id>/` 아래에 테이블당 JSONL 한 개와 `_manifest.json`
 (원천 파일·행 수·규칙 버전) 이다.
 
+**대역을 합칠 수 있다** — `PC:all+PA:all` 은 `pcall_paall/` 을 낸다 (`,` 도 같은
+구분자다). 배치가 읽는 bridge 는 하나라는 약속을 유지하면서 에이전트를 고객군 Mart 에
+싣기 위한 것이고, `build_marts_job.py` 의 기본 경로가 이 산출을 가리킨다.
+
+합치기에는 가드가 둘 있다. **홀드아웃(`HA`·`HB`)은 합치지 않는다** — 추천 평가용으로
+분리된 집합이라 Mart 로 가는 bridge 에 섞이면 홀드아웃이 오염된다. **대역 간
+`persona_id` 중복도 거부한다** — 지금은 접두가 달라 안 겹치지만 겹치면 Join 이 조용히
+행을 불린다. 합친 산출의 `_manifest.json` 은 단수형 대신 `persona_bands` 같은 복수형
+키를 쓴다.
+
 포맷이 JSONL 인 이유는 의존성이 필요 없고 저장소의 다른 배치 산출물
 (`eval_metadata.jsonl`, `product_feature.jsonl`) 과 같기 때문이다. Delta/Parquet 은
 저장 엔진이 확정된 뒤에 붙인다 (`docs/analytics/dw-design.md` §5).
@@ -96,6 +106,7 @@ CF 동시발생은 `build_cooc.py`가 `personas_*.json` 전체의 `author_id`를
 |---|---:|---:|---:|
 | `paall` | 100 | 2,125 | 0 |
 | `pcall` | 9,900 | 208,602 | 0 |
+| `pcall_paall` | 10,000 | 210,715 | 0 |
 | `haall` | 2,000 | 44,245 | 0 |
 | `hball` | 2,000 | 43,981 | 0 |
 

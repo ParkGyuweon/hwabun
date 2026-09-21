@@ -124,7 +124,7 @@ function Invoke-BatchPipeline {
         '--ingredient-weekly-path', "$dataRoot/marts/ingredient_weekly_interest",
         '--category-price-path', "$dataRoot/marts/category_price_reference",
         '--persona-segment-path', "$dataRoot/marts/persona_segment_daily_kpi",
-        '--persona-bridge-path', '/opt/project/contracts/persona/data/pcall/bridge_persona_segment.jsonl',
+        '--persona-bridge-path', '/opt/project/contracts/persona/data/pcall_paall/bridge_persona_segment.jsonl',
         '--price-band-path', "$dataRoot/marts/brand_price_band_daily_kpi",
         '--banner-daily-path', "$dataRoot/marts/banner_daily",
         '--user-trait-daily-path', "$dataRoot/marts/user_trait_daily",
