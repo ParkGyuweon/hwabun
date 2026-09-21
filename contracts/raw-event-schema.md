@@ -2,7 +2,7 @@
 
 작성일: 2026-09-02
 
-상태: Draft, Delta 구현·E2E 검증 대기
+상태: Parquet 구현·E2E 검증 완료 (2026-09-21)
 
 설계 설명: [`../docs/analytics/raw-event-storage-design.md`](../docs/analytics/raw-event-storage-design.md)
 
@@ -131,7 +131,7 @@ Dataset만 사용한다. Processed Dataset의 상세 계약은
   확장한다.
 - 필드 이름·타입·의미 변경은 기존 Raw를 덮어쓰지 않고 `schema_version`으로 구분한다.
 - 알 수 없는 신규 필드나 projection 파싱 실패 때문에 Kafka record를 버리지 않는다.
-- 계약 변경 시 실제 Delta Schema와 컬럼 drift 검증을 함께 갱신한다.
+- 계약 변경 시 실제 Parquet Schema와 컬럼 drift 검증을 함께 갱신한다.
 
 ## 7. 계약 검증 조건
 

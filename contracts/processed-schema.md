@@ -4,19 +4,19 @@
 최종 계약 갱신: 2026-09-07
 대상 작업: `[DATA] Spark 처리 결과 및 DW 저장 구조 확정`
 문서 정리 작업: `[DATA] Analytics 계약 및 설계 문서 구조 정리`
-상태: 논리 Schema 확정, 현재 Spark 구현·Delta 물리화·E2E 정합성 검증 대기
+상태: Spark 구현·Parquet 물리화·E2E 정합성 검증 완료 (2026-09-21)
 설계 설명: [`spark-processing-design.md`](../docs/analytics/spark-processing-design.md)
 
 ## 1. 범위와 우선순위
 
-이 문서는 Spark가 Raw Event를 정제·파생해 EC2-2의 Delta Lake에 저장하는
+이 문서는 Spark가 Raw Event를 정제·파생해 EC2-2에 **Parquet**으로 저장하는
 Processed Dataset의 계약 원본이다. 각 Dataset의 grain, key, 컬럼, Spark SQL 타입,
 nullable, partition과 입력 관계만 정의한다.
 
 처리 배경, 중복 제거 근거, KPI 산식, 현재 구현 gap과 E2E 계획은
 `../docs/analytics/spark-processing-design.md`에서 설명한다. 두 문서가 충돌하면 이
 문서를 우선한다.
-Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약은
+Dashboard 대상 KPI를 Parquet `marts`와 MySQL `dw`에 제공하는 Mart 계약은
 [`dw-schema.md`](./dw-schema.md), 적재·조회 설계는
 [`dw-design.md`](../docs/analytics/dw-design.md)에서 다룬다.
 
@@ -24,9 +24,9 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 
 | 항목 | 계약 |
 | --- | --- |
-| 기준 저장 엔진 | Delta Lake |
-| 저장 위치 | EC2-2 로컬 파일시스템의 Processed Delta root |
-| 내부 파일 | Parquet + `_delta_log` |
+| 기준 저장 엔진 | Parquet (Spark `DataFrameWriter.parquet`, `mode=overwrite`) |
+| 저장 위치 | EC2-2 로컬 파일시스템의 Processed root |
+| 내부 파일 | Parquet. 트랜잭션 로그는 없다 |
 | Timestamp | Spark SQL `timestamp`, UTC 해석 |
 | Dashboard 일자 | `Asia/Seoul` 기준 `event_date_kst` 또는 Dataset별 KST 날짜 |
 | Decimal | 금액은 `decimal(18,2)` |
@@ -37,7 +37,7 @@ Dashboard 대상 KPI를 Delta `marts`와 MySQL `dw`에 제공하는 Mart 계약�
 | Schema 확장 | 신규 컬럼은 nullable 추가를 기본으로 하고 기존 컬럼 의미·타입 변경 금지 |
 | 통합몰 귀속 | Event와 Processed Dataset에는 `tenant_id`, `business_id`를 두지 않고 상품 Fact가 `brand_id`를 `dim_product`에서 파생한다 |
 
-환경별 Delta root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
+환경별 Processed root와 checkpoint URI는 Spark 배포 설정에서 주입한다. Dataset 이름과
 하위 경로는 환경이 달라도 유지한다.
 
 ### 2.1 `brand_id`, `product_id`
@@ -720,7 +720,7 @@ Dashboard가 두 값을 섞어 "평균 평점"으로 보여주면 신규 상품�
 2026-09-07 통합몰 귀속 계약과 브랜드 Dimension Join 구현을 반영했다.
 아래 조건은 물리 구현·E2E 완료 판정 기준이다.
 
-1. 각 Delta Table의 실제 `printSchema()`가 이 문서의 컬럼·타입·nullable과 일치한다.
+1. 각 Dataset의 실제 `printSchema()`가 이 문서의 컬럼·타입·nullable과 일치한다.
 2. §3의 unique key 중복이 0건이다.
 3. Partition column이 NULL인 row가 0건이다.
 4. `cleaned_events.event_id` 중복이 0건이고 비정본은 `duplicate_events`에서
