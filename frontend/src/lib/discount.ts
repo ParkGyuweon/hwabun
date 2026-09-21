@@ -12,7 +12,24 @@
  * 바꿔 끼우고 이 파일의 함수는 그대로 쓴다.
  */
 import discountsData from '../mocks/discounts.json';
+import { toKrw } from './localize';
 import type { Product } from '../types/product';
+
+type Priced = Pick<Product, 'price_usd' | 'sale_price_usd' | 'price_krw' | 'sale_price_krw'>;
+
+/**
+ * 원화 정가. **원화 원본이 있으면 그대로**, 없을 때만 달러를 100원 단위로 환산한다 (2026-09-21).
+ * 표시(PriceTag·장바구니)·이벤트 금액(checkout)·목록 가격 필터가 전부 이 함수를 써야 값이 한 곳에서 갈리지 않는다.
+ */
+export const listPriceKrw = (p: Priced): number =>
+  typeof p.price_krw === 'number' && p.price_krw > 0 ? Math.round(p.price_krw) : toKrw(p.price_usd);
+
+/** 고객이 실제로 내는 원화. 할인 없으면 정가 */
+export const effectivePriceKrw = (p: Priced): number => {
+  if (!hasDiscount(p)) return listPriceKrw(p);
+  if (typeof p.sale_price_krw === 'number' && p.sale_price_krw > 0) return Math.round(p.sale_price_krw);
+  return toKrw(p.sale_price_usd as number);
+};
 
 interface DiscountEntry {
   /** 0~1. 0.15 = 15% */
@@ -35,6 +52,8 @@ export function applyDiscount(p: Product): Product {
   return {
     ...p,
     sale_price_usd: round2(p.price_usd * (1 - d.rate)),
+    // 원화 원본이 있으면 할인가도 원화로 낸다 (100원 단위). 표시와 결제가 같은 수를 본다
+    ...(typeof p.price_krw === 'number' && p.price_krw > 0 ? { sale_price_krw: Math.round((p.price_krw * (1 - d.rate)) / 100) * 100 } : {}),
     discount_rate: d.rate,
     discount_label: d.label,
   };

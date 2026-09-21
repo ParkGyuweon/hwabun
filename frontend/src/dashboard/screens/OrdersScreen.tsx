@@ -4,7 +4,8 @@ import { fmt } from '../lib/metrics';
 import { fetchSellerOrders } from '../../lib/shopApi';
 import type { SellerOrder } from '../../lib/shopApi';
 import { useBrandProducts } from '../lib/useBrandProducts';
-import { categoryKo, toKrw } from '../../lib/localize';
+import { categoryKo } from '../../lib/localize';
+import { listPriceKrw } from '../../lib/discount';
 import { DateRangePicker } from '../lib/DateRangePicker';
 import { presetRange } from '../lib/dateRange';
 import type { DateRange } from '../lib/dateRange';
@@ -331,7 +332,7 @@ export default function OrdersScreen({
                     <p className="myproducts__name">{p.product_name}</p>
                     <p className="myproducts__meta">{p.product_id}</p>
                   </div>
-                  <p className="myproducts__price">{toKrw(p.price_usd) > 0 ? won(toKrw(p.price_usd)) : '가격 미입력'}</p>
+                  <p className="myproducts__price">{listPriceKrw(p) > 0 ? won(listPriceKrw(p)) : '가격 미입력'}</p>
                 </li>
               ))}
             </ul>

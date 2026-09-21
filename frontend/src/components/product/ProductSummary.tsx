@@ -79,6 +79,8 @@ export default function ProductSummary({
     image_url: product.image_url,
     price_usd: product.price_usd,
     sale_price_usd: product.sale_price_usd ?? null,
+    price_krw: product.price_krw ?? null,
+    sale_price_krw: product.sale_price_krw ?? null,
     variant_id: variantIdOf(product, selectedSkuId),
     quantity,
   });

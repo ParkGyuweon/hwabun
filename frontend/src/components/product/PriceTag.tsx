@@ -1,9 +1,9 @@
-import { formatPrice } from '../../lib/format';
-import { discountPercent, effectivePrice, hasDiscount } from '../../lib/discount';
+import { formatKrw } from '../../lib/format';
+import { discountPercent, effectivePriceKrw, hasDiscount, listPriceKrw } from '../../lib/discount';
 import type { Product } from '../../types/product';
 
 interface PriceTagProps {
-  product: Pick<Product, 'price_usd' | 'sale_price_usd' | 'discount_label'>;
+  product: Pick<Product, 'price_usd' | 'sale_price_usd' | 'price_krw' | 'sale_price_krw' | 'discount_label'>;
   /** sm 카드 · md 요약·퀵룩 · lg 배너 가격 축 */
   size?: 'sm' | 'md' | 'lg';
   /** 할인 이유("입점 기념")까지 보일지. 카드에서는 자리가 없어 끈다 */
@@ -19,7 +19,8 @@ interface PriceTagProps {
  * 여섯 군데를 고쳐야 해서 여기 한 곳으로 모았다.
  */
 export default function PriceTag({ product, size = 'md', showLabel = false, className = '' }: PriceTagProps) {
-  const now = formatPrice(effectivePrice(product));
+  // 원화 원본이 있으면 그대로. 달러 환산은 원본이 없을 때만 (lib/discount)
+  const now = formatKrw(effectivePriceKrw(product));
   if (!hasDiscount(product)) {
     return (
       <span className={`price price--${size} ${className}`.trim()}>
@@ -31,7 +32,7 @@ export default function PriceTag({ product, size = 'md', showLabel = false, clas
     <span className={`price price--${size} price--sale ${className}`.trim()}>
       <em className="price__rate">{discountPercent(product)}%</em>
       <strong className="price__now">{now}</strong>
-      <s className="price__was">{formatPrice(product.price_usd)}</s>
+      <s className="price__was">{formatKrw(listPriceKrw(product))}</s>
       {showLabel && product.discount_label ? <span className="price__label">{product.discount_label}</span> : null}
     </span>
   );

@@ -1,7 +1,6 @@
 import type { CartItem } from '../types/cart';
 import type { Product } from '../types/product';
-import { effectivePrice, hasDiscount, discountPercent } from './discount';
-import { toKrw } from './localize';
+import { discountPercent, effectivePrice, effectivePriceKrw, hasDiscount, listPriceKrw } from './discount';
 
 /**
  * 이벤트 금액의 정본 통화 (계약 event-properties-schema §4.5, 2026-09-16 · Jira 303).
@@ -14,18 +13,20 @@ import { toKrw } from './localize';
 export const EVENT_CURRENCY = 'KRW';
 
 /** 정가 원화. 화면 표시(formatPrice)와 같은 식 */
-export const unitPriceKrw = (p: Pick<Product, 'price_usd'>): number => toKrw(p.price_usd);
+export const unitPriceKrw = (p: Pick<Product, 'price_usd' | 'price_krw'>): number => listPriceKrw(p);
 
 /**
  * 담기·빼기 이벤트의 금액 속성. `unit_price` 는 **정가**(계약 · 생성기 `price_props` 와 같음)이고 할인은 열린 속성으로
  * 덧붙인다 — `sale_price`(원화 실판매가)·`discount_rate`(정수 %). 할인이 없으면 두 키를 싣지 않는다.
  */
-export function unitMoneyProps(p: Pick<Product, 'price_usd' | 'sale_price_usd'> & { discount_rate?: number }): Record<string, unknown> {
+export function unitMoneyProps(
+  p: Pick<Product, 'price_usd' | 'sale_price_usd' | 'price_krw' | 'sale_price_krw'> & { discount_rate?: number },
+): Record<string, unknown> {
   return {
     unit_price: unitPriceKrw(p),
     currency: EVENT_CURRENCY,
     ...(hasDiscount(p)
-      ? { sale_price: toKrw(effectivePrice(p)), discount_rate: p.discount_rate ?? discountPercent(p) }
+      ? { sale_price: effectivePriceKrw(p), discount_rate: p.discount_rate ?? discountPercent(p) }
       : {}),
   };
 }
@@ -126,7 +127,7 @@ export function toOrderItems(items: CartItem[]): OrderItem[] {
 export function orderTotalsKrw(items: CartItem[]): { total: number; paid: number } {
   return {
     total: items.reduce((sum, item) => sum + unitPriceKrw(item) * item.quantity, 0),
-    paid: items.reduce((sum, item) => sum + toKrw(effectivePrice(item)) * item.quantity, 0),
+    paid: items.reduce((sum, item) => sum + effectivePriceKrw(item) * item.quantity, 0),
   };
 }
 

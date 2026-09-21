@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import { useBrandProducts } from '../lib/useBrandProducts';
-import { toKrw } from '../../lib/localize';
+import { listPriceKrw } from '../../lib/discount';
 import { fetchSellerOrders } from '../../lib/shopApi';
 import type { SellerOrder } from '../../lib/shopApi';
 
@@ -126,7 +126,7 @@ export default function MyProducts({ brandId, brandName }: { brandId: string | n
       <ul className="myproducts">
         {ranked.map((p) => {
           const image = p.image_url ?? p.images[0] ?? null;
-          const price = toKrw(p.price_usd);
+          const price = listPriceKrw(p);
           const s = sold.get(p.product_id) ?? { today: 0, month: 0, total: 0, amount: 0 };
           return (
             <li key={p.product_id} className={`myproducts__item${p.product_id === bestId ? ' is-best' : ''}`}>

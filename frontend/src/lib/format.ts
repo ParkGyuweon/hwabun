@@ -12,6 +12,11 @@ export function formatPrice(usd: number): string {
   return `${toKrw(usd).toLocaleString('ko-KR')}원`;
 }
 
+/** 이미 원화인 값. 환산·반올림 없이 적는다 */
+export function formatKrw(krw: number): string {
+  return `${Math.round(krw).toLocaleString('ko-KR')}원`;
+}
+
 export function formatCount(n: number): string {
   return n.toLocaleString('en-US');
 }

@@ -155,6 +155,8 @@ function mapSummary(s: ProductSummaryDto): Product {
     variants: active.map((v) => mapVariant(v, s.primaryImageUrl)),
     description: null,
     price_usd: krwToUsd(s.priceKrw),
+    // 원화 원본. 화면·결제는 이 값을 그대로 쓴다 (types/product.ts price_krw)
+    price_krw: s.priceKrw === null || s.priceKrw === undefined ? null : Number(s.priceKrw),
     size: null,
     rating: s.rating ?? null,
     review_count: null,
@@ -203,6 +205,7 @@ function mapDetail(d: ProductDetailDto): Product {
     description: mapDescription(d.description),
     ingredients: d.ingredients && d.ingredients.trim() ? [d.ingredients.trim()] : [],
     sale_price_usd: sale && sale < base.price_usd ? sale : null,
+    sale_price_krw: sale && sale < base.price_usd && first?.salePriceKrw != null ? Number(first.salePriceKrw) : null,
     discount_label: sale && sale < base.price_usd ? '할인' : undefined,
   };
 }
