@@ -133,22 +133,22 @@ export function validateForm(form: RegistrationForm): ValidationResult {
   if (!form.brand_name.trim()) errors.push('브랜드명이 비어 있습니다.');
   if (!SECONDARY_CATEGORIES.some((c) => c.value === form.secondary_category)) errors.push('대분류를 골라 주세요.');
   if (!TERTIARY_CATEGORIES.some((c) => c.value === form.tertiary_category)) errors.push('세부 분류를 골라 주세요.');
-  if (!form.ingredients.trim()) errors.push('전성분을 붙여 넣어 주세요. 추천은 전성분에서 성분을 읽습니다.');
-  if (form.price_krw === '' || !(Number(form.price_krw) > 0)) errors.push('가격(원)은 0보다 커야 합니다.');
+  if (!form.ingredients.trim()) errors.push('전성분을 붙여 넣어 주세요.');
+  if (form.price_krw === '' || !(Number(form.price_krw) > 0)) errors.push('가격을 0보다 크게 적어 주세요.');
 
   const outside = form.highlights.filter((h) => !HIGHLIGHT_VALUES.has(h));
-  if (outside.length) errors.push(`어휘에 없는 태그: ${outside.join(', ')}`);
+  if (outside.length) errors.push(`알 수 없는 태그: ${outside.join(', ')}`);
 
   if (form.highlights.length === 0) {
-    warnings.push('태그가 없으면 피부 고민·성분 표방·제형 세 블록이 0이 되어 추천 노출에 크게 불리합니다. 해당하는 것을 골라 주세요.');
+    warnings.push('태그를 하나도 안 고르면 추천에 잘 안 뜹니다.');
   } else if (!form.highlights.some((h) => CONCERN_VALUES.has(h))) {
-    warnings.push('피부 고민 태그가 하나도 없습니다. 고민 축은 추천 가중치가 가장 큽니다.');
+    warnings.push('피부 고민 태그를 골라 주세요.');
   }
   if (form.secondary_category === 'Sunscreen' && !form.ingredients.match(/spf|titanium|zinc oxide|triazone|avobenzone|homosalate|octocrylene|methoxyphenyl/i)) {
     // 전성분에 차단 성분이 없으면 추천은 제품명의 `SPF nn` 표기로 SPF 축을 켠다 (Jira 243, 계약 §3.1)
-    warnings.push('선케어인데 전성분에서 자외선 차단 성분을 찾지 못했습니다. 제품명에 "SPF 50" 처럼 표기하면 추천이 자외선 차단 상품으로 읽습니다.');
+    warnings.push('선케어인데 전성분에 자외선 차단 성분이 없습니다.');
   }
-  if (!form.image_url.trim()) warnings.push('대표 이미지가 없어 플레이스홀더로 보입니다.');
+  if (!form.image_url.trim()) warnings.push('대표 이미지가 없습니다.');
 
   return { errors, warnings };
 }

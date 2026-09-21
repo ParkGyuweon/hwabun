@@ -1068,9 +1068,14 @@ table.data tr:hover td {
 
 /* ---------- 상품 등록 ---------- */
 
+/*
+ * 왼쪽 입력 · 오른쪽 미리보기. **두 칸 모두 `minmax(0, …)` 와 `min-width: 0` 이 있어야 한다** (2026-09-21).
+ * 없으면 칸의 최소 너비가 "안에서 가장 긴 줄" 로 잡혀서, 아래 등록 줄의 긴 안내 한 줄 때문에 왼쪽 칸이
+ * 677px 로 부풀고 오른쪽 미리보기를 덮었다 (규원님 제보: 상품 등록 화면 깨짐).
+ */
 .register {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -1078,6 +1083,7 @@ table.data tr:hover td {
 .register__form {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .register__preview {
@@ -1085,6 +1091,7 @@ table.data tr:hover td {
   top: 16px;
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 /* ---------- 상품 등록 개편 (2026-09-21) ---------- */
@@ -1402,7 +1409,9 @@ table.data tr:hover td {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
+  min-width: 0;
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.92);
   -webkit-backdrop-filter: blur(12px);
@@ -1413,6 +1422,7 @@ table.data tr:hover td {
 }
 
 .reg-sticky__status {
+  flex: 1 1 200px;
   min-width: 0;
   font-size: 13px;
   overflow: hidden;
@@ -1526,7 +1536,7 @@ table.data tr:hover td {
 
 .reg-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -1636,15 +1646,23 @@ table.data tr:hover td {
   align-items: center;
 }
 
-@media (max-width: 1100px) {
+/* 사이드바(232) + 본문 여백(72) 을 빼면 1280 아래에서는 한 칸이 470px 도 안 된다. 그 밑은 위아래로 쌓는다 */
+@media (max-width: 1280px) {
   .register {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .register__preview {
     position: static;
   }
   .register__iframe {
     height: 720px;
+  }
+}
+
+/* 좁아지면 입력 두 칸짜리 줄도 한 칸씩 */
+@media (max-width: 720px) {
+  .reg-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
