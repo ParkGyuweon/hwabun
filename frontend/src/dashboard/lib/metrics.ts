@@ -70,7 +70,14 @@ export interface ProductMetrics {
   product: Product;
   impressions: number;
   clicks: number;
+  /**
+   * 상세를 본 **세션 수** (detail_view_sessions). 문턱(200)과 담기 비율의 분모가 이것이다 (계약 §4.1).
+   * 2026-09-21 까지는 Event 건수(product_view_count)를 넣어서, 8개 상품 전부 세션은 500~768 인데 건수는 200 을 못 넘어
+   * 상품 화면 네 칸이 한꺼번에 비었다 (규원님 실측).
+   */
   detailViews: number;
+  /** 상세를 본 세션 중 장바구니에 담은 세션 비율. 서버 view_to_cart_rate, 없으면 세션끼리 나눈 값 */
+  cartRate: number;
   quickLooks: number;
   ingredientViewRate: number;
   reviewViewRate: number;
@@ -83,7 +90,7 @@ export interface ProductMetrics {
   /** 노출→클릭→상세→정보확인→담기 중 브랜드 중앙값 대비 가장 낮은 단계 */
   bottleneck: 'click' | 'detail' | 'info' | 'cart';
   /** 이탈 직전 본 콘텐츠 최빈값 (product_exit_daily). 마트가 없으면 null — 화면은 하이픈 */
-  exitContent: 'ingredient_list' | 'usage_guide' | 'user_review' | 'similar_products' | 'product_hero' | 'price' | null;
+  exitContent: string | null;
   /** 세션당 variant_select 평균. 3 이상은 마찰. 마트가 없으면 null */
   variantSwitches: number | null;
   /** quick_look_close.close_reason = open_detail 비율. 마트가 없으면 null */
@@ -95,14 +102,37 @@ export interface ProductMetrics {
 }
 
 /** 이탈 지점 → 이유 힌트 (규칙 R-1c·e·h). 단정하지 않는다 */
-export const EXIT_HINT: Record<NonNullable<ProductMetrics['exitContent']>, { ko: string; hint: string }> = {
+/**
+ * 나간 자리(마지막으로 본 글)의 이름과 가능성 한 마디. 마트 `last_content_kind` 는 계약의 content_kind 21종 어느 것이든
+ * 올 수 있다. 2026-09-21 까지는 여섯 종만 받고 나머지는 버려서, 마트에 660행이 있어도 화면은 '-' 였다 (데이터 팀 실측).
+ * 모르는 종류는 이름만 그대로 적고 가능성은 비운다 — 지어내지 않는다.
+ */
+export const EXIT_HINT: Record<string, { ko: string; hint: string }> = {
   ingredient_list: { ko: '성분 목록', hint: '피하는 성분을 봤을 수 있습니다' },
+  ingredient_callout: { ko: '성분 특징', hint: '성분 설명이 기대와 달랐을 수 있습니다' },
+  clinical_claim: { ko: '임상 결과', hint: '근거가 약해 보였을 수 있습니다' },
   usage_guide: { ko: '사용법', hint: '설명이 어려웠을 수 있습니다' },
+  what_it_is: { ko: '제품 소개', hint: '찾던 제품이 아니었을 수 있습니다' },
+  what_else: { ko: '추가 설명', hint: '더 읽을 이유를 못 찾았을 수 있습니다' },
+  brand_story: { ko: '브랜드 소개', hint: '브랜드 이야기에서 관심이 끊겼을 수 있습니다' },
   user_review: { ko: '리뷰', hint: '안 좋은 리뷰를 봤을 수 있습니다' },
+  review_stats: { ko: '평점 분포', hint: '평점이 기대보다 낮았을 수 있습니다' },
+  review_filter: { ko: '리뷰 걸러 보기', hint: '내 피부 타입 리뷰가 적었을 수 있습니다' },
   similar_products: { ko: '유사 상품', hint: '다른 상품과 비교하러 갔을 수 있습니다' },
+  recommendation_card: { ko: '추천 상품', hint: '다른 상품으로 옮겨 갔을 수 있습니다' },
   product_hero: { ko: '첫 화면', hint: '목록에서 기대한 것과 달랐을 수 있습니다' },
+  product_image: { ko: '상품 이미지', hint: '사진에서 기대와 달랐을 수 있습니다' },
+  highlight_badge: { ko: '특징 배지', hint: '내세운 특징이 와닿지 않았을 수 있습니다' },
   price: { ko: '가격', hint: '가격이 부담됐을 수 있습니다' },
+  variant_option: { ko: '옵션 선택', hint: '원하는 옵션이 없었을 수 있습니다' },
+  cta: { ko: '구매 버튼', hint: '담기 직전에 망설였을 수 있습니다' },
+  persona_match: { ko: '내 피부 맞춤', hint: '내 피부와 안 맞아 보였을 수 있습니다' },
+  product_meta: { ko: '상품 정보', hint: '용량·사양이 기대와 달랐을 수 있습니다' },
 };
+
+export function exitHint(kind: string): { ko: string; hint: string } {
+  return EXIT_HINT[kind] ?? { ko: kind, hint: '' };
+}
 
 export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
   click: '보이고 → 누르기',

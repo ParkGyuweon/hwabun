@@ -94,6 +94,8 @@ export interface ProductRow {
   remove_from_cart_sessions: number;
   session_count: number;
   unique_user_count: number;
+  /** 상세 조회 ∪ 퀵룩 세션. view_to_cart_rate 의 분모(계약 §4.1). 배포본 E2 가 준다 (규원님 실측 09-21) */
+  detail_view_sessions?: number | null;
   product_ctr: number | null;
   detail_entry_rate: number | null;
   add_to_cart_rate: number | null;

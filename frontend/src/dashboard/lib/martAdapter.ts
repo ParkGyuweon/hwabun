@@ -86,8 +86,6 @@ const ENTRY_KO: Record<string, string> = {
   direct: '주소로 바로 들어옴',
 };
 
-const EXIT_KINDS: ProductMetrics['exitContent'][] = ['ingredient_list', 'usage_guide', 'user_review', 'similar_products', 'product_hero', 'price'];
-
 /* ---------- 도움 ---------- */
 
 const ratio = (num: number, den: number): number => (den === 0 ? 0 : num / den);
@@ -151,20 +149,22 @@ function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: 
       const f = r.funnel;
       const impressions = r.product_impression_count;
       const clicks = r.product_click_count;
-      const detailViews = r.product_view_count;
+      // 관심 점수·단계 비율은 Event 건수로, 문턱·담기 비율은 세션 수로. 둘을 섞으면 비율이 1.0 을 넘는다 (계약 §4.1 실측)
+      const detailViewCount = r.product_view_count;
+      const detailViews = r.detail_view_sessions ?? f?.detail_view_sessions ?? r.product_view_sessions;
       const addToCart = r.add_to_cart_count;
       const removed = r.remove_from_cart_count;
       const infoRate = f ? ratio(f.information_view_sessions, f.product_view_sessions) : 0;
       const rates = {
         click: f ? ratio(f.click_sessions, f.impression_sessions) : ratio(clicks, impressions),
-        detail: f ? ratio(f.product_view_sessions, f.click_sessions) : ratio(detailViews, clicks),
+        detail: f ? ratio(f.product_view_sessions, f.click_sessions) : ratio(detailViewCount, clicks),
         info: infoRate,
-        cart: f ? ratio(f.add_to_cart_sessions, f.detail_view_sessions ?? f.product_view_sessions) : ratio(addToCart, detailViews),
+        cart: r.add_to_cart_rate ?? (f ? ratio(f.add_to_cart_sessions, f.detail_view_sessions ?? f.product_view_sessions) : ratio(r.add_to_cart_sessions, detailViews)),
       };
       const interest =
         r.product_interest_score ??
         clicks * EVENT_WEIGHT.product_click +
-          detailViews * EVENT_WEIGHT.page_view +
+          detailViewCount * EVENT_WEIGHT.page_view +
           r.quick_look_count * EVENT_WEIGHT.quick_look +
           addToCart * EVENT_WEIGHT.add_to_cart +
           removed * EVENT_WEIGHT.remove_from_cart;
@@ -175,9 +175,8 @@ function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: 
        * 같은 문장을 그대로 읽고 손을 댔다. 없는 것은 하이픈으로 둔다.
        */
       const d = r.diagnostics;
-      const exitContent = (d?.exit_content_kind_top && EXIT_KINDS.includes(d.exit_content_kind_top as ProductMetrics['exitContent'])
-        ? (d.exit_content_kind_top as ProductMetrics['exitContent'])
-        : null);
+      // 마트가 준 종류를 그대로 받는다. 여섯 종만 걸러 받던 흰목록이 마트 660행을 '-' 로 만들었다 (2026-09-21)
+      const exitContent = d?.exit_content_kind_top ?? null;
       if (d) anyDiag = true;
 
       const row: ProductMetrics & { rates: typeof rates } = {
@@ -185,6 +184,7 @@ function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: 
         impressions,
         clicks,
         detailViews,
+        cartRate: rates.cart,
         quickLooks: r.quick_look_count,
         ingredientViewRate: infoRate,
         reviewViewRate: infoRate,
