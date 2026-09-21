@@ -476,7 +476,7 @@ source·실행 축이 다른 행이 여럿이면 소비자가 `window_end_date` 
 | 불변식이 깨진 Mart | `funnel_daily_kpi` 26 · `brand_daily_kpi` 24 · `product_daily_kpi` 28 · `persona_segment_daily_kpi` 74 · `brand_price_band_daily_kpi` 26 · `segment_price_band_daily_kpi` 52 |
 
 **Mart에서 `hist:`를 걸러내는 방식은 쓰지 않는다.** 걸러내면 재구매 마트가 0으로
-돌아가 327이 되돌아간다. 이력 세션이 최소 퍼널(`product_view` → `add_to_cart` →
+돌아가 `is_seeded=false` 결정이 원복된다. 이력 세션이 최소 퍼널(`product_view` → `add_to_cart` →
 `purchase`)을 갖추는 것이 정본이고, 그 책임은 생성기에 있다.
 
 Q5의 `*_counts_are_bounded` 계열이 이것을 검사한다. 이력 세션을 새로 만들거나 형태를
@@ -521,8 +521,8 @@ input = product_event_fact, purchase_fact, dim_product
 
 **`add_to_cart_rate`와 `purchase_rate`의 분모는 `detail_view_sessions`다.**
 `product_view_sessions`를 분모로 두면 Quick Look에서 담은 세션이 분자에만 들어가
-비율이 1.0을 넘는다. 실제로 그랬다 — 데이터 235 재생에서 1,248행 중 323행(26%)이
-1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 235에서 고쳤는데 상품 Mart가
+비율이 1.0을 넘는다. 실제로 그랬다 — 재생 데이터에서 1,248행 중 323행(26%)이
+1.0을 초과했고 최댓값이 6.0이었다. 브랜드·퍼널 Mart는 먼저 고쳤는데 상품 Mart가
 빠져 있었고, 검증 Job에 이 Mart의 비율 검사가 없어 드러나지 않았다.
 
 `product_ctr`와 `detail_entry_rate`의 분모는 `impression_count`로 **Event 수**다.
@@ -778,8 +778,12 @@ Mart 구조는 그대로다.
 모든 비율은 분모가 0이면 NULL이다. 시드 Event는 제외한다(§4.0).
 
 `bridge_persona_segment`는 저장소에 없는 생성물이다(`.gitignore`의 `data/`). 실행 전에
-`py contracts/persona/build_persona_tables.py --sample PC:all`로 만든다. 없으면 이 Mart를
-만들지 않고 검증 Job은 경고만 남긴다.
+`py contracts/persona/build_persona_tables.py --sample PC:all+PA:all`로 만든다.
+
+**없으면 Q4가 통째로 멈춘다.** `load_persona_segments`에 존재 확인이 없어 Spark가
+`AnalysisException [PATH_NOT_FOUND]`를 던지고, 일일 배치는 Q2~Q4 실패를 전체 중단으로
+처리한다 — 발행도 건너뛰어 대시보드가 전날 값에 머문다. 경로를 바꾸기 전에 대상 파일이
+있는지 먼저 확인한다.
 
 **계약에서 뺀 컬럼이 셋 있다.** `persona_behavior_feature_delta`도 input에서 뺐고,
 그 Fact는 2026-09-16에 계약에서 아예 지웠다 — 구현된 적이 없고 이 Mart 말고는

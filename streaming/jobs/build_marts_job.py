@@ -62,9 +62,14 @@ DEFAULT_SEGMENT_PRICE_BAND_PATH = "data/marts/segment_price_band_daily_kpi"
 DEFAULT_CLEANED_PATH = "data/processed/cleaned_events"
 DEFAULT_EVENT_DAILY_PATH = "data/marts/event_daily"
 # 저장소에 커밋하지 않는 생성물이다. 실행 전에
-#   py contracts/persona/build_persona_tables.py --sample PC:all
+#   py contracts/persona/build_persona_tables.py --sample PC:all+PA:all
+#
+# PC(프로그램 생성)와 PA(에이전트)를 합친 파일을 쓴다. PC 만 읽으면 에이전트
+# 100명이 persona_id join 에서 통째로 빠져 고객군 Mart 에 agent_llm 행이 없다.
+# 파일이 없으면 Spark 가 PATH_NOT_FOUND 로 던져 Q4 가 통째로 멈춘다 — 경로를
+# 바꾸기 전에 대상 파일이 서버에 있는지 먼저 확인한다.
 DEFAULT_PERSONA_BRIDGE_PATH = (
-    "contracts/persona/data/pcall/bridge_persona_segment.jsonl"
+    "contracts/persona/data/pcall_paall/bridge_persona_segment.jsonl"
 )
 DEFAULT_BANNER_DAILY_PATH = "data/marts/banner_daily"
 DEFAULT_USER_TRAIT_DAILY_PATH = "data/marts/user_trait_daily"
@@ -443,7 +448,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--persona-bridge-path",
         default=_env("PERSONA_BRIDGE_PATH", DEFAULT_PERSONA_BRIDGE_PATH),
-        help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all 로 만든다",
+        help="bridge_persona_segment JSONL. build_persona_tables.py --sample PC:all+PA:all 로 만든다",
     )
     parser.add_argument("--banner-daily-path", default=_env("BANNER_DAILY_PATH", DEFAULT_BANNER_DAILY_PATH))
     parser.add_argument("--user-trait-daily-path", default=_env("USER_TRAIT_DAILY_PATH", DEFAULT_USER_TRAIT_DAILY_PATH))
@@ -891,8 +896,9 @@ def _product_daily_kpi(
             F.col("purchase_count_distinct_order"),
         )
         .drop("purchase_count_distinct_order")
-        # 분모는 두 노출의 합이다. product_impression 만 쓰면 추천 카드에서 온
-        # 클릭이 분자에만 들어가 비율이 1 을 넘는다 (§4.1).
+        # 분모는 노출 세 Event 의 합이다 (IMPRESSION_EVENTS · §4.1).
+        # product_impression 만 쓰면 추천 카드에서 온 클릭이 분자에만 들어가
+        # 비율이 1 을 넘는다.
         .withColumn(
             "impression_count",
             (
@@ -1179,7 +1185,7 @@ def load_persona_segments(spark: Any, path: str) -> Any:
     """bridge_persona_segment JSONL 을 읽는다.
 
     저장소에 커밋하지 않는 생성물이라 (`.gitignore` 의 ``data/``) 실행 전에
-    ``py contracts/persona/build_persona_tables.py --sample PC:all`` 로 만든다.
+    ``py contracts/persona/build_persona_tables.py --sample PC:all+PA:all`` 로 만든다.
     """
 
     from pyspark.sql.types import StringType, StructField, StructType
