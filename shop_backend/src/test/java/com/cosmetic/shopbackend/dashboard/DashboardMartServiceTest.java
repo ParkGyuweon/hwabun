@@ -403,16 +403,40 @@ class DashboardMartServiceTest {
   @DisplayName("재구매는 최신 스냅샷만 읽는다 — 스냅샷을 기간 합산하지 않는다")
   void repurchaseReadsTheLatestSnapshotOnly() {
     insert("dw.brand_repurchase_daily", Map.of(
-      "brand_id", BRAND, "snapshot_date_kst", "2026-09-10", "buyer_count", 10, "repeat_buyer_count", 9
+      "brand_id", BRAND, "snapshot_date_kst", "2026-09-10", "buyer_count", 10, "repeat_buyer_count", 9,
+      "median_days_between_purchases", 21.0
     ));
     insert("dw.brand_repurchase_daily", Map.of(
-      "brand_id", BRAND, "snapshot_date_kst", "2026-09-11", "buyer_count", 100, "repeat_buyer_count", 20
+      "brand_id", BRAND, "snapshot_date_kst", "2026-09-11", "buyer_count", 100, "repeat_buyer_count", 20,
+      "median_days_between_purchases", 21.0
     ));
 
     Map<?, ?> brandBlock = (Map<?, ?>) service.purchase(SELLER, BRAND, FROM, TO, "all").get("brand");
 
     assertEquals(100L, number(brandBlock.get("buyer_count")));
     assertEquals(0.2D, decimal(brandBlock.get("repurchase_rate")), 1e-9);
+    assertEquals(21.0D, decimal(brandBlock.get("median_days_between_purchases")), 1e-9);
+  }
+
+  @Test
+  @DisplayName("재구매 중앙값은 동일한 실행 축 행을 합쳐도 보존한다")
+  void repurchaseKeepsMedianWhenExecutionAxisRowsAgree() {
+    insert("dw.brand_repurchase_daily", Map.of(
+      "brand_id", BRAND, "snapshot_date_kst", "2026-09-11", "buyer_count", 4,
+      "repeat_buyer_count", 2, "median_days_between_purchases", 18.0,
+      "actor_type", "user", "source", "web", "scenario_id", "scenario-a"
+    ));
+    insert("dw.brand_repurchase_daily", Map.of(
+      "brand_id", BRAND, "snapshot_date_kst", "2026-09-11", "buyer_count", 6,
+      "repeat_buyer_count", 3, "median_days_between_purchases", 18.0,
+      "actor_type", "synthetic", "source", "simulator", "scenario_id", "scenario-b"
+    ));
+
+    Map<?, ?> brandBlock = (Map<?, ?>) service.purchase(SELLER, BRAND, FROM, TO, "all").get("brand");
+
+    assertEquals(10L, number(brandBlock.get("buyer_count")));
+    assertEquals(5L, number(brandBlock.get("repeat_buyer_count")));
+    assertEquals(18.0D, decimal(brandBlock.get("median_days_between_purchases")), 1e-9);
   }
 
   @Test
