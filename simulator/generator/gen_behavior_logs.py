@@ -514,6 +514,12 @@ BANNER_INTENT = {"banner_impression": "session", "banner_click": "interest"}
 
 # ── 화면 구조: 섹션 -> (콘텐츠 종류, content_ref) ──────────────────────────
 #    프론트 실측 로그에서 역산했다. 섹션 순서 = 스크롤 순서
+# 상세를 이 깊이(%) 이상 본 세션을 "정독" 으로 본다. 성분 모드 전환·아코디언·본문 드래그
+# 같은 미세 상호작용은 이 세션에서만 난다.
+ENGAGED_DEPTH_MIN = int(os.environ.get("GEN_ENGAGED_DEPTH_MIN", "75"))
+# 옛 규칙(engaged = target 여부)으로 되돌리는 스위치. A/B 와 즉시 롤백용이다.
+ENGAGED_RULE = os.environ.get("GEN_ENGAGED_RULE", "depth")   # depth | target
+
 DETAIL_LAYOUT = [
     ("product_hero",     [("product_image", None), ("price", None),
                           ("variant_option", None), ("cta", None)]),
@@ -1598,8 +1604,22 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             depth = SC["deep_bounce_depth"]
         else:
             depth = int(rng.choice(SC["bounce_depth_choices"]))
+        # **`engaged` 는 "깊이 본 세션" 이다 — target 여부가 아니다 (2026-09-21).**
+        # 예전에는 `engaged=is_target` 이었다. `target` 은 페르소나의 마지막 긍정 리뷰 상품
+        # (1345행)이라 **세포라 리뷰 이력에 있는 상품만** 될 수 있고, hidden 경로에서는
+        # 아예 `is_target=False` 로 끈다(1582행). 그래서 등록 상품(SSAFY Beauty 8개)은
+        # 구조적으로 영원히 engaged 가 아니었다 — 09-20 실측으로 python_batch 864 세션에서
+        # accordion_toggle·ingredient_view_mode_change·text_copy·review_filter_apply 가
+        # **네 개 모두 정확히 0** 이었다(전체 브랜드는 13.63/7.08/4.92/13.23%).
+        # 대시보드의 '전성분을 펼쳐 본 방문 0.0%' 가 그 결과다.
+        #
+        # 깊이(depth)는 hidden 경로에서 pref 가, 아닌 경로에서 target·p_deep_bounce 가 정한다.
+        # 둘 다 "이 사람이 이 상품을 진지하게 봤나" 를 이미 담고 있으므로 그것을 그대로 쓴다.
+        # 평가와 무관하다 — eval_dynamic 은 자기 이벤트 표(`events_for`)를 쓰고 이 로그를
+        # 읽지 않는다. 생성기 로그를 입력으로 받는 평가는 eval_cbf_flow 하나뿐이다.
+        engaged = is_target if ENGAGED_RULE == "target" else (depth >= ENGAGED_DEPTH_MIN)
         visit_detail(e, g, catalog[g], rec_ids, rng, depth_target=depth,
-                     engaged=is_target, entry_source="in_app", SC=SC, rec_meta=rec_meta)
+                     engaged=engaged, entry_source="in_app", SC=SC, rec_meta=rec_meta)
         if hidden is not None:
             if wish:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
