@@ -10,13 +10,28 @@
       "Exfoliators"
     ],
     "image_url": "/images/ssafy-beauty/SB000001-m1.webp",
-    "sku_id": null,
+    "sku_id": "SB000001",
     "images": [
       "/images/ssafy-beauty/SB000001-m1.webp",
       "/images/ssafy-beauty/SB000001-m2.webp",
       "/images/ssafy-beauty/SB000001-m3.webp"
     ],
-    "variants": [],
+    "variants": [
+      {
+        "sku_id": "SB000001",
+        "label": "기본",
+        "image_url": "/images/ssafy-beauty/SB000001-m1.webp",
+        "swatch_url": null,
+        "variant_id": "SB000001-V1"
+      },
+      {
+        "sku_id": "SB000001-140",
+        "label": "대용량",
+        "image_url": "/images/ssafy-beauty/SB000001-m2.webp",
+        "swatch_url": null,
+        "variant_id": "SB000001-V2"
+      }
+    ],
     "description": {
       "what_it_is": "AHA(락틱애씨드)와 BHA(살리실릭애씨드)로 각질과 피지를 정리하고 모공 주변 결을 고르게 하는 데일리 토닝 패드입니다. 엠보 면으로 닦아내고 부드러운 면으로 마무리합니다.",
       "skin_type": "지성, 복합성. 자극에 민감하면 주 2~3회부터",
@@ -188,13 +203,28 @@
       "Moisturizers"
     ],
     "image_url": "/images/ssafy-beauty/SB000004-m1.webp",
-    "sku_id": null,
+    "sku_id": "SB000004",
     "images": [
       "/images/ssafy-beauty/SB000004-m1.webp",
       "/images/ssafy-beauty/SB000004-m2.webp",
       "/images/ssafy-beauty/SB000004-m3.webp"
     ],
-    "variants": [],
+    "variants": [
+      {
+        "sku_id": "SB000004",
+        "label": "기본",
+        "image_url": "/images/ssafy-beauty/SB000004-m1.webp",
+        "swatch_url": null,
+        "variant_id": "SB000004-V1"
+      },
+      {
+        "sku_id": "SB000004-220",
+        "label": "대용량",
+        "image_url": "/images/ssafy-beauty/SB000004-m2.webp",
+        "swatch_url": null,
+        "variant_id": "SB000004-V2"
+      }
+    ],
     "description": {
       "what_it_is": "저분자 콜라겐 3종과 나이아신아마이드를 젤리 제형에 담아 수분과 탄력을 한 번에 채우는 크림입니다. 끈적임 없이 탱글하게 마무리됩니다.",
       "skin_type": "건성, 중성. 여름철 지성 피부의 수분 크림으로도 적합",
@@ -366,13 +396,28 @@
       "Eye Creams & Treatments"
     ],
     "image_url": "/images/ssafy-beauty/SB000007-m1.webp",
-    "sku_id": null,
+    "sku_id": "SB000007",
     "images": [
       "/images/ssafy-beauty/SB000007-m1.webp",
       "/images/ssafy-beauty/SB000007-m2.webp",
       "/images/ssafy-beauty/SB000007-m3.webp"
     ],
-    "variants": [],
+    "variants": [
+      {
+        "sku_id": "SB000007",
+        "label": "기본",
+        "image_url": "/images/ssafy-beauty/SB000007-m1.webp",
+        "swatch_url": null,
+        "variant_id": "SB000007-V1"
+      },
+      {
+        "sku_id": "SB000007-REFILL",
+        "label": "리필",
+        "image_url": "/images/ssafy-beauty/SB000007-m2.webp",
+        "swatch_url": null,
+        "variant_id": "SB000007-V2"
+      }
+    ],
     "description": {
       "what_it_is": "PDRN 과 5종 펩타이드, 카페인, 레티놀을 눈가용으로 조정한 아이크림입니다. 다크서클이 도드라지는 부위와 눈가 잔주름을 함께 봅니다.",
       "skin_type": "모든 피부 타입. 레티놀 포함이라 저녁 사용 권장",
