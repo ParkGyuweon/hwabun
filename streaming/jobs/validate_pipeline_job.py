@@ -460,6 +460,15 @@ def _differing_columns(
     grain 컬럼에는 NULL 이 있다 (`brand_id`·`section_id`·`content_kind`·실행축).
     평범한 equi-join 으로는 그 행이 한 건도 맞지 않아 "전 컬럼이 전부 어긋남"
     으로 보인다. NULL-safe 로 맞춰야 값 차이와 grain 차이가 갈린다.
+
+    **grain 중복도 같이 센다.** `exceptAll` 은 다중집합 차이라 값이 똑같아도 한쪽에
+    같은 행이 하나 더 있으면 차이로 센다. 이 함수는 grain 으로 조인해 값을 비교하므로
+    중복 자체는 못 본다 — 2026-09-21 운영 리포트가 `differing_rows=5855` 인데 컬럼
+    차이와 grain 불일치가 모두 0 으로 나와 상세가 비었다. 그 조합이 나오면 남는
+    설명은 중복뿐이라 그 수를 직접 센다.
+
+    `*_grain_is_unique` 검사는 저장된 Mart 만 본다. 재계산 결과의 유일성은 어디서도
+    검사하지 않아 사각지대다.
     """
 
     from functools import reduce
@@ -476,6 +485,14 @@ def _differing_columns(
         lambda x, y: x & y,
         [F.col(f"l.{name}").eqNullSafe(F.col(f"r.{name}")) for name in keys],
     )
+    def duplicate_grains(frame: Any) -> int:
+        return (
+            frame.groupBy(*keys).count().where(F.col("count") > 1).count()
+        )
+
+    stored_dups = duplicate_grains(stored)
+    expected_dups = duplicate_grains(expected)
+
     matched = F.col("_l").isNotNull() & F.col("_r").isNotNull()
     counted = left.join(right, condition, "full_outer").agg(
         F.sum(F.when(~matched, 1).otherwise(0)).alias("_unmatched"),
@@ -494,6 +511,10 @@ def _differing_columns(
     unmatched = counted.pop("_unmatched") or 0
     if unmatched:
         parts.append(f"grain_only_on_one_side={unmatched}")
+    if stored_dups:
+        parts.append(f"stored_duplicate_grains={stored_dups}")
+    if expected_dups:
+        parts.append(f"recomputed_duplicate_grains={expected_dups}")
     parts.extend(
         f"{name}={count}"
         for name, count in sorted(counted.items(), key=lambda kv: -(kv[1] or 0))
@@ -2681,8 +2702,9 @@ def validate_frames(
         if difference:
             # 실패했을 때만 한 패스 더 쓴다. 통과하는 배치에 비용을 얹지 않는다.
             where = _differing_columns(stored, expected, grain, columns)
-            if where:
-                detail = f"{detail}; {where}"
+            # 설명을 못 찾아도 그 사실을 남긴다. 빈 문자열이면 아무것도 안 붙어
+            # 조사가 다시 막힌다 — 2026-09-21 리포트가 그 상태였다.
+            detail = f"{detail}; {where or 'no_column_or_grain_difference_found'}"
         checks.append(_check(
             f"{name}_is_deterministic_from_inputs",
             difference == 0,
