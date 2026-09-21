@@ -288,8 +288,9 @@ body {
   gap: 16px;
 }
 
+/* 196px 이면 "3,873,400원" 같은 긴 숫자가 칸을 넘쳐 줄이 꺾였다. 220px 부터는 한 줄에 들어간다 (2026-09-21) */
 .grid--kpi {
-  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .grid--2 {
@@ -623,16 +624,19 @@ body {
   opacity: 0.45;
 }
 
+/*
+ * 라벨 → 값 → 보조. **세 줄을 격자로 고정한다** (2026-09-21).
+ * 전에는 세로 flex 에 값이 `margin-top: auto` 로 아래에 붙어서, 보조 설명이 한 줄인 카드와 두 줄인 카드의
+ * 값 높이가 서로 달랐다 — 한 줄로 늘어선 카드를 훑을 때 숫자가 들쭉날쭉해 보였다.
+ * 가운데 칸을 1fr 로 두고 값을 그 칸 위에 붙이면, 보조 설명 길이와 상관없이 값이 늘 같은 높이에 온다.
+ */
 .kpi {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  /* 라벨 → 값 → 보조 순서를 고정한다. 값이 항상 같은 자리에 오면
-     카드 사이를 가로로 훑을 때 눈이 멈추지 않는다 */
-  justify-content: flex-start;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   min-height: 104px;
 }
 
@@ -647,16 +651,23 @@ body {
 }
 
 .kpi__value {
-  margin: auto 0 0;
-  font-size: 33px;
+  margin: 0;
+  align-self: start;
+  font-size: 32px;
   line-height: 1.05;
   font-weight: 700;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  /*
+   * "3,873,400원" 이 숫자와 단위로 갈라져 두 줄이 되던 것을 막는다. 낱말 안에서는 안 꺾고 띄어쓰기에서만 꺾으므로,
+   * 값이 상품명("제로 포어 토닝 패드")일 때는 전처럼 줄이 넘어간다 — 이름을 잘라 버리지 않는다.
+   */
+  word-break: keep-all;
 }
 
 .kpi__sub {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
+  align-self: end;
   font-size: 12px;
   color: var(--ink-faint);
 }
