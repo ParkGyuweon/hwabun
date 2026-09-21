@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        // Git 작업공간과 분리된 EC2-1 운영 환경 파일을 배포와 DW 초기화에 사용한다.
+        // Git 작업공간과 분리된 EC2-1 운영 환경 파일을 애플리케이션 배포에 사용한다.
         EC2_ENV_FILE = '/home/ubuntu/S15P21A306/deploy/ec2-1/.env'
     }
 
@@ -35,22 +35,12 @@ pipeline {
         booleanParam(
             name: 'DEPLOY_SHOP_BACKEND',
             defaultValue: false,
-            description: '쇼핑 백엔드(shop-backend)만 재빌드·재기동하고 MySQL migration을 적용합니다.'
+            description: '쇼핑 백엔드(shop-backend)만 재빌드·재기동합니다. MySQL은 건드리지 않습니다.'
         )
         booleanParam(
             name: 'DEPLOY_RECOMMEND',
             defaultValue: false,
             description: '추천 서버(recommend)만 재빌드·재기동합니다.'
-        )
-        booleanParam(
-            name: 'LOAD_DB_SEED',
-            defaultValue: false,
-            description: '배포 후 shop_backend_seed.sql을 MySQL에 적용합니다. 데이터 변경 작업이므로 필요할 때만 선택합니다.'
-        )
-        booleanParam(
-            name: 'INIT_DW_SCHEMA',
-            defaultValue: false,
-            description: 'EC2-1 MySQL의 dw 스키마만 삭제 후 재생성하고 EC2-2 Spark 전용 계정을 부여합니다. shop_backend 데이터베이스와 MySQL 볼륨은 유지됩니다.'
         )
     }
 
@@ -146,36 +136,6 @@ pipeline {
             }
         }
 
-        stage('MySQL 스키마 마이그레이션') {
-            when {
-                anyOf {
-                    expression { params.DEPLOY_TO_EC2 }
-                    expression { params.DEPLOY_SHOP_BACKEND }
-                }
-            }
-            steps {
-                sh '''
-                    set -eu
-                    # 모든 migration은 멱등 SQL이므로 커밋 diff와 무관하게 재적용한다.
-                    # 이전 커밋에 포함된 migration이 아직 EC2에 적용되지 않은 경우도 보장한다.
-                    migrations="$(find shop_backend/migrations -maxdepth 1 -type f -name '*.sql' | sort || true)"
-                    if [ -z "$migrations" ]; then
-                        echo '적용할 MySQL 마이그레이션이 없습니다.'
-                        exit 0
-                    fi
-
-                    printf '%s\n' "$migrations" | sort | while IFS= read -r migration; do
-                        target="/tmp/$(basename "$migration")"
-                        echo "MySQL migration 적용: $migration"
-                        docker cp "$migration" "ec2-1-mysql-1:$target"
-                        docker exec ec2-1-mysql-1 sh -c \
-                          'mysql -u root -p"$MYSQL_ROOT_PASSWORD" shop_backend < '"$target"
-                        docker exec ec2-1-mysql-1 rm -f "$target"
-                    done
-                '''
-            }
-        }
-
         stage('EC2 배포') {
             when {
                 anyOf {
@@ -235,13 +195,13 @@ pipeline {
                             services="$services prometheus grafana"
                         fi
                         if printf '%s\\n' "$changed" | grep -Eq '^deploy/ec2-1/(docker-compose[.]yml|prometheus[.]yml|[.]env[.]example)$'; then
-                            services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                            services="$services backend shop-backend recommend prometheus grafana nginx"
                         fi
                         # Jenkinsfile 변경은 서비스 선택·Compose 실행 방식을 바꿀 수 있다.
                         # 수동 빌드에서는 HEAD 한 커밋만 보므로, 바로 전 Compose 변경이
                         # 누락되지 않게 전체 구성을 재적용한다.
                         if printf '%s\\n' "$changed" | grep -Eq '^Jenkinsfile$'; then
-                            services="$services backend shop-backend mysql recommend prometheus grafana nginx"
+                            services="$services backend shop-backend recommend prometheus grafana nginx"
                         fi
                     fi
 
@@ -256,86 +216,10 @@ pipeline {
                       -p ec2-1 \\
                       --env-file "$EC2_ENV_FILE" \\
                       -f deploy/ec2-1/docker-compose.yml \\
-                      up -d --build $services
+                      up -d --build --no-deps $services
                 '''
             }
         }
 
-        stage('DW 스키마 초기화') {
-            when {
-                allOf {
-                    expression { params.DEPLOY_TO_EC2 }
-                    expression { params.INIT_DW_SCHEMA }
-                }
-            }
-            steps {
-                sh '''
-                    set -eu
-                    # Jenkins sh의 기본 xtrace가 비밀 파일 값을 콘솔에 출력하지 않게 한다.
-                    set +x
-                    test -f "$EC2_ENV_FILE"
-                    test -f contracts/dw/schema.sql
-                    # 추천 서버 읽기 계정과 EC2-2 Spark 쓰기 계정을 분리한다.
-                    set -a
-                    . "$EC2_ENV_FILE"
-                    set +a
-                    : "${DW_MYSQL_USER:?Set DW_MYSQL_USER in EC2_ENV_FILE}"
-                    : "${DW_MYSQL_PASSWORD:?Set DW_MYSQL_PASSWORD in EC2_ENV_FILE}"
-                    : "${DW_MYSQL_WRITER_USER:?Set DW_MYSQL_WRITER_USER in EC2_ENV_FILE}"
-                    : "${DW_MYSQL_WRITER_PASSWORD:?Set DW_MYSQL_WRITER_PASSWORD in EC2_ENV_FILE}"
-                    : "${DW_MYSQL_WRITER_HOST:?Set DW_MYSQL_WRITER_HOST to EC2-2 private IP}"
-
-                    # DW projection은 재생성 가능하다. dw만 DROP하며, MySQL 컨테이너·볼륨과
-                    # 같은 서버의 shop_backend 데이터베이스에는 손대지 않는다.
-                    docker exec ec2-1-mysql-1 sh -c \
-                      'mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS dw;"'
-
-                    docker cp contracts/dw/schema.sql ec2-1-mysql-1:/tmp/dw-schema.sql
-                    docker exec ec2-1-mysql-1 sh -c \
-                      'mysql -u root -p"$MYSQL_ROOT_PASSWORD" < /tmp/dw-schema.sql'
-                    docker exec ec2-1-mysql-1 rm -f /tmp/dw-schema.sql
-
-                    # SQL 파일은 실행 직후 삭제한다. 작은따옴표는 SQL 방식으로 이스케이프한다.
-                    sql_quote() { printf '%s' "$1" | sed "s/'/''/g"; }
-                    reader_user="$(sql_quote "$DW_MYSQL_USER")"
-                    reader_password="$(sql_quote "$DW_MYSQL_PASSWORD")"
-                    writer_user="$(sql_quote "$DW_MYSQL_WRITER_USER")"
-                    writer_password="$(sql_quote "$DW_MYSQL_WRITER_PASSWORD")"
-                    writer_host="$(sql_quote "$DW_MYSQL_WRITER_HOST")"
-                    grant_sql="$(mktemp)"
-                    trap 'rm -f "$grant_sql"' EXIT
-                    chmod 600 "$grant_sql"
-                    cat > "$grant_sql" <<SQL
-CREATE USER IF NOT EXISTS '$reader_user'@'%' IDENTIFIED BY '$reader_password';
-ALTER USER '$reader_user'@'%' IDENTIFIED BY '$reader_password';
-GRANT SELECT ON dw.* TO '$reader_user'@'%';
-CREATE USER IF NOT EXISTS '$writer_user'@'$writer_host' IDENTIFIED BY '$writer_password';
-ALTER USER '$writer_user'@'$writer_host' IDENTIFIED BY '$writer_password';
-GRANT ALL PRIVILEGES ON dw.* TO '$writer_user'@'$writer_host';
-FLUSH PRIVILEGES;
-SQL
-                    docker cp "$grant_sql" ec2-1-mysql-1:/tmp/dw-grant.sql
-                    docker exec ec2-1-mysql-1 sh -c \
-                      'mysql -u root -p"$MYSQL_ROOT_PASSWORD" < /tmp/dw-grant.sql'
-                    docker exec ec2-1-mysql-1 rm -f /tmp/dw-grant.sql
-                '''
-            }
-        }
-
-        stage('MySQL seed 적용') {
-            when {
-                allOf {
-                    expression { params.DEPLOY_TO_EC2 }
-                    expression { params.LOAD_DB_SEED }
-                }
-            }
-            steps {
-                sh '''
-                    docker cp shop_backend/seed/shop_backend_seed.sql ec2-1-mysql-1:/tmp/shop_backend_seed.sql
-                    docker exec ec2-1-mysql-1 sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" shop_backend < /tmp/shop_backend_seed.sql'
-                    docker exec ec2-1-mysql-1 rm -f /tmp/shop_backend_seed.sql
-                '''
-            }
-        }
     }
 }
