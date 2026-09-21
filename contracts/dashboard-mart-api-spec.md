@@ -34,10 +34,12 @@
 
 ## 0. 왜 이 계약이 필요한가
 
-대시보드 9화면 중 행동 지표(개요 KPI·상세 콘텐츠·고객군·성분 관심·상품 진단·막히는 곳)는 지금 전부 프론트의
-시드 고정 모의값이다. Spark `build_marts_job.py` 가 `product_daily_kpi`·`funnel_daily_kpi`·`brand_daily_kpi`·
-`ingredient_weekly_interest` 등을 Parquet 로 만들지만, 그것을 MySQL 로 옮기는 projection 도, 읽어 주는 API 도 없다
-(`docs/planning/feature-spec-status.md` "DW Publish 미구현에 가까움 · 실제 대시보드 API 미구현").
+이 문서를 처음 쓸 때는 대시보드의 행동 지표가 전부 프론트의 시드 고정 모의값이었고, 마트를 MySQL 로 옮기는
+projection 도 읽어 주는 API 도 없었다. **지금은 마트 22종이 `dw` 에 발행되고 E1~E7 중 다섯이 그 값을 읽는다**
+(2026-09-21 운영 실측). 남은 것은 §5-2 가 정리한 E4 의 세 블록이다.
+
+이 문서는 **어느 마트를 어떤 HTTP 로 읽는가**를 정한다. 마트가 준비됐는지와 API 가 붙었는지는 다른 문제라,
+§5 의 표에 마트별 상태를 따로 적는다.
 
 세 파트가 각자 할 일이 이 문서 하나로 갈린다.
 
@@ -529,10 +531,13 @@ key 는 `dw-schema.md` §4 그대로. **0.3 에서 마트 12종이 신설되고 
 Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가 아예 없다. 56행짜리 작은 표라 그대로 올린다.
 서버는 `brand_id` 로 이 표를 조회해 `cohort_key` 를 찾고, 그 값으로 `commons_cohort_weekly` 의 코호트 행을 고른다.
 
-**5-2 의 네 마트는 아직 MySQL 에 없다 (2026-09-16).** 전부 Parquet 에만 있고, B-1·B-2 확정에 따라 projection
-대상으로 올라가는 중이다 — `brand_price_band_daily_kpi` · `segment_price_band_daily_kpi` ·
-`commons_cohort_weekly` · `brand_cohort_dim`. 적재가 끝나기 전까지 E4 의 `price_bands`·`segment_price_grid`·
-`cohort` 는 `null` 이고 화면은 그 블록만 모의로 그린다. **E2 `diagnostics` 의 두 컬럼**
+**5-2 의 네 마트는 적재가 끝났다 (2026-09-21 운영 실측).** `brand_price_band_daily_kpi` 10,028행 ·
+`segment_price_band_daily_kpi` 50,939행 · `commons_cohort_weekly` 837행 · `brand_cohort_dim` 56행이
+`dw` 에 있다. **E4 의 `price_bands`·`segment_price_grid`·`cohort` 를 지금 읽을 수 있다.**
+
+2026-09-16 까지 이 자리에는 "아직 MySQL 에 없다 · 적재가 끝나기 전까지 `null` 이고 화면은 모의로 그린다"
+가 적혀 있었다. 적재가 끝난 뒤에도 이 문구가 남아 있어 서버가 네 마트를 조회하지 않았고, 세 블록이 비어
+있었다. **마트 상태가 바뀌면 이 절을 같이 고친다.** **E2 `diagnostics` 의 두 컬럼**
 (`variant_select_count`·`quick_look_close_open_detail_count`)은 마트에는 있지만 **Q3 재실행이 필요하다** —
 `close_reason` 을 Fact 에 새로 실어서, 다음 E2E 부터 값이 찬다.
 
