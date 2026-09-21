@@ -507,14 +507,24 @@ EXPLORE_SHARE_RANGE = (0.1, 0.3)
 
 # 세션 안에서 대응 노출이 없는 `product_click` 의 정상 범위.
 #
-# 기준선은 두 데이터셋 실측이다 — 생성기 300명 7.63%(104/1,363, AI 파트 측정),
-# e2e-336-final 8.12%(365/4,494). 생성기 가드가 grain 단위(날짜·브랜드·상품·실행축)라
-# 세션 단위 짝맞춤은 보장하지 않아서 남는 값이고, 되돌아가기·딥링크 경로가 원인이다.
-# 실사용자 트래픽은 프론트 합성으로 0 에 가까우므로 섞일수록 내려가야 정상이다.
+# 노출은 `IMPRESSION_EVENTS` 세 종류를 모두 본다. 계약이 분모를 그 합으로 정의하고
+# (dw-schema.md §4.1) Mart 검사도 같은 기준이다.
+#
+# 한때 `product_impression` 하나만 짝지었고 그 기준의 실측이 e2e-336-final 8.12%
+# (365/4,494)·생성기 300명 7.63% 였다. 같은 데이터를 세 종류로 다시 재니 **0.00%
+# (0/4,494)** 다. 남던 8.12% 는 행동이 아니라 측정 방식이었다 — 유사 상품 레일이
+# 카드에 `recommendation_impression` 만 내고 클릭은 `product_click` 으로 내는데
+# (`frontend/src/components/product/SimilarProducts.tsx`), 그 클릭이 통째로
+# 미매칭으로 잡히고 있었다.
+#
+# 임계 2% 는 실측 0% 에 운영 트래픽 여유를 둔 값이고 **잠정이다.** 에이전트 딥링크
+# 같은 경로가 섞인 운영 값은 아직 이 기준으로 재 본 적이 없다. Q5 가 매 실행
+# `product_click_unmatched`·`product_click_total` 을 기록하므로 바로잡은 기준의 첫
+# 운영 리포트로 확정한다.
 #
 # 검사가 아니라 경고로 둔다. 생성기가 약속한 적 없는 조건이라 실패로 잡으면 남의
 # 데이터를 틀렸다고 하는 것이 된다. 이 값을 넘으면 프론트 합성이 안 먹는 신호다.
-PRODUCT_CLICK_UNMATCHED_WARN_RATIO = 0.12
+PRODUCT_CLICK_UNMATCHED_WARN_RATIO = 0.02
 
 
 def _banner_explore_share(impressions: Any) -> dict[str, Any]:
@@ -771,7 +781,7 @@ def _attribution_quality(fact: Any, dim_product: Any) -> dict[str, Any]:
 def _unmatched_click_count(
     product_fact: Any,
     click_event: str,
-    impression_event: str,
+    impression_event: str | tuple[str, ...],
     keys: list[str],
 ) -> dict[str, int]:
     """세션 안에서 대응 노출이 없는 클릭을 센다.
@@ -780,13 +790,23 @@ def _unmatched_click_count(
     이 값은 0 이어야 한다. 조인 키는 쌍마다 다르다 — 계약상 **필수**인 property 만
     넣는다. 선택 property 를 키에 넣으면 그 값을 싣지 않는 생산자의 정상 로그가
     통째로 미매칭으로 잡힌다.
+
+    `impression_event` 는 여러 개를 받는다. 한 상품이 어느 자리에서 보였는지에 따라
+    노출 Event 이름이 달라서다 — 유사 상품 레일은 카드 하나에
+    `recommendation_impression` 만 내고 클릭 때 `product_click` 을 낸다
+    (`frontend/src/components/product/SimilarProducts.tsx`). 한 종류만 짝지으면 그
+    클릭이 전부 미매칭으로 잡힌다.
     """
 
     from pyspark.sql import functions as F
 
+    impression_names = (
+        (impression_event,) if isinstance(impression_event, str)
+        else tuple(impression_event)
+    )
     clicks = product_fact.where(F.col("event_name") == click_event).alias("click")
     impressions = (
-        product_fact.where(F.col("event_name") == impression_event)
+        product_fact.where(F.col("event_name").isin(*impression_names))
         .select(*keys)
         .dropDuplicates()
         .alias("impression")
@@ -2016,10 +2036,14 @@ def validate_frames(
     ))
     # 상품 쌍은 `list_id` 가 `product_click` 의 선택 property 라 키에 넣을 수 없다
     # (생성기·프론트 어느 쪽도 싣지 않는다). 세션·상품까지만 보고 경고로 남긴다.
+    #
+    # 노출은 세 Event 를 모두 본다. 계약이 분모를 그 합으로 정의하고
+    # (dw-schema.md §4.1), Mart 검사도 같은 기준이다. `product_impression` 하나만
+    # 짝지으면 유사 상품 레일에서 온 클릭이 통째로 미매칭이 된다.
     product_match = _unmatched_click_count(
         product_fact,
         "product_click",
-        "product_impression",
+        IMPRESSION_EVENTS,
         ["session_id", "product_id"],
     )
     product_unmatched_ratio = (

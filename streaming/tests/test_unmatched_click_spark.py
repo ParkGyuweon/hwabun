@@ -6,6 +6,7 @@ except ImportError:  # Spark integration runs in the project Spark image.
     SparkSession = None
 
 from streaming.jobs.validate_pipeline_job import (
+    IMPRESSION_EVENTS,
     PRODUCT_CLICK_UNMATCHED_WARN_RATIO,
     _unmatched_banner_click_count,
     _unmatched_click_count,
@@ -20,11 +21,15 @@ FACT_SCHEMA = (
 
 
 class UnmatchedClickBaselineTest(unittest.TestCase):
-    def test_warn_ratio_sits_above_both_measured_baselines(self):
-        """기준선은 생성기 7.63% · e2e-336-final 8.12% 다. 임계는 그 위여야 한다."""
-        self.assertGreater(PRODUCT_CLICK_UNMATCHED_WARN_RATIO, 0.0812)
-        # 너무 느슨하면 합성이 깨져도 안 걸린다
-        self.assertLess(PRODUCT_CLICK_UNMATCHED_WARN_RATIO, 0.25)
+    def test_warn_ratio_sits_just_above_the_measured_baseline(self):
+        """노출 3종 기준의 실측은 e2e-336-final 0.00%(0/4,494) 다.
+
+        `product_impression` 하나만 보던 때의 8.12% 는 행동이 아니라 측정 방식이었다.
+        임계는 실측 위에 여유를 두되, 옛 기준선(8%)만큼 느슨하면 합성이 깨져도
+        안 걸린다.
+        """
+        self.assertGreater(PRODUCT_CLICK_UNMATCHED_WARN_RATIO, 0.0)
+        self.assertLess(PRODUCT_CLICK_UNMATCHED_WARN_RATIO, 0.05)
 
 
 @unittest.skipUnless(SparkSession is not None, "pyspark is not installed")
@@ -125,6 +130,62 @@ class UnmatchedClickSparkTest(unittest.TestCase):
         )
 
         self.assertEqual({"total": 1, "unmatched": 1}, result)
+
+    def test_product_click_matches_a_recommendation_impression(self):
+        """유사 상품 레일은 카드에 recommendation_impression 만 내고 클릭은
+        product_click 으로 낸다. product_impression 하나만 보면 미매칭이 된다.
+        """
+        facts = self._facts([
+            self._row("recommendation_impression", "S1", "P1", "similar", "R1"),
+            self._row("product_click", "S1", "P1", None),
+        ])
+
+        result = _unmatched_click_count(
+            facts, "product_click", IMPRESSION_EVENTS, ["session_id", "product_id"],
+        )
+
+        self.assertEqual({"total": 1, "unmatched": 0}, result)
+
+    def test_product_click_matches_a_banner_impression(self):
+        """히어로 배너도 같다 — banner_impression 만 내고 클릭은 product_click 이다."""
+        facts = self._facts([
+            self._row("banner_impression", "S1", "P1", btype="new_brand",
+                      bvalue=None, bslot=1, trait="coldstart"),
+            self._row("product_click", "S1", "P1", None),
+        ])
+
+        result = _unmatched_click_count(
+            facts, "product_click", IMPRESSION_EVENTS, ["session_id", "product_id"],
+        )
+
+        self.assertEqual({"total": 1, "unmatched": 0}, result)
+
+    def test_product_click_with_no_impression_of_any_kind_is_unmatched(self):
+        """세 종류 어디에도 없으면 여전히 미매칭이다. 검사가 느슨해진 것이 아니다."""
+        facts = self._facts([
+            self._row("recommendation_impression", "S1", "P1", "similar", "R1"),
+            self._row("product_click", "S1", "P9", None),
+        ])
+
+        result = _unmatched_click_count(
+            facts, "product_click", IMPRESSION_EVENTS, ["session_id", "product_id"],
+        )
+
+        self.assertEqual({"total": 1, "unmatched": 1}, result)
+
+    def test_a_single_impression_event_still_works(self):
+        """배너·추천 쌍은 1:1 그대로다. 문자열 하나도 받아야 한다."""
+        facts = self._facts([
+            self._row("product_impression", "S1", "P1", "list_grid"),
+            self._row("product_click", "S1", "P1", None),
+        ])
+
+        result = _unmatched_click_count(
+            facts, "product_click", "product_impression",
+            ["session_id", "product_id"],
+        )
+
+        self.assertEqual({"total": 1, "unmatched": 0}, result)
 
     def test_duplicate_impressions_do_not_inflate_click_count(self):
         """노출이 여러 건이어도 클릭 총수가 조인으로 부풀면 안 된다."""
