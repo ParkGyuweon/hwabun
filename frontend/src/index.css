@@ -25,6 +25,11 @@
   --color-line-soft: #f1f3f5;
   --color-surface: #ffffff;
   --color-surface-soft: #faf7f1;
+  /*
+   * 페이지 바탕. 카드용 흰색(--color-surface)과 자리를 나눈다. 고객이 보는 쇼핑몰은 **연핑크**이고
+   * 판매자 대시보드는 연두다 (2026-09-21 시연 합의) — 시연 중 어느 시점의 화면인지 바탕색으로 구분한다.
+   */
+  --color-ground: #fdf5f7;
   /* 강조. 한정판 배지·찜·CTA 보조. 세포라 빨강 자리에 Blossom Pink */
   --color-accent: #e68fa1;
   --color-star: #a8c96e;
