@@ -1640,6 +1640,11 @@ table.data tr:hover td {
 .reg-field {
   display: grid;
   gap: 6px;
+  /*
+   * 두 칸을 나란히 두면(.reg-row) 안내 줄이 있는 쪽이 더 길어지고, 없는 쪽은 남는 높이가 입력칸으로 퍼져
+   * 가격 칸이 브랜드 칸보다 뚱뚱해졌다 (2026-09-22 팀 제보). 남는 높이는 아래로 비워 두고 칸 높이를 같게 한다.
+   */
+  align-content: start;
   margin-bottom: 14px;
 }
 
