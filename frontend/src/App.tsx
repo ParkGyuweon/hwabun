@@ -262,6 +262,8 @@ export default function App() {
    * "백엔드에 있는가" 는 `backend_brand_id` 가 말해 준다 (productRegistry 주석). 정적 세포라 리뷰는 그대로 두고 앞에 붙인다.
    */
   const inBackend = Boolean(product && (product.source === 'backend' || product.backend_brand_id));
+  /** 상세에서 리뷰를 쓰면 올려서 백엔드 리뷰를 다시 받는다 */
+  const [reviewNonce, setReviewNonce] = useState(0);
   useEffect(() => {
     if (!product || !inBackend) {
       setBackendReviews([]);
@@ -277,7 +279,7 @@ export default function App() {
     // 상세가 늦게 도착하면 product 객체만 바뀌고 id 는 같다 — 그때 리뷰를 다시 부르지 않는다.
     // 백엔드 목록이 늦게 와서 inBackend 가 false → true 로 바뀌면 그때 한 번 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.product_id, inBackend]);
+  }, [product?.product_id, inBackend, reviewNonce]);
 
   /** 화면에 그리는 리뷰. 고객이 실제로 쓴 것(최신순)을 앞에, 정적 세포라 표본을 뒤에 */
   const shownReviews = useMemo(
@@ -993,6 +995,7 @@ export default function App() {
             onAddToCart={preview ? () => undefined : addToCart}
             onBuyNow={preview ? () => undefined : buyNow}
             buying={paying}
+            onReviewWritten={() => setReviewNonce((n) => n + 1)}
           />
         </>
       ) : (

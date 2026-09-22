@@ -1441,6 +1441,61 @@
   font-size: 14px;
 }
 
+/* ---------- 리뷰 쓰기 칸 (components/review/ProductReviewBox) ---------- */
+
+/* 기본 모양은 마이페이지의 .writereview 를 그대로 쓴다 (styles/auth.css). 여기서는 상세 화면 배치와 잠긴 상태만 */
+.reviewbox {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+}
+
+.reviewbox__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reviewbox__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.reviewbox__note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-faint);
+}
+
+/*
+ * 잠긴 칸 (구매자가 아니거나 로그인 전). 칸은 보이되 회색으로 죽여 두고, 버튼은 눌리지 않는다.
+ * 숨기지 않는 이유: "리뷰는 어디서 쓰지" 를 없애고, 왜 못 쓰는지를 그 자리에서 읽게 하려고.
+ */
+.reviewbox.is-locked {
+  background: var(--color-surface-soft);
+  border-color: var(--color-line-soft);
+}
+
+.reviewbox.is-locked .writereview__stars button {
+  cursor: default;
+  color: var(--color-line);
+}
+
+.reviewbox.is-locked .writereview__body {
+  background: transparent;
+  color: var(--color-ink-faint);
+  cursor: not-allowed;
+}
+
+.reviewbox.is-locked .writereview__send,
+.reviewbox .writereview__send:disabled {
+  background: var(--color-line);
+  color: var(--color-ink-faint);
+  opacity: 1;
+  cursor: not-allowed;
+  pointer-events: none;
+
 /* ---------- 로그 창 · 시연용 보강 (2026-09-22) ---------- */
 
 .log-panel__toggle {

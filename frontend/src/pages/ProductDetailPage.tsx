@@ -10,6 +10,7 @@ import ReviewSummary from '../components/review/ReviewSummary';
 import ReviewFilterBar from '../components/review/ReviewFilterBar';
 import type { ReviewFilter, ReviewSort } from '../components/review/ReviewFilterBar';
 import ReviewList from '../components/review/ReviewList';
+import ProductReviewBox from '../components/review/ProductReviewBox';
 import FeedbackPanel from '../components/feedback/FeedbackPanel';
 import { calcReviewStats, splitIngredients } from '../lib/format';
 import { displayReviewCount, useReviewCounts } from '../lib/reviewStore';
@@ -37,6 +38,8 @@ interface ProductDetailPageProps {
   onBuyNow: (item: CartItem, addToCartProps: Record<string, unknown>) => void;
   /** 결제창이 떠 있거나 서버 확인 중. 버튼 연타 방지 */
   buying: boolean;
+  /** 리뷰를 새로 썼다. App 이 백엔드 리뷰를 다시 받는다 */
+  onReviewWritten?: () => void;
 }
 
 export default function ProductDetailPage({
@@ -49,6 +52,7 @@ export default function ProductDetailPage({
   onAddToCart,
   onBuyNow,
   buying,
+  onReviewWritten,
 }: ProductDetailPageProps) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [sort, setSort] = useState<ReviewSort>('recent');
@@ -198,6 +202,9 @@ export default function ProductDetailPage({
         </h2>
 
         <ReviewSummary stats={stats} totalReviewCount={reviewCount} />
+
+        {/* 리뷰 쓰기 칸. 누구에게나 보이되 이 상품을 산 회원에게만 열린다 (2026-09-22) */}
+        <ProductReviewBox productId={product.product_id} onWritten={() => onReviewWritten?.()} />
 
         <ReviewFilterBar
           persona={persona}

@@ -69,11 +69,12 @@ export function leakVerdict(steps: FunnelStep[]): Verdict {
   });
   const worst = drops.reduce((a, b) => (a.kept <= b.kept ? a : b));
 
+  // 키는 퍼널 단계 이름(martAdapter standardFunnel)에서 공백을 뺀 것. 단계 이름이 바뀌면 여기도 같이 바꾼다
   const ACTION: Record<string, string> = {
-    상품클릭: '목록의 상품 사진과 이름을 손보세요',
-    상세조회: '상세페이지 첫 화면과 대표 사진을 확인하세요',
-    정보확인: '성분과 리뷰를 페이지 위쪽으로 올리세요',
-    장바구니: '가격·용량·담기 버튼을 점검하세요',
+    상세를봄: '목록의 상품 사진과 이름, 빠른 보기 첫 화면을 손보세요',
+    장바구니에담음: '가격·용량·담기 버튼을 점검하세요',
+    결제로감: '장바구니에서 결제로 가는 길에 막히는 것이 없는지 보세요',
+    구매: '결제 단계에서 실패·취소가 나는지 확인하세요',
   };
   const key = worst.to.replace(/\s/g, '');
 
