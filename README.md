@@ -90,7 +90,7 @@
 - 수집 서버 `backend/` 8080. `POST /api/events` 를 검증하고 Kafka `activity-events` 로 produce 합니다. 파티션 키는 `session_id`, 과부하 때는 429/503 으로 백프레셔를 겁니다. Actuator + Micrometer 로 Prometheus 메트릭을 냅니다.
 - 쇼핑몰 백엔드 `shop_backend/` 8090. 도메인 12개(identity/JWT, brand, catalog, commerce, payment, feedback, dashboard, admin, settlement, recommendation 프록시, security, common)로 나뉘고, MySQL 테이블 38개와 ERD 문서가 있습니다.
 - 상품 등록 계약을 구현했습니다. 어휘 검증과 unmapped 저장을 포함합니다.
-- CI/CD `Jenkinsfile` 9 스테이지. GitLab 연결 확인 → Backend 테스트 → Shop Backend 테스트 → Frontend Docker 빌드 검증 → EC2 구성 변경 감지 → MySQL 마이그레이션 → EC2 배포 → DW 스키마 초기화 → MySQL seed
+- CI/CD `Jenkinsfile` 6 스테이지. GitLab 연결 확인 → Backend 테스트 → Shop Backend 테스트 → Frontend Docker 빌드 검증 → EC2 구성 변경 감지 → EC2 배포. MySQL 컨테이너와 스키마·seed는 배포에서 건드리지 않습니다.
 - 모니터링 `monitoring/`. Prometheus 설정과 Grafana 대시보드 3종(backend-overview, collector-validation, shop-backend-performance)을 프로비저닝합니다.
 - nginx 라우팅 (`deploy/nginx/default.conf`). `/api/events` 는 수집 8080 으로, 나머지 `/api/` 는 쇼핑몰 8090 으로 보냅니다.
 
@@ -163,7 +163,7 @@ LLM 을 쓰는 곳은 셋이고 경로가 다릅니다.
 | 시뮬레이터 | Python 생성기 | — | 페르소나 9,900명 합성 로그, 성향 6축, 결제·재구매, 층화 표본 |
 | | Playwright(Chromium) + OpenAI SDK → GMS | gpt-4.1-nano | 에이전트 100명이 실제 브라우저 조작. `--local-model` 로 Qwen2.5 도 가능 |
 | 운영 | Docker Compose · nginx · certbot | — | EC2-1 7서비스, EC2-2 7서비스 |
-| | Jenkins | — | `Jenkinsfile` 9 스테이지 |
+| | Jenkins | — | `Jenkinsfile` 6 스테이지 |
 | | Prometheus · Grafana | 3.5.0 · 12.1.0 | 대시보드 3종 프로비저닝 |
 | 데이터셋 | Sephora 리뷰 | — | 속성 4개가 모두 채워진 리뷰 844,865건(전체의 77.2%), 상품 200개(+ 등록 8 = 카탈로그 208), 페르소나 14,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
 
@@ -228,7 +228,7 @@ cd shop_backend && ./gradlew test                 # 쇼핑몰 백엔드
 ```
 S15P21A306/
 ├── README.md                          이 문서
-├── Jenkinsfile                        CI/CD 9 스테이지 (백엔드)
+├── Jenkinsfile                        CI/CD 6 스테이지 (백엔드)
 ├── .env.example · .dockerignore · .gitattributes · .gitignore
 │
 ├── contracts/                         ★ 팀 계약. 여기가 바뀌면 여러 모듈이 동시에 영향받는다 (데이터·AI)
