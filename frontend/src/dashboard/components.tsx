@@ -98,7 +98,7 @@ export function VerdictBanner({
   return (
     <section className="verdict verdict--mine">
       <p className="verdict__eyebrow">
-        지금 손봐야 할 것 <OriginBadge kind="mine" />
+        첫 번째 할 일 <OriginBadge kind="mine" />
       </p>
       <h2 className="verdict__headline">{headline}</h2>
       <p className="verdict__reason">{reason}</p>

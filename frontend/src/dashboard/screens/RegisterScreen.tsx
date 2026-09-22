@@ -377,7 +377,7 @@ export default function RegisterScreen() {
               <span className="reg-section__num">2</span>
               <div>
                 <h3 id="reg-sec-2">상품 특징</h3>
-                <p>추천이 이 태그를 봅니다. 해당하는 것을 모두 고르세요 · 고른 것 <b>{form.highlights.length}개</b></p>
+                <p>추천 기능이 이 특징을 보고 고객에게 보여 줍니다. 해당하는 것을 모두 고르세요 · 고른 것 <b>{form.highlights.length}개</b></p>
               </div>
             </header>
             {HIGHLIGHT_GROUPS.map((g) => {
@@ -405,7 +405,7 @@ export default function RegisterScreen() {
                 </div>
               );
             })}
-            {form.highlights.length === 0 ? <p className="reg-note">태그가 하나도 없으면 추천에 잘 안 뜹니다. 피부 고민은 꼭 골라 주세요.</p> : null}
+            {form.highlights.length === 0 ? <p className="reg-note">특징을 하나도 안 고르면 추천에 잘 안 뜹니다. 피부 고민은 꼭 골라 주세요.</p> : null}
           </section>
 
           {/* ③ 상세 설명 */}

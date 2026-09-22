@@ -33,14 +33,14 @@ export interface Insight {
   reasons: string[];
   action: string;
   /** 권고가 어느 단위인가 */
-  unit: '상세페이지' | '타깃·문구' | '제품·처방' | '포장' | '가격';
+  unit: '상세페이지' | '고객·문구' | '제품·처방' | '포장' | '가격';
   n: number;
   confidence: '높음' | '보통' | '낮음';
   score: number;
   beautyNoun: boolean;
 }
 
-const TONE_KO: Record<string, string> = { fair: '밝은 톤', light: '라이트 톤', medium: '미디엄 톤', tan: '탠 톤', deep: '딥 톤' };
+const TONE_KO: Record<string, string> = { fair: '가장 밝은 톤', light: '밝은 톤', medium: '중간 톤', tan: '어두운 톤', deep: '가장 어두운 톤' };
 
 function conf(n: number, signals: number): Insight['confidence'] {
   if (n >= 1000 && signals >= 2) return '높음';
@@ -162,7 +162,7 @@ export function rankInsights(m: BehaviorMetrics): Insight[] {
           top ? `${SKIN_TYPE_KO[best.type]} 고객이 가장 오래 읽는 설명: ${top.top}` : '',
         ].filter(Boolean),
         action: `${name(best)} 고객에 맞춰 문구를 쓰고 ${top ? `${top.top} 설명을` : '즐겨 읽는 설명을'} 앞에 두세요`,
-        unit: '타깃·문구',
+        unit: '고객·문구',
         n: Math.min(best.sessions, worst.sessions),
         confidence: conf(Math.min(best.sessions, worst.sessions), 2),
         score: Math.min(1, gap / 0.2) * Math.log(Math.min(best.sessions, worst.sessions)),

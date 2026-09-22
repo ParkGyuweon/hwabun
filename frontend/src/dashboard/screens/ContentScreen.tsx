@@ -90,7 +90,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           ? `평균의 ${r.conversionLift.toFixed(1)}배 담는데, 본 사람은 ${fmt.pct(r.viewRate)}뿐`
           : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 담기는 평균 아래`,
       num: `${r.conversionLift.toFixed(1)}배`,
-      unit: '담기 배수 (평균 1.0)',
+      unit: '담기 효과 (평균이 1.0배)',
       how: rx?.rx?.how,
       basis: rx?.rx?.basis,
       verify: rx?.rx?.verify,
@@ -112,7 +112,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
     <div className="stack">
       <section className="verdict verdict--mine">
         <p className="verdict__eyebrow">
-          이 화면이 말하는 것 <OriginBadge kind="mine" />
+          결론 <OriginBadge kind="mine" />
         </p>
         <h2 className="verdict__headline">{headline}</h2>
         <ul className="verdict__reasons">
@@ -120,10 +120,10 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             <li>기록이 쌓이면 여기에 나옵니다</li>
           ) : (
             <li>
-              글 {rows.length}종을 <b>담기 배수</b>로 줄 세운 결과
+              글 {rows.length}종을 <b>담기 효과</b> 순으로 세운 결과
             </li>
           )}
-          {!noData && liftPending ? <li>담기 배수는 계산 준비 중</li> : null}
+          {!noData && liftPending ? <li>담기 효과는 계산 준비 중</li> : null}
           {best && !liftPending ? (
             <li>
               가장 잘 먹히는 글: {best.ko} · {best.conversionLift.toFixed(1)}배
@@ -139,7 +139,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           <span
             title={`1.0배 = 내 브랜드 평균 담기율 · 1.0배 미만은 손보기, 1.5배 이상인데 절반도 못 봤으면 위로 올리기 · 지시 문장: AI ${llmCount}건 · 규칙 ${ruleCount}건`}
           >
-            담기 배수 기준
+            담기 효과 기준
           </span>
         }
       >
@@ -147,7 +147,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           <Actions items={actions} />
         ) : (
           <p className="note">
-            {noData ? '아직 할 일이 없습니다' : liftPending ? '담기 배수 계산 준비 중입니다' : '지금 순서를 그대로 두세요'}
+            {noData ? '아직 할 일이 없습니다' : liftPending ? '담기 효과 계산 준비 중입니다' : '지금 순서를 그대로 두세요'}
           </p>
         )}
       </Panel>
@@ -166,9 +166,9 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           source={source.contentLift}
         />
         <Kpi
-          label="고객이 가장 많이 드래그한 성분"
+          label="고객이 가장 많이 찾아본 성분"
           value={topScrape ? labelKo(topScrape.name) : '-'}
-          sub={topScrape ? `${fmt.int(topScrape.count)}회 드래그` : '아직 기록 없음'}
+          sub={topScrape ? `이름을 긁거나 복사한 횟수 ${fmt.int(topScrape.count)}번` : '아직 기록 없음'}
           source={source.scraped}
         />
         <Kpi
@@ -191,7 +191,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               <th>글</th>
               <th title="그 글이 화면에 보인 방문 ÷ 상세를 연 방문">본 비율</th>
               <th title="그 글에 머문 시간 ÷ 상세를 연 방문">읽은 시간</th>
-              <th title="그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율">담기 배수</th>
+              <th title="그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율">담기 효과</th>
               <th>할 일</th>
             </tr>
           </thead>
@@ -221,7 +221,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           </tbody>
         </table>
         <details className="fold">
-          <summary>읽은 시간 × 담기 배수 한눈에 보기</summary>
+          <summary>읽은 시간과 담기 효과를 한 그림으로</summary>
           <Scatter
             points={rows.map((c) => ({
               label: c.ko,
@@ -242,8 +242,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             <dd>그 글이 화면에 보인 방문 ÷ 상세를 연 방문.</dd>
             <dt>읽은 시간</dt>
             <dd>그 글에 머문 시간 ÷ 상세를 연 방문. 글 3개 이상 겹친 시간은 제외.</dd>
-            <dt>담기 배수</dt>
-            <dd>그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
+            <dt>담기 효과</dt>
+            <dd>그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율. 1.0배가 평균입니다. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
             <dt>기록 수</dt>
             <dd>그 글이 보인 방문 수. {fmt.int(THIN_VIEWS)}건 미만은 흐리게, 50건 미만은 그림에서 제외.</dd>
           </dl>
@@ -251,7 +251,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="고객이 드래그한 성분 TOP 10" source={source.scraped} fold aside={<span title="긁은 글 원문은 저장하지 않습니다">성분 이름만 셈</span>}>
+        <Panel title="고객이 가장 많이 찾아본 성분 10가지" source={source.scraped} fold aside={<span title="긁은 글 원문은 저장하지 않습니다">성분 이름을 마우스로 긁거나 복사한 횟수</span>}>
           <BarList
             items={scrapedIngredients.map((i) => ({
               label: labelKo(i.name),
