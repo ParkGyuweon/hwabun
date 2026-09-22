@@ -533,10 +533,26 @@ input = product_event_fact, purchase_fact, dim_product
 **노출 Event는 셋이고 분모는 그 합이다** (2026-09-17 프론트 확정). 프론트는 카드
 하나에 노출 Event를 정확히 하나만 낸다.
 
-선행 노출 없이 클릭이나 Quick Look 열기가 발생해 그 직전에 보강한 합성 노출
-(`impression_origin` = `implied_by_click` · `implied_by_quick_look`)도 관측 노출과
-동일하게 `impression_count`와 CTR 분모에 포함한다. 합성 여부는 분석용 구분이지 분모
-제외 조건이 아니다.
+선행 노출 없이 클릭·Quick Look 열기·상세 직접 진입이 발생해 그 직전에 보강한 합성 노출
+(`impression_origin` = `implied_by_click` · `implied_by_quick_look` ·
+`implied_by_direct_view`)도 관측 노출과 동일하게 `impression_count`와 CTR 분모에
+포함한다. 합성 여부는 분석용 구분이지 분모 제외 조건이 아니다.
+
+**`implied_by_direct_view`는 2026-09-22에 더했다** (프론트 !425). 링크·북마크·새 탭으로
+상세가 세션의 첫 화면이면 목록을 거치지 않아 앞의 두 갈래가 동작하지 않았고, 노출 없이
+상세 조회만 남았다. 그러면 분자가 분모보다 커져 **`detail_entry_rate`가 1을 넘는다** —
+2026-09-21 운영 배치에서 실사용자 9건 중 3건이 그랬고 brand 6234가 노출 4 · 상세 6으로
+1.5였다. 합성 트래픽은 늘 목록을 거쳐 이 경로가 지금까지 안 보였다.
+
+**이 보강으로 분모가 커져 `detail_entry_rate`와 `product_ctr`가 내려간다.** 값이 계약을
+벗어나던 것을 되돌리는 것이 목적이지만, 두 비율에 **"목록 카드를 본 적이 없는 진입"이
+섞인다**는 뜻이기도 하다. 원 기획의 질문("목록 카드가 일하고 있는지",
+`docs/dashboard/metric-basis.md`)에는 그만큼 덜 답한다. 값이 내려간 이유를 나중에 못 찾지
+않도록 여기에 남긴다.
+
+분해는 가능하다 — `impression_origin`이 `cleaned_events`에 보존되고 Q5가 매 실행 분포를
+집계한다(`_impression_origin_report`). 다만 **Mart·DW에는 그 컬럼이 없어 화면에서는 아직
+가를 수 없다.** 가르는 컬럼은 아래 문단의 규칙대로 읽는 화면이 생길 때 연다.
 
 합성 노출이 일반 노출과 같은 `event_name`으로 나가므로 위 분모 규칙은 마커와 무관하게
 성립하고, **Mart는 손댈 것이 없다.** 마커가 있어야 가능해지는 것은 분모를 나누는 일
@@ -575,6 +591,10 @@ Mart는 받은 Event를 셀 뿐이다.
 추천·배너로만 노출된 세션이 분모에서 빠져 비율이 1을 넘는다
 (§4.5 `funnel_session_fact`의 `reached_impression`). 세션 기준 `detail_entry_rate`가
 1을 넘던 것이 이것 때문이었다.
+
+**원인이 하나 더 있었다.** 노출 셋을 다 세도, 목록을 아예 안 거친 상세 진입은 어느
+노출도 없어서 분모에 안 들어간다. 그쪽은 위 `implied_by_direct_view` 보강으로 막는다.
+둘을 같이 해야 이 비율이 1을 넘지 않는다.
 
 `currency`는 key가 아니라 대표값 하나다. Event의 `currency`는 담기·결제 Event에만 붙고
 조회 Event에는 없어서, key에 올리면 통화 없는 조회 행과 결제 행이 갈려 세션 집계가
