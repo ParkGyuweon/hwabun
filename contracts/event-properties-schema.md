@@ -262,7 +262,7 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 
 ### 3.12-1 `impression_origin`
 
-`observed`, `implied_by_click`, `implied_by_quick_look`
+`observed`, `implied_by_click`, `implied_by_quick_look`, `implied_by_direct_view`
 
 세 노출 Event(`product_impression`, `recommendation_impression`, `banner_impression`)의
 선택 property다. 값은 노출 레코드가 **어디서 왔는지**를 말한다.
@@ -272,9 +272,17 @@ Front가 실제로 내보내는 값이며 `frontend/src/types/log.ts`의 `Filter
 | `observed` | 화면에서 정상 관측한 노출. 노출 Hook 타이머가 `hold_ms` 임계를 채워 확정한다 |
 | `implied_by_click` | 선행 노출 없이 클릭이 발생해 클릭 직전에 보강한 합성 노출 |
 | `implied_by_quick_look` | 선행 노출 없이 Quick Look 열기가 발생해 그 직전에 보강한 합성 노출 |
+| `implied_by_direct_view` | 목록을 거치지 않고 상세에 바로 들어와, 상세 조회 직전에 보강한 합성 노출 |
 
 Quick Look 열기는 클릭이 아니므로 `implied_by_click`으로 적지 않는다. 확정 계기가 달라야
 "카드를 봤다"의 근거를 뒤에서 되짚을 수 있다.
+
+`implied_by_direct_view`는 2026-09-21에 더했다. 링크·북마크·새 탭으로 상세가 세션의 첫
+화면이면(`navigation_source = session_start`) 목록에서 누른 것이 없어 앞의 두 보강이 동작하지
+않았고, 노출 없이 상세 조회만 남아 `detail_entry_rate`가 1을 넘었다(데이터 파트 실측: 노출 4
+세션 · 상세 6 세션 = 1.5). 합성 트래픽은 늘 목록을 거쳐서 실사용자 경로에서만 나타났다.
+보강은 로거(`frontend/src/lib/logger.ts` `trackProductView`)가 세션 단위로 한 상품에 한 번만
+내며, `list_id = "direct"` · `position = 0` · `hold_ms = 0`으로 목록 자리가 없음을 적는다.
 
 합성 노출은 대응 클릭·Quick Look과 같은 세션·상품·노출 위치 식별자를 사용하며 CTR과
 노출 분모에 포함한다.

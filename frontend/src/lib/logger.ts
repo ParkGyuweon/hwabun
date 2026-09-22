@@ -287,6 +287,30 @@ let startedPageViewKey: string | null | typeof NOT_STARTED = NOT_STARTED;
  * 이전에는 session_start 가 직전 화면의 page_view_id 를 들고 나갔고,
  * 페르소나 교체 시 새 세션의 첫 page_view 가 아예 없었다.
  */
+/**
+ * 노출로 인정하는 판정 임계값 (계약 §3.12-1). `IntersectionObserver` threshold 와 같은 값을 그대로 싣는다.
+ * 합성 노출도 같은 값을 싣는다 — 측정값이 아니라 기준이라서다. useImpression 이 이 값을 쓴다.
+ */
+export const IMPRESSION_VISIBLE_RATIO = 0.5;
+
+/**
+ * 이 **세션에서** 노출이 한 번이라도 남은 상품.
+ *
+ * `firedOnceKeys` 는 page_view 마다 비우므로 "세션 안에 노출이 있었나" 를 볼 수 없다. 그 판정이 따로 필요하다 —
+ * 목록을 거치지 않고 링크·북마크로 상세에 바로 들어오면 노출이 하나도 없는데 상세 조회만 남아서,
+ * 마트의 `detail_entry_rate` 가 1 을 넘는다 (데이터 파트 실측 2026-09-21: 노출 4 세션 · 상세 6 세션 = 1.5).
+ */
+const impressedProducts = new Set<string>();
+
+/** 노출을 남긴 쪽이 알려 준다 (useImpression). 세션이 바뀌면 비워진다 */
+export function markProductImpressed(productId: string | null | undefined): void {
+  if (productId) impressedProducts.add(productId);
+}
+
+export function hasProductImpression(productId: string): boolean {
+  return impressedProducts.has(productId);
+}
+
 export function startSession(personaId: string | null, productId: string | null = null): void {
   if (startedSessionKey === personaId) return;
   startedSessionKey = personaId;
@@ -294,6 +318,7 @@ export function startSession(personaId: string | null, productId: string | null 
   sessionId = createId();
   sequenceNo = 0;
   firedOnceKeys.clear();
+  impressedProducts.clear();
   pendingEntry = null;
   setLoggerContext({ personaId, productId });
 
@@ -323,6 +348,27 @@ function trackProductView(
   entry: ProductViewEntry | null = null,
 ): void {
   if (productId === null) return;
+  /**
+   * **상세를 봤으면 그 상품을 본 것이다.** 이 세션에 그 상품의 노출이 하나도 없으면 여기서 하나 보강한다
+   * (데이터 파트 요청 2026-09-21).
+   *
+   * 목록에서 누르고 들어온 경우는 `confirmImpressionByClick` 이 이미 남겼고, 화면에 오래 머문 카드는 관찰 경로가
+   * 남겼다. 남는 것은 **목록을 아예 안 거친 진입** — 링크·북마크·새 탭으로 상세가 첫 화면인 경우다. 그때는 누른 것이
+   * 없어 기존 보강 두 갈래(implied_by_click · implied_by_quick_look)가 동작하지 않아, 노출 없이 상세 조회만 남았다.
+   * 합성 트래픽은 늘 목록을 거쳐서 이 경로가 지금까지 안 보였다.
+   */
+  if (!impressedProducts.has(productId)) {
+    impressedProducts.add(productId);
+    track('product_impression', {
+      product_id: productId,
+      // 목록을 거치지 않았으므로 자리가 없다. 목록 이름과 순번 자리에 "목록 없음" 을 적는다
+      list_id: 'direct',
+      position: 0,
+      hold_ms: 0,
+      visible_ratio: IMPRESSION_VISIBLE_RATIO,
+      impression_origin: 'implied_by_direct_view',
+    });
+  }
   track('product_view', {
     product_id: productId,
     navigation_source: navigationSource,

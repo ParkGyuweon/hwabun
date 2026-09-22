@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { hasTrackedOnce, track, trackOnce } from '../lib/logger';
+import { IMPRESSION_VISIBLE_RATIO, hasTrackedOnce, markProductImpressed, track, trackOnce } from '../lib/logger';
 import type { EventName } from '../types/log';
 
-/** 카드 면적의 이 비율 이상이 화면에 들어와야 노출로 본다 */
-const VISIBLE_RATIO = 0.5;
+/** 카드 면적의 이 비율 이상이 화면에 들어와야 노출로 본다. 계약에 싣는 값이라 로거가 정본을 갖는다 */
+const VISIBLE_RATIO = IMPRESSION_VISIBLE_RATIO;
 
 /**
  * 스쳐 지나간 것을 노출로 세지 않기 위한 최소 유지 시간의 기본값.
@@ -68,7 +68,43 @@ const impressionKey = (eventName: string, pageViewKey: string, listId: string, p
  * 전에는 hold_ms == 0 이 합성의 유일한 표지였다. 그건 임계값이 마침 0 이 아니라서 성립하는 우연이라 파이프라인을
  * 거기에 묶지 않는다 — 마커가 있으면 임계값이 바뀌어도 분모 정의(dw-schema §4.1)가 안 깨진다.
  */
-export type ImpressionOrigin = 'observed' | 'implied_by_click' | 'implied_by_quick_look';
+export type ImpressionOrigin =
+  | 'observed'
+  | 'implied_by_click'
+  | 'implied_by_quick_look'
+  /** 목록을 안 거치고 링크·북마크로 상세에 바로 들어와 보강한 노출. 로거가 낸다 (2026-09-21) */
+  | 'implied_by_direct_view';
+
+/**
+ * 그 카드의 노출이 **어떤 `recommendation_id` 로** 남았는지. 클릭이 같은 값을 다시 쓰기 위한 기록이다.
+ *
+ * 맞춤 기획전 레일은 추천을 다시 불러올 때마다 새 `recommendation_id` 를 받는다. 노출이 남은 뒤 응답이 갱신되고
+ * 그 사이에 클릭이 들어오면, 클릭만 새 id 를 달고 나가 어느 노출에도 없는 값이 된다 (데이터 파트 실측 2026-09-21:
+ * 추천 클릭 2,964건 중 1건). 노출 때 쓴 값을 기억해 두고 클릭이 그것을 그대로 쓰면 둘이 항상 같은 묶음에 든다.
+ */
+const impressionRecommendationIds = new Map<string, string>();
+
+/** 노출이 남을 때 그때 쓴 추천 식별자를 적어 둔다 */
+function rememberRecommendationId(key: string, recommendationId: string | undefined): void {
+  if (recommendationId && !impressionRecommendationIds.has(key)) {
+    impressionRecommendationIds.set(key, recommendationId);
+  }
+}
+
+/**
+ * 그 카드의 노출 때 쓴 추천 식별자. 노출이 없었으면 undefined — 호출부가 지금 값으로 물러난다.
+ * 인자는 노출을 남길 때와 **같은 것**이어야 한다 (훅에 넘긴 pageViewKey·eventName·listId).
+ */
+export function recommendationIdForImpression(input: {
+  eventName: UseImpressionOptions['eventName'];
+  pageViewKey: string;
+  listId: string;
+  productId: string;
+}): string | undefined {
+  return impressionRecommendationIds.get(
+    impressionKey(input.eventName, input.pageViewKey, input.listId, input.productId),
+  );
+}
 
 interface ConfirmByClickInput {
   pageViewKey: string;
@@ -108,7 +144,10 @@ export function confirmImpressionByClick({
   extraProps,
   origin = 'implied_by_click',
 }: ConfirmByClickInput): boolean {
-  return trackOnce(impressionKey(eventName, pageViewKey, listId, productId), eventName, {
+  const key = impressionKey(eventName, pageViewKey, listId, productId);
+  rememberRecommendationId(key, recommendationId);
+  markProductImpressed(productId);
+  return trackOnce(key, eventName, {
     product_id: productId,
     list_id: listId,
     position,
@@ -208,8 +247,11 @@ export function useImpression({
             const productId = el.dataset.productId;
             if (!productId) return;
 
+            const key = impressionKey(eventName, pageViewKey, listId, productId);
+            rememberRecommendationId(key, recommendationId);
+            markProductImpressed(productId);
             const fired = trackOnce(
-              impressionKey(eventName, pageViewKey, listId, productId),
+              key,
               eventName,
               {
                 ...baseProps(el),
@@ -220,7 +262,7 @@ export function useImpression({
               },
             );
             // 클릭이 먼저 노출을 확정했으면(confirmImpressionByClick) 이미 남아 있다. 체류는 계속 잰다
-            if (fired || hasTrackedOnce(impressionKey(eventName, pageViewKey, listId, productId))) impressed.add(el);
+            if (fired || hasTrackedOnce(key)) impressed.add(el);
           }, holdMs);
 
           timers.set(el, id);
