@@ -243,7 +243,8 @@ export default function OrdersScreen({
                   >
                     <td>{formatOrderedAt(o.ordered_at)}</td>
                     <td>
-                      <span className="table__code">{o.order_id}</span>
+                      {/* 주문번호는 36자 UUID 라 열 하나를 다 먹었다. 앞 8자만 적고 전체는 마우스를 올리면 (2026-09-22 은솔님) */}
+                      <span className="table__code" title={o.order_id}>{o.order_id.slice(0, 8)}</span>
                     </td>
                     <td>{o.buyer_nickname || o.buyer_id}</td>
                     <td>

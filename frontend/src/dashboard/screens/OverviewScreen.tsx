@@ -308,12 +308,9 @@ export default function OverviewScreen({
         </Panel>
       </div>
 
-      <details className="fold">
-        <summary>
-          기본 숫자 · 방문 {fmt.int(overview.sessions)}번 · 상품 상세 본 횟수 {fmt.int(overview.detailViews)}번 · 그냥 나간 비율{' '}
-          {overview.bounceRate === null ? '아직 없음' : fmt.pct(overview.bounceRate)}
-        </summary>
-        <div className="grid grid--kpi fold__body">
+      {/* 접지 않고 바로 보인다 (2026-09-22 은솔님). 접힌 제목이 안의 카드 숫자를 그대로 되읊어 펼칠 이유가 없었다 */}
+      <section className="stack" aria-label="기본 숫자">
+        <div className="grid grid--kpi">
           <Kpi label="방문" value={`${fmt.int(overview.sessions)}번`} sub={noBehavior ? emptyWhy : `최근 ${days}일`} />
           <Kpi label="상품 상세 본 횟수" value={`${fmt.int(overview.detailViews)}번`} sub={noBehavior ? emptyWhy : `최근 ${days}일`} />
           <Kpi label="목록에서 상세로 들어온 비율" value={fmt.pct(overview.detailRate)} sub={noBehavior ? emptyWhy : '목록에 보인 횟수 기준'} />
@@ -337,7 +334,7 @@ export default function OverviewScreen({
             관심 점수는 장바구니 담기 1번을 3점, 상품 클릭 1번을 1점으로 더하고, 담았다가 뺀 1번은 2점을 뺀 값입니다. 점수 자체보다 순서를 보시면 됩니다.
           </p>
         </Panel>
-      </details>
+      </section>
     </div>
   );
 }

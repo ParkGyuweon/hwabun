@@ -297,7 +297,7 @@ export default function ReviewsScreen({
           )}
         </Panel>
 
-        <Panel title="리뷰에 자주 나오는 이야기" source="real" aside="영어 리뷰 글 기준">
+        <Panel title="리뷰에 자주 나오는 이야기" source="real">
           {stats.withText === 0 || stats.factors.every((f) => f.count === 0) ? (
             <p className="note">찾은 표현이 없습니다</p>
           ) : (
