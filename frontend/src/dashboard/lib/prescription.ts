@@ -110,7 +110,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
     const hit = m.segmentTopContent.find((s) => s.top === contentKo);
     if (!hit) return null;
     return {
-      from: '누가 사나',
+      from: '고객군',
       text: `${SKIN_TYPE_KO[hit.type]} 고객이 가장 오래 보는 글 · 읽는 시간의 ${fmt.pct(hit.dwellShare)}`,
     };
   };
@@ -127,34 +127,34 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       how: `임상 결과를 ${after('clinical_claim')} 바로 아래로 옮기고, 인원·기간·항목·결과 4줄 표로 바꾸세요.`,
       basis: [
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `평균의 ${liftOf('clinical_claim')}배 담는데, 본 사람은 ${viewPct('clinical_claim')}뿐`,
         },
         segmentBasis('임상 결과') ?? {
-          from: '누가 사나',
+          from: '고객군',
           text: '고객군별 읽는 시간에서 임상 결과가 가장 큼',
         },
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `전성분 펼친 방문 담기 ${fmt.pct(expand?.cartRateWith ?? 0)} · 안 펼친 방문 ${fmt.pct(expand?.cartRateWithout ?? 0)}`,
         },
       ],
-      verify: `본 비율 ${viewPct('clinical_claim')} → 50%, 담기 배수 2.0배 유지`,
+      verify: `본 비율 ${viewPct('clinical_claim')} → 50%, 담기 효과 2.0배 유지`,
     },
 
     ingredient_callout: {
       how: `성분 특징을 ${after('ingredient_callout')} 바로 아래로 옮기고, ${josa(drag3.join('·'), '을/를')} 맨 앞 카드로 세우세요.`,
       basis: [
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `평균의 ${liftOf('ingredient_callout')}배 담는데, 본 사람은 ${viewPct('ingredient_callout')}뿐`,
         },
         {
-          from: '고객이 찾는 성분',
-          text: `가장 많이 드래그한 성분: ${drag3.join('·')}`,
+          from: '성분',
+          text: `고객이 가장 많이 찾아본 성분: ${drag3.join('·')}`,
         },
         {
-          from: '막히는 곳',
+          from: '고객이 막히는 자리',
           text: `성분 목록에서 되돌아가 다시 읽음 ${fmt.int(backtrack?.count ?? 0)}건`,
         },
       ],
@@ -165,15 +165,15 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       how: `사용법을 아침·저녁 2열 표로 바꾸세요. 순서·양·겹칠 때 먼저 쓸 것, 세 줄만.`,
       basis: [
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `${dwellSec('usage_guide')}초나 읽는데 담기는 평균의 ${liftOf('usage_guide')}배`,
         },
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `접힌 정보 펼친 방문 담기 ${fmt.pct(accordion?.cartRateWith ?? 0)} · 안 펼친 방문 ${fmt.pct(accordion?.cartRateWithout ?? 0)}`,
         },
         {
-          from: '막히는 곳',
+          from: '고객이 막히는 자리',
           text: `담기 버튼 위에서 머뭇거림 ${fmt.int(hesitate?.count ?? 0)}건`,
         },
       ],
@@ -184,15 +184,15 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       how: `추가 설명 칸을 빼고, 남길 내용은 성분 특징·사용법 안으로 옮기세요.`,
       basis: [
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `담기 평균의 ${liftOf('what_else')}배로 열 종 중 최저 · 본 사람 ${viewPct('what_else')}`,
         },
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `같은 자리에 올 임상 결과는 ${liftOf('clinical_claim')}배`,
         },
         {
-          from: '막히는 곳',
+          from: '고객이 막히는 자리',
           text: `3초 안에 나간 방문 ${fmt.pct(m.quickExitRate)}`,
         },
       ],
@@ -203,11 +203,11 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       how: `리뷰 위 "내 피부 타입만 보기"를 기본으로 켜 두세요.`,
       basis: [
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `걸러 본 방문 담기 ${fmt.pct(skinFilter?.cartRateWith ?? 0)} · 안 그런 방문 ${fmt.pct(skinFilter?.cartRateWithout ?? 0)} · 누른 방문 ${fmt.pct(skinFilter?.doneRate ?? 0)}`,
         },
         {
-          from: '누가 사나',
+          from: '고객군',
           text: `걸러 본 방문 중 ${fmt.pct(m.sameSkinFilterRate, 0)}가 자기 피부 타입 선택`,
         },
       ],
@@ -218,11 +218,11 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       how: `전성분을 펼친 상태로 두거나 앞 5개를 미리 보이게 하세요. 지금 펼침 ${fmt.pct(expand?.doneRate ?? 0)}.`,
       basis: [
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `펼친 방문 담기 ${fmt.pct(expand?.cartRateWith ?? 0)} · 안 펼친 방문 ${fmt.pct(expand?.cartRateWithout ?? 0)}`,
         },
         {
-          from: '막히는 곳',
+          from: '고객이 막히는 자리',
           text: `이 구간 되돌아가 다시 읽음 ${fmt.int(backtrack?.count ?? 0)}건`,
         },
       ],
@@ -233,11 +233,11 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
       how: `상품 이미지를 누르면 확대되게 하세요. 지금은 눌러도 반응이 없습니다.`,
       basis: [
         {
-          from: '막히는 곳',
+          from: '고객이 막히는 자리',
           text: `이미지에서 눌러도 반응 없음 ${fmt.int(deadClick?.count ?? 0)}건 · 본 비율 ${viewPct('product_image')}`,
         },
         {
-          from: '무엇을 보고 사나',
+          from: '상세페이지 설명 글',
           text: `${dwellSec('product_image')}초만 보고 넘어감`,
         },
       ],

@@ -121,7 +121,7 @@ export default function SettlementScreen({ brandId }: { brandId: string | null }
           sub={totals.lastCompleted ? `마지막 지급 ${monthKo(totals.lastCompleted.settlement_month)}분` : '지급 완료 없음'}
           source="real"
         />
-        <Kpi label="플랫폼 수수료" value="0%" sub="판매액 = 정산액" source="real" />
+        <Kpi label="쇼핑몰 수수료" value="0%" sub="판 금액을 그대로 받습니다" source="real" />
       </div>
 
       <Panel

@@ -62,7 +62,7 @@ function CohortBadge({ cohort }: { cohort: CohortM }) {
       <section className="cohort cohort--suppressed" aria-label="비슷한 브랜드와 비교">
         <p className="cohort__eyebrow">비슷한 브랜드와 비교 · {week}</p>
         <p className="cohort__line" title={`비슷한 브랜드(${group})가 5곳 미만이거나 한 곳에 치우쳐 숫자를 내지 않습니다. 다른 브랜드 이름·숫자는 보이지 않습니다`}>
-          <strong>표본 부족</strong> · 비슷한 브랜드가 아직 5곳 미만
+          <strong>비교할 브랜드가 부족합니다</strong> · 비슷한 브랜드가 아직 5곳 미만
         </p>
       </section>
     );
@@ -178,7 +178,7 @@ export default function SegmentsScreen() {
       <Panel
         title="피부 타입 × 피부 톤 · 장바구니에 담은 비율"
         source={source.grid}
-        aside={`${MIN_CELL_VISITS}건 미만 비움 · ${THIN_VISITS}건 미만 흐림`}
+        aside={`방문 ${MIN_CELL_VISITS}건 미만 칸은 비움 · ${THIN_VISITS}건 미만은 흐리게`}
       >
         {segmentMatrix.length === 0 ? (
           <p className="note">{noSegments ? '아직 기록이 없습니다' : '계산 준비 중입니다'}</p>
@@ -236,7 +236,7 @@ export default function SegmentsScreen() {
                   <th title="'가격 미입력'은 가격이 등록되지 않은 상품">가격대</th>
                   <th>내 상품</th>
                   <th title="한 고객이 여러 가격대를 보면 가격대마다 한 번씩 셉니다. 더해서 전체 방문으로 읽지 마세요">상세 방문</th>
-                  <th title="상품을 보고 상세까지 들어온 비율">상세 진입</th>
+                  <th title="상품을 보고 상세까지 들어온 비율">상세로 들어옴</th>
                   <th title="상세를 본 뒤 담은 비율">담기</th>
                   <th title="상세를 본 뒤 구매한 비율">구매</th>
                 </tr>
@@ -269,7 +269,7 @@ export default function SegmentsScreen() {
         source={source.segmentPriceGrid}
         aside={
           <span title={`방문 ${MIN_CELL_VISITS}건 미만 칸은 비움 · ${THIN_VISITS}건 미만은 흐림`}>
-            {priceGridFilled}/20칸 · {MIN_CELL_VISITS}건 미만 비움
+            20칸 중 {priceGridFilled}칸 채움 · 방문 {MIN_CELL_VISITS}건 미만은 비움
           </span>
         }
       >

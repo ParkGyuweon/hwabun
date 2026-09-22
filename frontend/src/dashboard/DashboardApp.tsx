@@ -63,31 +63,31 @@ interface ScreenDef {
 const SCREENS: Record<ScreenKey, ScreenDef> = {
   overview: {
     section: 'overview', tab: '요약', scope: 'behavior',
-    title: '지금 손봐야 할 것', desc: '오늘 고칠 것 하나',
+    title: '요약', desc: '지금 상황과 첫 번째 할 일',
   },
   content: {
-    section: 'detail', tab: '무엇을 보고 사나', scope: 'behavior',
-    title: '무엇을 보고 사나', desc: '담게 만드는 설명 글',
+    section: 'detail', tab: '설명 글', scope: 'behavior',
+    title: '상세페이지 설명 글', desc: '어떤 글을 읽은 고객이 담는지',
   },
   behavior: {
-    section: 'detail', tab: '어디서 막히나', scope: 'behavior',
-    title: '막히는 곳', desc: '고객이 헤매는 자리',
+    section: 'detail', tab: '막히는 자리', scope: 'behavior',
+    title: '고객이 막히는 자리', desc: '눌러도 반응 없는 곳, 되돌아 읽는 곳',
   },
   products: {
     section: 'products', tab: '상품', scope: 'behavior',
-    title: '상품마다 어디서 멈추나', desc: '상품별 이탈 지점',
+    title: '상품별 진단', desc: '상품마다 고객이 멈추는 단계',
   },
   orders: {
     section: 'orders', tab: '주문', scope: 'feedback',
-    title: '무엇이 팔렸나', desc: '결제 완료된 주문',
+    title: '주문', desc: '결제 완료된 주문',
   },
   settlement: {
     section: 'orders', tab: '정산', scope: 'feedback',
-    title: '얼마를 받나', desc: '월별 정산 · 수수료 0%',
+    title: '정산', desc: '월별 정산 · 수수료 0%',
   },
   segments: {
     section: 'customers', tab: '고객군', scope: 'behavior',
-    title: '누가 사나', desc: '피부 타입·톤별 담기',
+    title: '고객군', desc: '피부 타입·톤별로 누가 담는지',
   },
   reviews: {
     section: 'voice', tab: '공개 리뷰', scope: 'behavior',
@@ -95,11 +95,11 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
   },
   feedback: {
     section: 'voice', tab: '받은 피드백', scope: 'feedback',
-    title: '고객이 고쳐 달라는 것', desc: '고객이 고른 개선점',
+    title: '받은 피드백', desc: '고객이 고쳐 달라고 한 것',
   },
   ingredients: {
     section: 'market', tab: '성분', scope: 'behavior',
-    title: '고객이 찾는 성분', desc: '찾는데 내 상품엔 없는 성분',
+    title: '성분', desc: '고객이 찾는데 내 상품엔 없는 성분',
   },
   register: {
     section: 'register', tab: '상품 등록', scope: 'feedback',
@@ -403,7 +403,7 @@ function MartNote() {
   let line: string;
   if (state === 'idle') line = '브랜드를 고르면 불러옵니다';
   else if (state === 'loading') line = '행동 기록을 불러오는 중';
-  else if (anyReal) line = martProcessedAt ? `데이터 기준: ${fmtProcessedAt(martProcessedAt)}` : '행동 기록을 불러왔습니다';
+  else if (anyReal) line = martProcessedAt ? `${fmtProcessedAt(martProcessedAt)}까지 반영` : '행동 기록을 불러왔습니다';
   else if (state === 'ready') line = '이 기간 행동 기록이 없습니다';
   else line = '행동 기록을 못 불러왔습니다';
   return (

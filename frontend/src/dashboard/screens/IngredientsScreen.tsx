@@ -111,7 +111,7 @@ export default function IngredientsScreen({
           </p>
         ) : null}
         <p className="verdict__sample">
-          {source.ingredients === 'real' ? '관심 순위: 쇼핑몰 전체 · 보유: 내 전성분' : '관심 순위: 기록 전 · 보유: 내 전성분'}
+          {source.ingredients === 'real' ? '찾는 순위는 쇼핑몰 전체 고객 기준 · 있고 없고는 내 상품 전성분 기준' : '찾는 순위는 아직 기록 없음 · 있고 없고는 내 상품 전성분 기준'}
         </p>
       </section>
 
@@ -119,7 +119,7 @@ export default function IngredientsScreen({
         title="고객이 찾는 성분과 내 상품 성분 맞춰 보기"
         origin="shared"
         source={source.ingredients}
-        aside={noInterest ? undefined : `관심 순 ${ingredientGap.length}종 · 없는 성분이 위`}
+        aside={noInterest ? undefined : `고객이 많이 찾는 순서 ${ingredientGap.length}종 · 내 상품에 없는 성분이 위`}
       >
         <div className="table-wrap">
           <table className="fbx-table gap-table">

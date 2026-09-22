@@ -120,9 +120,9 @@ export function buildOverviewHeadlineRequest(
       { label_ko: '구매 고객', value_text: `${fmt.int(rb.buyerCount)}명` },
       { label_ko: '다시 산 고객', value_text: `${fmt.int(rb.repeatBuyerCount)}명` },
     ];
-    if (rb.rate !== null) facts.push({ label_ko: '브랜드 재구매율', value_text: fmt.pct(rb.rate) });
-    if (rb.medianDays !== null) facts.push({ label_ko: '재구매 간격 중앙값', value_text: `${Math.round(rb.medianDays)}일` });
-    sections.push({ id: 'repurchase', label_ko: '재구매', facts, comparisons: [], thin: rb.buyerCount < 10 });
+    if (rb.rate !== null) facts.push({ label_ko: '다시 산 고객 비율', value_text: fmt.pct(rb.rate) });
+    if (rb.medianDays !== null) facts.push({ label_ko: '다시 사기까지 걸린 날', value_text: `${Math.round(rb.medianDays)}일` });
+    sections.push({ id: 'repurchase', label_ko: '다시 산 고객', facts, comparisons: [], thin: rb.buyerCount < 10 });
   }
 
   // 주문·매출. 백엔드 실측이 있을 때만

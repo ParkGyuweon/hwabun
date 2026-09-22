@@ -154,14 +154,10 @@ export default function OverviewScreen({
             sub={pulse.orders > 0 ? `한 주문에 평균 ${(pulse.units / pulse.orders).toFixed(1)}개` : '아직 팔린 수량이 없습니다'}
             source="real"
           />
-          <Kpi
-            label="팔린 상품 가짓수"
-            value={`${fmt.int(pulse.soldProducts)}가지`}
-            sub={pulse.soldProducts > 0 ? '한 번이라도 팔린 상품' : '아직 팔린 상품이 없습니다'}
-            source="real"
-          />
-          <Kpi label="리뷰" value={`${fmt.int(pulse.reviews)}건`} sub={pulse.reviews > 0 ? '구매 고객이 남김' : '아직 리뷰가 없습니다'} source="real" />
-          <Kpi label="받은 의견" value={`${fmt.int(pulse.feedbacks)}건`} sub={pulse.feedbacks > 0 ? '구매 고객이 보냄' : '아직 의견이 없습니다'} source="real" />
+          {/*
+            팔린 상품 가짓수·리뷰·받은 의견 칸은 뺐다 (2026-09-22 유림님). 요약에서 볼 만큼 중요한 숫자가 아니고
+            가짓수는 상품 화면, 리뷰·의견은 고객의 말 화면에 그대로 있다.
+          */}
         </div>
       ) : null}
       {/*
@@ -171,12 +167,12 @@ export default function OverviewScreen({
       {repurchase?.brand ? (
         <div className="grid grid--kpi">
           <Kpi
-            label="브랜드 재구매율"
+            label="다시 산 고객 비율"
             value={repurchase.brand.rate === null ? '아직 없음' : fmt.pct(repurchase.brand.rate)}
             sub={
               repurchase.brand.rate === null
-                ? `최근 ${repurchase.brand.windowDays}일 구매 고객 없음`
-                : `${fmt.int(repurchase.brand.buyerCount)}명 중 ${fmt.int(repurchase.brand.repeatBuyerCount)}명 · 최근 ${repurchase.brand.windowDays}일`
+                ? `최근 ${repurchase.brand.windowDays}일 동안 산 고객이 없습니다`
+                : `산 고객 ${fmt.int(repurchase.brand.buyerCount)}명 중 ${fmt.int(repurchase.brand.repeatBuyerCount)}명이 또 샀습니다 · 최근 ${repurchase.brand.windowDays}일`
             }
             source="real"
           />
@@ -189,23 +185,27 @@ export default function OverviewScreen({
             value={repurchase.brand.medianDays === null ? (repurchase.brand.repeatBuyerCount > 0 ? '계산 전' : '아직 없음') : `${Math.round(repurchase.brand.medianDays)}일`}
             sub={
               repurchase.brand.medianDays !== null
-                ? '첫 구매에서 다음 구매까지 · 가운데 값'
+                ? '처음 산 날부터 다시 산 날까지 · 고객마다 달라서 한가운데 값'
                 : repurchase.brand.repeatBuyerCount > 0
                   ? '다시 산 고객은 있지만 날수 계산은 준비 중'
                   : '두 번 산 고객이 생기면 채워집니다'
             }
             source="real"
           />
+          {/*
+            결제할 때 "왜 샀나요" 물음에 "쓰던 걸 다시 사서" 를 고른 주문 수 (checkout.ts `restock`).
+            고객이 스스로 한 말이라 위 칸(실제 주문 기록으로 센 재구매)과 다를 수 있고, 그래서 나란히 둔다.
+          */}
           <Kpi
-            label="또 사려고 샀다고 답한 주문"
+            label="'쓰던 걸 다시 사요'라고 답한 주문"
             value={`${fmt.int(repurchase.brand.declaredRestockOrders)}건`}
-            sub={`주문할 때 설문 답 · 실제로 다시 산 고객은 ${fmt.int(repurchase.brand.repeatBuyerCount)}명`}
+            sub={`결제할 때 고객이 직접 고른 답 · 주문 기록으로 센 다시 산 고객은 ${fmt.int(repurchase.brand.repeatBuyerCount)}명`}
             source="real"
           />
           <Kpi
             label="가장 많이 다시 사는 상품"
             value={best ? best.name : '아직 없음'}
-            sub={best ? `다시 산 비율 ${fmt.pct(best.rate)}` : '다시 산 고객이 아직 없습니다'}
+            sub={best ? `산 고객 중 ${fmt.pct(best.rate)}가 또 샀습니다` : '다시 산 고객이 아직 없습니다'}
             source="real"
           />
         </div>
@@ -213,7 +213,7 @@ export default function OverviewScreen({
       {top ? (
         <section className={`verdict verdict--${top.origin}`}>
           <p className="verdict__eyebrow">
-            지금 손봐야 할 것 <OriginBadge kind={top.origin} />
+            첫 번째 할 일 <OriginBadge kind={top.origin} />
           </p>
           <h2 className="verdict__headline">{top.headline}</h2>
           <ul className="verdict__reasons">
@@ -237,7 +237,7 @@ export default function OverviewScreen({
       ) : (
         <section className="verdict verdict--mine">
           <p className="verdict__eyebrow">
-            지금 손봐야 할 것 <OriginBadge kind="mine" />
+            첫 번째 할 일 <OriginBadge kind="mine" />
           </p>
           <h2 className="verdict__headline">아직 판단을 내릴 만큼 기록이 모이지 않았습니다</h2>
           <ul className="verdict__reasons">
@@ -267,7 +267,7 @@ export default function OverviewScreen({
         <Kpi
           label="담았다가 뺀 비율"
           value={fmt.pct(overview.removalRate)}
-          sub={noBehavior ? emptyWhy : `망설임 신호${delta(overview.removalRate, previous?.removalRate)}`}
+          sub={noBehavior ? emptyWhy : `담은 뒤 마음을 바꾼 고객${delta(overview.removalRate, previous?.removalRate)}`}
           source={source.overview}
         />
         <Kpi
@@ -279,7 +279,7 @@ export default function OverviewScreen({
       </div>
 
       {rest.length > 0 ? (
-        <Panel title="그다음에 볼 것" source={source.content} aside="차이가 크고 기록이 많은 순서">
+        <Panel title="그다음 할 일" source={source.content} aside="차이가 크고 기록이 많은 순서">
           <ul className="insight-list">
             {rest.map((i) => (
               <li key={i.id}>
@@ -332,7 +332,7 @@ export default function OverviewScreen({
             sub={overview.bounceRate === null ? '준비 중' : '아무 행동 없이 나감'}
           />
         </div>
-        <Panel title="고객이 가장 관심 보인 상품 5개" source={source.products} fold aside="담기·클릭은 더하고 담았다 뺀 것은 빼서 매긴 점수">
+        <Panel title="고객이 가장 관심 보인 상품 5개" source={source.products} fold aside="담기·누르기는 더하고 담았다 뺀 것은 빼서 매긴 점수">
           <BarList
             items={productMetrics.slice(0, 5).map((p) => ({
               label: p.product.product_name,
@@ -343,7 +343,7 @@ export default function OverviewScreen({
             rank
           />
           <p className="note">
-            관심 점수는 장바구니 담기 1번을 3점, 상품 클릭 1번을 1점으로 더하고, 담았다가 뺀 1번은 2점을 뺀 값입니다. 점수 자체보다 순서를 보시면 됩니다.
+            관심 점수는 장바구니 담기 1번을 3점, 상품 누르기 1번을 1점으로 더하고, 담았다가 뺀 1번은 2점을 뺀 값입니다. 점수 자체보다 순서를 보시면 됩니다.
           </p>
         </Panel>
       </details>
