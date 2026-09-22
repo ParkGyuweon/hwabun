@@ -1,4 +1,5 @@
 import { IMAGE_WIDTH_SWATCH, sizedImage } from '../../lib/image';
+import { formatKrw } from '../../lib/format';
 import { variantLabelKo } from '../../lib/localize';
 import { track } from '../../lib/logger';
 import type { ProductVariant } from '../../types/product';
@@ -58,6 +59,10 @@ export default function VariantPicker({
       <p className="variants__label">
         <span>옵션</span>
         <strong>{variantLabelKo(selected.label)}</strong>
+        {/* 옵션마다 값이 다르면(대용량·리필) 고른 옵션 값을 이름 옆에. 위의 큰 가격도 같은 값으로 바뀐다 */}
+        {typeof selected.price_krw === 'number' && selected.price_krw > 0 && variants.some((v) => v.price_krw !== selected.price_krw) ? (
+          <span className="variants__price">{formatKrw(selected.sale_price_krw && selected.sale_price_krw < selected.price_krw ? selected.sale_price_krw : selected.price_krw)}</span>
+        ) : null}
       </p>
 
       <ul className="variants__list">

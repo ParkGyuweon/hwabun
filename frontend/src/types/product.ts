@@ -95,6 +95,14 @@ export interface ProductVariant {
   swatch_url: string | null;
   /** 백엔드 옵션 id. 장바구니 API(POST /api/cart/items) 는 이 값으로 담는다. 목 상품은 없다 */
   variant_id?: string;
+  /**
+   * 옵션마다 다른 원화 정가·할인가 (2026-09-22). 대용량은 기본보다 비싸고 리필은 싸다.
+   * 없으면 상품 값(`Product.price_krw`)을 그대로 쓴다 (lib/discount withVariantPrice).
+   */
+  price_krw?: number | null;
+  sale_price_krw?: number | null;
+  /** 옵션 용량 표기 ("140매 / 310g"). 없으면 상품 `size` 를 그대로 보여 준다 */
+  size?: string | null;
 }
 
 /**

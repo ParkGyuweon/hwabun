@@ -12,7 +12,7 @@
  * 바꿔 끼우고 이 파일의 함수는 그대로 쓴다.
  */
 import discountsData from '../mocks/discounts.json';
-import { toKrw } from './localize';
+import { KRW_PER_USD, toKrw } from './localize';
 import type { Product } from '../types/product';
 
 type Priced = Pick<Product, 'price_usd' | 'sale_price_usd' | 'price_krw' | 'sale_price_krw'>;
@@ -77,4 +77,27 @@ export const discountPercent = (p: Pick<Product, 'price_usd' | 'sale_price_usd'>
 export function variantIdOf(p: Product, skuId: string | null): string | undefined {
   const v = (skuId ? p.variants.find((x) => x.sku_id === skuId) : undefined) ?? p.variants[0];
   return v?.variant_id;
+}
+
+/**
+ * 고른 옵션의 값으로 상품 가격 칸을 갈아 끼운 사본 (2026-09-22).
+ *
+ * 대용량은 기본보다 비싸고 리필은 싸다. 그런데 화면(PriceTag)·담기·결제 이벤트가 전부 `Product` 의 가격 칸만
+ * 봐서, 대용량을 골라도 기본 값이 그대로 찍혔다. 옵션에 값이 있으면 그 값으로 원화·달러·할인가를 함께 바꾸고,
+ * 없으면(옛 응답·옵션 없는 상품) 상품을 그대로 돌려준다. 이후 계산은 전부 기존 함수 그대로다.
+ */
+export function withVariantPrice(p: Product, skuId: string | null): Product {
+  const v = (skuId ? p.variants.find((x) => x.sku_id === skuId) : undefined) ?? p.variants[0];
+  if (!v || typeof v.price_krw !== 'number' || v.price_krw <= 0) return p;
+  const sale = typeof v.sale_price_krw === 'number' && v.sale_price_krw > 0 && v.sale_price_krw < v.price_krw ? v.sale_price_krw : null;
+  const usd = (krw: number) => Math.round((krw / KRW_PER_USD) * 100) / 100;
+  return {
+    ...p,
+    price_krw: v.price_krw,
+    price_usd: usd(v.price_krw),
+    sale_price_krw: sale,
+    sale_price_usd: sale === null ? null : usd(sale),
+    discount_rate: sale === null ? undefined : 1 - sale / v.price_krw,
+    discount_label: sale === null ? undefined : (p.discount_label ?? '할인'),
+  };
 }

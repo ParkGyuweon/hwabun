@@ -139,6 +139,10 @@ function mapVariant(v: VariantDto, fallbackImage: string | null): ProductVariant
     image_url: v.imageUrl ?? fallbackImage ?? '',
     swatch_url: v.swatchUrl ?? null,
     variant_id: v.variantId,
+    // 옵션 가격. 대용량·리필처럼 옵션마다 값이 다르다 — 전에는 버려서 어느 옵션을 골라도 상품 값 하나만 보였다 (2026-09-22)
+    price_krw: v.priceKrw === null || v.priceKrw === undefined ? null : Number(v.priceKrw),
+    sale_price_krw: v.salePriceKrw === null || v.salePriceKrw === undefined ? null : Number(v.salePriceKrw),
+    size: v.size ?? null,
   };
 }
 
@@ -154,9 +158,11 @@ function mapSummary(s: ProductSummaryDto): Product {
     images: s.primaryImageUrl ? [s.primaryImageUrl] : [],
     variants: active.map((v) => mapVariant(v, s.primaryImageUrl)),
     description: null,
-    price_usd: krwToUsd(s.priceKrw),
+    // 기본 옵션(첫 ACTIVE 옵션)의 값을 상품 값으로 삼는다. 상품 행의 priceKrw 가 옵션과 어긋난 상품이 있어서
+    // (SB000007: 상품 24,000 · 기본 옵션 32,200) 옵션 쪽을 정본으로 본다. 옵션 값이 없으면 상품 행 값
+    price_usd: krwToUsd(active[0]?.priceKrw ?? s.priceKrw),
     // 원화 원본. 화면·결제는 이 값을 그대로 쓴다 (types/product.ts price_krw)
-    price_krw: s.priceKrw === null || s.priceKrw === undefined ? null : Number(s.priceKrw),
+    price_krw: active[0]?.priceKrw != null ? Number(active[0].priceKrw) : s.priceKrw === null || s.priceKrw === undefined ? null : Number(s.priceKrw),
     size: null,
     rating: s.rating ?? null,
     review_count: null,

@@ -22,14 +22,20 @@
         "label": "기본",
         "image_url": "/images/ssafy-beauty/SB000001-m1.webp",
         "swatch_url": null,
-        "variant_id": "SB000001-V1"
+        "variant_id": "SB000001-V1",
+        "size": "70매 / 155g",
+        "price_krw": 29500,
+        "sale_price_krw": 25100
       },
       {
         "sku_id": "SB000001-140",
         "label": "대용량",
         "image_url": "/images/ssafy-beauty/SB000001-m2.webp",
         "swatch_url": null,
-        "variant_id": "SB000001-V2"
+        "variant_id": "SB000001-V2",
+        "size": "140매 / 310g",
+        "price_krw": 52000,
+        "sale_price_krw": 44200
       }
     ],
     "description": {
@@ -215,14 +221,20 @@
         "label": "기본",
         "image_url": "/images/ssafy-beauty/SB000004-m1.webp",
         "swatch_url": null,
-        "variant_id": "SB000004-V1"
+        "variant_id": "SB000004-V1",
+        "size": "110ml",
+        "price_krw": 34900,
+        "sale_price_krw": 29700
       },
       {
         "sku_id": "SB000004-220",
         "label": "대용량",
         "image_url": "/images/ssafy-beauty/SB000004-m2.webp",
         "swatch_url": null,
-        "variant_id": "SB000004-V2"
+        "variant_id": "SB000004-V2",
+        "size": "220ml",
+        "price_krw": 61000,
+        "sale_price_krw": 52000
       }
     ],
     "description": {
@@ -408,14 +420,20 @@
         "label": "기본",
         "image_url": "/images/ssafy-beauty/SB000007-m1.webp",
         "swatch_url": null,
-        "variant_id": "SB000007-V1"
+        "variant_id": "SB000007-V1",
+        "size": "20ml",
+        "price_krw": 32200,
+        "sale_price_krw": 27400
       },
       {
         "sku_id": "SB000007-REFILL",
         "label": "리필",
         "image_url": "/images/ssafy-beauty/SB000007-m2.webp",
         "swatch_url": null,
-        "variant_id": "SB000007-V2"
+        "variant_id": "SB000007-V2",
+        "size": "20ml",
+        "price_krw": 24000,
+        "sale_price_krw": 20400
       }
     ],
     "description": {
