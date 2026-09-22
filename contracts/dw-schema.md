@@ -570,11 +570,19 @@ input = product_event_fact, purchase_fact, dim_product
 세 노출의 합이고, 하나라도 빼면 그 경로의 클릭이 분자에만 들어가 비율이 1을 넘는다 —
 2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
 
-**`product_view_count`는 뒤로가기 재조회를 뺀다.** 프론트는 상세에서 뒤로 갔다
-돌아오면 `product_view`를 다시 내는데(`navigation_source="history_back"`, 프론트
-확인 2026-09-17) 그것은 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
-`detail_entry_rate`가 1을 넘을 수 있다. **세션 기준 지표(`product_view_sessions`
-등)에는 영향이 없다** — 같은 세션이라 `countDistinct`가 한 번만 센다.
+**`product_view_count`는 재조회를 뺀다 — `history_back`과 `reload` 둘이다.**
+프론트는 상세에서 뒤로 갔다 돌아오면 `product_view`를 다시 내고
+(`navigation_source="history_back"`, 프론트 확인 2026-09-17), 새로고침으로 같은 세션을
+이어 쓸 때도 다시 낸다(`navigation_source="reload"`, 프론트 !441·3802391,
+2026-09-22). 둘 다 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
+`detail_entry_rate`가 1을 넘는다 — 특히 새로고침은 노출이 세션 단위 중복 방지로 한 번만
+나가는데 조회만 또 나가서, 같은 세션에서 노출 1 · 조회 2가 된다.
+
+**`direct`는 빼지 않는다.** 목록을 안 거친 진짜 첫 진입이고 생성기가 1,845건 낸다
+(2026-09-22 실측). 새로고침을 `direct`로 묶으면 그것까지 빠지므로 프론트가 값을 따로 뒀다.
+
+**세션 기준 지표(`product_view_sessions` 등)에는 영향이 없다** — 같은 세션이라
+`countDistinct`가 한 번만 센다.
 
 **노출 판정 기준이 서로 다르다.** 목록은 hold 300ms, 추천은 1000ms다. 합쳐 쓰는 이상
 두 기준이 한 분모에 섞인다는 것을 알고 읽어야 한다. 기준을 맞추는 것은 프론트 몫이고,

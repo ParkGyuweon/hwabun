@@ -467,6 +467,37 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertEqual(1, row["product_view_sessions"])   # 세션은 원래 하나
         self.assertEqual(1.0, row["detail_entry_rate"])
 
+    def test_reload_views_are_not_new_entries(self):
+        """새로고침 재조회도 새 진입이 아니다 (§4.1, 프론트 !441·3802391).
+
+        뒤로가기보다 나쁘다 — 노출은 세션 단위 중복 방지로 한 번만 나가는데
+        조회만 또 나가서, 빼지 않으면 노출 1 · 조회 2 로 비율이 2.0 이 된다.
+        """
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="direct"),
+            self._fact("S1", "product_view", navigation_source="reload"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["product_view_count"])      # 재조회 제외
+        self.assertEqual(1, row["product_view_sessions"])   # 세션은 원래 하나
+        self.assertEqual(1.0, row["detail_entry_rate"])
+
+    def test_direct_entry_stays_a_new_entry(self):
+        """`direct` 는 빼지 않는다 — 목록을 안 거친 진짜 첫 진입이다.
+
+        생성기가 1,845건 낸다 (2026-09-22 실측). 새로고침을 `direct` 로 묶어
+        빼버리면 그것까지 사라져서, 프론트가 `reload` 를 따로 뒀다.
+        """
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="direct"),
+        ])
+
+        self.assertEqual(1, _product_daily_kpi(facts).first()["product_view_count"])
+
     def test_missing_navigation_source_counts_as_a_new_entry(self):
         """값이 없는 옛 로그는 재조회로 보지 않는다."""
         facts = self._facts([
