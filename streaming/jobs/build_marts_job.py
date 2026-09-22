@@ -642,10 +642,17 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
             "text_copy",
         ),
     )
+    # **`user_id` 는 묶음 기준이 아니다.** 한 세션 안에서 바뀌기 때문이다 — 비회원으로
+    # 둘러보다 중간에 로그인하면 앞은 NULL, 뒤는 계정 id 다. 기준에 넣으면 한 여정이
+    # 두 행으로 갈려, 실제로는 상세까지 간 세션이 "노출에서 이탈" 한 행을 하나 더
+    # 만든다 (2026-09-22 운영 배치 실측 8행, 전부 actor_type='user').
+    # 계약 grain 도 session_id + product_id 다 (Q5 `funnel_session_grain_is_unique`).
+    #
+    # 대표값은 `min` 으로 고른다. `first` 는 파티션 도착 순서를 타서 계정이 둘 이상인
+    # 세션에서 실행마다 값이 달라진다 — 결정성 검사가 그 자리를 잡는다 (§4.4).
     grouped = stage_events.groupBy(
         "session_id",
         "product_id",
-        "user_id",
         "persona_id",
         "scenario_id",
         "simulation_run_id",
@@ -653,6 +660,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "actor_type",
         "source",
     ).agg(
+        F.min("user_id").alias("user_id"),
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.min(
