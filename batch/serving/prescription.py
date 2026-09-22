@@ -33,7 +33,10 @@ from pydantic import BaseModel, Field
 BD = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 
-PROMPT_VERSION = "0.3"
+# 0.4 (2026-09-22) — 지시 어미를 권유형으로, DIRECTION_DOWN 을 어간으로 (Jira 409).
+# **프롬프트를 고치면 반드시 올린다.** 저장본 키가 input_hash-PROMPT_VERSION-model 이라
+# 판을 안 올리면 같은 입력이 옛 말투 저장본을 그대로 돌려준다 (09-22 배포본에서 실측).
+PROMPT_VERSION = "0.4"
 MODEL = os.environ.get("PRESCRIPTION_MODEL", "gpt-4.1-mini")
 GMS_BASE = os.environ.get("GMS_BASE", "https://gms.ssafy.io/gmsapi/api.openai.com/v1")
 STORE_PATH = os.environ.get("PRESCRIPTIONS_PATH") or os.path.join(

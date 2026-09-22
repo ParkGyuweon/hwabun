@@ -53,7 +53,7 @@ v0.1 수치 필드(`view_rate · cart_lift · avg_dwell_ms`)도 받아 `_text` �
   "rejected_by": [],
   "needs_evidence": [],
   "model": "gpt-4.1-mini",
-  "prompt_version": "0.3",
+  "prompt_version": "0.4",
   "input_hash": "sha256:6a5bc60d…",
   "generated_at": "2026-09-09T13:19:53",
   "cached": false
@@ -71,7 +71,7 @@ v0.1 수치 필드(`view_rate · cart_lift · avg_dwell_ms`)도 받아 `_text` �
 | `no_such_number:…` | 4 | how·basis 의 숫자가 입력 JSON 에 없음 (0.34↔34.0 변형, 표 줄 수 1~5 는 허용) |
 | `unsupported_comparison:…` | 5 | "평균보다 높/낮·좋다·나쁘다·충분" 류가 입력 신호 문장에 없음 |
 | `slot_mismatch:…` | 6 | `up` 인데 how 첫 문장에 `insert_after` 칸 이름이 없거나 다른 칸 이름이 있음. `insert_after` 가 null 이면 "맨 위" 필요 |
-| `direction_mismatch:…` | 7 | `up` 인데 "빼세요·지우세요·삭제하세요·없애세요·아래로" ("X **바로** 아래로" 는 위치 지정이라 허용) |
+| `direction_mismatch:…` | 7 | `up` 인데 빼기·지우기·삭제·없애기 지시 또는 "아래로" ("X **바로** 아래로" 는 위치 지정이라 허용). v0.4 부터 **어간으로 잡는다** — 어미가 권유형이라 "빼 주시면 좋겠습니다"·"지우시는 게 좋겠습니다" 도 걸린다 |
 | `basis_from` | 8 | 2~3개가 아니거나 여섯 화면 밖 (대괄호·따옴표는 벗겨 본다) |
 | `basis_diversity` | 9 | 모두 같은 화면 |
 | `verify_range:…` | 10 | "현재값 → 목표값" 화살표 없음(`no_arrow`) / 목표가 현재 이하 또는 1.6배 초과 |
@@ -92,6 +92,7 @@ v0.1 수치 필드(`view_rate · cart_lift · avg_dwell_ms`)도 받아 `_text` �
 | v0.1 그대로 (nano·mini × 온도 0·1, 20회) | basis 20/20 문자열 · `up` 인데 아래 칸 · 억지 "1개" · verify 화살표 미준수 |
 | v0.3 (mini · 온도 0 · 스키마 강제) | 5/5 같은 지시 · 거부 0/5. nano 는 "위쪽으로" 만 써 5/5 거부 → 쓰지 않음 |
 | v0.3 서버 실호출 (2026-09-09) | `how` "임상 결과를 성분 목록 바로 아래로 옮기세요." · basis 3개(세 화면) · verify 34.0% → 44.0% · 거부 0 |
+| **v0.4 실호출 (2026-09-22, Jira 409)** | `how` "임상 결과를 성분 목록 바로 아래로 **옮겨 보시면 좋겠습니다.**" · verify "…**되돌리시는 게 좋겠습니다.**" · 거부 0 |
 
 `insert_after` 를 입력으로 주므로 위치 흔들림은 구조적으로 0 이다. 처음엔 §7-7 "아래로" 검사가 "바로 아래로" 를 잡아 정상 응답을 거부했다 — "바로 " 뒤는 제외한다. **규격 §7-7 문구에 이 예외를 적어 달라고 프론트에 요청.**
 
@@ -102,3 +103,16 @@ v0.1 수치 필드(`view_rate · cart_lift · avg_dwell_ms`)도 받아 `_text` �
 | 환경변수 | `GMS_KEY` · `PRESCRIPTION_MODEL`(기본 gpt-4.1-mini) · `PRESCRIPTIONS_PATH`(컨테이너 `/data/prescriptions.jsonl`) |
 | 비용·시간 | 1회 2~3초, 수백 토큰. 브랜드당 콘텐츠 4~5개 = 15초 안 |
 | 검증 | `python -m unittest batch.serving.test_prescription` (가짜 LLM, 거부 11 각각). `RUN_LIVE=1` 이면 실제 1회 |
+
+## 판 번호와 저장본 (v0.4, 2026-09-22)
+
+**프롬프트를 고치면 `PROMPT_VERSION` 을 반드시 같이 올린다.** 저장본 키가
+`input_hash-PROMPT_VERSION-model` 이라, 판을 안 올리면 같은 입력이 옛 말투 저장본을
+그대로 돌려준다. 09-22 에 어미만 고치고 판을 안 올렸다가 배포본에서 `cached: true` ·
+`llm_calls: 0` 으로 옛 문장이 계속 나온 적이 있다.
+
+v0.4 에서 바뀐 것은 **지시 어미**다 — `"~하세요"` → `"~해 보시면 좋겠습니다"` ·
+`"~하시는 게 좋겠습니다"`. 읽는 사람이 그 브랜드의 주인이라 시키는 말투로 쓰지 않는다.
+
+**프롬프트 규격의 정본은 프론트 문서 `docs/dashboard/action-prescription-prompt.md` 다.
+그 문서도 v0.4 로 올려 달라고 프론트에 요청해야 한다** — 참조 구현만 먼저 올린 상태다.
