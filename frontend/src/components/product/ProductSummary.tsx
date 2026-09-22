@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { variantIdOf } from '../../lib/discount';
+import { variantIdOf, withVariantPrice } from '../../lib/discount';
 import PriceTag from './PriceTag';
 import { unitMoneyProps } from '../../lib/checkout';
 import StarRating from '../common/StarRating';
@@ -69,6 +69,9 @@ export default function ProductSummary({
     track('wishlist_toggle', { product_id: product.product_id, action: next ? 'add' : 'remove' });
   };
 
+  /** 고른 옵션의 값이 든 상품. 표시·담기·이벤트 금액이 전부 이것을 본다 — 대용량을 고르면 대용량 값이다 */
+  const priced = withVariantPrice(product, selectedSkuId);
+
   /** 지금 화면 상태(옵션·수량)로 만든 장바구니 품목. 담기와 바로 구매가 같은 값을 쓴다 */
   const cartItem = (): CartItem => ({
     product_id: product.product_id,
@@ -77,10 +80,10 @@ export default function ProductSummary({
     brand_name: product.brand_name,
     product_name: product.product_name,
     image_url: product.image_url,
-    price_usd: product.price_usd,
-    sale_price_usd: product.sale_price_usd ?? null,
-    price_krw: product.price_krw ?? null,
-    sale_price_krw: product.sale_price_krw ?? null,
+    price_usd: priced.price_usd,
+    sale_price_usd: priced.sale_price_usd ?? null,
+    price_krw: priced.price_krw ?? null,
+    sale_price_krw: priced.sale_price_krw ?? null,
     variant_id: variantIdOf(product, selectedSkuId),
     quantity,
   });
@@ -90,8 +93,8 @@ export default function ProductSummary({
     product_id: product.product_id,
     sku_id: selectedSkuId,
     quantity,
-    // 원화 정가 unit_price + currency:'KRW' (계약 §4.5). 할인은 sale_price·discount_rate 로 덧붙는다
-    ...unitMoneyProps(product),
+    // 원화 정가 unit_price + currency:'KRW' (계약 §4.5). 할인은 sale_price·discount_rate 로 덧붙는다. 고른 옵션 값이다
+    ...unitMoneyProps(priced),
     ...(entrySource ? { entry_source: entrySource } : {}),
   });
 
@@ -149,9 +152,11 @@ export default function ProductSummary({
       )}
 
       <div className="summary__price" data-log-content="price">
-        <PriceTag product={product} size="md" showLabel />
-        {/* size 는 자유 텍스트라 파싱하지 않고 그대로 노출한다 */}
-        {product.size ? <span className="summary__size">{product.size}</span> : null}
+        <PriceTag product={priced} size="md" showLabel />
+        {/* size 는 자유 텍스트라 파싱하지 않고 그대로 노출한다. 옵션에 용량이 있으면(대용량) 그 옵션 것 */}
+        {(product.variants.find((v) => v.sku_id === selectedSkuId)?.size ?? product.size) ? (
+          <span className="summary__size">{product.variants.find((v) => v.sku_id === selectedSkuId)?.size ?? product.size}</span>
+        ) : null}
       </div>
 
       <VariantPicker

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { variantIdOf } from '../../lib/discount';
+import { variantIdOf, withVariantPrice } from '../../lib/discount';
 import PriceTag from './PriceTag';
 import { unitMoneyProps } from '../../lib/checkout';
 import StarRating from '../common/StarRating';
@@ -87,6 +87,8 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
 
   const skuId = variant?.sku_id ?? product.sku_id;
   const imageUrl = variant?.image_url ?? product.image_url;
+  /** 고른 옵션의 값이 든 상품. 상세(ProductSummary)와 같은 규칙 — 대용량은 대용량 값 */
+  const priced = withVariantPrice(product, skuId);
 
   useEffect(() => {
     openedAtRef.current = Date.now();
@@ -116,7 +118,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
       sku_id: skuId,
       quantity,
       // 원화 정가 unit_price + currency:'KRW' (계약 §4.5). 상세의 담기와 같은 모양
-      ...unitMoneyProps(product),
+      ...unitMoneyProps(priced),
       entry_source: 'quick_look',
     });
     onAddToCart({
@@ -126,10 +128,10 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
       brand_name: product.brand_name,
       product_name: product.product_name,
       image_url: imageUrl,
-      price_usd: product.price_usd,
-      sale_price_usd: product.sale_price_usd ?? null,
-      price_krw: product.price_krw ?? null,
-      sale_price_krw: product.sale_price_krw ?? null,
+      price_usd: priced.price_usd,
+      sale_price_usd: priced.sale_price_usd ?? null,
+      price_krw: priced.price_krw ?? null,
+      sale_price_krw: priced.sale_price_krw ?? null,
       variant_id: variantIdOf(product, skuId),
       quantity,
     });
@@ -220,7 +222,7 @@ export default function QuickLook({ product, onClose, onAddToCart, onOpenDetail 
           />
 
           <div className="qlook__buy">
-            <PriceTag product={product} size="md" className="qlook__price" />
+            <PriceTag product={priced} size="md" className="qlook__price" />
 
             <div className="qlook__actions">
               <label className="qlook__qty">

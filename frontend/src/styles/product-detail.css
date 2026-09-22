@@ -199,6 +199,13 @@
   color: var(--color-ink);
 }
 
+/* 고른 옵션의 값. 옵션마다 값이 다를 때만 붙는다 */
+.variants__price {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
 .variants__list {
   display: flex;
   flex-wrap: wrap;
