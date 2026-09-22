@@ -1,0 +1,85 @@
+/*
+ * 발표용 상단 띠 (components/DemoBanner.tsx). `?demo=seller|shopper` 일 때만 그려진다.
+ *
+ * 색은 명도 차이로 가른다. 초록·핑크처럼 채도만 다른 두 색은 멀리서 같은 밝기로 보여 구분이 안 됐다.
+ * 사장님 화면은 짙은 녹색, 고객 화면은 짙은 자주 — 둘 다 흰 글씨가 또렷하게 올라가는 어두운 바탕이다.
+ */
+:root {
+  --demo-banner-h: 56px;
+}
+
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: var(--demo-banner-h);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  color: #fff;
+  font-family: var(--font-sans, 'Pretendard', sans-serif);
+  letter-spacing: -0.01em;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.15);
+}
+
+.demo-banner--seller {
+  background: #2f5d1e;
+}
+
+.demo-banner--shopper {
+  background: #8a2a47;
+}
+
+.demo-banner__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.25);
+}
+
+.demo-banner__big {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.demo-banner__small {
+  font-size: 15px;
+  font-weight: 500;
+  opacity: 0.85;
+  padding-left: 14px;
+  border-left: 1px solid rgb(255 255 255 / 0.4);
+  line-height: 1;
+}
+
+/*
+ * 띠가 있을 때 화면의 다른 sticky 요소를 띠 높이만큼 내린다. 안 내리면 스크롤할 때 띠 아래로 기어 들어간다.
+ * 대시보드 사이드바는 높이도 같이 줄인다 (100vh 그대로면 바닥이 잘린다).
+ */
+html[data-demo] .site-header {
+  top: var(--demo-banner-h);
+}
+
+html[data-demo] .sidebar {
+  top: var(--demo-banner-h);
+  height: calc(100vh - var(--demo-banner-h));
+}
+
+html[data-demo] :root[data-storefront='catalog'] .list__tabs,
+html[data-demo][data-storefront='catalog'] .list__tabs {
+  top: calc(72px + var(--demo-banner-h));
+}
+
+html[data-demo][data-storefront='catalog'] .list__controls {
+  top: calc(72px + 320px + var(--demo-banner-h));
+}
+
+html[data-demo][data-promo='side'] .list__promo {
+  top: calc(84px + var(--demo-banner-h));
+}
+
+html[data-demo] .register__preview {
+  top: calc(16px + var(--demo-banner-h));
+}
