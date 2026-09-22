@@ -671,11 +671,45 @@ def screen_is_broken(page):
         return False
 
 
+# 화면을 옮긴 뒤 **무엇을** 기다리는가.
+#
+# 예전에는 wait_until 을 networkidle 로 두어 네트워크가 500ms 동안 조용해지기를
+# 기다렸다. 재생(/live)이 초당 3,000건을 쏘는 동안에는 그 창이 영영 안 열려서,
+# 화면이 다 그려져 있어도 goto 가 시간제한까지 버티다 실패한다 — 2026-09-17 에
+# 100명이 LLM 을 한 번도 못 부르고 크레딧 0 으로 죽은 것이 이것이다.
+# 그래서 네트워크 대신 **필요한 것이 그려졌는지**를 기다린다. 뒤 코드가 어차피
+# 세고 있는 셀렉터라 기다리는 대상이 바뀌었을 뿐 판정은 그대로다 (Jira 407).
+NAV_TIMEOUT_MS = 15000
+READY_TIMEOUT_MS = 8000
+LIST_READY = ".card[data-product-id]"
+DETAIL_READY = '[data-log-action="add_to_cart"]'
+
+
+def goto_ready(page, url, expect="list"):
+    """화면을 옮기고 **쓸 수 있는 상태**가 될 때까지만 기다린다.
+
+    `expect` 는 list · detail · auto. auto 는 딥링크처럼 목록과 상세 중 어느
+    쪽이 나올지 모를 때 쓴다.
+
+    셀렉터가 안 나타나도 **예외를 올리지 않는다.** 화면이 비는 경우는 호출부가
+    이미 blank_screen() 이나 count() 로 판정해 복구하고 있어서, 여기서 던지면
+    그 복구 경로를 건너뛴다.
+    """
+    page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+    selector = {"list": LIST_READY, "detail": DETAIL_READY,
+                "auto": f"{LIST_READY}, {DETAIL_READY}"}[expect]
+    try:
+        page.wait_for_selector(selector, timeout=READY_TIMEOUT_MS)
+    except Exception:
+        pass
+    return page
+
+
 def recover_screen(page):
     """목록으로 되돌려 세션을 살린다. 돌아갈 곳을 모르면 아무것도 하지 않는다"""
     if not LIST_URL:
         return False
-    page.goto(LIST_URL, wait_until="networkidle")
+    goto_ready(page, LIST_URL)
     page.evaluate("() => window.scrollTo(0, 0)")
     page.wait_for_timeout(900)
     return True
@@ -1476,7 +1510,7 @@ def do_action(page, act, target, scroll_center=None):
         # 그래서 목록 주소를 미리 기억해 두고 그리로 이동해 복구한다
         if (page.url.startswith("about:")
                 or not page.locator(".card[data-product-id]").count()):
-            page.goto(LIST_URL or page.url, wait_until="networkidle")
+            goto_ready(page, LIST_URL or page.url)
             page.evaluate("() => window.scrollTo(0, 0)")   # 복구는 목록 맨 위에서
             page.wait_for_timeout(900)
         return True
@@ -2407,7 +2441,7 @@ def main():
                               product_id=pinned or (rng.choice(catalog) if deep else None),
                               persona_id=p["persona_id"])
 
-            page.goto(entry, wait_until="networkidle")
+            goto_ready(page, entry, expect="auto")
             # 주소로 정해졌으면 첫 화면부터 이 사람 로그다. 확인하고 게이트를 먼저 연다 —
             # 확인 없이 열면 프론트가 파라미터를 무시했을 때 남의 로그를 주워 담는다
             if persona_matches(page, p["persona_id"]):
@@ -2418,7 +2452,7 @@ def main():
             # 대부분 놀지만, 놀고 있다는 것 자체가 확인이라 남긴다
             if (deep or pinned) and not page.locator('[data-log-action="add_to_cart"]').count():
                 print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
-                page.goto(LIST_URL, wait_until="networkidle")
+                goto_ready(page, LIST_URL)
                 page.wait_for_timeout(800)
 
             # **페르소나 전환은 마지막 화면 이동 뒤여야 한다.** App.tsx 가
