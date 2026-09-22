@@ -53,8 +53,48 @@
   }
 }
 
+/*
+ * 조작 중(.is-active · DemoBanner.tsx 가 누르기·끌기·스크롤·타자를 받으면 1.2초 켠다).
+ * 흰 빛 한 줄이 띠를 왼쪽에서 오른쪽으로 훑고 지나가고, 점은 빠르게 뛴다.
+ * 두 화면을 나란히 둔 발표에서 "지금 어느 쪽을 만지는지" 가 멀리서도 보인다.
+ */
+.demo-banner {
+  position: sticky;
+  overflow: hidden;
+}
+
+.demo-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0) 35%, rgb(255 255 255 / 0.45) 50%, rgb(255 255 255 / 0) 65%, transparent 100%);
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.demo-banner.is-active::after {
+  opacity: 1;
+  animation: demo-banner-sweep 0.9s ease-in-out infinite;
+}
+
+.demo-banner.is-active .demo-banner__dot {
+  animation: demo-banner-blink 0.5s ease-in-out infinite;
+}
+
+@keyframes demo-banner-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .demo-banner__dot {
+  .demo-banner__dot,
+  .demo-banner.is-active .demo-banner__dot,
+  .demo-banner.is-active::after {
     animation: none;
   }
 }
