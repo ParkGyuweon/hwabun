@@ -593,8 +593,8 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       <small>{brandName ?? ''} · {f.replied_at?.slice(0, 10)}</small>
                     </blockquote>
                   ) : null}
+                  {/* "확인했어요" 버튼은 뺐다 (2026-09-22 유림님). 할 일은 답변 남기기와 반영했어요 둘이면 된다 */}
                   {f.status !== 'reflected' ? (
-                    {/* "확인했어요" 버튼은 뺐다 (2026-09-22 유림님). 할 일은 답변 남기기와 반영했어요 둘이면 된다 */}
                     <div className="fbx-card__actions">
                       <div className={`fbx-reply${hits.length ? ' has-warning' : ''}`}>
                         <input
