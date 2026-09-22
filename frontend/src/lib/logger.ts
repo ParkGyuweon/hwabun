@@ -205,9 +205,59 @@ let context: LoggerContext = {
   storefront: null,
 };
 
-let sessionId = createId();
+/**
+ * 세션 상태를 sessionStorage 에 둔다 (데이터 파트 요청 2026-09-22).
+ *
+ * 전에는 모듈 전역 변수여서 **페이지를 통째로 다시 로드하면** 새 session_id 가 발급됐다. 링크로 상세에 들어와
+ * 새로고침한 사람은 세션이 둘로 갈리고, 앞 세션은 늦게 도착한 조각(recommendation_snapshot 1건)만 든 껍데기가 됐다
+ * (규원님 실측: 사람당 세션 3.8개, product_view 가 0 인 세션 7/19).
+ *
+ * session_id 만 살리면 안 된다. `impressedProducts` 도 같이 살려야 같은 세션·같은 상품에 보강 노출
+ * (implied_by_direct_view)이 두 번 나가지 않는다. sequence_no 도 이어 간다 — 같은 세션 안에서 번호가 되감기면
+ * 정렬이 깨진다. 탭을 닫으면 sessionStorage 가 비므로 그때는 자연히 새 세션이다.
+ */
+const SESSION_STORE_KEY = 'hwabun.logger.session.v1';
+
+interface StoredSession {
+  session_id: string;
+  /** startSession 에 넘어온 식별자(회원 id·페르소나 id·null). 같은 값이면 같은 세션을 이어 쓴다 */
+  persona_key: string | null;
+  sequence_no: number;
+  impressed: string[];
+}
+
+function loadStoredSession(): StoredSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_STORE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<StoredSession>;
+    if (typeof v.session_id !== 'string' || typeof v.sequence_no !== 'number') return null;
+    return {
+      session_id: v.session_id,
+      persona_key: typeof v.persona_key === 'string' ? v.persona_key : null,
+      sequence_no: v.sequence_no,
+      impressed: Array.isArray(v.impressed) ? v.impressed.filter((x): x is string => typeof x === 'string') : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 새로고침 전 세션. 있으면 startSession 이 같은 식별자일 때 이어 쓴다. 한 번 쓰고 비운다 */
+let restoredSession: StoredSession | null = loadStoredSession();
+
+let sessionId = restoredSession?.session_id ?? createId();
 let pageViewId = createId();
-let sequenceNo = 0;
+let sequenceNo = restoredSession?.sequence_no ?? 0;
+
+function persistSession(personaKey: string | null): void {
+  try {
+    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts] };
+    window.sessionStorage.setItem(SESSION_STORE_KEY, JSON.stringify(v));
+  } catch {
+    /* 저장 못 해도 이번 페이지 안에서는 그대로 동작한다 */
+  }
+}
 
 const queue: LogEnvelope[] = [];
 const history: LogEnvelope[] = [];
@@ -300,11 +350,13 @@ export const IMPRESSION_VISIBLE_RATIO = 0.5;
  * 목록을 거치지 않고 링크·북마크로 상세에 바로 들어오면 노출이 하나도 없는데 상세 조회만 남아서,
  * 마트의 `detail_entry_rate` 가 1 을 넘는다 (데이터 파트 실측 2026-09-21: 노출 4 세션 · 상세 6 세션 = 1.5).
  */
-const impressedProducts = new Set<string>();
+const impressedProducts = new Set<string>(restoredSession?.impressed ?? []);
 
-/** 노출을 남긴 쪽이 알려 준다 (useImpression). 세션이 바뀌면 비워진다 */
+/** 노출을 남긴 쪽이 알려 준다 (useImpression). 세션이 바뀌면 비워진다. 새로고침에는 남는다 */
 export function markProductImpressed(productId: string | null | undefined): void {
-  if (productId) impressedProducts.add(productId);
+  if (!productId || impressedProducts.has(productId)) return;
+  impressedProducts.add(productId);
+  if (startedSessionKey !== NOT_STARTED) persistSession(startedSessionKey);
 }
 
 export function hasProductImpression(productId: string): boolean {
@@ -313,7 +365,27 @@ export function hasProductImpression(productId: string): boolean {
 
 export function startSession(personaId: string | null, productId: string | null = null): void {
   if (startedSessionKey === personaId) return;
+  const firstCall = startedSessionKey === NOT_STARTED;
   startedSessionKey = personaId;
+
+  /*
+   * 새로고침 뒤 첫 호출이고 저장된 세션의 식별자가 같으면 **그 세션을 이어 쓴다.** session_start 를 다시 내지 않고
+   * (세션은 하나다) 화면 조회만 남긴다. 목록을 거치지 않은 진입이라 navigation_source 는 `direct` (계약 §3.4).
+   * 노출 기록도 살아 있으니 이미 본 상품에는 보강 노출이 다시 나가지 않는다.
+   */
+  const resume = firstCall && restoredSession !== null && restoredSession.persona_key === personaId;
+  restoredSession = null;
+  if (resume) {
+    firedOnceKeys.clear();
+    pendingEntry = null;
+    setLoggerContext({ personaId, productId });
+    pageViewId = createId();
+    startedPageViewKey = productId;
+    track('page_view', { product_id: productId, navigation_source: 'direct' });
+    trackProductView(productId, 'direct');
+    persistSession(personaId);
+    return;
+  }
 
   sessionId = createId();
   sequenceNo = 0;
@@ -329,6 +401,7 @@ export function startSession(personaId: string | null, productId: string | null 
   track('session_start', { entry_page: context.pageType });
   track('page_view', { product_id: productId, navigation_source: 'session_start' });
   trackProductView(productId, 'session_start');
+  persistSession(personaId);
 }
 
 /**
@@ -434,6 +507,8 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   }
   staffNoticeShown = false;
   sequenceNo += 1;
+  // 번호가 오른 뒤 바로 저장한다. 새로고침 뒤에도 같은 세션의 번호가 이어진다
+  if (startedSessionKey !== NOT_STARTED) persistSession(startedSessionKey);
 
   /**
    * top-level `product_id` 는 **이벤트 대상 상품**이다 (데이터 계약).
