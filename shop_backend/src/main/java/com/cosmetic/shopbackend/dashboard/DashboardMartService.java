@@ -909,7 +909,8 @@ public class DashboardMartService {
         // 중앙값은 합산할 수 없다. 다만 실행 축이 여러 개여도 각 축의 값이
         // 동일하면 같은 모집단을 중복 투영한 것이므로 그 값을 유지한다.
         // 축별 중앙값이 실제로 다를 때만 null을 반환해 잘못된 재집계를 막는다.
-        "case when min(median_days_between_purchases)=max(median_days_between_purchases) " +
+        "case when count(median_days_between_purchases)=0 then null " +
+          "when min(median_days_between_purchases)=max(median_days_between_purchases) " +
           "then max(median_days_between_purchases) else null end median_days_between_purchases," +
         "max(window_days) window_days,min(window_start_date) window_start_date,max(window_end_date) window_end_date," +
         "min(mart_processed_at) mart_processed_at,count(*) row_count " +
