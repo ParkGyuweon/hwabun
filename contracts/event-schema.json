@@ -780,7 +780,8 @@
                 "enum": [
                   "observed",
                   "implied_by_click",
-                  "implied_by_quick_look"
+                  "implied_by_quick_look",
+                  "implied_by_direct_view"
                 ]
               }
             }

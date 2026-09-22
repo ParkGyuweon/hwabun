@@ -3,7 +3,7 @@ import ProductCard from '../components/product/ProductCard';
 import QuickLook from '../components/product/QuickLook';
 import { ensureBackendDetail } from '../lib/productRegistry';
 import EmptyState from '../components/common/EmptyState';
-import { confirmImpressionByClick, useImpression } from '../hooks/useImpression';
+import { confirmImpressionByClick, recommendationIdForImpression, useImpression } from '../hooks/useImpression';
 import type { ImpressionOrigin } from '../hooks/useImpression';
 import { useTrait } from '../hooks/useTrait';
 import { BANNER_POLICY_VERSION, BANNER_RESERVED, BANNER_SLOTS, HERO_POLICY, MAIN_SLOTS } from '../lib/bannerConfig';
@@ -558,10 +558,22 @@ export default function ProductListPage({
 
     confirmListImpression(listId, productId, position + 1, 'implied_by_click');
 
-    // 맞춤 기획전 클릭은 추천 클릭이기도 하다. 노출과 같은 식별자로 CTR 을 계산한다
+    /*
+     * 맞춤 기획전 클릭은 추천 클릭이기도 하다. **노출 때 쓴 식별자를 그대로 쓴다** (2026-09-21).
+     * 레일이 추천을 다시 불러오면 `promoRecommendationId` 가 새 값으로 바뀌는데, 노출은 이미 옛 값으로 남아 있다.
+     * 지금 값을 그냥 실으면 어느 노출에도 없는 id 가 클릭에만 붙어 CTR 을 응답 단위로 못 자른다.
+     * 바로 위 confirmListImpression 이 노출을 확정해 두므로, 노출이 없던 카드도 여기서 값을 찾는다.
+     */
     if (listId === 'promo_pick' && promoRecommendationId) {
+      const impressionRecId =
+        recommendationIdForImpression({
+          eventName: recommendIdentityId ? 'recommendation_impression' : 'product_impression',
+          pageViewKey: `promo:${recommendIdentityId ?? 'anonymous'}`,
+          listId,
+          productId,
+        }) ?? promoRecommendationId;
       track('recommendation_click', {
-        recommendation_id: promoRecommendationId,
+        recommendation_id: impressionRecId,
         list_id: listId,
         algorithm: promoAlgorithm,
         product_id: productId,
@@ -570,7 +582,7 @@ export default function ProductListPage({
       // 곧 열릴 상세의 product_view 에 같은 식별자를 싣는다 (Jira 210)
       setNextProductViewEntry({
         product_id: productId,
-        recommendation_id: promoRecommendationId,
+        recommendation_id: impressionRecId,
         list_id: listId,
         position: position + 1,
       });
