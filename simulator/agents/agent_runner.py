@@ -705,14 +705,43 @@ def goto_ready(page, url, expect="list"):
     return page
 
 
-def recover_screen(page):
-    """목록으로 되돌려 세션을 살린다. 돌아갈 곳을 모르면 아무것도 하지 않는다"""
+# 헤더의 홈 버튼. 라우터가 받아 화면 안에서만 이동하므로 **페이지가 다시 뜨지 않는다.**
+# (frontend/src/components/layout/SiteHeader.tsx — aria-label "BLOOM 홈")
+HOME_BUTTON = 'button.site-header__logo, [aria-label="BLOOM 홈"]'
+
+
+def return_to_list(page):
+    """목록으로 되돌린다. **전체 재로드를 피한다** (Jira 410).
+
+    `page.goto` 는 페이지를 통째로 다시 열고, 프론트 로거의 `sessionId` 가 모듈
+    전역이라(`frontend/src/lib/logger.ts:208`) 그때마다 새 세션이 발급된다.
+    복구할 때마다 세션이 갈려 한 사람이 3~4 세션으로 쪼개졌고, 앞 세션은 조각만
+    남아 `add_to_cart > product_view` 같은 분자>분모가 생겼다.
+
+    그래서 홈 버튼을 눌러 화면 안에서 이동한다. 버튼이 없거나 목록이 안 그려지면
+    예전처럼 `goto` 로 돌아간다 — 복구가 최우선이고, 세션 유지는 그 다음이다.
+    """
+    try:
+        btn = page.locator(HOME_BUTTON)
+        if btn.count():
+            btn.first.click(timeout=3000)
+            page.wait_for_selector(LIST_READY, timeout=READY_TIMEOUT_MS)
+            page.evaluate("() => window.scrollTo(0, 0)")
+            page.wait_for_timeout(600)
+            return True
+    except Exception:
+        pass
     if not LIST_URL:
         return False
     goto_ready(page, LIST_URL)
     page.evaluate("() => window.scrollTo(0, 0)")
     page.wait_for_timeout(900)
     return True
+
+
+def recover_screen(page):
+    """목록으로 되돌려 세션을 살린다. 돌아갈 곳을 모르면 아무것도 하지 않는다"""
+    return return_to_list(page)
 
 
 def read_screen(page, visited=()):
@@ -1510,9 +1539,7 @@ def do_action(page, act, target, scroll_center=None):
         # 그래서 목록 주소를 미리 기억해 두고 그리로 이동해 복구한다
         if (page.url.startswith("about:")
                 or not page.locator(".card[data-product-id]").count()):
-            goto_ready(page, LIST_URL or page.url)
-            page.evaluate("() => window.scrollTo(0, 0)")   # 복구는 목록 맨 위에서
-            page.wait_for_timeout(900)
+            return_to_list(page)   # 복구는 목록 맨 위에서 (재로드 없이)
         return True
 
     if a == "add_to_cart":
@@ -2452,8 +2479,7 @@ def main():
             # 대부분 놀지만, 놀고 있다는 것 자체가 확인이라 남긴다
             if (deep or pinned) and not page.locator('[data-log-action="add_to_cart"]').count():
                 print(f"  {p['persona_id']}  상세가 렌더되지 않아 목록에서 시작합니다")
-                goto_ready(page, LIST_URL)
-                page.wait_for_timeout(800)
+                return_to_list(page)
 
             # **페르소나 전환은 마지막 화면 이동 뒤여야 한다.** App.tsx 가
             # `useState(personas[0])` 로 들고 있어 페이지를 새로 열면 선택이
