@@ -154,13 +154,10 @@ export default function OverviewScreen({
             sub={pulse.orders > 0 ? `한 주문에 평균 ${(pulse.units / pulse.orders).toFixed(1)}개` : '아직 팔린 수량이 없습니다'}
             source="real"
           />
-          <Kpi
-            label="팔린 상품 가짓수"
-            value={`${fmt.int(pulse.soldProducts)}가지`}
-            sub={pulse.soldProducts > 0 ? '한 번이라도 팔린 상품' : '아직 팔린 상품이 없습니다'}
-            source="real"
-          />
-          {/* 리뷰·받은 의견 칸은 뺐다 (2026-09-22 유림님). 고객의 말 화면에서 보는 숫자라 요약에서는 자리만 차지했다 */}
+          {/*
+            팔린 상품 가짓수·리뷰·받은 의견 칸은 뺐다 (2026-09-22 유림님). 요약에서 볼 만큼 중요한 숫자가 아니고
+            가짓수는 상품 화면, 리뷰·의견은 고객의 말 화면에 그대로 있다.
+          */}
         </div>
       ) : null}
       {/*
