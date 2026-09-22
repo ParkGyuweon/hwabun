@@ -277,7 +277,12 @@ export function BarList({
 }
 
 /** 깔때기. 단계 사이 전환율을 함께 보여준다 */
-export function Funnel({ steps }: { steps: Array<{ label: string; value: number; note?: string }> }) {
+/**
+ * 막대 사다리. `sequential` 이 참(기본)이면 앞 단계 대비 "↓ N% 넘어옴" 을 적는다.
+ * 순서가 없는 묶음(행동 종류별 건수처럼 앞뒤 관계가 없는 것)은 거짓으로 두어 비율 줄을 뺀다 —
+ * 그 비율은 255% 처럼 나와 "앞 단계에서 넘어온 고객" 으로 읽히면 틀린 말이 된다 (2026-09-22 데이터 파트).
+ */
+export function Funnel({ steps, sequential = true }: { steps: Array<{ label: string; value: number; note?: string }>; sequential?: boolean }) {
   // 단계가 하나도 없으면 빈 칸 대신 이유를 적는다
   if (steps.length === 0) {
     return <p className="note">아직 행동 기록이 없습니다</p>;
@@ -286,7 +291,7 @@ export function Funnel({ steps }: { steps: Array<{ label: string; value: number;
   return (
     <div className="funnel">
       {steps.map((step, index) => {
-        const prev = index > 0 ? steps[index - 1].value : null;
+        const prev = sequential && index > 0 ? steps[index - 1].value : null;
         const rate = prev ? step.value / prev : null;
         return (
           <div key={step.label} className="funnel__step">

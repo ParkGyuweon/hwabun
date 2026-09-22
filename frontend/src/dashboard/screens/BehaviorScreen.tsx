@@ -140,12 +140,13 @@ export default function BehaviorScreen() {
         </Panel>
 
         <Panel
-          title="고객이 지나온 단계"
+          title="행동 종류별 건수"
           source={source.friction}
           fold
-          aside={<span title="방문 수가 아니라 행동 횟수입니다">보임 → 열람 → 비교 → 확인 → 담기·구매</span>}
+          aside={<span title="방문 수가 아니라 행동 횟수입니다. 앞뒤 순서가 있는 단계가 아니라 종류별로 묶은 것이라 넘어온 비율은 적지 않습니다">보임 · 열람 · 비교 · 확인 · 담기·구매</span>}
         >
-          <Funnel steps={intentFunnel.map((s) => ({ label: s.ko, value: s.value }))} />
+          {/* 순차 단계가 아니다. 담기·구매 묶음에는 장바구니 열기·찜·수량 변경이 들어 있어 확인 묶음보다 잦다 — 넘어온 비율을 적으면 255% 가 된다 */}
+          <Funnel steps={intentFunnel.map((s) => ({ label: s.ko, value: s.value }))} sequential={false} />
         </Panel>
       </div>
 
