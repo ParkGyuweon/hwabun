@@ -961,6 +961,34 @@ def _browser_unmatched_clicks(product_fact: Any) -> dict[str, int]:
     }
 
 
+def _over_clicked_banner_count(
+    banner_daily: Any, identity_columns: list[str]
+) -> int:
+    """날짜를 합산했을 때 클릭이 노출보다 많은 배너를 센다.
+
+    **클릭 ≤ 노출은 일자 칸에서 성립하지 않는다.** 세션이 자정을 넘으면 노출은
+    앞날, 클릭은 뒷날에 찍혀 뒷날 칸이 노출 0 · 클릭 1 이 된다 — 2026-09-22 운영
+    배치에서 brand 6218 · P421996 · trait_source=explore 가 그랬고, 앞날(09-19)
+    같은 배너에 노출 3 · 클릭 2 가 있었다.
+
+    세션 안에서 짝이 맞는지는 `banner_click_matches_impression_trait_source` 가
+    따로 본다. 여기서는 날짜만 걷어내 본다 — 자정을 넘긴 건이 상쇄되고, 노출
+    없는 클릭은 그대로 남는다.
+    """
+
+    from pyspark.sql import functions as F
+
+    return (
+        banner_daily.groupBy(*identity_columns)
+        .agg(
+            F.sum("click_count").alias("_clicks"),
+            F.sum("impression_count").alias("_impressions"),
+        )
+        .where(F.col("_clicks") > F.col("_impressions"))
+        .count()
+    )
+
+
 COHORT_COLLAPSED_GRAIN = ["snapshot_week_kst", "cohort_key", "metric_name"]
 
 
@@ -2156,7 +2184,6 @@ def validate_frames(
         F.col("click_count").isNull()
         | F.col("impression_count").isNull()
         | F.col("skip_count").isNull()
-        | (F.col("click_count") > F.col("impression_count"))
         | (F.col("skip_count") < 0)
         | (
             (F.col("impression_count") == 0)
@@ -2174,6 +2201,22 @@ def validate_frames(
         "banner_daily_counts_and_ctr_are_valid",
         invalid_banner_counts == 0,
         f"invalid_rows={invalid_banner_counts}",
+    ))
+    # **클릭 ≤ 노출은 일자 칸에서 성립하지 않는다.** 세션이 자정을 넘으면 노출은
+    # 앞날, 클릭은 뒷날에 찍혀 뒷날 칸이 노출 0 · 클릭 1 이 된다 — 2026-09-22 운영
+    # 배치에서 brand 6218 · P421996 · trait_source=explore 가 그랬고, 앞날(09-19)
+    # 같은 배너에 노출 3 · 클릭 2 가 있었다.
+    #
+    # 세션 안에서 짝이 맞는지는 `banner_click_matches_impression_trait_source` 가
+    # 따로 본다. 여기서는 **날짜를 합산해** 본다 — 자정을 넘긴 건이 상쇄되고,
+    # 노출 없는 클릭은 그대로 남는다.
+    banner_identity = [c for c in banner_grain if c != "event_date_kst"]
+    over_clicked = _over_clicked_banner_count(banner_daily, banner_identity)
+    checks.append(_check(
+        "banner_clicks_do_not_exceed_impressions",
+        over_clicked == 0,
+        f"over_clicked_banners={over_clicked}; 날짜를 합산해 본다 "
+        "(세션이 자정을 넘으면 일자 칸에서는 클릭이 노출보다 많을 수 있다)",
     ))
     invalid_banner_values = banner_daily.where(
         F.col("banner_value_is_valid").isNull()
