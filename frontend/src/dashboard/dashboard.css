@@ -67,16 +67,38 @@ body {
   min-height: 100vh;
 }
 
+/*
+ * 화면에 붙어 따라오는 왼쪽 막대. `height: 100vh` 라서 내용이 화면보다 길면 아래가 **잘렸다** —
+ * 발 부분(데이터 기준 날짜·색 안내)이 짧은 노트북에서 안 보였다 (데이터 파트 제보 2026-09-22).
+ * 넘치면 막대 안에서 스크롤되게 한다. 아래 여백을 조금 둬서 마지막 줄이 가장자리에 붙지 않게 한다.
+ */
 .sidebar {
   border-right: 1px solid var(--line);
   background: var(--panel);
-  padding: 28px 16px;
+  padding: 28px 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 28px;
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 막대 안 스크롤바는 얇게. 굵으면 메뉴 글자가 밀린다 */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+/* 발 부분은 늘 맨 아래. 내용이 짧으면 아래로 밀리고, 길면 스크롤된다 */
+.sidebar__foot {
+  flex: 0 0 auto;
 }
 
 .sidebar__brand {
