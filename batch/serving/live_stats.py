@@ -247,7 +247,11 @@ li:first-child{background:linear-gradient(90deg,var(--acc-light),transparent);bo
 <div class="card"><ul id="recent"></ul></div>
 </div>
 <script>
-var $ = function(id){ return document.getElementById(id); };
+// #app 은 PiP 창으로 통째로 옮겨 간다. document.getElementById 로 찾으면 옮긴
+// 뒤부터 null 이 되고, draw() 가 던진 예외를 tick() 의 catch 가 삼켜 화면이
+// 조용히 멈춘다. 컨테이너 노드는 옮겨도 같은 객체라 그 안에서 찾는다.
+var app = document.getElementById('app');
+var $ = function(id){ return app.querySelector('#' + id); };
 var fmt = function(n){ return (n == null ? 0 : n).toLocaleString(); };
 function draw(d){
   $('personas').innerHTML = fmt(d.personas_touched) + '<small>명</small>';
@@ -286,12 +290,11 @@ pipBtn.onclick = function(){
         w.document.head.appendChild(st);
       } catch (e) {}
     });
-    var host = $('app');
-    w.document.body.appendChild(host);
+    w.document.body.appendChild(app);
     pipBtn.hidden = true;
     // 창을 닫으면 본래 자리로 되돌린다. 안 되돌리면 원래 탭이 빈 화면으로 남는다
     w.addEventListener('pagehide', function(){
-      document.body.appendChild(host);
+      document.body.appendChild(app);
       pipBtn.hidden = false;
     });
   }).catch(function(){});
