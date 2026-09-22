@@ -261,19 +261,24 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           />
         </Panel>
 
+        {/*
+          열 이름을 문장으로 풀었다 (2026-09-22 은솔님: "한 방문·안 한 방문" 이 직관적으로 안 읽힌다).
+          "했을 때 담기 / 안 했을 때" 는 무엇의 비율인지가 빠져 있었다. 세 열 모두 "누구의 무엇" 을 적고,
+          표 아래에 첫 줄을 문장으로 한 번 읽어 준다.
+        */}
         <Panel
-          title="이 행동을 한 사람은 더 담나"
+          title="이 행동을 한 고객이 더 담았나"
           source={source.behaviors}
           fold
-          aside={<span title="같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다">한 방문과 안 한 방문 비교</span>}
+          aside={<span title="같이 움직인다는 뜻이고, 이것 때문이라는 뜻은 아닙니다">행동한 고객과 안 한 고객의 담기 비율을 나란히</span>}
         >
           <table className="table">
             <thead>
               <tr>
                 <th>행동</th>
-                <th title="상세를 연 방문 중 이 행동을 한 비율">한 방문</th>
-                <th title="이 행동을 한 방문의 담기 비율">했을 때 담기</th>
-                <th title="이 행동을 안 한 방문의 담기 비율">안 했을 때</th>
+                <th title="상세를 연 고객 중 이 행동을 한 고객의 비율">이 행동을 한 고객</th>
+                <th title="이 행동을 한 고객 중 장바구니에 담은 비율">한 고객 중 담은 비율</th>
+                <th title="이 행동을 안 한 고객 중 장바구니에 담은 비율">안 한 고객 중 담은 비율</th>
               </tr>
             </thead>
             <tbody>
@@ -296,6 +301,12 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               ))}
             </tbody>
           </table>
+          {validationBehaviors[0] ? (
+            <p className="note">
+              읽는 법: 상세를 본 고객 중 {fmt.pct(validationBehaviors[0].doneRate)}가 &lsquo;{validationBehaviors[0].ko}&rsquo;를 했고, 그 고객은{' '}
+              {fmt.pct(validationBehaviors[0].cartRateWith)}가 담았습니다. 안 한 고객은 {fmt.pct(validationBehaviors[0].cartRateWithout)}가 담았습니다.
+            </p>
+          ) : null}
         </Panel>
       </div>
     </div>
