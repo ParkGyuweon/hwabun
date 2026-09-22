@@ -31,22 +31,35 @@ type Verb = ActionItem['verb'];
  *
  * 1.0배는 내 브랜드 전체 담기율과 같다는 뜻이다. 정의는 아래 접힌 설명에 있다.
  */
-function verbOf(lift: number, viewRate: number): Verb {
+function verbOf(kind: string, lift: number, viewRate: number, sampleSize: number): Verb {
+  // 고객이 만든 값에는 동사를 붙이지 않는다. "평점 분포를 손보세요" 는 리뷰 조작 권유로 읽힌다 (2026-09-22 데이터 파트)
+  if (CUSTOMER_MADE.has(kind)) return 'keep';
+  // 읽은 사람이 거의 없으면 "읽었는데 설득이 안 됐다" 고 말할 수 없다. 표를 흐리게 그리는 기준과 같은 수
+  if (sampleSize < THIN_VIEWS) return 'keep';
   if (lift < 1) return 'fix';
   if (lift >= 1.5 && viewRate < 0.5) return 'up';
   return 'keep';
 }
 
+/**
+ * 사장님이 고칠 수 없는 글. 리뷰 원문과 평점 분포는 고객이 쓴 값이라 "손보기·올리기" 대상이 아니다.
+ * 표에는 "고객이 만든 값" 으로 적고, 할 일 목록과 맨 위 결론에서는 뺀다. 순위·담기 효과 관찰은 그대로 보인다.
+ */
+const CUSTOMER_MADE = new Set(['user_review', 'review_stats']);
+
 const VERB_PILL: Record<Verb, string> = { up: '위로 올리기', fix: '손보기', keep: '그대로' };
 const ORDER: Record<Verb, number> = { up: 0, fix: 1, keep: 2 };
 
-/** 이 수보다 적게 본 글은 흐리게 그린다. 아직 판단하기 이르다는 표시 */
+/** 이 수보다 적게 본 글은 흐리게 그리고 할 일도 내지 않는다. 아직 판단하기 이르다는 표시 */
 const THIN_VIEWS = 500;
 
 export default function ContentScreen({ brandName }: { brandName: string }) {
   const m = useBehavior();
   const { contentAttention, scrapedIngredients, validationBehaviors, source } = m;
-  const rows = useMemo(() => contentAttention.map((c) => ({ ...c, verb: verbOf(c.conversionLift, c.viewRate) })), [contentAttention]);
+  const rows = useMemo(
+    () => contentAttention.map((c) => ({ ...c, verb: verbOf(c.kind, c.conversionLift, c.viewRate, c.sampleSize) })),
+    [contentAttention],
+  );
 
   // 할 일은 올릴 것부터. 그 안에서는 담기 배수가 큰 순서, 손볼 것은 오래 읽힌 순서
   const todo = useMemo(
@@ -214,7 +227,9 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
                     <strong>{liftPending ? '-' : `${c.conversionLift.toFixed(1)}배`}</strong>
                   </td>
                   <td>
-                    <span className={`pill pill--${c.verb}`}>{liftPending ? '판단 전' : VERB_PILL[c.verb]}</span>
+                    <span className={`pill pill--${c.verb}`} title={CUSTOMER_MADE.has(c.kind) ? '고객이 쓴 리뷰·평점이라 사장님이 고치는 대상이 아닙니다' : undefined}>
+                      {liftPending ? '판단 전' : CUSTOMER_MADE.has(c.kind) ? '고객이 만든 값' : c.sampleSize < THIN_VIEWS ? '판단 전' : VERB_PILL[c.verb]}
+                    </span>
                   </td>
                 </tr>
               ))}
