@@ -243,7 +243,6 @@ li:first-child{background:linear-gradient(90deg,var(--acc-light),transparent);bo
 <div class="head">
   <div><div class="k">상태가 바뀐 사용자</div><div class="big" id="personas">0<small>명</small></div></div>
   <div><div class="k">초당 반영 이벤트</div><div class="big" id="eps">0<small>/s</small></div></div>
-  <div><div class="k">누적 반영</div><div class="big" id="total">0</div></div>
 </div>
 <div class="card"><ul id="recent"></ul></div>
 </div>
@@ -254,7 +253,6 @@ function draw(d){
   $('personas').innerHTML = fmt(d.personas_touched) + '<small>명</small>';
   var ev = d.events || {};
   $('eps').innerHTML = fmt(ev.per_sec_10s_avg) + '<small>/s</small>';
-  $('total').textContent = fmt(ev.total);
   var rows = d.recent || [];
   $('recent').innerHTML = rows.map(function(r){
     var src = r.source === 'kafka' ? ('P' + (r.partition == null ? '?' : r.partition)) : '직접';
