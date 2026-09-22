@@ -293,9 +293,38 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+/* 나란히 놓인 패널은 높이를 맞춘다. 제각각이면 아래 여백이 들쭉날쭉해 보인다 (2026-09-22) */
 .grid--2 {
   grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-  align-items: start;
+  align-items: stretch;
+}
+
+.grid--2 > .panel {
+  height: 100%;
+}
+
+/* 퍼널 옆 곁가지 한 줄 (성분·리뷰). 단계가 아니라 참고 값이라 막대 아래에 조용히 둔다 */
+.funnel__aside {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.funnel__aside b {
+  font-size: 15px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.funnel__aside em {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--ink-faint);
 }
 
 .stack {
