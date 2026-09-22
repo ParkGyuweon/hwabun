@@ -299,12 +299,21 @@ export default function OverviewScreen({
         <Panel title={`날짜별 방문 수 · 최근 ${days}일`} source={source.overview} aside="눈금은 0부터">
           <LineChart points={series.map((d) => ({ label: d.label, value: d.visits }))} />
         </Panel>
-        <Panel
-          title="구매까지 가는 단계"
-          source={source.funnel}
-          aside="상품을 보고 장바구니에 담기까지 · 단계마다 남은 방문 수"
-        >
+        <Panel title="구매까지 가는 단계" source={source.funnel} aside="단계마다 남은 방문">
           <Funnel steps={standardFunnel} />
+          {/*
+            성분·리뷰 확인은 단계가 아니라 곁가지다 — 퀵룩으로 담은 방문은 볼 기회가 없었다. 퍼널에 끼우면
+            "성분·리뷰 → 담기" 가 154% 로 나온다. 분모를 상품 상세 방문으로 맞춰 옆에 적는다 (2026-09-22).
+          */}
+          {overview.sessions > 0 ? (
+            <p className="funnel__aside" title="퀵룩에는 성분·리뷰가 없어 상품 상세를 연 방문만 분모로 씁니다">
+              <span>성분·리뷰까지 확인</span>
+              <b>{fmt.pct(overview.sessions === 0 ? 0 : overview.infoViews / overview.sessions)}</b>
+              <em>
+                상품 상세 {fmt.int(overview.sessions)}건 중 {fmt.int(overview.infoViews)}건
+              </em>
+            </p>
+          ) : null}
         </Panel>
       </div>
 

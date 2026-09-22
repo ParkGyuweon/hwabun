@@ -88,6 +88,11 @@ export interface Overview {
   reviewViewRate: number;
   /** 정보 확인 도달률. 마트는 information_view_rate, 모의는 성분·리뷰 열람률 평균 */
   infoRate: number;
+  /**
+   * 성분·리뷰까지 확인한 방문 수. 분모는 **상품 상세를 연 방문**(`sessions`)이다 — 퀵룩에는 성분·리뷰가 없어서
+   * 볼 기회 자체가 없다. 그래서 이 값은 구매 단계 퍼널에 넣지 않고 옆에 따로 적는다 (데이터 파트 2026-09-22).
+   */
+  infoViews: number;
   /** 마트에 없으면 null. 화면은 하이픈 */
   bounceRate: number | null;
 }
@@ -334,6 +339,7 @@ export function emptyBehavior(): BehaviorMetrics {
       ingredientViewRate: 0,
       reviewViewRate: 0,
       infoRate: 0,
+      infoViews: 0,
       bounceRate: null,
     },
     previous: null,

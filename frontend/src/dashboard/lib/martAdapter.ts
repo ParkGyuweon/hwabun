@@ -134,6 +134,7 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
     ingredientViewRate: nz(kind('ingredient_list'), infoRate),
     reviewViewRate: nz(kind('user_review'), infoRate),
     infoRate,
+    infoViews: p.information_view_sessions,
     bounceRate: bounce,
   };
 }
@@ -436,11 +437,21 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
     if (ov.funnel) {
       out = {
         ...out,
+        /*
+         * 구매까지 가는 단계 (데이터 파트 지적 2026-09-22).
+         *
+         * **성분·리뷰 확인은 뺐다.** 순차 단계가 아니라 상세 아래 형제 단계다 — 퀵룩에는 성분·리뷰가 없어서
+         * 퀵룩에서 바로 담은 방문은 볼 기회가 없었는데 담기 수에는 들어간다. 그래서 "성분·리뷰 → 담기" 가
+         * 154% 로 나왔다. 계약도 담기 ≤ 성분·리뷰 를 보장한 적이 없다 (전체 행의 84.7% 가 담기 > 성분·리뷰).
+         * 이 값은 퍼널 옆에 상품 상세를 분모로 따로 적는다.
+         *
+         * **'상세를 봄' 은 세션 기준이다.** 담기(퀵룩 포함)와 모집단을 맞춘다. 전에는 퀵룩을 뺀 수를 써서
+         * 담기와 분모가 달랐고 96.4% 까지 올라갔다 — 조건이 조금만 바뀌면 이 칸도 100% 를 넘는다.
+         */
         standardFunnel: [
           { label: '상품이 보임', value: ov.funnel.impression_sessions },
           { label: '상품을 누름', value: ov.funnel.click_sessions },
-          { label: '상세를 봄', value: ov.funnel.product_view_sessions },
-          { label: '성분·리뷰 확인', value: ov.funnel.information_view_sessions },
+          { label: '상세를 봄', value: ov.funnel.detail_view_sessions ?? ov.funnel.product_view_sessions },
           { label: '장바구니에 담음', value: ov.funnel.add_to_cart_sessions },
         ],
       };
