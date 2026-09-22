@@ -1,0 +1,145 @@
+/*
+ * 발표용 상단 띠 (components/DemoBanner.tsx). `?demo=seller|shopper` 일 때만 그려진다.
+ *
+ * 색은 HWABUN 로고의 두 색 그대로다 (index.css 팔레트) — 사장님 화면은 Fresh Green, 고객 화면은 Soft Blossom Pink.
+ * 글씨는 흰색, 왼쪽 점은 천천히 깜빡여 "지금 켜져 있는 화면" 이라는 느낌을 준다 (2026-09-22 유림님).
+ * 바탕색을 연두·핑크로 갈랐던 것(e785a72)은 되돌리고 이 띠 하나로만 가른다 (2026-09-22 유림님).
+ */
+:root {
+  --demo-banner-h: 56px;
+}
+
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: var(--demo-banner-h);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  color: #fff;
+  font-family: var(--font-sans, 'Pretendard', sans-serif);
+  letter-spacing: -0.01em;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.08);
+}
+
+.demo-banner--seller {
+  background: #a8c96e;
+}
+
+.demo-banner--shopper {
+  background: #e68fa1;
+}
+
+.demo-banner__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.3);
+  animation: demo-banner-blink 1.6s ease-in-out infinite;
+}
+
+@keyframes demo-banner-blink {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 4px rgb(255 255 255 / 0.3);
+  }
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 0 8px rgb(255 255 255 / 0.12);
+  }
+}
+
+/*
+ * 조작 중(.is-active · DemoBanner.tsx 가 누르기·끌기·스크롤·타자를 받으면 1.2초 켠다).
+ * 흰 빛 한 줄이 띠를 왼쪽에서 오른쪽으로 훑고 지나가고, 점은 빠르게 뛴다.
+ * 두 화면을 나란히 둔 발표에서 "지금 어느 쪽을 만지는지" 가 멀리서도 보인다.
+ */
+.demo-banner {
+  position: sticky;
+  overflow: hidden;
+}
+
+.demo-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0) 35%, rgb(255 255 255 / 0.45) 50%, rgb(255 255 255 / 0) 65%, transparent 100%);
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.demo-banner.is-active::after {
+  opacity: 1;
+  animation: demo-banner-sweep 0.9s ease-in-out infinite;
+}
+
+.demo-banner.is-active .demo-banner__dot {
+  animation: demo-banner-blink 0.5s ease-in-out infinite;
+}
+
+@keyframes demo-banner-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-banner__dot,
+  .demo-banner.is-active .demo-banner__dot,
+  .demo-banner.is-active::after {
+    animation: none;
+  }
+}
+
+.demo-banner__big {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.demo-banner__small {
+  font-size: 15px;
+  font-weight: 500;
+  opacity: 0.9;
+  padding-left: 14px;
+  border-left: 1px solid rgb(255 255 255 / 0.5);
+  line-height: 1;
+}
+
+/*
+ * 띠가 있을 때 화면의 다른 sticky 요소를 띠 높이만큼 내린다. 안 내리면 스크롤할 때 띠 아래로 기어 들어간다.
+ * 대시보드 사이드바는 높이도 같이 줄인다 (100vh 그대로면 바닥이 잘린다).
+ */
+html[data-demo] .site-header {
+  top: var(--demo-banner-h);
+}
+
+html[data-demo] .sidebar {
+  top: var(--demo-banner-h);
+  height: calc(100vh - var(--demo-banner-h));
+}
+
+html[data-demo] :root[data-storefront='catalog'] .list__tabs,
+html[data-demo][data-storefront='catalog'] .list__tabs {
+  top: calc(72px + var(--demo-banner-h));
+}
+
+html[data-demo][data-storefront='catalog'] .list__controls {
+  top: calc(72px + 320px + var(--demo-banner-h));
+}
+
+html[data-demo][data-promo='side'] .list__promo {
+  top: calc(84px + var(--demo-banner-h));
+}
+
+html[data-demo] .register__preview {
+  top: calc(16px + var(--demo-banner-h));
+}

@@ -37,7 +37,7 @@ body {
   font-size: 15px;
   line-height: 1.5;
   color: var(--color-ink);
-  background: var(--color-ground);
+  background: var(--color-surface);
 }
 
 /* ---------- 헤더: 얇고 반투명 ---------- */
