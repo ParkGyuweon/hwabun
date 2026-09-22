@@ -233,8 +233,12 @@ li:first-child{background:linear-gradient(90deg,var(--acc-light),transparent);bo
 .pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;
  background:var(--acc-light);color:var(--brown);margin-left:8px;font-weight:600}
 .n{color:var(--acc-deep);font-weight:700;margin-left:8px}
+.pipbtn{font:inherit;font-size:13px;vertical-align:middle;margin-left:12px;padding:6px 12px;
+  border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--brown);cursor:pointer}
+.pipbtn:hover{background:var(--acc-light);border-color:var(--acc)}
 </style></head><body>
-<h1>방금 상태가 바뀐 사용자</h1>
+<div id="app">
+<h1>방금 상태가 바뀐 사용자 <button id="pip" class="pipbtn" hidden>항상 위에 띄우기</button></h1>
 <p class="sub">이벤트가 추천 상태에 반영된 사람이 실시간으로 올라옵니다 · 1초마다 갱신</p>
 <div class="head">
   <div><div class="k">상태가 바뀐 사용자</div><div class="big" id="personas">0<small>명</small></div></div>
@@ -242,6 +246,7 @@ li:first-child{background:linear-gradient(90deg,var(--acc-light),transparent);bo
   <div><div class="k">누적 반영</div><div class="big" id="total">0</div></div>
 </div>
 <div class="card"><ul id="recent"></ul></div>
+</div>
 <script>
 var $ = function(id){ return document.getElementById(id); };
 var fmt = function(n){ return (n == null ? 0 : n).toLocaleString(); };
@@ -267,6 +272,32 @@ function tick(){
 }
 tick();
 setInterval(tick, 1000);
+
+// 항상 위에 뜨는 창. 확장 프로그램 팝업(chrome.action)은 포커스를 잃으면 닫히게
+// 되어 있어 우회가 없다. 문서 PiP 는 브라우저가 OS 창으로 띄워 주므로 다른 앱을
+// 클릭해도 내려가지 않는다. 시크릿 창 위에도 그대로 뜬다 (Jira 408).
+var pipBtn = $('pip');
+if (window.documentPictureInPicture) { pipBtn.hidden = false; }
+pipBtn.onclick = function(){
+  documentPictureInPicture.requestWindow({width: 430, height: 660}).then(function(w){
+    Array.prototype.forEach.call(document.styleSheets, function(ss){
+      try {
+        var css = Array.prototype.map.call(ss.cssRules, function(r){ return r.cssText; }).join('');
+        var st = w.document.createElement('style');
+        st.textContent = css;
+        w.document.head.appendChild(st);
+      } catch (e) {}
+    });
+    var host = $('app');
+    w.document.body.appendChild(host);
+    pipBtn.hidden = true;
+    // 창을 닫으면 본래 자리로 되돌린다. 안 되돌리면 원래 탭이 빈 화면으로 남는다
+    w.addEventListener('pagehide', function(){
+      document.body.appendChild(host);
+      pipBtn.hidden = false;
+    });
+  }).catch(function(){});
+};
 </script>
 </body></html>"""
 
