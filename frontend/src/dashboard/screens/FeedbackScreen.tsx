@@ -45,7 +45,7 @@ const AXIS_COLOR: Record<string, string> = {
 };
 
 /** 업체 처리 상태 문구 (백엔드 계약 2026-09-18). new=OPEN · read=ACKNOWLEDGED · reflected=IMPLEMENTED */
-const STATUS_KO = { new: '아직 안 봤어요', read: '확인했어요', reflected: '반영했어요' } as const;
+const STATUS_KO = { new: '아직 안 봤어요', read: '답변했어요', reflected: '반영했어요' } as const;
 
 /** 분류기가 아직 종류를 정하지 못한 글에 붙이는 이름. 화면 곳곳에서 같은 말을 쓴다 */
 const PENDING_LABEL = '종류 나누는 중';
@@ -594,14 +594,8 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                     </blockquote>
                   ) : null}
                   {f.status !== 'reflected' ? (
+                    {/* "확인했어요" 버튼은 뺐다 (2026-09-22 유림님). 할 일은 답변 남기기와 반영했어요 둘이면 된다 */}
                     <div className="fbx-card__actions">
-                      {f.status === 'new' ? (
-                        <button type="button" className="fbx-btn" disabled={busy[f.feedback_id]} onClick={() => void respond(f, 'ACKNOWLEDGED')}>
-                          확인했어요
-                        </button>
-                      ) : (
-                        <span />
-                      )}
                       <div className={`fbx-reply${hits.length ? ' has-warning' : ''}`}>
                         <input
                           placeholder="고객에게 보일 답변 한 줄"

@@ -2156,7 +2156,8 @@ table.data tr:hover td {
 
 .fbx-card__actions {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  /* 답변 입력칸 · 답변 남기기 · 반영했어요 — 한 줄. 확인 버튼이 있던 자리는 없앴다 (2026-09-22) */
+  grid-template-columns: 1fr auto auto;
   align-items: start;
   gap: 8px;
 }
