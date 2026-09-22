@@ -901,6 +901,53 @@ body {
   border-radius: 6px;
 }
 
+/*
+ * 평범한 표(.table). 상세페이지·고객군·주문·리뷰 화면이 쓴다.
+ * 그동안 이 클래스에는 칸 규칙이 하나도 없어서 열 사이가 붙어 보이고 줄 구분이 안 됐다 (2026-09-22 규원님).
+ * 진단 표(table.data)와 같은 결로 맞춘다 — 넉넉한 좌우 여백, 연한 가로 구분선, 숫자는 오른쪽 정렬.
+ */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+  padding-left: 4px;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 4px;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table td.note {
+  text-align: left;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

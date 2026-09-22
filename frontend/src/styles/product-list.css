@@ -214,6 +214,8 @@
   justify-content: center;
   gap: var(--space-3);
   margin: var(--space-8) 0 0;
+  /* 화면 맨 밑에 붙어 있으면 잘린 것처럼 보이고 누르기도 어렵다. 아래로 숨 쉴 자리를 둔다 (2026-09-22 규원님) */
+  padding-bottom: var(--space-9);
 }
 
 .list__pager-pages {
