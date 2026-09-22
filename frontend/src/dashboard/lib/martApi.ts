@@ -57,6 +57,9 @@ export interface FunnelSessions {
   quick_look_cart_sessions?: number;
   /** 상세 조회 ∪ 퀵룩 세션 — view_to_cart_rate 분모 (계약 0.2.1, 데이터 235 결함 보고). 마트에 아직 없으면 생략 */
   detail_view_sessions?: number | null;
+  /** 결제 시작·구매 세션 (계약 0.2 추가, 마트에 있다). 옛 응답에는 없을 수 있어 선택 */
+  checkout_sessions?: number | null;
+  purchase_sessions?: number | null;
 }
 
 export interface OverviewPayload extends MartEnvelope {

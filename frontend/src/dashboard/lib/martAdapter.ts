@@ -447,13 +447,26 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
          *
          * **'상세를 봄' 은 세션 기준이다.** 담기(퀵룩 포함)와 모집단을 맞춘다. 전에는 퀵룩을 뺀 수를 써서
          * 담기와 분모가 달랐고 96.4% 까지 올라갔다 — 조건이 조금만 바뀌면 이 칸도 100% 를 넘는다.
+         *
+         * **'상품을 누름' 칸도 뺐다** (은솔님 2026-09-22 사슬 전체 확인). 목록의 퀵룩 버튼은 product_click 을 내지 않아
+         * 클릭과 퀵룩은 병렬 경로다. 클릭을 분모로 두면 "누름 → 상세" 가 646% 가 된다 (전체 행의 99% 가 상세 > 누름).
+         * 클릭률은 퍼널 밖 한 줄(funnelNote)로 적는다 — 실제 주 동선은 퀵룩이라 퍼널에 클릭 칸이 있으면 반대로 읽힌다.
+         * 뒤에 결제·구매를 이어 붙인다. 네 쌍(보임→상세→담기→결제→구매) 전부 단조 감소가 보장된 값이다.
          */
         standardFunnel: [
           { label: '상품이 보임', value: ov.funnel.impression_sessions },
-          { label: '상품을 누름', value: ov.funnel.click_sessions },
           { label: '상세를 봄', value: ov.funnel.detail_view_sessions ?? ov.funnel.product_view_sessions },
           { label: '장바구니에 담음', value: ov.funnel.add_to_cart_sessions },
+          ...(typeof ov.funnel.checkout_sessions === 'number' ? [{ label: '결제로 감', value: ov.funnel.checkout_sessions }] : []),
+          ...(typeof ov.funnel.purchase_sessions === 'number' ? [{ label: '구매', value: ov.funnel.purchase_sessions }] : []),
         ],
+        funnelNote: {
+          impressionSessions: ov.funnel.impression_sessions,
+          clickSessions: ov.funnel.click_sessions,
+          detailSessions: ov.funnel.detail_view_sessions ?? ov.funnel.product_view_sessions,
+          productViewSessions: ov.funnel.product_view_sessions,
+          quickLookSessions: ov.funnel.quick_look_sessions ?? null,
+        },
       };
       src.funnel = 'real';
     }

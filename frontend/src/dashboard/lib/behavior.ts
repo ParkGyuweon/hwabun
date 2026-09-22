@@ -265,6 +265,17 @@ export interface BehaviorMetrics {
   previous: Overview | null;
   daily: DailyPoint[];
   standardFunnel: FunnelStep[];
+  /**
+   * 퍼널 밖에 적는 진입 경로 한 줄 (은솔님 2026-09-22). 클릭과 퀵룩은 병렬 경로라 퍼널 칸으로 두면 100% 를 넘는다.
+   * 대신 "노출 중 몇 %가 상품을 눌렀나" 와 "상세를 연 세션이 퀵룩·상품 상세 중 어느 쪽인가" 를 따로 적는다. 마트가 없으면 null
+   */
+  funnelNote: {
+    impressionSessions: number;
+    clickSessions: number;
+    detailSessions: number;
+    productViewSessions: number;
+    quickLookSessions: number | null;
+  } | null;
   productMetrics: ProductMetrics[];
   contentAttention: ContentAttention[];
   scrapedIngredients: ScrapedIngredient[];
@@ -345,6 +356,7 @@ export function emptyBehavior(): BehaviorMetrics {
     previous: null,
     daily: [],
     standardFunnel: [],
+    funnelNote: null,
     productMetrics: [],
     contentAttention: [],
     scrapedIngredients: [],
