@@ -17,6 +17,9 @@ spring:
 server:
   port: ${SERVER_PORT:8090}
 
+# 로그인 JWT 만료 시간: 24시간
+SHOP_BACKEND_JWT_EXPIRATION_MS: 86400000
+
 recommendation:
   url: ${RECOMMEND_URL:http://localhost:8300}
   timeout-ms: ${RECOMMEND_TIMEOUT_MS:300}
