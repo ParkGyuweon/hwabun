@@ -56,7 +56,7 @@ export default function OverviewScreen({
   onGo?: (screen: string) => void;
 }) {
   const m = useBehavior();
-  const { overview, previous, daily: series, standardFunnel, productMetrics, repurchase, source } = m;
+  const { overview, previous, daily: series, standardFunnel, funnelNote, productMetrics, repurchase, source } = m;
   const best = repurchase ? bestRepurchase(repurchase, productMetrics) : null;
   const insights = useMemo(() => rankInsights(m), [m]);
   const top = insights[0];
@@ -301,6 +301,22 @@ export default function OverviewScreen({
         </Panel>
         <Panel title="구매까지 가는 단계" source={source.funnel} aside="단계마다 남은 방문">
           <Funnel steps={standardFunnel} />
+          {/*
+            클릭은 퍼널 칸이 아니라 곁가지다 (은솔님 2026-09-22). 목록의 빠른 보기는 클릭을 남기지 않아 클릭과 빠른 보기가
+            병렬 경로이고, 실제 주 동선은 빠른 보기다. 퍼널에 클릭 칸이 있으면 "대부분 클릭으로 들어온다" 로 거꾸로 읽힌다.
+          */}
+          {funnelNote && funnelNote.impressionSessions > 0 ? (
+            <p className="funnel__aside" title="목록의 빠른 보기는 상품을 누른 것으로 세지 않습니다">
+              <span>상품을 누른 방문</span>
+              <b>{fmt.pct(funnelNote.clickSessions / funnelNote.impressionSessions)}</b>
+              <em>
+                보인 {fmt.int(funnelNote.impressionSessions)}건 중 {fmt.int(funnelNote.clickSessions)}건
+                {funnelNote.quickLookSessions !== null
+                  ? ` · 상세를 연 ${fmt.int(funnelNote.detailSessions)}건은 빠른 보기 ${fmt.int(funnelNote.quickLookSessions)} · 상품 상세 ${fmt.int(funnelNote.productViewSessions)}`
+                  : ''}
+              </em>
+            </p>
+          ) : null}
           {/*
             성분·리뷰 확인은 단계가 아니라 곁가지다 — 퀵룩으로 담은 방문은 볼 기회가 없었다. 퍼널에 끼우면
             "성분·리뷰 → 담기" 가 154% 로 나온다. 분모를 상품 상세 방문으로 맞춰 옆에 적는다 (2026-09-22).

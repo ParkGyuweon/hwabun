@@ -370,7 +370,7 @@ export function startSession(personaId: string | null, productId: string | null 
 
   /*
    * 새로고침 뒤 첫 호출이고 저장된 세션의 식별자가 같으면 **그 세션을 이어 쓴다.** session_start 를 다시 내지 않고
-   * (세션은 하나다) 화면 조회만 남긴다. 목록을 거치지 않은 진입이라 navigation_source 는 `direct` (계약 §3.4).
+   * (세션은 하나다) 화면 조회만 남긴다. navigation_source 는 `reload` (계약 §3.4, 2026-09-22 추가) — 마트가 뒤로가기 재조회처럼 product_view_count 에서 빼려면 direct 와 갈라야 한다.
    * 노출 기록도 살아 있으니 이미 본 상품에는 보강 노출이 다시 나가지 않는다.
    */
   const resume = firstCall && restoredSession !== null && restoredSession.persona_key === personaId;
@@ -381,8 +381,8 @@ export function startSession(personaId: string | null, productId: string | null 
     setLoggerContext({ personaId, productId });
     pageViewId = createId();
     startedPageViewKey = productId;
-    track('page_view', { product_id: productId, navigation_source: 'direct' });
-    trackProductView(productId, 'direct');
+    track('page_view', { product_id: productId, navigation_source: 'reload' });
+    trackProductView(productId, 'reload');
     persistSession(personaId);
     return;
   }
