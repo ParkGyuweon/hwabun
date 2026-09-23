@@ -671,6 +671,60 @@ section_view_count`가 항상 성립한다.** 제외하지 않으면 "본 사람
 제외된 세션의 체류·드래그는 `dwell_ms_sum`·`text_selection_count`에 그대로 남는다.
 빠지는 것은 "봤다"는 집계뿐이다.
 
+#### 4.4-1 `section_view_sessions`로 비율을 만들 때의 한계 (2026-09-23)
+
+**이 Mart로는 "그 구역을 본 사람 비율"을 정확히 낼 수 없다.** 화면이
+`section_view_sessions / product_view_sessions`로 만드는데 두 값이 어긋난다.
+`ssafy-beauty`의 성분 목록이 **100.8%**로 나온 자리다. 원인이 둘이고 **둘 다 컬럼을
+더해야 풀린다** — 아래 "고치는 방법"이 정본이다.
+
+**원인 ① 분모에 Quick Look이 빠져 있다.** 섹션은 Quick Look에서도 읽히는데
+`product_view_sessions`는 상품 상세를 연 세션만 센다(§4.5 `reached_product_view`).
+2026-09-23 운영 Mart 실측이다.
+
+| 항목 | 값 |
+| --- | --- |
+| 상세 조회 없이 섹션을 읽은 (세션·상품·섹션) 조합 | 3,780 (`product_hero` 1,845 · `highlights` 1,264 · `about_product` 671) |
+| `section_view_sessions > product_view_sessions` 인 행 | 4,775 / 28,789 (16.6%). 평균 비율 601%까지 |
+| 브랜드×종류 100% 초과 중 섹션이 1개뿐인 조합 | 137 / 191 — **이 원인만으로 넘는다** |
+
+**올바른 분모는 `detail_view_sessions`(상세 ∪ Quick Look)다.** 같은 구조를 쓰는
+§4.21 `friction_daily`가 그 분모를 쓰고 **24,720행에서 위반이 0이다.** 이 Mart에는 그
+컬럼이 없다.
+
+**원인 ② `section_id`를 가로질러 합산할 수 없다.** 세션 수는 더하면 같은 사람을 여러 번
+센다. 한 `content_kind`가 섹션 여러 개에 걸치면 소비자가 그것을 합산하게 된다.
+
+| 항목 | 값 |
+| --- | --- |
+| 섹션이 2개 이상인 `content_kind` | `ingredient_list` (`about_product` · `ingredients`) |
+| 브랜드×종류 조합 중 섹션 2개 이상 | 76 / 1,038 |
+| 100% 초과 191개 중 이 원인이 겹친 조합 | 54. 최대 **149.8%** |
+| `ssafy-beauty` 성분 목록 | 768 + 564 = 1,332 vs 분모 1,322 → 100.8% |
+
+역방향도 있다 — `section_id=product_hero` 하나에 `content_kind`가 넷이다
+(`product_image` · `price` · `cta` · `variant_option`). **두 축은 다대다다.**
+
+**분자를 잘라 맞추면 안 된다.** `section_view_sessions`를 `product_view` 모집단으로
+제한해 보면 위반은 4,775행 → 0행이 되지만, `product_hero`가 1,845 세션에서 **0**이 되어
+화면에 "아무도 대표 이미지를 안 봤다"는 거짓이 뜬다. 같은 이유로 Q5에
+`section_view_sessions <= product_view_sessions` 검사를 두지 않는다 — **성립하지 않는
+규칙이라 정상 데이터가 실패한다.**
+
+성분·리뷰 열람(`ingredient_view_sessions`·`review_view_sessions`)은 제한이 옳다. 그
+행동은 Quick Look에 없어서 `product_view_sessions`가 맞는 분모이고, 실측 위반도 0행이다.
+
+**고치는 방법 — 컬럼 둘을 더한다 (시연 후).**
+
+1. `detail_view_sessions`를 이 Mart에 싣는다. `funnel_session_fact`에 이미 있다(§4.5)
+2. `content_kind` 단위 고유 세션 수를 별도 컬럼으로 낸다. `product_view_sessions`처럼
+   각 행에 같은 값을 반복해 넣으면 소비자가 `max`로 되돌린 뒤 합산할 수 있다
+   (`DashboardMartService` 가 그 Mart에서 이미 쓰는 방식이다)
+
+`schema.sql`에 `IF NOT EXISTS`가 없어 파일만 고쳐도 기존 테이블이 바뀌지 않는다.
+`deploy/ec2-1/migrations/`에 `ALTER TABLE`이 따로 필요하다. **raw 초기화는 필요 없다** —
+DW는 파이프라인 끝이고 배치가 매번 raw에서 Mart를 새로 만든다.
+
 입력의 `content_kind`가 비어 있을 때 섹션 정본 라벨로 채우는 규칙은
 `processed-schema.md` §3에 있다 — **여기서 다시 채우지 않는다.** 두 곳에서 채우면
 기준이 갈린다.
