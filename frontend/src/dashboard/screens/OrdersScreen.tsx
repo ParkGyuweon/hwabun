@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { BarList, Kpi, Panel } from '../components';
 import { fmt } from '../lib/metrics';
-import { fetchSellerOrders } from '../../lib/shopApi';
+import { SELLER_ORDER_LIMIT, fetchSellerOrders } from '../../lib/shopApi';
 import type { SellerOrder } from '../../lib/shopApi';
 import { useBrandProducts } from '../lib/useBrandProducts';
 import { categoryKo } from '../../lib/localize';
@@ -167,6 +167,11 @@ export default function OrdersScreen({
   return (
     <div className="stack">
       <DateRangePicker value={range} onChange={setRange} />
+      {orders.length >= SELLER_ORDER_LIMIT ? (
+        <p className="note">
+          이 기간 주문이 많아 최근 {fmt.int(SELLER_ORDER_LIMIT)}건까지만 셌습니다. 매출·주문 수가 실제보다 적을 수 있으니 기간을 줄여 보세요.
+        </p>
+      ) : null}
 
       <div className="grid grid--kpi">
         <Kpi label="기간 매출" value={won(totals.revenue)} sub={rangeLabel} source="real" />
