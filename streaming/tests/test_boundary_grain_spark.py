@@ -28,7 +28,7 @@ STAGE_SCHEMA = (
 BANNER_SCHEMA = (
     "event_date_kst string, brand_id string, product_id string, "
     "banner_type string, trait_source string, "
-    "impression_count long, click_count long"
+    "impression_count long, click_count long, skip_count long"
 )
 
 BANNER_IDENTITY = ["brand_id", "product_id", "banner_type", "trait_source"]
@@ -106,10 +106,14 @@ class BoundaryGrainTest(unittest.TestCase):
         return self.spark.createDataFrame(rows, BANNER_SCHEMA)
 
     def test_click_after_midnight_is_not_a_violation(self):
-        """노출은 앞날, 클릭은 뒷날에 찍혀도 합치면 맞는다."""
+        """노출은 앞날, 클릭은 뒷날에 찍혀도 합치면 맞는다.
+
+        `skip_count` 도 같이 상쇄된다 — 정의가 `impression - click` 이라 뒷날 칸은
+        자동으로 음수다. 일자별로 음수를 막으면 이 정상 동선이 걸린다.
+        """
         frame = self._banners([
-            ("2026-09-19", "B1", "P1", "new_brand", "explore", 3, 2),
-            ("2026-09-20", "B1", "P1", "new_brand", "explore", 0, 1),
+            ("2026-09-19", "B1", "P1", "new_brand", "explore", 3, 2, 1),
+            ("2026-09-20", "B1", "P1", "new_brand", "explore", 0, 1, -1),
         ])
 
         self.assertEqual(0, _over_clicked_banner_count(frame, BANNER_IDENTITY))
@@ -117,7 +121,16 @@ class BoundaryGrainTest(unittest.TestCase):
     def test_click_without_any_impression_is_reported(self):
         """어느 날에도 노출이 없으면 그대로 잡힌다."""
         frame = self._banners([
-            ("2026-09-20", "B1", "P1", "new_brand", "explore", 0, 1),
+            ("2026-09-20", "B1", "P1", "new_brand", "explore", 0, 1, -1),
+        ])
+
+        self.assertEqual(1, _over_clicked_banner_count(frame, BANNER_IDENTITY))
+
+    def test_negative_skip_sum_is_reported(self):
+        """합산해도 skip 이 음수면 잡는다 — 클릭이 노출보다 많다는 뜻이다."""
+        frame = self._banners([
+            ("2026-09-19", "B1", "P1", "new_brand", "explore", 1, 2, -1),
+            ("2026-09-20", "B1", "P1", "new_brand", "explore", 1, 2, -1),
         ])
 
         self.assertEqual(1, _over_clicked_banner_count(frame, BANNER_IDENTITY))
@@ -125,8 +138,8 @@ class BoundaryGrainTest(unittest.TestCase):
     def test_other_banners_do_not_cover_the_gap(self):
         """다른 배너의 노출이 대신 메우지 않는다 — trait_source 가 다르면 별개다."""
         frame = self._banners([
-            ("2026-09-20", "B1", "P1", "new_brand", "coldstart", 5, 5),
-            ("2026-09-20", "B1", "P1", "new_brand", "explore", 0, 1),
+            ("2026-09-20", "B1", "P1", "new_brand", "coldstart", 5, 5, 0),
+            ("2026-09-20", "B1", "P1", "new_brand", "explore", 0, 1, -1),
         ])
 
         self.assertEqual(1, _over_clicked_banner_count(frame, BANNER_IDENTITY))
