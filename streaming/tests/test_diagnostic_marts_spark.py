@@ -485,6 +485,46 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         self.assertEqual(1, row["product_view_sessions"])   # 세션은 원래 하나
         self.assertEqual(1.0, row["detail_entry_rate"])
 
+    def test_revisit_views_are_not_new_entries(self):
+        """화면 안에서 이미 본 상품으로 다시 온 것도 새 진입이 아니다
+        (§4.1, 프론트 !445).
+
+        장바구니를 열고 닫으면 그렇게 된다. 2026-09-23 운영 배치에서 실사용자 한
+        세션이 노출 1 · 조회 3 으로 detail_entry_rate 300% 를 냈고, 그중 둘이 이
+        경로였다 (14초·2초 간격).
+        """
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="in_app"),
+            self._fact("S1", "product_view", navigation_source="revisit"),
+            self._fact("S1", "product_view", navigation_source="revisit"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["product_view_count"])      # 재조회 둘 제외
+        self.assertEqual(1, row["product_view_sessions"])   # 세션은 원래 하나
+        self.assertEqual(1.0, row["detail_entry_rate"])
+
+    def test_in_app_entry_stays_a_new_entry(self):
+        """`in_app` 은 빼지 않는다 — 목록에서 카드를 눌러 들어온 새 진입이다.
+
+        그때는 카드를 다시 봤으니 노출도 함께 늘어난다. 노출이 세션당 한 번이라는
+        전제는 성립하지 않는다 — 2026-09-23 실측으로 실사용자가 같은 세션·상품에
+        평균 2.35회, 최대 15회 노출을 낸다.
+        """
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="in_app"),
+            self._fact("S1", "product_view", navigation_source="in_app"),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(2, row["product_view_count"])
+        self.assertEqual(1.0, row["detail_entry_rate"])
+
     def test_direct_entry_stays_a_new_entry(self):
         """`direct` 는 빼지 않는다 — 목록을 안 거친 진짜 첫 진입이다.
 

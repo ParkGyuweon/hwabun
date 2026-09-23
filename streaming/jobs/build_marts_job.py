@@ -2059,9 +2059,22 @@ EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
 # 나가는데 조회만 또 나가서, 빼지 않으면 같은 세션에서 노출 1 · 조회 2 가 되어
 # `detail_entry_rate` 가 1 을 넘는다.
 #
+# `revisit` 은 화면 안 이동인데 같은 세션에 이미 `product_view` 를 남긴 상품으로
+# 다시 온 것이다 (프론트 !445, 계약 §3.4). 장바구니를 열고 닫으면 그렇게 된다 —
+# 2026-09-23 배치에서 실사용자 한 세션이 노출 1 · 조회 3 으로 300% 를 냈고, 그중
+# 둘이 이 경로였다 (14초·2초 간격).
+#
 # **`direct` 는 빼면 안 된다.** 목록을 안 거친 진짜 첫 진입이고 생성기가
 # 1,845건 낸다. 그래서 프론트가 새로고침에 값을 따로 뒀다.
-REVISIT_NAVIGATION_SOURCES = ("history_back", "reload")
+#
+# 프론트의 `revisit` 판정이 지금은 넓다 — 목록에서 같은 상품을 **다시 클릭해** 들어온
+# 것까지 포함한다. 그쪽은 카드를 다시 봤으니 노출도 함께 늘어나 새 진입으로 봐야
+# 한다. 실측으로 재조회 후보 109건 중 105건(96%)이 앞에 `product_click` 이 있었다.
+# 노출이 세션당 한 번이라는 전제가 성립하지 않는다 — 실사용자 평균 2.35회, 최대
+# 15회다(`firedOnceKeys` 는 page_view 마다 비워지고, 세션 단위 중복 방지는 보강
+# 노출에만 걸린다). 범위를 좁히는 것은 프론트 몫이고, **좁혀지면 비율이 올라갈 뿐
+# 이 상수는 그대로다.**
+REVISIT_NAVIGATION_SOURCES = ("history_back", "reload", "revisit")
 
 # 찜 토글에서 "추가" 를 뜻하는 action 값 (event-properties-schema §4.5).
 WISHLIST_ADD_ACTION = "add"
