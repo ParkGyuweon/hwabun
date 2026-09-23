@@ -20,9 +20,9 @@ import '../../styles/auth.css';
  *
  * 로그인 전에는 아무것도 그리지 않는다. 받아 둔 목록·배지는 세션 id 에 묶어 두어, 재로그인하면 이전 사람 것이 안 보인다.
  *
- * `placement="above"` 는 대시보드 사이드바 발 부분용이다. 사이드바는 `overflow-y: auto` 에 `backdrop-filter` 까지 있어
- * 안에 둔 패널은 absolute 든 fixed 든 사이드바 폭(232px)에서 잘렸다 (2026-09-23 은솔님 제보). 그래서 패널을 body 로
- * 빼서(portal) 종 위치에 맞춰 화면 기준으로 띄운다 — 종 왼쪽 끝에 맞추고 위로 연다.
+ * 패널은 body 로 빼서(portal) 종 위치에 맞춰 화면 기준으로 띄운다. `placement` 는 원하는 방향일 뿐이고,
+ * 화면에 안 들어가면 반대쪽으로 연다 — 자세한 규칙은 아래 useLayoutEffect.
+ * `placement="above"` 는 대시보드 사이드바 발 부분용(종 왼쪽 맞춤·위로), 기본 below 는 헤더용(종 오른쪽 맞춤·아래로).
  */
 export default function NotificationBell({
   role,
@@ -53,22 +53,40 @@ export default function NotificationBell({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [floatStyle, setFloatStyle] = useState<CSSProperties | null>(null);
 
-  // above: 열려 있는 동안 종 위치를 따라간다. 사이드바가 스크롤되거나 창 크기가 바뀌면 다시 잰다
+  /*
+   * 패널은 늘 body 로 띄우고(portal) 화면 기준 fixed 로 놓는다. 열려 있는 동안 종 위치를 따라간다.
+   *
+   * 헤더(쇼핑몰)와 사이드바(대시보드)가 둘 다 backdrop-filter 라 안에 두면 그 상자 기준으로 잘렸다. 거기에 창이 좁으면
+   * (두 화면을 나란히 띄운 시연) 쇼핑몰은 종 오른쪽 맞춤 360px 가 화면 왼쪽 밖으로, 대시보드는 사이드바가 위쪽 가로 막대가
+   * 되면서 "위로 열기" 가 화면 위로 나가 잘렸다 (2026-09-23 은솔님·유림님 제보). 그래서
+   *   - 폭은 화면 폭 − 32px 을 넘지 않는다
+   *   - 가로는 종에 맞추되(below: 오른쪽 끝, above: 왼쪽 끝) 화면 양옆 16px 안으로 민다
+   *   - 세로는 원하는 쪽(placement)이 좁고 반대쪽이 더 넓으면 반대쪽으로 연다
+   */
   useLayoutEffect(() => {
-    if (placement !== 'above' || !mine.open) return;
+    if (!mine.open) return;
     const place = () => {
       const r = bellRef.current?.getBoundingClientRect();
       if (!r) return;
       const gap = 8;
       const edge = 16;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const width = Math.min(360, vw - edge * 2);
+      const wantLeft = placement === 'above' ? r.left : r.right - width;
+      const left = Math.min(Math.max(wantLeft, edge), vw - width - edge);
+      const spaceAbove = r.top - gap - edge;
+      const spaceBelow = vh - r.bottom - gap - edge;
+      const enough = 240;
+      const up = placement === 'above' ? spaceAbove >= enough || spaceAbove >= spaceBelow : spaceBelow < enough && spaceAbove > spaceBelow;
       setFloatStyle({
         position: 'fixed',
-        top: 'auto',
+        left,
         right: 'auto',
-        left: r.left,
-        bottom: window.innerHeight - r.top + gap,
-        width: Math.max(240, Math.min(360, window.innerWidth - r.left - edge)),
-        maxHeight: Math.max(160, r.top - gap - edge),
+        width,
+        ...(up
+          ? { top: 'auto', bottom: vh - r.top + gap, maxHeight: Math.max(120, spaceAbove) }
+          : { top: r.bottom + gap, bottom: 'auto', maxHeight: Math.max(120, spaceBelow) }),
       });
     };
     place();
@@ -169,8 +187,8 @@ export default function NotificationBell({
   const panel = (
     <div
       ref={panelRef}
-      className={`notif__panel${placement === 'above' ? ' notif__panel--float' : ''}`}
-      style={placement === 'above' ? (floatStyle ?? undefined) : undefined}
+      className="notif__panel notif__panel--float"
+      style={floatStyle ?? undefined}
       role="dialog"
       aria-label="알림"
     >
@@ -227,7 +245,7 @@ export default function NotificationBell({
         {unread > 0 ? <span className="notif__badge">{unread > 99 ? '99+' : unread}</span> : null}
       </button>
 
-      {open ? (placement === 'above' ? (floatStyle ? createPortal(panel, document.body) : null) : panel) : null}
+      {open && floatStyle ? createPortal(panel, document.body) : null}
     </div>
   );
 }
