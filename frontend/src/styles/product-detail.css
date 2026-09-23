@@ -1531,7 +1531,7 @@
 }
 
 /*
- * 접힌 상태 — 막대 대신 동그란 버튼 하나 (2026-09-23). 건수는 오른쪽 위 작은 배지.
+ * 접힌 상태 — 막대 대신 동그란 버튼 하나 (2026-09-23). 건수는 보이지 않는다.
  * apple.css 의 .log-panel__toggle(알약 모양)보다 선택자가 구체적이라 여기 값이 이긴다.
  */
 .log-panel.is-collapsed {
@@ -1560,25 +1560,9 @@
   background: #a8c96e;
 }
 
-.log-panel__count {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #a8c96e;
-  color: #1d1d1f;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 20px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.log-panel__count.is-muted {
+.log-panel.is-collapsed .log-panel__live.is-muted {
   background: #c7c7cc;
+  box-shadow: 0 0 0 3px rgb(199 199 204 / 0.35);
 }
 
 .log-panel__toggle--round:focus-visible {
