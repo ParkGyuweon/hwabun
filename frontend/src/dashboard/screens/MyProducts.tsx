@@ -3,7 +3,7 @@ import { Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import { useBrandProducts } from '../lib/useBrandProducts';
 import { listPriceKrw } from '../../lib/discount';
-import { fetchSellerOrders } from '../../lib/shopApi';
+import { SELLER_ORDER_LIMIT, fetchSellerOrders } from '../../lib/shopApi';
 import type { SellerOrder } from '../../lib/shopApi';
 
 /** 로컬(Asia/Seoul) 기준 YYYY-MM-DD. 결제 시각은 ISO 라 UTC 로 자르면 자정 근처 주문이 어제로 간다 */
@@ -119,7 +119,10 @@ export default function MyProducts({ brandId, brandName }: { brandId: string | n
     ? '판매량 못 읽음'
     : orders === null
       ? '판매량 받는 중'
-      : `오늘 ${fmt.int(totals.today)} · 이달 ${fmt.int(totals.month)} · 누적 ${fmt.int(totals.total)}`;
+      : `오늘 ${fmt.int(totals.today)} · 이달 ${fmt.int(totals.month)} · 누적 ${fmt.int(totals.total)}${
+          // 누적은 2020년부터 읽는다. 상한만큼 돌아왔으면 오래된 주문이 빠졌다
+          orders.length >= SELLER_ORDER_LIMIT ? ` (최근 주문 ${fmt.int(SELLER_ORDER_LIMIT)}건 기준)` : ''
+        }`;
 
   return (
     <Panel title="내가 등록한 상품" source="real" aside={`${list.length}개 · ${salesAside}`}>
