@@ -13,6 +13,7 @@ import { type BehaviorMetrics, emptyBehavior } from './behavior';
 import { fetchMartBundle, type MartBundle } from './martApi';
 import { fromMart } from './martAdapter';
 import { catalogProducts } from './metrics';
+import { useBrandProducts } from './useBrandProducts';
 
 export type MartState = 'idle' | 'loading' | 'ready' | 'unavailable';
 
@@ -63,15 +64,22 @@ export function BehaviorProvider({
     };
   }, [key, brandId, days]);
 
+  // 쇼핑몰에 등록된 이 브랜드 상품. 번들 카탈로그에 없는 새 상품도 이름을 붙이려고 받는다
+  const { products: serverProducts } = useBrandProducts(brandId, brandName);
+
   const bundle = key ? (cache.get(key) ?? (fetched?.key === key ? fetched.bundle : null)) : null;
   const martState: MartState = !key ? 'idle' : bundle ? (anyPayload(bundle) ? 'ready' : 'unavailable') : 'loading';
 
   const metrics = useMemo(() => {
     const base = emptyBehavior();
     if (!bundle || !anyPayload(bundle)) return base;
-    const mine: Product[] = brandName ? catalogProducts.filter((p) => p.brand_name === brandName) : [];
+    const bundled: Product[] = brandName ? catalogProducts.filter((p) => p.brand_name === brandName) : [];
+    // 서버 목록이 정본. 번들에만 있는 상품은 뒤에 붙인다 (같은 id 는 한 번만)
+    const server = serverProducts ?? [];
+    const seen = new Set(server.map((p) => p.product_id));
+    const mine = [...server, ...bundled.filter((p) => !seen.has(p.product_id))];
     return fromMart(bundle, base, mine);
-  }, [bundle, days, brandName]);
+  }, [bundle, days, brandName, serverProducts]);
 
   const value = useMemo(() => ({ metrics, martState, days }), [metrics, martState, days]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
