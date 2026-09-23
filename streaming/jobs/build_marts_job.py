@@ -1561,15 +1561,28 @@ def _content_daily_kpi(
     ]
     product_key = ["event_date_kst", "brand_id", "product_id", *axes]
 
+    # 분모와 성분·리뷰 열람 세션은 **상품 단위**라 content_kind 마다 같은 값이 반복된다.
+    # 행 단위로 세면 user_review 행이 ingredient_view_sessions=0 을 달고 나와
+    # "아무도 성분을 안 봤다" 로 읽힌다. 소비자도 반복을 정상으로 본다
+    # (docs/dashboard/dashboard-mart-api-spec.md E3).
+    view_sessions = _product_view_sessions(funnel_session_df, time_zone).select(
+        *product_key, "session_id"
+    ).distinct()
+    views = view_sessions.groupBy(*product_key).agg(
+        F.countDistinct("session_id").cast("long").alias("product_view_sessions")
+    )
+
+    # 분자를 분모의 모집단으로 제한한다. Quick Look 으로 상세를 연 세션은 콘텐츠를
+    # 읽고도 퍼널의 product_view 에 없어서, 제한하지 않으면 비율이 1.0 을 넘는다.
+    # product_daily_kpi 의 add_to_cart_rate 가 같은 이유로 1,248행 중 323행에서
+    # 1.0 을 넘었다. 분자와 분모는 같은 모집단을 세야 한다.
+    viewed_content = _null_safe_semi_join(
+        content, view_sessions, [*product_key, "session_id"]
+    )
+
     per_content = content.groupBy(*content_key).agg(
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.sum("view_count").cast("long").alias("section_view_count"),
-        # 조회가 있는 세션만 센다. 체류·드래그만 남기고 section_view 가 없는
-        # 세션까지 세면 section_view_sessions > section_view_count 가 되어
-        # "본 사람이 조회 수보다 많다" 가 나온다 (dw-schema.md §4.4).
-        F.countDistinct(
-            F.when(F.col("view_count") > 0, F.col("session_id"))
-        ).cast("long").alias("section_view_sessions"),
         # 합이 NULL 이 되는 경우(모든 입력이 NULL)를 0 으로 맞춘다. 체류 0 은
         # "머물지 않았다" 이지 "모른다" 가 아니라서 계약이 N 으로 선언했다.
         F.coalesce(F.sum("dwell_ms_sum"), F.lit(0)).cast("long").alias("dwell_ms_sum"),
@@ -1591,23 +1604,24 @@ def _content_daily_kpi(
         .cast("double").alias("content_interest_score"),
     )
 
-    # 분모와 성분·리뷰 열람 세션은 **상품 단위**라 content_kind 마다 같은 값이 반복된다.
-    # 행 단위로 세면 user_review 행이 ingredient_view_sessions=0 을 달고 나와
-    # "아무도 성분을 안 봤다" 로 읽힌다. 소비자도 반복을 정상으로 본다
-    # (docs/dashboard/dashboard-mart-api-spec.md E3).
-    view_sessions = _product_view_sessions(funnel_session_df, time_zone).select(
-        *product_key, "session_id"
-    ).distinct()
-    views = view_sessions.groupBy(*product_key).agg(
-        F.countDistinct("session_id").cast("long").alias("product_view_sessions")
+    # **`section_view_sessions` 도 같은 제한을 받는다.** 성분·리뷰 열람만 제한하고
+    # 이쪽을 원본으로 두었더니 `section_view_sessions / product_view_sessions` 가
+    # 100% 를 넘었다 — 2026-09-23 운영 Mart 에서 28,789행 중 4,775행(16.6%)이
+    # 그랬고 전부 `python_batch` 였다. 같은 행의 성분·리뷰 쌍은 0행이었다.
+    #
+    # 조회가 있는 세션만 센다. 체류·드래그만 남기고 `section_view` 가 없는 세션까지
+    # 세면 `section_view_sessions > section_view_count` 가 되어 "본 사람이 조회 수보다
+    # 많다" 가 나온다 (dw-schema.md §4.4).
+    section_views = viewed_content.groupBy(*content_key).agg(
+        F.countDistinct(
+            F.when(F.col("view_count") > 0, F.col("session_id"))
+        ).cast("long").alias("section_view_sessions")
     )
-
-    # 분자를 분모의 모집단으로 제한한다. Quick Look 으로 상세를 연 세션은 콘텐츠를
-    # 읽고도 퍼널의 product_view 에 없어서, 제한하지 않으면 비율이 1.0 을 넘는다.
-    # product_daily_kpi 의 add_to_cart_rate 가 같은 이유로 1,248행 중 323행에서
-    # 1.0 을 넘었다. 분자와 분모는 같은 모집단을 세야 한다.
-    viewed_content = _null_safe_semi_join(
-        content, view_sessions, [*product_key, "session_id"]
+    per_content = _null_safe_join(
+        per_content, section_views, content_key
+    ).withColumn(
+        "section_view_sessions",
+        F.coalesce(F.col("section_view_sessions"), F.lit(0).cast("long")),
     )
 
     def kind_sessions(kinds: tuple[str, ...], alias: str) -> Any:

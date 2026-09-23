@@ -177,6 +177,10 @@ class ContentMartSparkTest(unittest.TestCase):
         Quick Look 으로 상세를 연 세션은 콘텐츠를 읽고도 퍼널의 product_view 에
         없다. 제한하지 않으면 비율이 1.0 을 넘는다 — 실제로 났던
         분자·분모 모집단 불일치와 같은 유형이다.
+
+        **`section_view_sessions` 도 같은 제한을 받는다.** 예전에는 이 기대값이
+        2 였다 — 성분·리뷰 열람만 제한하고 이쪽은 원본을 세고 있었다. 그래서
+        화면의 "본 사람" 비율이 100% 를 넘었다 (2026-09-23 운영 Mart 4,775행).
         """
         rows = self._content_df([
             self._content("S1", "ingredient_list"),
@@ -187,10 +191,14 @@ class ContentMartSparkTest(unittest.TestCase):
 
         row = _content_daily_kpi(rows, funnel, "Asia/Seoul").collect()[0]
 
-        self.assertEqual(2, row["section_view_sessions"])
+        self.assertEqual(1, row["section_view_sessions"])
         self.assertEqual(1, row["product_view_sessions"])
         self.assertEqual(1, row["ingredient_view_sessions"])
         self.assertEqual(1.0, row["ingredient_view_rate"])
+        # 분자가 분모를 넘지 않는다 — 화면의 "본 사람" 비율이 이 쌍이다.
+        self.assertLessEqual(
+            row["section_view_sessions"], row["product_view_sessions"]
+        )
 
     def test_rates_are_null_when_no_product_view_exists(self):
         """퍼널에 상품 조회가 없으면 분모가 0이다. 비율은 NULL, 건수는 0."""
