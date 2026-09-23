@@ -173,12 +173,14 @@ Event.product_id
 
 ### 3.4 `navigation_source`
 
-`session_start`, `in_app`, `history_back`, `direct`, `reload`
+`session_start`, `in_app`, `history_back`, `direct`, `reload`, `revisit`
 
 세션 시작과 함께 발생한 첫 `page_view`는 `direct`보다 `session_start`를 우선한다.
 `reload`는 새로고침으로 **같은 세션을 이어 쓸 때**의 첫 `page_view`·`product_view`다 (프론트 로거가 session_id를
 sessionStorage에 보존한다, 2026-09-22). 뒤로가기 재조회(`history_back`)와 같이 `product_view_count`에서 빼는 재조회로 다룬다 —
 직접 진입(`direct`)과 섞이면 진짜 첫 진입까지 빠지므로 값을 따로 둔다.
+`revisit`은 화면 안 이동(`in_app`)인데 **같은 세션에 이미 `product_view`를 남긴 상품**의 상세로 다시 올 때다
+(장바구니를 열고 닫아 상세가 다시 열리는 경우 등, 2026-09-23 추가). `history_back`·`reload`와 같이 `product_view_count`에서 빼는 재조회다.
 같은 상세 진입의 `product_view.navigation_source`는 `page_view` 값과 같아야 한다.
 
 ### 3.5 `quick_look_close.close_reason`

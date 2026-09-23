@@ -538,16 +538,23 @@ EXPLORE_SHARE_RANGE = (0.1, 0.3)
 # (`frontend/src/components/product/SimilarProducts.tsx`), 그 클릭이 통째로
 # 미매칭으로 잡히고 있었다.
 #
-# 임계 2% 는 실측 0% 에 운영 트래픽 여유를 둔 값이고 **아직 잠정이다.**
+# 임계 2% 는 실측 0% 에 운영 트래픽 여유를 둔 값이고 **2026-09-22 배치로 확정했다.**
 #
-# 2026-09-21 배치가 바로잡은 기준으로 잰 첫 운영 리포트이고 값은
-# `product_click_unmatched=0/31,136` (0.00%) 이었다. **그래도 확정하지 않는다** —
-# 그 실행의 실행축이 `python_batch` 와 실사용자뿐이라 에이전트(`agent_llm`)
-# 딥링크가 한 건도 섞이지 않았고, 합성분은 2026-09-16 고정 replay 파일이라 이미
-# 0.00% (0/4,494) 로 재 본 것과 같은 데이터다. 규모만 커졌다.
+# 확정 조건으로 걸어 둔 것이 `agent_llm` 이 포함된 실행의 리포트였다. 2026-09-21
+# 배치는 실행축이 `python_batch` 와 실사용자뿐이라(에이전트 딥링크 0건) 값이
+# 0/31,136 이어도 확정하지 않았다. 09-22 배치가 PC 9,900명 + PA 100명으로 그
+# 조건을 채웠다.
 #
-# 확정 조건은 `agent_llm` 이 포함된 실행의 리포트다. Q5 가 매 실행
-# `product_click_unmatched`·`product_click_total` 을 기록하므로 추세는 계속 남는다.
+#     전체          0 / 45,134   (0.00%)
+#       python_batch  44,494
+#       agent_llm        624     ← 09-21 의 82건에서 7.6배
+#       user              16
+#
+# 에이전트 경로만 따로 봐도 표본이 선다. 09-21 에는 PA 클릭이 82건이라 0/82 로는
+# 95% 상한이 3.6% 여서 2% 를 배제하지 못했다. 624건이면 상한이 0.48% 라 배제된다.
+#
+# Q5 가 매 실행 `product_click_unmatched`·`product_click_total` 을 기록하므로
+# 추세는 계속 남는다. 이 값이 2% 를 넘으면 프론트 합성이 안 먹는 신호다.
 #
 # 검사가 아니라 경고로 둔다. 생성기가 약속한 적 없는 조건이라 실패로 잡으면 남의
 # 데이터를 틀렸다고 하는 것이 된다. 이 값을 넘으면 프론트 합성이 안 먹는 신호다.
@@ -959,6 +966,34 @@ def _browser_unmatched_clicks(product_fact: Any) -> dict[str, int]:
         "product_unmatched": product["unmatched"],
         "product_total": product["total"],
     }
+
+
+def _over_clicked_banner_count(
+    banner_daily: Any, identity_columns: list[str]
+) -> int:
+    """날짜를 합산했을 때 클릭이 노출보다 많은 배너를 센다.
+
+    **클릭 ≤ 노출은 일자 칸에서 성립하지 않는다.** 세션이 자정을 넘으면 노출은
+    앞날, 클릭은 뒷날에 찍혀 뒷날 칸이 노출 0 · 클릭 1 이 된다 — 2026-09-22 운영
+    배치에서 brand 6218 · P421996 · trait_source=explore 가 그랬고, 앞날(09-19)
+    같은 배너에 노출 3 · 클릭 2 가 있었다.
+
+    세션 안에서 짝이 맞는지는 `banner_click_matches_impression_trait_source` 가
+    따로 본다. 여기서는 날짜만 걷어내 본다 — 자정을 넘긴 건이 상쇄되고, 노출
+    없는 클릭은 그대로 남는다.
+    """
+
+    from pyspark.sql import functions as F
+
+    return (
+        banner_daily.groupBy(*identity_columns)
+        .agg(
+            F.sum("click_count").alias("_clicks"),
+            F.sum("impression_count").alias("_impressions"),
+        )
+        .where(F.col("_clicks") > F.col("_impressions"))
+        .count()
+    )
 
 
 COHORT_COLLAPSED_GRAIN = ["snapshot_week_kst", "cohort_key", "metric_name"]
@@ -2156,7 +2191,6 @@ def validate_frames(
         F.col("click_count").isNull()
         | F.col("impression_count").isNull()
         | F.col("skip_count").isNull()
-        | (F.col("click_count") > F.col("impression_count"))
         | (F.col("skip_count") < 0)
         | (
             (F.col("impression_count") == 0)
@@ -2174,6 +2208,22 @@ def validate_frames(
         "banner_daily_counts_and_ctr_are_valid",
         invalid_banner_counts == 0,
         f"invalid_rows={invalid_banner_counts}",
+    ))
+    # **클릭 ≤ 노출은 일자 칸에서 성립하지 않는다.** 세션이 자정을 넘으면 노출은
+    # 앞날, 클릭은 뒷날에 찍혀 뒷날 칸이 노출 0 · 클릭 1 이 된다 — 2026-09-22 운영
+    # 배치에서 brand 6218 · P421996 · trait_source=explore 가 그랬고, 앞날(09-19)
+    # 같은 배너에 노출 3 · 클릭 2 가 있었다.
+    #
+    # 세션 안에서 짝이 맞는지는 `banner_click_matches_impression_trait_source` 가
+    # 따로 본다. 여기서는 **날짜를 합산해** 본다 — 자정을 넘긴 건이 상쇄되고,
+    # 노출 없는 클릭은 그대로 남는다.
+    banner_identity = [c for c in banner_grain if c != "event_date_kst"]
+    over_clicked = _over_clicked_banner_count(banner_daily, banner_identity)
+    checks.append(_check(
+        "banner_clicks_do_not_exceed_impressions",
+        over_clicked == 0,
+        f"over_clicked_banners={over_clicked}; 날짜를 합산해 본다 "
+        "(세션이 자정을 넘으면 일자 칸에서는 클릭이 노출보다 많을 수 있다)",
     ))
     invalid_banner_values = banner_daily.where(
         F.col("banner_value_is_valid").isNull()

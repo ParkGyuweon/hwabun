@@ -224,6 +224,8 @@ interface StoredSession {
   persona_key: string | null;
   sequence_no: number;
   impressed: string[];
+  /** 이 세션에 상세를 본 상품. 새로고침 뒤에도 재조회(`revisit`)를 가르려면 같이 살려야 한다. 옛 저장본에는 없다 */
+  viewed: string[];
 }
 
 function loadStoredSession(): StoredSession | null {
@@ -237,6 +239,7 @@ function loadStoredSession(): StoredSession | null {
       persona_key: typeof v.persona_key === 'string' ? v.persona_key : null,
       sequence_no: v.sequence_no,
       impressed: Array.isArray(v.impressed) ? v.impressed.filter((x): x is string => typeof x === 'string') : [],
+      viewed: Array.isArray(v.viewed) ? v.viewed.filter((x): x is string => typeof x === 'string') : [],
     };
   } catch {
     return null;
@@ -252,7 +255,7 @@ let sequenceNo = restoredSession?.sequence_no ?? 0;
 
 function persistSession(personaKey: string | null): void {
   try {
-    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts] };
+    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts], viewed: [...viewedProducts] };
     window.sessionStorage.setItem(SESSION_STORE_KEY, JSON.stringify(v));
   } catch {
     /* 저장 못 해도 이번 페이지 안에서는 그대로 동작한다 */
@@ -352,6 +355,16 @@ export const IMPRESSION_VISIBLE_RATIO = 0.5;
  */
 const impressedProducts = new Set<string>(restoredSession?.impressed ?? []);
 
+/**
+ * 이 세션에 `product_view` 를 남긴 상품. 같은 상품 상세로 화면 안에서 다시 돌아오면 `in_app` 대신 `revisit` 을 단다
+ * (계약 §3.4, 데이터 파트 요청 2026-09-23).
+ *
+ * 상세에서 담기 → 장바구니 열기 → 닫기면 상세가 다시 열리며 `product_view` 가 한 번 더 나간다. `in_app` 이면 새 진입과
+ * 구분이 안 돼 마트의 `detail_entry_rate` 가 노출 1 · 조회 3 = 300% 가 됐다. 실사용자 세션 5건 중 1건꼴이다.
+ * 뒤로가기(`history_back`)·새로고침(`reload`)과 같은 재조회라 마트가 같은 방식으로 `product_view_count` 에서 뺀다.
+ */
+const viewedProducts = new Set<string>(restoredSession?.viewed ?? []);
+
 /** 노출을 남긴 쪽이 알려 준다 (useImpression). 세션이 바뀌면 비워진다. 새로고침에는 남는다 */
 export function markProductImpressed(productId: string | null | undefined): void {
   if (!productId || impressedProducts.has(productId)) return;
@@ -391,6 +404,7 @@ export function startSession(personaId: string | null, productId: string | null 
   sequenceNo = 0;
   firedOnceKeys.clear();
   impressedProducts.clear();
+  viewedProducts.clear();
   pendingEntry = null;
   setLoggerContext({ personaId, productId });
 
@@ -442,6 +456,8 @@ function trackProductView(
       impression_origin: 'implied_by_direct_view',
     });
   }
+  // 로그를 안 내는 판매자·운영자 세션에는 기록하지 않는다. 로그아웃 뒤 첫 조회가 재조회로 찍히면 안 된다
+  if (!isStaffSession()) viewedProducts.add(productId);
   track('product_view', {
     product_id: productId,
     navigation_source: navigationSource,
@@ -492,8 +508,10 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
   setLoggerContext({ productId });
   const entry = pendingEntry;
   pendingEntry = null;
-  track('page_view', { product_id: productId, navigation_source: navigationSource });
-  trackProductView(productId, navigationSource, entry);
+  // 화면 안 이동인데 이 세션에 이미 본 상품이면 재조회다. page_view 와 product_view 에 같은 값을 단다 (계약 §3.4)
+  const source = navigationSource === 'in_app' && productId !== null && viewedProducts.has(productId) ? 'revisit' : navigationSource;
+  track('page_view', { product_id: productId, navigation_source: source });
+  trackProductView(productId, source, entry);
 }
 
 /**

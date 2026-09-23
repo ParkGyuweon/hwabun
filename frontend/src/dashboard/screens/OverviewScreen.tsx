@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchSellerPulse } from '../../lib/shopApi';
+import { fetchSellerFeedback, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerPulse } from '../../lib/shopApi';
 import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
@@ -12,6 +12,7 @@ import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline }
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
+import type { Feedback } from '../../types/feedback';
 
 /**
  * 개요 (명세 §2-1). 역피라미드: 결론 한 줄 → 근거 배지 → 범용 지표(접힘).
@@ -62,8 +63,29 @@ export default function OverviewScreen({
   const top = insights[0];
   const rest = insights.slice(1, 4);
 
+  /*
+   * 서버 피드백(GET /api/seller/feedback) + 이 브라우저에서 쓴 글. 고객의 말 화면과 같은 규칙이다.
+   * 전에는 브라우저 저장본만 읽어서, 서버에 의견이 쌓여 있어도 이 카드는 "아직 없음" 이었다 (2026-09-23 명세 대조).
+   */
   const all = useFeedback();
-  const fb = useMemo(() => (brandName ? feedbackForBrand(all, brandName) : []), [all, brandName]);
+  const [remote, setRemote] = useState<{ brand: string; rows: Feedback[] } | null>(null);
+  useEffect(() => {
+    const brandId = loadBrandId();
+    if (!brandId || !brandName) return;
+    let alive = true;
+    void fetchSellerFeedback(brandId, brandName).then((rows) => {
+      if (alive && rows) setRemote({ brand: brandName, rows });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [brandName]);
+  const fb = useMemo(() => {
+    const local = brandName ? feedbackForBrand(all, brandName) : [];
+    const server = remote && remote.brand === brandName ? remote.rows : [];
+    const seen = new Set(local.map((f) => f.feedback_id));
+    return [...server.filter((f) => !seen.has(f.feedback_id)), ...local];
+  }, [all, remote, brandName]);
   const fbTop = useMemo(() => {
     const map = new Map<string, number>();
     for (const f of fb) for (const l of labelsOf(f)) map.set(l.category_id, (map.get(l.category_id) ?? 0) + 1);

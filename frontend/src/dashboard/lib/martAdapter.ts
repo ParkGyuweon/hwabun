@@ -139,14 +139,20 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
   };
 }
 
-function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: boolean } {
+function toProducts(p: ProductsPayload, brandProducts: Product[] = []): { rows: ProductMetrics[]; diagnostics: boolean } {
+  /*
+   * 이름표는 번들 카탈로그 + 이 브랜드의 서버 상품. 번들에만 기대면 사장님이 쇼핑몰에 새로 등록한 상품이
+   * 마트에는 잡혀도 여기서 버려져 상품 화면·관심 상품 TOP5·퀵룩 합계에서 빠졌다 (2026-09-23 명세 대조).
+   * 같은 id 면 서버 것이 이긴다 — 이름·가격을 사장님이 고쳤을 수 있다.
+   */
   const byId = new Map<string, Product>(catalogProducts.map((c) => [c.product_id, c]));
+  for (const b of brandProducts) byId.set(b.product_id, b);
   let anyDiag = false;
 
   const base = p.products
     .map((r) => {
       const product = byId.get(r.product_id);
-      if (!product) return null; // 카탈로그에 없는 상품은 이름을 못 붙인다. 등록 카탈로그 동기화가 붙으면 여기서 찾는다
+      if (!product) return null; // 번들에도 서버 목록에도 없는 상품(판매 중지 등)은 이름을 못 붙인다
       const f = r.funnel;
       const impressions = r.product_impression_count;
       const clicks = r.product_click_count;
@@ -398,7 +404,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
   // E2 먼저. 개요의 퀵룩 합계와 성분 보유 판정에 상품이 필요하다
   let quickLooks = base.overview.quickLooks;
   if (pr) {
-    const { rows, diagnostics } = toProducts(pr);
+    const { rows, diagnostics } = toProducts(pr, brandProducts);
     // 행이 0 개여도 그대로 쓴다. "아직 아무도 안 봤다" 는 사실이고, 모의 상품 목록으로 덮으면 사실이 사라진다
     out = { ...out, productMetrics: rows };
     src.products = 'real';

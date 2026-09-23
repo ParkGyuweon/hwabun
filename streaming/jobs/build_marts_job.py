@@ -642,10 +642,17 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
             "text_copy",
         ),
     )
+    # **`user_id` 는 묶음 기준이 아니다.** 한 세션 안에서 바뀌기 때문이다 — 비회원으로
+    # 둘러보다 중간에 로그인하면 앞은 NULL, 뒤는 계정 id 다. 기준에 넣으면 한 여정이
+    # 두 행으로 갈려, 실제로는 상세까지 간 세션이 "노출에서 이탈" 한 행을 하나 더
+    # 만든다 (2026-09-22 운영 배치 실측 8행, 전부 actor_type='user').
+    # 계약 grain 도 session_id + product_id 다 (Q5 `funnel_session_grain_is_unique`).
+    #
+    # 대표값은 `min` 으로 고른다. `first` 는 파티션 도착 순서를 타서 계정이 둘 이상인
+    # 세션에서 실행마다 값이 달라진다 — 결정성 검사가 그 자리를 잡는다 (§4.4).
     grouped = stage_events.groupBy(
         "session_id",
         "product_id",
-        "user_id",
         "persona_id",
         "scenario_id",
         "simulation_run_id",
@@ -653,6 +660,7 @@ def _build_funnel_session_fact(stage_events: Any, time_zone: str) -> Any:
         "actor_type",
         "source",
     ).agg(
+        F.min("user_id").alias("user_id"),
         F.first("category_id", ignorenulls=True).alias("category_id"),
         F.first("brand_id", ignorenulls=True).alias("brand_id"),
         F.min(
@@ -822,13 +830,13 @@ def _product_daily_kpi(
         count_events("banner_impression"),
         count_events("product_click"),
         count_events("quick_look"),
-        # 뒤로가기 재조회를 뺀 새 진입만 센다 (§4.1). detail_entry_rate 의
-        # 분자라, 재조회를 포함하면 노출보다 조회가 많아질 수 있다.
+        # 재조회(뒤로가기·새로고침)를 뺀 새 진입만 센다 (§4.1).
+        # detail_entry_rate 의 분자라, 재조회를 포함하면 노출보다 조회가 많아진다.
         F.sum(
             F.when(
                 (F.col("event_name") == F.lit("product_view"))
                 & ~F.coalesce(
-                    F.col("navigation_source") == F.lit(HISTORY_BACK_NAVIGATION),
+                    F.col("navigation_source").isin(*REVISIT_NAVIGATION_SOURCES),
                     F.lit(False),
                 ),
                 F.lit(1),
@@ -2041,10 +2049,19 @@ EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
 
 # 퀵룩 창을 닫은 이유 중 "상세로 넘어갔다" 를 뜻하는 값
 # (event-properties-schema.md §3.5).
-# 뒤로가기 재조회. 새 진입이 아니라 같은 상세를 다시 연 것이라 건수 집계에서
-# 뺀다 (프론트 확정 2026-09-17). 세션 dedup 지표에는 영향이 없다 — 어차피
-# 같은 세션이라 countDistinct 가 한 번만 센다.
-HISTORY_BACK_NAVIGATION = "history_back"
+# 재조회. 새 진입이 아니라 같은 상세를 다시 연 것이라 건수 집계에서 뺀다.
+# 세션 dedup 지표에는 영향이 없다 — 어차피 같은 세션이라 countDistinct 가
+# 한 번만 센다.
+#
+# `history_back` 은 뒤로가기 (프론트 확정 2026-09-17).
+# `reload` 는 새로고침으로 같은 세션을 이어 쓸 때의 조회다 (프론트 !441·3802391,
+# 계약 event-properties-schema.md §3.4). 노출은 세션 단위 중복 방지로 한 번만
+# 나가는데 조회만 또 나가서, 빼지 않으면 같은 세션에서 노출 1 · 조회 2 가 되어
+# `detail_entry_rate` 가 1 을 넘는다.
+#
+# **`direct` 는 빼면 안 된다.** 목록을 안 거친 진짜 첫 진입이고 생성기가
+# 1,845건 낸다. 그래서 프론트가 새로고침에 값을 따로 뒀다.
+REVISIT_NAVIGATION_SOURCES = ("history_back", "reload")
 
 # 찜 토글에서 "추가" 를 뜻하는 action 값 (event-properties-schema §4.5).
 WISHLIST_ADD_ACTION = "add"
