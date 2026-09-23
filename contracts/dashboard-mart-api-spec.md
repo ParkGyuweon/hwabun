@@ -278,7 +278,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 | 합산 수량 | `content_daily_kpi` (dw-schema §4.4) `product_id`·일자 합산 | **마트 생김** (0.3). `dwell_ms_sum` 은 마트 규칙대로 `content_interest_fact` 기준 — `section_dwell_agg` 와 동시에 더하지 않는다 |
 | `product_view_sessions` | 같은 마트의 분모 컬럼. **`content_kind` 축으로 합산하지 않는다** | content_kind 마다 같은 값이 되는 것이 정상. 아래 참고 |
 | `avg_dwell_ms_per_session` | `dwell_ms_sum / product_view_sessions` 재계산 | 화면의 "얼마나 오래 읽나" |
-| `view_rate` | `section_view_sessions / product_view_sessions` | 화면의 "몇 명이 봤나". 마트에 없어 서버가 만든다 |
+| `view_rate` | `section_view_sessions / product_view_sessions` | 화면의 "몇 명이 봤나". 마트에 없어 서버가 만든다. **1.0 을 넘는다 — 아래 경고** |
 | `conversion` | `{ viewed_sessions, viewed_cart_sessions, viewed_cart_rate, cart_lift }` — `content_conversion_daily` (dw-schema §4.19) | **마트 생김** (0.3). `viewed_cart_rate` 까지가 마트 값이고 **`cart_lift` 는 서버가 나눈다** (아래) |
 | `brand` | `brand_daily_kpi` 합산 | lift 의 분모. `view_to_cart_rate` 는 E1 과 같은 식(`/ detail_view_sessions`) |
 | `behaviors` | `[{ event, done_sessions, not_done_sessions, done_cart_rate, not_done_cart_rate }]` — `behavior_conversion_daily` (dw-schema §4.20) · event ∈ `ingredient_view_mode_change`·`review_filter_apply`·`accordion_toggle`·`text_copy` | **마트 생김** (0.3). 0건이어도 행이 온다 (아래) |
@@ -289,6 +289,24 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 행이 `ingredient_view_sessions = 0` 을 달고 나와 "아무도 성분을 안 봤다" 로 읽히기 때문이다.
 `avg_dwell_ms_per_session`·`ingredient_view_rate`·`review_view_rate` 가 전부 이 분모를 쓴다. 서버는 이 셋을
 **`content_kind` 중 아무 행의 값(전부 같다)** 으로 내보내고, 다른 컬럼만 합산한다.
+
+**⚠️ `view_rate` 는 1.0 을 넘는다. 지금 마트로는 정확히 낼 수 없다** (2026-09-23 실측:
+브랜드×종류 191개 조합이 100% 초과, 최대 149.8%. `ssafy-beauty` 성분 목록 100.8%).
+원인 둘과 고치는 방법은 **`dw-schema.md` §4.4-1 이 정본**이다. 요지만 적으면,
+
+- **분모에 Quick Look 이 빠졌다.** 섹션은 Quick Look 에서도 읽히는데 `product_view_sessions` 는
+  상품 상세만 센다. 위 `view_to_cart_rate` 가 같은 이유로 분모를 `detail_view_sessions` 로
+  바꾼 것과 **같은 문제다** — 그때 담기율만 고치고 이쪽은 남았다. §4.21 `friction_daily` 는
+  `detail_view_sessions` 를 써서 24,720행 위반 0 이다
+- **`section_view_sessions` 는 `section_id` 를 가로질러 합산할 수 없다.** 세션 수를 더하면
+  같은 사람을 여러 번 센다. `ingredient_list` 가 섹션 2개(`about_product`·`ingredients`)에
+  걸쳐서 그 종류만 이 원인이 겹친다. 반대로 `section_id=product_hero` 하나에 `content_kind` 가
+  넷이다 — **두 축은 다대다다**
+
+**분자를 잘라 맞추지 말 것.** `section_view_sessions` 를 `product_view` 모집단으로 제한하면
+위반은 사라지지만 `product_hero` 가 1,845 세션에서 0 이 되어 "아무도 대표 이미지를 안 봤다"
+가 화면에 뜬다. 화면에서 100% 로 자르는 것도 권하지 않는다 — 값이 왜 낮은지 아무도 모르게
+된다. **컬럼 둘을 더하는 것이 해결이고 시연 후 과제다** (§4.4-1).
 
 **`cart_lift` 는 마트에 없다 — 서버가 나눈다.**
 
