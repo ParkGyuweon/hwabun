@@ -1495,6 +1495,7 @@
   opacity: 1;
   cursor: not-allowed;
   pointer-events: none;
+}
 
 /* ---------- 로그 창 · 시연용 보강 (2026-09-22) ---------- */
 
@@ -1511,17 +1512,7 @@
   border-radius: 50%;
   background: var(--color-brand);
   box-shadow: 0 0 0 3px rgb(168 201 110 / 0.35);
-  animation: log-panel-live 1.4s ease-in-out infinite;
-}
-
-@keyframes log-panel-live {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+  /* 깜빡임은 뺐다 — 발표 화면에서 정신없다 (2026-09-23, 상단 띠와 같은 결정) */
 }
 
 .log-panel__muted {

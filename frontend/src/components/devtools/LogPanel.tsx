@@ -3,7 +3,7 @@ import { clearHistory, getHistory, isSuppressed, subscribe } from '../../lib/log
 import type { LogEnvelope } from '../../types/log';
 
 /**
- * 개발·QA·시연용 로그 창 (우하단). `?dev=1` 로 켠다 (lib/devtools).
+ * 개발·QA·시연용 로그 창 (우하단). 쇼핑몰에 늘 뜬다 (2026-09-23, 전에는 `?dev=1` 일 때만).
  *
  * 트리거가 의도한 순간에만 한 번씩 발생하는지 눈으로 확인하려고 만들었고, 발표에서는 "고객이 움직일 때마다
  * 로그가 우르르 찍힌다" 를 보여 주는 자리다 (유림님 2026-09-22). 그래서

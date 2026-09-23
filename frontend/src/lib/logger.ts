@@ -527,7 +527,7 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   // 판매자·운영자의 행동은 고객 행동이 아니다. 만들어서 화면 로그 창에는 보여 주되 **쌓지도 보내지도 않는다**
   const suppressed = isStaffSession();
   if (suppressed) {
-    if (import.meta.env.DEV && !staffNoticeShown) {
+    if (!staffNoticeShown) {
       staffNoticeShown = true;
       console.info('[log] 판매자·운영자 세션이라 행동 로그를 보내지 않습니다 (로그아웃하면 다시 보냅니다)');
     }
@@ -622,6 +622,12 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     listener(event);
   }
 
+  /*
+   * 브라우저 개발자 도구 콘솔에도 찍는다. 배포 빌드에서도 켠다 — 전에는 개발 서버에서만 찍혀서 배포 사이트의
+   * 콘솔에는 아무것도 안 떠 "로그가 안 찍힌다" 로 보였다 (2026-09-23 유림님). 서버로 안 나가는 줄은 표시한다
+   */
+  console.info(`[log] ${eventName}${suppressed ? ' (판매자 로그인 중 · 서버로 안 보냄)' : ''}`, event);
+
   // 판매자·운영자 세션: 화면 로그 창까지만. 성향 누적·전송 큐에는 넣지 않는다
   if (suppressed) return;
 
@@ -629,9 +635,6 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   ingestForTrait(eventName, event.properties);
 
   queue.push(event);
-
-  // 개발 중 확인용. 화면에서는 LogPanel 이 같은 내용을 보여준다
-  if (import.meta.env.DEV) console.info(`[log] ${eventName}`, event);
 
   // 전환은 배치를 기다리지 않는다 (§2-1). 백오프 중이면 그대로 예약으로 떨어진다 —
   // 수집 서버가 죽어 있을 때 전환마다 요청을 쏘면 폭주 방지가 무너진다
