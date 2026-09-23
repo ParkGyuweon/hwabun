@@ -283,7 +283,7 @@ export default function DashboardApp() {
 
         <div className="sidebar__foot">
           {/* 인앱 알림함. 판매자는 새 의견 알림을 받는다 — 누르면 고객의 말 화면으로 */}
-          <NotificationBell role="SELLER" onOpen={() => setScreen('feedback')} />
+          <NotificationBell role="SELLER" placement="above" onOpen={() => setScreen('feedback')} />
           {seller ? (
             <div className="sidebar__account">
               <span className="sidebar__account-name" title={seller.email}>

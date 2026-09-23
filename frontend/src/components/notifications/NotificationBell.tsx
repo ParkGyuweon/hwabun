@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
 import type { AccountRole } from '../../lib/auth';
 import { fetchNotifications, fetchUnreadCount, markAllNotificationsRead, markNotificationRead } from '../../lib/shopApi';
@@ -17,14 +19,21 @@ import '../../styles/auth.css';
  * 판매자는 새 의견. 알림을 누르면 `onOpen` 이 화면을 옮기고(회원은 상품 상세, 판매자는 피드백 화면) 읽음으로 남긴다.
  *
  * 로그인 전에는 아무것도 그리지 않는다. 받아 둔 목록·배지는 세션 id 에 묶어 두어, 재로그인하면 이전 사람 것이 안 보인다.
+ *
+ * `placement="above"` 는 대시보드 사이드바 발 부분용이다. 사이드바는 `overflow-y: auto` 에 `backdrop-filter` 까지 있어
+ * 안에 둔 패널은 absolute 든 fixed 든 사이드바 폭(232px)에서 잘렸다 (2026-09-23 은솔님 제보). 그래서 패널을 body 로
+ * 빼서(portal) 종 위치에 맞춰 화면 기준으로 띄운다 — 종 왼쪽 끝에 맞추고 위로 연다.
  */
 export default function NotificationBell({
   role,
   onOpen,
+  placement = 'below',
 }: {
   role: AccountRole;
   /** 알림을 눌렀을 때. 화면 이동은 호출부가 정한다 */
   onOpen: (n: AppNotification) => void;
+  /** below: 종 아래 오른쪽 맞춤(헤더). above: 종 위로, body 에 띄워 부모의 잘림을 피한다(사이드바) */
+  placement?: 'below' | 'above';
 }) {
   const session = useAuth(role);
   const sessionKey = session?.id ?? null;
@@ -40,6 +49,36 @@ export default function NotificationBell({
   const mine = state.key === sessionKey ? state : { key: sessionKey, unread: 0, items: null, open: false, failed: false };
   const patch = (p: Partial<typeof mine>) => setState((cur) => ({ ...(cur.key === sessionKey ? cur : { key: sessionKey, unread: 0, items: null, open: false, failed: false }), ...p, key: sessionKey }));
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const bellRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [floatStyle, setFloatStyle] = useState<CSSProperties | null>(null);
+
+  // above: 열려 있는 동안 종 위치를 따라간다. 사이드바가 스크롤되거나 창 크기가 바뀌면 다시 잰다
+  useLayoutEffect(() => {
+    if (placement !== 'above' || !mine.open) return;
+    const place = () => {
+      const r = bellRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const gap = 8;
+      const edge = 16;
+      setFloatStyle({
+        position: 'fixed',
+        top: 'auto',
+        right: 'auto',
+        left: r.left,
+        bottom: window.innerHeight - r.top + gap,
+        width: Math.max(240, Math.min(360, window.innerWidth - r.left - edge)),
+        maxHeight: Math.max(160, r.top - gap - edge),
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [placement, mine.open]);
 
   const refreshCount = useCallback(async () => {
     const n = await fetchUnreadCount(role);
@@ -66,7 +105,9 @@ export default function NotificationBell({
   useEffect(() => {
     if (!mine.open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) patch({ open: false });
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      patch({ open: false });
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') patch({ open: false });
@@ -125,10 +166,52 @@ export default function NotificationBell({
   if (!session) return null;
 
   const { unread, open, items, failed } = mine;
+  const panel = (
+    <div
+      ref={panelRef}
+      className={`notif__panel${placement === 'above' ? ' notif__panel--float' : ''}`}
+      style={placement === 'above' ? (floatStyle ?? undefined) : undefined}
+      role="dialog"
+      aria-label="알림"
+    >
+      <div className="notif__head">
+        <strong>알림</strong>
+        {items && items.some((x) => x.readAt === null) ? (
+          <button type="button" className="notif__readall" onClick={() => void readAll()}>
+            모두 읽음
+          </button>
+        ) : null}
+      </div>
+      {failed ? (
+        <p className="notif__empty">알림을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.</p>
+      ) : items === null ? (
+        <p className="notif__empty">알림을 받는 중입니다.</p>
+      ) : items.length === 0 ? (
+        <p className="notif__empty">아직 알림이 없습니다.</p>
+      ) : (
+        <ul className="notif__list">
+          {items.map((n) => (
+            <li key={n.notificationId}>
+              <button
+                type="button"
+                className={`notif__item${n.readAt === null ? ' is-unread' : ''}`}
+                onClick={() => void openOne(n)}
+              >
+                <span className="notif__title">{n.title}</span>
+                <span className="notif__body">{n.body}</span>
+                <span className="notif__when">{formatWhen(n.createdAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <div className="notif" ref={rootRef}>
       <button
+        ref={bellRef}
         type="button"
         className={`notif__bell${unread > 0 ? ' has-unread' : ''}`}
         aria-label={unread > 0 ? `알림 ${unread}개 안 읽음` : '알림'}
@@ -144,41 +227,7 @@ export default function NotificationBell({
         {unread > 0 ? <span className="notif__badge">{unread > 99 ? '99+' : unread}</span> : null}
       </button>
 
-      {open ? (
-        <div className="notif__panel" role="dialog" aria-label="알림">
-          <div className="notif__head">
-            <strong>알림</strong>
-            {items && items.some((x) => x.readAt === null) ? (
-              <button type="button" className="notif__readall" onClick={() => void readAll()}>
-                모두 읽음
-              </button>
-            ) : null}
-          </div>
-          {failed ? (
-            <p className="notif__empty">알림을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요.</p>
-          ) : items === null ? (
-            <p className="notif__empty">알림을 받는 중입니다.</p>
-          ) : items.length === 0 ? (
-            <p className="notif__empty">아직 알림이 없습니다.</p>
-          ) : (
-            <ul className="notif__list">
-              {items.map((n) => (
-                <li key={n.notificationId}>
-                  <button
-                    type="button"
-                    className={`notif__item${n.readAt === null ? ' is-unread' : ''}`}
-                    onClick={() => void openOne(n)}
-                  >
-                    <span className="notif__title">{n.title}</span>
-                    <span className="notif__body">{n.body}</span>
-                    <span className="notif__when">{formatWhen(n.createdAt)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
+      {open ? (placement === 'above' ? (floatStyle ? createPortal(panel, document.body) : null) : panel) : null}
     </div>
   );
 }
