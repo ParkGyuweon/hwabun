@@ -1,8 +1,8 @@
 /*
- * 발표용 상단 띠 (components/DemoBanner.tsx). `?demo=seller|shopper` 일 때만 그려진다.
+ * 발표용 상단 띠 (components/DemoBanner.tsx). 대시보드·쇼핑몰에 늘 그려진다 (`?demo=off` 로 끈다).
  *
  * 색은 HWABUN 로고의 두 색 그대로다 (index.css 팔레트) — 사장님 화면은 Fresh Green, 고객 화면은 Soft Blossom Pink.
- * 글씨는 흰색, 왼쪽 점은 천천히 깜빡여 "지금 켜져 있는 화면" 이라는 느낌을 준다 (2026-09-22 유림님).
+ * 글씨는 흰색, 왼쪽에 흰 점 하나 (움직임 없음, 2026-09-23).
  * 바탕색을 연두·핑크로 갈랐던 것(e785a72)은 되돌리고 이 띠 하나로만 가른다 (2026-09-22 유림님).
  */
 :root {
@@ -38,66 +38,11 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 0 4px rgb(255 255 255 / 0.3);
-  animation: demo-banner-blink 1.6s ease-in-out infinite;
-}
-
-@keyframes demo-banner-blink {
-  0%,
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 0 4px rgb(255 255 255 / 0.3);
-  }
-  50% {
-    opacity: 0.35;
-    box-shadow: 0 0 0 8px rgb(255 255 255 / 0.12);
-  }
 }
 
 /*
- * 조작 중(.is-active · DemoBanner.tsx 가 누르기·끌기·스크롤·타자를 받으면 1.2초 켠다).
- * 흰 빛 한 줄이 띠를 왼쪽에서 오른쪽으로 훑고 지나가고, 점은 빠르게 뛴다.
- * 두 화면을 나란히 둔 발표에서 "지금 어느 쪽을 만지는지" 가 멀리서도 보인다.
+ * 깜빡임·조작 중 흰 빛 훑기는 뺐다 — 발표 화면에서 정신없다 (2026-09-23 유림님). 점은 가만히 있다.
  */
-.demo-banner {
-  position: sticky;
-  overflow: hidden;
-}
-
-.demo-banner::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0) 35%, rgb(255 255 255 / 0.45) 50%, rgb(255 255 255 / 0) 65%, transparent 100%);
-  transform: translateX(-100%);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.demo-banner.is-active::after {
-  opacity: 1;
-  animation: demo-banner-sweep 0.9s ease-in-out infinite;
-}
-
-.demo-banner.is-active .demo-banner__dot {
-  animation: demo-banner-blink 0.5s ease-in-out infinite;
-}
-
-@keyframes demo-banner-sweep {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .demo-banner__dot,
-  .demo-banner.is-active .demo-banner__dot,
-  .demo-banner.is-active::after {
-    animation: none;
-  }
-}
 
 .demo-banner__big {
   font-size: 24px;
