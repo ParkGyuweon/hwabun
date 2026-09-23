@@ -514,16 +514,26 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
   trackProductView(productId, source, entry);
 }
 
+/**
+ * 판매자·운영자 세션이라 지금 로그를 **보내지 않는** 상태인가. 로그 창(LogPanel)이 그 사실을 적는다.
+ * 이벤트는 여전히 만들어져 화면 로그 창에는 흐른다 — 시연 때 우하단에 로그가 우르르 찍히는 것을 보여 주려면
+ * 대시보드에 로그인해 둔 같은 브라우저에서도 보여야 한다 (유림님 2026-09-22). 서버로는 한 건도 안 나간다.
+ */
+export function isSuppressed(): boolean {
+  return isStaffSession();
+}
+
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
-  // 판매자·운영자의 행동은 고객 행동이 아니다. 만들지도, 쌓지도, 보내지도 않는다
-  if (isStaffSession()) {
-    if (import.meta.env.DEV && !staffNoticeShown) {
+  // 판매자·운영자의 행동은 고객 행동이 아니다. 만들어서 화면 로그 창에는 보여 주되 **쌓지도 보내지도 않는다**
+  const suppressed = isStaffSession();
+  if (suppressed) {
+    if (!staffNoticeShown) {
       staffNoticeShown = true;
       console.info('[log] 판매자·운영자 세션이라 행동 로그를 보내지 않습니다 (로그아웃하면 다시 보냅니다)');
     }
-    return;
+  } else {
+    staffNoticeShown = false;
   }
-  staffNoticeShown = false;
   sequenceNo += 1;
   // 번호가 오른 뒤 바로 저장한다. 새로고침 뒤에도 같은 세션의 번호가 이어진다
   if (startedSessionKey !== NOT_STARTED) persistSession(startedSessionKey);
@@ -603,11 +613,6 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     properties: dropDisallowedNulls(eventName, finalProperties),
   };
 
-  // 세션 성향은 이벤트가 나가는 바로 이 자리에서 같이 누적한다 (lib/trait.ts). 지연 0
-  ingestForTrait(eventName, event.properties);
-
-  queue.push(event);
-
   history.unshift(event);
   if (history.length > HISTORY_LIMIT) {
     history.length = HISTORY_LIMIT;
@@ -617,8 +622,19 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     listener(event);
   }
 
-  // 개발 중 확인용. 화면에서는 LogPanel 이 같은 내용을 보여준다
-  if (import.meta.env.DEV) console.info(`[log] ${eventName}`, event);
+  /*
+   * 브라우저 개발자 도구 콘솔에도 찍는다. 배포 빌드에서도 켠다 — 전에는 개발 서버에서만 찍혀서 배포 사이트의
+   * 콘솔에는 아무것도 안 떠 "로그가 안 찍힌다" 로 보였다 (2026-09-23 유림님). 서버로 안 나가는 줄은 표시한다
+   */
+  console.info(`[log] ${eventName}${suppressed ? ' (판매자 로그인 중 · 서버로 안 보냄)' : ''}`, event);
+
+  // 판매자·운영자 세션: 화면 로그 창까지만. 성향 누적·전송 큐에는 넣지 않는다
+  if (suppressed) return;
+
+  // 세션 성향은 이벤트가 나가는 바로 이 자리에서 같이 누적한다 (lib/trait.ts). 지연 0
+  ingestForTrait(eventName, event.properties);
+
+  queue.push(event);
 
   // 전환은 배치를 기다리지 않는다 (§2-1). 백오프 중이면 그대로 예약으로 떨어진다 —
   // 수집 서버가 죽어 있을 때 전환마다 요청을 쏘면 폭주 방지가 무너진다
