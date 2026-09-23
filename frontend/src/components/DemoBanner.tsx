@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import '../styles/demo-banner.css';
 
 /**
@@ -8,47 +8,26 @@ import '../styles/demo-banner.css';
  * **늘 켜져 있다** (2026-09-23 유림님). 전에는 `?demo=seller|shopper` 를 붙여야만 떴는데, 주소를 챙기지 않아도
  * 기존 대시보드·쇼핑몰 주소 그대로 띠가 보이게 바꿨다. 어느 띠인지는 붙인 쪽이 `role` 로 정한다.
  *
- * 끄는 법: 주소 뒤에 `?demo=off` (캡처 등). 다시 켜기: `?demo=on`. 쇼핑몰은 상품을 누를 때 주소를 바꿔 쓰므로
- * 끈 값은 sessionStorage 에 기억해 탭을 닫을 때까지 유지한다.
+ * 쇼핑몰은 핑크, 대시보드는 연두. 끄는 스위치는 두지 않는다.
  *
  * 띠는 문서 흐름 안에 sticky 로 둔다. 화면의 다른 sticky 요소(대시보드 사이드바·쇼핑몰 헤더)는
  * demo-banner.css 가 `html[data-demo]` 아래에서 띠 높이만큼 내려 준다.
  */
 export type DemoRole = 'seller' | 'shopper';
 
-const KEY = 'hwabun.demo-banner.off';
-
 const TEXT: Record<DemoRole, { big: string; small: string }> = {
   seller: { big: '사장님 화면', small: 'HWABUN 브랜드 대시보드' },
   shopper: { big: '고객 화면', small: 'HWABUN 쇼핑몰' },
 };
 
-/** 이 탭에서 띠를 껐는가 */
-function readOff(): boolean {
-  const q = new URLSearchParams(window.location.search).get('demo');
-  try {
-    if (q === 'off') window.sessionStorage.setItem(KEY, '1');
-    else if (q !== null) window.sessionStorage.removeItem(KEY);
-    return window.sessionStorage.getItem(KEY) === '1';
-  } catch {
-    // 저장소를 못 쓰면 이번 주소만 본다
-    return q === 'off';
-  }
-}
-
-export default function DemoBanner({ role: pageRole }: { role: DemoRole }) {
-  const [off] = useState(() => readOff());
-  const role: DemoRole | null = off ? null : pageRole;
-
+export default function DemoBanner({ role }: { role: DemoRole }) {
   useEffect(() => {
-    if (!role) return;
     document.documentElement.dataset.demo = role;
     return () => {
       delete document.documentElement.dataset.demo;
     };
   }, [role]);
 
-  if (!role) return null;
   const t = TEXT[role];
   return (
     <div className={`demo-banner demo-banner--${role}`} role="note" aria-label={`${t.big} 시연`}>

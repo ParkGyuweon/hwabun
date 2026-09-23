@@ -1,5 +1,5 @@
 /*
- * 발표용 상단 띠 (components/DemoBanner.tsx). 대시보드·쇼핑몰에 늘 그려진다 (`?demo=off` 로 끈다).
+ * 발표용 상단 띠 (components/DemoBanner.tsx). 대시보드(연두)·쇼핑몰(핑크)에 늘 그려진다.
  *
  * 색은 HWABUN 로고의 두 색 그대로다 (index.css 팔레트) — 사장님 화면은 Fresh Green, 고객 화면은 Soft Blossom Pink.
  * 글씨는 흰색, 왼쪽에 흰 점 하나 (움직임 없음, 2026-09-23).

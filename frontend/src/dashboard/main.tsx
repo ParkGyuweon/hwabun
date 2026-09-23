@@ -14,7 +14,7 @@ import './storefront-preview.css';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
-    {/* 발표용 상단 띠 · 늘 켜짐 (끄려면 ?demo=off) */}
+    {/* 발표용 상단 띠 · 늘 켜짐 */}
     <DemoBanner role="seller" />
     {/* 브랜드 담당자(SELLER) 로그인 · shop_backend /api/auth */}
     <AuthGate
