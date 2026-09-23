@@ -829,12 +829,16 @@ def _with_revisit_flag(product_fact_df: Any) -> Any:
 
     is_view = F.col("event_name") == F.lit("product_view")
 
-    # 이 조회가 세션·상품 안에서 몇 번째인가. 조회가 아닌 Event 는 세지 않는다.
-    # 동률은 ``event_id`` 로 깬다 — 순서가 실행마다 흔들리면 집계도 흔들린다 (§4.4).
-    view_ordinal = F.sum(F.when(is_view, F.lit(1)).otherwise(F.lit(0))).over(
+    # 세션·상품 안에서 "첫 조회" 를 하나 고르고, 그보다 뒤면 재조회다. 순서를
+    # 매기는 창(window) 대신 최솟값을 쓴다 — `min` 은 도착 순서와 무관해서 정렬
+    # 없이도 결정적이다. `product_daily_kpi_is_deterministic_from_inputs` 가
+    # Mart 를 재계산해 비교하므로, 여기가 흔들리면 그 검사가 깨진다 (§4.4).
+    #
+    # 같은 시각이 둘이어도 `event_id` 가 뒤에서 갈라 준다. 시각만 보면 둘 다
+    # "첫 조회" 가 되어 재조회가 하나도 안 걸러진다.
+    view_key = F.when(is_view, F.struct(F.col("event_time"), F.col("event_id")))
+    first_view_key = F.min(view_key).over(
         Window.partitionBy("session_id", "product_id")
-        .orderBy(F.col("event_time").asc(), F.col("event_id").asc())
-        .rowsBetween(Window.unboundedPreceding, Window.currentRow)
     )
 
     labeled_revisit = F.coalesce(
@@ -844,7 +848,7 @@ def _with_revisit_flag(product_fact_df: Any) -> Any:
     # 두면 두 번째 조회에서 조건이 NULL 로 번져 새 진입도 아니고 재조회도 아닌 상태가
     # 되고, `when` 이 그 행을 조용히 0 으로 떨어뜨린다.
     repeated_in_app_view = F.coalesce(
-        (view_ordinal > F.lit(1))
+        (view_key > first_view_key)
         & (F.col("navigation_source") == F.lit(IN_APP_NAVIGATION)),
         F.lit(False),
     )

@@ -100,14 +100,14 @@ class DiagnosticMartSparkTest(unittest.TestCase):
 
     @staticmethod
     def _fact(session, event_name, close_reason=None, product="P1", brand="B1",
-              seeded=False, action=None, navigation_source=None):
+              seeded=False, action=None, navigation_source=None, at=None):
         seq = next(_EVENT_SEQ)
         return (
             date(2026, 9, 8), brand, product, "C1", session, "U-" + session,
             event_name, close_reason, action, navigation_source,
             None, None, None, None,
             "user", "web", None, None, None, seeded,
-            f"E{seq:06d}", datetime(2026, 9, 8) + timedelta(seconds=seq),
+            f"E{seq:06d}", at or datetime(2026, 9, 8) + timedelta(seconds=seq),
         )
 
     def _events(self, rows):
@@ -618,6 +618,43 @@ class DiagnosticMartSparkTest(unittest.TestCase):
         ])
 
         self.assertEqual(2, _product_daily_kpi(facts).first()["product_view_count"])
+
+    def test_revisit_judgement_ignores_row_order(self):
+        """행이 어떤 순서로 도착해도 같은 답이 나와야 한다.
+
+        `product_daily_kpi_is_deterministic_from_inputs` 가 Mart 를 재계산해
+        `exceptAll` 로 비교한다. 재조회 판정이 파티션 도착 순서를 타면 그 검사가
+        깨진다 — 그래서 순서를 매기는 창 대신 `min` 으로 첫 조회를 고른다.
+        """
+        events = [
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="in_app"),
+            self._fact("S1", "product_view", navigation_source="in_app"),
+        ]
+
+        forward = _product_daily_kpi(self._facts(events)).first()
+        backward = _product_daily_kpi(self._facts(list(reversed(events)))).first()
+
+        self.assertEqual(1, forward["product_view_count"])
+        self.assertEqual(forward["product_view_count"], backward["product_view_count"])
+
+    def test_views_at_the_same_instant_still_leave_one_new_entry(self):
+        """시각이 같아도 `event_id` 가 갈라 준다.
+
+        시각만 보면 둘 다 "첫 조회" 가 되어 재조회가 하나도 안 걸러지고, 노출 1 ·
+        조회 2 로 `detail_entry_rate` 가 2.0 이 된다.
+        """
+        same = datetime(2026, 9, 8, 3, 0, 0)
+        facts = self._facts([
+            self._fact("S1", "product_impression"),
+            self._fact("S1", "product_view", navigation_source="in_app", at=same),
+            self._fact("S1", "product_view", navigation_source="in_app", at=same),
+        ])
+
+        row = _product_daily_kpi(facts).first()
+
+        self.assertEqual(1, row["product_view_count"])
+        self.assertEqual(1.0, row["detail_entry_rate"])
 
     def test_missing_navigation_source_counts_as_a_new_entry(self):
         """값이 없는 옛 로그는 재조회로 보지 않는다."""
