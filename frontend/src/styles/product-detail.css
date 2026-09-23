@@ -1496,3 +1496,57 @@
   cursor: not-allowed;
   pointer-events: none;
 }
+
+/* ---------- 로그 창 · 시연용 보강 (2026-09-22) ---------- */
+
+.log-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 살아 있다는 표시. 새 줄이 올 때마다 목록이 위에서 밀려 내려오는 것과 함께 읽힌다 */
+.log-panel__live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  box-shadow: 0 0 0 3px rgb(168 201 110 / 0.35);
+  /* 깜빡임은 뺐다 — 발표 화면에서 정신없다 (2026-09-23, 상단 띠와 같은 결정) */
+}
+
+.log-panel__muted {
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.log-panel__caret {
+  margin-left: auto;
+}
+
+.log-panel__empty {
+  display: block;
+  padding: var(--space-3);
+  color: var(--color-ink-faint);
+}
+
+/* 새 줄은 위에 꽂히며 잠깐 연두로 빛난다 */
+.log-panel__list li {
+  animation: log-panel-in 0.9s ease-out;
+}
+
+@keyframes log-panel-in {
+  from {
+    background: rgb(168 201 110 / 0.35);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .log-panel__live,
+  .log-panel__list li {
+    animation: none;
+  }
+}
