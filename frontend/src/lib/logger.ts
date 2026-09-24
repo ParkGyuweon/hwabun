@@ -365,6 +365,17 @@ const impressedProducts = new Set<string>(restoredSession?.impressed ?? []);
  */
 const viewedProducts = new Set<string>(restoredSession?.viewed ?? []);
 
+/**
+ * 직전 `product_view` 이후에 `product_click` 이 있었던 상품. 이런 상품은 이미 본 상품이어도 **새 진입**(`in_app`)이다
+ * (데이터 파트 요청 2026-09-23 오후).
+ *
+ * 처음엔 "이 세션에 본 적 있으면 전부 revisit" 이었는데, 목록으로 돌아가 같은 카드를 다시 누른 것까지 묶였다. 그건 카드를
+ * 다시 봤으니 노출도 같이 늘어나는 새 진입이다 (실측: 재조회 후보 109건 중 105건이 바로 앞에 product_click).
+ * 추천 카드도 `recommendation_click` 과 함께 `product_click` 을 내므로 이것 하나로 가른다. 상세를 열면 비운다.
+ * 새로고침은 `reload` 로 따로 가르므로 저장하지 않는다.
+ */
+const clickedSinceView = new Set<string>();
+
 /** 노출을 남긴 쪽이 알려 준다 (useImpression). 세션이 바뀌면 비워진다. 새로고침에는 남는다 */
 export function markProductImpressed(productId: string | null | undefined): void {
   if (!productId || impressedProducts.has(productId)) return;
@@ -405,6 +416,7 @@ export function startSession(personaId: string | null, productId: string | null 
   firedOnceKeys.clear();
   impressedProducts.clear();
   viewedProducts.clear();
+  clickedSinceView.clear();
   pendingEntry = null;
   setLoggerContext({ personaId, productId });
 
@@ -458,6 +470,7 @@ function trackProductView(
   }
   // 로그를 안 내는 판매자·운영자 세션에는 기록하지 않는다. 로그아웃 뒤 첫 조회가 재조회로 찍히면 안 된다
   if (!isStaffSession()) viewedProducts.add(productId);
+  clickedSinceView.delete(productId);
   track('product_view', {
     product_id: productId,
     navigation_source: navigationSource,
@@ -508,8 +521,12 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
   setLoggerContext({ productId });
   const entry = pendingEntry;
   pendingEntry = null;
-  // 화면 안 이동인데 이 세션에 이미 본 상품이면 재조회다. page_view 와 product_view 에 같은 값을 단다 (계약 §3.4)
-  const source = navigationSource === 'in_app' && productId !== null && viewedProducts.has(productId) ? 'revisit' : navigationSource;
+  // 화면 안 이동인데 이 세션에 이미 본 상품이고, 그 뒤로 카드를 다시 누르지 않았으면 재조회다.
+  // page_view 와 product_view 에 같은 값을 단다 (계약 §3.4)
+  const source =
+    navigationSource === 'in_app' && productId !== null && viewedProducts.has(productId) && !clickedSinceView.has(productId)
+      ? 'revisit'
+      : navigationSource;
   track('page_view', { product_id: productId, navigation_source: source });
   trackProductView(productId, source, entry);
 }
@@ -630,6 +647,9 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
 
   // 판매자·운영자 세션: 화면 로그 창까지만. 성향 누적·전송 큐에는 넣지 않는다
   if (suppressed) return;
+
+  // 카드를 눌렀다 — 곧 열릴 상세는 이미 본 상품이어도 새 진입이다 (위 clickedSinceView)
+  if (eventName === 'product_click' && targetProductId) clickedSinceView.add(targetProductId);
 
   // 세션 성향은 이벤트가 나가는 바로 이 자리에서 같이 누적한다 (lib/trait.ts). 지연 0
   ingestForTrait(eventName, event.properties);
