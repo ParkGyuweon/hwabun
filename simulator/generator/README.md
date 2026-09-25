@@ -79,7 +79,7 @@ python simulator/generator/gen_behavior_logs.py --limit 50 --post http://localho
 # 3) 부하 조절 — 초당 200건
 python simulator/generator/gen_behavior_logs.py --limit 500 --post http://localhost:8080 --rps 200
 
-# 4) 전원 10,000명 (약 590만건 / 3GB)
+# 4) 전원 9,900명 (약 1,030만건 / 6.9GB)
 python simulator/generator/gen_behavior_logs.py --post http://localhost:8080 --rps 2000
 ```
 
@@ -99,6 +99,15 @@ python simulator/generator/gen_behavior_logs.py --post http://localhost:8080 --r
 | `--exposure {popular_v0,cbf_v1}` | **무엇이 화면에 노출되는가** (아래) | `popular_v0` |
 | `--recommend-url URL` | **추천 서버 연동** (Jira 221, 아래 절). 목록마다 실제 추천을 받아 그 식별자로 이벤트를 만든다 | 없음 |
 | `--banner-slots N` · `--reserved N` · `--hero top\|new_brand` | 추천 서버에 요청할 배너 칸 수 · 전용 배너 칸 수 · 히어로 정책 (Jira 237). 화면이 히어로 하나라 기본이 1 · 0 · new_brand (Jira 239) | 1 · 0 · new_brand |
+| `--behavior {rule,hidden_preference}` | 행동을 무엇이 정하는가 (위 절). 평가용은 `hidden_preference` | `rule` |
+| `--pref-profile NAME` · `--pref-seed N` | hidden preference 가중치 조합 · 잡음 seed (강건성 평가용) | `default` · 0 |
+| `--include-agents` | PA 100명도 생성 (맨 위 — 재생에는 넣지 않는다) | 제외 |
+| `--scenario-id` · `--simulation-run-id` · `--generator-type` | 실행 메타데이터 | `normal_day` · UTC 시각 · `python_batch` |
+| `--no-banner-events` | `banner_impression`/`banner_click` 을 내지 않는다 (Jira 212) | 냄 |
+| `--no-quick-look` | Quick Look 동선을 끈다 (A/B 대조군) | 켬 |
+| `--allow-ctr-grain-violations` | grain 단위 노출<클릭 을 경고만 하고 통과 (Jira 358) | 중단 |
+| env `GEN_NOW` | 기준 시각. **한국 시각으로 읽는다**(`today` = 오늘 12:00, `2026-09-17`, `2026-09-17T09:30:00`). 시연 캐시를 만들 때만 준다 — 없으면 고정 시각이라 마트가 06-04~08-28 에 쌓여 대시보드 14일 창에서 안 보인다. 이벤트 `occurred_at` 은 UTC(`Z`)로 나간다 | 고정 시각 |
+| env `GEN_ENGAGED_DEPTH_MIN` · `GEN_ENGAGED_RULE` | 정독 판정 깊이 · `depth\|target` 롤백 스위치 (Jira 376) | 75 · `depth` |
 
 `--post` 와 `--out` 은 같이 쓸 수 있다. 전송하면서 파일로도 남는다.
 
@@ -113,7 +122,7 @@ python simulator/generator/gen_behavior_logs.py --recommend-url http://localhost
 
 | 화면 | 없을 때 | 있을 때 |
 |---|---|---|
-| 목록의 맞춤 기획전 행 | 인기순 10개, 노출 이벤트 없음 | 서버 `items` 10개. `recommendation_snapshot`(list_id `main`) 1건 + 칸마다 `recommendation_impression`. 식별자·`algorithm`(`ltr-369t-…`)은 응답 그대로 |
+| 목록의 맞춤 기획전 행 | 인기순 10개, 노출 이벤트 없음 | 서버 `items` 10개. `recommendation_snapshot`(list_id `main`) 1건 + 칸마다 `recommendation_impression`. 식별자·`algorithm`(`ltr-239t-2026-09-16`)은 응답 그대로 |
 | 히어로 배너 1칸 (2026-09-10, Jira 239 — 배너 행 6칸은 기획 검토로 화면에서 빠짐) | 리뷰가 가장 적은 상품을 new_brand 히어로로, `banner_axes_v0` | 서버 `hero` 그대로(`hero=new_brand`: 신규 상품 중 점수 최고) — `banner_slot` 1·`list_id` `hero_banner`·`banner_type`·`banner_value`(null 키 유지)·`trait_source`·`policy_version`(프론트 bannerConfig 와 같은 값). 응답 `banners[]` 는 화면에 없어 쓰지 않는다 |
 | 클릭 | 이번 상품을 배너에 끼워 넣고 누른다 | **서버가 실제로 노출한 상품** 중에서 고른다 — 배너(`p_banner_click`) 또는 메인 카드(`p_rec_click`). 노출과 같은 `recommendation_id`·칸 번호 |
 | 세션 상태 | — | 목록을 열기 전에 그동안의 행동을 `POST /api/events` 로 서버에 넘긴다 → 다음 추천이 그 행동을 반영(`state_source=events`) |
@@ -127,8 +136,10 @@ python simulator/generator/gen_behavior_logs.py --recommend-url http://localhost
 | 대상 | 페르소나 | 이벤트 | 생성 시간 | 파일 |
 |---|---:|---:|---:|---:|
 | 맛보기 | 50 | 약 2만 | 1초 미만 | 10MB |
-| 중간 | 1,000 | 약 59만 | 5초 | 300MB |
-| 전원 (`--include-agents`) | 10,000 | 약 590만 | 50초 | 3GB |
+| 중간 | 1,000 | 약 71만 | 21초 | 714MB |
+| 전원 | 9,900 | 약 1,030만 | 1분 (RSS 12GB) | 6.9GB |
+
+1,000·9,900 행은 KRW 시연 캐시 실측(09-16, `docs/ai/live-demo-runbook.md` §3).
 
 전송은 100건씩 배치로 나간다(백엔드 `EventBatchRequest` 의 `@Size(max = 100)`).
 **전원을 제한 없이 보내면 59,000회 요청**이 나가므로, 처음에는 `--limit` 과 `--rps` 로
@@ -159,7 +170,6 @@ Kafka 가 안 떠 있으면 백엔드가 발행을 기다리다 **25초쯤 뒤�
 
 로컬에서 백엔드만 띄우고(Kafka 없이) 실제로 쏴본 결과 **503 KAFKA_UNAVAILABLE** 이 나왔다.
 `ActivityEvent` 검증을 전부 통과하고 발행 단계에서만 막혔다는 뜻이다.
-**Kafka 를 띄운 상태에서 202 가 나오는 것은 아직 확인하지 못했다.**
 
 ## 데이터 출처
 
@@ -224,6 +234,12 @@ python simulator/generator/build_persona_style.py
    `seed:` 긍정 시드는 계약대로 **조회 없이 담기만** 그대로다 — 마트는 seeded 를 빼고 추천 입력의 시드 표현도 안 바뀐다.
 6. **담기 6곳 전부 가격 속성** (Jira 342, 09-17) — Quick Look 담기(`entry_source=quick_look`)만 `price_props` 가 빠져 관측 담기의 38% 가 `unit_price` NULL 로
    적재되던 것을 고쳤다. USD 면 `price_usd`, KRW 면 `unit_price`+`currency`. 테스트 `test_every_add_to_cart_carries_price_props` 가 지킨다.
+7. **성분 드래그** (Jira 351) — 성분 섹션에서 `text_selection` 을 낸다. 사전은 `contracts/product-feature-vocab.json` 하나를 프론트와 같이 쓰고,
+   `matched_ingredients` 는 그 상품이 실제로 가진 성분에서만 고른다(`ingredient_weekly_interest` 마트가 explode 한다).
+8. **사용법 아코디언 `content_kind=usage_guide`** (Jira 364) — 실제 화면과 같은 값. 없어서 대시보드 콘텐츠 화면의 '사용법' 행이 비던 것.
+9. **결제는 이 세션에서 담은 것만** (Jira 371) — 앞선 방문에서 담은 것은 장바구니에 남되 사지 않는다. 안 가르면 결제일에 담기 세션이 0 인
+   (상품, 날짜) 행이 생겨 funnel·고객군 마트 불변식이 깨졌다.
+10. **정독 판정 = 조회 깊이 75 이상** (Jira 376) — 성분 모드 전환·아코디언·드래그 같은 미세 상호작용은 이 세션에서만 난다. 예전엔 target 여부로 갈랐다(`GEN_ENGAGED_RULE=target` 로 되돌림).
 
 모든 synthetic Event의 `properties`에는 `scenario_id`, `simulation_run_id`,
 `generator_type`이 포함된다. 기본 시나리오는 `normal_day`, 생성 방식은
