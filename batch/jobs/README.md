@@ -1,10 +1,10 @@
 # batch/jobs — 인코딩 · 학습 · 추천기 (학습과 서빙이 같은 코드)
 
-설계 문서: `docs/ai/recommendation-design.md` · 평가: `docs/ai/evaluation-framework.md` (대표 지표 부록 W: 42.15 / 43.15%).
+설계 문서: `docs/ai/recommendation-design.md` · 평가: `docs/ai/evaluation-framework.md` (대표 지표: holdout_a 43.80 / holdout_b 42.45% — 09-16 가중 코사인 20피처, 이전 19피처 42.15 / 43.15).
 
 | 파일 | 역할 |
 |---|---|
-| `product_encoder.py` | 상품 → 148차원 벡터 (어휘집 `contracts/product-feature-vocab.json` 0.5). 성분은 전성분 위치 가중만 쓴다 — highlights 성분 태그는 안 쓴다(계약 §3.1, 09-10). SPF 는 전성분에 자차가 없으면 제품명 `SPF nn` 으로 켠다 |
+| `product_encoder.py` | 상품 → 148차원 벡터 (어휘집 `contracts/product-feature-vocab.json` 0.7). 성분은 전성분 위치 가중만 쓴다 — highlights 성분 태그는 안 쓴다(계약 §3.1, 09-10). SPF 는 전성분에 자차가 없으면 제품명 `SPF nn` 으로 켠다 |
 | `user_vector.py` · `behavior_weights.py` | 행동 이벤트 → 사용자 벡터. 가중치의 단일 소스는 `frontend/src/types/log.ts` |
 | `persona_feature.py` | 속성 친화도 `AffinityTable` (`affinity_lift.csv`), 표기 정규화(`lightMedium→light`, `brunette→brown`, `Grey→gray`). 서버의 쿼리 속성 검증도 같은 표를 쓴다 |
 | `build_cooc.py` · `cf_bonus` | CF 동시발생. 홀드아웃 페르소나는 `personas_*.json` glob 으로 자동 제외 |
@@ -24,5 +24,5 @@
 
 ```bash
 cd <레포 루트>
-PYTHONPATH=. python -m unittest discover -s batch/jobs -p "test_*.py"     # 98 (2026-09-11)
+PYTHONPATH=. python -m unittest discover -s batch/jobs -p "test_*.py"     # 102 (2026-09-25)
 ```

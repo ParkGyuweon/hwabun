@@ -4,7 +4,7 @@
 
 | 스크립트 | 만드는 것 |
 |---|---|
-| `build_feature_vocab.py` | `contracts/product-feature-vocab.json` (어휘집 0.5) · 폼 라벨 |
+| `build_feature_vocab.py` | `contracts/product-feature-vocab.json` (어휘집 0.7) · 폼 라벨 |
 | `build_affinity_lift.py` | `data/affinity_lift.csv` (속성 × 상품 친화도, 리뷰 844,865건) |
 | `build_reviews_100.py` | 상품당 리뷰 100건 층화 추출 (원천 458,217건, 평균 = 화면 별점 200/200) — 2026-09-10 |
 | `merge_reviews_ko.py` | 번역본 검수 A~G → `contracts/localization/reviews-ko.json` (20,000건, `--allow` 로 사람이 본 id 통과) |

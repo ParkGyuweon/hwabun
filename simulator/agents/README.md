@@ -47,8 +47,9 @@ python simulator/agents/agent_runner.py --limit 10 \
   shop_backend 시드). 로그인이 없으면 프론트가 서버 주문을 `!member` 로 막아 결제까지 못 간다.
 - `checkout` 은 장바구니 → 주문하기 → 주문 완료 → 구매 사유 설문(응답 70% · 건너뛰기 30%, 생성기와 같은 값)을
   한 동선으로 누르고 **세션을 끝낸다**. 담은 것이 1개 이상이고 상세를 3개 이상 본 뒤에만 열린다 (leave 와 같은 문턱).
-- 전제: 프론트에 결제 키(`VITE_PORTONE_*`)가 **없어야** 한다. 키가 있으면 카카오페이 창이 떠서 에이전트가 넘지 못한다.
-  키 없는 프론트는 `/api/orders/{id}/pay` 로 PAID 표시(테스트 주문)가 되고 `purchase` 이벤트 모양은 같다.
+- 결제: 러너 브라우저는 `navigator.webdriver` 가 참이라 프론트가 결제창 대신 `/api/orders/{id}/pay`(테스트 주문, PAID 표시)로 간다
+  (`frontend/src/lib/payment.ts`). 그래서 결제 키가 있는 배포본에서도 주문이 끝난다. 백엔드는 `TEST_PAY_ALLOWED_MEMBER_PREFIX`(배포 `PA`)로
+  PA 회원만 받는다. `purchase` 이벤트 모양은 카카오페이와 같고 `payment_method=test` 만 다르다.
 - `sort_list` 는 세션당 한 번, target 은 화면의 정렬 이름(인기순 · 평점 높은순 · 가격 낮은순 · 가격 높은순).
 - `buy_now`(Jira 333): 상세의 바로구매 버튼(`data-log-action="buy_now"`, 프론트 09-16). 프론트가 `add_to_cart → begin_checkout`(entry_source=buy_now)을 연속으로 남기고 주문 확인으로 가며, 러너는 그 뒤를 `checkout` 과 같은 꼬리(주문 완료 → 설문)로 잇는다. 문턱은 checkout 과 같다. `?pay=test` 는 프론트가 `navigator.webdriver` 로 자동 판별해 러너 URL 은 바꾸지 않는다.
 - `click_banner`: 목록 위 히어로 배너(AdBanner)가 보이면 화면 텍스트에 `[배너] 브랜드 · 배지 · 문구` 한 줄로 실리고
@@ -60,6 +61,25 @@ python simulator/agents/agent_runner.py --limit 10 \
 python simulator/agents/agent_runner.py --checkout --limit 1     --script click_product,add_to_cart,back_to_list,click_product,back_to_list,click_product,back_to_list,checkout
 ```
 
+## 09-17 이후 추가된 행동·옵션
+
+| 항목 | 내용 |
+|---|---|
+| `write_feedback` | 상세를 40% 이상 읽은 뒤 상품당 한 번 열리는 의견 남기기. 구매와 무관(09-17 결정). 주문 직후에도 확률 0.6(`FEEDBACK_AFTER_ORDER_P`)으로 한 번 더 |
+| 피드백 축 | 러너에 베껴 두지 않고 `contracts/feedback-category-vocab.json` 에서 읽는다(Jira 367). 라벨이 어긋나 0건이던 것. 못 남긴 횟수를 실행 요약에 센다 |
+| `select_text` | 상세 성분 섹션(`[data-log-section="ingredients"]`)을 펴고 성분명을 긁는다 → 프론트가 `text_selection` 을 남긴다. 대시보드 드래그 TOP 10·처방이 읽는 값(Jira 363) |
+| 주문 직후 리뷰 | 행동이 아니라 주문 직후 단계. 확률 `REVIEW_AFTER_ORDER_P` 0.8 로 마이페이지 모달에서 쓴다(Jira 360) |
+| `--product PRODUCT_ID` · `--min-details N` | 전원이 그 상품 상세에서 시작 · 구매 문턱(기본 3)을 낮춤. 재구매 시연 데이터 전용(Jira 362) |
+| `--entry auto\|list\|detail` | 시작 화면 고정. 기본 auto 는 페르소나마다 무작위 |
+| `--post-timeout N` | 수집 API 응답 대기 초(기본 40). Kafka 가 없으면 25초쯤 뒤 503 |
+
+## 화면 대기·복구 (09-22)
+
+- `goto` 는 `domcontentloaded` + 셀렉터 대기(`goto_ready`, 목록 `.card[data-product-id]` · 상세 담기 버튼)다(Jira 407). 예전 `networkidle` 은
+  재생(/live)이 초당 수천 건을 쏘는 동안 오지 않아, 화면이 다 그려져 있어도 시간제한까지 버티다 실패했다(09-17 100명이 LLM 0회로 종료).
+- 목록 복구는 헤더 홈 버튼으로 화면 안에서 이동한다(`return_to_list`, Jira 410). `goto` 로 전체를 다시 열면 프론트 로거 `sessionId` 가
+  새로 발급돼 한 사람이 3~4 세션으로 쪼개졌다. 버튼이 없거나 목록이 안 그려질 때만 `goto` 로 물러난다.
+
 ## 정렬 문구는 중립 · 배너 대조군 `--no-banner` — Jira 326, 2026-09-16
 
 - 파일럿(20명 × 2조건)에서 `sort_list` 30회가 **전부 '가격 낮은순'** 이었다. 프롬프트가 "가격이 신경 쓰이면 가격 낮은순…" 예시를 든 탓.
@@ -68,7 +88,7 @@ python simulator/agents/agent_runner.py --checkout --limit 1     --script click_
   노출 A/B 의 대조군. 배너 노출 로그(`recommendation_impression`, `list_id=hero_banner`)는 두 조건 모두 프론트가 남긴다.
 - 파일럿 결과(배포 서버, 09-16): 배너를 본 20명 중 **6명 클릭(30%), 4명은 첫 화면에서**, 배너 상품 상세 4·찜 1·담기 1.
   전체 담기는 85 vs 89 로 같고 찜은 34 vs 62(n=20, 잡음 범위). 클릭 이유는 전부 "새 브랜드 신상품". 데이터는 레포 밖(Research/banner-ab-20260916).
-- 배포 프론트에는 09-16 부터 포트원 키가 있어 `checkout` 이 카카오페이 창에서 멈춘다 → 프론트 `?pay=test` 스위치(`navigator.webdriver` 자동 판별)는 09-17 11:00 !271 로 dev 에 머지됐고, 배포 브랜치(ec2-1-deploy) 반영·재배포는 대기(!286). 그 전엔 배포본 실행은 결제 없이(`--checkout` 빼고). 배포되면 `--checkout --limit 1` 로 E2E 1명 먼저.
+- 배포 프론트에는 09-16 부터 포트원 키가 있다. 프론트 `?pay=test` 스위치(`navigator.webdriver` 자동 판별, !271)가 들어가 러너는 배포본에서도 테스트 결제로 주문을 끝낸다. 처음 돌릴 때는 `--checkout --limit 1` 로 E2E 1명 먼저.
 
 ## 페르소나가 행동을 이끄는가 — `--prefer-category`
 
@@ -201,9 +221,11 @@ PA00001 로 기록됐습니다.
 
 근본 수정은 프론트가 `?persona=` 를 읽는 것이었고, 제안 패치가
 **적용됐습니다** (`Research/handoff/frontend-persona-url-param.md` → dev `10dd3b3`).
-러너는 아직 화면을 먼저 열고 페르소나를 고르는 순서라 `LogSink` 게이트를 그대로
-둡니다 — 게이트는 배치 전송으로 섞여 오는 남의 이벤트도 같이 막습니다.
-러너가 `?persona=` 로 바로 들어가게 바꾸는 것은 별건입니다.
+러너도 이제 진입 주소에 `?persona=` 를 싣고 들어가(Jira 372), 첫 화면 아바타로
+적용됐는지 확인되면(`persona_matches`) 첫 화면부터 게이트를 엽니다. 딥링크 상세의
+`product_view` 가 버려지던 것이 이것으로 풀렸습니다. 드롭다운 전환(또는 `--checkout`
+회원 로그인)은 그 뒤에도 그대로 합니다. `LogSink` 게이트는 배치 전송으로 섞여 오는 남의 이벤트를
+막으려고 그대로 둡니다.
 
 **2026-09-03 이전 로그는 이 오염을 안고 있습니다.** 사람 단위로 재려면
 `--exclude=PA00001` 로 빼십시오.

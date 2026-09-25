@@ -132,7 +132,7 @@ sudo docker compose exec -T nginx nginx -s reload
 - **볼륨은 이미지 갱신으로 안 바뀐다.** `/data/registered_products.jsonl` 은 최초 배포 때 값이 그대로다 (09-15: SB 8개 price_krw 가 옛 1,400 환산값).
   shop-backend 가 떠 있으면 카탈로그 동기화가 백엔드 원화값으로 덮어쓴다. 급하면
   `sudo docker cp /home/ubuntu/dev-build/batch/ingest/data/serving/registered_products.jsonl ec2-1-recommend-1:/data/ && sudo docker restart ec2-1-recommend-1`.
-- dev 의 compose 에 없는 서비스(shop-backend·mysql, `ec2-1-deploy` 브랜치)가 떠 있으면 `Found orphan containers` 경고가 난다. 정상이고 건드리지 않는다. `--remove-orphans` 를 붙이지 않는다.
+- shop-backend·mysql 은 이제 dev compose 에도 들어 있다. 그 밖에 compose 에 없는 컨테이너가 떠 있어 `Found orphan containers` 경고가 나면 정상이고 건드리지 않는다. `--remove-orphans` 를 붙이지 않는다.
 
 수동으로 할 때 (EC2 안에서):
 
@@ -147,7 +147,7 @@ sudo docker compose --env-file /home/ubuntu/S15P21A306/deploy/ec2-1/.env exec re
 | 항목 | 값 |
 | --- | --- |
 | 포트 | 8300, 컨테이너 네트워크 안에서만 (`expose`). 인증이 없어 외부에 열지 않는다 |
-| 백엔드 → 추천 | `RECOMMEND_URL=http://recommend:8300` — 읽는 쪽은 백엔드 프록시 브랜치 `feat/recommendation-proxy-mvp`(dev 미머지, 2026-09-14). dev 의 `backend/`(수집기)는 이 값을 쓰지 않는다 |
+| 백엔드 → 추천 | `RECOMMEND_URL=http://recommend:8300` — 읽는 쪽은 shop_backend `RecommendationClient`(프록시 `feat/recommendation-proxy-mvp` dev 머지 완료). dev 의 `backend/`(수집기)는 이 값을 쓰지 않는다 |
 | 추천 실시간 현황 | `GET /live`(시연용 페이지)·`/live/stats` — 내부 전용. 밖에 보이려면 nginx `location = /live` · `location /live/` → `http://recommend:8300` 한 블록 추가 (Jira 295) |
 | 추천 신규 규칙 | `NEW_BRAND_DAYS=14` · `NEW_BRAND_ALWAYS_PREFIX=SB` — SSAFY Beauty 8개는 09-23 이후에도 신규(히어로 `new_brand` 후보) 로 남는다 (Jira 249) |
 | 기동 시간 | 첫 요청 전 모델·페르소나 로드 약 4~10초. `start_period` 40초 뒤 헬스체크 |
@@ -156,7 +156,8 @@ sudo docker compose --env-file /home/ubuntu/S15P21A306/deploy/ec2-1/.env exec re
 | 모델 교체 | `batch/ingest/data/serving/ltr_model.pkl` 을 바꾸고 이미지를 다시 빌드. `requirements.txt` 의 scikit-learn 버전이 학습 버전과 같아야 한다 |
 | 행동 유입 | `KAFKA_BOOTSTRAP_SERVERS`(백엔드와 같은 값)가 있으면 `activity-events` 를 group `recommend-state-v1` 로 구독해 세션 상태를 초 단위로 갱신 (Jira 226). Spark 와 별도 group. `/health.kafka_state` 의 `connected`·`lag`·`last_processed_at` 확인 (Jira 232: `connected` 가 브로커 다운 중에도 true 로 남던 버그 수정, 로컬 실측 소비 약 35,000건/초). 비우면 `POST /api/events` 만 |
 
-nginx 는 `/api/` 를 `backend`(수집기) 8080 으로만 보낸다. 추천 경로는 쇼핑몰 백엔드(shop_backend)가 프록시하는 형태로
-확정됐고(요청서 §5, 프록시 브랜치 `feat/recommendation-proxy-mvp` 는 2026-09-11 기준 dev 미머지) nginx 에는 따로 열지 않는다.
+nginx(`deploy/nginx/default.conf`) 경로: `= /api/events` → `backend`(수집기) 8080, `= /api/prescription` · `= /api/headline` → `recommend` 8300
+(대시보드 문장, IP 당 분당 6회 제한, Jira 365), 나머지 `/api/` → `shop-backend` 8090. 추천(`/api/recommend`)은 shop_backend 가 프록시하므로
+nginx 에 따로 열지 않는다(요청서 §5). 처방 LLM 스위치 `/api/prescription/llm` 과 `/live` · `/pipeline` 은 열려 있지 않다.
 로컬 개발은 Vite 프록시(`frontend/vite.config.ts`)가 8300 으로 직결한다. 임시로 직접 열어야 하면 `location /api/recommend { proxy_pass http://recommend:8300; }`
 를 `/api/` 앞에 두면 된다.
