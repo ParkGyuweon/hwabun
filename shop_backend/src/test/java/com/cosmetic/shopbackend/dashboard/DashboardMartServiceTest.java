@@ -42,6 +42,33 @@ class DashboardMartServiceTest {
     service = new DashboardMartService(dw, provider(dw));
   }
 
+  @Test
+  @DisplayName("가격 위치 API는 카테고리 중앙값을 쓰고 표본 3개 미만이면 전체 중앙값을 쓴다")
+  void pricePositionUsesCatalogMedianAndFallback() {
+    dw.execute("create table product (product_id varchar(64),brand_id varchar(64),product_name varchar(100),secondary_category varchar(64),status varchar(16))");
+    dw.execute("create table product_variant (product_id varchar(64),price_krw decimal(18,2),status varchar(16))");
+    dw.update("insert into product values ('P1',?,'mine','Serums','ACTIVE')", BRAND);
+    dw.update("insert into product values ('P2','other','other-1','Serums','ACTIVE')");
+    dw.update("insert into product values ('P3','other','other-2','Serums','ACTIVE')");
+    dw.update("insert into product values ('P4',?,'mine-2','Masks','ACTIVE')", BRAND);
+    dw.update("insert into product_variant values ('P1',20000,'ACTIVE')");
+    dw.update("insert into product_variant values ('P2',10000,'ACTIVE')");
+    dw.update("insert into product_variant values ('P3',30000,'ACTIVE')");
+    dw.update("insert into product_variant values ('P4',50000,'ACTIVE')");
+
+    List<?> products = (List<?>) service.pricePosition(SELLER, BRAND).get("products");
+    Map<?, ?> first = (Map<?, ?>) products.get(0);
+    Map<?, ?> second = (Map<?, ?>) products.get(1);
+    assertEquals(2, products.size());
+    assertEquals("category", first.get("reference_source"));
+    assertEquals(20000D, decimal(first.get("reference_median_krw")));
+    assertEquals(0D, decimal(first.get("price_difference_pct")));
+    assertEquals("global_fallback", second.get("reference_source"));
+    assertEquals(25000D, decimal(second.get("reference_median_krw")));
+    assertEquals(100D, decimal(second.get("price_difference_pct")));
+    assertThrows(ResponseStatusException.class, () -> service.pricePosition("other-seller", BRAND));
+  }
+
   /* ---------------------------------------------------------------- E1 overview */
 
   @Test
@@ -318,6 +345,7 @@ class DashboardMartServiceTest {
     ));
 
     Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
+    assertEquals(cohort, service.cohortPosition(SELLER, BRAND, FROM, TO, "all").get("cohort"));
     Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
 
     assertEquals("2-3|105k+", cohort.get("cohort_key"));

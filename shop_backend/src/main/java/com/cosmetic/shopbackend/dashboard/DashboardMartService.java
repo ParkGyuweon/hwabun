@@ -1,11 +1,14 @@
 package com.cosmetic.shopbackend.dashboard;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,6 +88,81 @@ public class DashboardMartService {
       brandId,
       brandId,
       brandId
+    );
+  }
+
+  /** Compare each active product's list price with its category median. */
+  public Map<String, Object> pricePosition(String seller, String brand) {
+    owns(seller, brand);
+    // The category DW reference is Parquet-only. Use the same base-price median
+    // rule over the live catalog so this endpoint needs no new DW projection.
+    List<Map<String, Object>> catalog = shopJdbc.queryForList(
+      "select p.product_id,p.brand_id,p.product_name,p.secondary_category," +
+        "min(case when v.status='ACTIVE' and v.price_krw>0 then v.price_krw end) price_krw " +
+        "from product p left join product_variant v on v.product_id=p.product_id " +
+        "where p.status='ACTIVE' " +
+        "group by p.product_id,p.brand_id,p.product_name,p.secondary_category order by p.product_id"
+    );
+    Map<String, List<BigDecimal>> pricesByCategory = new LinkedHashMap<>();
+    List<BigDecimal> allPrices = new ArrayList<>();
+    for (Map<String, Object> product : catalog) {
+      BigDecimal price = decimalOrNull(product.get("price_krw"));
+      if (price == null) continue;
+      pricesByCategory.computeIfAbsent(String.valueOf(product.get("secondary_category")), ignored -> new ArrayList<>()).add(price);
+      allPrices.add(price);
+    }
+    BigDecimal globalMedian = median(allPrices);
+    List<Map<String, Object>> comparisons = new ArrayList<>();
+    for (Map<String, Object> product : catalog) {
+      if (!brand.equals(product.get("brand_id"))) continue;
+      List<BigDecimal> categoryPrices = pricesByCategory.getOrDefault(String.valueOf(product.get("secondary_category")), List.of());
+      boolean sufficient = categoryPrices.size() >= 3;
+      BigDecimal price = decimalOrNull(product.get("price_krw"));
+      BigDecimal categoryMedian = median(categoryPrices);
+      BigDecimal reference = sufficient ? categoryMedian : globalMedian;
+      Map<String, Object> row = new LinkedHashMap<>(product);
+      row.remove("brand_id");
+      row.put("currency", "KRW");
+      row.put("category_product_count", categoryPrices.size());
+      row.put("category_median_krw", categoryMedian);
+      row.put("reference_median_krw", reference);
+      row.put("reference_source", sufficient ? "category" : "global_fallback");
+      row.put("is_sample_sufficient", sufficient);
+      row.put("price_difference_pct", price == null || reference == null || reference.signum() <= 0 ? null :
+        price.subtract(reference).multiply(BigDecimal.valueOf(100)).divide(reference, 2, RoundingMode.HALF_UP));
+      comparisons.add(row);
+    }
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("brand_id", brand);
+    response.put("currency", "KRW");
+    response.put("products", comparisons);
+    return response;
+  }
+
+  private static BigDecimal median(List<BigDecimal> values) {
+    if (values.isEmpty()) return null;
+    List<BigDecimal> sorted = new ArrayList<>(values);
+    Collections.sort(sorted);
+    int middle = sorted.size() / 2;
+    return sorted.size() % 2 == 1 ? sorted.get(middle) :
+      sorted.get(middle - 1).add(sorted.get(middle)).divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+  }
+
+  private static BigDecimal decimalOrNull(Object value) {
+    return value == null ? null : new BigDecimal(value.toString());
+  }
+
+  /** Expose the same anonymized cohort position used by the segments dashboard. */
+  public Map<String, Object> cohortPosition(String seller, String brand, String from, String to, String actor) {
+    Read read = open(seller, brand, from, to, actor);
+    CohortResult result = read.optional("brand_cohort_dim", () -> cohort(read, read.q));
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("cohort", result == null ? null : result.body());
+    return read.envelope(
+      List.of("brand_cohort_dim", "commons_cohort_weekly", "brand_daily_kpi"),
+      result != null,
+      result == null ? null : result.processedAt(),
+      body
     );
   }
 
