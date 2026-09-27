@@ -91,12 +91,17 @@ const COLLECT_ENDPOINT = '/api/events';
 /**
  * 브랜드 담당자(SELLER)·운영자(ADMIN)가 이 브라우저에 로그인해 있으면 쇼핑몰 행동 로그를 **보내지 않는다**
  * (결정 2026-09-11). 그 사람은 고객이 아니다. 자기 상품을 점검하려고 상세를 열고 담아 보는 행동이 대시보드
- * 지표·추천·성향에 섞이면 안 된다. MEMBER 로도 같이 로그인해 있어도 막는다 — 같은 사람이다.
+ * 지표·추천·성향에 섞이면 안 된다.
+ *
+ * 단, 쇼핑몰에 회원(MEMBER)으로 로그인해 있으면 고객으로 보고 보낸다 (2026-09-27). 시연에서 같은 브라우저에
+ * 대시보드를 로그인해 둔 채 회원으로 쇼핑하면 로그가 서버로 안 나가 실시간 화면이 멈췄다. 시크릿 창도 시크릿 창끼리
+ * localStorage 를 공유해 피할 수 없었다. 비로그인으로 둘러보는 판매자·운영자는 지금처럼 막힌다.
  *
  * 로그인 여부는 이벤트가 만들어지는 순간마다 본다. 대시보드에서 로그아웃하면 다음 이벤트부터 다시 나간다.
  */
 function isStaffSession(): boolean {
   try {
+    if (sessionSnapshot('MEMBER') !== null) return false;
     return sessionSnapshot('SELLER') !== null || sessionSnapshot('ADMIN') !== null;
   } catch {
     return false;
