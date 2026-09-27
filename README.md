@@ -124,17 +124,18 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - 추천 점수. 콘텐츠 유사도에 페르소나 속성 친화도 4,000행과 CF 동시발생(200×200)을 얹고 LTR 로 결합합니다. 트리 239개·피처 20개, 학습 5,954명 231,005행. 학습과 서빙이 `ltr_features.py` 를 같이 씁니다.
 - 노출 정책. MMR 다양성, 신규 브랜드 전용 슬롯, 콜드스타트 폴백. `regenerate_all.py` 가 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
 - 평가 축 3개 분리. 오프라인 leave-last-out, 리뷰 이력 순차 재생, 동적 시뮬레이션. 홀드아웃 2세트(각 2,000명)로 a 에서 고르고 b 에서 확인합니다.
-- 추천 서버 `batch/serving/` 8300, 라우트 20개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장, 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/pipeline`
+- 추천 서버 `batch/serving/` 8300, 라우트 23개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장·한 마디(`/api/headline`), 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/live/users`·`/pipeline`
 - 실시간 상태. `activity-events` 를 별도 컨슈머 그룹으로 구독해 세션 상태를 초 단위로 갱신하고, DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다.
 - 시뮬레이터. 페르소나 9,900명 합성 로그(약 1,049만 건)와 LLM 에이전트 100명. 에이전트는 Playwright 로 실제 브라우저를 띄워 프론트 로거를 그대로 탑니다. 성향 6축이 "어떻게 보는가"만 바꾸고 "무엇을 고르는가"에는 관여하지 않습니다.
 - 고객 피드백 분류. 축 5종은 고객이 고르고 분류기는 그 축 안 카테고리 20종에서만 고릅니다. 사람 정답 50건 대비 F1 94.3, 금지어 599개 대조
 - 상품 등록 계약·어휘집·한국어 폼 라벨, 배너 축 6종, 상품·리뷰 한국어화, 백엔드 적재용 테이블 6종과 DDL
 
-LLM 을 쓰는 곳은 셋이고 경로가 다릅니다.
+LLM 을 쓰는 곳은 넷이고 경로가 다릅니다.
 
 | 무엇 | 경로 | 실행 형태 |
 | --- | --- | --- |
 | 대시보드 처방 문장 | 추천 서버 `POST /api/prescription` → GMS | 서비스 안, 런타임 스위치로 on/off |
+| 대시보드 한 마디 | 추천 서버 `POST /api/headline` → GMS | 서비스 안, 처방 스위치를 같이 따르고 꺼지면 규칙 문장 |
 | 고객 피드백 분류 | 추천 서버 `POST /api/feedback/classify` → GMS · 배치는 `classify_feedback.py` → GMS 직접 | 서비스 안(백엔드 배치가 호출) · 오프라인 CLI |
 | 에이전트 PA | `agent_runner.py` → GMS 직접 | 오프라인 CLI |
 
@@ -338,16 +339,18 @@ S15P21A306/
 │   │   ├── eval_persona_feature.py · eval_dynamic.py · eval_review_replay.py · eval_cbf_flow.py
 │   │   ├── eval_metadata.py · persona_split.py · hidden_preference.py
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 를 직접 읽는 가중치 로더
-│   └── serving/                           ★ 추천 추론 서버 8300 (테스트 11 파일)
+│   └── serving/                           ★ 추천 추론 서버 8300 (테스트 13 파일)
 │       ├── recommend_server.py                FastAPI 진입점
 │       ├── banners.py                         hero·배너 조립
 │       ├── prescription.py                    대시보드 처방 문장 (LLM)
+│       ├── headline.py                        대시보드 화면·섹션별 한 마디 (LLM)
+│       ├── feedback_classify.py               고객 피드백 분류 서빙
 │       ├── catalog_sync.py                    쇼핑몰 백엔드 ACTIVE 상품 동기화
 │       ├── catalog_registry.py                등록 입력 → 계약 검사 → 인코딩 → 카탈로그 편입
 │       ├── session_store.py                   세션 상태 영속화·재생
 │       ├── kafka_state.py                     activity-events 구독 → 상태 실시간 갱신
 │       ├── user_trait.py                      DW user_trait_daily → long_term_trait
-│       ├── live_stats.py · pipeline_stats.py  시연 화면 /live · /pipeline
+│       ├── live_stats.py · pipeline_stats.py  시연 화면 /live · /live/users · /pipeline
 │       ├── bench_recommend.py · e2e_smoke.py  응답 시간 실측, E2E 스모크
 │       └── requirements.txt
 │

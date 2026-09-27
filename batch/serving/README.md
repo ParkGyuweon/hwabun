@@ -1,6 +1,6 @@
 # batch/serving — 추천 추론 서버 (FastAPI, 8300)
 
-계약 `contracts/recommendation-io-spec.md` §5 의 **참조 구현이자 정본**. 모델이 sklearn pickle 이고 피처 19개를 다른 언어로
+계약 `contracts/recommendation-io-spec.md` §5 의 **참조 구현이자 정본**. 모델이 sklearn pickle 이고 피처 20개를 다른 언어로
 다시 짜면 순위가 조용히 어긋나므로 점수는 파이썬이 내고, 쇼핑몰 백엔드는 프록시한다 (프록시 09-14 dev 머지, hero·가입 속성 4개 통과).
 EC2-1 에 컨테이너로 배포됨 (`deploy/ec2-1`, 09-15 dev 최신 이미지 · 어휘집 0.7). 재배포는 `deploy/ec2-1/redeploy-local.sh` 한 줄.
 
@@ -24,14 +24,17 @@ curl "http://127.0.0.1:8300/api/recommend?persona_id=PA00001&size=10&banner_slot
 
 | 파일 | 역할 |
 |---|---|
-| `recommend_server.py` | 엔진(Engine)·엔드포인트. `/api/recommend` `/api/events` `/api/products` `/api/prescription` `/api/catalog/sync` `/api/sessions/compact` `/health` |
+| `recommend_server.py` | 엔진(Engine)·엔드포인트. `/api/recommend` `/api/events` `/api/products` `/api/prescription` `/api/headline` `/api/feedback/classify` `/api/catalog/sync` `/api/sessions/compact` `/health` · 시연용 `/live` `/live/users` `/pipeline` |
 | `banners.py` | hero·배너 조립, 축 값(concern·ingredient·clean·price_bin·category·segment), `reason` 단일 key. 현행 화면은 히어로 1칸 `hero=new_brand` (Jira 237). 히어로 `banner_type` 은 요청 `axes` 순서, 1순위 축에 성향이 없으면 상품 자신 값 + `trait_source=coldstart`, `hero_policy_version=hero-2026-09-15` (Jira 304·307). price_bin 은 원화 경계(어휘집 0.7) |
 | `catalog_registry.py` | 등록 상품(`POST /api/products`) 검증·인코딩·영속 (Jira 216/219) |
 | `catalog_sync.py` | 쇼핑몰 `GET /api/products` 를 읽어 편입·갱신·중단 (Jira 222, `SHOP_BACKEND_URL`) |
 | `kafka_state.py` | `activity-events` 소비자 — 수동 commit·event_id dedupe·health (Jira 226/232, 로컬 실측 ~35,000건/초) |
 | `session_store.py` | 상태 이벤트 로그 append·재기동 시 재생 (Jira 224) |
 | `user_trait.py` | 장기 성향 `user_trait_daily` 조회 → 응답 `long_term_trait` (Jira 306). dw MySQL(`DW_MYSQL_HOST`) → 스냅샷 → null. 시작 적재·5분 재적재. 신선도 `age_days`·`stale`(2일)·TTL 14일 → null (Jira 319) |
-| `prescription.py` | 대시보드 처방 문장 v0.3 (Jira 220/225, GMS) |
+| `prescription.py` | 대시보드 처방 문장 v0.4 권유형 말투 (Jira 220/225/409, GMS) |
+| `headline.py` | 대시보드 화면·섹션별 한 마디 `POST /api/headline` — 서술문, 프롬프트 0.1 (Jira 365, GMS, 계약 `contracts/headline-api-spec.md`) |
+| `feedback_classify.py` | 고객 피드백 분류 `POST /api/feedback/classify` — 라벨만 돌려주고 DB 는 백엔드가 쓴다 (Jira 353, 분류기는 `simulator/feedback/classify_feedback.py` 그대로) |
+| `pipeline_stats.py` | `GET /pipeline` · `/pipeline/stats` 시연 파이프라인 한 화면 (Jira 337) |
 | `bench_recommend.py` | 응답 시간 측정 (p95 15ms 급) |
 | `e2e_smoke.py` | 로컬 E2E 스모크 24단계 (판매자→등록→동기화→추천→회원→주문→결제→마트 API). `BE`/`RS`/`FE` env 로 주소. 09-14 14/24, 실패는 전부 백엔드 요청 항목 (Jira 296) |
 | `live_stats.py` | **실시간 처리 현황** `GET /live`(시연용 한 페이지) · `GET /live/stats`(JSON). 초당 반영 이벤트·Kafka 파티션별 소비·방금 상태가 바뀐 사용자·추천 p50/p95 (Jira 295) |
@@ -51,7 +54,9 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 
 상단 오른쪽 **▶ 페르소나 시작** 버튼은 `POST /live/demo/start`(초당 건수) 로 `simulator/generator/demo_live.py` 를 자식 프로세스로 띄운다. 인원은 env `DEMO_LIMIT`(로컬 기본 9,900, 배포 compose 1,000 — 컨테이너 메모리 때문), 통화는 `DEMO_CURRENCY`(기본 KRW, 사이트·계약과 같게, Jira 341), 캐시는 `DEMO_CACHE_DIR`(배포 볼륨 `/data/demo_cache`, 파일명 `demo_behavior_<limit>_<currency>.jsonl`). 09-16 부터 Docker 이미지에도 들어 있다(Jira 335). 절차 정본은 `docs/ai/live-demo-runbook.md`.
 
-`GET /pipeline` · `/pipeline/stats` (Jira 337, `pipeline_stats.py`): 사이트 활동(PC/PA/실사용자) → Kafka 파티션(브로커 워터마크·committed·lag) → Spark(`SPARK_MASTER_UI`) → dw 마트 7개(`DW_MYSQL_*`) → 대시보드(`DASHBOARD_URL`) 를 한 화면에. 다른 파트 자원은 읽기만. 소비자에 `observer` 훅(필터 전 모든 메시지)이 붙는다. 에이전트 버튼은 노트북 런처 `simulator/agents/agent_launcher.py`(8301) 로 간다. 런북 §2-1.
+`GET /pipeline` · `/pipeline/stats` (Jira 337, `pipeline_stats.py`): 사이트 활동(PC/PA/실사용자) → Kafka 파티션(브로커 워터마크·committed·lag) → Spark(`SPARK_MASTER_UI`) → dw 마트 22개(`DW_MYSQL_*`, 목록은 env `DW_PROJECTION_MARTS`) → 대시보드(`DASHBOARD_URL`) 를 한 화면에. 다른 파트 자원은 읽기만. 소비자에 `observer` 훅(필터 전 모든 메시지)이 붙는다. 에이전트 버튼은 노트북 런처 `simulator/agents/agent_launcher.py`(8301) 로 간다. 런북 §2-1.
+
+`GET /live/users` (Jira 405): "방금 상태가 바뀐 사용자" 칸만 크게 보는 시연용 페이지. 시연을 컴퓨터 여러 대로 나눌 때 이 화면만 따로 띄운다. 같은 `/live/stats` 를 읽고 새 API 는 없다.
 
 `GET /live/stats` 가 같은 숫자를 JSON 으로 준다(`events.series_60s`·`partitions`·`recent`…). 인증은 없다 — 추천 서버는
 내부 네트워크 전용이고, 시연에서 밖에 보이려면 nginx 에 `/live` 를 `recommend:8300` 으로 여는 한 줄이 필요하다(배포 README).
@@ -69,8 +74,10 @@ Spark UI 는 마트까지만 보이고, "그 이벤트가 **추천 상태에 반
 cd batch/serving
 python -m unittest test_recommend_server      # 36
 python -m unittest test_banners               # 22   ← test_recommend_server 와 같은 프로세스로 돌리지 않는다 (등록 테스트 상품이 샌다)
-python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 13·5·7·3·17·10 = 55
-python -m unittest test_live                  # 4    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
+python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 12·6·7·3·17·14 = 59
+python -m unittest test_headline test_feedback_classify   # 29·23 = 52  ← LLM 은 가짜 클라이언트
+python -m unittest test_live                  # 7    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
+python -m unittest test_pipeline test_pipeline_html   # 9·4 = 13  ← /pipeline (Jira 337) · 페이지 JS 문법
 ```
 테스트는 등록 상품 파일 복사본과 임시 세션 로그를 쓰므로 레포 파일을 건드리지 않는다. `test_prescription.test_live_once` 는 `RUN_LIVE`+`GMS_KEY` 가 있을 때만.
 
