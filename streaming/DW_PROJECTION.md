@@ -111,8 +111,31 @@ Mart 사이의 `RENAME TABLE`은 하나의 트랜잭션으로 묶지 않는다. 
 
 기존 EC2-2 `.env`에 7종의 `DW_PROJECTION_MARTS`가 지정돼 있으면 아래 목록으로
 갱신한다. `.env` 값은 Compose 기본값보다 우선한다. 특정 Mart만 발행할 때도 이 변수를
-사용할 수 있다. 목록 끝의 `cross_brand_daily`·`category_price_reference`는 **MySQL에
-테이블을 먼저 만든 뒤에** 넣는다 — 없는 상태로 넣으면 그 종의 `RENAME TABLE`이 실패한다.
+사용할 수 있다.
+
+**발행 목록에 Mart를 새로 넣을 때는 두 가지가 선행한다.**
+
+1. **MySQL에 그 Mart의 테이블을 먼저 만든다.** 발행은 staging 적재 후
+   `RENAME TABLE dw.<mart> TO dw.<mart>__old, dw.<staging> TO dw.<mart>`로 교체하므로
+   (`publish_user_trait_job.py`) 대상 테이블이 없으면 그 RENAME이 실패한다.
+2. **`dw-projection` 이미지를 다시 빌드한다.**
+
+   ```bash
+   sudo docker compose --profile dw build dw-projection
+   ```
+
+   `streaming/Dockerfile.dw`가 `COPY jobs/ /app/streaming/jobs/`로 **Job 코드를 빌드 시점에
+   이미지 안으로 복사한다.** Spark 컨테이너와 달리 bind mount가 아니다(`contracts/`만
+   마운트한다). 그래서
+   `git pull`만으로는 새 Mart의 파티션 축이 컨테이너에 반영되지 않고,
+   `MART_PARTITION_COLUMNS[mart]`가 직접 색인이라(`dw_projection_source.py`) 옛 이미지에서는
+   **그 Mart만 `KeyError`로 실패한다.**
+
+둘 중 하나라도 빠지면 발행은 그 Mart에서만 실패하고 나머지는 정상 발행된다(Jira 359).
+보고서에서 실패한 Mart를 확인한 뒤 원인을 해결하고 그 Mart만 재실행하면 된다.
+
+아래 목록 끝의 `cross_brand_daily`·`category_price_reference`가 지금 이 조건에 해당한다 —
+`contracts/dw/schema.sql`에 DDL은 있으나 운영 MySQL에는 테이블이 없다.
 
 ```dotenv
 DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily,cross_brand_daily,category_price_reference
