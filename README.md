@@ -33,7 +33,7 @@
                                               Q1 raw_sink   (상시)              │                 · 마트 API 7개
  세 갈래가 같은 스키마                          Q2 clean_events                   │
  frontend/src/types/log.ts (43종)              Q3 derive_facts                 DW MySQL
- contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      22 테이블
+ contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      23 테이블
                                                Q5 validate     (검사 166개)      ▲
                                                      │                          │
                                                      └── dw projection ─────────┘
