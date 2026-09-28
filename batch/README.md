@@ -40,9 +40,11 @@ cd <레포 루트>
 PYTHONPATH=. python -m unittest discover -s batch/jobs -p "test_*.py"     # 102
 cd batch/serving && python -m unittest test_recommend_server               # 36  (test_banners 와 한 프로세스로 돌리지 않는다 — 등록 테스트 상품이 샌다)
 python -m unittest test_banners                                            # 22
-python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 55
-python -m unittest test_live                                               # 4
-cd <레포 루트> && PYTHONPATH=. python -m unittest discover -s simulator/generator -p "test_*.py"   # 27 (생성기·추천 클라이언트, 절대 import 라 루트에서)
+python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test_session_store test_prescription test_user_trait   # 59
+python -m unittest test_headline test_feedback_classify                    # 52
+python -m unittest test_live                                               # 7
+python -m unittest test_pipeline test_pipeline_html                        # 13
+cd <레포 루트> && PYTHONPATH=. python -m unittest discover -s simulator/generator -p "test_*.py"   # 66 (생성기·추천 클라이언트·재생·grain 가드, 절대 import 라 루트에서)
 ```
 
 ## 런타임에 쓰는 파일 (산출물 아님)

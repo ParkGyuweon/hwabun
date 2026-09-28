@@ -39,8 +39,10 @@
 ## 0. 왜 이 계약이 필요한가
 
 이 문서를 처음 쓸 때는 대시보드의 행동 지표가 전부 프론트의 시드 고정 모의값이었고, 마트를 MySQL 로 옮기는
-projection 도 읽어 주는 API 도 없었다. **지금은 마트 22종이 `dw` 에 발행되고 E1~E7 중 다섯이 그 값을 읽는다**
-(2026-09-21 운영 실측). 남은 것은 §5-2 가 정리한 E4 의 세 블록이다.
+projection 도 읽어 주는 API 도 없었다. **지금은 마트 22종이 `dw` 에 발행되고 E1~E7 일곱 전부가 그 값을 읽는다**
+(2026-09-28 운영 실측). §5-2 가 정리한 E4 의 세 블록(`price_bands`·`segment_price_grid`·`cohort`)도
+2026-09-21 에 붙었다. DW 계약의 발행 대상은 24종이지만 그중 시장 비교 2종은 DDL 만 갖춘 상태이고
+운영 MySQL 에는 아직 테이블이 없다 (§5-3).
 
 이 문서는 **어느 마트를 어떤 HTTP 로 읽는가**를 정한다. 마트가 준비됐는지와 API 가 붙었는지는 다른 문제라,
 §5 의 표에 마트별 상태를 따로 적는다.
@@ -156,8 +158,10 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 처리돼야 한다. 조건부 블록은 응답에서 `null` 로 오고 프론트가 그 블록만 모의로 채운다.
 
 **0.3 에서 E2·E3·E4·E6 이 전부 "가능" 으로 올라갔다.** 데이터 파트가 §6 요청을 09-14~16 에 구현했다 (§5 표).
-`event_volumes` 하나만 재료가 없다 — `realtime_event_stats` · `event_daily` 둘 다 dw-schema §5 에 후보로만 있고 구현이
-없다. 티켓은 등록됐고(`S15P21A306-323`) 우선순위는 가장 낮다. B-1·B-2 projection 갱신 뒤에 만든다 (§8-5).
+`event_volumes` 는 **재료가 생겼다** — `event_daily`(dw-schema §4.27)가 구현돼 `dw` 에 발행돼 있고
+grain 선두가 `brand_id` 라 브랜드 필터도 된다(2026-09-28 운영 실측 17,142행). `realtime_event_stats`
+(§5.1)는 여전히 후보이고 key 에 `brand_id` 가 없어 이 블록에 쓸 수 없다. 남은 것은 백엔드가 이 블록을
+구현하는 일이고, 티켓은 `S15P21A306-323` · 우선순위는 가장 낮다 (§8-5).
 
 **단, "마트가 있다" 와 "엔드포인트가 있다" 는 다르다.** 이 표는 마트 쪽 재료를 말한다. 실제 해제는 백엔드가 그 블록을
 구현하고 MySQL projection 에 마트가 올라온 뒤다 — 순서는 §8-5 에서 정한다. 그때까지 응답은 계속 `null` 이고
@@ -278,7 +282,7 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 | 합산 수량 | `content_daily_kpi` (dw-schema §4.4) `product_id`·일자 합산 | **마트 생김** (0.3). `dwell_ms_sum` 은 마트 규칙대로 `content_interest_fact` 기준 — `section_dwell_agg` 와 동시에 더하지 않는다 |
 | `product_view_sessions` | 같은 마트의 분모 컬럼. **`content_kind` 축으로 합산하지 않는다** | content_kind 마다 같은 값이 되는 것이 정상. 아래 참고 |
 | `avg_dwell_ms_per_session` | `dwell_ms_sum / product_view_sessions` 재계산 | 화면의 "얼마나 오래 읽나" |
-| `view_rate` | `section_view_sessions / product_view_sessions` | 화면의 "몇 명이 봤나". 마트에 없어 서버가 만든다 |
+| `view_rate` | `section_view_sessions / product_view_sessions` | 화면의 "몇 명이 봤나". 마트에 없어 서버가 만든다. **1.0 을 넘는다 — 아래 경고** |
 | `conversion` | `{ viewed_sessions, viewed_cart_sessions, viewed_cart_rate, cart_lift }` — `content_conversion_daily` (dw-schema §4.19) | **마트 생김** (0.3). `viewed_cart_rate` 까지가 마트 값이고 **`cart_lift` 는 서버가 나눈다** (아래) |
 | `brand` | `brand_daily_kpi` 합산 | lift 의 분모. `view_to_cart_rate` 는 E1 과 같은 식(`/ detail_view_sessions`) |
 | `behaviors` | `[{ event, done_sessions, not_done_sessions, done_cart_rate, not_done_cart_rate }]` — `behavior_conversion_daily` (dw-schema §4.20) · event ∈ `ingredient_view_mode_change`·`review_filter_apply`·`accordion_toggle`·`text_copy` | **마트 생김** (0.3). 0건이어도 행이 온다 (아래) |
@@ -289,6 +293,24 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 행이 `ingredient_view_sessions = 0` 을 달고 나와 "아무도 성분을 안 봤다" 로 읽히기 때문이다.
 `avg_dwell_ms_per_session`·`ingredient_view_rate`·`review_view_rate` 가 전부 이 분모를 쓴다. 서버는 이 셋을
 **`content_kind` 중 아무 행의 값(전부 같다)** 으로 내보내고, 다른 컬럼만 합산한다.
+
+**⚠️ `view_rate` 는 1.0 을 넘는다. 지금 마트로는 정확히 낼 수 없다** (2026-09-23 실측:
+브랜드×종류 191개 조합이 100% 초과, 최대 149.8%. `ssafy-beauty` 성분 목록 100.8%).
+원인 둘과 고치는 방법은 **`dw-schema.md` §4.4-1 이 정본**이다. 요지만 적으면,
+
+- **분모에 Quick Look 이 빠졌다.** 섹션은 Quick Look 에서도 읽히는데 `product_view_sessions` 는
+  상품 상세만 센다. 위 `view_to_cart_rate` 가 같은 이유로 분모를 `detail_view_sessions` 로
+  바꾼 것과 **같은 문제다** — 그때 담기율만 고치고 이쪽은 남았다. §4.21 `friction_daily` 는
+  `detail_view_sessions` 를 써서 24,720행 위반 0 이다
+- **`section_view_sessions` 는 `section_id` 를 가로질러 합산할 수 없다.** 세션 수를 더하면
+  같은 사람을 여러 번 센다. `ingredient_list` 가 섹션 2개(`about_product`·`ingredients`)에
+  걸쳐서 그 종류만 이 원인이 겹친다. 반대로 `section_id=product_hero` 하나에 `content_kind` 가
+  넷이다 — **두 축은 다대다다**
+
+**분자를 잘라 맞추지 말 것.** `section_view_sessions` 를 `product_view` 모집단으로 제한하면
+위반은 사라지지만 `product_hero` 가 1,845 세션에서 0 이 되어 "아무도 대표 이미지를 안 봤다"
+가 화면에 뜬다. 화면에서 100% 로 자르는 것도 권하지 않는다 — 값이 왜 낮은지 아무도 모르게
+된다. **컬럼 둘을 더하는 것이 해결이고 시연 후 과제다** (§4.4-1).
 
 **`cart_lift` 는 마트에 없다 — 서버가 나눈다.**
 
@@ -446,7 +468,7 @@ cart_lift = content_conversion_daily.viewed_cart_rate / brand_daily_kpi.view_to_
 | `by_location`, `counts` | `friction_daily` (dw-schema §4.21) | **마트 생김** (0.3) |
 | `quick_exit_rate` | `exit_daily` (dw-schema §4.22 · `exit_summary.dwell_ms < 3000` 세션 / 상세 세션) | **마트 생김** (0.3) |
 | `entry_source` | `entry_source_daily` (dw-schema §4.23) | **마트 생김** (0.3) |
-| `event_volumes` | `realtime_event_stats` 또는 `event_daily`. 브랜드 필터 가능해야 한다 | **재료 없음** — 티켓 `S15P21A306-323`. 우선순위 최하 (§8-5) |
+| `event_volumes` | `event_daily` (dw-schema §4.27 · grain 선두가 `brand_id` 라 브랜드 필터 가능). `realtime_event_stats` 는 key 에 `brand_id` 가 없어 쓸 수 없다 | **마트 생김** — 백엔드 블록 구현 대기. 티켓 `S15P21A306-323` · 우선순위 최하 (§8-5) |
 
 #### E6 을 읽을 때 틀리기 쉬운 것
 
@@ -526,7 +548,7 @@ key 는 `dw-schema.md` §4 그대로. **0.3 에서 마트 12종이 신설되고 
 
 #### 5-2. 0.3 에서 새로 생긴 마트 (전부 dw-schema 에 계약 있음)
 
-| 마트 | 행 | 계약 | 쓰는 곳 | 사용 컬럼 |
+| 마트 | 행(0.3 기준 2026-09-16 · 마트 행 수는 배치마다 바뀐다) | 계약 | 쓰는 곳 | 사용 컬럼 |
 | --- | --- | --- | --- | --- |
 | `persona_segment_daily_kpi` | 1,008 | §4.6 | E4 `by_segment`·`grid` | 전 컬럼. `product_id` 가 key 에 **없다** — 브랜드 grain |
 | `brand_price_band_daily_kpi` | 588 | §4.6-1 | E4 `price_bands` | 전 컬럼 |
@@ -566,8 +588,14 @@ Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가
 
 #### 5-3. projection 대상이 아닌 것
 
-`banner_daily` · `cross_brand_daily` · `category_price_reference` · `analytics_baseline` 은 읽는 엔드포인트가 없다.
+`banner_daily` · `analytics_baseline` 은 읽는 엔드포인트가 없다.
 **소비자 없는 마트는 옮기지 않는다** 는 원칙에 프론트도 동의한다 (dw-schema §7.2).
+
+**`cross_brand_daily` · `category_price_reference` 는 2026-09-28에 DDL·allowlist 를 갖췄다** (dw-schema §7.2).
+여러 브랜드가 모여야 나오는 값이라 화면에 붙일 자리를 정하려고 미리 준비한 것이고, **읽는 엔드포인트는 아직 없다.**
+실제 MySQL 적재는 소비자가 정해진 뒤에 한다. 둘 다 다른 브랜드를 식별할 값을 싣지 않는다 — 앞은 출발 브랜드를
+두지 않고(dw-schema §4.12), 뒤는 브랜드 축이 없다(§4.9). 필터는 각각 `destination_brand_id` 와
+`secondary_category + currency` 다 (후자는 `ingredient_weekly_interest` 처럼 브랜드 필터 없이 읽는다).
 
 인덱스 권고: `(brand_id, event_date_kst)` 선두. `ingredient_weekly_interest` 는 `(interest_week_kst)`,
 `commons_cohort_weekly` 는 `(cohort_key, snapshot_week_kst)`.
@@ -657,7 +685,7 @@ Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가
    | E4 | `price_bands`·`segment_price_grid` | `brand_price_band_daily_kpi`·`segment_price_band_daily_kpi` |
    | E4 | `cohort` | `commons_cohort_weekly` + `brand_cohort_dim` (둘 다 projection 대상 · §5-2) |
    | E6 | `by_location`·`counts`·`quick_exit_rate`·`entry_source` | `friction_daily`·`exit_daily`·`entry_source_daily` |
-   | E6 | `event_volumes` | **재료 없음** — 티켓 등록됨 (`S15P21A306-323`). 우선순위 최하 |
+   | E6 | `event_volumes` | `event_daily` (§4.27 · 마트 생김). 백엔드 블록 구현 대기 — 티켓 `S15P21A306-323` · 우선순위 최하 |
 
    프론트 입장은 **전부 해제**다. 블록이 `null` 이면 모의로 물러나므로 부분 해제도 안전하고, 배지가 섞인 상태를
    이미 드러낸다 (§7). 순서는 백엔드 작업량과 시연 일정이 정하는 것이라 여기서 단정하지 않되, 프론트 의견은

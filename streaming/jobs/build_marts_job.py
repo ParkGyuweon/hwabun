@@ -804,6 +804,65 @@ def _safe_ratio(numerator: Any, denominator: Any) -> Any:
     ).otherwise(F.lit(None).cast("double"))
 
 
+def _with_revisit_flag(product_fact_df: Any) -> Any:
+    """새 진입이 아닌 상세 조회에 ``is_revisit_view`` 를 세운다 (§4.1).
+
+    프론트가 붙이는 ``navigation_source=revisit`` 만 믿으면 안 된다. 그 라벨은
+    배포된 시점 이후 Event 에만 있고, Mart 는 매 배치 raw 전체를 다시 읽는다 —
+    2026-09-23 배치가 그래서 실패했다.
+
+        23:55:15  product_view  in_app   ← 새 진입
+        23:55:29  product_view  in_app   ← 14초 뒤, 장바구니 닫고 돌아옴
+        23:55:31  product_view  in_app   ←  2초 뒤
+        노출 1 · 조회 3 → detail_entry_rate 300%
+
+    순서로 보면 라벨이 없어도 이 실패는 잡힌다. 한 세션·한 상품의 **두 번째 이후**
+    화면 안 상세는 재조회다. 라벨이 있으면 그것도 그대로 존중한다.
+
+    **프론트의 기준보다 넓다.** 프론트는 직전 조회 이후 그 상품의 ``product_click`` 이
+    있었으면 새 진입으로 둔다 (계약 §3.4, 2026-09-23 오후에 좁혔다). 이 규칙은 그 클릭을
+    보지 않아 라벨 없는 옛 Event 에서는 프론트보다 많이 뺀다 — ``detail_entry_rate`` 가
+    낮게 나오는 방향이라 검증은 통과한다 (dw-schema §4.1 알려진 한계). 좁히려면 조회
+    사이 구간을 갈라야 하고, 그러려면 순번 창이 필요해 아래 ``min`` 의 결정성을 잃는다.
+
+    ``direct`` · ``session_start`` 는 순서와 무관하게 새 진입이다. 바깥에서 다시
+    들어온 것이라 카드를 다시 본 셈이고, 노출도 함께 늘어난다.
+    """
+
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    is_view = F.col("event_name") == F.lit("product_view")
+
+    # 세션·상품 안에서 "첫 조회" 를 하나 고르고, 그보다 뒤면 재조회다. 순서를
+    # 매기는 창(window) 대신 최솟값을 쓴다 — `min` 은 도착 순서와 무관해서 정렬
+    # 없이도 결정적이다. `product_daily_kpi_is_deterministic_from_inputs` 가
+    # Mart 를 재계산해 비교하므로, 여기가 흔들리면 그 검사가 깨진다 (§4.4).
+    #
+    # 같은 시각이 둘이어도 `event_id` 가 뒤에서 갈라 준다. 시각만 보면 둘 다
+    # "첫 조회" 가 되어 재조회가 하나도 안 걸러진다.
+    view_key = F.when(is_view, F.struct(F.col("event_time"), F.col("event_id")))
+    first_view_key = F.min(view_key).over(
+        Window.partitionBy("session_id", "product_id")
+    )
+
+    labeled_revisit = F.coalesce(
+        F.col("navigation_source").isin(*REVISIT_NAVIGATION_SOURCES), F.lit(False)
+    )
+    # `navigation_source` 가 NULL 인 옛 로그는 재조회로 보지 않는다. coalesce 없이
+    # 두면 두 번째 조회에서 조건이 NULL 로 번져 새 진입도 아니고 재조회도 아닌 상태가
+    # 되고, `when` 이 그 행을 조용히 0 으로 떨어뜨린다.
+    repeated_in_app_view = F.coalesce(
+        (view_key > first_view_key)
+        & (F.col("navigation_source") == F.lit(IN_APP_NAVIGATION)),
+        F.lit(False),
+    )
+
+    return product_fact_df.withColumn(
+        "is_revisit_view", is_view & (labeled_revisit | repeated_in_app_view)
+    )
+
+
 def _product_daily_kpi(
     product_fact_df: Any, event_weights: dict[str, float] | None = None
 ) -> Any:
@@ -811,6 +870,9 @@ def _product_daily_kpi(
 
     # 시드 Event 제외는 Mart 정의의 일부다. 호출부에 두면 경로마다 결과가 달라진다.
     product_fact_df = _observed_events(product_fact_df)
+
+    # 재조회 판정은 창(window) 을 쓰므로 집계 전에 한 번만 붙인다.
+    product_fact_df = _with_revisit_flag(product_fact_df)
 
     group_columns = ["event_date_kst", "product_id", *EXECUTION_AXES]
 
@@ -830,15 +892,13 @@ def _product_daily_kpi(
         count_events("banner_impression"),
         count_events("product_click"),
         count_events("quick_look"),
-        # 재조회(뒤로가기·새로고침)를 뺀 새 진입만 센다 (§4.1).
-        # detail_entry_rate 의 분자라, 재조회를 포함하면 노출보다 조회가 많아진다.
+        # 재조회를 뺀 새 진입만 센다 (§4.1). detail_entry_rate 의 분자라,
+        # 재조회를 포함하면 노출보다 조회가 많아진다. 판정은 `_with_revisit_flag`
+        # 가 라벨과 순서 양쪽으로 한다 — 라벨은 배포 이후 Event 에만 있다.
         F.sum(
             F.when(
                 (F.col("event_name") == F.lit("product_view"))
-                & ~F.coalesce(
-                    F.col("navigation_source").isin(*REVISIT_NAVIGATION_SOURCES),
-                    F.lit(False),
-                ),
+                & ~F.col("is_revisit_view"),
                 F.lit(1),
             ).otherwise(F.lit(0))
         ).cast("long").alias("product_view_count"),
@@ -2073,9 +2133,27 @@ EXIT_CONTENT_EVENT_MIN_COLUMNS = ("event_time", "event_id")
 # 나가는데 조회만 또 나가서, 빼지 않으면 같은 세션에서 노출 1 · 조회 2 가 되어
 # `detail_entry_rate` 가 1 을 넘는다.
 #
+# `revisit` 은 화면 안 이동인데 같은 세션에 이미 `product_view` 를 남긴 상품으로
+# 다시 온 것이다 (프론트 !445, 계약 §3.4). 장바구니를 열고 닫으면 그렇게 된다 —
+# 2026-09-23 배치에서 실사용자 한 세션이 노출 1 · 조회 3 으로 300% 를 냈고, 그중
+# 둘이 이 경로였다 (14초·2초 간격).
+#
 # **`direct` 는 빼면 안 된다.** 목록을 안 거친 진짜 첫 진입이고 생성기가
 # 1,845건 낸다. 그래서 프론트가 새로고침에 값을 따로 뒀다.
-REVISIT_NAVIGATION_SOURCES = ("history_back", "reload")
+#
+# 프론트는 2026-09-23 오후에 `revisit` 을 좁혔다 — 목록에서 같은 상품을 **다시 클릭해**
+# 들어온 것은 카드를 다시 봤으니 노출도 함께 늘어나 새 진입(`in_app`)이다 (계약 §3.4,
+# 실측으로 재조회 후보 109건 중 105건(96%)이 앞에 `product_click` 이 있었다). 이 상수는
+# 그 라벨을 그대로 받으므로 함께 고칠 것이 없다. 다만 `_with_revisit_flag` 의 순서 판정은
+# 그 클릭을 보지 않아 라벨 없는 옛 Event 에서는 프론트보다 많이 뺀다 (dw-schema §4.1
+# 알려진 한계). 노출이 세션당 한 번이라는 전제도 성립하지 않는다 — 실사용자 평균 2.35회,
+# 최대 15회다(`firedOnceKeys` 는 page_view 마다 비워지고, 세션 단위 중복 방지는 보강
+# 노출에만 걸린다). 어느 쪽이든 **좁혀지면 비율이 올라갈 뿐 이 상수는 그대로다.**
+REVISIT_NAVIGATION_SOURCES = ("history_back", "reload", "revisit")
+
+# 화면 안 이동. 이 값일 때만 순서로 재조회를 가린다 — 바깥에서 들어온
+# `direct`·`session_start` 는 몇 번째든 새 진입이다 (`_with_revisit_flag`).
+IN_APP_NAVIGATION = "in_app"
 
 # 찜 토글에서 "추가" 를 뜻하는 action 값 (event-properties-schema §4.5).
 WISHLIST_ADD_ACTION = "add"

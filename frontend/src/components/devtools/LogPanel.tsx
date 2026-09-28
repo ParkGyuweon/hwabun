@@ -1,24 +1,55 @@
 import { useEffect, useState } from 'react';
-import { clearHistory, getHistory, subscribe } from '../../lib/logger';
+import { clearHistory, getHistory, isSuppressed, subscribe } from '../../lib/logger';
 import type { LogEnvelope } from '../../types/log';
 
 /**
- * 개발·QA 전용 로그 패널.
+ * 개발·QA·시연용 로그 창 (우하단). 쇼핑몰에 늘 뜬다 (2026-09-23, 전에는 `?dev=1` 일 때만).
  *
- * 트리거가 의도한 순간에만 한 번씩 발생하는지 눈으로 확인하려고 만든다.
- * 콘솔만으로는 중복 발생이나 누락을 놓치기 쉽다.
+ * 트리거가 의도한 순간에만 한 번씩 발생하는지 눈으로 확인하려고 만들었고, 발표에서는 "고객이 움직일 때마다
+ * 로그가 우르르 찍힌다" 를 보여 주는 자리다 (유림님 2026-09-22). 그래서
+ *   - 켜지면 **펼친 채로** 시작한다 (전에는 접혀 있어 "로그 0건" 한 줄만 보였다)
+ *   - 새 줄은 위에 꽂히며 잠깐 빛난다
+ *   - 대시보드에 로그인한 브라우저(판매자 세션)라 서버로 안 나가는 상태면 그 사실을 머리에 적는다.
+ *     이벤트는 여전히 여기까지는 온다 (logger.ts isSuppressed)
+ *   - 접으면 막대가 아니라 **동그란 버튼 하나**만 남는다. 건수 배지도 없다 (유림님 2026-09-23 — 접어도 화면을 가렸고,
+ *     숫자가 계속 올라가는 것도 정신없었다)
  */
 export default function LogPanel() {
   const [events, setEvents] = useState<LogEnvelope[]>(() => [...getHistory()]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
+  const [suppressed, setSuppressed] = useState(() => isSuppressed());
 
-  useEffect(() => subscribe((event) => setEvents((prev) => [event, ...prev].slice(0, 200))), []);
+  useEffect(
+    () =>
+      subscribe((event) => {
+        setEvents((prev) => [event, ...prev].slice(0, 200));
+        setSuppressed(isSuppressed());
+      }),
+    [],
+  );
 
   return (
-    <aside className={`log-panel${open ? ' is-open' : ''}`}>
-      <button type="button" className="log-panel__toggle" onClick={() => setOpen((prev) => !prev)}>
-        로그 {events.length}건 {open ? '▾' : '▴'}
-      </button>
+    <aside className={`log-panel${open ? ' is-open' : ' is-collapsed'}`}>
+      {open ? (
+        <button type="button" className="log-panel__toggle" onClick={() => setOpen(false)} aria-expanded="true">
+          <span className="log-panel__live" aria-hidden="true" />
+          고객 행동 로그 {events.length}건
+          {suppressed ? <span className="log-panel__muted">판매자 로그인 중 · 화면에만 표시</span> : null}
+          <span className="log-panel__caret">▾</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="log-panel__toggle log-panel__toggle--round"
+          onClick={() => setOpen(true)}
+          aria-expanded="false"
+          aria-label={`고객 행동 로그 ${events.length}건 펼치기${suppressed ? ' · 판매자 로그인 중이라 화면에만 표시' : ''}`}
+          title={suppressed ? '고객 행동 로그 · 판매자 로그인 중이라 서버로 안 보냄' : '고객 행동 로그 펼치기'}
+        >
+          {/* 숫자는 안 보인다 — 접어 둔 동안 건수가 계속 올라가면 정신없다. 판매자 로그인 중(서버로 안 나감)이면 점이 회색 */}
+          <span className={`log-panel__live${suppressed ? ' is-muted' : ''}`} aria-hidden="true" />
+        </button>
+      )}
 
       {open ? (
         <div className="log-panel__body">
@@ -36,6 +67,7 @@ export default function LogPanel() {
           </div>
 
           <ol className="log-panel__list">
+            {events.length === 0 ? <li className="log-panel__empty">아직 기록이 없습니다. 화면을 움직여 보세요.</li> : null}
             {events.map((event) => (
               <li key={event.event_id}>
                 <span className="log-panel__seq">#{event.sequence_no}</span>

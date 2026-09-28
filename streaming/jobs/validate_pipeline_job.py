@@ -61,7 +61,7 @@ DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 
 # validate_frames 의 이름과 contracts/dw/build_ddl.py 의 Mart 이름을 한 곳에서
-# 연결한다. 이 22종이 MySQL projection allowlist와 같은 범위다.
+# 연결한다. 이 24종이 MySQL projection allowlist와 같은 범위다.
 PROJECTION_MART_FRAMES = {
     "product_daily_kpi": "product_daily",
     "brand_daily_kpi": "brand_daily",
@@ -85,6 +85,8 @@ PROJECTION_MART_FRAMES = {
     "brand_cohort_dim": "brand_cohort",
     "commons_cohort_weekly": "commons_cohort",
     "user_trait_daily": "user_trait_daily",
+    "cross_brand_daily": "cross_brand_daily",
+    "category_price_reference": "category_price",
 }
 
 # Mart 실행 축. build_marts_job.EXECUTION_AXES 와 같아야 한다.
@@ -981,6 +983,11 @@ def _over_clicked_banner_count(
     세션 안에서 짝이 맞는지는 `banner_click_matches_impression_trait_source` 가
     따로 본다. 여기서는 날짜만 걷어내 본다 — 자정을 넘긴 건이 상쇄되고, 노출
     없는 클릭은 그대로 남는다.
+
+    **`skip_count` 도 같이 본다.** 정의가 `impression_count - click_count` 라
+    (§4.10) 클릭이 노출보다 많은 칸에서 자동으로 음수가 된다. 일자별로 음수를
+    막으면 자정을 넘긴 세션이 걸린다 — 2026-09-23 배치가 그것 하나로 실패했다.
+    둘은 같은 사실의 두 표현이므로 한 자리에서 본다.
     """
 
     from pyspark.sql import functions as F
@@ -990,8 +997,11 @@ def _over_clicked_banner_count(
         .agg(
             F.sum("click_count").alias("_clicks"),
             F.sum("impression_count").alias("_impressions"),
+            F.sum("skip_count").alias("_skips"),
         )
-        .where(F.col("_clicks") > F.col("_impressions"))
+        .where(
+            (F.col("_clicks") > F.col("_impressions")) | (F.col("_skips") < 0)
+        )
         .count()
     )
 
@@ -2187,11 +2197,14 @@ def validate_frames(
         _duplicate_count(banner_daily, banner_grain) == 0,
         "banner_daily configured grain is unique",
     ))
+    # `skip_count` 는 일자별로 음수를 볼 수 없다. 정의가
+    # `impression_count - click_count` 라(§4.10) 클릭이 노출보다 많은 칸에서 자동으로
+    # 음수가 된다 — 자정을 넘긴 세션이 만드는 그 칸이다. 아래 날짜 합산 검사가
+    # 클릭과 함께 본다. 2026-09-23 배치에서 이 조건 하나만 남아 실패했다.
     invalid_banner_counts = banner_daily.where(
         F.col("click_count").isNull()
         | F.col("impression_count").isNull()
         | F.col("skip_count").isNull()
-        | (F.col("skip_count") < 0)
         | (
             (F.col("impression_count") == 0)
             & F.col("banner_ctr").isNotNull()
@@ -2222,8 +2235,9 @@ def validate_frames(
     checks.append(_check(
         "banner_clicks_do_not_exceed_impressions",
         over_clicked == 0,
-        f"over_clicked_banners={over_clicked}; 날짜를 합산해 본다 "
-        "(세션이 자정을 넘으면 일자 칸에서는 클릭이 노출보다 많을 수 있다)",
+        f"over_clicked_banners={over_clicked}; click>impression 과 skip_count<0 을 "
+        "날짜 합산으로 함께 본다 (세션이 자정을 넘으면 일자 칸에서는 클릭이 노출보다 "
+        "많고 skip_count 가 음수가 된다)",
     ))
     invalid_banner_values = banner_daily.where(
         F.col("banner_value_is_valid").isNull()

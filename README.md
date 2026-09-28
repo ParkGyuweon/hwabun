@@ -12,10 +12,10 @@
 
 | | 산출물 |
 | --- | --- |
-| 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 12개), 플랫폼 운영 화면 |
+| 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 11개), 플랫폼 운영 화면 |
 | 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(그중 22종 발행) |
 | AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
-| 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 162개 |
+| 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 166개(2026-09-23 운영 배치 기준) |
 
 기준일 2026-09-18. 아래 수치는 이 날짜에 레포와 배포 서버에서 직접 확인한 값입니다.
 
@@ -34,7 +34,7 @@
  세 갈래가 같은 스키마                          Q2 clean_events                   │
  frontend/src/types/log.ts (43종)              Q3 derive_facts                 DW MySQL
  contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      22 테이블
-                                               Q5 validate     (검사 162개)      ▲
+                                               Q5 validate     (검사 166개)      ▲
                                                      │                          │
                                                      └── dw projection ─────────┘
                                                          staging→검증→원자적 스왑
@@ -76,7 +76,7 @@
 한 코드베이스에서 엔트리 3개를 빌드합니다. 로그가 여기서 출발합니다.
 
 - 쇼핑몰 BLOOM (`index.html`). 상품 목록·상세·장바구니·주문·결제(PortOne)·리뷰(구매자만)·피드백에 추천 카드와 신규 브랜드 히어로 배너를 붙였습니다.
-- 브랜드 대시보드 (`dashboard.html`). 사장님이 묻는 질문 순서로 메뉴 8개(요약 · 상세페이지 · 상품 · 주문 · 고객 · 고객의 말 · 시장 · 상품 등록)이고, 그 안에 탭 화면 12개(콘텐츠·마찰, 주문·정산, 공개 리뷰·받은 피드백 등)가 있습니다. 상세페이지 처방 문장은 AI 서버(`/api/prescription`)가 답하면 그 문장을, 아니면 규칙 표 문장을 씁니다 — 화면이 비는 순간이 없게 한 구조입니다.
+- 브랜드 대시보드 (`dashboard.html`). 사장님이 묻는 질문 순서로 메뉴 8개(요약 · 상세페이지 · 상품 · 주문 · 고객 · 고객의 말 · 시장 · 상품 등록)이고, 그 안에 탭 화면 11개(콘텐츠·마찰, 주문·정산, 공개 리뷰·받은 피드백 등)가 있습니다. 상세페이지 처방 문장은 AI 서버(`/api/prescription`)가 답하면 그 문장을, 아니면 규칙 표 문장을 씁니다 — 화면이 비는 순간이 없게 한 구조입니다.
 - 플랫폼 운영 화면 (`platform.html`).
 - 행동 로거 (`src/lib/logger.ts`). 이벤트 43종을 조립해 버퍼에 담고 전송하며, 429/502/503 은 백오프로 재시도합니다. 이벤트 스키마 `src/types/log.ts` 는 AI·데이터가 직접 import 해서 가중치를 맞추는 단일 출처입니다.
 - 수집 훅 (`src/hooks/`). 스크롤 깊이·정지·되돌아 읽기, 섹션 노출과 체류, 텍스트 선택·복사, 주목 신호(hover/rage/dead click), 이탈 요약을 잡습니다.
@@ -102,7 +102,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - Q2 `clean_events_job`. 스키마와 의미를 검증하고 `event_id` 정본을 골라 cleaned / bad / duplicate 세 갈래로 나눕니다.
 - Q3 `derive_facts_job`. 세션화와 Fact 6종(상품, 구매, 구매사유, 리뷰, 섹션 체류, 콘텐츠 관심), Dimension 2종(dim_product, dim_brand)을 만듭니다.
 - Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 22종이 DW 발행 대상이고, `banner_daily`·`category_price_reference`·`cross_brand_daily` 는 Parquet 으로만 둡니다. `analytics_baseline` (`dw-schema.md` §4.13) 은 기준선 기간을 인자로 준 실행에서만 만들어져 상시 25종에 넣지 않습니다 — 코드에는 출력 경로가 26개인데 평소 25개만 생기는 이유입니다.
-- Q5 `validate_pipeline_job`. 품질 검증 162개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속, 발행 대상 마트의 NOT NULL 계약, 세션 안에서 클릭에 대응하는 노출이 있는지를 확인합니다.
+- Q5 `validate_pipeline_job`. 품질 검증 166개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속, 발행 대상 마트의 NOT NULL 계약, 세션 안에서 클릭에 대응하는 노출이 있는지를 확인합니다.
 - 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`, 그리고 대시보드 마트 조회 계약 `dashboard-mart-api-spec.md`
 - Job 이 실제로 읽는 계약 파일도 같이 관리합니다. `purchase-reason-trait-map.json`(Q4·Q5), `user-trait-weights.json`(Q4), `dw/build_ddl.py`(DDL 생성 · projection 과 Q5 의 NOT NULL 정책 정본) 와 `dw/schema.sql`, `event-schema.json`(Q5 가 `impression_origin` 허용값을 여기서 읽습니다 — Q2 와 수집기는 같은 규칙을 각자 코드로 구현합니다)
 - 노출 정의 통일. 노출 이벤트 셋(product, recommendation, banner)을 CTR 분모에 합산하고, 뒤로가기 재조회는 상세 진입에서 뺍니다. 선행 노출 없이 클릭·Quick Look 이 먼저 일어나면 프론트가 노출을 합성해 남기고, 그 사실을 `impression_origin`(`observed` · `implied_by_click` · `implied_by_quick_look`) 으로 구분합니다. 합성분도 분모에 넣습니다.
@@ -124,17 +124,18 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - 추천 점수. 콘텐츠 유사도에 페르소나 속성 친화도 4,000행과 CF 동시발생(200×200)을 얹고 LTR 로 결합합니다. 트리 239개·피처 20개, 학습 5,954명 231,005행. 학습과 서빙이 `ltr_features.py` 를 같이 씁니다.
 - 노출 정책. MMR 다양성, 신규 브랜드 전용 슬롯, 콜드스타트 폴백. `regenerate_all.py` 가 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
 - 평가 축 3개 분리. 오프라인 leave-last-out, 리뷰 이력 순차 재생, 동적 시뮬레이션. 홀드아웃 2세트(각 2,000명)로 a 에서 고르고 b 에서 확인합니다.
-- 추천 서버 `batch/serving/` 8300, 라우트 20개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장, 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/pipeline`
+- 추천 서버 `batch/serving/` 8300, 라우트 23개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장·한 마디(`/api/headline`), 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/live/users`·`/pipeline`
 - 실시간 상태. `activity-events` 를 별도 컨슈머 그룹으로 구독해 세션 상태를 초 단위로 갱신하고, DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다.
 - 시뮬레이터. 페르소나 9,900명 합성 로그(약 1,049만 건)와 LLM 에이전트 100명. 에이전트는 Playwright 로 실제 브라우저를 띄워 프론트 로거를 그대로 탑니다. 성향 6축이 "어떻게 보는가"만 바꾸고 "무엇을 고르는가"에는 관여하지 않습니다.
 - 고객 피드백 분류. 축 5종은 고객이 고르고 분류기는 그 축 안 카테고리 20종에서만 고릅니다. 사람 정답 50건 대비 F1 94.3, 금지어 599개 대조
 - 상품 등록 계약·어휘집·한국어 폼 라벨, 배너 축 6종, 상품·리뷰 한국어화, 백엔드 적재용 테이블 6종과 DDL
 
-LLM 을 쓰는 곳은 셋이고 경로가 다릅니다.
+LLM 을 쓰는 곳은 넷이고 경로가 다릅니다.
 
 | 무엇 | 경로 | 실행 형태 |
 | --- | --- | --- |
 | 대시보드 처방 문장 | 추천 서버 `POST /api/prescription` → GMS | 서비스 안, 런타임 스위치로 on/off |
+| 대시보드 한 마디 | 추천 서버 `POST /api/headline` → GMS | 서비스 안, 처방 스위치를 같이 따르고 꺼지면 규칙 문장 |
 | 고객 피드백 분류 | 추천 서버 `POST /api/feedback/classify` → GMS · 배치는 `classify_feedback.py` → GMS 직접 | 서비스 안(백엔드 배치가 호출) · 오프라인 CLI |
 | 에이전트 PA | `agent_runner.py` → GMS 직접 | 오프라인 CLI |
 
@@ -308,7 +309,7 @@ S15P21A306/
 │   │   ├── clean_events_job.py            Q2 검증·중복 제거
 │   │   ├── derive_facts_job.py            Q3 세션화·Fact 6종·Dimension 2종
 │   │   ├── build_marts_job.py             Q4 퍼널 세션 Fact · Mart 25종 (발행 대상 22종)
-│   │   ├── validate_pipeline_job.py       Q5 품질 검증 162개
+│   │   ├── validate_pipeline_job.py       Q5 품질 검증 166개
 │   │   ├── publish_user_trait_job.py      dw projection 진입점 (staging→검증→원자적 스왑)
 │   │   ├── dw_projection_source.py        Parquet 읽기·DDL 대조
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 재사용 어댑터
@@ -338,16 +339,18 @@ S15P21A306/
 │   │   ├── eval_persona_feature.py · eval_dynamic.py · eval_review_replay.py · eval_cbf_flow.py
 │   │   ├── eval_metadata.py · persona_split.py · hidden_preference.py
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 를 직접 읽는 가중치 로더
-│   └── serving/                           ★ 추천 추론 서버 8300 (테스트 11 파일)
+│   └── serving/                           ★ 추천 추론 서버 8300 (테스트 13 파일)
 │       ├── recommend_server.py                FastAPI 진입점
 │       ├── banners.py                         hero·배너 조립
 │       ├── prescription.py                    대시보드 처방 문장 (LLM)
+│       ├── headline.py                        대시보드 화면·섹션별 한 마디 (LLM)
+│       ├── feedback_classify.py               고객 피드백 분류 서빙
 │       ├── catalog_sync.py                    쇼핑몰 백엔드 ACTIVE 상품 동기화
 │       ├── catalog_registry.py                등록 입력 → 계약 검사 → 인코딩 → 카탈로그 편입
 │       ├── session_store.py                   세션 상태 영속화·재생
 │       ├── kafka_state.py                     activity-events 구독 → 상태 실시간 갱신
 │       ├── user_trait.py                      DW user_trait_daily → long_term_trait
-│       ├── live_stats.py · pipeline_stats.py  시연 화면 /live · /pipeline
+│       ├── live_stats.py · pipeline_stats.py  시연 화면 /live · /live/users · /pipeline
 │       ├── bench_recommend.py · e2e_smoke.py  응답 시간 실측, E2E 스모크
 │       └── requirements.txt
 │

@@ -43,6 +43,8 @@ DEFAULT_PROJECTION_MARTS = (
     "content_conversion_daily",
     "behavior_conversion_daily",
     "event_daily",
+    "cross_brand_daily",
+    "category_price_reference",
 )
 
 PROJECTION_MARTS = DEFAULT_PROJECTION_MARTS
@@ -70,6 +72,9 @@ MART_PARTITION_COLUMNS = {
     "content_conversion_daily": ("event_date_kst",),
     "behavior_conversion_daily": ("event_date_kst",),
     "event_daily": ("event_date_kst",),
+    "cross_brand_daily": ("event_date_kst",),
+    # 카탈로그 파생이라 날짜 축이 없다 — 파티션도 없다 (dw-schema §4.9).
+    "category_price_reference": (),
 }
 
 

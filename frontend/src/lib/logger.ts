@@ -91,12 +91,17 @@ const COLLECT_ENDPOINT = '/api/events';
 /**
  * 브랜드 담당자(SELLER)·운영자(ADMIN)가 이 브라우저에 로그인해 있으면 쇼핑몰 행동 로그를 **보내지 않는다**
  * (결정 2026-09-11). 그 사람은 고객이 아니다. 자기 상품을 점검하려고 상세를 열고 담아 보는 행동이 대시보드
- * 지표·추천·성향에 섞이면 안 된다. MEMBER 로도 같이 로그인해 있어도 막는다 — 같은 사람이다.
+ * 지표·추천·성향에 섞이면 안 된다.
+ *
+ * 단, 쇼핑몰에 회원(MEMBER)으로 로그인해 있으면 고객으로 보고 보낸다 (2026-09-27). 시연에서 같은 브라우저에
+ * 대시보드를 로그인해 둔 채 회원으로 쇼핑하면 로그가 서버로 안 나가 실시간 화면이 멈췄다. 시크릿 창도 시크릿 창끼리
+ * localStorage 를 공유해 피할 수 없었다. 비로그인으로 둘러보는 판매자·운영자는 지금처럼 막힌다.
  *
  * 로그인 여부는 이벤트가 만들어지는 순간마다 본다. 대시보드에서 로그아웃하면 다음 이벤트부터 다시 나간다.
  */
 function isStaffSession(): boolean {
   try {
+    if (sessionSnapshot('MEMBER') !== null) return false;
     return sessionSnapshot('SELLER') !== null || sessionSnapshot('ADMIN') !== null;
   } catch {
     return false;
@@ -224,6 +229,8 @@ interface StoredSession {
   persona_key: string | null;
   sequence_no: number;
   impressed: string[];
+  /** 이 세션에 상세를 본 상품. 새로고침 뒤에도 재조회(`revisit`)를 가르려면 같이 살려야 한다. 옛 저장본에는 없다 */
+  viewed: string[];
 }
 
 function loadStoredSession(): StoredSession | null {
@@ -237,6 +244,7 @@ function loadStoredSession(): StoredSession | null {
       persona_key: typeof v.persona_key === 'string' ? v.persona_key : null,
       sequence_no: v.sequence_no,
       impressed: Array.isArray(v.impressed) ? v.impressed.filter((x): x is string => typeof x === 'string') : [],
+      viewed: Array.isArray(v.viewed) ? v.viewed.filter((x): x is string => typeof x === 'string') : [],
     };
   } catch {
     return null;
@@ -252,7 +260,7 @@ let sequenceNo = restoredSession?.sequence_no ?? 0;
 
 function persistSession(personaKey: string | null): void {
   try {
-    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts] };
+    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts], viewed: [...viewedProducts] };
     window.sessionStorage.setItem(SESSION_STORE_KEY, JSON.stringify(v));
   } catch {
     /* 저장 못 해도 이번 페이지 안에서는 그대로 동작한다 */
@@ -352,6 +360,27 @@ export const IMPRESSION_VISIBLE_RATIO = 0.5;
  */
 const impressedProducts = new Set<string>(restoredSession?.impressed ?? []);
 
+/**
+ * 이 세션에 `product_view` 를 남긴 상품. 같은 상품 상세로 화면 안에서 다시 돌아오면 `in_app` 대신 `revisit` 을 단다
+ * (계약 §3.4, 데이터 파트 요청 2026-09-23).
+ *
+ * 상세에서 담기 → 장바구니 열기 → 닫기면 상세가 다시 열리며 `product_view` 가 한 번 더 나간다. `in_app` 이면 새 진입과
+ * 구분이 안 돼 마트의 `detail_entry_rate` 가 노출 1 · 조회 3 = 300% 가 됐다. 실사용자 세션 5건 중 1건꼴이다.
+ * 뒤로가기(`history_back`)·새로고침(`reload`)과 같은 재조회라 마트가 같은 방식으로 `product_view_count` 에서 뺀다.
+ */
+const viewedProducts = new Set<string>(restoredSession?.viewed ?? []);
+
+/**
+ * 직전 `product_view` 이후에 `product_click` 이 있었던 상품. 이런 상품은 이미 본 상품이어도 **새 진입**(`in_app`)이다
+ * (데이터 파트 요청 2026-09-23 오후).
+ *
+ * 처음엔 "이 세션에 본 적 있으면 전부 revisit" 이었는데, 목록으로 돌아가 같은 카드를 다시 누른 것까지 묶였다. 그건 카드를
+ * 다시 봤으니 노출도 같이 늘어나는 새 진입이다 (실측: 재조회 후보 109건 중 105건이 바로 앞에 product_click).
+ * 추천 카드도 `recommendation_click` 과 함께 `product_click` 을 내므로 이것 하나로 가른다. 상세를 열면 비운다.
+ * 새로고침은 `reload` 로 따로 가르므로 저장하지 않는다.
+ */
+const clickedSinceView = new Set<string>();
+
 /** 노출을 남긴 쪽이 알려 준다 (useImpression). 세션이 바뀌면 비워진다. 새로고침에는 남는다 */
 export function markProductImpressed(productId: string | null | undefined): void {
   if (!productId || impressedProducts.has(productId)) return;
@@ -391,6 +420,8 @@ export function startSession(personaId: string | null, productId: string | null 
   sequenceNo = 0;
   firedOnceKeys.clear();
   impressedProducts.clear();
+  viewedProducts.clear();
+  clickedSinceView.clear();
   pendingEntry = null;
   setLoggerContext({ personaId, productId });
 
@@ -442,6 +473,9 @@ function trackProductView(
       impression_origin: 'implied_by_direct_view',
     });
   }
+  // 로그를 안 내는 판매자·운영자 세션에는 기록하지 않는다. 로그아웃 뒤 첫 조회가 재조회로 찍히면 안 된다
+  if (!isStaffSession()) viewedProducts.add(productId);
+  clickedSinceView.delete(productId);
   track('product_view', {
     product_id: productId,
     navigation_source: navigationSource,
@@ -492,20 +526,36 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
   setLoggerContext({ productId });
   const entry = pendingEntry;
   pendingEntry = null;
-  track('page_view', { product_id: productId, navigation_source: navigationSource });
-  trackProductView(productId, navigationSource, entry);
+  // 화면 안 이동인데 이 세션에 이미 본 상품이고, 그 뒤로 카드를 다시 누르지 않았으면 재조회다.
+  // page_view 와 product_view 에 같은 값을 단다 (계약 §3.4)
+  const source =
+    navigationSource === 'in_app' && productId !== null && viewedProducts.has(productId) && !clickedSinceView.has(productId)
+      ? 'revisit'
+      : navigationSource;
+  track('page_view', { product_id: productId, navigation_source: source });
+  trackProductView(productId, source, entry);
+}
+
+/**
+ * 판매자·운영자 세션이라 지금 로그를 **보내지 않는** 상태인가. 로그 창(LogPanel)이 그 사실을 적는다.
+ * 이벤트는 여전히 만들어져 화면 로그 창에는 흐른다 — 시연 때 우하단에 로그가 우르르 찍히는 것을 보여 주려면
+ * 대시보드에 로그인해 둔 같은 브라우저에서도 보여야 한다 (유림님 2026-09-22). 서버로는 한 건도 안 나간다.
+ */
+export function isSuppressed(): boolean {
+  return isStaffSession();
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
-  // 판매자·운영자의 행동은 고객 행동이 아니다. 만들지도, 쌓지도, 보내지도 않는다
-  if (isStaffSession()) {
-    if (import.meta.env.DEV && !staffNoticeShown) {
+  // 판매자·운영자의 행동은 고객 행동이 아니다. 만들어서 화면 로그 창에는 보여 주되 **쌓지도 보내지도 않는다**
+  const suppressed = isStaffSession();
+  if (suppressed) {
+    if (!staffNoticeShown) {
       staffNoticeShown = true;
       console.info('[log] 판매자·운영자 세션이라 행동 로그를 보내지 않습니다 (로그아웃하면 다시 보냅니다)');
     }
-    return;
+  } else {
+    staffNoticeShown = false;
   }
-  staffNoticeShown = false;
   sequenceNo += 1;
   // 번호가 오른 뒤 바로 저장한다. 새로고침 뒤에도 같은 세션의 번호가 이어진다
   if (startedSessionKey !== NOT_STARTED) persistSession(startedSessionKey);
@@ -585,11 +635,6 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     properties: dropDisallowedNulls(eventName, finalProperties),
   };
 
-  // 세션 성향은 이벤트가 나가는 바로 이 자리에서 같이 누적한다 (lib/trait.ts). 지연 0
-  ingestForTrait(eventName, event.properties);
-
-  queue.push(event);
-
   history.unshift(event);
   if (history.length > HISTORY_LIMIT) {
     history.length = HISTORY_LIMIT;
@@ -599,8 +644,22 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
     listener(event);
   }
 
-  // 개발 중 확인용. 화면에서는 LogPanel 이 같은 내용을 보여준다
-  if (import.meta.env.DEV) console.info(`[log] ${eventName}`, event);
+  /*
+   * 브라우저 개발자 도구 콘솔에도 찍는다. 배포 빌드에서도 켠다 — 전에는 개발 서버에서만 찍혀서 배포 사이트의
+   * 콘솔에는 아무것도 안 떠 "로그가 안 찍힌다" 로 보였다 (2026-09-23 유림님). 서버로 안 나가는 줄은 표시한다
+   */
+  console.info(`[log] ${eventName}${suppressed ? ' (판매자 로그인 중 · 서버로 안 보냄)' : ''}`, event);
+
+  // 판매자·운영자 세션: 화면 로그 창까지만. 성향 누적·전송 큐에는 넣지 않는다
+  if (suppressed) return;
+
+  // 카드를 눌렀다 — 곧 열릴 상세는 이미 본 상품이어도 새 진입이다 (위 clickedSinceView)
+  if (eventName === 'product_click' && targetProductId) clickedSinceView.add(targetProductId);
+
+  // 세션 성향은 이벤트가 나가는 바로 이 자리에서 같이 누적한다 (lib/trait.ts). 지연 0
+  ingestForTrait(eventName, event.properties);
+
+  queue.push(event);
 
   // 전환은 배치를 기다리지 않는다 (§2-1). 백오프 중이면 그대로 예약으로 떨어진다 —
   // 수집 서버가 죽어 있을 때 전환마다 요청을 쏘면 폭주 방지가 무너진다

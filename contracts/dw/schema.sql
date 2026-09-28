@@ -135,6 +135,22 @@ CREATE TABLE `dw`.`brand_repurchase_daily` (
   KEY `ix_brand_repurchase_daily__grain` (`brand_id`, `snapshot_date_kst`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- category_price_reference
+CREATE TABLE `dw`.`category_price_reference` (
+  `secondary_category` VARCHAR(64) NOT NULL,
+  `currency` VARCHAR(32) NOT NULL,
+  `product_count` BIGINT NOT NULL,
+  `observed_median_price` DECIMAL(18,2) NOT NULL,
+  `global_product_count` BIGINT NOT NULL,
+  `global_median_price` DECIMAL(18,2) NOT NULL,
+  `is_sample_sufficient` TINYINT(1) NOT NULL,
+  `reference_median_price` DECIMAL(18,2) NOT NULL,
+  `reference_source` VARCHAR(64) NOT NULL,
+  `min_sample_size` INT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`secondary_category`, `currency`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- commons_cohort_weekly
 CREATE TABLE `dw`.`commons_cohort_weekly` (
   `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -216,6 +232,30 @@ CREATE TABLE `dw`.`content_daily_kpi` (
   `mart_processed_at` DATETIME(3) NOT NULL,
   PRIMARY KEY (`dw_row_id`),
   KEY `ix_content_daily_kpi__grain` (`brand_id`, `event_date_kst`, `product_id`, `section_id`, `content_kind`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- cross_brand_daily
+CREATE TABLE `dw`.`cross_brand_daily` (
+  `dw_row_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `destination_brand_id` VARCHAR(64) NOT NULL,
+  `event_date_kst` DATE NOT NULL,
+  `actor_type` VARCHAR(32) NOT NULL,
+  `source` VARCHAR(32) NOT NULL,
+  `generator_type` VARCHAR(64) NULL,
+  `scenario_id` VARCHAR(64) NULL,
+  `simulation_run_id` VARCHAR(64) NULL,
+  `brand_view_sessions` BIGINT NOT NULL,
+  `cross_brand_entry_sessions` BIGINT NOT NULL,
+  `recommendation_cross_brand_entry_sessions` BIGINT NOT NULL,
+  `banner_cross_brand_entry_sessions` BIGINT NOT NULL,
+  `mart_processed_at` DATETIME(3) NOT NULL,
+  `cross_brand_entry_rate` DOUBLE NULL,
+  `recommendation_cross_brand_entry_rate` DOUBLE NULL,
+  `banner_cross_brand_entry_rate` DOUBLE NULL,
+  `recommendation_share_of_cross_brand_entries` DOUBLE NULL,
+  `banner_share_of_cross_brand_entries` DOUBLE NULL,
+  PRIMARY KEY (`dw_row_id`),
+  KEY `ix_cross_brand_daily__grain` (`destination_brand_id`, `event_date_kst`, `actor_type`, `source`, `generator_type`, `scenario_id`, `simulation_run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- entry_source_daily
@@ -582,5 +622,3 @@ CREATE TABLE `dw`.`user_trait_daily` (
 -- MySQL 로 옮기지 않는 Mart — Parquet 에만 둔다 (§7.2)
 --   analytics_baseline: 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다
 --   banner_daily: 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다
---   category_price_reference: 카탈로그 파생 참조표다. Event 를 읽지 않고 브랜드 축도 없다
---   cross_brand_daily: 읽는 엔드포인트가 없다

@@ -1,10 +1,10 @@
 # 서빙용 피처 산출물
 
-`python batch/jobs/export_features.py` 가 만든다. 백엔드 `RankingService` 가 읽는 입력이다.
+`python batch/jobs/export_features.py` 가 만든다. 추천 서버(`batch/serving`)가 읽는 입력이다. 백엔드는 프록시만 한다.
 계약은 `contracts/recommendation-io-spec.md`, 점수 식은 같은 문서 §API 를 따른다.
 
 ```
-score(u, i) = model.predict_proba(피처 19개)      <- 학습 결합 (계약 §4-2)
+score(u, i) = model.predict_proba(피처 20개)      <- 학습 결합 (계약 §4-2)
 ```
 
 **2026-09-07 부터 점수 결합을 학습한다.** 아래 선형 식은 **폴백**이고, 그 항들은
@@ -20,8 +20,8 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 | `product_feature.jsonl` | 상품 200개 · 148차원 벡터 · prior · 카테고리/가격대/평점 | `product_feature` |
 | `attribute_affinity.csv` | 4,000행 = 200상품 x 20세그먼트 | `attribute_affinity` |
 | `item_cooc.npz` | 200x200 동시발생 + 상품별 지지자 수 | (서빙 전용) |
-| `ltr_model.pkl` | 학습 결합 모델 (부스팅 트리 369개, 2026-09-10 · 약 1.4MB · 정본은 `ltr_model_meta.json`) | (서빙 전용) |
-| `ltr_model_meta.json` | 피처 이름 19개 · 학습 조건 · 순열 중요도 · sklearn 버전 | (서빙 전용) |
+| `ltr_model.pkl` | 학습 결합 모델 (부스팅 트리 239개, 2026-09-16 · 약 0.9MB(901,360바이트) · 정본은 `ltr_model_meta.json`) | (서빙 전용) |
+| `ltr_model_meta.json` | 피처 이름 20개 · 학습 조건 · 순열 중요도(현행 모델은 `null` — 09-26 실측값은 노션에만 있음) · sklearn 버전 | (서빙 전용) |
 | `ranking_golden.json` | 페르소나 20명의 기대 상위 10개와 점수 | (대조용, 적재 대상 아님) |
 
 ## 백엔드 적재용 정규화 테이블
@@ -79,7 +79,7 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
   `session_events.jsonl`·`prescriptions.jsonl`·`registered_products.jsonl` 은 서버가 **런타임에 쓰는** 파일이라 산출물이 아니다
   (운영은 `/data` 볼륨, 로컬 실행 시 env 없이 돌리면 이 폴더에 생긴다 — `.gitignore` 의 `data/` 패턴에 걸려 커밋되지 않는다).
 - **`ltr_model.pkl` 은 파이썬 pickle 이라 자바가 못 읽는다.** ONNX 로 내보내거나
-  파이썬 추론 서버를 띄워야 한다. AI 파트 권고는 후자다 — 피처 19개를 자바로 다시
+  파이썬 추론 서버를 띄워야 한다. AI 파트 권고는 후자다 — 피처 20개를 자바로 다시
   구현하면 **에러 없이 순위만 틀린다.** 계약 §4-2 참조.
 - pickle 은 sklearn 버전에 묶인다. `ltr_model_meta.json` 의 `sklearn_version` 이
   로컬과 다르면 다시 학습할 것 (`python batch/jobs/train_ltr.py`).

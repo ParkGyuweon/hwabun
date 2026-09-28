@@ -570,16 +570,47 @@ input = product_event_fact, purchase_fact, dim_product
 세 노출의 합이고, 하나라도 빼면 그 경로의 클릭이 분자에만 들어가 비율이 1을 넘는다 —
 2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
 
-**`product_view_count`는 재조회를 뺀다 — `history_back`과 `reload` 둘이다.**
+**`product_view_count`는 재조회를 뺀다 — `history_back`·`reload`·`revisit` 셋이다.**
 프론트는 상세에서 뒤로 갔다 돌아오면 `product_view`를 다시 내고
 (`navigation_source="history_back"`, 프론트 확인 2026-09-17), 새로고침으로 같은 세션을
 이어 쓸 때도 다시 낸다(`navigation_source="reload"`, 프론트 !441·3802391,
-2026-09-22). 둘 다 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
+2026-09-22). 화면 안에서 이미 본 상품 상세로 돌아오는 경우도 마찬가지다
+(`navigation_source="revisit"`, 프론트 !445·64609b0, 2026-09-23) — 장바구니를 열고
+닫으면 그렇게 된다. 셋 다 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
 `detail_entry_rate`가 1을 넘는다 — 특히 새로고침은 노출이 세션 단위 중복 방지로 한 번만
 나가는데 조회만 또 나가서, 같은 세션에서 노출 1 · 조회 2가 된다.
 
-**`direct`는 빼지 않는다.** 목록을 안 거친 진짜 첫 진입이고 생성기가 1,845건 낸다
-(2026-09-22 실측). 새로고침을 `direct`로 묶으면 그것까지 빠지므로 프론트가 값을 따로 뒀다.
+**라벨만 믿지 않고 Event 순서로도 판정한다.** 라벨은 프론트가 배포된 시점 이후
+Event에만 있는데, Mart는 매 배치 raw 전체를 다시 읽으므로 그 전에 쌓인 Event도 같이
+집계된다 — 그것들은 `in_app`으로만 남아 있다. 그래서 한 세션·한 상품에서 **두 번째
+이후의 `in_app` 상세**는 라벨이 없어도 재조회로 본다. 순서는 `event_time` 오름차순,
+동률이면 `event_id` 사전순이다(§4.4 결정성).
+
+**이 파생 규칙은 프론트의 `revisit` 기준보다 넓다.** 프론트는 직전 `product_view`
+이후에 그 상품의 `product_click`이 있었으면 새 진입(`in_app`)으로 둔다
+(`event-properties-schema.md` §3.4, 2026-09-23 오후에 좁혔다). 파생 규칙은 그 클릭을
+보지 않고 두 번째 이후를 전부 재조회로 본다. 라벨이 있는 Event에서는 프론트가 판정한
+`revisit`을 그대로 존중하지만, 라벨 없는 Event에서는 프론트보다 많이 뺀다 — 아래 한계다.
+
+> 2026-09-23 운영 배치가 이 때문에 실패했다. 실사용자 한 세션이 P442566에서
+> `product_click` → `product_view in_app` → `add_to_cart` → `product_view in_app`(14초 뒤)
+> → `product_view in_app`(2초 뒤)를 냈고, 노출 1 · 조회 3으로 `detail_entry_rate`가
+> 300%가 됐다. 같은 세션·상품에 `in_app` 조회가 2회 이상인 비율은 `python_batch`
+> 0.007% · `agent_llm` 6.9% · 실사용자 20.9%로, 실물 프론트를 타는 트래픽에서만 흔하다.
+
+**`direct`와 `session_start`는 빼지 않는다.** 바깥에서 다시 들어온 것이라 몇 번째든
+새 진입이고, 카드를 다시 본 셈이라 노출도 함께 늘어난다. `direct`는 목록을 안 거친
+진짜 첫 진입이고 생성기가 1,845건 낸다(2026-09-22 실측). 새로고침을 `direct`로 묶으면
+그것까지 빠지므로 프론트가 값을 따로 뒀다.
+
+> **알려진 한계 — 순서 판정이 목록 재클릭까지 뺀다.** 목록으로 돌아가 같은 카드를
+> 다시 눌러 들어온 것은 카드를 다시 봤으니 노출도 늘어 새 진입으로 보는 것이 맞다 —
+> 2026-09-23 실측으로 재조회 후보 109건 중 105건(96%)이 앞에 `product_click`이 있었다.
+> 프론트는 같은 날 오후 그것을 `in_app`으로 되돌렸지만(§3.4), 이 파생 규칙은 클릭을
+> 보지 않으므로 라벨 없는 Event에서는 여전히 뺀다. 그만큼 `detail_entry_rate`가 실제보다
+> 낮게 나온다. 비율이 1을 넘는 방향이 아니라 검증은 통과한다. 좁히려면 직전 조회 이후
+> `product_click`이 있었는지를 파생 규칙이 함께 봐야 하는데, 조회 사이 구간을 가르려면
+> 순번을 매기는 창이 필요해 `min` 만으로 얻은 결정성(§4.4)을 다시 따져야 한다.
 
 **세션 기준 지표(`product_view_sessions` 등)에는 영향이 없다** — 같은 세션이라
 `countDistinct`가 한 번만 센다.
@@ -670,6 +701,60 @@ section_view_count`가 항상 성립한다.** 제외하지 않으면 "본 사람
 화면에 뜬다 — 2026-09-20 운영 Mart에서 성분 줄이 조회 23,285 · 세션 26,715였다.
 제외된 세션의 체류·드래그는 `dwell_ms_sum`·`text_selection_count`에 그대로 남는다.
 빠지는 것은 "봤다"는 집계뿐이다.
+
+#### 4.4-1 `section_view_sessions`로 비율을 만들 때의 한계 (2026-09-23)
+
+**이 Mart로는 "그 구역을 본 사람 비율"을 정확히 낼 수 없다.** 화면이
+`section_view_sessions / product_view_sessions`로 만드는데 두 값이 어긋난다.
+`ssafy-beauty`의 성분 목록이 **100.8%**로 나온 자리다. 원인이 둘이고 **둘 다 컬럼을
+더해야 풀린다** — 아래 "고치는 방법"이 정본이다.
+
+**원인 ① 분모에 Quick Look이 빠져 있다.** 섹션은 Quick Look에서도 읽히는데
+`product_view_sessions`는 상품 상세를 연 세션만 센다(§4.5 `reached_product_view`).
+2026-09-23 운영 Mart 실측이다.
+
+| 항목 | 값 |
+| --- | --- |
+| 상세 조회 없이 섹션을 읽은 (세션·상품·섹션) 조합 | 3,780 (`product_hero` 1,845 · `highlights` 1,264 · `about_product` 671) |
+| `section_view_sessions > product_view_sessions` 인 행 | 4,775 / 28,789 (16.6%). 평균 비율 601%까지 |
+| 브랜드×종류 100% 초과 중 섹션이 1개뿐인 조합 | 137 / 191 — **이 원인만으로 넘는다** |
+
+**올바른 분모는 `detail_view_sessions`(상세 ∪ Quick Look)다.** 같은 구조를 쓰는
+§4.21 `friction_daily`가 그 분모를 쓰고 **24,720행에서 위반이 0이다.** 이 Mart에는 그
+컬럼이 없다.
+
+**원인 ② `section_id`를 가로질러 합산할 수 없다.** 세션 수는 더하면 같은 사람을 여러 번
+센다. 한 `content_kind`가 섹션 여러 개에 걸치면 소비자가 그것을 합산하게 된다.
+
+| 항목 | 값 |
+| --- | --- |
+| 섹션이 2개 이상인 `content_kind` | `ingredient_list` (`about_product` · `ingredients`) |
+| 브랜드×종류 조합 중 섹션 2개 이상 | 76 / 1,038 |
+| 100% 초과 191개 중 이 원인이 겹친 조합 | 54. 최대 **149.8%** |
+| `ssafy-beauty` 성분 목록 | 768 + 564 = 1,332 vs 분모 1,322 → 100.8% |
+
+역방향도 있다 — `section_id=product_hero` 하나에 `content_kind`가 넷이다
+(`product_image` · `price` · `cta` · `variant_option`). **두 축은 다대다다.**
+
+**분자를 잘라 맞추면 안 된다.** `section_view_sessions`를 `product_view` 모집단으로
+제한해 보면 위반은 4,775행 → 0행이 되지만, `product_hero`가 1,845 세션에서 **0**이 되어
+화면에 "아무도 대표 이미지를 안 봤다"는 거짓이 뜬다. 같은 이유로 Q5에
+`section_view_sessions <= product_view_sessions` 검사를 두지 않는다 — **성립하지 않는
+규칙이라 정상 데이터가 실패한다.**
+
+성분·리뷰 열람(`ingredient_view_sessions`·`review_view_sessions`)은 제한이 옳다. 그
+행동은 Quick Look에 없어서 `product_view_sessions`가 맞는 분모이고, 실측 위반도 0행이다.
+
+**고치는 방법 — 컬럼 둘을 더한다 (시연 후).**
+
+1. `detail_view_sessions`를 이 Mart에 싣는다. `funnel_session_fact`에 이미 있다(§4.5)
+2. `content_kind` 단위 고유 세션 수를 별도 컬럼으로 낸다. `product_view_sessions`처럼
+   각 행에 같은 값을 반복해 넣으면 소비자가 `max`로 되돌린 뒤 합산할 수 있다
+   (`DashboardMartService` 가 그 Mart에서 이미 쓰는 방식이다)
+
+`schema.sql`에 `IF NOT EXISTS`가 없어 파일만 고쳐도 기존 테이블이 바뀌지 않는다.
+`deploy/ec2-1/migrations/`에 `ALTER TABLE`이 따로 필요하다. **raw 초기화는 필요 없다** —
+DW는 파이프라인 끝이고 배치가 매번 raw에서 Mart를 새로 만든다.
 
 입력의 `content_kind`가 비어 있을 때 섹션 정본 라벨로 채우는 규칙은
 `processed-schema.md` §3에 있다 — **여기서 다시 채우지 않는다.** 두 곳에서 채우면
@@ -963,7 +1048,13 @@ input = product_event_fact
 
 `impression_count`, `click_count`, `impression_sessions`, `click_sessions`, `skip_count`,
 `banner_ctr`를 저장한다. `banner_ctr`은 `click_count / impression_count`이며 분모 0은
-NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`는 원문
+NULL이다. `skip_count`는 `impression_count - click_count`다. `banner_skip` Event는 만들지 않는다.
+
+**`skip_count`는 일자 칸에서 음수가 될 수 있다.** 정의가 위와 같으므로 세션이 자정을
+넘겨 노출이 앞날, 클릭이 뒷날에 찍히면 뒷날 칸이 음수가 된다 — 클릭이 노출보다 많은
+그 칸의 다른 표현이다. 그래서 음수 여부는 일자별로 보지 않고 날짜를 합산해
+`banner_clicks_do_not_exceed_impressions`가 클릭·노출과 한자리에서 본다. 일자별로
+막으면 자정을 넘긴 정상 동선이 걸린다(2026-09-23 운영 배치가 그것 하나로 실패했다). `banner_value_is_valid`는 원문
 어휘집 검증 결과이고 `new_brand`만 NULL을 허용한다.
 
 `policy_version`을 key에 두는 이유는 배너·정렬 정책 배포 전후를 같은 Mart 안에서
@@ -1017,7 +1108,7 @@ input = sessionized_events
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
-| key 전체 | 공통/string | scenario/run만 Y | 집계 축. 출발 브랜드는 두지 않는다 |
+| key 전체 | 공통/string | `generator_type`·scenario·run만 Y | 집계 축. 출발 브랜드는 두지 않는다. `destination_brand_id`는 NOT NULL이다 — 입력이 `brand_id`가 있는 조회로 한정된다. Web 실사용자 행은 `generator_type`이 NULL이다(§2.2, 2026-09-23 운영 1,945행 중 23행) |
 | `brand_view_sessions` | bigint | N | 그 브랜드 상품을 조회한 세션. 모든 비율의 분모 |
 | `cross_brand_entry_sessions` | bigint | N | 그중 세션 첫 브랜드와 다른 브랜드로 넘어온 세션 |
 | `recommendation_cross_brand_entry_sessions` | bigint | N | 위 중 추천 귀속 |
@@ -1311,7 +1402,7 @@ input = content_interest_fact, funnel_session_fact
 
 **대시보드가 만들 수 없는 값이다.** "그 콘텐츠를 본 세션"과 "그 세션이 담았는가"를
 맞추려면 세션 단위 조인이 필요한데, 집계된 Mart 두 개를 받아서는 복원되지 않는다.
-`docs/dashboard/dashboard-mart-api-spec.md` §6-2가 이 Mart를 요구하는 근거다.
+`dashboard-mart-api-spec.md` §6-2가 이 Mart를 요구하는 근거다.
 
 **cart_lift를 미리 계산하지 않는다.** 기준이 되는 브랜드 담기율(§4.14
 `view_to_cart_rate`, 분모 `detail_view_sessions`)과 나누면 "본 사람의 담기율 배수"가
@@ -1750,9 +1841,10 @@ Q5(`validate_pipeline_job`)가 이미 같은 불변식을 Parquet 단계에서 �
 
 ### 7.2 projection 대상과 적재 순서
 
-현재 MySQL `dw` projection 대상은 `contracts/dw/schema.sql`에 정의된 22개 Mart다.
-Spark가 만든 Parquet이 기준 저장소이고, `publish_user_trait_job.py`가 선택된 Mart를
-staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 22종
+현재 MySQL `dw` projection 대상은 `contracts/dw/schema.sql`에 정의된 24개 Mart다.
+이 가운데 **시장 비교 2종은 2026-09-28에 DDL·allowlist만 갖춘 상태**이고 운영 MySQL에는
+아직 테이블이 없다(아래 참고). Spark가 만든 Parquet이 기준 저장소이고, `publish_user_trait_job.py`가 선택된 Mart를
+staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 24종
 전체를 발행하며, `DW_PROJECTION_MARTS` 또는 `--marts`로 일부만 선택할 수 있다.
 
 | 그룹 | Mart |
@@ -1763,6 +1855,7 @@ staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 �
 | 세그먼트·가격·코호트 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi`, `brand_cohort_dim`, `commons_cohort_weekly` |
 | 성분·이탈·유입 | `ingredient_weekly_interest`, `product_exit_daily`, `segment_content_daily`, `friction_daily`, `exit_daily`, `entry_source_daily` |
 | 콘텐츠·이벤트 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily`, `event_daily` |
+| 시장 비교 | `cross_brand_daily`, `category_price_reference` |
 
 **E4의 네 블록은 2026-09-16에 합의됐다** (프론트 계약 0.3). `price_bands`·
 `segment_price_grid`·`cohort` 세 블록을 넣기로 하면서 `brand_price_band_daily_kpi`·
@@ -1774,13 +1867,19 @@ projection 대상이 됐다.
 **`brand_cohort_dim` 없이는 `commons_cohort_weekly`를 읽을 수 없다** — 코호트 행에
 브랜드 식별자가 없기 때문이다(§4.18 R5).
 
-다음 4개 Mart는 현재도 MySQL projection 대상이 아니라 Parquet에만 둔다.
+**시장 비교 두 Mart를 2026-09-28에 발행 대상으로 올렸다.** `cross_brand_daily`(§4.12)와
+`category_price_reference`(§4.9)는 **여러 브랜드가 모여야 나오는 값**이고, 마트까지
+만들어 두고 Parquet에만 두면 대시보드가 영원히 읽지 못한다. 둘 다 다른 브랜드를
+식별할 값을 싣지 않는다 — 앞은 출발 브랜드를 두지 않고(§4.12), 뒤는 브랜드 축이
+아예 없다(§4.9). **읽는 엔드포인트는 아직 없다.** "소비자 없는 마트는 옮기지
+않는다"는 원칙(§7.2 아래)과의 관계는 이렇게 정리한다 — DDL·allowlist·검증은 미리
+갖추고, **실제 발행(MySQL 적재)은 읽는 엔드포인트가 정해진 뒤에 한다.**
+
+다음 2개 Mart는 현재도 MySQL projection 대상이 아니라 Parquet에만 둔다.
 
 | Mart | 이유 |
 | --- | --- |
 | `banner_daily` | 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다 |
-| `cross_brand_daily` | 읽는 엔드포인트가 없다 |
-| `category_price_reference` | 카탈로그 파생 참조표다. Event를 읽지 않고 브랜드 축도 없다 |
 | `analytics_baseline` | 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다 |
 
 소비자가 생기거나 저장 정책이 바뀌면 `PARQUET_ONLY`와 `GRAINS`를 함께 검토하고

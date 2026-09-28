@@ -779,6 +779,14 @@
   text-align: left;
 }
 
+/*
+ * 실제로는 늘 body 에 띄운다(portal). 위치·폭·최대 높이는 NotificationBell 이 인라인 style 로 준다 —
+ * 위 top/right/width/max-height 는 그 값이 덮는다. 상단 띠(1000)·로그 창보다 위에 온다.
+ */
+.notif__panel--float {
+  z-index: 1100;
+}
+
 .notif__head {
   display: flex;
   align-items: center;

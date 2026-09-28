@@ -112,7 +112,9 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
   });
 
   // 드래그 0회인 성분을 "가장 많이 드래그한 성분"으로 적지 않는다. 기록이 없으면 없다고 적는다
-  const topScrape = scrapedIngredients.find((x) => x.count > 0);
+  const topScrape = scrapedIngredients.find((x) => x.score > 0);
+  // 복사가 한 번도 없으면 열 자체를 안 둔다. 0 만 늘어선 열은 읽을 게 없다
+  const anyCopy = rows.some((c) => c.copyCount > 0);
   const expand = validationBehaviors.find((v) => v.event === 'ingredient_view_mode_change') ?? validationBehaviors[0];
 
   const headline = noData
@@ -181,7 +183,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         <Kpi
           label="고객이 가장 많이 찾아본 성분"
           value={topScrape ? labelKo(topScrape.name) : '-'}
-          sub={topScrape ? `이름을 긁거나 복사한 횟수 ${fmt.int(topScrape.count)}번` : '아직 기록 없음'}
+          sub={topScrape ? `이름을 긁거나 복사한 성분 1위 · 관련 행동 ${fmt.int(topScrape.events)}번` : '아직 기록 없음'}
           source={source.scraped}
         />
         <Kpi
@@ -204,14 +206,16 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               <th>글</th>
               <th title="그 글이 화면에 보인 방문 ÷ 상세를 연 방문">본 비율</th>
               <th title="그 글에 머문 시간 ÷ 상세를 연 방문">읽은 시간</th>
+              <th title="그 글을 본 방문 중 장바구니에 담은 비율">본 고객 담기</th>
               <th title="그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율">담기 효과</th>
+              {anyCopy ? <th title="그 글에서 글자를 복사한 횟수">복사</th> : null}
               <th>할 일</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="note">
+                <td colSpan={anyCopy ? 7 : 6} className="note">
                   아직 기록이 없습니다
                 </td>
               </tr>
@@ -223,9 +227,11 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
                   <td>{c.ko}</td>
                   <td>{fmt.pct(c.viewRate)}</td>
                   <td>{(c.avgDwellMs / 1000).toFixed(0)}초</td>
+                  <td>{c.viewedCartRate === null ? '-' : fmt.pct(c.viewedCartRate)}</td>
                   <td>
                     <strong>{liftPending ? '-' : `${c.conversionLift.toFixed(1)}배`}</strong>
                   </td>
+                  {anyCopy ? <td>{c.copyCount > 0 ? `${fmt.int(c.copyCount)}번` : '-'}</td> : null}
                   <td>
                     <span className={`pill pill--${c.verb}`} title={CUSTOMER_MADE.has(c.kind) ? '고객이 쓴 리뷰·평점이라 사장님이 고치는 대상이 아닙니다' : undefined}>
                       {liftPending ? '판단 전' : CUSTOMER_MADE.has(c.kind) ? '고객이 만든 값' : c.sampleSize < THIN_VIEWS ? '판단 전' : VERB_PILL[c.verb]}
@@ -257,6 +263,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             <dd>그 글이 화면에 보인 방문 ÷ 상세를 연 방문.</dd>
             <dt>읽은 시간</dt>
             <dd>그 글에 머문 시간 ÷ 상세를 연 방문. 글 3개 이상 겹친 시간은 제외.</dd>
+            <dt>본 고객 담기</dt>
+            <dd>그 글을 본 방문 중 장바구니에 담은 비율.</dd>
             <dt>담기 효과</dt>
             <dd>그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율. 1.0배가 평균입니다. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
             <dt>기록 수</dt>
@@ -266,13 +274,14 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
       </Panel>
 
       <div className="grid grid--2">
-        <Panel title="고객이 가장 많이 찾아본 성분 10가지" source={source.scraped} fold aside={<span title="긁은 글 원문은 저장하지 않습니다">성분 이름을 마우스로 긁거나 복사한 횟수</span>}>
+        <Panel title="고객이 가장 많이 찾아본 성분 10가지" source={source.scraped} fold aside={<span title="긁은 글 원문은 저장하지 않습니다">이름을 긁거나 복사할수록 점수가 올라갑니다</span>}>
           <BarList
             items={scrapedIngredients.map((i) => ({
               label: labelKo(i.name),
-              value: i.count,
-              hint: i.copyCount === null ? undefined : `복사 ${i.copyCount}회`,
+              value: i.score,
+              hint: `행동 ${fmt.int(i.events)}번`,
             }))}
+            format={(v) => `${fmt.int(v)}점`}
           />
         </Panel>
 

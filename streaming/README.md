@@ -229,7 +229,7 @@ received_at ASC
 
 Q2는 동일 Kafka 좌표가 Raw에 반복된 경우 먼저 한 row로 축약하고, 그 다음
 `event_id` 기준 정본을 고른다. 같은 `event_id`의 나머지 후보는
-`duplicate_events`에 보존한다. JSON 파싱·공통 필드·42종 Event 등록 여부와
+`duplicate_events`에 보존한다. JSON 파싱·공통 필드·43종 Event 등록 여부와
 Event-intent 조합·sequence/event index·actor-source 조합·상품 대상 Event의
 `product_id`·synthetic 필수 properties 검증에 실패한 row는 원문과 좌표를
 `bad_events`에 남긴다. `banner_impression`과 `banner_click`은 배너 타입·값·slot·

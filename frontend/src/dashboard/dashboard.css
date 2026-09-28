@@ -154,22 +154,16 @@ body {
 }
 
 /*
- * 사이드바 안의 알림 패널. 종은 사이드바(232px) 왼쪽 아래에 있는데 패널(360px)은 헤더용으로
- * "오른쪽 끝 맞춤·아래로 열기" 라서 화면 왼쪽 밖으로 뻗어 잘렸다 (2026-09-21 규원님 제보).
- * 여기서는 종의 왼쪽에 맞춰 오른쪽으로, 발 부분이라 위로 연다. 사이드바는 backdrop-filter 로
- * 자기 쌓임 맥락을 만들어 뒤에 오는 본문이 패널을 덮을 수 있어 z-index 를 준다.
+ * 사이드바 알림 패널. 종은 사이드바(232px) 왼쪽 아래, 패널은 360px 이다. 처음엔 헤더식 "오른쪽 끝 맞춤"
+ * 이라 화면 왼쪽 밖으로 뻗어 잘렸고 (2026-09-21 규원님 제보), 그다음엔 사이드바의 `overflow-y: auto` 가
+ * 오른쪽을 잘랐다 (2026-09-23 은솔님 제보). 사이드바는 backdrop-filter 도 있어 fixed 로도 못 빠져나온다.
+ * 그래서 NotificationBell 이 placement="above" 일 때 패널을 body 로 빼고 위치는 인라인 style 로 준다.
+ * 패널을 띄우는 규칙은 이제 쇼핑몰 헤더와 같다(NotificationBell). z-index 는 styles/auth.css 의 .notif__panel--float.
  */
 .sidebar {
   z-index: 5;
 }
 
-.sidebar .notif__panel {
-  top: auto;
-  bottom: 38px;
-  left: 0;
-  right: auto;
-  width: min(360px, calc(100vw - 48px));
-}
 
 /* 서버 브랜드 선택·등록·상태. 사이드바 브랜드 이름 바로 아래 */
 .sidebar__brand-select {
@@ -1109,6 +1103,14 @@ table.data tr:hover td {
     flex-wrap: nowrap;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  /*
+   * 발표용 상단 띠(demo-banner.css)의 `html[data-demo] .sidebar { height: calc(100vh - 띠) }` 가 위 `height: auto` 보다
+   * 세서, 가로 막대가 화면 높이만큼 늘어나고 메뉴가 한가운데 떴다 (2026-09-28 유림님 제보). 좁은 화면에선 띠가 있어도 접는다.
+   */
+  html[data-demo] .console .sidebar {
+    height: auto;
   }
 
   /* 가로 막대 안의 모든 칸 — 내용보다 좁아지지 않는다. 이게 한 자씩 쪼개지던 원인이다 */

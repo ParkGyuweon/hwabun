@@ -110,7 +110,7 @@ export SEPHORA_DATASET=/path/to/dataset/sephora
 # 1) 카탈로그 200개  -> data/products_200.json, data/excluded_products.json
 python batch/ingest/build_products_json.py
 
-# 2) 어휘집 v0.4     -> contracts/product-feature-vocab.json
+# 2) 어휘집(현재 0.7)    -> contracts/product-feature-vocab.json
 python batch/ingest/build_feature_vocab.py
 ```
 
@@ -120,7 +120,7 @@ python batch/ingest/build_feature_vocab.py
 `affinity_lift.csv` 와 `concern_from_reviews.npz` 생성기는 각각
 `batch/ingest/build_affinity_lift.py`(2026-09 레포로 이관), `batch/jobs/concern_from_reviews.py` 입니다.
 
-### 재현 검증 (2026-08-31, 어휘집 0.4 시점 — 현재 어휘집은 0.5: 09-10 성분 태그 제거·SPF 동의어·retinoate/betaine salicylate)
+### 재현 검증 (2026-08-31, 어휘집 0.4 시점 — 현재 어휘집은 0.7(09-15 price_bin 원화 경계): 09-10 성분 태그 제거·SPF 동의어·retinoate/betaine salicylate)
 
 원본 CSV 에서 처음부터 다시 돌려 `products_200.json` · `excluded_products.json` ·
 `contracts/product-feature-vocab.json` 이 **바이트 단위로 동일**함을 확인했습니다.

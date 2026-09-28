@@ -125,6 +125,7 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
     impressions: p.impression_sessions,
     clicks: funnelClicks,
     detailViews: p.product_view_count,
+    detailSessions: p.detail_view_sessions ?? p.product_view_sessions,
     quickLooks,
     addToCart: p.add_to_cart_count,
     removed: p.remove_from_cart_count,
@@ -139,14 +140,20 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
   };
 }
 
-function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: boolean } {
+function toProducts(p: ProductsPayload, brandProducts: Product[] = []): { rows: ProductMetrics[]; diagnostics: boolean } {
+  /*
+   * 이름표는 번들 카탈로그 + 이 브랜드의 서버 상품. 번들에만 기대면 사장님이 쇼핑몰에 새로 등록한 상품이
+   * 마트에는 잡혀도 여기서 버려져 상품 화면·관심 상품 TOP5·퀵룩 합계에서 빠졌다 (2026-09-23 명세 대조).
+   * 같은 id 면 서버 것이 이긴다 — 이름·가격을 사장님이 고쳤을 수 있다.
+   */
   const byId = new Map<string, Product>(catalogProducts.map((c) => [c.product_id, c]));
+  for (const b of brandProducts) byId.set(b.product_id, b);
   let anyDiag = false;
 
   const base = p.products
     .map((r) => {
       const product = byId.get(r.product_id);
-      if (!product) return null; // 카탈로그에 없는 상품은 이름을 못 붙인다. 등록 카탈로그 동기화가 붙으면 여기서 찾는다
+      if (!product) return null; // 번들에도 서버 목록에도 없는 상품(판매 중지 등)은 이름을 못 붙인다
       const f = r.funnel;
       const impressions = r.product_impression_count;
       const clicks = r.product_click_count;
@@ -198,6 +205,8 @@ function toProducts(p: ProductsPayload): { rows: ProductMetrics[]; diagnostics: 
         quickLookToDetail: d?.quick_look_open_detail_rate ?? null,
         removeRate: ratio(r.remove_from_cart_sessions, r.add_to_cart_sessions),
         infoRate,
+        ctr: r.product_ctr ?? null,
+        detailEntryRate: r.detail_entry_rate ?? null,
         rates,
       };
       return row;
@@ -235,6 +244,8 @@ function toContent(p: ContentPayload): { rows: ContentAttention[]; lift: boolean
         avgDwellMs: nz(r.avg_dwell_ms_per_session, ratio(r.dwell_ms_sum, r.product_view_sessions)),
         viewRate: nz(r.view_rate, ratio(r.section_view_sessions, r.product_view_sessions)),
         conversionLift: lift ?? 1,
+        viewedCartRate: r.conversion?.viewed_cart_rate ?? null,
+        copyCount: r.text_copy_count ?? 0,
         sampleSize: r.section_view_sessions,
       };
     })
@@ -246,7 +257,11 @@ function toSegments(p: SegmentsPayload, emptyMatrix: BehaviorMetrics['segmentMat
   const types = ['dry', 'oily', 'combination', 'normal'];
   const byType = p.by_segment
     .filter((s) => s.segment_type === 'skin_type')
-    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s) }));
+    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s), users: s.segment_user_count }));
+  const byTone = SKIN_TONE_ORDER.flatMap((tone) => {
+    const s = p.by_segment.find((x) => x.segment_type === 'skin_tone' && x.segment_value === tone);
+    return s ? [{ type: tone, sessions: s.product_view_sessions, cartRate: cartRateOf(s), users: s.segment_user_count }] : [];
+  });
 
   const matrix = p.grid
     ? types.map((type) => ({
@@ -270,17 +285,20 @@ function toSegments(p: SegmentsPayload, emptyMatrix: BehaviorMetrics['segmentMat
       })
     : emptyTop;
 
-  return { byType: byType.length > 0 ? byType : null, matrix, grid: Boolean(p.grid), top, topReal: Boolean(p.top_content), sameSkin: p.same_skin_filter_rate };
+  return { byType: byType.length > 0 ? byType : null, byTone, matrix, grid: Boolean(p.grid), top, topReal: Boolean(p.top_content), sameSkin: p.same_skin_filter_rate };
 }
 
-/** 드래그 TOP 10. 어휘집에 없는 이름은 한국어 표시명을 붙일 수 없어 뺀다 (성분 갭 표와 같은 규칙) */
+/**
+ * 직접 짚은 성분 TOP 10. 프론트 어휘집에 없는 성분은 서버가 준 한국어 이름(label_ko)으로 남긴다 —
+ * 전에는 어휘집에 없다고 버려서 서버가 준 성분이 목록에서 사라졌다 (2026-09-28).
+ */
 function toScraped(p: IngredientsPayload) {
   return [...p.by_ingredient]
-    .map((i) => ({ name: canonicalIngredient(i.ingredient), score: i.direct_match_score }))
-    .filter((i): i is { name: string; score: number } => i.name !== null)
+    .map((i) => ({ name: canonicalIngredient(i.ingredient) ?? i.label_ko ?? null, score: i.direct_match_score, events: i.contributing_event_count }))
+    .filter((i): i is { name: string; score: number; events: number } => Boolean(i.name))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10)
-    .map((i) => ({ name: i.name, count: Math.round(i.score), copyCount: null }));
+    .map((i) => ({ name: i.name, score: Math.round(i.score), events: i.events }));
 }
 
 function toFriction(p: FrictionPayload, base: BehaviorMetrics) {
@@ -398,7 +416,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
   // E2 먼저. 개요의 퀵룩 합계와 성분 보유 판정에 상품이 필요하다
   let quickLooks = base.overview.quickLooks;
   if (pr) {
-    const { rows, diagnostics } = toProducts(pr);
+    const { rows, diagnostics } = toProducts(pr, brandProducts);
     // 행이 0 개여도 그대로 쓴다. "아직 아무도 안 봤다" 는 사실이고, 모의 상품 목록으로 덮으면 사실이 사라진다
     out = { ...out, productMetrics: rows };
     src.products = 'real';
@@ -466,6 +484,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
           detailSessions: ov.funnel.detail_view_sessions ?? ov.funnel.product_view_sessions,
           productViewSessions: ov.funnel.product_view_sessions,
           quickLookSessions: ov.funnel.quick_look_sessions ?? null,
+          quickLookCartSessions: ov.funnel.quick_look_cart_sessions ?? null,
         },
       };
       src.funnel = 'real';
@@ -504,6 +523,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
     out = {
       ...out,
       segmentByType: s.byType ?? [],
+      segmentByTone: s.byTone,
       // 격자·상위 콘텐츠가 비어 있는 것도 답이다. 모의 히트맵으로 덮으면 없는 고객군이 있는 것처럼 보인다
       segmentMatrix: s.matrix,
       segmentTopContent: s.top,
@@ -542,7 +562,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
           type,
           cells: cellsOf
             .filter((c) => c.segment_value === type)
-            .map((c) => ({ bin: c.price_bin, sessions: c.detail_view_sessions, cartRate: c.view_to_cart_rate ?? 0 })),
+            .map((c) => ({ bin: c.price_bin, sessions: c.detail_view_sessions, cartRate: c.view_to_cart_rate ?? 0, purchaseRate: c.view_to_purchase_rate })),
         })),
       };
       src.segmentPriceGrid = 'real';

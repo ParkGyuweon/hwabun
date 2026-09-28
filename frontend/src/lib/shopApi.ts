@@ -718,7 +718,14 @@ export interface SellerOrder {
 }
 
 /**
- * `GET /api/seller/orders?brandId=&from=&to=` (docs/dashboard/seller-console-gaps.md §4).
+ * 한 번에 받는 주문 수. 서버 상한(MAX_LIMIT 1000)에 맞춘다. 서버 기본값 200 에 맡기면 주문이 200건을 넘는 순간
+ * 기간 매출·누적 판매량이 조용히 줄어든다. 이 수만큼 돌아오면 잘렸을 수 있다 — 화면이 그렇게 적는다.
+ * 합계를 서버가 따로 주면 이 상한과 무관해진다 (백엔드 요청 2026-09-23).
+ */
+export const SELLER_ORDER_LIMIT = 1000;
+
+/**
+ * `GET /api/seller/orders?brandId=&from=&to=&limit=` (docs/dashboard/seller-console-gaps.md §4).
  *
  * 못 읽으면 null 이다. 화면은 그때 "-" 를 적는다 — 빈 배열로 바꿔 돌려주면 "주문이 없다" 와 구분이 안 된다.
  */
@@ -726,7 +733,7 @@ export async function fetchSellerOrders(
   brandId: string,
   range?: { from: string; to: string },
 ): Promise<SellerOrder[] | null> {
-  const query = new URLSearchParams({ brandId });
+  const query = new URLSearchParams({ brandId, limit: String(SELLER_ORDER_LIMIT) });
   if (range) {
     query.set('from', range.from);
     query.set('to', range.to);

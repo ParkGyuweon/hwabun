@@ -6,7 +6,7 @@
 |---|---|---|
 | `personas/` | 실제 Sephora 리뷰어에서 층화추출한 페르소나 10,000명(코드 9,900 + 에이전트 100) + 홀드아웃 2,000×2. `build_personas.py` | [`personas/data/README.md`](personas/data/README.md) |
 | `generator/` | 코드 페르소나의 합성 행동 로그. `--recommend-url` 로 실제 추천 서버 응답을 쓴다(히어로 1칸 `hero=new_brand`, Jira 239). `--post` 로 수집기에 전송 | [`generator/README.md`](generator/README.md) |
-| `agents/` | LLM 에이전트 100명이 실제 화면을 조작 (Playwright). 프롬프트로는 페르소나 차이가 안 난다(lift 1.0x) — 다음 손잡이는 러너 코드 필터(Jira 241) | [`agents/README.md`](agents/README.md) |
+| `agents/` | LLM 에이전트 100명이 실제 화면을 조작 (Playwright). 프롬프트로는 페르소나 차이가 안 난다(lift 1.0x). 코드 종류 필터로 담기 lift 1.00→1.11x(Jira 241). 남은 손잡이는 노출층(목록 레일) | [`agents/README.md`](agents/README.md) |
 | `feedback/` | 고객 피드백 생성·분류(고정 목록 5축 20종, 계약 `contracts/feedback-classification.md`)·금지어 | 계약 문서 참조 |
 | `collector_client.py` | 수집기 `POST /api/events` 클라이언트 (에이전트·생성기 공용) | — |
 

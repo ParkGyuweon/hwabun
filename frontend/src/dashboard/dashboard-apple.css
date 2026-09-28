@@ -1353,6 +1353,20 @@ table.data td.is-warn {
   .defn__list dd {
     margin-bottom: 10px;
   }
+
+  /*
+   * 좁은 화면에선 막대를 뺀다. 막대 116px·값 74px 를 고정으로 잡으면 이름 칸이 0px 이 돼 무엇의 숫자인지 사라졌다 (2026-09-28).
+   * 이름과 숫자가 답이고 막대는 곁들이라 버려도 뜻이 남는다.
+   */
+  .bars__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .bars--rank .bars__row {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+  }
+  .bars__track {
+    display: none;
+  }
 }
 
 /* 결론 배너: 전체 브랜드 종합은 핑크 그라데이션 + 왼쪽 띠. 내 것(연두)과 한눈에 갈려야 한다 */
