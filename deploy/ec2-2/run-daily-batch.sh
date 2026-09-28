@@ -71,7 +71,7 @@ for job in clean_events_job derive_facts_job build_marts_job; do
 done
 
 # Q5 is a report, not a gate. It checks every Mart invariant that
-# validate_pipeline_job defines -- 162 of them on 2026-09-18, and the count grows
+# validate_pipeline_job defines -- 162 of them on 2026-09-18 and 166 on 2026-09-23, and the count grows
 # as the data part adds checks, so read that number as a snapshot. A handful of
 # bad rows used to abort the run before the publish step below
 # (set -e), leaving 22 correct Marts unpublished and the dashboard blank. On
