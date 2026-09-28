@@ -110,8 +110,8 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     title: '가격', desc: '내 가격과 같은 카테고리 중간 가격',
   },
   inflow: {
-    section: 'market', tab: '넘어온 고객', scope: 'behavior',
-    title: '다른 브랜드에서 넘어온 고객', desc: '다른 브랜드를 보다가 내 상품으로 온 방문',
+    section: 'market', tab: '넘어온 방문', scope: 'behavior',
+    title: '다른 브랜드에서 넘어온 방문', desc: '다른 브랜드를 보다가 내 상품으로 온 방문 수',
   },
   register: {
     section: 'register', tab: '상품 등록', scope: 'feedback',
