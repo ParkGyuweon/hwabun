@@ -836,21 +836,6 @@ body {
   color: var(--color-star);
 }
 
-/* ---------- 개발용 로그 패널: 화면 톤에 맞게만 ---------- */
-
-.log-panel__toggle {
-  border-radius: var(--radius-pill);
-  background: rgba(29, 29, 31, 0.92);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.log-panel__body {
-  border-radius: 16px;
-}
-
 @media (max-width: 720px) {
   .list__promo-head h2 {
     font-size: 30px;

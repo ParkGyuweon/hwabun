@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
-import LogPanel from './components/devtools/LogPanel';
 import { isPreviewMode } from './lib/devtools';
 import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
@@ -1012,8 +1011,6 @@ export default function App() {
         />
       )}
 
-      {/* 우하단 고객 행동 로그 창 · 늘 켜짐 (2026-09-23 유림님, 전에는 ?dev=1 일 때만). 상품 등록 미리보기에는 없다 */}
-      {!preview ? <LogPanel /> : null}
     </>
   );
 }
