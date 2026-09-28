@@ -332,7 +332,7 @@ class DashboardMartServiceTest {
       Map.entry("cohort_key", "2-3|105k+"),
       Map.entry("snapshot_week_kst", "2026-09-07"),
       Map.entry("metric_name", "view_to_cart_rate"),
-      Map.entry("actor_type", "web"),
+      Map.entry("actor_type", "all"),
       Map.entry("window_start_date", "2026-09-07"),
       Map.entry("window_end_date", "2026-09-13"),
       Map.entry("brand_count", 4),
@@ -359,8 +359,8 @@ class DashboardMartServiceTest {
   }
 
   @Test
-  @DisplayName("actor=all 코호트가 여러 실행 행이면 분위값을 만들지 않는다")
-  void allActorCohortDoesNotAverageExecutionRows() {
+  @DisplayName("actor=all 코호트는 분리된 전체 행의 분위값을 읽고 실행축 행을 합치지 않는다")
+  void allActorCohortUsesMaterializedAllRow() {
     segmentDay("2026-09-10", "skin_type", "dry", 10, 1.0D);
     brandDay("2026-09-10", 100, 30, 50, 15, 10);
     insert("dw.brand_cohort_dim", Map.of(
@@ -373,14 +373,16 @@ class DashboardMartServiceTest {
     ));
     insertCohortMetric("web", 2, 0.1D, 0.2D, 0.3D);
     insertCohortMetric("synthetic", 6, 0.3D, 0.4D, 0.5D);
+    insertCohortMetric("all", 5, 0.15D, 0.25D, 0.35D);
 
     Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
     Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
 
-    assertNull(metric.get("p25"));
-    assertNull(metric.get("p50"));
-    assertNull(metric.get("p75"));
-    assertNull(metric.get("my_position"));
+    assertEquals(5L, number(cohort.get("brand_count")));
+    assertEquals(0.15D, decimal(metric.get("p25")), 1e-9);
+    assertEquals(0.25D, decimal(metric.get("p50")), 1e-9);
+    assertEquals(0.35D, decimal(metric.get("p75")), 1e-9);
+    assertEquals(cohort, service.cohortPosition(SELLER, BRAND, FROM, TO, "all").get("cohort"));
   }
 
   /* ---------------------------------------------------------------- E5 ingredients */

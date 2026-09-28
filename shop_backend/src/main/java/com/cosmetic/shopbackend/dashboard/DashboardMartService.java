@@ -94,8 +94,8 @@ public class DashboardMartService {
   /** Compare each active product's list price with its category median. */
   public Map<String, Object> pricePosition(String seller, String brand) {
     owns(seller, brand);
-    // The category DW reference is Parquet-only. Use the same base-price median
-    // rule over the live catalog so this endpoint needs no new DW projection.
+    // This is a live shop-catalog comparison, not the Parquet-only
+    // category_price_reference Mart. Its snapshot and prices may differ.
     List<Map<String, Object>> catalog = shopJdbc.queryForList(
       "select p.product_id,p.brand_id,p.product_name,p.secondary_category," +
         "min(case when v.status='ACTIVE' and v.price_krw>0 then v.price_krw end) price_krw " +
@@ -694,12 +694,12 @@ public class DashboardMartService {
     if (dimensions.isEmpty() || dimensions.getFirst().get("cohort_key") == null) return null;
 
     Map<String, Object> dim = dimensions.getFirst();
-    String actorClause = q.actorClause();
+    // Unlike additive Marts, cohort percentiles have a separately materialized
+    // actor_type='all' row. Never combine execution-axis percentile rows.
+    String actorClause = " and actor_type=?";
     // snapshot_week_kst는 KST 월요일이다. from이 주중이어도 그 주의 스냅샷을 포함한다.
     LocalDate snapshotFrom = q.from().minusDays(6);
-    Object[] cohortArgs = actorClause.isEmpty()
-      ? new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()) }
-      : new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()), q.actor() };
+    Object[] cohortArgs = new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()), q.actor() };
     String cohortWhere = "cohort_key=? and snapshot_week_kst between ? and ?" + actorClause;
     List<Map<String, Object>> rows = many(
         "select metric_name,snapshot_week_kst,window_start_date,window_end_date,brand_count," +
