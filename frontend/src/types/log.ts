@@ -409,6 +409,8 @@ export const EVENT_WEIGHT: Record<EventName, number> = {
  *
  * - 장바구니·찜을 누른 상품          → v_u⁺
  * - 눌러봤지만 아무것도 안 한 상품    → v_u⁻ (보고 나서 안 담았다는 뜻이다)
+ *   단, 관여도 합이 3.0 이상인 정독은 약한 긍정(×0.6)으로 v_u⁺ 에 더한다 —
+ *   09-03 규칙 5 개정 (batch/jobs/user_vector.py ENGAGED_MIN · ENGAGED_POS_W)
  * - 목록에 뜨기만 한 상품            → 어느 쪽에도 안 넣는다 (CTR 분모로만)
  *
  * "보긴 봤다" 는 좋아한다는 뜻이 아니다. 규칙 A·B 를 함께 적용하면
@@ -428,7 +430,7 @@ export const NEGATIVE_EVENTS: ReadonlySet<EventName> = new Set<EventName>([
  *
  * `section_dwell` 은 체크포인트·이탈 때마다 나가므로 스크롤을 오르내리면
  * 같은 섹션 체류가 계속 쌓인다. 그대로 합산하면 오래 스크롤한 것이
- * `add_to_cart`(4.0)보다 훨씬 강한 신호가 된다 — 실측에서 담은 상품 점수의
+ * `add_to_cart`(당시 4.0, 09-07 이후 3.0)보다 훨씬 강한 신호가 된다 — 실측에서 담은 상품 점수의
  * 92% 가 체류였고 담기 자체는 8% 였다.
  *
  * 이벤트는 전부 전송한다 (총 체류 시간 분석에 필요하다).

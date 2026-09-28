@@ -21,7 +21,7 @@ score(u, i) = w1 x cos(v_u+, v_i) - λ x cos(v_u-, v_i) + w2 x attr_affinity(u, 
 | `attribute_affinity.csv` | 4,000행 = 200상품 x 20세그먼트 | `attribute_affinity` |
 | `item_cooc.npz` | 200x200 동시발생 + 상품별 지지자 수 | (서빙 전용) |
 | `ltr_model.pkl` | 학습 결합 모델 (부스팅 트리 239개, 2026-09-16 · 약 0.9MB(901,360바이트) · 정본은 `ltr_model_meta.json`) | (서빙 전용) |
-| `ltr_model_meta.json` | 피처 이름 20개 · 학습 조건 · 순열 중요도 · sklearn 버전 | (서빙 전용) |
+| `ltr_model_meta.json` | 피처 이름 20개 · 학습 조건 · 순열 중요도(현행 모델은 `null` — 09-26 실측값은 노션에만 있음) · sklearn 버전 | (서빙 전용) |
 | `ranking_golden.json` | 페르소나 20명의 기대 상위 10개와 점수 | (대조용, 적재 대상 아님) |
 
 ## 백엔드 적재용 정규화 테이블
