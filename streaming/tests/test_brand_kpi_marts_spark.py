@@ -1,5 +1,6 @@
+import itertools
 import unittest
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 try:
     from pyspark.sql import SparkSession
@@ -301,8 +302,13 @@ PRODUCT_FACT_SCHEMA = (
     "actor_type string, source string, generator_type string, scenario_id string, "
     "simulation_run_id string, session_id string, user_id string, event_name string, "
     "order_id string, purchase_quantity int, item_revenue decimal(18,2), currency string, "
-    "close_reason string, action string, navigation_source string"
+    "close_reason string, action string, navigation_source string, "
+    # 재조회 판정이 세션·상품 안의 Event 순서를 본다 (`_with_revisit_flag`).
+    "event_id string, event_time timestamp"
 )
+
+# Event 순서는 `_event` 를 부른 순서다. 테스트가 적은 순서가 곧 일어난 순서다.
+_EVENT_SEQ = itertools.count(1)
 
 
 @unittest.skipIf(SparkSession is None, "pyspark is available in the Spark image")
@@ -328,10 +334,12 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
 
     @staticmethod
     def _event(session, user, event_name, day=8, product="P1", action=None):
+        seq = next(_EVENT_SEQ)
         return (
             date(2026, 9, day), product, "CAT1", "A", "user", "web",
             None, None, None, session, user, event_name, None, None, None, None,
             None, action, None,
+            f"E{seq:06d}", datetime(2026, 9, day) + timedelta(seconds=seq),
         )
 
     def test_quick_look_cart_counts_against_detail_view_sessions(self):
@@ -383,6 +391,7 @@ class ProductKpiMartsSparkTest(unittest.TestCase):
             (
                 date(2026, 9, 8), "P1", "CAT1", "A", "user", "web", None, None, None,
                 "S1", "U1", "purchase", "O1", 1, None, None, None, None, None,
+                "E900001", datetime(2026, 9, 8, 0, 0, 30),
             ),
             self._event("S2", "U2", "product_view"),
         ])

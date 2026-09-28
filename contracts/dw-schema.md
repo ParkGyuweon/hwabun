@@ -570,16 +570,47 @@ input = product_event_fact, purchase_fact, dim_product
 세 노출의 합이고, 하나라도 빼면 그 경로의 클릭이 분자에만 들어가 비율이 1을 넘는다 —
 2026-09-17 재생 데이터(104만 건)에서 실제로 걸렸다.
 
-**`product_view_count`는 재조회를 뺀다 — `history_back`과 `reload` 둘이다.**
+**`product_view_count`는 재조회를 뺀다 — `history_back`·`reload`·`revisit` 셋이다.**
 프론트는 상세에서 뒤로 갔다 돌아오면 `product_view`를 다시 내고
 (`navigation_source="history_back"`, 프론트 확인 2026-09-17), 새로고침으로 같은 세션을
 이어 쓸 때도 다시 낸다(`navigation_source="reload"`, 프론트 !441·3802391,
-2026-09-22). 둘 다 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
+2026-09-22). 화면 안에서 이미 본 상품 상세로 돌아오는 경우도 마찬가지다
+(`navigation_source="revisit"`, 프론트 !445·64609b0, 2026-09-23) — 장바구니를 열고
+닫으면 그렇게 된다. 셋 다 새 진입이 아니라 재조회다. 포함하면 분자가 노출보다 커져
 `detail_entry_rate`가 1을 넘는다 — 특히 새로고침은 노출이 세션 단위 중복 방지로 한 번만
 나가는데 조회만 또 나가서, 같은 세션에서 노출 1 · 조회 2가 된다.
 
-**`direct`는 빼지 않는다.** 목록을 안 거친 진짜 첫 진입이고 생성기가 1,845건 낸다
-(2026-09-22 실측). 새로고침을 `direct`로 묶으면 그것까지 빠지므로 프론트가 값을 따로 뒀다.
+**라벨만 믿지 않고 Event 순서로도 판정한다.** 라벨은 프론트가 배포된 시점 이후
+Event에만 있는데, Mart는 매 배치 raw 전체를 다시 읽으므로 그 전에 쌓인 Event도 같이
+집계된다 — 그것들은 `in_app`으로만 남아 있다. 그래서 한 세션·한 상품에서 **두 번째
+이후의 `in_app` 상세**는 라벨이 없어도 재조회로 본다. 순서는 `event_time` 오름차순,
+동률이면 `event_id` 사전순이다(§4.4 결정성).
+
+**이 파생 규칙은 프론트의 `revisit` 기준보다 넓다.** 프론트는 직전 `product_view`
+이후에 그 상품의 `product_click`이 있었으면 새 진입(`in_app`)으로 둔다
+(`event-properties-schema.md` §3.4, 2026-09-23 오후에 좁혔다). 파생 규칙은 그 클릭을
+보지 않고 두 번째 이후를 전부 재조회로 본다. 라벨이 있는 Event에서는 프론트가 판정한
+`revisit`을 그대로 존중하지만, 라벨 없는 Event에서는 프론트보다 많이 뺀다 — 아래 한계다.
+
+> 2026-09-23 운영 배치가 이 때문에 실패했다. 실사용자 한 세션이 P442566에서
+> `product_click` → `product_view in_app` → `add_to_cart` → `product_view in_app`(14초 뒤)
+> → `product_view in_app`(2초 뒤)를 냈고, 노출 1 · 조회 3으로 `detail_entry_rate`가
+> 300%가 됐다. 같은 세션·상품에 `in_app` 조회가 2회 이상인 비율은 `python_batch`
+> 0.007% · `agent_llm` 6.9% · 실사용자 20.9%로, 실물 프론트를 타는 트래픽에서만 흔하다.
+
+**`direct`와 `session_start`는 빼지 않는다.** 바깥에서 다시 들어온 것이라 몇 번째든
+새 진입이고, 카드를 다시 본 셈이라 노출도 함께 늘어난다. `direct`는 목록을 안 거친
+진짜 첫 진입이고 생성기가 1,845건 낸다(2026-09-22 실측). 새로고침을 `direct`로 묶으면
+그것까지 빠지므로 프론트가 값을 따로 뒀다.
+
+> **알려진 한계 — 순서 판정이 목록 재클릭까지 뺀다.** 목록으로 돌아가 같은 카드를
+> 다시 눌러 들어온 것은 카드를 다시 봤으니 노출도 늘어 새 진입으로 보는 것이 맞다 —
+> 2026-09-23 실측으로 재조회 후보 109건 중 105건(96%)이 앞에 `product_click`이 있었다.
+> 프론트는 같은 날 오후 그것을 `in_app`으로 되돌렸지만(§3.4), 이 파생 규칙은 클릭을
+> 보지 않으므로 라벨 없는 Event에서는 여전히 뺀다. 그만큼 `detail_entry_rate`가 실제보다
+> 낮게 나온다. 비율이 1을 넘는 방향이 아니라 검증은 통과한다. 좁히려면 직전 조회 이후
+> `product_click`이 있었는지를 파생 규칙이 함께 봐야 하는데, 조회 사이 구간을 가르려면
+> 순번을 매기는 창이 필요해 `min` 만으로 얻은 결정성(§4.4)을 다시 따져야 한다.
 
 **세션 기준 지표(`product_view_sessions` 등)에는 영향이 없다** — 같은 세션이라
 `countDistinct`가 한 번만 센다.
@@ -1017,7 +1048,13 @@ input = product_event_fact
 
 `impression_count`, `click_count`, `impression_sessions`, `click_sessions`, `skip_count`,
 `banner_ctr`를 저장한다. `banner_ctr`은 `click_count / impression_count`이며 분모 0은
-NULL이다. `banner_skip` Event는 만들지 않는다. `banner_value_is_valid`는 원문
+NULL이다. `skip_count`는 `impression_count - click_count`다. `banner_skip` Event는 만들지 않는다.
+
+**`skip_count`는 일자 칸에서 음수가 될 수 있다.** 정의가 위와 같으므로 세션이 자정을
+넘겨 노출이 앞날, 클릭이 뒷날에 찍히면 뒷날 칸이 음수가 된다 — 클릭이 노출보다 많은
+그 칸의 다른 표현이다. 그래서 음수 여부는 일자별로 보지 않고 날짜를 합산해
+`banner_clicks_do_not_exceed_impressions`가 클릭·노출과 한자리에서 본다. 일자별로
+막으면 자정을 넘긴 정상 동선이 걸린다(2026-09-23 운영 배치가 그것 하나로 실패했다). `banner_value_is_valid`는 원문
 어휘집 검증 결과이고 `new_brand`만 NULL을 허용한다.
 
 `policy_version`을 key에 두는 이유는 배너·정렬 정책 배포 전후를 같은 Mart 안에서
