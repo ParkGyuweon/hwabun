@@ -103,8 +103,8 @@ class GrainTest(unittest.TestCase):
 
         분류되지 않은 Mart 가 남으면 "빠뜨린 것"과 "일부러 뺀 것"을 구분할 수 없다.
         """
-        self.assertEqual(22, len(GRAINS))
-        self.assertEqual(4, len(PARQUET_ONLY))
+        self.assertEqual(24, len(GRAINS))
+        self.assertEqual(2, len(PARQUET_ONLY))
         self.assertEqual(set(), set(GRAINS) & set(PARQUET_ONLY))
 
     def test_parquet_only_marts_carry_a_reason(self):
@@ -176,7 +176,12 @@ class GrainTest(unittest.TestCase):
         self.assertIn("KEY `ix_brand_daily_kpi__grain`", ddl)
 
     def test_nullable_grain_marts_use_surrogate_except_dimension(self):
-        """NULL 가능 축은 대리키를 쓰고, Dimension grain은 직접 PK를 쓴다."""
+        """NULL 가능 축은 대리키를 쓰고, grain 전체가 NOT NULL 이면 직접 PK 를 쓴다.
+
+        예외는 실행 축이 없는 카탈로그 파생 Mart 다 — `brand_cohort_dim`(§3.7)과
+        `category_price_reference`(§4.9) 둘이고, 둘 다 Event 를 읽지 않는다.
+        """
+        catalog_derived = {"brand_cohort_dim", "category_price_reference"}
         for mart, grain in GRAINS.items():
             with self.subTest(mart=mart):
                 nullable_grain = any(
@@ -184,15 +189,16 @@ class GrainTest(unittest.TestCase):
                     and column not in NOT_NULL_KEYS_BY_MART.get(mart, ())
                     for column in grain
                 )
-                if mart == "brand_cohort_dim":
+                if mart in catalog_derived:
                     self.assertFalse(nullable_grain)
                 else:
                     self.assertTrue(nullable_grain)
 
     def test_grain_without_nullable_axis_uses_a_composite_key(self):
-        """지금은 해당하는 Mart 가 없지만 분기는 살아 있어야 한다.
+        """실행 축 없이 카탈로그에서만 파생하는 Mart 가 타는 경로다.
 
-        실행 축 없이 카탈로그에서만 파생하는 Mart 가 생기면 이 경로를 탄다.
+        `category_price_reference`(§4.9)가 이 경로로 PK 를 받는다. Mart 이름과
+        무관한 분기라 probe grain 으로 따로 본다.
         """
         GRAINS["__probe__"] = ["secondary_category", "currency"]
         try:

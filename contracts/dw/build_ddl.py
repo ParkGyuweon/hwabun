@@ -107,7 +107,6 @@ NULLABLE_KEYS = {
     "scenario_id",          # §2.2
     "simulation_run_id",    # §2.2
     "brand_id",             # §2.2 상품 미귀속 Mart
-    "destination_brand_id",
     "price_bin",            # §4.6-1 가격 결측 보존
     "reason",               # §4.17 건너뛴 응답은 NULL
     "section_id",           # §4.4 섹션을 모르는 콘텐츠 Event 가 있다
@@ -118,6 +117,12 @@ NULLABLE_KEYS = {
 # 없다. 이 표에 있는 Mart 는 대리키 없이 PRIMARY KEY 를 그대로 쓴다.
 NOT_NULL_KEYS_BY_MART = {
     "brand_cohort_dim": {"brand_id"},   # §3.7 grain/key = brand_id
+    # §4.12 목적지 브랜드. Mart 가 `brand_id IS NOT NULL` 인 조회만 입력으로 받는다
+    # (`build_marts_job._cross_brand_daily`). 운영 1,945행 실측 NULL 0.
+    "cross_brand_daily": {"destination_brand_id"},
+    # §4.9 카탈로그 파생 참조표의 grain. `currency` 는 다른 Mart 에서는 값 컬럼이라
+    # NULL 이 가능하지만(NULLABLE_VALUES) 여기서는 key 다. 운영 8행 실측 NULL 0.
+    "category_price_reference": {"currency"},
 }
 
 # 비 key 인데도 NOT NULL 인 컬럼.
@@ -151,6 +156,13 @@ NOT_NULL_VALUES = {
     "brand_hash",
     "product_count_band",
     "commons_participating",
+    # 카테고리 가격 참조표의 값 (§4.9). 세 가격은 유효 기준가가 있는 상품에서만
+    # 집계하고 표본이 모자라면 `global_fallback` 으로 채우므로 비지 않는다.
+    # `_price` 로 끝나 기본 규칙이 NULL 로 판정하기 때문에 여기 적는다.
+    "observed_median_price",
+    "global_median_price",
+    "reference_median_price",
+    "reference_source",
 }
 # 이름으로 판정할 수 없어 계약에서 직접 가져오는 것.
 NULLABLE_VALUES = {
@@ -162,7 +174,7 @@ NULLABLE_VALUES = {
 
 
 # ── projection 대상 ─────────────────────────────────────────────────────────
-# 현재 MySQL projection 대상은 이 파일의 GRAINS 22종이다 (§7.2).
+# 현재 MySQL projection 대상은 이 파일의 GRAINS 24종이다 (§7.2).
 # EC2-2 Compose의 기본 실행과 적재 Job의 allowlist·DDL은 전체 GRAINS를
 # 지원한다. Parquet 전용 Mart는 아래
 # PARQUET_ONLY에 명시한다.
@@ -276,6 +288,16 @@ GRAINS = {
         "user_id", "trait_date_kst", "trait", "identity_scope",
         "actor_type", "source", "scenario_id", "simulation_run_id",
     ],
+    # §4.12 교차 브랜드 유입. 브랜드 축이 `destination_brand_id` 다 — 출발 브랜드는
+    # Mart 에 없어서 다른 브랜드를 식별할 값이 애초에 실리지 않는다.
+    "cross_brand_daily": [
+        "destination_brand_id", "event_date_kst",
+        "actor_type", "source", "generator_type",
+        "scenario_id", "simulation_run_id",
+    ],
+    # §4.9 카탈로그 파생 참조표. 브랜드 축도 실행 축도 없다 — 같은 통화의 카테고리
+    # 기준가라 판매자마다 같은 값을 읽는다.
+    "category_price_reference": ["secondary_category", "currency"],
 }
 
 
@@ -299,8 +321,6 @@ EXCLUDED_COLUMNS = {
 # projection 여부를 아무도 판단하지 않은 상태이기 때문이다.
 PARQUET_ONLY = {
     "banner_daily": "읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다",
-    "cross_brand_daily": "읽는 엔드포인트가 없다",
-    "category_price_reference": "카탈로그 파생 참조표다. Event 를 읽지 않고 브랜드 축도 없다",
     "analytics_baseline": "배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다",
 }
 
@@ -320,13 +340,16 @@ def mysql_type(name: str, spark_type: str) -> str:
 
 
 def is_nullable(name: str, grain: list[str], mart: str | None = None) -> bool:
+    # Mart 별 예외가 이름 기반 규칙을 이긴다. 같은 이름이 어떤 Mart 에서는 값
+    # 컬럼(NULL 가능)이고 다른 Mart 에서는 key 인 경우가 있다 — `category_price_reference`
+    # 의 `currency` 가 그 예다. 이 검사를 뒤에 두면 NULLABLE_VALUES 가 먼저 걸린다.
+    if name in NOT_NULL_KEYS_BY_MART.get(mart or "", ()):
+        return False
     if name in NOT_NULL_VALUES:
         return False
     if name in NULLABLE_VALUES:
         return True
     if name in grain:
-        if name in NOT_NULL_KEYS_BY_MART.get(mart or "", ()):
-            return False
         return name in NULLABLE_KEYS
     # count 는 0 이 "없음"이지 "모름"이 아니다. 비율·점수는 분모 0 이면 NULL 이다.
     return not name.endswith("_count") and not name.endswith("_sessions")
