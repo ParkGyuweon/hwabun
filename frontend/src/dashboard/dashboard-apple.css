@@ -1380,3 +1380,12 @@ table.data td.is-warn {
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), rgba(255, 255, 255, 0) 58%),
     var(--panel);
 }
+
+/* 시장 · 가격 표. 좁은 화면에서 "41,000 / 원" 처럼 숫자가 끊기지 않게, 대신 표가 옆으로 밀린다 (table-wrap 이 스크롤) */
+.table--price td:nth-child(n + 3),
+.table--price th:nth-child(n + 3) {
+  white-space: nowrap;
+}
+.table--price td:first-child {
+  min-width: 9em;
+}

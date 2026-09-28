@@ -72,17 +72,10 @@ class DashboardMartServiceTest {
   @Test
   @DisplayName("교차 브랜드 유입은 목적 브랜드·기간으로 읽고 실행축을 합산한 뒤 비율을 다시 계산한다")
   void crossBrandInflowAggregatesExecutionAxesAndFilters() {
-    dw.execute("create table dw.cross_brand_daily (" +
-      "destination_brand_id varchar(64) not null,event_date_kst date not null," +
-      "actor_type varchar(32) not null,source varchar(32) not null,generator_type varchar(64)," +
-      "scenario_id varchar(64),simulation_run_id varchar(64)," +
-      "brand_view_sessions bigint not null,cross_brand_entry_sessions bigint not null," +
-      "recommendation_cross_brand_entry_sessions bigint not null,banner_cross_brand_entry_sessions bigint not null," +
-      "mart_processed_at timestamp(3) not null)");
-    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','synthetic','simulator','agent_llm','s1','r1',50,10,6,2,'2026-09-11 02:00:00')");
-    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','synthetic','simulator','python_batch','s2','r2',100,20,8,4,'2026-09-11 02:00:00')");
-    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','web','web',null,null,null,50,10,1,1,'2026-09-11 02:00:00')");
-    dw.update("insert into dw.cross_brand_daily values ('other','2026-09-10','synthetic','simulator','python_batch','s2','r2',900,200,80,40,'2026-09-11 02:00:00')");
+    crossBrandDay("6018", "synthetic", "simulator", "agent_llm", "s1", "r1", 50, 10, 6, 2);
+    crossBrandDay("6018", "synthetic", "simulator", "python_batch", "s2", "r2", 100, 20, 8, 4);
+    crossBrandDay("6018", "web", "web", null, null, null, 50, 10, 1, 1);
+    crossBrandDay("other", "synthetic", "simulator", "python_batch", "s2", "r2", 900, 200, 80, 40);
 
     Map<String, Object> response = service.crossBrandInflow(SELLER, BRAND, FROM, TO, "all", "all");
     Map<?, ?> summary = (Map<?, ?>) response.get("summary");
@@ -782,6 +775,34 @@ class DashboardMartServiceTest {
       Map.entry("p50", p50),
       Map.entry("p75", p75)
     ));
+  }
+
+  private void crossBrandDay(
+    String brand,
+    String actorType,
+    String source,
+    String generatorType,
+    String scenarioId,
+    String simulationRunId,
+    long brandViewSessions,
+    long crossBrandEntrySessions,
+    long recommendationCrossBrandEntrySessions,
+    long bannerCrossBrandEntrySessions
+  ) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("destination_brand_id", brand);
+    row.put("event_date_kst", "2026-09-10");
+    row.put("actor_type", actorType);
+    row.put("source", source);
+    row.put("generator_type", generatorType);
+    row.put("scenario_id", scenarioId);
+    row.put("simulation_run_id", simulationRunId);
+    row.put("brand_view_sessions", brandViewSessions);
+    row.put("cross_brand_entry_sessions", crossBrandEntrySessions);
+    row.put("recommendation_cross_brand_entry_sessions", recommendationCrossBrandEntrySessions);
+    row.put("banner_cross_brand_entry_sessions", bannerCrossBrandEntrySessions);
+    row.put("mart_processed_at", "2026-09-11 02:00:00");
+    insert("dw.cross_brand_daily", row);
   }
 
   private void insert(String table, Map<String, Object> values) {

@@ -7,6 +7,8 @@ import ContentScreen from './screens/ContentScreen';
 import SegmentsScreen from './screens/SegmentsScreen';
 import ReviewsScreen from './screens/ReviewsScreen';
 import IngredientsScreen from './screens/IngredientsScreen';
+import PriceScreen from './screens/PriceScreen';
+import InflowScreen from './screens/InflowScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import FeedbackScreen from './screens/FeedbackScreen';
 import SettlementScreen from './screens/SettlementScreen';
@@ -34,6 +36,8 @@ type ScreenKey =
   | 'behavior'
   | 'reviews'
   | 'ingredients'
+  | 'price'
+  | 'inflow'
   | 'register'
   | 'feedback'
   | 'settlement';
@@ -101,6 +105,14 @@ const SCREENS: Record<ScreenKey, ScreenDef> = {
     section: 'market', tab: '성분', scope: 'behavior',
     title: '성분', desc: '고객이 찾는데 내 상품엔 없는 성분',
   },
+  price: {
+    section: 'market', tab: '가격', scope: 'behavior',
+    title: '가격', desc: '내 가격과 같은 카테고리 중간 가격',
+  },
+  inflow: {
+    section: 'market', tab: '넘어온 고객', scope: 'behavior',
+    title: '다른 브랜드에서 넘어온 고객', desc: '다른 브랜드를 보다가 내 상품으로 온 방문',
+  },
   register: {
     section: 'register', tab: '상품 등록', scope: 'feedback',
     title: '상품 등록', desc: '고객 화면 미리보기',
@@ -124,7 +136,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; screens: ScreenKey[] }> 
   { key: 'orders', label: '주문', screens: ['orders', 'settlement'] },
   { key: 'customers', label: '고객', screens: ['segments'] },
   { key: 'voice', label: '고객의 말', screens: ['reviews', 'feedback'] },
-  { key: 'market', label: '시장', screens: ['ingredients'] },
+  { key: 'market', label: '시장', screens: ['ingredients', 'price', 'inflow'] },
 ];
 
 /** 분석 메뉴와 성격이 달라 아래 따로 둔다 */
@@ -311,7 +323,7 @@ export default function DashboardApp() {
           <ScopeNote scope={active.scope} brandName={brand?.name ?? null} />
 
           <div className="main__controls">
-            {screen === 'overview' ? (
+            {screen === 'overview' || screen === 'inflow' ? (
               <select
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
@@ -358,6 +370,8 @@ export default function DashboardApp() {
         {screen === 'ingredients' ? (
           <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
+        {screen === 'price' ? <PriceScreen brandId={brand?.id ?? null} /> : null}
+        {screen === 'inflow' ? <InflowScreen brandId={brand?.id ?? null} days={days} /> : null}
         {screen === 'register' ? <RegisterScreen /> : null}
         {screen === 'feedback' ? <FeedbackScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'settlement' ? <SettlementScreen brandId={brand?.id ?? null} /> : null}
