@@ -16,7 +16,7 @@ class ProjectionMartContractTest(unittest.TestCase):
     def test_mapping_covers_every_ddl_projection_mart(self):
         rules = _load_dw_contract_rules()
 
-        self.assertEqual(22, len(PROJECTION_MART_FRAMES))
+        self.assertEqual(24, len(PROJECTION_MART_FRAMES))
         self.assertEqual(set(rules.GRAINS), set(PROJECTION_MART_FRAMES))
 
 

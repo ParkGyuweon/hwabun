@@ -18,8 +18,8 @@ from streaming.jobs.publish_user_trait_job import main
 
 class MartContractTests(unittest.TestCase):
     def test_default_targets_cover_recommendation_and_dashboard_core(self):
-        self.assertEqual(22, len(DEFAULT_PROJECTION_MARTS))
-        self.assertEqual(22, len(set(DEFAULT_PROJECTION_MARTS)))
+        self.assertEqual(24, len(DEFAULT_PROJECTION_MARTS))
+        self.assertEqual(24, len(set(DEFAULT_PROJECTION_MARTS)))
         self.assertEqual(MART, DEFAULT_PROJECTION_MARTS[0])
         self.assertIn("brand_daily_kpi", DEFAULT_PROJECTION_MARTS)
         self.assertIn("product_daily_kpi", DEFAULT_PROJECTION_MARTS)

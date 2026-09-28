@@ -584,8 +584,14 @@ Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가
 
 #### 5-3. projection 대상이 아닌 것
 
-`banner_daily` · `cross_brand_daily` · `category_price_reference` · `analytics_baseline` 은 읽는 엔드포인트가 없다.
+`banner_daily` · `analytics_baseline` 은 읽는 엔드포인트가 없다.
 **소비자 없는 마트는 옮기지 않는다** 는 원칙에 프론트도 동의한다 (dw-schema §7.2).
+
+**`cross_brand_daily` · `category_price_reference` 는 2026-09-28에 DDL·allowlist 를 갖췄다** (dw-schema §7.2).
+여러 브랜드가 모여야 나오는 값이라 화면에 붙일 자리를 정하려고 미리 준비한 것이고, **읽는 엔드포인트는 아직 없다.**
+실제 MySQL 적재는 소비자가 정해진 뒤에 한다. 둘 다 다른 브랜드를 식별할 값을 싣지 않는다 — 앞은 출발 브랜드를
+두지 않고(dw-schema §4.12), 뒤는 브랜드 축이 없다(§4.9). 필터는 각각 `destination_brand_id` 와
+`secondary_category + currency` 다 (후자는 `ingredient_weekly_interest` 처럼 브랜드 필터 없이 읽는다).
 
 인덱스 권고: `(brand_id, event_date_kst)` 선두. `ingredient_weekly_interest` 는 `(interest_week_kst)`,
 `commons_cohort_weekly` 는 `(cohort_key, snapshot_week_kst)`.

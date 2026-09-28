@@ -61,7 +61,7 @@ DEFAULT_BASELINE_PATH = "data/marts/analytics_baseline"
 DEFAULT_TIME_ZONE = "Asia/Seoul"
 
 # validate_frames 의 이름과 contracts/dw/build_ddl.py 의 Mart 이름을 한 곳에서
-# 연결한다. 이 22종이 MySQL projection allowlist와 같은 범위다.
+# 연결한다. 이 24종이 MySQL projection allowlist와 같은 범위다.
 PROJECTION_MART_FRAMES = {
     "product_daily_kpi": "product_daily",
     "brand_daily_kpi": "brand_daily",
@@ -85,6 +85,8 @@ PROJECTION_MART_FRAMES = {
     "brand_cohort_dim": "brand_cohort",
     "commons_cohort_weekly": "commons_cohort",
     "user_trait_daily": "user_trait_daily",
+    "cross_brand_daily": "cross_brand_daily",
+    "category_price_reference": "category_price",
 }
 
 # Mart 실행 축. build_marts_job.EXECUTION_AXES 와 같아야 한다.

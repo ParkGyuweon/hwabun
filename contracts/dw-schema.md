@@ -1108,7 +1108,7 @@ input = sessionized_events
 
 | column | type | nullable | 설명 |
 | --- | --- | --- | --- |
-| key 전체 | 공통/string | scenario/run만 Y | 집계 축. 출발 브랜드는 두지 않는다 |
+| key 전체 | 공통/string | `generator_type`·scenario·run만 Y | 집계 축. 출발 브랜드는 두지 않는다. `destination_brand_id`는 NOT NULL이다 — 입력이 `brand_id`가 있는 조회로 한정된다. Web 실사용자 행은 `generator_type`이 NULL이다(§2.2, 2026-09-23 운영 1,945행 중 23행) |
 | `brand_view_sessions` | bigint | N | 그 브랜드 상품을 조회한 세션. 모든 비율의 분모 |
 | `cross_brand_entry_sessions` | bigint | N | 그중 세션 첫 브랜드와 다른 브랜드로 넘어온 세션 |
 | `recommendation_cross_brand_entry_sessions` | bigint | N | 위 중 추천 귀속 |
@@ -1841,9 +1841,10 @@ Q5(`validate_pipeline_job`)가 이미 같은 불변식을 Parquet 단계에서 �
 
 ### 7.2 projection 대상과 적재 순서
 
-현재 MySQL `dw` projection 대상은 `contracts/dw/schema.sql`에 정의된 22개 Mart다.
-Spark가 만든 Parquet이 기준 저장소이고, `publish_user_trait_job.py`가 선택된 Mart를
-staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 22종
+현재 MySQL `dw` projection 대상은 `contracts/dw/schema.sql`에 정의된 24개 Mart다.
+이 가운데 **시장 비교 2종은 2026-09-28에 DDL·allowlist만 갖춘 상태**이고 운영 MySQL에는
+아직 테이블이 없다(아래 참고). Spark가 만든 Parquet이 기준 저장소이고, `publish_user_trait_job.py`가 선택된 Mart를
+staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 실행은 24종
 전체를 발행하며, `DW_PROJECTION_MARTS` 또는 `--marts`로 일부만 선택할 수 있다.
 
 | 그룹 | Mart |
@@ -1854,6 +1855,7 @@ staging → 검증 → RENAME 순서로 적재한다. EC2-2 Compose의 기본 �
 | 세그먼트·가격·코호트 | `persona_segment_daily_kpi`, `brand_price_band_daily_kpi`, `segment_price_band_daily_kpi`, `brand_cohort_dim`, `commons_cohort_weekly` |
 | 성분·이탈·유입 | `ingredient_weekly_interest`, `product_exit_daily`, `segment_content_daily`, `friction_daily`, `exit_daily`, `entry_source_daily` |
 | 콘텐츠·이벤트 | `content_daily_kpi`, `content_conversion_daily`, `behavior_conversion_daily`, `event_daily` |
+| 시장 비교 | `cross_brand_daily`, `category_price_reference` |
 
 **E4의 네 블록은 2026-09-16에 합의됐다** (프론트 계약 0.3). `price_bands`·
 `segment_price_grid`·`cohort` 세 블록을 넣기로 하면서 `brand_price_band_daily_kpi`·
@@ -1865,13 +1867,19 @@ projection 대상이 됐다.
 **`brand_cohort_dim` 없이는 `commons_cohort_weekly`를 읽을 수 없다** — 코호트 행에
 브랜드 식별자가 없기 때문이다(§4.18 R5).
 
-다음 4개 Mart는 현재도 MySQL projection 대상이 아니라 Parquet에만 둔다.
+**시장 비교 두 Mart를 2026-09-28에 발행 대상으로 올렸다.** `cross_brand_daily`(§4.12)와
+`category_price_reference`(§4.9)는 **여러 브랜드가 모여야 나오는 값**이고, 마트까지
+만들어 두고 Parquet에만 두면 대시보드가 영원히 읽지 못한다. 둘 다 다른 브랜드를
+식별할 값을 싣지 않는다 — 앞은 출발 브랜드를 두지 않고(§4.12), 뒤는 브랜드 축이
+아예 없다(§4.9). **읽는 엔드포인트는 아직 없다.** "소비자 없는 마트는 옮기지
+않는다"는 원칙(§7.2 아래)과의 관계는 이렇게 정리한다 — DDL·allowlist·검증은 미리
+갖추고, **실제 발행(MySQL 적재)은 읽는 엔드포인트가 정해진 뒤에 한다.**
+
+다음 2개 Mart는 현재도 MySQL projection 대상이 아니라 Parquet에만 둔다.
 
 | Mart | 이유 |
 | --- | --- |
 | `banner_daily` | 읽는 엔드포인트가 없다. 배너 성과는 Q5 검증과 기준선 대조에만 쓴다 |
-| `cross_brand_daily` | 읽는 엔드포인트가 없다 |
-| `category_price_reference` | 카탈로그 파생 참조표다. Event를 읽지 않고 브랜드 축도 없다 |
 | `analytics_baseline` | 배너 도입 전후를 비교하는 정책 스냅샷이다. 브랜드별 기간 조회가 아니다 |
 
 소비자가 생기거나 저장 정책이 바뀌면 `PARQUET_ONLY`와 `GRAINS`를 함께 검토하고
