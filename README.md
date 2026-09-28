@@ -13,11 +13,11 @@
 | | 산출물 |
 | --- | --- |
 | 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 11개), 플랫폼 운영 화면 |
-| 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(그중 22종 발행) |
+| 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(발행 대상 24종, 운영 기본 실행 22종) |
 | AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
 | 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 166개(2026-09-23 운영 배치 기준) |
 
-기준일 2026-09-18. 아래 수치는 이 날짜에 레포와 배포 서버에서 직접 확인한 값입니다.
+기준일 2026-09-28(발표 종료일). 아래 수치는 이 날짜에 레포(`origin/dev`)와 배포 서버에서 직접 확인한 값입니다.
 
 ## 1. 아키텍처
 
@@ -51,16 +51,16 @@
 
 ## 2. 팀 구성과 담당
 
-6명입니다. 괄호 안 숫자는 `git log --no-merges` 로 센 해당 디렉터리 커밋 수입니다.
+6명입니다. 괄호 안 숫자는 `git log --no-merges --author=<이름> -- <경로>` 로 센 해당 디렉터리 커밋 수입니다(2026-09-28, 같은 사람의 다른 계정 이름은 합산하지 않았습니다).
 
 | 이름 | 역할 | 소유 영역 |
 | --- | --- | --- |
 | 강하린 | 기획 (PM) | 프로젝트 일정·업무 관리 · 서비스 기획 · 발표/영상 콘텐츠 제작 |
-| 추유림 | 프론트엔드 | `frontend/` (195) · `docs/dashboard/` (60) |
-| 최열음 | 백엔드 | `shop_backend/` (47) · `backend/` (30) · `monitoring/` (6) · `Jenkinsfile` |
-| 이은솔 | 데이터 | `streaming/` (128) · `contracts/` (135) · `infra/` (16) |
+| 추유림 | 프론트엔드 | `frontend/` (203) · `docs/dashboard/` (30) |
+| 최열음 | 백엔드 | `shop_backend/` (66) · `backend/` (31) · `monitoring/` (6) · `Jenkinsfile` |
+| 이은솔 | 데이터 | `streaming/` (165) · `contracts/` (162) · `infra/` (18) |
 | 송민우 | 인프라 | `deploy/ec2-2/` · dw projection · `streaming/` (23) · `infra/` (10) |
-| 박규원 | AI | `batch/` (126) · `simulator/` (115) · `docs/ai/` |
+| 박규원 | AI | `batch/` (144) · `simulator/` (137) · `docs/ai/` (90) |
 
 ### 강하린 · 기획 (PM)
 
@@ -88,11 +88,11 @@
 ### 최열음 · 백엔드
 
 - 수집 서버 `backend/` 8080. `POST /api/events` 를 검증하고 Kafka `activity-events` 로 produce 합니다. 파티션 키는 `session_id`, 과부하 때는 429/503 으로 백프레셔를 겁니다. Actuator + Micrometer 로 Prometheus 메트릭을 냅니다.
-- 쇼핑몰 백엔드 `shop_backend/` 8090. 도메인 12개(identity/JWT, brand, catalog, commerce, payment, feedback, dashboard, admin, settlement, recommendation 프록시, security, common)로 나뉘고, MySQL 테이블 38개와 ERD 문서가 있습니다.
+- 쇼핑몰 백엔드 `shop_backend/` 8090. 도메인 13개(identity/JWT, brand, catalog, commerce, payment, feedback, notification, dashboard, admin, settlement, recommendation 프록시, security, common)로 나뉘고, MySQL 테이블 38개와 ERD 문서가 있습니다.
 - 상품 등록 계약을 구현했습니다. 어휘 검증과 unmapped 저장을 포함합니다.
 - CI/CD `Jenkinsfile` 6 스테이지. GitLab 연결 확인 → Backend 테스트 → Shop Backend 테스트 → Frontend Docker 빌드 검증 → EC2 구성 변경 감지 → EC2 배포. MySQL 컨테이너와 스키마·seed는 배포에서 건드리지 않습니다.
 - 모니터링 `monitoring/`. Prometheus 설정과 Grafana 대시보드 3종(backend-overview, collector-validation, shop-backend-performance)을 프로비저닝합니다.
-- nginx 라우팅 (`deploy/nginx/default.conf`). `/api/events` 는 수집 8080 으로, 나머지 `/api/` 는 쇼핑몰 8090 으로 보냅니다.
+- nginx 라우팅 (`deploy/nginx/default.conf`). `/api/events` 는 수집 8080 으로, `/api/prescription`·`/api/headline` 은 추천 서버 8300 으로, 나머지 `/api/` 는 쇼핑몰 8090 으로 보냅니다(추천은 쇼핑몰의 `/api/recommend` 프록시를 거칩니다).
 
 ### 이은솔 · 데이터
 
@@ -101,7 +101,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - Q1 `raw_sink_job`. Kafka 를 읽어 Raw Parquet 으로 적재합니다. Structured Streaming 이라 체크포인트로 오프셋을 이어받고, 파싱에 실패한 레코드도 원문을 남깁니다.
 - Q2 `clean_events_job`. 스키마와 의미를 검증하고 `event_id` 정본을 골라 cleaned / bad / duplicate 세 갈래로 나눕니다.
 - Q3 `derive_facts_job`. 세션화와 Fact 6종(상품, 구매, 구매사유, 리뷰, 섹션 체류, 콘텐츠 관심), Dimension 2종(dim_product, dim_brand)을 만듭니다.
-- Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 22종이 DW 발행 대상이고, `banner_daily`·`category_price_reference`·`cross_brand_daily` 는 Parquet 으로만 둡니다. `analytics_baseline` (`dw-schema.md` §4.13) 은 기준선 기간을 인자로 준 실행에서만 만들어져 상시 25종에 넣지 않습니다 — 코드에는 출력 경로가 26개인데 평소 25개만 생기는 이유입니다.
+- Q4 `build_marts_job`. 퍼널 세션 Fact 를 만들고, 상품·퍼널·브랜드 일간 KPI, 재구매, 구매사유, 성분 주간 관심, 고객군, 가격대, 배너, 콘텐츠, 마찰, 이탈, 유입 경로, 교차 브랜드, Commons 코호트까지 마트 25종을 집계합니다. 이 가운데 24종이 DW 발행 대상이고(`cross_brand_daily`·`category_price_reference` 는 09-28 에 등록, DW 테이블을 만든 뒤 발행 — 운영 EC2-2 의 기본 실행 목록은 아직 22종), `banner_daily` 는 Parquet 으로만 둡니다. `analytics_baseline` (`dw-schema.md` §4.13) 은 기준선 기간을 인자로 준 실행에서만 만들어져 상시 25종에 넣지 않습니다 — 코드에는 출력 경로가 26개인데 평소 25개만 생기는 이유입니다.
 - Q5 `validate_pipeline_job`. 품질 검증 166개로 grain 유일성, 비율 0~1, 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속, 발행 대상 마트의 NOT NULL 계약, 세션 안에서 클릭에 대응하는 노출이 있는지를 확인합니다.
 - 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`, 그리고 대시보드 마트 조회 계약 `dashboard-mart-api-spec.md`
 - Job 이 실제로 읽는 계약 파일도 같이 관리합니다. `purchase-reason-trait-map.json`(Q4·Q5), `user-trait-weights.json`(Q4), `dw/build_ddl.py`(DDL 생성 · projection 과 Q5 의 NOT NULL 정책 정본) 와 `dw/schema.sql`, `event-schema.json`(Q5 가 `impression_origin` 허용값을 여기서 읽습니다 — Q2 와 수집기는 같은 규칙을 각자 코드로 구현합니다)
@@ -112,7 +112,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 
 - EC2-2 를 구축했습니다. Kafka 브로커(KRaft), Spark 마스터/워커/히스토리, Q1 상시 가동 컨테이너가 떠 있습니다.
 - 일일 배치 자동화. `run-daily-batch.sh` 가 flock 으로 중복 실행을 막고, systemd service·timer 가 매일 18:00 UTC(03:00 KST)에 Q2→Q3→Q4→Q5→발행을 한 번에 돌립니다.
-- dw projection `publish_user_trait_job`. 마트 Parquet 을 MySQL 로 옮깁니다. staging 테이블에 적재하고 행 수·grain 유일성·NOT NULL 을 검증한 뒤 RENAME 으로 원자적으로 스왑하고 `__old` 를 백업으로 남깁니다. 대상 마트 22종
+- dw projection `publish_user_trait_job`. 마트 Parquet 을 MySQL 로 옮깁니다. staging 테이블에 적재하고 행 수·grain 유일성·NOT NULL 을 검증한 뒤 RENAME 으로 원자적으로 스왑하고 `__old` 를 백업으로 남깁니다. 발행 대상 마트 24종(운영 기본 실행 22종)
 - DW 스키마 마이그레이션을 관리합니다 (`deploy/ec2-1/migrations/`).
 - 퍼널 Fact 와 일간 KPI 마트를 초기 구현했습니다.
 
@@ -244,6 +244,8 @@ S15P21A306/
 │   ├── recommendation-io-spec.md          추천 입출력 (백엔드↔AI). 점수 식·LTR·§5 API·§5-1 배너
 │   ├── dashboard-mart-api-spec.md         브랜드 대시보드 마트 조회 API (백엔드↔프론트↔데이터)
 │   ├── prescription-api-spec.md           대시보드 처방 문장 API (AI↔프론트)
+│   ├── headline-api-spec.md               대시보드 화면·섹션별 한 마디 API (AI↔프론트)
+│   ├── feedback-insight-spec.md           고객 목소리 AI 요약 API 초안 0.1 (프론트 제안, 서버 미구현)
 │   ├── product-feature-spec.md            상품 벡터 148차원 명세
 │   ├── product-feature-vocab.json         인코딩 어휘집 0.7. 9블록, 원화 가격 경계
 │   ├── product-registration-spec.md       상품 등록 입력 필드·어휘 제약·파생값
@@ -268,9 +270,9 @@ S15P21A306/
 │   ├── index.html · dashboard.html · platform.html      엔트리 3개
 │   ├── package.json · tsconfig*.json · vite.config.ts · .oxlintrc.json
 │   │                                      프록시 세 갈래:
-│   │                                        /api/recommend · /api/prescription · /api/catalog        → 8300
-│   │                                        /api/auth · brands · products · cart · orders · reviews
-│   │                                        · feedback · seller · settlements · admin                 → 8090
+│   │                                        /api/recommend · /api/prescription · /api/headline · /api/catalog → 8300
+│   │                                        /api/auth · members · brands · products · cart · orders · reviews
+│   │                                        · feedback · seller · settlements · admin · notifications → 8090
 │   │                                        그 외 /api (= /api/events)                                → 8080
 │   ├── .env.development · .env.production · .env.example
 │   ├── plugins/   image-cache.ts · review-chunks.ts (Vite 플러그인)
@@ -284,7 +286,7 @@ S15P21A306/
 │       ├── hooks/     useImpression · useInteractionSignals · useExitSummary · useTextSelection
 │       │              useAuth · useCatalog · useRecommendation · useFeedback …
 │       ├── pages/     ProductListPage · ProductDetailPage · CartPage
-│       ├── dashboard/ DashboardApp.tsx · screens/(12개) · lib/(martApi · martAdapter · insightApi · prescription) · css 4종
+│       ├── dashboard/ DashboardApp.tsx · screens/(13 파일) · lib/(martApi · martAdapter · insightApi · prescription) · css 4종
 │       ├── platform/  PlatformApp.tsx · lib
 │       ├── components/ account · auth · banner · cart · common · devtools · feedback · layout · product · review
 │       ├── mocks/     SSAFY Beauty 카탈로그 · 시연용 시드(피드백 30건 등) · 스크립트 산출 샘플 JSON
@@ -308,13 +310,13 @@ S15P21A306/
 │   │   ├── raw_sink_job.py                Q1 Kafka → Raw Parquet
 │   │   ├── clean_events_job.py            Q2 검증·중복 제거
 │   │   ├── derive_facts_job.py            Q3 세션화·Fact 6종·Dimension 2종
-│   │   ├── build_marts_job.py             Q4 퍼널 세션 Fact · Mart 25종 (발행 대상 22종)
+│   │   ├── build_marts_job.py             Q4 퍼널 세션 Fact · Mart 25종 (발행 대상 24종)
 │   │   ├── validate_pipeline_job.py       Q5 품질 검증 166개
 │   │   ├── publish_user_trait_job.py      dw projection 진입점 (staging→검증→원자적 스왑)
 │   │   ├── dw_projection_source.py        Parquet 읽기·DDL 대조
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 재사용 어댑터
 │   ├── tools/replay_collector.py          gzip 행동 로그를 수집기로 재생 (SHA-256 회계)
-│   ├── tests/                             Spark 테스트 26개 파일
+│   ├── tests/                             Spark 테스트 37개 파일
 │   └── Dockerfile.dw · requirements-dw.txt · DW_PROJECTION.md · README.md
 │
 ├── batch/                             ★ 추천 배치 + 추천 추론 서버 (AI)
@@ -397,16 +399,21 @@ S15P21A306/
 │
 ├── docs/
 │   ├── planning/     ★ 확정 기획 정본. service-plan.md · feature-spec-status.md
-│   ├── ai/           추천 설계·검증. recommendation-design · evaluation-framework ·
-│   │                 cbf-technical-review · exposure-role · ingredient-domain-guide · live-demo-runbook
+│   ├── ai/           추천 설계·검증. README · recommendation-design · evaluation-framework ·
+│   │                 cbf-technical-review · exposure-role · ingredient-domain-guide · live-demo-runbook ·
+│   │                 persona-feature-port · product-feature-sample
 │   ├── analytics/    행동 로그·DW 설계. behavior-log-design · event-logging-design ·
-│   │                 log-transport-contract · dw-design · spark-processing-design · persona-design
+│   │                 log-transport-contract · dw-design · spark-processing-design · persona-design ·
+│   │                 raw-event-storage-design · marketing-signal-research · event-weight-rationale.html
 │   ├── dashboard/    B2B 대시보드 조사·설계. b2b-dashboard-research · insight-catalog · metric-basis
 │   ├── localization/ 한국어화 검수본
 │   ├── data/ · captures/ · system-architecture*.png
+│   ├── api-spec.md                    쇼핑몰 백엔드 API 명세 (백엔드)
+│   ├── shop-backend-requests.md · recommend-trait-requests.md   프론트 → 백엔드·AI 요청서
 │   └── git-convention.md · backend-ingestion-backpressure.md
 │
 ├── data/                              Spark 로컬 산출물 (gitignore). raw_events · processed · marts · checkpoints
+├── exec/                              포팅 제출물 (인프라). 포팅 매뉴얼 · 외부 서비스 정보 · DB 덤프(dw·shop_backend 2026-09-23) · 시연 시나리오
 └── 1차 평가/                          평가 제출물 (팀원 6명 폴더)
 ```
 
