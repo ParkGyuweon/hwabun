@@ -43,6 +43,24 @@ public class DashboardController {
   @GetMapping("/segments")
   public Map<String, Object> segments(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.segments(requireSeller(actor), brandId, from, to, actorType); }
 
+  @GetMapping("/price-position")
+  public Map<String, Object> pricePosition(@AuthenticationPrincipal ShopPrincipal actor) { return marts.pricePosition(requireSeller(actor), requireSellerBrand(actor)); }
+
+  @GetMapping("/cohort-position")
+  public Map<String, Object> cohortPosition(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.cohortPosition(requireSeller(actor), requireSellerBrand(actor), from, to, actorType); }
+
+  @GetMapping("/cross-brand")
+  public Map<String, Object> crossBrandInflow(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @RequestParam String brandId,
+    @RequestParam(required = false) String from,
+    @RequestParam(required = false) String to,
+    @RequestParam(required = false) String actorType,
+    @RequestParam(required = false) String generatorType
+  ) {
+    return marts.crossBrandInflow(requireSeller(actor), brandId, from, to, actorType, generatorType);
+  }
+
   @GetMapping("/ingredients")
   public Map<String, Object> ingredients(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.ingredients(requireSeller(actor), brandId, from, to, actorType); }
 
@@ -55,5 +73,11 @@ public class DashboardController {
   private String requireSeller(ShopPrincipal actor) {
     if (actor == null || actor.role() != AccountRole.SELLER) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "seller role required");
     return actor.accountId();
+  }
+
+  private String requireSellerBrand(ShopPrincipal actor) {
+    requireSeller(actor);
+    if (actor.brandId() == null || actor.brandId().isBlank()) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "brand claim required");
+    return actor.brandId();
   }
 }

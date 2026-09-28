@@ -42,6 +42,71 @@ class DashboardMartServiceTest {
     service = new DashboardMartService(dw, provider(dw));
   }
 
+  @Test
+  @DisplayName("가격 위치 API는 카테고리 중앙값을 쓰고 표본 3개 미만이면 전체 중앙값을 쓴다")
+  void pricePositionUsesCatalogMedianAndFallback() {
+    dw.execute("create table product (product_id varchar(64),brand_id varchar(64),product_name varchar(100),secondary_category varchar(64),status varchar(16))");
+    dw.execute("create table product_variant (product_id varchar(64),price_krw decimal(18,2),status varchar(16))");
+    dw.update("insert into product values ('P1',?,'mine','Serums','ACTIVE')", BRAND);
+    dw.update("insert into product values ('P2','other','other-1','Serums','ACTIVE')");
+    dw.update("insert into product values ('P3','other','other-2','Serums','ACTIVE')");
+    dw.update("insert into product values ('P4',?,'mine-2','Masks','ACTIVE')", BRAND);
+    dw.update("insert into product_variant values ('P1',20000,'ACTIVE')");
+    dw.update("insert into product_variant values ('P2',10000,'ACTIVE')");
+    dw.update("insert into product_variant values ('P3',30000,'ACTIVE')");
+    dw.update("insert into product_variant values ('P4',50000,'ACTIVE')");
+
+    List<?> products = (List<?>) service.pricePosition(SELLER, BRAND).get("products");
+    Map<?, ?> first = (Map<?, ?>) products.get(0);
+    Map<?, ?> second = (Map<?, ?>) products.get(1);
+    assertEquals(2, products.size());
+    assertEquals("category", first.get("reference_source"));
+    assertEquals(20000D, decimal(first.get("reference_median_krw")));
+    assertEquals(0D, decimal(first.get("price_difference_pct")));
+    assertEquals("global_fallback", second.get("reference_source"));
+    assertEquals(25000D, decimal(second.get("reference_median_krw")));
+    assertEquals(100D, decimal(second.get("price_difference_pct")));
+    assertThrows(ResponseStatusException.class, () -> service.pricePosition("other-seller", BRAND));
+  }
+
+  @Test
+  @DisplayName("교차 브랜드 유입은 목적 브랜드·기간으로 읽고 실행축을 합산한 뒤 비율을 다시 계산한다")
+  void crossBrandInflowAggregatesExecutionAxesAndFilters() {
+    dw.execute("create table dw.cross_brand_daily (" +
+      "destination_brand_id varchar(64) not null,event_date_kst date not null," +
+      "actor_type varchar(32) not null,source varchar(32) not null,generator_type varchar(64)," +
+      "scenario_id varchar(64),simulation_run_id varchar(64)," +
+      "brand_view_sessions bigint not null,cross_brand_entry_sessions bigint not null," +
+      "recommendation_cross_brand_entry_sessions bigint not null,banner_cross_brand_entry_sessions bigint not null," +
+      "mart_processed_at timestamp(3) not null)");
+    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','synthetic','simulator','agent_llm','s1','r1',50,10,6,2,'2026-09-11 02:00:00')");
+    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','synthetic','simulator','python_batch','s2','r2',100,20,8,4,'2026-09-11 02:00:00')");
+    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','web','web',null,null,null,50,10,1,1,'2026-09-11 02:00:00')");
+    dw.update("insert into dw.cross_brand_daily values ('other','2026-09-10','synthetic','simulator','python_batch','s2','r2',900,200,80,40,'2026-09-11 02:00:00')");
+
+    Map<String, Object> response = service.crossBrandInflow(SELLER, BRAND, FROM, TO, "all", "all");
+    Map<?, ?> summary = (Map<?, ?>) response.get("summary");
+    Map<?, ?> day = (Map<?, ?>) ((List<?>) response.get("daily")).getFirst();
+    assertEquals("full", coverage(response));
+    assertEquals(200L, number(summary.get("brand_view_sessions")));
+    assertEquals(40L, number(summary.get("cross_brand_entry_sessions")));
+    assertEquals(15L, number(summary.get("recommendation_cross_brand_entry_sessions")));
+    assertEquals(7L, number(summary.get("banner_cross_brand_entry_sessions")));
+    assertEquals(0.2D, decimal(summary.get("cross_brand_entry_rate")), 1e-9);
+    assertEquals(0.075D, decimal(summary.get("recommendation_cross_brand_entry_rate")), 1e-9);
+    assertEquals(0.035D, decimal(summary.get("banner_cross_brand_entry_rate")), 1e-9);
+    assertEquals(0.375D, decimal(summary.get("recommendation_share_of_cross_brand_entries")), 1e-9);
+    assertEquals("2026-09-10", day.get("event_date_kst"));
+
+    Map<?, ?> filtered = (Map<?, ?>) service.crossBrandInflow(
+      SELLER, BRAND, FROM, TO, "synthetic", "python_batch"
+    ).get("summary");
+    assertEquals(100L, number(filtered.get("brand_view_sessions")));
+    assertEquals(20L, number(filtered.get("cross_brand_entry_sessions")));
+    assertEquals(8L, number(filtered.get("recommendation_cross_brand_entry_sessions")));
+    assertThrows(ResponseStatusException.class, () -> service.crossBrandInflow("other-seller", BRAND, FROM, TO, "all", "all"));
+  }
+
   /* ---------------------------------------------------------------- E1 overview */
 
   @Test
@@ -305,7 +370,7 @@ class DashboardMartServiceTest {
       Map.entry("cohort_key", "2-3|105k+"),
       Map.entry("snapshot_week_kst", "2026-09-07"),
       Map.entry("metric_name", "view_to_cart_rate"),
-      Map.entry("actor_type", "web"),
+      Map.entry("actor_type", "all"),
       Map.entry("window_start_date", "2026-09-07"),
       Map.entry("window_end_date", "2026-09-13"),
       Map.entry("brand_count", 4),
@@ -318,6 +383,7 @@ class DashboardMartServiceTest {
     ));
 
     Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
+    assertEquals(cohort, service.cohortPosition(SELLER, BRAND, FROM, TO, "all").get("cohort"));
     Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
 
     assertEquals("2-3|105k+", cohort.get("cohort_key"));
@@ -331,8 +397,8 @@ class DashboardMartServiceTest {
   }
 
   @Test
-  @DisplayName("actor=all 코호트가 여러 실행 행이면 분위값을 만들지 않는다")
-  void allActorCohortDoesNotAverageExecutionRows() {
+  @DisplayName("actor=all 코호트는 분리된 전체 행의 분위값을 읽고 실행축 행을 합치지 않는다")
+  void allActorCohortUsesMaterializedAllRow() {
     segmentDay("2026-09-10", "skin_type", "dry", 10, 1.0D);
     brandDay("2026-09-10", 100, 30, 50, 15, 10);
     insert("dw.brand_cohort_dim", Map.of(
@@ -345,14 +411,16 @@ class DashboardMartServiceTest {
     ));
     insertCohortMetric("web", 2, 0.1D, 0.2D, 0.3D);
     insertCohortMetric("synthetic", 6, 0.3D, 0.4D, 0.5D);
+    insertCohortMetric("all", 5, 0.15D, 0.25D, 0.35D);
 
     Map<?, ?> cohort = (Map<?, ?>) service.segments(SELLER, BRAND, FROM, TO, "all").get("cohort");
     Map<?, ?> metric = ((List<Map<?, ?>>) cohort.get("metrics")).getFirst();
 
-    assertNull(metric.get("p25"));
-    assertNull(metric.get("p50"));
-    assertNull(metric.get("p75"));
-    assertNull(metric.get("my_position"));
+    assertEquals(5L, number(cohort.get("brand_count")));
+    assertEquals(0.15D, decimal(metric.get("p25")), 1e-9);
+    assertEquals(0.25D, decimal(metric.get("p50")), 1e-9);
+    assertEquals(0.35D, decimal(metric.get("p75")), 1e-9);
+    assertEquals(cohort, service.cohortPosition(SELLER, BRAND, FROM, TO, "all").get("cohort"));
   }
 
   /* ---------------------------------------------------------------- E5 ingredients */

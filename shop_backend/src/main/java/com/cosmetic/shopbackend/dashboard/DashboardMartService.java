@@ -1,11 +1,14 @@
 package com.cosmetic.shopbackend.dashboard;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -86,6 +89,174 @@ public class DashboardMartService {
       brandId,
       brandId
     );
+  }
+
+  /** Compare each active product's list price with its category median. */
+  public Map<String, Object> pricePosition(String seller, String brand) {
+    owns(seller, brand);
+    // This is a live shop-catalog comparison, not the Parquet-only
+    // category_price_reference Mart. Its snapshot and prices may differ.
+    List<Map<String, Object>> catalog = shopJdbc.queryForList(
+      "select p.product_id,p.brand_id,p.product_name,p.secondary_category," +
+        "min(case when v.status='ACTIVE' and v.price_krw>0 then v.price_krw end) price_krw " +
+        "from product p left join product_variant v on v.product_id=p.product_id " +
+        "where p.status='ACTIVE' " +
+        "group by p.product_id,p.brand_id,p.product_name,p.secondary_category order by p.product_id"
+    );
+    Map<String, List<BigDecimal>> pricesByCategory = new LinkedHashMap<>();
+    List<BigDecimal> allPrices = new ArrayList<>();
+    for (Map<String, Object> product : catalog) {
+      BigDecimal price = decimalOrNull(product.get("price_krw"));
+      if (price == null) continue;
+      pricesByCategory.computeIfAbsent(String.valueOf(product.get("secondary_category")), ignored -> new ArrayList<>()).add(price);
+      allPrices.add(price);
+    }
+    BigDecimal globalMedian = median(allPrices);
+    List<Map<String, Object>> comparisons = new ArrayList<>();
+    for (Map<String, Object> product : catalog) {
+      if (!brand.equals(product.get("brand_id"))) continue;
+      List<BigDecimal> categoryPrices = pricesByCategory.getOrDefault(String.valueOf(product.get("secondary_category")), List.of());
+      boolean sufficient = categoryPrices.size() >= 3;
+      BigDecimal price = decimalOrNull(product.get("price_krw"));
+      BigDecimal categoryMedian = median(categoryPrices);
+      BigDecimal reference = sufficient ? categoryMedian : globalMedian;
+      Map<String, Object> row = new LinkedHashMap<>(product);
+      row.remove("brand_id");
+      row.put("currency", "KRW");
+      row.put("category_product_count", categoryPrices.size());
+      row.put("category_median_krw", categoryMedian);
+      row.put("reference_median_krw", reference);
+      row.put("reference_source", sufficient ? "category" : "global_fallback");
+      row.put("is_sample_sufficient", sufficient);
+      row.put("price_difference_pct", price == null || reference == null || reference.signum() <= 0 ? null :
+        price.subtract(reference).multiply(BigDecimal.valueOf(100)).divide(reference, 2, RoundingMode.HALF_UP));
+      comparisons.add(row);
+    }
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("brand_id", brand);
+    response.put("currency", "KRW");
+    response.put("products", comparisons);
+    return response;
+  }
+
+  private static BigDecimal median(List<BigDecimal> values) {
+    if (values.isEmpty()) return null;
+    List<BigDecimal> sorted = new ArrayList<>(values);
+    Collections.sort(sorted);
+    int middle = sorted.size() / 2;
+    return sorted.size() % 2 == 1 ? sorted.get(middle) :
+      sorted.get(middle - 1).add(sorted.get(middle)).divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+  }
+
+  private static BigDecimal decimalOrNull(Object value) {
+    return value == null ? null : new BigDecimal(value.toString());
+  }
+
+  /** Expose the same anonymized cohort position used by the segments dashboard. */
+  public Map<String, Object> cohortPosition(String seller, String brand, String from, String to, String actor) {
+    Read read = open(seller, brand, from, to, actor);
+    CohortResult result = read.optional("brand_cohort_dim", () -> cohort(read, read.q));
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("cohort", result == null ? null : result.body());
+    return read.envelope(
+      List.of("brand_cohort_dim", "commons_cohort_weekly", "brand_daily_kpi"),
+      result != null,
+      result == null ? null : result.processedAt(),
+      body
+    );
+  }
+
+  /** Cross-brand entry sessions for the seller's destination brand. */
+  public Map<String, Object> crossBrandInflow(
+    String seller,
+    String brand,
+    String from,
+    String to,
+    String actor,
+    String generatorType
+  ) {
+    Read read = open(seller, brand, from, to, actor);
+    String generator = generatorType == null || generatorType.isBlank() ? "all" : generatorType;
+    List<Map<String, Object>> daily = read.optional("cross_brand_daily", () -> crossBrandDaily(read.q, generator));
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("summary", daily == null || daily.isEmpty() ? null : crossBrandSummary(daily));
+    body.put("daily", daily);
+    Object processedAt = null;
+    if (daily != null) {
+      for (Map<String, Object> row : daily) {
+        Object candidate = row.remove("mart_processed_at");
+        if (candidate instanceof Timestamp timestamp &&
+          (!(processedAt instanceof Timestamp current) || timestamp.after(current))) {
+          processedAt = timestamp;
+        }
+        row.put("event_date_kst", dateText(row.get("event_date_kst")));
+        row.put("cross_brand_entry_rate", divide(row.get("cross_brand_entry_sessions"), row.get("brand_view_sessions")));
+        row.put("recommendation_cross_brand_entry_rate", divide(
+          row.get("recommendation_cross_brand_entry_sessions"), row.get("brand_view_sessions")
+        ));
+        row.put("banner_cross_brand_entry_rate", divide(
+          row.get("banner_cross_brand_entry_sessions"), row.get("brand_view_sessions")
+        ));
+        row.put("recommendation_share_of_cross_brand_entries", divide(
+          row.get("recommendation_cross_brand_entry_sessions"), row.get("cross_brand_entry_sessions")
+        ));
+        row.put("banner_share_of_cross_brand_entries", divide(
+          row.get("banner_cross_brand_entry_sessions"), row.get("cross_brand_entry_sessions")
+        ));
+      }
+    }
+    return read.envelope(
+      List.of("cross_brand_daily"),
+      daily != null && !daily.isEmpty(),
+      processedAt,
+      body
+    );
+  }
+
+  private List<Map<String, Object>> crossBrandDaily(Query q, String generatorType) {
+    String actorClause = "all".equals(q.actor()) ? "" : " and actor_type=?";
+    String generatorClause = "all".equals(generatorType) ? "" : " and generator_type=?";
+    List<Object> args = new ArrayList<>(List.of(q.brand(), Date.valueOf(q.from()), Date.valueOf(q.to())));
+    if (!actorClause.isEmpty()) args.add(q.actor());
+    if (!generatorClause.isEmpty()) args.add(generatorType);
+    return many(
+      "select event_date_kst," +
+        "coalesce(sum(brand_view_sessions),0) brand_view_sessions," +
+        "coalesce(sum(cross_brand_entry_sessions),0) cross_brand_entry_sessions," +
+        "coalesce(sum(recommendation_cross_brand_entry_sessions),0) recommendation_cross_brand_entry_sessions," +
+        "coalesce(sum(banner_cross_brand_entry_sessions),0) banner_cross_brand_entry_sessions," +
+        "max(mart_processed_at) mart_processed_at " +
+        "from dw.cross_brand_daily where destination_brand_id=? and event_date_kst between ? and ?" +
+        actorClause + generatorClause + " group by event_date_kst order by event_date_kst",
+      args.toArray()
+    );
+  }
+
+  private Map<String, Object> crossBrandSummary(List<Map<String, Object>> daily) {
+    Map<String, Object> summary = new LinkedHashMap<>();
+    for (String field : List.of(
+      "brand_view_sessions",
+      "cross_brand_entry_sessions",
+      "recommendation_cross_brand_entry_sessions",
+      "banner_cross_brand_entry_sessions"
+    )) {
+      summary.put(field, daily.stream().mapToLong(row -> longOf(row.get(field))).sum());
+    }
+    summary.put("cross_brand_entry_rate", divide(summary.get("cross_brand_entry_sessions"), summary.get("brand_view_sessions")));
+    summary.put("recommendation_cross_brand_entry_rate", divide(
+      summary.get("recommendation_cross_brand_entry_sessions"), summary.get("brand_view_sessions")
+    ));
+    summary.put("banner_cross_brand_entry_rate", divide(
+      summary.get("banner_cross_brand_entry_sessions"), summary.get("brand_view_sessions")
+    ));
+    summary.put("recommendation_share_of_cross_brand_entries", divide(
+      summary.get("recommendation_cross_brand_entry_sessions"), summary.get("cross_brand_entry_sessions")
+    ));
+    summary.put("banner_share_of_cross_brand_entries", divide(
+      summary.get("banner_cross_brand_entry_sessions"), summary.get("cross_brand_entry_sessions")
+    ));
+    return summary;
   }
 
   /* ------------------------------------------------------------------ E1 overview */
@@ -616,12 +787,12 @@ public class DashboardMartService {
     if (dimensions.isEmpty() || dimensions.getFirst().get("cohort_key") == null) return null;
 
     Map<String, Object> dim = dimensions.getFirst();
-    String actorClause = q.actorClause();
+    // Unlike additive Marts, cohort percentiles have a separately materialized
+    // actor_type='all' row. Never combine execution-axis percentile rows.
+    String actorClause = " and actor_type=?";
     // snapshot_week_kst는 KST 월요일이다. from이 주중이어도 그 주의 스냅샷을 포함한다.
     LocalDate snapshotFrom = q.from().minusDays(6);
-    Object[] cohortArgs = actorClause.isEmpty()
-      ? new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()) }
-      : new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()), q.actor() };
+    Object[] cohortArgs = new Object[] { dim.get("cohort_key"), Date.valueOf(snapshotFrom), Date.valueOf(q.to()), q.actor() };
     String cohortWhere = "cohort_key=? and snapshot_week_kst between ? and ?" + actorClause;
     List<Map<String, Object>> rows = many(
         "select metric_name,snapshot_week_kst,window_start_date,window_end_date,brand_count," +
