@@ -3,7 +3,10 @@
 `jobs/publish_user_trait_job.py`는 Spark가 완료한 Mart Parquet을 PyArrow로 최대 1,000행씩
 읽는 독립 Python Job이다. Spark 재집계나 JDBC 연결이 필요하지 않다. 현재 projection
 allowlist는 `contracts/dw/schema.sql`의 24개 DW Mart와 맞춰져 있으며, `--marts`로
-발행 대상을 선택한다. EC2-2 Compose의 기본 실행은 24종 전체를 사용한다.
+발행 대상을 선택한다. **EC2-2 Compose의 기본 실행은 아직 22종이다** — 시장 비교 2종
+(`cross_brand_daily`, `category_price_reference`)은 DDL만 갖춘 상태이고 운영 MySQL에
+테이블이 없다. 테이블을 만들기 전에 발행 목록에 넣으면 그 종만 실패한다(발행은 Mart마다
+독립이라 나머지는 정상 발행된다).
 DDL·grain·NULL 정책은 `contracts/dw/schema.sql`과 `build_ddl.py`에서
 읽고 수정하지 않는다.
 
@@ -97,7 +100,7 @@ sudo docker compose --profile dw build dw-projection
 sudo docker compose --profile dw run --rm dw-projection
 ```
 
-기본 실행은 24종 Mart를 순서대로 발행한다.
+기본 실행은 Compose가 넘기는 목록(현재 22종)을 순서대로 발행한다.
 stdout의 전체 `status=published`, 각 Mart의 `published=true`와
 `source_rows=inserted_rows`를 확인한다. JSON 보고서는 `dw-projection-reports` Volume의
 `/reports/dw-projection.json`에도 Mart별로 남는다.
@@ -106,9 +109,10 @@ Mart 사이의 `RENAME TABLE`은 하나의 트랜잭션으로 묶지 않는다. 
 앞에서 성공한 Mart만 새 값으로 발행될 수 있으므로, 보고서의 실패 Mart만 원인 해결 후
 재실행한다.
 
-기존 EC2-2 `.env`에 7종의 `DW_PROJECTION_MARTS`가 지정돼 있으면 아래 24종 목록으로
+기존 EC2-2 `.env`에 7종의 `DW_PROJECTION_MARTS`가 지정돼 있으면 아래 목록으로
 갱신한다. `.env` 값은 Compose 기본값보다 우선한다. 특정 Mart만 발행할 때도 이 변수를
-사용할 수 있다.
+사용할 수 있다. 목록 끝의 `cross_brand_daily`·`category_price_reference`는 **MySQL에
+테이블을 먼저 만든 뒤에** 넣는다 — 없는 상태로 넣으면 그 종의 `RENAME TABLE`이 실패한다.
 
 ```dotenv
 DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily,cross_brand_daily,category_price_reference
