@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import DashboardApp from './DashboardApp';
 import AuthGate from '../components/auth/AuthGate';
-import DemoBanner from '../components/DemoBanner';
 // 글꼴 정본 (--font-sans). dashboard.css 의 --font 가 이 값을 받으므로 먼저 와야 한다
 import '../styles/pretendard.css';
 import './dashboard.css';
@@ -14,8 +13,6 @@ import './storefront-preview.css';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
-    {/* 발표용 상단 띠 · 늘 켜짐 */}
-    <DemoBanner role="seller" />
     {/* 브랜드 담당자(SELLER) 로그인 · shop_backend /api/auth */}
     <AuthGate
       role="SELLER"
