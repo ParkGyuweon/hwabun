@@ -77,8 +77,9 @@ function crossSignals(m: BehaviorMetrics, target: ContentAttention): Prescriptio
     out.push({
       from: '고객이 찾는 성분',
       signal: 'dragged_ingredients_top3',
-      text: `드래그 상위 3개는 ${drag.map((d) => `${labelKo(d.name)} ${fmt.int(d.count)}회`).join(', ')}입니다.`,
-      sample_size: drag.reduce((s, d) => s + d.count, 0),
+      // 점수(direct_match_score)를 "N회" 로 적으면 틀린 숫자가 된다. 건수는 관련 행동 수로 적는다
+      text: `고객이 이름을 가장 많이 긁거나 복사한 성분은 ${drag.map((d) => `${labelKo(d.name)}(관련 행동 ${fmt.int(d.events)}번)`).join(', ')}입니다.`,
+      sample_size: drag.reduce((s, d) => s + d.events, 0),
     });
   }
 

@@ -1105,6 +1105,14 @@ table.data tr:hover td {
     border-bottom: 1px solid var(--line);
   }
 
+  /*
+   * 발표용 상단 띠(demo-banner.css)의 `html[data-demo] .sidebar { height: calc(100vh - 띠) }` 가 위 `height: auto` 보다
+   * 세서, 가로 막대가 화면 높이만큼 늘어나고 메뉴가 한가운데 떴다 (2026-09-28 유림님 제보). 좁은 화면에선 띠가 있어도 접는다.
+   */
+  html[data-demo] .console .sidebar {
+    height: auto;
+  }
+
   /* 가로 막대 안의 모든 칸 — 내용보다 좁아지지 않는다. 이게 한 자씩 쪼개지던 원인이다 */
   .sidebar > *,
   .sidebar__nav button {

@@ -99,6 +99,10 @@ export interface ProductMetrics {
   removeRate: number;
   /** 정보 확인(성분 또는 리뷰) 도달 세션 비율 */
   infoRate: number;
+  /** 목록에 보였을 때 누른 비율 (product_ctr). 없으면 null */
+  ctr: number | null;
+  /** 목록에 보였을 때 상세까지 연 비율 (detail_entry_rate). 없으면 null */
+  detailEntryRate: number | null;
 }
 
 /** 이탈 지점 → 이유 힌트 (규칙 R-1c·e·h). 단정하지 않는다 */
@@ -295,6 +299,10 @@ export interface ContentAttention {
   avgDwellMs: number;
   viewRate: number;
   conversionLift: number;
+  /** 이 글을 본 방문의 실제 담기율 (conversion.viewed_cart_rate). 없으면 null */
+  viewedCartRate: number | null;
+  /** 이 글에서 글자를 복사한 횟수 */
+  copyCount: number;
   sampleSize: number;
 }
 

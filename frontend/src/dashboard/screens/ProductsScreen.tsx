@@ -5,7 +5,7 @@ import type { ProductMetrics } from '../lib/metrics';
 import { useBehavior } from '../lib/useBehavior';
 import MyProducts from './MyProducts';
 
-type SortKey = 'interest' | 'cartRate' | 'remove' | 'variant';
+type SortKey = 'interest' | 'ctr' | 'cartRate' | 'remove' | 'variant';
 
 /**
  * 상품 (명세 §2-5). 상품마다 "어디서 막히나 · 어디서 나가나 · 왜일 가능성" 을 한 줄로.
@@ -35,6 +35,9 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
   const rows = useMemo(() => {
     const list = [...productMetrics];
     switch (sort) {
+      case 'ctr':
+        // 눈에 안 띄는 상품을 먼저. 값이 없는 상품은 뒤로
+        return list.sort((a, b) => (a.ctr ?? 2) - (b.ctr ?? 2));
       case 'cartRate':
         return list.sort((a, b) => b.cartRate - a.cartRate);
       case 'remove':
@@ -114,6 +117,7 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
             {(
               [
                 ['interest', '관심 많은 순'],
+                ['ctr', '덜 눌린 순'],
                 ['cartRate', '담기 비율 순'],
                 ['remove', '담았다 뺀 비율 순'],
                 ['variant', '옵션 많이 오간 순'],
@@ -133,6 +137,7 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
                 <th className="is-name">상품</th>
                 <th title="노출 → 클릭 → 상세 → 성분·리뷰 확인 → 담기 중, 내 다른 상품과 비교해 가장 뒤처진 단계">막히는 단계</th>
                 <th title="가장 많이 나간 자리. 옆의 짧은 말은 가능성이고 단정이 아닙니다">나간 자리</th>
+                <th title="목록에 보였을 때 누른 비율 · 아래는 상세까지 연 비율">목록에서 누름</th>
                 <th title="상세를 본 방문 중 담은 비율">담기</th>
                 <th title="상세를 본 방문 중 성분·리뷰까지 확인한 비율">성분·리뷰</th>
                 <th title="방문 한 번에 옵션을 바꾼 평균 횟수">옵션 오감</th>
@@ -145,7 +150,7 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={showRepurchase ? 10 : 9} className="note">
+                  <td colSpan={showRepurchase ? 11 : 10} className="note">
                     {source.products === 'none' ? '아직 기록을 받지 못했습니다' : '이 기간에 상세를 본 상품이 없습니다'}
                   </td>
                 </tr>
@@ -163,6 +168,10 @@ export default function ProductsScreen({ brandId, brandName }: { brandId: string
                     <td>
                       {p.exitContent ? exitHint(p.exitContent).ko : '-'}
                       {p.exitContent && exitHint(p.exitContent).hint ? <span className="diag-hint">{exitHint(p.exitContent).hint}</span> : null}
+                    </td>
+                    <td>
+                      {p.ctr === null ? '-' : fmt.pct(p.ctr)}
+                      {p.detailEntryRate !== null ? <span className="diag-hint">상세까지 {fmt.pct(p.detailEntryRate, 0)}</span> : null}
                     </td>
                     <td>
                       <b>{fmt.pct(p.cartRate)}</b>

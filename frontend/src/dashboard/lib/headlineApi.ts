@@ -88,12 +88,13 @@ export function buildOverviewHeadlineRequest(
   {
     const facts = [
       { label_ko: '방문', value_text: `${fmt.int(o.sessions)}건` },
-      { label_ko: '상세를 본 방문', value_text: `${fmt.int(o.detailViews)}건` },
-      { label_ko: '장바구니에 담은 방문', value_text: `${fmt.int(o.addToCart)}건` },
+      // 둘 다 방문 수가 아니라 횟수다 (product_view_count·add_to_cart_count). "방문" 으로 적으면 한 마디가 틀린 말을 한다
+      { label_ko: '상세를 본 횟수', value_text: `${fmt.int(o.detailViews)}번` },
+      { label_ko: '장바구니에 담은 횟수', value_text: `${fmt.int(o.addToCart)}번` },
     ];
     const comparisons: string[] = [];
     if (p) {
-      comparisons.push(compare('상세를 본 방문', `${fmt.int(p.detailViews)}건`, `${fmt.int(o.detailViews)}건`, p.detailViews, o.detailViews, periodText));
+      comparisons.push(compare('상세를 본 횟수', `${fmt.int(p.detailViews)}번`, `${fmt.int(o.detailViews)}번`, p.detailViews, o.detailViews, periodText));
     }
     sections.push({ id: 'traffic', label_ko: '찾아온 사람', facts, comparisons, thin });
   }
