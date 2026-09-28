@@ -983,7 +983,7 @@ def _over_clicked_banner_count(
     없는 클릭은 그대로 남는다.
 
     **`skip_count` 도 같이 본다.** 정의가 `impression_count - click_count` 라
-    (§4.16) 클릭이 노출보다 많은 칸에서 자동으로 음수가 된다. 일자별로 음수를
+    (§4.10) 클릭이 노출보다 많은 칸에서 자동으로 음수가 된다. 일자별로 음수를
     막으면 자정을 넘긴 세션이 걸린다 — 2026-09-23 배치가 그것 하나로 실패했다.
     둘은 같은 사실의 두 표현이므로 한 자리에서 본다.
     """
@@ -2196,7 +2196,7 @@ def validate_frames(
         "banner_daily configured grain is unique",
     ))
     # `skip_count` 는 일자별로 음수를 볼 수 없다. 정의가
-    # `impression_count - click_count` 라(§4.16) 클릭이 노출보다 많은 칸에서 자동으로
+    # `impression_count - click_count` 라(§4.10) 클릭이 노출보다 많은 칸에서 자동으로
     # 음수가 된다 — 자정을 넘긴 세션이 만드는 그 칸이다. 아래 날짜 합산 검사가
     # 클릭과 함께 본다. 2026-09-23 배치에서 이 조건 하나만 남아 실패했다.
     invalid_banner_counts = banner_daily.where(
