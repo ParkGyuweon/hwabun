@@ -1402,7 +1402,7 @@ input = content_interest_fact, funnel_session_fact
 
 **대시보드가 만들 수 없는 값이다.** "그 콘텐츠를 본 세션"과 "그 세션이 담았는가"를
 맞추려면 세션 단위 조인이 필요한데, 집계된 Mart 두 개를 받아서는 복원되지 않는다.
-`docs/dashboard/dashboard-mart-api-spec.md` §6-2가 이 Mart를 요구하는 근거다.
+`dashboard-mart-api-spec.md` §6-2가 이 Mart를 요구하는 근거다.
 
 **cart_lift를 미리 계산하지 않는다.** 기준이 되는 브랜드 담기율(§4.14
 `view_to_cart_rate`, 분모 `detail_view_sessions`)과 나누면 "본 사람의 담기율 배수"가

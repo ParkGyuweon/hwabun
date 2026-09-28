@@ -13,7 +13,7 @@ nullable 및 입출력 구조를 정의하는 Markdown 명세도 이 디렉터�
 | 정상·오류 샘플 | 계약 통과 payload와 의도적인 위반 payload | `samples/` |
 | 검증 코드 | 계약 위반과 구현 drift를 탐지 | `validate_events.py`, `coverage_report.py`, `tests/` |
 
-`samples/event-mapping-cases.json`은 활성 Event 39개의 `event_name`, `intent`,
+`samples/event-mapping-cases.json`은 활성 Event 43개의 `event_name`, `intent`,
 `product_id` 정책과 Producer를 담은 전 구간 공통 테스트 벡터다. 운영 입력 데이터가
 아니며 `event-schema.json`과의 집합·규칙 일치는 자동 테스트로 보장한다.
 
