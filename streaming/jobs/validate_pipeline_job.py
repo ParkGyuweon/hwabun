@@ -2843,6 +2843,10 @@ def validate_frames(
         # 분자는 분모 모집단으로 제한돼 있다 (§4.4)
         | (F.col("ingredient_view_sessions") > F.col("product_view_sessions"))
         | (F.col("review_view_sessions") > F.col("product_view_sessions"))
+        # `section_view_sessions` 도 같은 제한을 받는다. 이 쌍의 검사가 없어서
+        # 화면의 "본 사람" 비율이 100.8% 로 나가는 것을 못 잡았다 — 2026-09-23
+        # 운영 Mart 에서 28,789행 중 4,775행(16.6%)이 위반이었다.
+        | (F.col("section_view_sessions") > F.col("product_view_sessions"))
     ).count()
     checks.append(_check(
         "content_daily_counts_are_bounded",
