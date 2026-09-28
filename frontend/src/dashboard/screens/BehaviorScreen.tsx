@@ -16,7 +16,7 @@ import { useBehavior } from '../lib/useBehavior';
  * 이 화면의 마트는 전부 신규 요청(계약 §6-5)이다. 올 때까지 0·빈 표이고 배지가 그렇게 적는다.
  */
 export default function BehaviorScreen() {
-  const { frictionByLocation, frictionCounts, entryConversion, intentFunnel, eventVolumes, quickExitRate, overview, source } = useBehavior();
+  const { frictionByLocation, frictionCounts, entryConversion, intentFunnel, eventVolumes, quickExitRate, source } = useBehavior();
 
   // 머뭇거림(hover_dwell)은 막힌 것과 다른 축이라 결론에서 뺀다
   // 0 끼리는 순위가 없다. 한 번도 안 일어난 자리를 "가장 많이 막힌 자리"로 세우지 않는다 (2026-09-18)
@@ -77,11 +77,12 @@ export default function BehaviorScreen() {
           sub={frictionCounts.scroll_backtrack === 0 ? '아직 기록 없음' : '되돌아가 다시 읽은 횟수'}
           source={source.friction}
         />
+        {/* 담았다 뺀 비율은 요약에 이미 있다. 이 화면에선 막힌 신호를 하나 더 둔다 (2026-09-28) */}
         <Kpi
-          label="담았다가 뺀 비율"
-          value={fmt.pct(overview.removalRate)}
-          sub={overview.removalRate === 0 ? '아직 기록 없음' : '담은 뒤 다시 뺀 비율'}
-          source={source.overview}
+          label="눌러도 반응 없던 곳"
+          value={fmt.int(frictionCounts.dead_click)}
+          sub={frictionCounts.dead_click === 0 ? '아직 기록 없음' : '눌리는 줄 알고 누른 횟수'}
+          source={source.friction}
         />
       </div>
 
