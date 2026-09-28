@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Heatmap, Kpi, Panel } from '../components';
 import { PRICE_BIN_ORDER, SKIN_TONE_ORDER, SKIN_TYPE_KO, fmt, priceBinKo } from '../lib/metrics';
-import type { CohortM } from '../lib/behavior';
+import type { CohortM, SegmentByType } from '../lib/behavior';
 import { useBehavior } from '../lib/useBehavior';
 
 const TONE_KO: Record<string, string> = {
@@ -73,7 +74,7 @@ function CohortBadge({ cohort }: { cohort: CohortM }) {
         className="cohort__eyebrow"
         title={
           cohort.sampleSufficient
-            ? '중간값 = 비슷한 브랜드를 한 줄로 세웠을 때 가운데 값. 다른 브랜드 이름·개별 숫자는 보이지 않습니다'
+            ? '비슷한 브랜드 범위 = 한 줄로 세웠을 때 가운데 절반이 드는 구간. 다른 브랜드 이름·개별 숫자는 보이지 않습니다'
             : '이 주는 비슷한 브랜드의 방문이 적어 참고만 해 주세요. 다른 브랜드 이름·개별 숫자는 보이지 않습니다'
         }
       >
@@ -88,7 +89,11 @@ function CohortBadge({ cohort }: { cohort: CohortM }) {
               <strong className="cohort__pos">{pos ? pos.label : '비교 불가'}</strong>
               <span className="cohort__nums">
                 {m.mine !== null ? `내 브랜드 ${fmt.pct(m.mine)}` : '내 값 없음'}
-                {m.p50 !== null ? ` · 비슷한 브랜드 중간값 ${fmt.pct(m.p50)}` : ''}
+                {m.p25 !== null && m.p75 !== null
+                  ? ` · 비슷한 브랜드 ${fmt.pct(m.p25)}~${fmt.pct(m.p75)}${m.p50 !== null ? ` (중간 ${fmt.pct(m.p50)})` : ''}`
+                  : m.p50 !== null
+                    ? ` · 비슷한 브랜드 중간값 ${fmt.pct(m.p50)}`
+                    : ''}
               </span>
             </li>
           );
@@ -98,8 +103,37 @@ function CohortBadge({ cohort }: { cohort: CohortM }) {
   );
 }
 
+/** 피부 타입·톤 한 축 표. 두 표가 모양이 같다 */
+function AxisTable({ head, rows, label }: { head: string; rows: SegmentByType[]; label: (key: string) => string }) {
+  return (
+    <table className="table">
+      <thead>
+        <tr>
+          <th>{head}</th>
+          <th title="이 기간에 들어온 고객 수">고객</th>
+          <th>상세 방문</th>
+          <th title="상세를 본 뒤 담은 비율">담기</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((s) => (
+          <tr key={s.type} className={s.sessions < THIN_VISITS ? 'is-thin' : ''}>
+            <td>{label(s.type)}</td>
+            <td>{fmt.int(s.users)}명</td>
+            <td>{fmt.int(s.sessions)}</td>
+            <td>
+              <strong>{fmt.pct(s.cartRate)}</strong>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function SegmentsScreen() {
-  const { segmentMatrix, segmentByType, segmentTopContent, sameSkinFilterRate, priceBands, segmentPriceGrid, cohort, source } = useBehavior();
+  const [priceMetric, setPriceMetric] = useState<'cart' | 'purchase'>('cart');
+  const { segmentMatrix, segmentByType, segmentByTone, segmentTopContent, sameSkinFilterRate, priceBands, segmentPriceGrid, cohort, source } = useBehavior();
 
   /** 가격대 표. 정해진 5구간 순서 + 가격 미입력 행은 맨 아래 */
   const binIndex = (bin: string | null) => (bin === null ? 99 : (PRICE_BIN_ORDER as readonly string[]).indexOf(bin));
@@ -110,7 +144,7 @@ export default function SegmentsScreen() {
   const priceCells: Record<string, Record<string, { value: number; n: number }>> = {};
   for (const r of segmentPriceGrid) {
     priceCells[r.type] = {};
-    for (const c of r.cells) if (c.bin !== null) priceCells[r.type][c.bin] = { value: c.cartRate, n: c.sessions };
+    for (const c of r.cells) if (c.bin !== null) priceCells[r.type][c.bin] = { value: priceMetric === 'cart' ? c.cartRate : c.purchaseRate ?? 0, n: c.sessions };
   }
   const priceGridFilled = segmentPriceGrid.flatMap((r) => r.cells).filter((c) => c.bin !== null && c.sessions >= MIN_CELL_VISITS).length;
 
@@ -121,6 +155,8 @@ export default function SegmentsScreen() {
   const best = converting.length > 0 ? converting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
   const typesConverting = (segmentByType ?? []).filter((t) => t.cartRate > 0);
   const bestType = typesConverting.length > 0 ? typesConverting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
+  const tonesConverting = segmentByTone.filter((t) => t.cartRate > 0 && t.sessions >= MIN_CELL_VISITS);
+  const bestTone = tonesConverting.length > 0 ? tonesConverting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
 
   const cells: Record<string, Record<string, { value: number; n: number }>> = {};
   for (const r of segmentMatrix) {
@@ -148,7 +184,7 @@ export default function SegmentsScreen() {
           <Kpi
             label="가장 많이 담는 피부 타입"
             value={SKIN_TYPE_KO[bestType.type] ?? bestType.type}
-            sub={`${fmt.int(bestType.sessions)}건 중 ${fmt.pct(bestType.cartRate)} · 톤 표 준비 중`}
+            sub={`상세 ${fmt.int(bestType.sessions)}건 중 ${fmt.pct(bestType.cartRate)}`}
             source="real"
           />
         ) : best ? (
@@ -172,7 +208,12 @@ export default function SegmentsScreen() {
           sub={sameSkinFilterRate === 0 ? '아직 기록 없음' : '리뷰 걸러 본 방문 중'}
           source={source.behaviors}
         />
-        <Kpi label="고객군을 나누는 기준" value="4 × 5" sub="피부 타입 4 × 피부 톤 5" source="real" />
+        <Kpi
+          label="가장 많이 담는 피부 톤"
+          value={bestTone ? TONE_KO[bestTone.type] ?? bestTone.type : '-'}
+          sub={bestTone ? `상세 ${fmt.int(bestTone.sessions)}건 중 ${fmt.pct(bestTone.cartRate)}` : noSegments ? '아직 기록 없음' : '담은 고객 아직 없음'}
+          source={source.segments}
+        />
       </div>
 
       <Panel
@@ -197,27 +238,11 @@ export default function SegmentsScreen() {
           />
         )}
         <p className="note">복합성 행은 톤끼리 비교하세요</p>
-        {source.segments === 'real' && segmentByType && segmentByType.length > 0 ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th title="피부 타입만으로 나눈 값">피부 타입</th>
-                <th>상세 방문</th>
-                <th title="상세를 본 뒤 담은 비율">담기</th>
-              </tr>
-            </thead>
-            <tbody>
-              {segmentByType.map((s) => (
-                <tr key={s.type} className={s.sessions < THIN_VISITS ? 'is-thin' : ''}>
-                  <td>{SKIN_TYPE_KO[s.type] ?? s.type}</td>
-                  <td>{fmt.int(s.sessions)}</td>
-                  <td>
-                    <strong>{fmt.pct(s.cartRate)}</strong>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {source.segments === 'real' && ((segmentByType?.length ?? 0) > 0 || segmentByTone.length > 0) ? (
+          <div className="grid grid--2">
+            {segmentByType && segmentByType.length > 0 ? <AxisTable head="피부 타입" rows={segmentByType} label={(k) => SKIN_TYPE_KO[k] ?? k} /> : null}
+            {segmentByTone.length > 0 ? <AxisTable head="피부 톤" rows={segmentByTone} label={(k) => TONE_KO[k] ?? k} /> : null}
+          </div>
         ) : null}
       </Panel>
 
@@ -237,8 +262,8 @@ export default function SegmentsScreen() {
                   <th>내 상품</th>
                   <th title="한 고객이 여러 가격대를 보면 가격대마다 한 번씩 셉니다. 더해서 전체 방문으로 읽지 마세요">상세 방문</th>
                   <th title="상품을 보고 상세까지 들어온 비율">상세로 들어옴</th>
-                  <th title="상세를 본 뒤 담은 비율">담기</th>
-                  <th title="상세를 본 뒤 구매한 비율">구매</th>
+                  <th title="상세를 본 뒤 담은 비율 · 아래는 담은 방문 수">담기</th>
+                  <th title="상세를 본 뒤 구매한 비율 · 아래는 구매한 방문 수">구매</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,8 +279,12 @@ export default function SegmentsScreen() {
                     <td>{b.detailEntryRate === null ? '-' : fmt.pct(b.detailEntryRate)}</td>
                     <td>
                       <strong>{b.cartRate === null ? '-' : fmt.pct(b.cartRate)}</strong>
+                      <span className="diag-hint">{fmt.int(b.cartSessions)}건</span>
                     </td>
-                    <td>{b.purchaseRate === null ? '-' : fmt.pct(b.purchaseRate)}</td>
+                    <td>
+                      {b.purchaseRate === null ? '-' : fmt.pct(b.purchaseRate)}
+                      <span className="diag-hint">{fmt.int(b.purchaseSessions)}건</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -265,11 +294,20 @@ export default function SegmentsScreen() {
       </Panel>
 
       <Panel
-        title="피부 타입 × 가격대 · 장바구니에 담은 비율"
+        title={`피부 타입 × 가격대 · ${priceMetric === 'cart' ? '장바구니에 담은' : '구매한'} 비율`}
         source={source.segmentPriceGrid}
         aside={
-          <span title={`방문 ${MIN_CELL_VISITS}건 미만 칸은 비움 · ${THIN_VISITS}건 미만은 흐림`}>
-            20칸 중 {priceGridFilled}칸 채움 · 방문 {MIN_CELL_VISITS}건 미만은 비움
+          <span className="chips chips--inline" title={`20칸 중 ${priceGridFilled}칸 채움 · 방문 ${MIN_CELL_VISITS}건 미만은 비움 · ${THIN_VISITS}건 미만은 흐림`}>
+            {(
+              [
+                ['cart', '담기'],
+                ['purchase', '구매'],
+              ] as const
+            ).map(([k, label]) => (
+              <button key={k} type="button" className={`chip${priceMetric === k ? ' chip--hit' : ''}`} onClick={() => setPriceMetric(k)}>
+                {label}
+              </button>
+            ))}
           </span>
         }
       >

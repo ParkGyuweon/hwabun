@@ -13,6 +13,9 @@ import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
 import type { Feedback } from '../../types/feedback';
+import { PURCHASE_REASONS } from '../../lib/checkout';
+
+const REASON_KO = new Map(PURCHASE_REASONS.map((r) => [r.key, r.label]));
 
 /**
  * 개요 (명세 §2-1). 역피라미드: 결론 한 줄 → 근거 배지 → 범용 지표(접힘).
@@ -62,6 +65,13 @@ export default function OverviewScreen({
   const insights = useMemo(() => rankInsights(m), [m]);
   const top = insights[0];
   const rest = insights.slice(1, 4);
+  const [trend, setTrend] = useState<'visits' | 'carts'>('visits');
+  // 결제할 때 고른 "왜 샀나요" 답. 답을 안 고른 주문(reason null)은 비율에서 빠진다 (서버 reason_share 와 같은 규칙)
+  const reasons = (repurchase?.reasons ?? [])
+    .filter((r): r is typeof r & { reason: string } => r.reason !== null && r.orderCount > 0)
+    .sort((a, b) => b.orderCount - a.orderCount);
+  const reasonOrders = reasons.reduce((s, r) => s + r.orderCount, 0);
+  const cartSessions = standardFunnel.find((s) => s.label === '장바구니에 담음')?.value ?? 0;
 
   /*
    * 서버 피드백(GET /api/seller/feedback) + 이 브라우저에서 쓴 글. 고객의 말 화면과 같은 규칙이다.
@@ -277,7 +287,7 @@ export default function OverviewScreen({
         <Kpi
           label="상세를 보고 담은 비율"
           value={fmt.pct(overview.cartRate)}
-          sub={noBehavior ? emptyWhy : `상세 ${fmt.int(overview.detailViews)}번 중${delta(overview.cartRate, previous?.cartRate)}`}
+          sub={noBehavior ? emptyWhy : `상세를 연 방문 ${fmt.int(overview.detailSessions)}건 중${delta(overview.cartRate, previous?.cartRate)}`}
           source={source.overview}
         />
         <Kpi
@@ -317,9 +327,38 @@ export default function OverviewScreen({
         </Panel>
       ) : null}
 
+      {reasons.length > 0 ? (
+        <Panel title="고객이 고른 구매 이유" source={source.purchase} aside={`결제할 때 답한 주문 ${fmt.int(reasonOrders)}건`}>
+          <BarList
+            items={reasons.map((r) => ({
+              label: REASON_KO.get(r.reason) ?? r.reason,
+              value: r.share ?? r.orderCount / reasonOrders,
+              hint: `${fmt.int(r.orderCount)}건`,
+            }))}
+            format={(v) => fmt.pct(v, 0)}
+          />
+        </Panel>
+      ) : null}
       <div className="grid grid--2">
-        <Panel title={`날짜별 방문 수 · 최근 ${days}일`} source={source.overview} aside="눈금은 0부터">
-          <LineChart points={series.map((d) => ({ label: d.label, value: d.visits }))} />
+        <Panel
+          title={`날짜별 ${trend === 'visits' ? '방문' : '담기'} · 최근 ${days}일`}
+          source={source.overview}
+          aside={
+            <span className="chips chips--inline">
+              {(
+                [
+                  ['visits', '방문'],
+                  ['carts', '담기'],
+                ] as const
+              ).map(([k, label]) => (
+                <button key={k} type="button" className={`chip${trend === k ? ' chip--hit' : ''}`} onClick={() => setTrend(k)}>
+                  {label}
+                </button>
+              ))}
+            </span>
+          }
+        >
+          <LineChart points={series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts }))} />
         </Panel>
         <Panel title="구매까지 가는 단계" source={source.funnel} aside="단계마다 남은 방문">
           <Funnel steps={standardFunnel} />
@@ -343,6 +382,15 @@ export default function OverviewScreen({
             성분·리뷰 확인은 단계가 아니라 곁가지다 — 퀵룩으로 담은 방문은 볼 기회가 없었다. 퍼널에 끼우면
             "성분·리뷰 → 담기" 가 154% 로 나온다. 분모를 상품 상세 방문으로 맞춰 옆에 적는다 (2026-09-22).
           */}
+          {funnelNote?.quickLookCartSessions && cartSessions > 0 ? (
+            <p className="funnel__aside" title="상품 상세를 열지 않고 빠른 보기 창에서 바로 담은 방문">
+              <span>빠른 보기에서 바로 담음</span>
+              <b>{fmt.pct(funnelNote.quickLookCartSessions / cartSessions)}</b>
+              <em>
+                담은 {fmt.int(cartSessions)}건 중 {fmt.int(funnelNote.quickLookCartSessions)}건
+              </em>
+            </p>
+          ) : null}
           {overview.sessions > 0 ? (
             <p className="funnel__aside" title="퀵룩에는 성분·리뷰가 없어 상품 상세를 연 방문만 분모로 씁니다">
               <span>성분·리뷰까지 확인</span>

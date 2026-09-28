@@ -78,6 +78,8 @@ export interface Overview {
   impressions: number;
   clicks: number;
   detailViews: number;
+  /** 상세(빠른 보기 포함)를 연 방문 수. 담기 비율의 분모 */
+  detailSessions: number;
   quickLooks: number;
   addToCart: number;
   removed: number;
@@ -110,9 +112,10 @@ export interface FunnelStep {
 
 export interface ScrapedIngredient {
   name: string;
-  count: number;
-  /** 마트(ingredient_weekly_interest)에는 복사 수가 따로 없다 → null */
-  copyCount: number | null;
+  /** 이름을 긁거나 복사해 직접 짚은 점수 (direct_match_score). 건수가 아니다 */
+  score: number;
+  /** 이 성분에 닿은 행동 수 (contributing_event_count). 상품을 통해 간접으로 닿은 것도 센다 */
+  events: number;
 }
 
 export interface ValidationBehavior {
@@ -146,6 +149,8 @@ export interface SegmentByType {
   type: string;
   sessions: number;
   cartRate: number;
+  /** 이 고객군 사람 수 (segment_user_count) */
+  users: number;
 }
 
 /**
@@ -167,7 +172,7 @@ export interface PriceBandM {
 /** 피부 타입 × 가격대 (E4 `segment_price_grid`, S5 히트맵). 마트는 표본 미달 칸을 지우지 않는다 — 화면이 50 미만 비움·200 미만 흐림 */
 export interface SegmentPriceRowM {
   type: string;
-  cells: Array<{ bin: string | null; sessions: number; cartRate: number }>;
+  cells: Array<{ bin: string | null; sessions: number; cartRate: number; purchaseRate: number | null }>;
 }
 
 /**
@@ -275,6 +280,8 @@ export interface BehaviorMetrics {
     detailSessions: number;
     productViewSessions: number;
     quickLookSessions: number | null;
+    /** 빠른 보기에서 상세를 안 열고 바로 담은 방문 (quick_look_cart_sessions) */
+    quickLookCartSessions: number | null;
   } | null;
   productMetrics: ProductMetrics[];
   contentAttention: ContentAttention[];
@@ -282,6 +289,8 @@ export interface BehaviorMetrics {
   validationBehaviors: ValidationBehavior[];
   segmentMatrix: SegmentRowM[];
   segmentByType: SegmentByType[] | null;
+  /** 피부 톤 단일 축 (segment_type = skin_tone). 마트 없으면 빈 배열 */
+  segmentByTone: SegmentByType[];
   segmentTopContent: SegmentTop[];
   sameSkinFilterRate: number;
   /** 가격대별 반응. 마트 없으면 빈 배열 (모의 없음) */
@@ -341,6 +350,7 @@ export function emptyBehavior(): BehaviorMetrics {
       impressions: 0,
       clicks: 0,
       detailViews: 0,
+      detailSessions: 0,
       quickLooks: 0,
       addToCart: 0,
       removed: 0,
@@ -363,6 +373,7 @@ export function emptyBehavior(): BehaviorMetrics {
     validationBehaviors: [],
     segmentMatrix: [],
     segmentByType: null,
+    segmentByTone: [],
     segmentTopContent: [],
     sameSkinFilterRate: 0,
     priceBands: [],

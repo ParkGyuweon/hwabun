@@ -125,6 +125,7 @@ function toOverview(p: OverviewPayload['current'], content: ContentPayload | nul
     impressions: p.impression_sessions,
     clicks: funnelClicks,
     detailViews: p.product_view_count,
+    detailSessions: p.detail_view_sessions ?? p.product_view_sessions,
     quickLooks,
     addToCart: p.add_to_cart_count,
     removed: p.remove_from_cart_count,
@@ -204,6 +205,8 @@ function toProducts(p: ProductsPayload, brandProducts: Product[] = []): { rows: 
         quickLookToDetail: d?.quick_look_open_detail_rate ?? null,
         removeRate: ratio(r.remove_from_cart_sessions, r.add_to_cart_sessions),
         infoRate,
+        ctr: r.product_ctr ?? null,
+        detailEntryRate: r.detail_entry_rate ?? null,
         rates,
       };
       return row;
@@ -241,6 +244,8 @@ function toContent(p: ContentPayload): { rows: ContentAttention[]; lift: boolean
         avgDwellMs: nz(r.avg_dwell_ms_per_session, ratio(r.dwell_ms_sum, r.product_view_sessions)),
         viewRate: nz(r.view_rate, ratio(r.section_view_sessions, r.product_view_sessions)),
         conversionLift: lift ?? 1,
+        viewedCartRate: r.conversion?.viewed_cart_rate ?? null,
+        copyCount: r.text_copy_count ?? 0,
         sampleSize: r.section_view_sessions,
       };
     })
@@ -252,7 +257,11 @@ function toSegments(p: SegmentsPayload, emptyMatrix: BehaviorMetrics['segmentMat
   const types = ['dry', 'oily', 'combination', 'normal'];
   const byType = p.by_segment
     .filter((s) => s.segment_type === 'skin_type')
-    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s) }));
+    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s), users: s.segment_user_count }));
+  const byTone = SKIN_TONE_ORDER.flatMap((tone) => {
+    const s = p.by_segment.find((x) => x.segment_type === 'skin_tone' && x.segment_value === tone);
+    return s ? [{ type: tone, sessions: s.product_view_sessions, cartRate: cartRateOf(s), users: s.segment_user_count }] : [];
+  });
 
   const matrix = p.grid
     ? types.map((type) => ({
@@ -276,17 +285,20 @@ function toSegments(p: SegmentsPayload, emptyMatrix: BehaviorMetrics['segmentMat
       })
     : emptyTop;
 
-  return { byType: byType.length > 0 ? byType : null, matrix, grid: Boolean(p.grid), top, topReal: Boolean(p.top_content), sameSkin: p.same_skin_filter_rate };
+  return { byType: byType.length > 0 ? byType : null, byTone, matrix, grid: Boolean(p.grid), top, topReal: Boolean(p.top_content), sameSkin: p.same_skin_filter_rate };
 }
 
-/** 드래그 TOP 10. 어휘집에 없는 이름은 한국어 표시명을 붙일 수 없어 뺀다 (성분 갭 표와 같은 규칙) */
+/**
+ * 직접 짚은 성분 TOP 10. 프론트 어휘집에 없는 성분은 서버가 준 한국어 이름(label_ko)으로 남긴다 —
+ * 전에는 어휘집에 없다고 버려서 서버가 준 성분이 목록에서 사라졌다 (2026-09-28).
+ */
 function toScraped(p: IngredientsPayload) {
   return [...p.by_ingredient]
-    .map((i) => ({ name: canonicalIngredient(i.ingredient), score: i.direct_match_score }))
-    .filter((i): i is { name: string; score: number } => i.name !== null)
+    .map((i) => ({ name: canonicalIngredient(i.ingredient) ?? i.label_ko ?? null, score: i.direct_match_score, events: i.contributing_event_count }))
+    .filter((i): i is { name: string; score: number; events: number } => Boolean(i.name))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10)
-    .map((i) => ({ name: i.name, count: Math.round(i.score), copyCount: null }));
+    .map((i) => ({ name: i.name, score: Math.round(i.score), events: i.events }));
 }
 
 function toFriction(p: FrictionPayload, base: BehaviorMetrics) {
@@ -472,6 +484,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
           detailSessions: ov.funnel.detail_view_sessions ?? ov.funnel.product_view_sessions,
           productViewSessions: ov.funnel.product_view_sessions,
           quickLookSessions: ov.funnel.quick_look_sessions ?? null,
+          quickLookCartSessions: ov.funnel.quick_look_cart_sessions ?? null,
         },
       };
       src.funnel = 'real';
@@ -510,6 +523,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
     out = {
       ...out,
       segmentByType: s.byType ?? [],
+      segmentByTone: s.byTone,
       // 격자·상위 콘텐츠가 비어 있는 것도 답이다. 모의 히트맵으로 덮으면 없는 고객군이 있는 것처럼 보인다
       segmentMatrix: s.matrix,
       segmentTopContent: s.top,
@@ -548,7 +562,7 @@ export function fromMart(bundle: MartBundle, base: BehaviorMetrics, brandProduct
           type,
           cells: cellsOf
             .filter((c) => c.segment_value === type)
-            .map((c) => ({ bin: c.price_bin, sessions: c.detail_view_sessions, cartRate: c.view_to_cart_rate ?? 0 })),
+            .map((c) => ({ bin: c.price_bin, sessions: c.detail_view_sessions, cartRate: c.view_to_cart_rate ?? 0, purchaseRate: c.view_to_purchase_rate })),
         })),
       };
       src.segmentPriceGrid = 'real';
