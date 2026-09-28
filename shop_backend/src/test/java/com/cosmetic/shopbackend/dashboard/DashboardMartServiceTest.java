@@ -69,6 +69,44 @@ class DashboardMartServiceTest {
     assertThrows(ResponseStatusException.class, () -> service.pricePosition("other-seller", BRAND));
   }
 
+  @Test
+  @DisplayName("교차 브랜드 유입은 목적 브랜드·기간으로 읽고 실행축을 합산한 뒤 비율을 다시 계산한다")
+  void crossBrandInflowAggregatesExecutionAxesAndFilters() {
+    dw.execute("create table dw.cross_brand_daily (" +
+      "destination_brand_id varchar(64) not null,event_date_kst date not null," +
+      "actor_type varchar(32) not null,source varchar(32) not null,generator_type varchar(64)," +
+      "scenario_id varchar(64),simulation_run_id varchar(64)," +
+      "brand_view_sessions bigint not null,cross_brand_entry_sessions bigint not null," +
+      "recommendation_cross_brand_entry_sessions bigint not null,banner_cross_brand_entry_sessions bigint not null," +
+      "mart_processed_at timestamp(3) not null)");
+    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','synthetic','simulator','agent_llm','s1','r1',50,10,6,2,'2026-09-11 02:00:00')");
+    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','synthetic','simulator','python_batch','s2','r2',100,20,8,4,'2026-09-11 02:00:00')");
+    dw.update("insert into dw.cross_brand_daily values ('6018','2026-09-10','web','web',null,null,null,50,10,1,1,'2026-09-11 02:00:00')");
+    dw.update("insert into dw.cross_brand_daily values ('other','2026-09-10','synthetic','simulator','python_batch','s2','r2',900,200,80,40,'2026-09-11 02:00:00')");
+
+    Map<String, Object> response = service.crossBrandInflow(SELLER, BRAND, FROM, TO, "all", "all");
+    Map<?, ?> summary = (Map<?, ?>) response.get("summary");
+    Map<?, ?> day = (Map<?, ?>) ((List<?>) response.get("daily")).getFirst();
+    assertEquals("full", coverage(response));
+    assertEquals(200L, number(summary.get("brand_view_sessions")));
+    assertEquals(40L, number(summary.get("cross_brand_entry_sessions")));
+    assertEquals(15L, number(summary.get("recommendation_cross_brand_entry_sessions")));
+    assertEquals(7L, number(summary.get("banner_cross_brand_entry_sessions")));
+    assertEquals(0.2D, decimal(summary.get("cross_brand_entry_rate")), 1e-9);
+    assertEquals(0.075D, decimal(summary.get("recommendation_cross_brand_entry_rate")), 1e-9);
+    assertEquals(0.035D, decimal(summary.get("banner_cross_brand_entry_rate")), 1e-9);
+    assertEquals(0.375D, decimal(summary.get("recommendation_share_of_cross_brand_entries")), 1e-9);
+    assertEquals("2026-09-10", day.get("event_date_kst"));
+
+    Map<?, ?> filtered = (Map<?, ?>) service.crossBrandInflow(
+      SELLER, BRAND, FROM, TO, "synthetic", "python_batch"
+    ).get("summary");
+    assertEquals(100L, number(filtered.get("brand_view_sessions")));
+    assertEquals(20L, number(filtered.get("cross_brand_entry_sessions")));
+    assertEquals(8L, number(filtered.get("recommendation_cross_brand_entry_sessions")));
+    assertThrows(ResponseStatusException.class, () -> service.crossBrandInflow("other-seller", BRAND, FROM, TO, "all", "all"));
+  }
+
   /* ---------------------------------------------------------------- E1 overview */
 
   @Test

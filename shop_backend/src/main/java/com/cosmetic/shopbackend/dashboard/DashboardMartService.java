@@ -166,6 +166,99 @@ public class DashboardMartService {
     );
   }
 
+  /** Cross-brand entry sessions for the seller's destination brand. */
+  public Map<String, Object> crossBrandInflow(
+    String seller,
+    String brand,
+    String from,
+    String to,
+    String actor,
+    String generatorType
+  ) {
+    Read read = open(seller, brand, from, to, actor);
+    String generator = generatorType == null || generatorType.isBlank() ? "all" : generatorType;
+    List<Map<String, Object>> daily = read.optional("cross_brand_daily", () -> crossBrandDaily(read.q, generator));
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("summary", daily == null || daily.isEmpty() ? null : crossBrandSummary(daily));
+    body.put("daily", daily);
+    Object processedAt = null;
+    if (daily != null) {
+      for (Map<String, Object> row : daily) {
+        Object candidate = row.remove("mart_processed_at");
+        if (candidate instanceof Timestamp timestamp &&
+          (!(processedAt instanceof Timestamp current) || timestamp.after(current))) {
+          processedAt = timestamp;
+        }
+        row.put("event_date_kst", dateText(row.get("event_date_kst")));
+        row.put("cross_brand_entry_rate", divide(row.get("cross_brand_entry_sessions"), row.get("brand_view_sessions")));
+        row.put("recommendation_cross_brand_entry_rate", divide(
+          row.get("recommendation_cross_brand_entry_sessions"), row.get("brand_view_sessions")
+        ));
+        row.put("banner_cross_brand_entry_rate", divide(
+          row.get("banner_cross_brand_entry_sessions"), row.get("brand_view_sessions")
+        ));
+        row.put("recommendation_share_of_cross_brand_entries", divide(
+          row.get("recommendation_cross_brand_entry_sessions"), row.get("cross_brand_entry_sessions")
+        ));
+        row.put("banner_share_of_cross_brand_entries", divide(
+          row.get("banner_cross_brand_entry_sessions"), row.get("cross_brand_entry_sessions")
+        ));
+      }
+    }
+    return read.envelope(
+      List.of("cross_brand_daily"),
+      daily != null && !daily.isEmpty(),
+      processedAt,
+      body
+    );
+  }
+
+  private List<Map<String, Object>> crossBrandDaily(Query q, String generatorType) {
+    String actorClause = "all".equals(q.actor()) ? "" : " and actor_type=?";
+    String generatorClause = "all".equals(generatorType) ? "" : " and generator_type=?";
+    List<Object> args = new ArrayList<>(List.of(q.brand(), Date.valueOf(q.from()), Date.valueOf(q.to())));
+    if (!actorClause.isEmpty()) args.add(q.actor());
+    if (!generatorClause.isEmpty()) args.add(generatorType);
+    return many(
+      "select event_date_kst," +
+        "coalesce(sum(brand_view_sessions),0) brand_view_sessions," +
+        "coalesce(sum(cross_brand_entry_sessions),0) cross_brand_entry_sessions," +
+        "coalesce(sum(recommendation_cross_brand_entry_sessions),0) recommendation_cross_brand_entry_sessions," +
+        "coalesce(sum(banner_cross_brand_entry_sessions),0) banner_cross_brand_entry_sessions," +
+        "max(mart_processed_at) mart_processed_at " +
+        "from dw.cross_brand_daily where destination_brand_id=? and event_date_kst between ? and ?" +
+        actorClause + generatorClause + " group by event_date_kst order by event_date_kst",
+      args.toArray()
+    );
+  }
+
+  private Map<String, Object> crossBrandSummary(List<Map<String, Object>> daily) {
+    Map<String, Object> summary = new LinkedHashMap<>();
+    for (String field : List.of(
+      "brand_view_sessions",
+      "cross_brand_entry_sessions",
+      "recommendation_cross_brand_entry_sessions",
+      "banner_cross_brand_entry_sessions"
+    )) {
+      summary.put(field, daily.stream().mapToLong(row -> longOf(row.get(field))).sum());
+    }
+    summary.put("cross_brand_entry_rate", divide(summary.get("cross_brand_entry_sessions"), summary.get("brand_view_sessions")));
+    summary.put("recommendation_cross_brand_entry_rate", divide(
+      summary.get("recommendation_cross_brand_entry_sessions"), summary.get("brand_view_sessions")
+    ));
+    summary.put("banner_cross_brand_entry_rate", divide(
+      summary.get("banner_cross_brand_entry_sessions"), summary.get("brand_view_sessions")
+    ));
+    summary.put("recommendation_share_of_cross_brand_entries", divide(
+      summary.get("recommendation_cross_brand_entry_sessions"), summary.get("cross_brand_entry_sessions")
+    ));
+    summary.put("banner_share_of_cross_brand_entries", divide(
+      summary.get("banner_cross_brand_entry_sessions"), summary.get("cross_brand_entry_sessions")
+    ));
+    return summary;
+  }
+
   /* ------------------------------------------------------------------ E1 overview */
 
   public Map<String, Object> overview(String seller, String brand, String from, String to, String actor) {

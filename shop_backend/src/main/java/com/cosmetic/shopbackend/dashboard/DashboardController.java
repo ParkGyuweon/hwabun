@@ -49,6 +49,18 @@ public class DashboardController {
   @GetMapping("/cohort-position")
   public Map<String, Object> cohortPosition(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.cohortPosition(requireSeller(actor), requireSellerBrand(actor), from, to, actorType); }
 
+  @GetMapping("/cross-brand")
+  public Map<String, Object> crossBrandInflow(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @RequestParam String brandId,
+    @RequestParam(required = false) String from,
+    @RequestParam(required = false) String to,
+    @RequestParam(required = false) String actorType,
+    @RequestParam(required = false) String generatorType
+  ) {
+    return marts.crossBrandInflow(requireSeller(actor), brandId, from, to, actorType, generatorType);
+  }
+
   @GetMapping("/ingredients")
   public Map<String, Object> ingredients(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.ingredients(requireSeller(actor), brandId, from, to, actorType); }
 
