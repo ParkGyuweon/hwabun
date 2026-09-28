@@ -39,8 +39,10 @@
 ## 0. 왜 이 계약이 필요한가
 
 이 문서를 처음 쓸 때는 대시보드의 행동 지표가 전부 프론트의 시드 고정 모의값이었고, 마트를 MySQL 로 옮기는
-projection 도 읽어 주는 API 도 없었다. **지금은 마트 22종이 `dw` 에 발행되고 E1~E7 중 다섯이 그 값을 읽는다**
-(2026-09-21 운영 실측). 남은 것은 §5-2 가 정리한 E4 의 세 블록이다.
+projection 도 읽어 주는 API 도 없었다. **지금은 마트 22종이 `dw` 에 발행되고 E1~E7 일곱 전부가 그 값을 읽는다**
+(2026-09-28 운영 실측). §5-2 가 정리한 E4 의 세 블록(`price_bands`·`segment_price_grid`·`cohort`)도
+2026-09-21 에 붙었다. DW 계약의 발행 대상은 24종이지만 그중 시장 비교 2종은 DDL 만 갖춘 상태이고
+운영 MySQL 에는 아직 테이블이 없다 (§5-3).
 
 이 문서는 **어느 마트를 어떤 HTTP 로 읽는가**를 정한다. 마트가 준비됐는지와 API 가 붙었는지는 다른 문제라,
 §5 의 표에 마트별 상태를 따로 적는다.
@@ -156,8 +158,10 @@ projection 테이블이 아직 없으면 **503** `{"error":"mart_unavailable","m
 처리돼야 한다. 조건부 블록은 응답에서 `null` 로 오고 프론트가 그 블록만 모의로 채운다.
 
 **0.3 에서 E2·E3·E4·E6 이 전부 "가능" 으로 올라갔다.** 데이터 파트가 §6 요청을 09-14~16 에 구현했다 (§5 표).
-`event_volumes` 하나만 재료가 없다 — `realtime_event_stats` · `event_daily` 둘 다 dw-schema §5 에 후보로만 있고 구현이
-없다. 티켓은 등록됐고(`S15P21A306-323`) 우선순위는 가장 낮다. B-1·B-2 projection 갱신 뒤에 만든다 (§8-5).
+`event_volumes` 는 **재료가 생겼다** — `event_daily`(dw-schema §4.27)가 구현돼 `dw` 에 발행돼 있고
+grain 선두가 `brand_id` 라 브랜드 필터도 된다(2026-09-28 운영 실측 17,142행). `realtime_event_stats`
+(§5.1)는 여전히 후보이고 key 에 `brand_id` 가 없어 이 블록에 쓸 수 없다. 남은 것은 백엔드가 이 블록을
+구현하는 일이고, 티켓은 `S15P21A306-323` · 우선순위는 가장 낮다 (§8-5).
 
 **단, "마트가 있다" 와 "엔드포인트가 있다" 는 다르다.** 이 표는 마트 쪽 재료를 말한다. 실제 해제는 백엔드가 그 블록을
 구현하고 MySQL projection 에 마트가 올라온 뒤다 — 순서는 §8-5 에서 정한다. 그때까지 응답은 계속 `null` 이고
@@ -464,7 +468,7 @@ cart_lift = content_conversion_daily.viewed_cart_rate / brand_daily_kpi.view_to_
 | `by_location`, `counts` | `friction_daily` (dw-schema §4.21) | **마트 생김** (0.3) |
 | `quick_exit_rate` | `exit_daily` (dw-schema §4.22 · `exit_summary.dwell_ms < 3000` 세션 / 상세 세션) | **마트 생김** (0.3) |
 | `entry_source` | `entry_source_daily` (dw-schema §4.23) | **마트 생김** (0.3) |
-| `event_volumes` | `realtime_event_stats` 또는 `event_daily`. 브랜드 필터 가능해야 한다 | **재료 없음** — 티켓 `S15P21A306-323`. 우선순위 최하 (§8-5) |
+| `event_volumes` | `event_daily` (dw-schema §4.27 · grain 선두가 `brand_id` 라 브랜드 필터 가능). `realtime_event_stats` 는 key 에 `brand_id` 가 없어 쓸 수 없다 | **마트 생김** — 백엔드 블록 구현 대기. 티켓 `S15P21A306-323` · 우선순위 최하 (§8-5) |
 
 #### E6 을 읽을 때 틀리기 쉬운 것
 
@@ -544,7 +548,7 @@ key 는 `dw-schema.md` §4 그대로. **0.3 에서 마트 12종이 신설되고 
 
 #### 5-2. 0.3 에서 새로 생긴 마트 (전부 dw-schema 에 계약 있음)
 
-| 마트 | 행 | 계약 | 쓰는 곳 | 사용 컬럼 |
+| 마트 | 행(0.3 기준 2026-09-16 · 마트 행 수는 배치마다 바뀐다) | 계약 | 쓰는 곳 | 사용 컬럼 |
 | --- | --- | --- | --- | --- |
 | `persona_segment_daily_kpi` | 1,008 | §4.6 | E4 `by_segment`·`grid` | 전 컬럼. `product_id` 가 key 에 **없다** — 브랜드 grain |
 | `brand_price_band_daily_kpi` | 588 | §4.6-1 | E4 `price_bands` | 전 컬럼 |
@@ -681,7 +685,7 @@ Spark 가 만든 Mart 이고 Parquet 에만 있어 백엔드가 읽을 경로가
    | E4 | `price_bands`·`segment_price_grid` | `brand_price_band_daily_kpi`·`segment_price_band_daily_kpi` |
    | E4 | `cohort` | `commons_cohort_weekly` + `brand_cohort_dim` (둘 다 projection 대상 · §5-2) |
    | E6 | `by_location`·`counts`·`quick_exit_rate`·`entry_source` | `friction_daily`·`exit_daily`·`entry_source_daily` |
-   | E6 | `event_volumes` | **재료 없음** — 티켓 등록됨 (`S15P21A306-323`). 우선순위 최하 |
+   | E6 | `event_volumes` | `event_daily` (§4.27 · 마트 생김). 백엔드 블록 구현 대기 — 티켓 `S15P21A306-323` · 우선순위 최하 |
 
    프론트 입장은 **전부 해제**다. 블록이 `null` 이면 모의로 물러나므로 부분 해제도 안전하고, 배지가 섞인 상태를
    이미 드러낸다 (§7). 순서는 백엔드 작업량과 시연 일정이 정하는 것이라 여기서 단정하지 않되, 프론트 의견은
