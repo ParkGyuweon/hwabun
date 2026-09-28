@@ -387,6 +387,67 @@ export const fetchIngredients = (q: MartQuery) => getMart<IngredientsPayload>('i
 export const fetchFriction = (q: MartQuery) => getMart<FrictionPayload>('friction', q);
 export const fetchPurchase = (q: MartQuery) => getMart<PurchasePayload>('purchase', q);
 
+/* ---------- 시장 · 가격 비교와 다른 브랜드에서 넘어온 고객 (2026-09-28 BE feat/dashboard-position-api) ---------- */
+
+/**
+ * 내 상품 가격 vs 같은 카테고리 중간 가격 (`GET /api/seller/dashboard/price-position`).
+ * 마트가 아니라 쇼핑몰 상품 목록에서 바로 센다 — 봉투(source)가 없고 기간·brandId 도 받지 않는다(토큰의 브랜드).
+ * 카테고리 상품이 3개 미만이면 전체 중간값으로 비교하고 `is_sample_sufficient=false` 다.
+ */
+export interface PricePositionRow {
+  product_id: string;
+  product_name: string;
+  secondary_category: string | null;
+  price_krw: number | null;
+  currency: string;
+  category_product_count: number;
+  category_median_krw: number | null;
+  reference_median_krw: number | null;
+  reference_source: 'category' | 'global_fallback';
+  is_sample_sufficient: boolean;
+  /** (내 가격 − 기준가) ÷ 기준가 × 100. 이미 % 단위다 (12.5 = 12.5%) */
+  price_difference_pct: number | null;
+}
+
+export interface PricePositionPayload {
+  brand_id: string;
+  currency: string;
+  products: PricePositionRow[];
+}
+
+export async function fetchPricePosition(): Promise<PricePositionPayload | null> {
+  try {
+    const res = await authFetch('SELLER', '/api/seller/dashboard/price-position');
+    if (!res.ok) return null;
+    const body = (await res.json()) as PricePositionPayload;
+    return body && Array.isArray(body.products) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 다른 브랜드를 보던 고객이 우리 상품으로 넘어온 방문 (`cross_brand_daily`). 비율의 분모는 우리 브랜드를 본 방문 */
+export interface CrossBrandCounts {
+  brand_view_sessions: number;
+  cross_brand_entry_sessions: number;
+  recommendation_cross_brand_entry_sessions: number;
+  banner_cross_brand_entry_sessions: number;
+  cross_brand_entry_rate: number | null;
+  recommendation_cross_brand_entry_rate: number | null;
+  banner_cross_brand_entry_rate: number | null;
+  recommendation_share_of_cross_brand_entries: number | null;
+  banner_share_of_cross_brand_entries: number | null;
+}
+
+export interface CrossBrandPayload extends MartEnvelope {
+  /** 행이 없으면(DW 테이블 전 · 기록 0) null */
+  summary: CrossBrandCounts | null;
+  /** 마트가 없으면 null */
+  daily: Array<CrossBrandCounts & { event_date_kst: string }> | null;
+}
+
+export const fetchCrossBrand = (q: MartQuery) => getMart<CrossBrandPayload>('cross-brand', q);
+
 export interface MartBundle {
   overview: OverviewPayload | null;
   products: ProductsPayload | null;
