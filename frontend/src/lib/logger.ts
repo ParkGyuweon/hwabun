@@ -537,9 +537,8 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
 }
 
 /**
- * 판매자·운영자 세션이라 지금 로그를 **보내지 않는** 상태인가. 로그 창(LogPanel)이 그 사실을 적는다.
- * 이벤트는 여전히 만들어져 화면 로그 창에는 흐른다 — 시연 때 우하단에 로그가 우르르 찍히는 것을 보여 주려면
- * 대시보드에 로그인해 둔 같은 브라우저에서도 보여야 한다 (유림님 2026-09-22). 서버로는 한 건도 안 나간다.
+ * 판매자·운영자 세션이라 지금 로그를 **보내지 않는** 상태인가. 서버로는 한 건도 안 나간다.
+ * (화면 로그 창이 이 값을 적었는데, 창은 2026-09-28 뺐다)
  */
 export function isSuppressed(): boolean {
   return isStaffSession();
