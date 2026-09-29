@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
+import LiveLog from './components/devtools/LiveLog';
 import { isPreviewMode } from './lib/devtools';
 import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
@@ -1011,6 +1012,8 @@ export default function App() {
         />
       )}
 
+      {/* 우하단 실시간 행동 기록 · 늘 켜짐 (2026-09-29 새로 만듦). 상품 등록 미리보기에는 없다 */}
+      {!preview ? <LiveLog /> : null}
     </>
   );
 }
