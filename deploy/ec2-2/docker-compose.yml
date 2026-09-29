@@ -32,6 +32,10 @@ services:
     restart: unless-stopped
     logging: *logging
     ports:
+      # WARNING: default 0.0.0.0 publishes unauthenticated PLAINTEXT Kafka on every
+      # interface, and Docker bypasses UFW - only the AWS security group blocks it.
+      # Kept as-is so an existing .env without KAFKA_BIND_IP still deploys; set
+      # KAFKA_BIND_IP=<EC2-2 private IP> in .env (README "경고 — Kafka 9092").
       - "${KAFKA_BIND_IP:-0.0.0.0}:9092:9092"
     environment:
       KAFKA_NODE_ID: "1"
