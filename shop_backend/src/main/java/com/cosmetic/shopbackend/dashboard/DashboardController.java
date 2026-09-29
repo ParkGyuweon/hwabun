@@ -1,5 +1,6 @@
 package com.cosmetic.shopbackend.dashboard;
 
+import com.cosmetic.shopbackend.brand.SellerBrandResolver;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import java.util.Map;
@@ -12,9 +13,11 @@ import org.springframework.web.bind.annotation.*;
 public class DashboardController {
 
   private final DashboardMartService marts;
+  private final SellerBrandResolver sellerBrands;
 
-  public DashboardController(DashboardMartService marts) {
+  public DashboardController(DashboardMartService marts, SellerBrandResolver sellerBrands) {
     this.marts = marts;
+    this.sellerBrands = sellerBrands;
   }
 
   @GetMapping
@@ -77,7 +80,6 @@ public class DashboardController {
 
   private String requireSellerBrand(ShopPrincipal actor) {
     requireSeller(actor);
-    if (actor.brandId() == null || actor.brandId().isBlank()) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "brand claim required");
-    return actor.brandId();
+    return sellerBrands.brandIdOf(actor);
   }
 }
