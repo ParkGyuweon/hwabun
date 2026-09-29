@@ -28,7 +28,7 @@
 }
 
 .live-log {
-  width: min(320px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
   border-radius: 18px;
   padding: 14px 0 6px;
   animation: live-log-in 240ms ease-out;
@@ -136,59 +136,32 @@
 .live-log__row:nth-child(n + 5) { opacity: 0.56; }
 .live-log__row:nth-child(n + 7) { opacity: 0.42; }
 
+/* 두 칸 모두 크게: 몇 초 전 · 이벤트 이름 */
 .live-log__time {
-  font-size: 17px;
+  min-width: 4.8em;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ll-text);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
-.live-log__hm {
-  color: var(--ll-faint);
-  font-weight: 500;
-}
-
-.live-log__ss {
-  color: var(--ll-text);
-  font-weight: 700;
-}
-
-.live-log__row:first-child .live-log__ss {
+.live-log__row:first-child .live-log__time {
   color: var(--ll-accent);
-}
-
-.live-log__event {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.live-log__label {
-  font-size: 19px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.live-log__extra {
-  font-weight: 500;
-  color: var(--ll-sub);
-  font-variant-numeric: tabular-nums;
 }
 
 .live-log__raw {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 11px;
-  color: var(--ll-faint);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ll-text);
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
-
 .live-log__empty {
   margin: 0;
   padding: 22px 18px 18px;
