@@ -152,11 +152,24 @@ async function post(path: string, body: unknown): Promise<Response> {
   }
 }
 
+/** 429 {"error":"too_many_attempts","message":…}. 서버 문구가 한국어면 그대로, 아니면 같은 뜻의 기본 문장 */
+async function tooManyMessage(res: Response): Promise<string> {
+  const fallback = '로그인 시도가 너무 많아요. 잠시 후 다시 시도해 주세요.';
+  try {
+    const body = (await res.json()) as { message?: unknown } | null;
+    const m = body?.message;
+    return typeof m === 'string' && /[가-힣]/.test(m) ? m : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function toSession(res: Response, role: AccountRole): Promise<AccountSession> {
   if (res.status === 401) throw new AuthError('이메일 또는 비밀번호가 맞지 않습니다.', 'credentials', 401);
   if (res.status === 403) throw new AuthError('이 계정으로는 들어갈 수 없습니다.', 'forbidden', 403);
   if (res.status === 409) throw new AuthError('이미 가입된 이메일입니다. 로그인해 주세요.', 'conflict', 409);
   if (res.status === 400) throw new AuthError('입력값을 확인해 주세요. 비밀번호는 8자 이상입니다.', 'validation', 400);
+  if (res.status === 429) throw new AuthError(await tooManyMessage(res), 'unknown', 429);
   if (res.status === 502 || res.status === 503 || res.status === 504)
     throw new AuthError('서버에 연결할 수 없습니다. 백엔드(8090)가 떠 있는지 확인해 주세요.', 'unavailable', res.status);
   if (!res.ok) throw new AuthError(`요청이 실패했습니다 (${res.status}).`, 'unknown', res.status);
