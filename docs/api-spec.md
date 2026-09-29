@@ -121,6 +121,21 @@ Shop backend 인증 요청은 `Authorization: Bearer <JWT>`를 사용합니다. 
 
 주문 응답은 `orderId`, `status`, `totalAmount`, `paidAmount`, `currency`, `paymentId`, `paymentProvider`, `paidAt`, `createdAt`, `itemCount`를 포함합니다. 동일 회원이 같은 idempotency key를 다른 장바구니로 재사용하면 `409`입니다. `/pay`는 테스트 계정 prefix 설정에 따라 제한됩니다.
 
+### 5.1 결제 대조(confirm 누락 복구)와 웹훅
+
+결제창에서 돈은 빠졌는데 브라우저가 `/confirm`을 못 부르고 끊긴 경우를 서버가 스스로 맞춥니다. 결제 id는 주문마다 `hwabun-{orderId}`로 고정이라 주문번호만으로 PortOne을 다시 조회할 수 있습니다.
+
+| Method | Path | 권한 | 설명 |
+|---|---|---|---|
+| POST | `/api/payments/portone/webhook` | 없음 | PortOne 웹훅. 본문의 paymentId만 꺼내 해당 주문을 즉시 대조 |
+
+- **스케줄 대조**: `shop.payment.reconcile.interval-ms`(기본 5분)마다 생성 2분~24시간 사이 `CREATED` 주문을 최근 것부터 최대 `batch-size`(기본 50)건 PortOne에 조회합니다. `PAID`이고 `/confirm`과 같은 검증(결제 id·상태·통화·금액·`customData.orderId`)을 통과하면 조건부 update(`status='CREATED'`일 때만)로 `PAID` 처리합니다. `/confirm`과 동시에 돌아도 한 번만 반영됩니다.
+- **끄기**: `SHOP_PAYMENT_RECONCILE_ENABLED=false`. `PORTONE_API_SECRET`이 비어 있으면 켜져 있어도 돌지 않습니다.
+- **웹훅**: V2 `{"type":"Transaction.Paid","data":{"paymentId":"hwabun-..."}}`와 구버전 `{"payment_id":"hwabun-..."}`를 받습니다. 본문의 상태·금액은 믿지 않고 PortOne을 다시 조회해 위와 같은 검증을 거칩니다. 응답 `{"result":"RECOVERED|ALREADY_PAID|NO_PAYMENT|NOT_PAID|MISMATCH|NOT_PAYABLE|ORDER_NOT_FOUND|IGNORED"}`. PortOne 조회 실패 시 5xx로 답해 PortOne이 재전송합니다.
+- **MISMATCH**(PortOne은 PAID인데 금액·주문번호가 다름)는 자동 처리하지 않고 `WARN` 로그만 남깁니다.
+
+**다음 단계(미구현) — 환불·취소**: 지금은 PortOne 결제 취소 API(`POST /payments/{paymentId}/cancel`)를 부르지 않습니다. 필요한 작업은 ① `MISMATCH`나 24시간 넘게 `CREATED`로 남은 결제 완료 건의 자동/수동 취소, ② 판매자·운영자용 주문 취소·환불 엔드포인트와 `CANCELLED`/`REFUNDED` 상태 전이, `payment.status` 갱신, ③ 웹훅 `Transaction.Cancelled` 반영, ④ 웹훅 서명(Standard Webhooks, 웹훅 시크릿) 검증입니다. 그전까지 불일치·미확인 결제는 로그를 보고 PortOne 콘솔에서 수동으로 취소합니다.
+
 ## 6. 리뷰·피드백
 
 | Method | Path | 권한 | 설명 |
