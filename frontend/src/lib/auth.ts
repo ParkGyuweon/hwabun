@@ -241,8 +241,8 @@ export function isDevSession(session: AccountSession | null): boolean {
 /**
  * 개발자 모드 · 모의 세션. 백엔드 없이 대시보드·플랫폼 화면을 전부 보기 위한 것.
  *
- * 배포 화면(j15a306.p.ssafy.io)에도 버튼이 있다 (2026-09-14 요청) — shop_backend 가 배포에 아직 없어 로그인이 안 되고,
- * 그 상태로도 대시보드 내용을 확인해야 해서다. 이 세션이면 `authFetch` 가 서버를 부르지 않고 503 을 돌려주므로
+ * 버튼은 로컬 개발이거나 주소에 ?dev=1 이 있을 때만 보인다 (AuthGate, 2026-09-29). 배포 화면에서 누구나 누르면
+ * 모의 화면을 실제 화면으로 오해할 수 있어서다. 이 세션이면 `authFetch` 가 서버를 부르지 않고 503 을 돌려주므로
  * 화면은 전부 모의 데이터(배지 "모의")로 그려지고, 401 로 튕기지도 않는다. 실제 계정으로 로그인하면 덮어써진다.
  */
 export function devSession(role: AccountRole): void {
