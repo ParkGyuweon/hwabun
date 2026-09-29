@@ -24,6 +24,7 @@ import {
   clearPendingPayment,
   isPaymentEnabled,
   parsePaymentReturn,
+  paymentIdFor,
   requestKakaoPay,
   savePendingPayment,
   takePendingPayment,
@@ -193,6 +194,12 @@ export default function App() {
    * 두 번 담기고 수량·금액이 두 배로 주문됐다. ref 는 바로 바뀌므로 두 번째 클릭을 그 자리에서 막는다.
    */
   const orderLockRef = useRef(false);
+  /**
+   * 결제는 끝났는데 확인만 실패한 주문. 다시 누르면 결제창을 또 열지 않고 **확인부터** 다시 한다 —
+   * 같은 결제 번호로 결제창을 다시 열면 결제사가 거절하고, 새 번호로 열면 두 번 결제된다.
+   * `clientOrderId` · `sig` 는 같은 품목으로 다시 누를 때 같은 주문 번호를 쓰기 위해 둔다.
+   */
+  const unconfirmedPaymentRef = useRef<{ orderId: string; paymentId: string; clientOrderId?: string; sig: string } | null>(null);
   /** 백엔드 상품의 리뷰. 상품이 바뀔 때 받아 온다. 목 상품이면 빈 배열이고 샘플 리뷰를 쓴다 */
   const [backendReviews, setBackendReviews] = useState<Review[]>([]);
   /**
@@ -425,7 +432,11 @@ export default function App() {
      * 내용이 다른데 같은 키로 보내면 409 "idempotency key reused" 가 온다 (계약 대조 2026-09-17 #3).
      */
     const sig = JSON.stringify(toOrderItems(cartItems));
-    const orderId = pendingOrderIdRef.current !== null && pendingOrderSigRef.current === sig ? pendingOrderIdRef.current : createOrderId();
+    const unconfirmed = unconfirmedPaymentRef.current;
+    const orderId = pendingOrderIdRef.current !== null && pendingOrderSigRef.current === sig
+      ? pendingOrderIdRef.current
+      // 결제 확인만 남은 같은 주문이 있으면 그 번호를 이어 쓴다 (모바일 복귀 뒤에는 위 ref 가 비어 있다)
+      : unconfirmed?.clientOrderId && unconfirmed.sig === sig ? unconfirmed.clientOrderId : createOrderId();
     pendingOrderIdRef.current = orderId;
     pendingOrderSigRef.current = sig;
 
@@ -565,6 +576,45 @@ export default function App() {
             failPayment(localOrderId, `order_${created.status}`, `주문을 만들지 못했습니다. ${created.reason}`, 'kakaopay', localOrderId);
             return;
           }
+          /*
+           * 같은 주문 번호로 다시 누르면 서버는 **이미 있는 주문**을 돌려준다. 앞선 시도에서 결제가 끝났으면
+           * 결제창을 다시 열지 않는다 — 결제사가 같은 결제 번호를 거절해 "결제 실패" 로 보이기 때문이다.
+           */
+          const completePaid = (paymentId: string, paidAt: string | null) => {
+            unconfirmedPaymentRef.current = null;
+            finishOrder({
+              orderId: created.orderId,
+              clientOrderId: localOrderId,
+              items,
+              count,
+              total,
+              paid,
+              mode: 'backend',
+              note: null,
+              payment_method: 'kakaopay',
+              payment_id: paymentId,
+              paid_at: paidAt ?? new Date().toISOString(),
+              paidKrw: created.totalAmountKrw ?? paidKrwLocal,
+            }, origin);
+          };
+          if (created.status === 'PAID') {
+            completePaid(paymentIdFor(created.orderId), created.paidAt);
+            return;
+          }
+          const unconfirmed = unconfirmedPaymentRef.current;
+          if (unconfirmed && unconfirmed.orderId === created.orderId) {
+            const again = await confirmBackendOrder(created.orderId, unconfirmed.paymentId);
+            if (again.ok) {
+              completePaid(unconfirmed.paymentId, again.paidAt);
+              return;
+            }
+            // 409 는 "아직 결제되지 않음" 이다 — 그때만 아래에서 결제창을 연다. 나머지는 잠시 뒤 다시 확인하게 둔다
+            if (again.status !== 409) {
+              failPayment(created.orderId, `confirm_${again.status}`, '결제 확인이 아직 끝나지 않았습니다. 잠시 뒤 다시 눌러 주세요. 다시 눌러도 두 번 결제되지 않습니다.', 'kakaopay', localOrderId);
+              return;
+            }
+            unconfirmedPaymentRef.current = null;
+          }
           if (created.totalAmountKrw === null) {
             failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay', localOrderId);
             return;
@@ -590,9 +640,11 @@ export default function App() {
           const confirmed = await confirmBackendOrder(created.orderId, pay.paymentId);
           clearPendingPayment();
           if (!confirmed.ok) {
+            unconfirmedPaymentRef.current = { orderId: created.orderId, paymentId: pay.paymentId, clientOrderId: localOrderId, sig: JSON.stringify(items) };
             failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', localOrderId);
             return;
           }
+          unconfirmedPaymentRef.current = null;
           finishOrder({
             orderId: created.orderId,
             clientOrderId: localOrderId,
@@ -678,7 +730,11 @@ export default function App() {
         return;
       }
       // 여기서부터 첫 await 까지는 동기라 두 번째 클릭이 끼어들 틈이 없다. 잠금은 await 바로 앞에서 잡는다
-      const orderId = createOrderId();
+      // 결제 확인만 남은 같은 상품이면 그 주문 번호를 이어 쓴다 — 새 번호면 새 주문이 생겨 두 번 결제된다
+      const unconfirmed = unconfirmedPaymentRef.current;
+      const orderId = unconfirmed?.clientOrderId && unconfirmed.sig === JSON.stringify(toOrderItems([item]))
+        ? unconfirmed.clientOrderId
+        : createOrderId();
       const { total, paid } = orderTotalsKrw([item]);
       /*
        * 바로 구매도 퍼널을 전부 밟는다 — add_to_cart → begin_checkout → purchase.
@@ -730,6 +786,7 @@ export default function App() {
     const paymentId = ret.paymentId;
     void confirmBackendOrder(pending.orderId, paymentId).then((confirmed) => {
       if (!confirmed.ok) {
+        unconfirmedPaymentRef.current = { orderId: pending.orderId, paymentId, clientOrderId: pending.clientOrderId, sig: JSON.stringify(pending.items) };
         failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', pending.clientOrderId);
         return;
       }
