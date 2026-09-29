@@ -2,7 +2,8 @@
  * 로그인 — shop_backend(`feat/shop-backend`, 머지 전) 의 `/api/auth` 계약에 맞춘다.
  *
  *   POST /api/auth/login    { email, password, role }        → 200 AccountResponse · 401
- *   POST /api/auth/members  { email, password, nickname }    → 201 AccountResponse · 409 (이미 가입)
+ *   POST /api/auth/members  { email, password, nickname, agreeTerms, agreePrivacy, agreeSkinInfo?, agreeBehaviorLink? }
+ *                                                            → 201 AccountResponse · 409 (이미 가입) · 400 consent_required
  *   POST /api/auth/sellers  { email, password, name }        → 201 AccountResponse · 409
  *   AccountResponse = { id, email, name, role, status, token }
  *
@@ -27,6 +28,16 @@ export interface AccountSession {
   token: string;
   /** JWT `exp` (epoch ms). 못 읽으면 null — 만료는 서버 401 로 안다 */
   expires_at: number | null;
+  /**
+   * 둘러본 기록을 이 계정과 이어도 되나 (서버 `behaviorLinked`). 가입 때 연결에 동의하지 않은 회원만 false.
+   * 이 필드가 생기기 전에 저장된 세션은 값이 없고, 없으면 지금처럼 이어진 것으로 본다.
+   */
+  behavior_linked?: boolean;
+}
+
+/** 행동 로그를 이 회원 계정과 이을지. 값이 없는(예전) 세션은 이어진 것으로 본다 */
+export function isBehaviorLinked(session: AccountSession | null): boolean {
+  return session !== null && session.behavior_linked !== false;
 }
 
 export const ROLE_LABEL: Record<AccountRole, string> = {
@@ -138,6 +149,7 @@ interface AccountResponse {
   role: string;
   status: string;
   token: string;
+  behaviorLinked?: boolean;
 }
 
 async function post(path: string, body: unknown): Promise<Response> {
@@ -156,7 +168,12 @@ async function toSession(res: Response, role: AccountRole): Promise<AccountSessi
   if (res.status === 401) throw new AuthError('이메일 또는 비밀번호가 맞지 않습니다.', 'credentials', 401);
   if (res.status === 403) throw new AuthError('이 계정으로는 들어갈 수 없습니다.', 'forbidden', 403);
   if (res.status === 409) throw new AuthError('이미 가입된 이메일입니다. 로그인해 주세요.', 'conflict', 409);
-  if (res.status === 400) throw new AuthError('입력값을 확인해 주세요. 비밀번호는 8자 이상입니다.', 'validation', 400);
+  if (res.status === 400) {
+    // 필수 동의가 빠지면 서버가 { error: 'consent_required', message } 로 돌려준다. 그 문장을 그대로 보여 준다
+    const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+    if (body?.error === 'consent_required' && body.message) throw new AuthError(body.message, 'validation', 400);
+    throw new AuthError('입력값을 확인해 주세요. 비밀번호는 8자 이상입니다.', 'validation', 400);
+  }
   if (res.status === 502 || res.status === 503 || res.status === 504)
     throw new AuthError('서버에 연결할 수 없습니다. 백엔드(8090)가 떠 있는지 확인해 주세요.', 'unavailable', res.status);
   if (!res.ok) throw new AuthError(`요청이 실패했습니다 (${res.status}).`, 'unknown', res.status);
@@ -171,6 +188,7 @@ async function toSession(res: Response, role: AccountRole): Promise<AccountSessi
     status: a.status,
     token: a.token,
     expires_at: decodeExp(a.token),
+    behavior_linked: a.behaviorLinked !== false,
   };
 }
 
@@ -186,13 +204,16 @@ export async function login(role: AccountRole, email: string, password: string):
  *
  * MEMBER 는 피부 프로필 4개(`skinTypeCode` …)를 같이 싣는다 (AI 요청 2026-09-10 §1). 백엔드 `RegisterMember` 가
  * 아직 이 필드를 안 받으면 무시될 뿐 가입은 된다. 프론트는 같은 값을 이 브라우저에도 남긴다 (lib/memberProfile).
+ *
+ * 동의 4개도 extra 로 싣는다: `agreeTerms`·`agreePrivacy`(필수, 없으면 400), `agreeSkinInfo`·`agreeBehaviorLink`(선택).
+ * 서버는 `agreeSkinInfo` 가 true 가 아니면 피부 프로필 4개를 저장하지 않는다.
  */
 export async function register(
   role: Exclude<AccountRole, 'ADMIN'>,
   email: string,
   password: string,
   name: string,
-  extra: Record<string, string | null> = {},
+  extra: Record<string, string | boolean | null> = {},
 ): Promise<AccountSession> {
   const path = role === 'MEMBER' ? '/api/auth/members' : '/api/auth/sellers';
   const body =

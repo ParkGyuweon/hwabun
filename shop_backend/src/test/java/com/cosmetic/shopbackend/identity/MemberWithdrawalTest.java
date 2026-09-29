@@ -84,7 +84,7 @@ class MemberWithdrawalTest {
 
   private Member signedUp() {
     identity.member(new IdentityController.RegisterMember(
-      "yu@example.com", "password123", "유림", "dry", "light", "black", "brown"
+      "yu@example.com", "password123", "유림", "dry", "light", "black", "brown", true, true, true, true
     ));
     return store.getFirst();
   }
@@ -191,15 +191,15 @@ class MemberWithdrawalTest {
     assertEquals(401, byPlaceholder.getStatusCode().value());
 
     var again = identity.member(new IdentityController.RegisterMember(
-      "yu@example.com", "password456", "유림2", null, null, null, null
+      "yu@example.com", "password456", "유림2", null, null, null, null, true, true, null, null
     ));
     assertEquals(201, again.getStatusCode().value());
     assertNotNull(again.getBody());
-    assertNotEquals(old.getId(), again.getBody().id());
+    assertNotEquals(old.getId(), ((IdentityController.AccountResponse) again.getBody()).id());
 
     var login = identity.login(new IdentityController.Login("yu@example.com", "password456", AccountRole.MEMBER));
     assertEquals(200, login.getStatusCode().value());
-    assertEquals(again.getBody().id(), login.getBody().id());
+    assertEquals(((IdentityController.AccountResponse) again.getBody()).id(), login.getBody().id());
   }
 
   @Test

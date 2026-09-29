@@ -25,6 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * 값은 프론트와 같은 어휘만 받는다. 이 컬럼은 리뷰 스냅샷·추천·마트가 그대로 읽으므로, 정의되지 않은 값은
  * 400으로 거절해 데이터 계약을 지킨다. MEMBER 만. /api/auth/** 가 permitAll 이라 거기 두지 않았다.
+ *
+ * 마이페이지에서 피부 값을 하나라도 골라 저장하면 피부 정보 수집·이용에 동의한 것으로 보고
+ * skin_info_agreed_at 을 지금으로 남긴다 (화면에 그렇게 안내한다). consent_version 은 가입 때 값이라 건드리지 않는다.
  */
 @RestController
 @RequestMapping("/api/members/me/profile")
@@ -69,6 +72,9 @@ public class MemberProfileController {
     m.setSkinToneCode(skinTone);
     m.setHairColorCode(hairColor);
     m.setEyeColorCode(eyeColor);
+    if (
+      skinType != null || skinTone != null || hairColor != null || eyeColor != null
+    ) m.setSkinInfoAgreedAt(java.time.LocalDateTime.now());
     members.save(m);
     return Profile.of(m);
   }
