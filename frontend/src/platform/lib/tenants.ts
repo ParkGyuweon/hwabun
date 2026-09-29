@@ -160,18 +160,22 @@ export function tpsSeries(): Array<{ label: string; value: number }> {
   }));
 }
 
+/**
+ * 단계별 상태 (예시 값). 실제 값은 추천 서버 `/pipeline/stats` 에 있지만 nginx 가 공개하지 않는다
+ * (deploy/nginx/default.conf, 운영 요청서 §5). 공개 경로가 생기기 전까지 화면에는 "예시 값" 배지와 함께 둔다.
+ */
 export const pipeline = [
-  { stage: 'Collector', detail: 'POST /api/events · 배치 20건/5초', state: 'ok' as const, metric: 'p95 38ms' },
-  { stage: 'Kafka', detail: 'activity-events · 파티션 6', state: 'ok' as const, metric: 'lag 0' },
-  { stage: 'Spark', detail: 'raw_sink · clean_events · derive_facts · build_marts', state: 'watch' as const, metric: '연결 검증 중' },
-  { stage: 'Mart', detail: '일간 7 · 실시간 2', state: 'watch' as const, metric: '스키마 확정 · 적재 전' },
+  { stage: '수집 서버 (Collector)', detail: '행동 이벤트 받기 · 5초마다 20건씩 묶음', state: 'ok' as const, metric: '응답 38ms (p95)' },
+  { stage: '수집 대기열 (Kafka)', detail: '파티션 6개', state: 'ok' as const, metric: '지연 0건 (lag)' },
+  { stage: '분산 처리 (Spark)', detail: '원본 저장 · 정제 · 사실 도출 · 마트 만들기', state: 'ok' as const, metric: '매일 배치' },
+  { stage: '집계 테이블 (Mart)', detail: '대시보드가 읽는 집계', state: 'ok' as const, metric: '매일 갱신' },
 ];
 
 export const badEvents = [
-  { reason: '필수 property 누락', count: 412 },
-  { reason: 'enum 밖 값', count: 138 },
-  { reason: 'schema_version 불일치', count: 27 },
-  { reason: '봉투 필드 누락', count: 9 },
+  { reason: '필수 항목 누락 (property)', count: 412 },
+  { reason: '허용 목록 밖 값 (enum)', count: 138 },
+  { reason: '형식 버전 불일치 (schema_version)', count: 27 },
+  { reason: '기본 필드 누락 (envelope)', count: 9 },
 ];
 
 export { fmt };
