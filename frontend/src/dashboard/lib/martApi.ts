@@ -35,6 +35,7 @@ export interface BrandPeriod {
   add_to_cart_sessions: number;
   /** 상세 조회 ∪ 퀵룩 세션 — view_to_cart_rate 분모 (계약 0.2.1, 데이터 235 결함 보고). 마트에 아직 없으면 생략 */
   detail_view_sessions?: number | null;
+  /** 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값. 기간의 사람 수가 아니다 — 화면에 "명" 으로 내지 않는다 */
   unique_user_count: number;
   product_count_viewed: number;
   product_view_count: number;
@@ -70,6 +71,7 @@ export interface OverviewPayload extends MartEnvelope {
     event_date_kst: string;
     product_view_sessions: number;
     add_to_cart_sessions: number;
+    /** 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값. 기간의 사람 수가 아니다 — 화면에 "명" 으로 내지 않는다 */
     unique_user_count: number;
   }>;
   funnel: FunnelSessions | null;
@@ -97,6 +99,7 @@ export interface ProductRow {
   add_to_cart_sessions: number;
   remove_from_cart_sessions: number;
   session_count: number;
+  /** 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값. 기간의 사람 수가 아니다 — 화면에 "명" 으로 내지 않는다 */
   unique_user_count: number;
   /** 상세 조회 ∪ 퀵룩 세션. view_to_cart_rate 의 분모(계약 §4.1). 배포본 E2 가 준다 (규원님 실측 09-21) */
   detail_view_sessions?: number | null;
@@ -165,6 +168,7 @@ export interface ContentPayload extends MartEnvelope {
 export interface SegmentRow {
   segment_type: string;
   segment_value: string;
+  /** 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값. 기간의 사람 수가 아니다 — 화면에 "명" 으로 내지 않는다 */
   segment_user_count: number;
   session_count: number;
   product_view_sessions: number;
@@ -220,6 +224,7 @@ export interface SegmentPriceCell {
   segment_value: string;
   price_bin: string | null;
   currency: string;
+  /** 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값. 기간의 사람 수가 아니다 — 화면에 "명" 으로 내지 않는다 */
   segment_user_count: number;
   session_count: number;
   product_count: number;

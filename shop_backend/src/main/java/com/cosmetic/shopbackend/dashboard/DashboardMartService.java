@@ -285,6 +285,8 @@ public class DashboardMartService {
     previous.remove("mart_processed_at");
     if (hasPrevious) mergeProductTotals(read, previousRange, previous);
 
+    // unique_user_count 는 마트 행(하루 × 실행 축)마다 따로 센 고유 사용자 수다. 여기서는 같은 날의 실행 축 행을 더할 뿐이라
+    // 축을 걸쳐 같은 사용자가 있으면 두 번 들어간다. 사람 수로 화면에 내지 않는다.
     List<Map<String, Object>> daily = read.required(
       "brand_daily_kpi",
       () ->
@@ -334,6 +336,8 @@ public class DashboardMartService {
    * 상세 진입은 `detail_view_sessions / impression_sessions`(상세 ∪ 퀵룩), 담기는 `/ detail_view_sessions` 다.
    */
   private static String brandPeriodSql(Query q) {
+    // unique_user_count 는 **하루 단위로 센 고유 사용자 수의 합**이다. 마트가 날짜별 고유 수만 가지므로 기간 합산은
+    // 여러 날 들른 같은 사용자를 날마다 다시 센다 — 기간의 고유 사용자 수가 아니다. 화면은 이 값을 "명" 으로 쓰지 않는다.
     return "select coalesce(sum(impression_sessions),0) impression_sessions," +
       "coalesce(sum(product_view_sessions),0) product_view_sessions," +
       "coalesce(sum(information_view_sessions),0) information_view_sessions," +
@@ -413,6 +417,7 @@ public class DashboardMartService {
             "coalesce(sum(add_to_cart_sessions),0) add_to_cart_sessions," +
             "coalesce(sum(remove_from_cart_sessions),0) remove_from_cart_sessions," +
             "coalesce(sum(session_count),0) session_count," +
+            // 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값이다. 여러 날 본 같은 사용자가 날마다 들어가 고유 수가 아니다.
             "coalesce(sum(unique_user_count),0) unique_user_count," +
             "coalesce(sum(product_interest_score),0) product_interest_score," +
             // §4.1: product_ctr · detail_entry_rate 의 분모는 세 노출 합계인 impression_count(Event 수)다. 세션이 아니다.
@@ -649,6 +654,7 @@ public class DashboardMartService {
       "persona_segment_daily_kpi",
       () ->
         many(
+          // segment_user_count 합은 하루 단위로 센 고객 수를 더한 값이다 (기간 고유 수 아님). 화면은 session_count 를 방문 수로 쓴다.
           "select segment_type,segment_value,coalesce(sum(segment_user_count),0) segment_user_count," +
             "coalesce(sum(session_count),0) session_count," +
             "coalesce(sum(product_view_sessions),0) product_view_sessions," +
@@ -762,6 +768,7 @@ public class DashboardMartService {
   private List<Map<String, Object>> segmentPriceGrid(Query q) {
     List<Map<String, Object>> rows = many(
       "select segment_type,segment_value,price_bin,currency," +
+        // 하루 단위 고객 수의 합이다. 기간 고유 수가 아니다.
         "coalesce(sum(segment_user_count),0) segment_user_count," +
         "coalesce(sum(session_count),0) session_count," +
         "coalesce(sum(product_count),0) product_count," +
