@@ -193,7 +193,7 @@
 | Cleaned Events | 중복/오류 이벤트 분리 | Must | 구현 | Q2 `clean_events_job.py` |
 | Fact 생성 | 분석 가능한 행동 사실 테이블 생성 | Must | 구현 | Q3 `derive_facts_job.py` |
 | KPI Mart | 대시보드 조회용 지표 테이블 | Must | 구현 | Q4 `build_marts_job.py` 마트 25종 (DW 발행 대상 24종) · Q5 `validate_pipeline_job.py` 검증 |
-| DW Publish | Mart 결과를 MySQL 대시보드 조회용으로 적재 | Must | 구현 | `publish_user_trait_job.py` staging → RENAME 스왑. DW 테이블 24개(`contracts/dw/schema.sql`) 중 대시보드 마트 API 가 23개, 추천 서버가 `user_trait_daily` 를 읽는다. 운영 기본 발행 목록은 22개(`DW_PROJECTION_MARTS`) |
+| DW Publish | Mart 결과를 MySQL 대시보드 조회용으로 적재 | Must | 구현 | `publish_user_trait_job.py` staging → RENAME 스왑. DW 계약 테이블 24개(`contracts/dw/schema.sql`) = 대시보드용 22(`cross_brand_daily` 발행 대기 포함) + 추천 서버용 `user_trait_daily` 1 + 계약만 있고 쓰지 않는 `category_price_reference` 1(백엔드가 카탈로그로 직접 계산, MySQL 테이블 없음). 운영 기본 발행 목록은 22개(`DW_PROJECTION_MARTS`) |
 
 ### DW / KPI 의미
 
