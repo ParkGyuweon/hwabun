@@ -297,7 +297,7 @@ export default function SegmentsScreen() {
         title={`피부 타입 × 가격대 · ${priceMetric === 'cart' ? '장바구니에 담은' : '구매한'} 비율`}
         source={source.segmentPriceGrid}
         aside={
-          <span className="chips chips--inline" title={`20칸 중 ${priceGridFilled}칸 채움 · 방문 ${MIN_CELL_VISITS}건 미만은 비움 · ${THIN_VISITS}건 미만은 흐림`}>
+          <span className="chips chips--inline" title={`20칸 중 ${priceGridFilled}칸에 숫자가 있어요. 방문이 ${MIN_CELL_VISITS}건이 안 되면 비우고 ${THIN_VISITS}건이 안 되면 흐리게 보여요`}>
             {(
               [
                 ['cart', '담기'],
