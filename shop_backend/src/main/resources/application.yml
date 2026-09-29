@@ -31,7 +31,13 @@ shop:
       cron: ${SHOP_FEEDBACK_CLASSIFY_CRON:0 0 6 * * *}
       batch-size: ${SHOP_FEEDBACK_CLASSIFY_BATCH_SIZE:200}
   test-pay:
-    allowed-member-prefix: ${TEST_PAY_ALLOWED_MEMBER_PREFIX:}
+    # 결제 없이 PAID 로 표시하는 테스트 주문(POST /api/orders/{id}/pay)을 부를 수 있는 회원.
+    # 이 경로는 에이전트 러너 전용이다 — PA 러너는 카카오페이 창(카카오 로그인·QR)을 자동화로 넘을 수 없어
+    # 이 길로 주문을 끝내야 재구매 지표가 잡힌다.
+    # 프론트의 ?pay=test·navigator.webdriver 판정은 보호 장치가 아니다. 로그인한 사람이면 누구나 토큰으로
+    # 이 엔드포인트를 직접 부를 수 있어서, 실제 차단은 여기서 한다.
+    # 기본값 PA — 로컬 개발도 PA 러너 계정으로 테스트 결제를 쓴다. 빈 값이면 아무도 못 부른다(닫힌 채 실패).
+    allowed-member-prefix: ${TEST_PAY_ALLOWED_MEMBER_PREFIX:PA}
   payment:
     # 결제 대조: confirm 이 실패·누락된 CREATED 주문을 PortOne 에 다시 물어 PAID 로 맞춘다.
     # PORTONE_API_SECRET 이 비어 있으면 enabled 여도 돌지 않는다(로컬 개발 기본).
@@ -47,12 +53,6 @@ portone:
   api-url: ${PORTONE_API_URL:https://api.portone.io}
   timeout-ms: ${PORTONE_TIMEOUT_MS:10000}
 
-# 결제 없이 PAID 로 표시하는 테스트 주문(POST /api/orders/{id}/pay)을 부를 수 있는 회원.
-# 이 경로는 에이전트 러너 전용이다 — PA 러너는 카카오페이 창(카카오 로그인·QR)을 자동화로 넘을 수 없어
-# 이 길로 주문을 끝내야 재구매 지표가 잡힌다.
-# 프론트의 ?pay=test·navigator.webdriver 판정은 보호 장치가 아니다. 로그인한 사람이면 누구나 토큰으로
-# 이 엔드포인트를 직접 부를 수 있어서, 실제 차단은 여기서 한다.
-# 빈 값이면 제한하지 않는다 — 로컬 개발은 막히면 안 된다. 배포에서만 PA 로 채운다.
 management:
   metrics:
     tags:
