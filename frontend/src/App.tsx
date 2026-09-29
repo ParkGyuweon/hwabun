@@ -31,7 +31,8 @@ import {
 import type { PaymentMethod } from './lib/payment';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
-import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
+import { backendCatalogState, catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
+import EmptyState from './components/common/EmptyState';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
@@ -544,7 +545,7 @@ export default function App() {
           failPayment(
             localOrderId,
             `cart_clear_${cleared.status}`,
-            `서버 장바구니를 정리하지 못해 주문을 멈췄습니다. ${cleared.reason} 잠시 뒤 다시 시도해 주세요.`,
+            '주문을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.',
             isPaymentEnabled() ? 'kakaopay' : 'test',
             localOrderId,
           );
@@ -560,7 +561,7 @@ export default function App() {
             return;
           }
           if (created.totalAmountKrw === null) {
-            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay', localOrderId);
+            failPayment(created.orderId, 'no_total_amount', '결제 금액을 확인하지 못해 결제창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.', 'kakaopay', localOrderId);
             return;
           }
           // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
@@ -584,7 +585,7 @@ export default function App() {
           const confirmed = await confirmBackendOrder(created.orderId, pay.paymentId);
           clearPendingPayment();
           if (!confirmed.ok) {
-            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', localOrderId);
+            failPayment(created.orderId, `confirm_${confirmed.status}`, '결제 확인을 마치지 못했습니다. 잠시 후 주문 내역에서 확인해 주세요.', 'kakaopay', localOrderId);
             return;
           }
           finishOrder({
@@ -622,8 +623,8 @@ export default function App() {
      * 바로 구매도 같은 길이라 여기서 갈리지 않는다 — 막힌 이유는 origin 과 무관하다.
      */
     const message = source.some((i) => !i.variant_id)
-      ? '백엔드에 등록되지 않은 상품은 결제할 수 없습니다.'
-      : '결제하려면 고객 로그인이 필요합니다.';
+      ? '지금 주문할 수 없는 상품이 장바구니에 있습니다.'
+      : '결제하려면 로그인이 필요합니다.';
     failPayment(localOrderId, 'backend_checkout_required', message, 'test', localOrderId);
   }, [paying, member, finishOrder, failPayment]);
 
@@ -651,7 +652,7 @@ export default function App() {
          * 여기서는 이벤트를 남기지 않는다. 새 이름(`buy_now_blocked` 같은)은 계약
          * (`event-schema.json` · 수집기 INTENTS)에 등록되기 전에는 `unregistered_event` 로 거절된다.
          */
-        requestLogin('바로 구매는 고객 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
+        requestLogin('바로 구매하려면 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
         return;
       }
       const orderId = createOrderId();
@@ -699,7 +700,7 @@ export default function App() {
     const paymentId = ret.paymentId;
     void confirmBackendOrder(pending.orderId, paymentId).then((confirmed) => {
       if (!confirmed.ok) {
-        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', pending.clientOrderId);
+        failPayment(pending.orderId, `confirm_${confirmed.status}`, '결제 확인을 마치지 못했습니다. 잠시 후 주문 내역에서 확인해 주세요.', 'kakaopay', pending.clientOrderId);
         return;
       }
       finishOrder({
@@ -943,6 +944,22 @@ export default function App() {
    * 아니다 (2026-09-18). 담기·구매도 미리보기에서는 아무 일도 하지 않는다.
    */
   const preview = isPreviewMode();
+  /*
+   * 주소의 `?product=` 가 카탈로그에 끝내 없으면(오타·내린 상품) 조용히 목록으로 떨구지 않고 "없는 상품" 을 알린다.
+   * 백엔드 목록이 아직 오는 중이면 판정을 미룬다 — 백엔드에만 있는 상품은 목록이 온 뒤에 열린다 (위 effect).
+   * 미리보기는 초안이 늦게 오거나 지워지는 게 정상이라 제외한다.
+   */
+  const requestedProductId = new URLSearchParams(window.location.search).get('product');
+  const catalogState = backendCatalogState();
+  const productMissing =
+    !preview &&
+    !cartOpen &&
+    productId === null &&
+    requestedProductId !== null &&
+    catalogState !== 'idle' &&
+    catalogState !== 'loading' &&
+    // 목록이 막 와서 effect 가 곧 열어 줄 상품이면 "없음" 을 한 프레임도 비추지 않는다
+    resolveProduct(requestedProductId, products, draft) === null;
   return (
     <>
       {preview ? null : (
@@ -996,6 +1013,15 @@ export default function App() {
             onReviewWritten={() => setReviewNonce((n) => n + 1)}
           />
         </>
+      ) : productMissing ? (
+        <main className="page cart">
+          <div className="cart__empty">
+            <EmptyState message="상품을 찾을 수 없습니다. 판매가 끝났거나 주소가 바뀌었을 수 있습니다." />
+            <button type="button" className="cart__continue" onClick={goHome}>
+              상품 목록으로 가기
+            </button>
+          </div>
+        </main>
       ) : (
         <ProductListPage
           products={products}

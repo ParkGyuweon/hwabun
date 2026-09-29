@@ -200,6 +200,16 @@ const syntheticContext = syntheticContextFromUrl();
  */
 const environment = import.meta.env.PROD ? 'production' : 'local';
 
+/** 이벤트를 콘솔에도 찍을지. 개발 서버는 늘, 배포본은 `bloom:log-console=1` 을 켠 브라우저만 (아래 track 주석) */
+const logToConsole: boolean = (() => {
+  if (import.meta.env.DEV) return true;
+  try {
+    return typeof window !== 'undefined' && window.localStorage.getItem('bloom:log-console') === '1';
+  } catch {
+    return false;
+  }
+})();
+
 let context: LoggerContext = {
   personaId: null,
   pageType: 'product_detail',
@@ -644,10 +654,12 @@ export function track(eventName: EventName, properties: Record<string, unknown> 
   }
 
   /*
-   * 브라우저 개발자 도구 콘솔에도 찍는다. 배포 빌드에서도 켠다 — 전에는 개발 서버에서만 찍혀서 배포 사이트의
-   * 콘솔에는 아무것도 안 떠 "로그가 안 찍힌다" 로 보였다 (2026-09-23 유림님). 서버로 안 나가는 줄은 표시한다
+   * 브라우저 개발자 도구 콘솔에도 찍는다. 서버로 안 나가는 줄은 표시한다.
+   * 배포 빌드에서는 기본으로 끈다 — 고객 브라우저 콘솔에 모든 행동이 찍히는 건 쇼핑몰답지 않다 (2026-09-29).
+   * 배포 사이트에서 확인하려면 콘솔에서 `localStorage.setItem('bloom:log-console', '1')` 후 새로고침한다
+   * (2026-09-23 유림님: 배포 사이트 콘솔에 아무것도 안 떠 "로그가 안 찍힌다" 로 보였던 일).
    */
-  console.info(`[log] ${eventName}${suppressed ? ' (판매자 로그인 중 · 서버로 안 보냄)' : ''}`, event);
+  if (logToConsole) console.info(`[log] ${eventName}${suppressed ? ' (판매자 로그인 중 · 서버로 안 보냄)' : ''}`, event);
 
   // 판매자·운영자 세션: 화면 로그 창까지만. 성향 누적·전송 큐에는 넣지 않는다
   if (suppressed) return;

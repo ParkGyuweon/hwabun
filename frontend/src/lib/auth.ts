@@ -148,7 +148,7 @@ async function post(path: string, body: unknown): Promise<Response> {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new AuthError('서버에 연결할 수 없습니다. 백엔드(8090)가 떠 있는지 확인해 주세요.', 'unavailable');
+    throw new AuthError('지금은 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.', 'unavailable');
   }
 }
 
@@ -158,11 +158,11 @@ async function toSession(res: Response, role: AccountRole): Promise<AccountSessi
   if (res.status === 409) throw new AuthError('이미 가입된 이메일입니다. 로그인해 주세요.', 'conflict', 409);
   if (res.status === 400) throw new AuthError('입력값을 확인해 주세요. 비밀번호는 8자 이상입니다.', 'validation', 400);
   if (res.status === 502 || res.status === 503 || res.status === 504)
-    throw new AuthError('서버에 연결할 수 없습니다. 백엔드(8090)가 떠 있는지 확인해 주세요.', 'unavailable', res.status);
-  if (!res.ok) throw new AuthError(`요청이 실패했습니다 (${res.status}).`, 'unknown', res.status);
+    throw new AuthError('지금은 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.', 'unavailable', res.status);
+  if (!res.ok) throw new AuthError('요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'unknown', res.status);
 
   const a = (await res.json()) as AccountResponse;
-  if (a.role !== role) throw new AuthError('역할이 다른 계정입니다.', 'forbidden', res.status);
+  if (a.role !== role) throw new AuthError('이 화면에서는 쓸 수 없는 계정입니다.', 'forbidden', res.status);
   return {
     id: a.id,
     email: a.email,
