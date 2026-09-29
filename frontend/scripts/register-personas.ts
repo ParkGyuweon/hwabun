@@ -62,6 +62,11 @@ for (const p of personas) {
     skinToneCode: orNull(p.skin_tone),
     hairColorCode: orNull(p.hair_color),
     eyeColorCode: orNull(p.eye_color),
+    // 시뮬레이션 페르소나 — 필수 동의가 없으면 400, 피부 정보 동의가 없으면 속성 4개가 저장되지 않는다
+    agreeTerms: true,
+    agreePrivacy: true,
+    agreeSkinInfo: true,
+    agreeBehaviorLink: true,
   };
   if (dry) {
     console.log(JSON.stringify(body));
