@@ -116,6 +116,64 @@ class SettlementBatchSchedulerTest {
     assertEquals(4_000L, gross("A"));
   }
 
+  @Test
+  @DisplayName("월말 02:00 이후 결제는 다음 달 1일 배치에서 전달 정산에 들어간다")
+  void firstDayRunRegeneratesPreviousMonth() {
+    LocalDate august = LocalDate.of(2026, 8, 1);
+    brand("A", "ACTIVE");
+    order("O1", "PAID", "2026-08-10T10:00");
+    item("I1", "O1", "A", 10_000);
+
+    // 8월 31일 02:00 배치
+    scheduler.generateFor(LocalDate.of(2026, 8, 31));
+    assertEquals(10_000L, gross("A", august));
+
+    // 그 뒤 8월 31일 15:00 결제
+    order("O2", "PAID", "2026-08-31T15:00");
+    item("I2", "O2", "A", 3_000);
+
+    // 9월 1일 02:00 배치
+    scheduler.generateFor(LocalDate.of(2026, 9, 1));
+    assertEquals(13_000L, gross("A", august));
+    assertEquals(0L, gross("A", MONTH));
+  }
+
+  @Test
+  @DisplayName("전달 정산이 아직 없으면 1일 배치가 만든다")
+  void createsMissingPreviousMonth() {
+    LocalDate august = LocalDate.of(2026, 8, 1);
+    brand("A", "ACTIVE");
+    order("O1", "PAID", "2026-08-31T15:00");
+    item("I1", "O1", "A", 5_000);
+
+    scheduler.generateFor(LocalDate.of(2026, 9, 1));
+    assertEquals(5_000L, gross("A", august));
+  }
+
+  @Test
+  @DisplayName("완료된 전달 정산은 1일 배치가 건드리지 않고, 이번 달은 계속 만든다")
+  void completedPreviousMonthUntouched() {
+    LocalDate august = LocalDate.of(2026, 8, 1);
+    brand("A", "ACTIVE");
+    order("O1", "PAID", "2026-08-10T10:00");
+    item("I1", "O1", "A", 10_000);
+    scheduler.generateFor(LocalDate.of(2026, 8, 31));
+    jdbc.update("update settlement set status='COMPLETED' where brand_id='A' and settlement_month=?", august);
+
+    order("O2", "PAID", "2026-08-31T15:00");
+    item("I2", "O2", "A", 3_000);
+    order("O3", "PAID", "2026-09-01T01:00");
+    item("I3", "O3", "A", 2_000);
+
+    scheduler.generateFor(LocalDate.of(2026, 9, 1));
+    assertEquals(10_000L, gross("A", august));
+    assertEquals("COMPLETED", jdbc.queryForObject(
+      "select status from settlement where brand_id='A' and settlement_month=?", String.class, august));
+    assertEquals(1, count("select count(*) from settlement_item where order_item_id='I1'"));
+    assertEquals(0, count("select count(*) from settlement_item where order_item_id='I2'"));
+    assertEquals(2_000L, gross("A", MONTH));
+  }
+
   private void brand(String id, String status) {
     jdbc.update("insert into brand values (?,?)", id, status);
   }
@@ -129,11 +187,15 @@ class SettlementBatchSchedulerTest {
   }
 
   private long gross(String brandId) {
+    return gross(brandId, MONTH);
+  }
+
+  private long gross(String brandId, LocalDate month) {
     return jdbc.queryForObject(
       "select gross_amount from settlement where brand_id=? and settlement_month=?",
       Long.class,
       brandId,
-      MONTH
+      month
     );
   }
 
