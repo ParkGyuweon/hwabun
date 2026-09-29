@@ -188,6 +188,11 @@ export default function App() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   /** 결제창이 떠 있거나 서버 확인 중. 버튼 연타 방지 */
   const [paying, setPaying] = useState(false);
+  /**
+   * 주문 잠금. `paying` 은 다음 렌더에야 바뀌어서, 빠른 두 번 클릭이 둘 다 통과해 서버 장바구니에 같은 상품이
+   * 두 번 담기고 수량·금액이 두 배로 주문됐다. ref 는 바로 바뀌므로 두 번째 클릭을 그 자리에서 막는다.
+   */
+  const orderLockRef = useRef(false);
   /** 백엔드 상품의 리뷰. 상품이 바뀔 때 받아 온다. 목 상품이면 빈 배열이고 샘플 리뷰를 쓴다 */
   const [backendReviews, setBackendReviews] = useState<Review[]>([]);
   /**
@@ -516,8 +521,9 @@ export default function App() {
    * 경로를 두 벌로 나누지 않은 이유는, 결제·확인·실패 처리가 전부 같아야 하기 때문이다. 한쪽만
    * 고치면 "장바구니로는 되는데 바로 구매는 안 되는" 종류의 버그가 난다.
    */
-  const submitOrder = useCallback(async (source: CartItem[], origin: OrderOrigin, localOrderId: string) => {
-    if (source.length === 0 || paying) return;
+  const sendOrder = useCallback(async (source: CartItem[], origin: OrderOrigin, localOrderId: string) => {
+    // 잠금(orderLockRef)은 부르는 쪽(submitOrder · buyNow)이 이미 잡았다. 여기서 바로 부르지 않는다
+    if (source.length === 0) return;
     const items = toOrderItems(source);
     const { count, total, paid } = orderTotals(source);
     const paidKrwLocal = orderTotalsKrw(source).paid;
@@ -625,7 +631,23 @@ export default function App() {
       ? '백엔드에 등록되지 않은 상품은 결제할 수 없습니다.'
       : '결제하려면 고객 로그인이 필요합니다.';
     failPayment(localOrderId, 'backend_checkout_required', message, 'test', localOrderId);
-  }, [paying, member, finishOrder, failPayment]);
+  }, [member, finishOrder, failPayment]);
+
+  /**
+   * 주문 버튼의 입구. **await 전에** 잠그고 `paying` 을 켠다 — 서버 장바구니를 비우고 다시 채운 뒤 주문하는
+   * 흐름이라, 두 번째 클릭이 그 사이에 끼면 같은 상품이 두 번 담겨 두 배로 결제된다. 끝나면 무조건 푼다.
+   */
+  const submitOrder = useCallback(async (source: CartItem[], origin: OrderOrigin, localOrderId: string) => {
+    if (source.length === 0 || orderLockRef.current) return;
+    orderLockRef.current = true;
+    setPaying(true);
+    try {
+      await sendOrder(source, origin, localOrderId);
+    } finally {
+      orderLockRef.current = false;
+      setPaying(false);
+    }
+  }, [sendOrder]);
 
   /** 장바구니 확인 화면의 주문 버튼. 주문 번호는 `beginCheckout` 이 만든 것을 그대로 쓴다 */
   const placeOrder = useCallback(
@@ -645,7 +667,8 @@ export default function App() {
    */
   const buyNow = useCallback(
     async (item: CartItem, addToCartProps: Record<string, unknown>) => {
-      if (paying) return;
+      // 잠금 확인은 맨 앞에서, 잠그는 건 로그인 확인 뒤에 — 모달만 열고 끝나는 클릭이 잠금을 쥐고 있으면 안 된다
+      if (orderLockRef.current) return;
       if (!hasMemberSession()) {
         /*
          * 여기서는 이벤트를 남기지 않는다. 새 이름(`buy_now_blocked` 같은)은 계약
@@ -654,6 +677,7 @@ export default function App() {
         requestLogin('바로 구매는 고객 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
         return;
       }
+      // 여기서부터 첫 await 까지는 동기라 두 번째 클릭이 끼어들 틈이 없다. 잠금은 await 바로 앞에서 잡는다
       const orderId = createOrderId();
       const { total, paid } = orderTotalsKrw([item]);
       /*
@@ -673,9 +697,16 @@ export default function App() {
         currency: EVENT_CURRENCY,
         entry_source: 'buy_now',
       });
-      await submitOrder([item], 'buy_now', orderId);
+      orderLockRef.current = true;
+      setPaying(true);
+      try {
+        await sendOrder([item], 'buy_now', orderId);
+      } finally {
+        orderLockRef.current = false;
+        setPaying(false);
+      }
     },
-    [paying, submitOrder],
+    [sendOrder],
   );
 
   /**
