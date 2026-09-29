@@ -250,8 +250,9 @@ export default function IngredientsScreen({
                       }}
                     />
                   </span>
-                  <span className="band__w" title="전성분 맨 앞이면 1.00, 뒤로 갈수록 작아집니다">
-                    {b.weight.toFixed(2)}
+                  {/* 0.73 같은 숫자는 사장님이 읽을 값이 아니다. 전성분에서 어디쯤 있는지로 풀어 쓴다 */}
+                  <span className="band__w" title="전성분에서 앞에 적힐수록 많이 든 편입니다">
+                    {b.tagged ? '' : b.weight > 0.66 ? '앞쪽' : b.weight > MINOR_WEIGHT ? '중간' : '뒤쪽 · 적은 양'}
                   </span>
                 </li>
               ))}
