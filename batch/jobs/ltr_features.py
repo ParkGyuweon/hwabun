@@ -42,13 +42,20 @@ def load_ltr(path=None):
     조용히 None 을 돌려주지 않는다. 부르는 쪽이 경고를 찍어야 한다 —
     조용히 꺼지면 "LTR 로 잰 수치" 가 사실은 선형 값이 된다.
     """
-    base = path or os.environ.get("LTR_MODEL_DIR") or SERVING     # 실험 모델은 LTR_MODEL_DIR (Jira 322)
-    model = os.path.join(base, "ltr_model.pkl")
-    meta = os.path.join(base, "ltr_model_meta.json")
-    if not (os.path.exists(model) and os.path.exists(meta)):
-        return None
-    import joblib
-    return joblib.load(model), json.load(open(meta, encoding="utf-8"))
+    # 찾는 순서: 인자 → LTR_MODEL_DIR(실험 모델 Jira 322 · 재학습 산출물 볼륨) → 이미지 안 serving/.
+    # LTR_MODEL_DIR 이 비어 있으면(재학습이 아직 한 번도 안 돈 볼륨) 이미지 모델로 내려간다 —
+    # 여기서 None 을 돌려주면 서버가 조용히 선형으로 도는데, 그건 "모델 없음" 이 아니라 설정 실수다.
+    for base in [b for b in (path, os.environ.get("LTR_MODEL_DIR"), SERVING) if b]:
+        model = os.path.join(base, "ltr_model.pkl")
+        meta = os.path.join(base, "ltr_model_meta.json")
+        if os.path.exists(model) and os.path.exists(meta):
+            import joblib
+            m = json.load(open(meta, encoding="utf-8"))
+            m["_dir"] = os.path.abspath(base)
+            return joblib.load(model), m
+        if path:                                   # 명시한 경로는 대신 찾지 않는다
+            return None
+    return None
 
 NAMES = (["cos_all", "affinity", "prior", "cf", "supporters",
           "same_brand", "price_prox", "n_seed", "pop_rank", "cf_rank"]
