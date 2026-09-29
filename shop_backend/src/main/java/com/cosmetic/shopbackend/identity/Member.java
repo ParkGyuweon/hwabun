@@ -61,6 +61,14 @@ public class Member {
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt;
 
+  /**
+   * 둘러본 기록을 이 계정과 이어도 되나. 가입 때 동의 화면을 거쳤는데(consent_version 있음) 연결에
+   * 동의하지 않은 경우에만 false 다. 동의 컬럼이 생기기 전 계정(시드·PA 페르소나)은 지금처럼 이어진다.
+   */
+  public boolean isBehaviorLinked() {
+    return consentVersion == null || behaviorLinkAgreedAt != null;
+  }
+
   @PrePersist
   void prePersist() {
     if (id == null) id = java.util.UUID.randomUUID().toString();

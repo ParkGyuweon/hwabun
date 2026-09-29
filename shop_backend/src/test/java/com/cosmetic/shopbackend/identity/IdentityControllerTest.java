@@ -1,6 +1,7 @@
 package com.cosmetic.shopbackend.identity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,7 +40,7 @@ class IdentityControllerTest {
       tokens
     );
 
-    controller.member(
+    ResponseEntity<?> created = controller.member(
       new IdentityController.RegisterMember(
         "member@example.com",
         "password123",
@@ -69,6 +70,55 @@ class IdentityControllerTest {
       IdentityController.CONSENT_VERSION,
       saved.getValue().getConsentVersion()
     );
+    // 연결 동의(agreeBehaviorLink)를 안 했으니 행동 로그는 계정과 잇지 않는다
+    assertFalse(saved.getValue().isBehaviorLinked());
+    assertFalse(
+      ((IdentityController.AccountResponse) created.getBody()).behaviorLinked()
+    );
+  }
+
+  @Test
+  void behaviorLinkFollowsConsentButLegacyAccountsStayLinked() {
+    Member legacy = new Member();
+    assertTrue(legacy.isBehaviorLinked());
+
+    Member declined = new Member();
+    declined.setConsentVersion(IdentityController.CONSENT_VERSION);
+    assertFalse(declined.isBehaviorLinked());
+
+    Member agreed = new Member();
+    agreed.setConsentVersion(IdentityController.CONSENT_VERSION);
+    agreed.setBehaviorLinkAgreedAt(java.time.LocalDateTime.now());
+    assertTrue(agreed.isBehaviorLinked());
+  }
+
+  @Test
+  void loginReportsBehaviorLinkOfMember() {
+    MemberRepository members = mock(MemberRepository.class);
+    PasswordEncoder encoder = mock(PasswordEncoder.class);
+    Member declined = new Member();
+    declined.setId("m-1");
+    declined.setEmail("declined@example.com");
+    declined.setNickname("회원");
+    declined.setPasswordHash("$2a$hash");
+    declined.setConsentVersion(IdentityController.CONSENT_VERSION);
+    when(members.findByEmail("declined@example.com")).thenReturn(Optional.of(declined));
+
+    IdentityController c = new IdentityController(
+      mock(SellerAccountRepository.class),
+      members,
+      mock(AdminAccountRepository.class),
+      encoder,
+      mock(JwtTokenService.class)
+    );
+    when(encoder.matches("password123", "$2a$hash")).thenReturn(true);
+
+    ResponseEntity<IdentityController.AccountResponse> res = c.login(
+      new IdentityController.Login("declined@example.com", "password123", AccountRole.MEMBER)
+    );
+
+    assertEquals(200, res.getStatusCode().value());
+    assertFalse(res.getBody().behaviorLinked());
   }
 
   @Test

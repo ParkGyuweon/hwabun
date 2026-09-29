@@ -87,7 +87,9 @@ public class IdentityController {
     String name,
     String role,
     String status,
-    String token
+    String token,
+    /** 행동 로그를 이 계정과 이어도 되나. 회원만 false 가 될 수 있고 판매자·운영자는 늘 true */
+    boolean behaviorLinked
   ) {}
 
   @PostMapping("/members")
@@ -133,7 +135,8 @@ public class IdentityController {
         m.getEmail(),
         m.getNickname(),
         AccountRole.MEMBER,
-        m.getStatus()
+        m.getStatus(),
+        m.isBehaviorLinked()
       )
     );
   }
@@ -174,7 +177,8 @@ public class IdentityController {
               x.getEmail(),
               x.getNickname(),
               AccountRole.MEMBER,
-              x.getStatus()
+              x.getStatus(),
+              x.isBehaviorLinked()
             )
           )
         )
@@ -290,6 +294,17 @@ public class IdentityController {
     AccountRole role,
     AccountStatus status
   ) {
+    return response(id, email, name, role, status, true);
+  }
+
+  private AccountResponse response(
+    String id,
+    String email,
+    String name,
+    AccountRole role,
+    AccountStatus status,
+    boolean behaviorLinked
+  ) {
     String brandId = null;
     if (role == AccountRole.SELLER && brands != null) {
       brandId = brands.findAllBySeller_Id(id).stream()
@@ -303,7 +318,8 @@ public class IdentityController {
       name,
       role.name(),
       status.name(),
-      tokens.issue(id, role, brandId)
+      tokens.issue(id, role, brandId),
+      behaviorLinked
     );
   }
 }
