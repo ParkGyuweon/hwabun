@@ -220,8 +220,20 @@ let context: LoggerContext = {
  * session_id 만 살리면 안 된다. `impressedProducts` 도 같이 살려야 같은 세션·같은 상품에 보강 노출
  * (implied_by_direct_view)이 두 번 나가지 않는다. sequence_no 도 이어 간다 — 같은 세션 안에서 번호가 되감기면
  * 정렬이 깨진다. 탭을 닫으면 sessionStorage 가 비므로 그때는 자연히 새 세션이다.
+ *
+ * **세션 정의: 탭 단위 + 30분 비활성 시 새 세션** (2026-09-29).
+ * - 마지막 이벤트로부터 `SESSION_IDLE_MS` 가 지난 뒤 이벤트가 나면 새 session_id 로 갈아타고 `session_start` 부터 다시 낸다.
+ *   새로고침 때도 저장본의 마지막 활동이 30분을 넘었으면 이어 쓰지 않는다.
+ * - 탭 복제는 sessionStorage 를 통째로 복사해서 두 탭이 같은 session_id·겹치는 sequence_no 를 쓰게 된다. 그래서
+ *   살아 있는 페이지는 `TAB_LIVE_KEY` 를 세워 두고 pagehide 에 내린다. 새로고침은 내린 뒤에 로드되고, 복제는 원본이
+ *   살아 있는 동안 복사되므로 **로드 시점에 표식이 서 있으면 복제본**으로 보고 새 세션을 딴다.
+ *   pagehide 없이 죽은 탭(강제 종료)을 다시 열면 새 세션이 하나 더 생길 뿐이라 안전한 쪽이다.
  */
 const SESSION_STORE_KEY = 'hwabun.logger.session.v1';
+const TAB_LIVE_KEY = 'hwabun.logger.tab-live.v1';
+
+/** 이 시간 동안 이벤트가 하나도 없으면 다음 이벤트부터 새 세션이다 (웹 분석 관례 30분) */
+export const SESSION_IDLE_MS = 30 * 60 * 1000;
 
 interface StoredSession {
   session_id: string;
@@ -231,15 +243,40 @@ interface StoredSession {
   impressed: string[];
   /** 이 세션에 상세를 본 상품. 새로고침 뒤에도 재조회(`revisit`)를 가르려면 같이 살려야 한다. 옛 저장본에는 없다 */
   viewed: string[];
+  /** 마지막 이벤트 시각(epoch ms). 옛 저장본에는 없고, 없으면 지금으로 본다 */
+  last_activity_at?: number;
+}
+
+/** 로드 시점에 표식이 이미 서 있으면 복제된 탭이다. 확인한 뒤 이 페이지 몫으로 다시 세운다 */
+function claimTab(): boolean {
+  try {
+    const duplicated = window.sessionStorage.getItem(TAB_LIVE_KEY) !== null;
+    window.sessionStorage.setItem(TAB_LIVE_KEY, '1');
+    window.addEventListener('pagehide', () => {
+      try { window.sessionStorage.removeItem(TAB_LIVE_KEY); } catch { /* 무시 */ }
+    });
+    // bfcache 에서 돌아온 페이지는 다시 살아 있다
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) try { window.sessionStorage.setItem(TAB_LIVE_KEY, '1'); } catch { /* 무시 */ }
+    });
+    return duplicated;
+  } catch {
+    return false;
+  }
 }
 
 function loadStoredSession(): StoredSession | null {
   try {
+    if (claimTab()) return null;
     const raw = window.sessionStorage.getItem(SESSION_STORE_KEY);
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<StoredSession>;
     if (typeof v.session_id !== 'string' || typeof v.sequence_no !== 'number') return null;
+    const lastActivityAt = typeof v.last_activity_at === 'number' ? v.last_activity_at : Date.now();
+    // 30분 넘게 비어 있던 세션은 이어 쓰지 않는다
+    if (Date.now() - lastActivityAt > SESSION_IDLE_MS) return null;
     return {
+      last_activity_at: lastActivityAt,
       session_id: v.session_id,
       persona_key: typeof v.persona_key === 'string' ? v.persona_key : null,
       sequence_no: v.sequence_no,
@@ -257,10 +294,16 @@ let restoredSession: StoredSession | null = loadStoredSession();
 let sessionId = restoredSession?.session_id ?? createId();
 let pageViewId = createId();
 let sequenceNo = restoredSession?.sequence_no ?? 0;
+/** 마지막 이벤트 시각. 이것으로 30분 비활성을 가른다 */
+let lastActivityAt = restoredSession?.last_activity_at ?? Date.now();
+
+function isSessionIdle(): boolean {
+  return Date.now() - lastActivityAt > SESSION_IDLE_MS;
+}
 
 function persistSession(personaKey: string | null): void {
   try {
-    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts], viewed: [...viewedProducts] };
+    const v: StoredSession = { session_id: sessionId, persona_key: personaKey, sequence_no: sequenceNo, impressed: [...impressedProducts], viewed: [...viewedProducts], last_activity_at: lastActivityAt };
     window.sessionStorage.setItem(SESSION_STORE_KEY, JSON.stringify(v));
   } catch {
     /* 저장 못 해도 이번 페이지 안에서는 그대로 동작한다 */
@@ -416,14 +459,24 @@ export function startSession(personaId: string | null, productId: string | null 
     return;
   }
 
+  pendingEntry = null;
+  setLoggerContext({ personaId });
+  beginFreshSession(productId);
+}
+
+/**
+ * 새 session_id 로 처음부터 시작한다. 페르소나 교체(startSession)와 30분 비활성 뒤 첫 이벤트(track·startPageView)가 같이 쓴다.
+ * 활동 시각을 먼저 갱신해서 안에서 부르는 track 이 다시 비활성으로 판정하지 않는다.
+ */
+function beginFreshSession(productId: string | null): void {
+  lastActivityAt = Date.now();
   sessionId = createId();
   sequenceNo = 0;
   firedOnceKeys.clear();
   impressedProducts.clear();
   viewedProducts.clear();
   clickedSinceView.clear();
-  pendingEntry = null;
-  setLoggerContext({ personaId, productId });
+  setLoggerContext({ productId });
 
   // 첫 page_view 몫의 id 를 세션 시작 전에 발급해 둘이 공유한다
   pageViewId = createId();
@@ -432,7 +485,7 @@ export function startSession(personaId: string | null, productId: string | null 
   track('session_start', { entry_page: context.pageType });
   track('page_view', { product_id: productId, navigation_source: 'session_start' });
   trackProductView(productId, 'session_start');
-  persistSession(personaId);
+  if (startedSessionKey !== NOT_STARTED) persistSession(startedSessionKey);
 }
 
 /**
@@ -519,6 +572,12 @@ export function setNextProductViewEntry(entry: ProductViewEntry | null): void {
  */
 export function startPageView(productId: string | null, navigationSource = 'in_app'): void {
   if (startedPageViewKey === productId) return;
+  // 30분 넘게 쉬었다가 화면을 옮기면 이 화면이 새 세션의 첫 화면이다
+  if (startedSessionKey !== NOT_STARTED && isSessionIdle()) {
+    pendingEntry = null;
+    beginFreshSession(productId);
+    return;
+  }
   startedPageViewKey = productId;
 
   pageViewId = createId();
@@ -545,6 +604,9 @@ export function isSuppressed(): boolean {
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
+  // 30분 비활성 뒤 첫 이벤트면 지금 화면으로 새 세션을 열고(session_start·page_view) 그 뒤에 이 이벤트를 싣는다
+  if (startedSessionKey !== NOT_STARTED && isSessionIdle()) beginFreshSession(context.productId);
+  lastActivityAt = Date.now();
   // 판매자·운영자의 행동은 고객 행동이 아니다. 만들어서 화면 로그 창에는 보여 주되 **쌓지도 보내지도 않는다**
   const suppressed = isStaffSession();
   if (suppressed) {
