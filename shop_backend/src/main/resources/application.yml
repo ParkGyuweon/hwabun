@@ -22,7 +22,7 @@ SHOP_BACKEND_JWT_EXPIRATION_MS: 86400000
 
 recommendation:
   url: ${RECOMMEND_URL:http://localhost:8300}
-  timeout-ms: ${RECOMMEND_TIMEOUT_MS:300}
+  timeout-ms: ${RECOMMEND_TIMEOUT_MS:1500}
   feedback-timeout-ms: ${RECOMMEND_FEEDBACK_TIMEOUT_MS:30000}
 
 shop:

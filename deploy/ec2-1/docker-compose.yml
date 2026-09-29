@@ -35,6 +35,8 @@ services:
       PORTONE_API_URL: ${PORTONE_API_URL:-https://api.portone.io}
       PORTONE_TIMEOUT_MS: ${PORTONE_TIMEOUT_MS:-10000}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
+      # 추천 API 응답 대기(ms). 너무 짧으면 프론트가 조용히 예시 추천으로 바뀐다
+      RECOMMEND_TIMEOUT_MS: ${RECOMMEND_TIMEOUT_MS:-1500}
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-ec2}
       # 결제 없이 PAID 로 표시하는 테스트 주문(/api/orders/{id}/pay)을 부를 수 있는 회원 ID 접두.
       # 에이전트 러너 계정(PA00001~PA00100, 시드 shop_backend_seed.sql)만 허용한다.
