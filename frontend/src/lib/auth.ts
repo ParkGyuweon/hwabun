@@ -218,16 +218,28 @@ export async function authFetch(role: AccountRole, input: string, init: RequestI
   headers.set('Authorization', `Bearer ${s.token}`);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
   const res = await fetch(input, { ...init, headers });
-  /**
-   * 401 이면 세션을 지운다. 단, **인증 확인용 호출(GET /api/brands)에서만.**
-   * shop_backend 는 /error 가 permitAll 이 아니라서 어떤 4xx 도 401 {"error":"unauthorized"} 로
-   * 바뀐다 (2026-09-10 실측). 상품 등록 400 한 번에 판매자가 로그아웃되는 걸 막기 위해, 다른
-   * 경로의 401 은 세션을 건드리지 않고 호출부가 실패로 처리한다. 토큰이 정말 만료됐으면
-   * 대시보드가 첫 화면에서 부르는 /api/brands 가 401 을 돌려 그때 지워진다.
-   */
-  const probe = input.startsWith('/api/brands') && (init.method ?? 'GET').toUpperCase() === 'GET';
-  if (res.status === 401 && probe) write(role, null);
+  if (res.status === 401 && (await isTokenRejected(res, input, init))) write(role, null);
   return res;
+}
+
+/**
+ * 이 401 이 "토큰이 틀렸다" 는 뜻인가.
+ *
+ * shop_backend 의 인증 진입점(SecurityConfig authenticationEntryPoint)은 401 `{"error":"unauthorized"}` 를
+ * 돌려준다. 이 본문이면 어느 경로든 토큰이 만료·무효라는 뜻이라 세션을 지운다.
+ * 예전에는 /error 가 permitAll 이 아니라서 모든 4xx 가 이 본문의 401 로 바뀌었기 때문에 GET /api/brands 에서만
+ * 지웠는데, 백엔드가 /error 를 permitAll 로 연 뒤로(SecurityConfig) 그 문제는 없다.
+ * 본문이 다른 401 은 예전처럼 인증 확인용 호출(GET /api/brands)에서만 세션을 지우고, 그 밖은 호출부가 실패로 처리한다.
+ */
+async function isTokenRejected(res: Response, input: string, init: RequestInit): Promise<boolean> {
+  const probe = input.startsWith('/api/brands') && (init.method ?? 'GET').toUpperCase() === 'GET';
+  if (probe) return true;
+  try {
+    const body = (await res.clone().json()) as { error?: unknown } | null;
+    return body !== null && typeof body === 'object' && body.error === 'unauthorized';
+  } catch {
+    return false;
+  }
 }
 
 /** 개발자 모드 세션의 토큰. 이 값이면 `authFetch` 가 백엔드를 부르지 않는다 */
