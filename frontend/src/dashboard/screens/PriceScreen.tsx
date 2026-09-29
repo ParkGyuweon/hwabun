@@ -83,7 +83,7 @@ export default function PriceScreen({ brandId }: { brandId: string | null }) {
                 <th>카테고리</th>
                 <th>내 가격</th>
                 <th title="같은 카테고리 상품을 가격순으로 세웠을 때 가운데 가격">중간 가격</th>
-                <th title="(내 가격 − 중간 가격) ÷ 중간 가격">차이</th>
+                <th title="내 가격이 중간 가격보다 몇 % 비싸거나 싼지예요">차이</th>
               </tr>
             </thead>
             <tbody>

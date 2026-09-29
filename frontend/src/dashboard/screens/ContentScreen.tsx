@@ -152,7 +152,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         source={source.contentLift}
         aside={
           <span
-            title={`1.0배 = 내 브랜드 평균 담기율 · 1.0배 미만은 손보기, 1.5배 이상인데 절반도 못 봤으면 위로 올리기 · 지시 문장: AI ${llmCount}건 · 규칙 ${ruleCount}건`}
+            title={`평균보다 덜 담긴 글은 손보고, 1.5배 넘게 담기는데 절반도 안 본 글은 위로 올리라고 알려 드려요 (AI가 쓴 안내 ${llmCount}건 · 기본 안내 ${ruleCount}건)`}
           >
             담기 효과 기준
           </span>
@@ -204,10 +204,10 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           <thead>
             <tr>
               <th>글</th>
-              <th title="그 글이 화면에 보인 방문 ÷ 상세를 연 방문">본 비율</th>
-              <th title="그 글에 머문 시간 ÷ 상세를 연 방문">읽은 시간</th>
+              <th title="상세페이지를 연 방문 중 그 글까지 본 비율이에요">본 비율</th>
+              <th title="상세페이지를 한 번 열 때 그 글을 평균 얼마나 읽었는지예요">읽은 시간</th>
               <th title="그 글을 본 방문 중 장바구니에 담은 비율">본 고객 담기</th>
-              <th title="그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율">담기 효과</th>
+              <th title="그 글을 본 고객이 내 브랜드 평균보다 몇 배 더 담았는지예요">담기 효과</th>
               {anyCopy ? <th title="그 글에서 글자를 복사한 횟수">복사</th> : null}
               <th>할 일</th>
             </tr>
@@ -260,13 +260,13 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             <dt>무엇을 셌나</dt>
             <dd>상세페이지 안에서 읽는 글 10종. 목록 카드·장바구니·메뉴는 제외.</dd>
             <dt>본 비율</dt>
-            <dd>그 글이 화면에 보인 방문 ÷ 상세를 연 방문.</dd>
+            <dd>상세페이지를 연 방문 중 그 글까지 본 비율.</dd>
             <dt>읽은 시간</dt>
-            <dd>그 글에 머문 시간 ÷ 상세를 연 방문. 글 3개 이상 겹친 시간은 제외.</dd>
+            <dd>상세페이지를 한 번 열 때 그 글을 평균 얼마나 읽었는지. 글 3개 이상이 한 화면에 겹친 시간은 뺐습니다.</dd>
             <dt>본 고객 담기</dt>
             <dd>그 글을 본 방문 중 장바구니에 담은 비율.</dd>
             <dt>담기 효과</dt>
-            <dd>그 글을 본 방문의 담기율 ÷ 내 브랜드 전체 담기율. 1.0배가 평균입니다. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
+            <dd>그 글을 본 고객이 내 브랜드 평균보다 몇 배 더 담았는지. 1.0배가 평균입니다. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
             <dt>기록 수</dt>
             <dd>그 글이 보인 방문 수. {fmt.int(THIN_VIEWS)}건 미만은 흐리게, 50건 미만은 그림에서 제외.</dd>
           </dl>
