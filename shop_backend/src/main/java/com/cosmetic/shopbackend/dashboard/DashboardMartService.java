@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -1315,15 +1316,20 @@ public class DashboardMartService {
   }
 
   /**
-   * 마트 갱신 시각. projection 은 Spark 의 UTC timestamp 를 그대로 `DATETIME(3)` 에 넣으므로 UTC 로 읽어 KST 로 적는다.
-   * 화면 하단에 그대로 찍히는 값이라 오프셋을 붙여 보낸다 (계약 §1-3).
+   * 마트 갱신 시각. projection 은 Spark 의 UTC timestamp 를 그대로 `DATETIME(3)` 에 넣으므로(DW_PROJECTION.md,
+   * dw_projection_source.py 가 naive UTC 로 바꿔 쓴다) UTC 로 읽어 KST 로 적는다. UTC→KST 변환은 **여기 한 곳**에서만 한다 —
+   * 화면(fmtProcessedAt)은 받은 `+09:00` 문자열의 벽시계 값을 그대로 풀어 쓸 뿐이다 (계약 §1-3).
+   *
+   * MySQL Connector/J 8 은 DATETIME 을 `getObject` 로 `LocalDateTime` 으로 준다 (H2 는 `Timestamp`). 예전에는 Timestamp 만
+   * 바꿔서 실제 MySQL 에서는 UTC 벽시계가 오프셋 없이 나가 화면이 9시간 이른 시각을 KST 로 보였다.
    */
-  private static String timestampText(Object value) {
+  static String timestampText(Object value) {
     if (value == null) return null;
-    if (value instanceof Timestamp timestamp) {
-      return timestamp.toLocalDateTime().atOffset(ZoneOffset.UTC).atZoneSameInstant(KST).toOffsetDateTime().toString();
-    }
-    return String.valueOf(value);
+    LocalDateTime utc;
+    if (value instanceof Timestamp timestamp) utc = timestamp.toLocalDateTime();
+    else if (value instanceof LocalDateTime local) utc = local;
+    else return String.valueOf(value);
+    return utc.atOffset(ZoneOffset.UTC).atZoneSameInstant(KST).toOffsetDateTime().toString();
   }
 
   private static Object[] concat(Object[] left, Object[] right) {

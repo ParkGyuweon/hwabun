@@ -431,7 +431,10 @@ function MartNote() {
   );
 }
 
-/** "2026-09-20T18:56:03" → "9월 20일 18:56". 사장님이 읽는 시각이라 날짜 형식을 풀어 쓴다 */
+/**
+ * "2026-09-20T18:56:03+09:00" → "9월 20일 18:56". 사장님이 읽는 시각이라 날짜 형식을 풀어 쓴다.
+ * 서버(DashboardMartService.timestampText)가 DW 의 UTC 값을 이미 KST(+09:00)로 바꿔 보낸다. 여기서는 시간대를 다시 바꾸지 않는다.
+ */
 function fmtProcessedAt(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
   if (!m) return iso.slice(0, 16).replace('T', ' ');
