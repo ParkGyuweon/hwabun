@@ -51,11 +51,11 @@ export async function saveMemberProfileServer(profile: MemberProfile): Promise<P
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profileToApi(profile)),
     });
-    if (res.status === 503) return { ok: false, reason: '개발자 모드' };
-    if (!res.ok) return { ok: false, reason: `서버 응답 ${res.status}` };
+    if (res.status === 503) return { ok: false, reason: '지금은 저장할 수 없습니다' };
+    if (!res.ok) return { ok: false, reason: '저장하지 못했습니다' };
     return { ok: true, profile: fromApi((await res.json()) as ProfileDto) };
   } catch {
-    return { ok: false, reason: '서버에 연결할 수 없습니다' };
+    return { ok: false, reason: '지금은 연결할 수 없습니다' };
   }
 }
 
