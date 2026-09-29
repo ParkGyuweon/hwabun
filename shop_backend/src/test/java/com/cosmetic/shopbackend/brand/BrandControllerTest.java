@@ -1,7 +1,9 @@
 package com.cosmetic.shopbackend.brand;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -70,6 +72,37 @@ class BrandControllerTest {
     );
     assertEquals(403, e.getStatusCode().value());
     assertEquals(BrandStatus.INACTIVE, brand.getStatus());
+  }
+
+  @Test
+  @DisplayName("로고는 https 주소·사이트 안 경로·빈 값만 받는다")
+  void logoUrlAllowList() {
+    assertTrue(BrandController.validLogoUrl(null));
+    assertTrue(BrandController.validLogoUrl(""));
+    assertTrue(BrandController.validLogoUrl("https://cdn.example.com/logo.png"));
+    assertTrue(BrandController.validLogoUrl("/images/brand/logo.png"));
+    assertFalse(BrandController.validLogoUrl("http://cdn.example.com/logo.png"));
+    assertFalse(BrandController.validLogoUrl("javascript:alert(1)"));
+    assertFalse(BrandController.validLogoUrl("data:image/png;base64,AAAA"));
+    assertFalse(BrandController.validLogoUrl("//evil.example.com/x.png"));
+    assertFalse(BrandController.validLogoUrl("/\\evil.example.com/x.png"));
+    assertFalse(BrandController.validLogoUrl("https:///nohost"));
+  }
+
+  @Test
+  @DisplayName("잘못된 로고 주소로 수정하면 400 이고 저장하지 않는다")
+  void updateRejectsBadLogo() {
+    ResponseStatusException e = assertThrows(
+      ResponseStatusException.class,
+      () ->
+        controller.update(
+          "b1",
+          SELLER,
+          new BrandController.BrandRequest("브랜드", null, "javascript:alert(1)")
+        )
+    );
+    assertEquals(400, e.getStatusCode().value());
+    assertEquals(null, brand.getLogoUrl());
   }
 
   @Test

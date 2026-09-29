@@ -134,9 +134,35 @@ public class BrandController {
   }
 
   private static void copy(Brand b, BrandRequest r) {
+    if (!validLogoUrl(r.logoUrl())) throw new ResponseStatusException(
+      HttpStatus.BAD_REQUEST,
+      "로고 주소는 https:// 로 시작하는 주소나 /images 같은 사이트 안 경로만 쓸 수 있어요."
+    );
     b.setName(r.name());
     b.setDescription(r.description());
     b.setLogoUrl(r.logoUrl());
+  }
+
+  /**
+   * 로고 주소로 받아 줄 값인가. 쓸 때(생성·수정)만 본다 — 이미 저장된 값은 읽을 때 막지 않는다.
+   *
+   * 비어 있으면 로고 없음이다. 그 밖에는 호스트가 있는 `https://` 주소나 `/` 로 시작하는 사이트 안
+   * 경로만 받는다. `javascript:`·`data:`·`http://`·`//다른호스트` 같은 값은 400 이다.
+   */
+  static boolean validLogoUrl(String url) {
+    if (url == null || url.isBlank()) return true;
+    String v = url.trim();
+    if (v.startsWith("/")) return !v.startsWith("//") && !v.contains("\\");
+    try {
+      java.net.URI u = new java.net.URI(v);
+      return (
+        "https".equalsIgnoreCase(u.getScheme()) &&
+        u.getHost() != null &&
+        !u.getHost().isBlank()
+      );
+    } catch (java.net.URISyntaxException e) {
+      return false;
+    }
   }
 
   private static BrandResponse view(Brand b) {
