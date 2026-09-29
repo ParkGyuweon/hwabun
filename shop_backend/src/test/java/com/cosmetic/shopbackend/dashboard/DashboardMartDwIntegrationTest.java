@@ -15,7 +15,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @EnabledIfEnvironmentVariable(named = "RUN_DW_INTEGRATION", matches = "true")
 class DashboardMartDwIntegrationTest {
   private static final String BRAND = "6018";
-  private static final String ACTOR = "web";
+  private static final String ACTOR = "user";
   private static final String SOURCE = "codex-test";
   private final JdbcTemplate shop = jdbc(
     env("SHOP_BACKEND_MYSQL_URL", "jdbc:mysql://localhost:13306/shop_backend"),

@@ -74,7 +74,7 @@ class DashboardMartServiceTest {
   void crossBrandInflowAggregatesExecutionAxesAndFilters() {
     crossBrandDay("6018", "synthetic", "simulator", "agent_llm", "s1", "r1", 50, 10, 6, 2);
     crossBrandDay("6018", "synthetic", "simulator", "python_batch", "s2", "r2", 100, 20, 8, 4);
-    crossBrandDay("6018", "web", "web", null, null, null, 50, 10, 1, 1);
+    crossBrandDay("6018", "user", "web", null, null, null, 50, 10, 1, 1);
     crossBrandDay("other", "synthetic", "simulator", "python_batch", "s2", "r2", 900, 200, 80, 40);
 
     Map<String, Object> response = service.crossBrandInflow(SELLER, BRAND, FROM, TO, "all", "all");
@@ -402,7 +402,7 @@ class DashboardMartServiceTest {
       "cohort_key", "2-3|105k+",
       "commons_participating", true
     ));
-    insertCohortMetric("web", 2, 0.1D, 0.2D, 0.3D);
+    insertCohortMetric("user", 2, 0.1D, 0.2D, 0.3D);
     insertCohortMetric("synthetic", 6, 0.3D, 0.4D, 0.5D);
     insertCohortMetric("all", 5, 0.15D, 0.25D, 0.35D);
 
@@ -590,11 +590,23 @@ class DashboardMartServiceTest {
   @Test
   @DisplayName("actorType 을 주면 그 축만 읽는다")
   void actorTypeFiltersTheMartKey() {
-    brandDay("2026-09-10", 100, 30, 50, 15, 10, "web");
+    brandDay("2026-09-10", 100, 30, 50, 15, 10, "user");
     brandDay("2026-09-10", 700, 70, 70, 70, 70, "synthetic");
 
-    Map<?, ?> current = (Map<?, ?>) service.overview(SELLER, BRAND, FROM, TO, "web").get("current");
-    assertEquals(100L, number(current.get("impression_sessions")));
+    Map<String, Object> user = service.overview(SELLER, BRAND, FROM, TO, "user");
+    assertEquals(100L, number(((Map<?, ?>) user.get("current")).get("impression_sessions")));
+    assertEquals("user", user.get("actor_type"));
+
+    // `web` 은 `user` 의 예전 이름이다 (계약 §1-2). 받아서 `user` 로 바꿔 읽는다.
+    Map<String, Object> legacy = service.overview(SELLER, BRAND, FROM, TO, "web");
+    assertEquals(100L, number(((Map<?, ?>) legacy.get("current")).get("impression_sessions")));
+    assertEquals("user", legacy.get("actor_type"));
+
+    ResponseStatusException bad = assertThrows(
+      ResponseStatusException.class,
+      () -> service.overview(SELLER, BRAND, FROM, TO, "robot")
+    );
+    assertEquals(400, bad.getStatusCode().value());
 
     Map<?, ?> all = (Map<?, ?>) service.overview(SELLER, BRAND, FROM, TO, "all").get("current");
     assertEquals(800L, number(all.get("impression_sessions")));
@@ -610,7 +622,7 @@ class DashboardMartServiceTest {
   /* ---------------------------------------------------------------- 도우미 */
 
   private void brandDay(String date, int impressions, int detailViews, int productViews, int informationViews, int carts) {
-    brandDay(date, impressions, detailViews, productViews, informationViews, carts, "web");
+    brandDay(date, impressions, detailViews, productViews, informationViews, carts, "user");
   }
 
   private void brandDay(
@@ -640,7 +652,7 @@ class DashboardMartServiceTest {
     row.put("brand_id", BRAND);
     row.put("event_date_kst", date);
     row.put("product_id", productId);
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.putAll(metrics);
     insert("dw.product_daily_kpi", row);
   }
@@ -651,7 +663,7 @@ class DashboardMartServiceTest {
     row.put("event_date_kst", date);
     row.put("product_id", productId);
     row.put("last_content_kind", contentKind);
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.put("exit_sessions", sessions);
     insert("dw.product_exit_daily", row);
   }
@@ -671,7 +683,7 @@ class DashboardMartServiceTest {
     row.put("product_id", productId);
     row.put("section_id", sectionId);
     row.put("content_kind", contentKind);
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.put("product_view_sessions", productViewSessions);
     row.put("section_view_sessions", sectionViewSessions);
     row.put("section_view_count", sectionViewSessions);
@@ -698,7 +710,7 @@ class DashboardMartServiceTest {
     row.put("event_date_kst", date);
     row.put("segment_type", type);
     row.put("segment_value", value);
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.put("session_count", sessions);
     row.put("segment_user_count", sessions);
     row.put("product_view_sessions", productViewSessions);
@@ -714,7 +726,7 @@ class DashboardMartServiceTest {
     row.put("event_date_kst", date);
     row.put("skin_type", skinType);
     row.put("content_kind", contentKind);
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.put("dwell_ms_sum", dwell);
     row.put("dwell_sessions", 1);
     row.put("segment_dwell_ms_sum", segmentDwell);
@@ -727,7 +739,7 @@ class DashboardMartServiceTest {
     row.put("event_date_kst", date);
     row.put("price_bin", priceBin);
     row.put("currency", "KRW");
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.put("session_count", impressions);
     row.put("unique_user_count", productViews);
     row.put("impression_sessions", impressions);
@@ -748,7 +760,7 @@ class DashboardMartServiceTest {
     row.put("segment_value", value);
     row.put("price_bin", priceBin);
     row.put("currency", "KRW");
-    row.put("actor_type", "web");
+    row.put("actor_type", "user");
     row.put("segment_user_count", sessions);
     row.put("session_count", sessions);
     row.put("product_view_sessions", sessions);

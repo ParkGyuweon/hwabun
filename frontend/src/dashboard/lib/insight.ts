@@ -80,7 +80,8 @@ export function leakVerdict(steps: FunnelStep[]): Verdict {
 
   return {
     headline: `"${worst.from}" → "${worst.to}" 사이에서 가장 많이 나갑니다`,
-    reason: `${fmt.int(worst.lost)}명이 나갔고, ${fmt.pct(worst.kept)}만 넘어왔습니다`,
+    // 단계 값은 사람 수가 아니라 방문 수(세션)다. "명" 으로 적으면 없는 사람 수를 말하게 된다
+    reason: `방문 ${fmt.int(worst.lost)}건이 여기서 멈췄고, ${fmt.pct(worst.kept)}만 넘어왔습니다`,
     action: ACTION[key] ?? '이 단계 화면을 다시 살펴보세요',
     sampleSize: steps[0]?.value ?? 0,
   };

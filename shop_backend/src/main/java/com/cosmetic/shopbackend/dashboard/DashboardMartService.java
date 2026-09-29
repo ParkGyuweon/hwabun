@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -42,7 +43,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class DashboardMartService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-  private static final Set<String> ACTOR_TYPES = Set.of("all", "web", "synthetic");
+  /**
+   * DW 의 `actor_type` 은 `user` · `synthetic` 두 값뿐이다 (clean_events_job). `all` 은 필터를 걸지 않는 조회값이다.
+   * `web` 은 `user` 의 예전 이름이라 받아서 `user` 로 바꾼다 (계약 §1-2).
+   */
+  private static final Set<String> ACTOR_TYPES = Set.of("all", "user", "synthetic");
+  private static final String LEGACY_USER_ACTOR = "web";
   private static final Pattern DW_TABLE = Pattern.compile("dw\\.([a-z_]+)");
 
   /** 계약 §1-2. 넘으면 400 range_too_long */
@@ -280,6 +286,8 @@ public class DashboardMartService {
     previous.remove("mart_processed_at");
     if (hasPrevious) mergeProductTotals(read, previousRange, previous);
 
+    // unique_user_count 는 마트 행(하루 × 실행 축)마다 따로 센 고유 사용자 수다. 여기서는 같은 날의 실행 축 행을 더할 뿐이라
+    // 축을 걸쳐 같은 사용자가 있으면 두 번 들어간다. 사람 수로 화면에 내지 않는다.
     List<Map<String, Object>> daily = read.required(
       "brand_daily_kpi",
       () ->
@@ -329,6 +337,8 @@ public class DashboardMartService {
    * 상세 진입은 `detail_view_sessions / impression_sessions`(상세 ∪ 퀵룩), 담기는 `/ detail_view_sessions` 다.
    */
   private static String brandPeriodSql(Query q) {
+    // unique_user_count 는 **하루 단위로 센 고유 사용자 수의 합**이다. 마트가 날짜별 고유 수만 가지므로 기간 합산은
+    // 여러 날 들른 같은 사용자를 날마다 다시 센다 — 기간의 고유 사용자 수가 아니다. 화면은 이 값을 "명" 으로 쓰지 않는다.
     return "select coalesce(sum(impression_sessions),0) impression_sessions," +
       "coalesce(sum(product_view_sessions),0) product_view_sessions," +
       "coalesce(sum(information_view_sessions),0) information_view_sessions," +
@@ -408,6 +418,7 @@ public class DashboardMartService {
             "coalesce(sum(add_to_cart_sessions),0) add_to_cart_sessions," +
             "coalesce(sum(remove_from_cart_sessions),0) remove_from_cart_sessions," +
             "coalesce(sum(session_count),0) session_count," +
+            // 하루 단위로 센 고유 사용자 수를 기간 동안 더한 값이다. 여러 날 본 같은 사용자가 날마다 들어가 고유 수가 아니다.
             "coalesce(sum(unique_user_count),0) unique_user_count," +
             "coalesce(sum(product_interest_score),0) product_interest_score," +
             // §4.1: product_ctr · detail_entry_rate 의 분모는 세 노출 합계인 impression_count(Event 수)다. 세션이 아니다.
@@ -644,6 +655,7 @@ public class DashboardMartService {
       "persona_segment_daily_kpi",
       () ->
         many(
+          // segment_user_count 합은 하루 단위로 센 고객 수를 더한 값이다 (기간 고유 수 아님). 화면은 session_count 를 방문 수로 쓴다.
           "select segment_type,segment_value,coalesce(sum(segment_user_count),0) segment_user_count," +
             "coalesce(sum(session_count),0) session_count," +
             "coalesce(sum(product_view_sessions),0) product_view_sessions," +
@@ -757,6 +769,7 @@ public class DashboardMartService {
   private List<Map<String, Object>> segmentPriceGrid(Query q) {
     List<Map<String, Object>> rows = many(
       "select segment_type,segment_value,price_bin,currency," +
+        // 하루 단위 고객 수의 합이다. 기간 고유 수가 아니다.
         "coalesce(sum(segment_user_count),0) segment_user_count," +
         "coalesce(sum(session_count),0) session_count," +
         "coalesce(sum(product_count),0) product_count," +
@@ -1303,15 +1316,20 @@ public class DashboardMartService {
   }
 
   /**
-   * 마트 갱신 시각. projection 은 Spark 의 UTC timestamp 를 그대로 `DATETIME(3)` 에 넣으므로 UTC 로 읽어 KST 로 적는다.
-   * 화면 하단에 그대로 찍히는 값이라 오프셋을 붙여 보낸다 (계약 §1-3).
+   * 마트 갱신 시각. projection 은 Spark 의 UTC timestamp 를 그대로 `DATETIME(3)` 에 넣으므로(DW_PROJECTION.md,
+   * dw_projection_source.py 가 naive UTC 로 바꿔 쓴다) UTC 로 읽어 KST 로 적는다. UTC→KST 변환은 **여기 한 곳**에서만 한다 —
+   * 화면(fmtProcessedAt)은 받은 `+09:00` 문자열의 벽시계 값을 그대로 풀어 쓸 뿐이다 (계약 §1-3).
+   *
+   * MySQL Connector/J 8 은 DATETIME 을 `getObject` 로 `LocalDateTime` 으로 준다 (H2 는 `Timestamp`). 예전에는 Timestamp 만
+   * 바꿔서 실제 MySQL 에서는 UTC 벽시계가 오프셋 없이 나가 화면이 9시간 이른 시각을 KST 로 보였다.
    */
-  private static String timestampText(Object value) {
+  static String timestampText(Object value) {
     if (value == null) return null;
-    if (value instanceof Timestamp timestamp) {
-      return timestamp.toLocalDateTime().atOffset(ZoneOffset.UTC).atZoneSameInstant(KST).toOffsetDateTime().toString();
-    }
-    return String.valueOf(value);
+    LocalDateTime utc;
+    if (value instanceof Timestamp timestamp) utc = timestamp.toLocalDateTime();
+    else if (value instanceof LocalDateTime local) utc = local;
+    else return String.valueOf(value);
+    return utc.atOffset(ZoneOffset.UTC).atZoneSameInstant(KST).toOffsetDateTime().toString();
   }
 
   private static Object[] concat(Object[] left, Object[] right) {
@@ -1328,6 +1346,7 @@ public class DashboardMartService {
   record Query(String brand, LocalDate from, LocalDate to, String actor) {
     static Query parse(String brand, String rawFrom, String rawTo, String rawActor) {
       String actor = rawActor == null || rawActor.isBlank() ? "all" : rawActor;
+      if (LEGACY_USER_ACTOR.equals(actor)) actor = "user";
       if (!ACTOR_TYPES.contains(actor)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad_actor_type");
       LocalDate end;
       LocalDate start;
