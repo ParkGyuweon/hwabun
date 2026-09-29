@@ -98,8 +98,27 @@ public class BrandController {
     @AuthenticationPrincipal ShopPrincipal actor
   ) {
     Brand b = authorized(id, actor);
+    if (
+      actor.role() == AccountRole.SELLER &&
+      !sellerMayChangeStatus(b.getStatus(), status)
+    ) throw new ResponseStatusException(
+      HttpStatus.FORBIDDEN,
+      "비활성 브랜드를 다시 여는 것은 운영자만 할 수 있어요."
+    );
     b.setStatus(status);
     return view(brands.save(b));
+  }
+
+  /**
+   * 판매자가 자기 브랜드 상태를 바꿀 수 있는가.
+   *
+   * 판매자는 브랜드를 내리는 것(INACTIVE)만 할 수 있다. INACTIVE 는 운영자가 내린 것인지 판매자가
+   * 내린 것인지 구분할 컬럼이 없으므로, INACTIVE → ACTIVE 로 되살리는 것은 운영자
+   * (`PATCH /api/admin/brands/{id}/status`)만 한다. 같은 상태로 두는 것은 막지 않는다.
+   */
+  static boolean sellerMayChangeStatus(BrandStatus current, BrandStatus next) {
+    if (next == current) return true;
+    return next == BrandStatus.INACTIVE;
   }
 
   private Brand authorized(String id, ShopPrincipal actor) {
