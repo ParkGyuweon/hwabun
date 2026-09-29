@@ -199,7 +199,7 @@ class MemberWithdrawalTest {
 
     var login = identity.login(new IdentityController.Login("yu@example.com", "password456", AccountRole.MEMBER));
     assertEquals(200, login.getStatusCode().value());
-    assertEquals(((IdentityController.AccountResponse) again.getBody()).id(), login.getBody().id());
+    assertEquals(((IdentityController.AccountResponse) again.getBody()).id(), ((IdentityController.AccountResponse) login.getBody()).id());
   }
 
   @Test
