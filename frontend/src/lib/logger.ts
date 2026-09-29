@@ -1,5 +1,5 @@
 import { EVENT_INTENT, SCHEMA_VERSION } from '../types/log';
-import { sessionSnapshot } from './auth';
+import { isBehaviorLinked, sessionSnapshot } from './auth';
 import { ingestForTrait } from './trait';
 import type { ActorType, EventName, LogEnvelope, PageType } from '../types/log';
 
@@ -110,9 +110,15 @@ function isStaffSession(): boolean {
 
 let staffNoticeShown = false;
 
+/**
+ * 가입 때 "둘러본 기록을 내 계정과 연결" 에 동의하지 않은 회원이면 토큰을 싣지 않는다 — 익명 방문처럼
+ * session_id 로만 나간다 (App 이 persona_id 에도 회원 id 를 넣지 않는다). 동의 전 계정은 지금처럼 이어진다.
+ */
 function collectToken(): string | null {
   try {
-    return sessionSnapshot('MEMBER')?.token ?? null;
+    const member = sessionSnapshot('MEMBER');
+    if (!isBehaviorLinked(member)) return null;
+    return member?.token ?? null;
   } catch {
     // 저장소를 못 읽어도 로그는 보내야 한다. 익명으로 나간다
     return null;

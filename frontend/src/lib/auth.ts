@@ -28,6 +28,16 @@ export interface AccountSession {
   token: string;
   /** JWT `exp` (epoch ms). 못 읽으면 null — 만료는 서버 401 로 안다 */
   expires_at: number | null;
+  /**
+   * 둘러본 기록을 이 계정과 이어도 되나 (서버 `behaviorLinked`). 가입 때 연결에 동의하지 않은 회원만 false.
+   * 이 필드가 생기기 전에 저장된 세션은 값이 없고, 없으면 지금처럼 이어진 것으로 본다.
+   */
+  behavior_linked?: boolean;
+}
+
+/** 행동 로그를 이 회원 계정과 이을지. 값이 없는(예전) 세션은 이어진 것으로 본다 */
+export function isBehaviorLinked(session: AccountSession | null): boolean {
+  return session !== null && session.behavior_linked !== false;
 }
 
 export const ROLE_LABEL: Record<AccountRole, string> = {
@@ -139,6 +149,7 @@ interface AccountResponse {
   role: string;
   status: string;
   token: string;
+  behaviorLinked?: boolean;
 }
 
 async function post(path: string, body: unknown): Promise<Response> {
@@ -177,6 +188,7 @@ async function toSession(res: Response, role: AccountRole): Promise<AccountSessi
     status: a.status,
     token: a.token,
     expires_at: decodeExp(a.token),
+    behavior_linked: a.behaviorLinked !== false,
   };
 }
 
