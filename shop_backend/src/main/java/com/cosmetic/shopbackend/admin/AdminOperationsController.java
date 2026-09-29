@@ -3,6 +3,7 @@ package com.cosmetic.shopbackend.admin;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -78,7 +79,7 @@ public class AdminOperationsController {
     String admin = actor.accountId();
     updateOr404(
       "update settlement set status='COMPLETED',completed_at=?,completed_by=? where settlement_id=? and status='PENDING'",
-      LocalDateTime.now(),
+      LocalDateTime.now(ZoneId.of("Asia/Seoul")),
       admin,
       id
     );
