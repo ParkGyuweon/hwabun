@@ -629,7 +629,18 @@ export default function ProductListPage({
 
       <section className="list__promo" data-log-section="promo_row" data-recommend-source={recommendationSource}>
         <header className="list__promo-head">
-          <h2>지금 주목할 상품</h2>
+          <h2>
+            지금 주목할 상품
+            {/* 추천 서버 응답이 없어 기본 목록으로 채웠을 때. 모델 추천처럼 보이지 않게 작게 밝힌다 (2026-09-29) */}
+            {recommendationSource === 'mock' ? (
+              <small
+                data-recommend-fallback
+                style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, letterSpacing: 0, opacity: 0.55, verticalAlign: 'middle' }}
+              >
+                기본 추천
+              </small>
+            ) : null}
+          </h2>
           <p>
             {persona
               ? `${skinTypeLabel(persona.skin_type)} 피부에 맞춘 추천`

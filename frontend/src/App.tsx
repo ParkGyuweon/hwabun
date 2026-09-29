@@ -42,6 +42,7 @@ import { backendCatalogState, catalogSnapshot, ensureBackendDetail, resolveProdu
 import EmptyState from './components/common/EmptyState';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
+import { isBehaviorLinked } from './lib/auth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
 import { useAuthorCounts, useProductReviews, useReviewSkinTypes } from './lib/reviewStore';
 import personasData from './mocks/personas.sample.json';
@@ -961,8 +962,10 @@ export default function App() {
    * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 식별자면
    * 아무것도 하지 않으므로 productId 변경으로 다시 실행돼도 무해하다.
    */
-  // 로그인 회원이 최우선. 아니면 **고른** 페르소나. 둘 다 없으면 주인 없는 방문이라 null 이다
-  const logIdentity = member?.id ?? (personaChosen ? personaId || null : null);
+  // 로그인 회원이 최우선. 아니면 **고른** 페르소나. 둘 다 없으면 주인 없는 방문이라 null 이다.
+  // 가입 때 기록 연결에 동의하지 않은 회원은 회원 id 를 싣지 않는다 (logger 도 토큰을 빼고 보낸다)
+  const linkedMemberId = member && isBehaviorLinked(member) ? member.id : null;
+  const logIdentity = linkedMemberId ?? (personaChosen ? personaId || null : null);
   useEffect(() => {
     setLoggerContext({
       pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',

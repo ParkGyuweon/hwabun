@@ -158,7 +158,9 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
               </span>
             ) : null}
           </div>
-          <p className="mypage__note">내 계정에 저장되어 어느 기기에서 로그인해도 같이 보입니다.</p>
+          <p className="mypage__note">
+            내 계정에 저장되어 어느 기기에서 로그인해도 같이 보입니다. 저장하면 피부 정보 수집·이용에 동의한 것으로 봐요.
+          </p>
         </section>
 
         <section className="mypage__section">

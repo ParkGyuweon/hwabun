@@ -37,7 +37,7 @@ Shop backend 인증 요청은 `Authorization: Bearer <JWT>`를 사용합니다. 
 
 | Method | Path | 권한 | 요청 |
 |---|---|---|---|
-| POST | `/api/auth/members` | 공개 | `email`, `password(8자 이상)`, `nickname`, 선택 프로필 코드 |
+| POST | `/api/auth/members` | 공개 | `email`, `password(8자 이상)`, `nickname`, `agreeTerms`·`agreePrivacy`(필수, true 아니면 400 `consent_required`), 선택 `agreeSkinInfo`(false면 프로필 코드 4개 저장 안 함)·`agreeBehaviorLink`, 선택 프로필 코드 |
 | POST | `/api/auth/sellers` | 공개 | `email`, `password(8자 이상)`, `name` |
 | POST | `/api/auth/login` | 공개 | `email`, `password`, `role: MEMBER\|SELLER\|ADMIN` |
 

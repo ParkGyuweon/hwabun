@@ -11,9 +11,11 @@
  * record 정의를 그대로 옮겼다. 필드 이름이 camelCase 인 이유다.
  *
  * 알려진 백엔드 제약 (요청 메시지에 적어 보냄)
- *   · 모든 4xx 가 401 {"error":"unauthorized"} 로 바뀐다. /error 가 permitAll 이 아니라서다.
- *     그래서 여기서는 상태 코드로만 분기하고 401 을 "인증 실패" 로 단정하지 않는다.
- *   · category 시드가 없어 POST /api/products 는 지금 항상 실패한다. 실패하면 로컬 등록으로 물러난다.
+ *   · 401 {"error":"unauthorized"} 는 인증 진입점이 돌려주는 것으로, 토큰 만료·무효라는 뜻이다. 예전에는
+ *     /error 가 permitAll 이 아니라서 모든 4xx 가 이 401 로 바뀌었지만 지금은 풀렸다 (SecurityConfig).
+ *     이 401 이면 authFetch 가 그 역할의 세션을 지운다.
+ *   · category 는 secondary_category 코드로 시드돼 있다 (shop_backend_seed.sql). POST /api/products 가
+ *     실패하면 로컬 등록으로 물러난다.
  *   · 새 상품은 DRAFT 로 만들어져 목록에 안 뜬다. 등록 성공 직후 ACTIVE 로 바꾸는 요청을 한 번 더 보낸다.
  */
 import { authFetch, sessionSnapshot } from './auth';
@@ -44,7 +46,7 @@ const krwToUsd = (krw: number | string | null | undefined): number =>
   krw === null || krw === undefined ? 0 : round2(Number(krw) / KRW_PER_USD);
 
 /**
- * 실패 응답을 화면에 보여 줄 한 문장으로. 백엔드가 4xx 를 401 로 바꾸는 버그가 있어 상태 코드만 믿지 않는다.
+ * 실패 응답을 화면에 보여 줄 한 문장으로. 같은 상태 코드도 API 마다 뜻이 달라 본문 문구까지 본다.
  * 화면 문장에는 상태 코드·서버 원문을 넣지 않는다 (고객이 읽는 말). 원문은 개발 중에만 콘솔에 남긴다.
  */
 async function reasonOf(res: Response): Promise<string> {
@@ -56,8 +58,8 @@ async function reasonOf(res: Response): Promise<string> {
   }
   if (import.meta.env.DEV) console.warn(`[shopApi] ${res.status} ${res.url}`, text.slice(0, 300));
   if (res.status === 401) {
-    // 로그인 만료일 수도, 백엔드가 다른 4xx 를 401 로 돌려준 것일 수도 있다 — 문장은 둘 다에 맞게
-    return '요청을 처리하지 못했습니다. 다시 로그인한 뒤 시도해 주세요.';
+    // 서버의 /error 수정 뒤로 401 은 실제 로그인 만료다 (예전엔 다른 4xx 도 401 로 왔다)
+    return '로그인이 끝났습니다. 다시 로그인한 뒤 시도해 주세요.';
   }
   /*
    * 403·409 는 **어느 API 인지에 따라 뜻이 다르다.** 전에는 둘 다 피드백 화면 문장으로 고정돼 있어서 결제 403 이
@@ -259,9 +261,8 @@ export type RegisterResult = { ok: true; product: Product; activated: boolean } 
 /**
  * POST /api/products. 폼(snake_case)을 백엔드 record(camelCase)로 옮긴다.
  *
- * categoryId 는 백엔드 `category` 테이블의 id 인데 시드가 비어 있어 무엇을 보내도 지금은 400 이다.
- * 2차 카테고리 코드를 보낸다. 백엔드에 "category 를 secondary_category 코드로 시드해 달라" 고 요청했다.
- * 그 시드가 들어오면 이 함수는 손대지 않아도 통과한다.
+ * categoryId 는 백엔드 `category` 테이블의 id 다. 그 테이블은 secondary_category 코드를 id 로 시드돼 있어
+ * (shop_backend_seed.sql) 폼의 2차 카테고리 코드를 그대로 보낸다.
  */
 export async function registerProductBackend(form: RegistrationForm): Promise<RegisterResult> {
   const brandId = loadBrandId();

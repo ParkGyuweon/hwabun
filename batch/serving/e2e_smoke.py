@@ -80,7 +80,7 @@ if pid:
     step("9 추천 서버에 편입", st == 200, f"HTTP {st} registered_at={ (r or {}).get('registered_at') if isinstance(r, dict) else '-'} new_until={(r or {}).get('new_until') if isinstance(r, dict) else '-'}")
     # registered_at 은 백엔드 createdAt 이 없으면 편입 시각으로 대체된다(요청서 9-11). 편입 직후라 두 값이 거의 같아 자동 판별은 못 한다
 # 회원 가입 → 추천
-st, r = call("POST", f"{BE}/api/auth/members", {"email": f"member-{run}@e2e.local", "password": "Passw0rd!e2e", "nickname": f"e2e-{run}"})
+st, r = call("POST", f"{BE}/api/auth/members", {"email": f"member-{run}@e2e.local", "password": "Passw0rd!e2e", "nickname": f"e2e-{run}", "agreeTerms": True, "agreePrivacy": True})
 member_tok = (r or {}).get("token") if isinstance(r, dict) else None; member_id = (r or {}).get("id") if isinstance(r, dict) else None
 step("10 회원 가입", st in (200, 201) and bool(member_tok), f"HTTP {st} id={member_id}")
 st, r = call("GET", f"{RS}/api/recommend?persona_id={member_id}&size=10&hero=new_brand&banner_slots=1&skin_type=dry&skin_tone=fair")
