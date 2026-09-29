@@ -113,12 +113,12 @@ class IdentityControllerTest {
     );
     when(encoder.matches("password123", "$2a$hash")).thenReturn(true);
 
-    ResponseEntity<IdentityController.AccountResponse> res = c.login(
+    ResponseEntity<?> res = c.login(
       new IdentityController.Login("declined@example.com", "password123", AccountRole.MEMBER)
     );
 
     assertEquals(200, res.getStatusCode().value());
-    assertFalse(res.getBody().behaviorLinked());
+    assertFalse(((IdentityController.AccountResponse) res.getBody()).behaviorLinked());
   }
 
   @Test
