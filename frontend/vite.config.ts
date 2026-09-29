@@ -40,6 +40,11 @@ export default defineConfig({
        *   recommend    (8300)  추천·처방 문장·한 마디·카탈로그 동기화                 batch/serving/
        *   shop_backend (8090)  로그인·브랜드·상품·주문·리뷰·피드백·대시보드   shop_backend/
        *   collector    (8080)  행동 로그 수집 /api/events                     backend/
+       *
+       * 주의: 개발에서는 /api/recommend 를 8300 으로 바로 보낸다. 배포에서는 shop_backend 를 거쳐 간다
+       * (RecommendationController → RecommendationClient → 8300).
+       * 그래서 개발 서버로는 배포의 추천 경로(shop_backend 경유)가 확인되지 않는다. 다른 개발자가 이 직통
+       * 경로에 기대고 있으니 바꾸지 않는다 (2026-09-29).
        */
       ...Object.fromEntries(
         ['/api/recommend', '/api/prescription', '/api/headline', '/api/catalog'].map((path) => [
