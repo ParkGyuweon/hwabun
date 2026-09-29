@@ -357,7 +357,11 @@ def main():
     if not key:
         raise SystemExit("GMS 키를 못 찾았습니다. `set -a && . ./.env && set +a` 먼저.")
 
-    clf = Classifier(OpenAI(api_key=key, base_url=GMS_BASE), axes, vocab["other"], a.model, lang=a.lang)
+    # 기본값(600초·재시도 2회) 대신 서빙과 같은 한도. 한 건이 매달려 배치 전체가 서지 않게
+    client = OpenAI(api_key=key, base_url=GMS_BASE,
+                    timeout=float(os.environ.get("LLM_TIMEOUT_S") or 20),
+                    max_retries=int(os.environ.get("LLM_MAX_RETRIES") or 1))
+    clf = Classifier(client, axes, vocab["other"], a.model, lang=a.lang)
     n_cat = sum(len(ax["cats"]) for ax in axes.values())
     print(f"피드백 {len(rows)}건 · 고정 목록 {len(axes)}축 {n_cat}종 + 기타"
           f" · 어휘 {vocab['schema_version']} · {a.model} · 지시문 {a.lang} · 건당 호출 1회{NL}")

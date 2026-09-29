@@ -951,7 +951,10 @@ def prescribe(body: rx.PrescriptionInput,
     if client is None:
         raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "GMS_KEY 가 없어 처방 문장을 만들 수 없습니다"})
     _rx_stats["llm_calls"] += 1
-    return rx.prescribe(body, client, store, force=force, model=model)
+    try:
+        return rx.prescribe(body, client, store, force=force, model=model)
+    except Exception as exc:           # noqa: BLE001  시간 초과·GMS 장애 — 프론트는 503 을 규칙표 문장으로 받는다
+        raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": f"처방 LLM 호출 실패: {type(exc).__name__}"})
 
 
 # ── 화면·섹션별 한 마디 (Jira 365) ─────────────────────────────────────────
@@ -987,7 +990,10 @@ def headline_lines(body: hl.HeadlineInput,
     use = client if _rx_enabled else None          # 처방 스위치를 같이 따른다
     if use is not None:
         _hl_stats["llm_calls"] += 1
-    env = hl.headline(body, use, store, force=force, model=model)
+    try:
+        env = hl.headline(body, use, store, force=force, model=model)
+    except Exception:                  # noqa: BLE001  시간 초과·GMS 장애 — 503 대신 규칙 문장 (저장하지 않는다)
+        env = hl.headline(body, None, None, model=model)
     if env.get("origin") == "rule":
         _hl_stats["rule_fallbacks"] += 1
     return env

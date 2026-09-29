@@ -132,5 +132,41 @@ class PrescriptionGuardTest(unittest.TestCase):
         self.assertEqual(1, llm.calls)
 
 
+class TimeoutFallbackTest(unittest.TestCase):
+    """LLM 이 시간 초과로 죽어도 500 이 아니다 — 처방은 503(프론트 규칙표), 한 마디는 규칙 문장"""
+
+    def test_client_has_short_timeout(self):
+        old = os.environ.get("GMS_KEY")
+        os.environ["GMS_KEY"] = "test-not-a-key"
+        try:
+            c = rx.make_client()
+        finally:
+            if old is None:
+                os.environ.pop("GMS_KEY", None)
+            else:
+                os.environ["GMS_KEY"] = old
+        self.assertEqual(rx.LLM_TIMEOUT_S, c.timeout)
+        self.assertLessEqual(c.timeout, 30)
+        self.assertLessEqual(c.max_retries, 1)
+
+    def test_headline_timeout_falls_back_to_rule(self):
+        boom = _Boom()
+        _fresh(boom)
+        r = client.post("/api/headline", json=_hl_body())
+        self.assertEqual(200, r.status_code, r.text)
+        self.assertEqual("rule", r.json()["origin"])
+        self.assertEqual(1, boom.calls)
+        # 실패는 저장하지 않는다 — 다음 요청은 다시 LLM 을 시도한다
+        client.post("/api/headline", json=_hl_body())
+        self.assertEqual(2, boom.calls)
+
+    def test_prescription_timeout_is_503(self):
+        boom = _Boom()
+        _fresh(boom)
+        r = client.post("/api/prescription", json=copy.deepcopy(tp.INPUT))
+        self.assertEqual(503, r.status_code, r.text)
+        self.assertEqual("LLM_UNAVAILABLE", r.json()["detail"]["code"])
+
+
 if __name__ == "__main__":
     unittest.main()
