@@ -81,6 +81,7 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
 """
 import glob
 import datetime
+import hmac
 import json
 import os
 import sys
@@ -89,7 +90,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
 
 BD = os.path.dirname(os.path.abspath(__file__))
@@ -913,14 +914,29 @@ def _rx_deps():
     return _rx_store, _rx_client
 
 
+def _force_allowed(force: bool, admin_token: Optional[str]) -> bool:
+    """공개 엔드포인트의 force(저장본 무시 재생성)는 운영 토큰이 맞을 때만 따른다.
+
+    nginx 가 /api/prescription · /api/headline 을 인증 없이 열어 두므로, 아무나 force=true 로
+    저장본을 건너뛰면 매 요청이 과금 호출이 된다. 대시보드 화면은 force 를 보내지 않는다.
+    env SERVING_ADMIN_TOKEN 이 비어 있으면 force 는 늘 무시된다."""
+    if not force:
+        return False
+    want = os.environ.get("SERVING_ADMIN_TOKEN") or ""
+    return bool(want) and hmac.compare_digest(want.encode("utf-8"), (admin_token or "").encode("utf-8"))
+
+
 @app.post("/api/prescription")
 def prescribe(body: rx.PrescriptionInput,
-              force: bool = Query(False, description="저장본이 있어도 다시 생성"),
-              model: str = Query(rx.MODEL)):
+              force: bool = Query(False, description="저장본이 있어도 다시 생성 (X-Admin-Token 이 맞을 때만)"),
+              x_admin_token: Optional[str] = Header(None)):
     """브랜드 대시보드 할 일 처방 문장 (docs/dashboard/action-prescription-prompt.md v0.3, Jira 225).
     판정(verb)과 옮길 위치(insert_after)는 프론트가 정해서 보낸다. 여기서는 문장만 만들고 §7 자동 거부 11개를 건다 —
     거부되면 prescription=null, rejected_by 에 코드. 실증 필요 표현은 needs_evidence 꼬리표.
     봉투는 프론트 PrescriptionEnvelope (input_hash 포함). 같은 입력은 저장본을 준다 (cached=true)."""
+    # 모델은 요청에서 받지 않는다 — 비싼 모델을 골라 부르는 과금 공격을 막는다 (env PRESCRIPTION_MODEL 로만 바꾼다)
+    model = rx.MODEL
+    force = _force_allowed(force, x_admin_token)
     store, client = _rx_deps()
     problems = rx.input_problems(body)
     if problems:                       # LLM 을 부르기 전에 끝나는 경우 — 키가 없어도 답한다
@@ -953,14 +969,16 @@ def _hl_deps():
 
 @app.post("/api/headline")
 def headline_lines(body: hl.HeadlineInput,
-                   force: bool = Query(False, description="저장본이 있어도 다시 생성"),
-                   model: str = Query(hl.MODEL)):
+                   force: bool = Query(False, description="저장본이 있어도 다시 생성 (X-Admin-Token 이 맞을 때만)"),
+                   x_admin_token: Optional[str] = Header(None)):
     """대시보드 화면 하나의 한 마디 (contracts/headline-api-spec.md, Jira 365).
 
     숫자는 프론트가 화면에 그린 문자열 그대로 보낸다 — 서버는 계산하지 않는다.
     비교·변화 판단은 `comparisons` 에 넣어 보낸 문장 안에서만 쓸 수 있다.
     **503 을 내지 않는다.** 키가 없거나 문장이 거부되면 규칙 문장(origin="rule")으로 답한다 —
     설명 한 줄 때문에 화면이 비면 표만 남아 읽을 사람이 더 막힌다."""
+    model = hl.MODEL                               # 요청에서 받지 않는다 (env HEADLINE_MODEL 로만)
+    force = _force_allowed(force, x_admin_token)
     store, client = _hl_deps()
     key = hl.store_key(body, model)
     if not force and store.get(key):
