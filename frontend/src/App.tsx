@@ -570,7 +570,7 @@ export default function App() {
             return;
           }
           // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
-          savePendingPayment({ orderId: created.orderId, clientOrderId: localOrderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw });
+          savePendingPayment({ orderId: created.orderId, clientOrderId: localOrderId, items, count, total, paid, totalAmountKrw: created.totalAmountKrw, origin });
           // 결제 정본은 서버 totalAmount(원화 정수). 화면 합계와 1원 차이가 나도 이벤트는 실제 결제액을 따른다
           const paidKrw = created.totalAmountKrw;
           const pay = await requestKakaoPay({
@@ -746,7 +746,8 @@ export default function App() {
         payment_id: paymentId,
         paid_at: confirmed.paidAt ?? new Date().toISOString(),
         paidKrw: pending.totalAmountKrw,
-      });
+        // 예전에 저장된 값에는 origin 이 없다 — 그때는 원래대로 장바구니 주문으로 본다
+      }, pending.origin ?? 'cart');
     });
     // 첫 진입 한 번만. finishOrder/failPayment 는 안정적이다
     // eslint-disable-next-line react-hooks/exhaustive-deps
