@@ -2,9 +2,10 @@ import { useMemo, useState, useEffect } from 'react';
 import { fetchSellerFeedback, respondToFeedback, startFeedbackClassification } from '../../lib/shopApi';
 import { OriginBadge, Panel } from '../components';
 import InsightCard from './InsightCard';
+import { INSIGHT_API_READY } from '../lib/insightApi';
 import { useBrandProducts } from '../lib/useBrandProducts';
 import { useFeedback } from '../../hooks/useFeedback';
-import { feedbackForBrand, feedbackSource, updateFeedback } from '../../lib/feedbackStore';
+import { dropSamplesIfReal, feedbackForBrand, feedbackSource, isSeedFeedback, updateFeedback } from '../../lib/feedbackStore';
 import { findAdTerms } from '../../lib/adTerms';
 import { skinTypeLabel, humanizeAttribute } from '../../lib/format';
 import {
@@ -123,10 +124,10 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
     };
   }, [brandId, brandName]);
   const mine = useMemo(() => {
-    // 번들 시드(SSAFY Beauty 30건)는 로그인한 브랜드가 그 이름일 때만 섞인다. 다른 브랜드에는 남의 피드백이다
+    // 로컬 저장본은 로그인한 브랜드 것만. 진짜 의견이 있으면 번들 샘플은 빼고, 샘플뿐이면 카드마다 "예시" 를 붙인다
     const local = brandName ? feedbackForBrand(all, brandName) : [];
     const seen = new Set(local.map((f) => f.feedback_id));
-    return [...remote.filter((f) => !seen.has(f.feedback_id)), ...local];
+    return dropSamplesIfReal([...remote.filter((f) => !seen.has(f.feedback_id)), ...local]);
   }, [all, remote, brandName]);
 
   /** 배지. 백엔드 행이나 이 사이트에서 쓴 글이 있으면 실측, 전부 번들 샘플이면 시드 */
@@ -334,8 +335,9 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
         </p>
       </div>
 
-      {/* AI 요약. 원문 목록보다 위 — 사장님은 결론부터 본다. 상품 필터를 그대로 따른다 */}
-      <InsightCard brandId={brandId} productId={productId === 'all' ? null : productId} />
+      {/* AI 요약. 원문 목록보다 위 — 사장님은 결론부터 본다. 상품 필터를 그대로 따른다.
+          서버가 아직 없어서 꺼 둔다 (INSIGHT_API_READY). 켜 두면 "연결 전" 빈 카드만 보인다 */}
+      {INSIGHT_API_READY ? <InsightCard brandId={brandId} productId={productId === 'all' ? null : productId} /> : null}
 
       {verdict ? (
         <section className="verdict verdict--mine">
@@ -554,6 +556,9 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                 <li key={f.feedback_id} className={`fbx-card is-${f.status}`}>
                   <div className="fbx-card__meta">
                     <span className="fbx-card__product">{productName(f.product_id)}</span>
+                    {isSeedFeedback(f) ? (
+                      <span className="fbx-card__buyer fbx-card__buyer--no" title="보여 드리려고 넣어 둔 예시 글입니다. 실제 고객이 쓴 글이 아닙니다">예시</span>
+                    ) : null}
                     {/*
                       산 사람의 말인지. 의견은 사지 않아도 보낼 수 있고, 두 말은 무게가 다르다 —
                       산 사람의 "향이 강하다" 와 안 산 사람의 "향이 강할 것 같다" 는 다른 이야기다.
