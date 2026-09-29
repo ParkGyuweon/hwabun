@@ -11,9 +11,11 @@
  * record 정의를 그대로 옮겼다. 필드 이름이 camelCase 인 이유다.
  *
  * 알려진 백엔드 제약 (요청 메시지에 적어 보냄)
- *   · 모든 4xx 가 401 {"error":"unauthorized"} 로 바뀐다. /error 가 permitAll 이 아니라서다.
- *     그래서 여기서는 상태 코드로만 분기하고 401 을 "인증 실패" 로 단정하지 않는다.
- *   · category 시드가 없어 POST /api/products 는 지금 항상 실패한다. 실패하면 로컬 등록으로 물러난다.
+ *   · 401 {"error":"unauthorized"} 는 인증 진입점이 돌려주는 것으로, 토큰 만료·무효라는 뜻이다. 예전에는
+ *     /error 가 permitAll 이 아니라서 모든 4xx 가 이 401 로 바뀌었지만 지금은 풀렸다 (SecurityConfig).
+ *     이 401 이면 authFetch 가 그 역할의 세션을 지운다.
+ *   · category 는 secondary_category 코드로 시드돼 있다 (shop_backend_seed.sql). POST /api/products 가
+ *     실패하면 로컬 등록으로 물러난다.
  *   · 새 상품은 DRAFT 로 만들어져 목록에 안 뜬다. 등록 성공 직후 ACTIVE 로 바꾸는 요청을 한 번 더 보낸다.
  */
 import { authFetch, sessionSnapshot } from './auth';
@@ -43,7 +45,10 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const krwToUsd = (krw: number | string | null | undefined): number =>
   krw === null || krw === undefined ? 0 : round2(Number(krw) / KRW_PER_USD);
 
-/** 실패 응답을 한 문장으로. 백엔드가 4xx 를 401 로 바꾸는 버그가 있어 상태 코드만 믿지 않는다 */
+/**
+ * 실패 응답을 화면에 보여 줄 한 문장으로. 같은 상태 코드도 API 마다 뜻이 달라 본문 문구까지 본다.
+ * 화면 문장에는 상태 코드·서버 원문을 넣지 않는다 (고객이 읽는 말). 원문은 개발 중에만 콘솔에 남긴다.
+ */
 async function reasonOf(res: Response): Promise<string> {
   let text = '';
   try {
@@ -51,41 +56,37 @@ async function reasonOf(res: Response): Promise<string> {
   } catch {
     /* 본문 없음 */
   }
-  if (res.status === 401 && text.includes('unauthorized')) {
-    return '백엔드가 요청을 거절했습니다 (401). 로그인 만료이거나, 백엔드가 4xx 를 401 로 돌려주는 알려진 문제일 수 있습니다';
+  if (import.meta.env.DEV) console.warn(`[shopApi] ${res.status} ${res.url}`, text.slice(0, 300));
+  if (res.status === 401) {
+    // 서버의 /error 수정 뒤로 401 은 실제 로그인 만료다 (예전엔 다른 4xx 도 401 로 왔다)
+    return '로그인이 끝났습니다. 다시 로그인한 뒤 시도해 주세요.';
   }
   /*
    * 403·409 는 **어느 API 인지에 따라 뜻이 다르다.** 전에는 둘 다 피드백 화면 문장으로 고정돼 있어서 결제 403 이
    * "구매한 상품에만 남길 수 있다" 로, 품절 409 가 "이미 있는 항목" 으로 떴다 (계약 대조 2026-09-17). 서버 본문의
-   * 문구(CommerceController · FeedbackController)로 가른다. 본문이 낯설면 상태 코드만 적고 원문을 덧붙인다.
+   * 문구(CommerceController · FeedbackController)로 가른다.
    */
   const lower = text.toLowerCase();
   if (res.status === 403) {
-    if (lower.includes('paid purchase')) return '구매한 상품에만 남길 수 있습니다 (403)';
-    if (lower.includes('test payment')) return '테스트 결제는 에이전트 러너 계정만 쓸 수 있습니다 (403). 카카오페이로 결제해 주세요';
-    if (lower.includes('brand')) return '내 브랜드가 아닙니다 (403)';
-    return `권한이 없습니다 (403)${text ? ` — ${text.slice(0, 80)}` : '. 다른 역할의 계정이거나 로그인이 만료됐습니다'}`;
+    if (lower.includes('paid purchase')) return '구매한 상품에만 남길 수 있습니다.';
+    // 테스트 결제(/pay)는 에이전트 러너 계정만 쓸 수 있다
+    if (lower.includes('test payment')) return '이 결제 방법은 쓸 수 없습니다. 카카오페이로 결제해 주세요.';
+    if (lower.includes('brand')) return '내 브랜드 상품이 아닙니다.';
+    return '이 계정으로는 할 수 없습니다. 다시 로그인해 주세요.';
   }
-  if (res.status === 404) return '백엔드에 없는 상품입니다 (404)';
+  if (res.status === 404) return '상품이나 주문 정보를 찾을 수 없습니다.';
   if (res.status === 409) {
-    if (lower.includes('inactive') || lower.includes('unavailable')) return '품절·판매 중지된 상품이 장바구니에 있습니다 (409). 그 상품을 빼고 다시 주문해 주세요';
-    if (lower.includes('idempotency')) return '같은 주문 번호로 다른 내용이 요청됐습니다 (409). 장바구니를 다시 열어 주문해 주세요';
-    if (lower.includes('feedback') || lower.includes('duplicate')) return '이미 남긴 피드백입니다 (409)';
-    return `이미 있는 항목입니다 (409)${text ? ` — ${text.slice(0, 80)}` : ''}`;
+    if (lower.includes('inactive') || lower.includes('unavailable')) return '품절되었거나 판매가 멈춘 상품이 장바구니에 있습니다. 그 상품을 빼고 다시 주문해 주세요.';
+    if (lower.includes('idempotency')) return '장바구니 내용이 바뀌었습니다. 장바구니를 다시 열어 주문해 주세요.';
+    if (lower.includes('feedback') || lower.includes('duplicate')) return '이미 남긴 의견입니다.';
+    return '이미 처리된 요청입니다.';
   }
-  if (res.status >= 500) return `백엔드 오류 (${res.status})`;
-  try {
-    const j = JSON.parse(text) as { message?: string; error?: string };
-    if (j.message) return j.message;
-    if (j.error) return j.error;
-  } catch {
-    /* 텍스트 본문 */
-  }
-  return text ? text.slice(0, 120) : `요청 실패 (${res.status})`;
+  if (res.status >= 500) return '일시적인 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.';
+  return '요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 }
 
 const fail = async (res: Response): Promise<ApiFailure> => ({ ok: false, status: res.status, reason: await reasonOf(res) });
-const offline = (): ApiFailure => ({ ok: false, status: 0, reason: '백엔드에 연결할 수 없습니다' });
+const offline = (): ApiFailure => ({ ok: false, status: 0, reason: '지금은 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.' });
 
 export const hasMemberSession = (): boolean => sessionSnapshot('MEMBER') !== null;
 export const hasSellerSession = (): boolean => sessionSnapshot('SELLER') !== null;
@@ -260,9 +261,8 @@ export type RegisterResult = { ok: true; product: Product; activated: boolean } 
 /**
  * POST /api/products. 폼(snake_case)을 백엔드 record(camelCase)로 옮긴다.
  *
- * categoryId 는 백엔드 `category` 테이블의 id 인데 시드가 비어 있어 무엇을 보내도 지금은 400 이다.
- * 2차 카테고리 코드를 보낸다. 백엔드에 "category 를 secondary_category 코드로 시드해 달라" 고 요청했다.
- * 그 시드가 들어오면 이 함수는 손대지 않아도 통과한다.
+ * categoryId 는 백엔드 `category` 테이블의 id 다. 그 테이블은 secondary_category 코드를 id 로 시드돼 있어
+ * (shop_backend_seed.sql) 폼의 2차 카테고리 코드를 그대로 보낸다.
  */
 export async function registerProductBackend(form: RegistrationForm): Promise<RegisterResult> {
   const brandId = loadBrandId();
@@ -355,7 +355,7 @@ export type OrderListResult = { ok: true; orders: BackendOrder[] } | ApiFailure;
 
 /** 결제 완료된 내 주문 목록. 브라우저 localStorage 주문 내역은 사용하지 않는다. */
 export async function fetchBackendOrders(): Promise<OrderListResult> {
-  if (!hasMemberSession()) return { ok: false, status: 401, reason: '고객 로그인이 없습니다' };
+  if (!hasMemberSession()) return { ok: false, status: 401, reason: '로그인이 필요합니다.' };
   try {
     const res = await authFetch('MEMBER', '/api/orders');
     if (!res.ok) return fail(res);
@@ -381,7 +381,7 @@ export async function submitReview(input: {
   title: string | null;
   body: string;
 }): Promise<ReviewSubmitResult> {
-  if (!hasMemberSession()) return { ok: false, status: 401, reason: '고객 로그인이 없습니다' };
+  if (!hasMemberSession()) return { ok: false, status: 401, reason: '로그인이 필요합니다.' };
   try {
     const res = await authFetch('MEMBER', '/api/reviews', {
       method: 'POST',
@@ -431,7 +431,7 @@ export async function clearBackendCart(): Promise<ClearCartResult> {
        * 비우지 못한 것을 비웠다고 보고하는 셈이라 여기서 멈춘다.
        */
       if (!item.id) {
-        return { ok: false, status: 0, reason: '장바구니 항목에 id 가 없어 비울 수 없습니다' };
+        return { ok: false, status: 0, reason: '장바구니를 정리하지 못했습니다.' };
       }
       const del = await authFetch('MEMBER', `/api/cart/items/${encodeURIComponent(item.id)}`, {
         method: 'DELETE',
@@ -467,7 +467,7 @@ export async function createBackendOrder(items: CartItem[], idempotencyKey: stri
     if (!created.ok) return fail(created);
     const order = (await created.json()) as Record<string, unknown>;
     const orderId = String(order.orderId ?? order.id ?? order.order_id ?? '');
-    if (!orderId) return { ok: false, status: created.status, reason: '주문 응답에 주문 번호가 없습니다' };
+    if (!orderId) return { ok: false, status: created.status, reason: '주문 번호를 받지 못했습니다.' };
     const amt = Number(order.totalAmount ?? order.total_amount);
     return { ok: true, orderId, totalAmountKrw: Number.isFinite(amt) && amt > 0 ? Math.round(amt) : null };
   } catch {
@@ -523,7 +523,7 @@ export type FeedbackSubmitResult = { ok: true; feedbackId: string } | ApiFailure
 
 /** POST /api/feedback. 백엔드가 이 고객의 PAID 주문을 직접 확인한다. 없으면 403 이 정상이다 */
 export async function submitFeedbackBackend(input: { productId: string; axisId: string; body: string }): Promise<FeedbackSubmitResult> {
-  if (!hasMemberSession()) return { ok: false, status: 0, reason: '고객 로그인이 없습니다' };
+  if (!hasMemberSession()) return { ok: false, status: 0, reason: '로그인이 필요합니다.' };
   try {
     const res = await authFetch('MEMBER', '/api/feedback', {
       method: 'POST',

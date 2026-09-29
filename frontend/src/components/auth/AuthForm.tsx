@@ -19,11 +19,11 @@ type Mode = 'login' | 'register';
 /** 가입 동의 항목. 필수 둘이 켜져야 가입 버튼이 눌린다 */
 type ConsentKey = 'terms' | 'privacy' | 'skinInfo' | 'behaviorLink';
 
-const CONSENTS: { key: ConsentKey; required: boolean; label: string; view?: string }[] = [
+const CONSENTS: { key: ConsentKey; required: boolean; label: string; view?: string; hint?: string }[] = [
   { key: 'terms', required: true, label: '이용약관 동의', view: '?terms=1' },
   { key: 'privacy', required: true, label: '개인정보 수집·이용 동의', view: '?privacy=1' },
   { key: 'skinInfo', required: false, label: '피부 정보 수집·이용 동의 (맞춤 추천용)', view: '?privacy=1' },
-  { key: 'behaviorLink', required: false, label: '둘러본 기록을 내 계정과 연결해 추천에 쓰기', view: '?privacy=1' },
+  { key: 'behaviorLink', required: false, label: '둘러본 기록을 내 계정과 연결해 추천에 쓰기', view: '?privacy=1', hint: '끄면 찜·장바구니·구매가 추천에 반영되지 않아 맞춤 추천이 약해져요.' },
 ];
 
 const NO_CONSENT: Record<ConsentKey, boolean> = { terms: false, privacy: false, skinInfo: false, behaviorLink: false };
@@ -270,6 +270,7 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
                       {c.required ? '필수' : '선택'}
                     </em>
                     {c.label}
+                    {c.hint ? <small className="auth__consent-hint">{c.hint}</small> : null}
                   </span>
                 </label>
                 {c.view ? (

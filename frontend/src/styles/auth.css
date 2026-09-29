@@ -971,3 +971,10 @@
   color: #8e8e93;
   font-variant-numeric: tabular-nums;
 }
+
+.auth__consent-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--a-ink-faint);
+}

@@ -11,12 +11,16 @@ export default function Breadcrumb({ items, onHome }: BreadcrumbProps) {
       <ol>
         <li>
           <button type="button" className="breadcrumb__home" onClick={onHome}>
-            Home
+            홈
           </button>
         </li>
+        {/*
+          중간 분류는 글자로만 둔다. 예전에는 `<a href="#">` 라 누르면 맨 위로 튀고 주소에 # 만 붙었다 —
+          분류별 목록 화면이 따로 없어서 갈 곳이 없다.
+        */}
         {items.map((item, index) => (
           <li key={`${item}-${index}`}>
-            {index === items.length - 1 ? <span aria-current="page">{item}</span> : <a href="#">{item}</a>}
+            <span aria-current={index === items.length - 1 ? 'page' : undefined}>{item}</span>
           </li>
         ))}
       </ol>
