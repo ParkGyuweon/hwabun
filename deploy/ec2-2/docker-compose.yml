@@ -74,7 +74,7 @@ services:
     environment:
       ACTIVITY_EVENTS_TOPIC: ${ACTIVITY_EVENTS_TOPIC:-activity-events}
       ACTIVITY_EVENTS_PARTITIONS: ${ACTIVITY_EVENTS_PARTITIONS:-3}
-      KAFKA_TOPIC_RETENTION_MS: ${KAFKA_TOPIC_RETENTION_MS:-86400000}
+      KAFKA_TOPIC_RETENTION_MS: ${KAFKA_TOPIC_RETENTION_MS:-259200000}
     entrypoint: [/bin/bash, -ec]
     command:
       - |
@@ -82,6 +82,11 @@ services:
           --create --if-not-exists --topic "$$ACTIVITY_EVENTS_TOPIC" \
           --partitions "$$ACTIVITY_EVENTS_PARTITIONS" --replication-factor 1 \
           --config cleanup.policy=delete --config "retention.ms=$$KAFKA_TOPIC_RETENTION_MS"
+        # --if-not-exists leaves an existing topic untouched, so re-apply retention
+        # explicitly. Idempotent: same value -> no-op on the broker.
+        /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+          --alter --entity-type topics --entity-name "$$ACTIVITY_EVENTS_TOPIC" \
+          --add-config "retention.ms=$$KAFKA_TOPIC_RETENTION_MS"
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
           --describe --topic "$$ACTIVITY_EVENTS_TOPIC"
 
@@ -146,7 +151,7 @@ services:
 
   spark-raw-sink:
     <<: *spark-runtime
-    restart: on-failure:5
+    restart: unless-stopped
     entrypoint: [/opt/spark/bin/spark-submit]
     command:
       - --master

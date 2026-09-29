@@ -60,7 +60,7 @@ sink의 책임이다. 업무 Event 중복 제거와 semantic validation은 Proce
 | Partition | 3 |
 | Replication factor | 1 |
 | Cleanup policy | `delete` |
-| Retention | 86,400,000ms, 24시간 |
+| Retention | 259,200,000ms, 72시간 (2026-09-29 24시간에서 상향) |
 | Producer acks | `all` |
 | Producer idempotence | 활성화 |
 | Compression | `lz4` |

@@ -176,7 +176,7 @@ Partition 수를 늘리면 같은 Key의 대상 Partition이 달라질 수 있�
 | Replication Factor | 현행 생성 코드 1 | Broker 3대 이상 확보 시 3 제안 |
 | `min.insync.replicas` | 1 제안 | RF 3 구성에서 2 제안 |
 | `cleanup.policy` | `delete` 제안 | `delete` 제안 |
-| `retention.ms` | 24시간을 초기 실험값으로 제안 | 허용 장애 시간·따라잡기 시간·여유분으로 산정 |
+| `retention.ms` | 72시간 (EC2-2 적용값. 초기 실험값 24시간에서 상향) | 허용 장애 시간·따라잡기 시간·여유분으로 산정 |
 | 데이터 볼륨 | 재시작 후 유지되는 로컬 볼륨 | 독립 장애 영역의 영속 디스크 |
 | Checkpoint | Job별 경로. 로컬 실험 한정 | 실행 컨테이너와 분리된 영속 저장소 |
 | Kafka/Spark 버전 | 미정. 구현 시 호환 버전 고정 | 로컬과 동일 조합부터 검증 |
@@ -206,6 +206,17 @@ KRaft Controller는 데이터 복제본과 별개의 메타데이터 합의를 �
   × Replication Factor
   × 실측 저장 크기 보정 및 운영 여유
 ```
+
+EC2-2의 72시간 보존 추정 (측정값이 아니라 가정을 적은 상한이다):
+
+```text
+하루 최대 100만 건(가정) × 1KB(압축 전 JSON 상한 가정) × 3일 × RF1
+  ≈ 3GB  (Producer lz4 압축이 적용되므로 실제는 이보다 작다)
+```
+
+2026-09-21 기준 EC2-2 디스크 309G 중 20G 사용이므로 3GB는 약 1%이고,
+`streaming/README.md`의 디스크 70% 경고선에 영향을 주지 않는다. 실제 값은
+`docker system df -v` 또는 Volume `hwabun-ec2-2-kafka-data`의 `du -sh`로 재어 이 추정을 갱신한다.
 
 Peak TPS, 큰 Event의 p95/최대 크기, Partition별 쏠림, 재전송량도 별도로 측정한다. Kafka 보존 기간은 Raw 적재 Job의 장애 시간과 복구 후 따라잡는 시간을 감당해야 한다. Raw 장기 보존 기간은 데이터 파트와 별도로 정한다.
 
