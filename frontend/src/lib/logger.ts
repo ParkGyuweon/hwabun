@@ -604,9 +604,17 @@ export function isSuppressed(): boolean {
 }
 
 export function track(eventName: EventName, properties: Record<string, unknown> = {}): void {
-  // 30분 비활성 뒤 첫 이벤트면 지금 화면으로 새 세션을 열고(session_start·page_view) 그 뒤에 이 이벤트를 싣는다
-  if (startedSessionKey !== NOT_STARTED && isSessionIdle()) beginFreshSession(context.productId);
-  lastActivityAt = Date.now();
+  /*
+   * 30분 비활성 뒤 첫 이벤트면 지금 화면으로 새 세션을 열고(session_start·page_view) 그 뒤에 이 이벤트를 싣는다.
+   * 단 **떠나는 중에 나는 이벤트**(exit_summary, 탭이 숨겨진 뒤 useExitSummary·useSectionView 가 내는 마감 이벤트)는
+   * 활동이 아니다. 이탈 이벤트 하나 싣자고 세션을 새로 열지 않고 지금 세션에 붙이며, 활동 시각도 갱신하지 않는다 —
+   * 그래야 다음 실제 행동이 여전히 새 세션을 연다.
+   */
+  const leaving = eventName === 'exit_summary' || (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+  if (!leaving) {
+    if (startedSessionKey !== NOT_STARTED && isSessionIdle()) beginFreshSession(context.productId);
+    lastActivityAt = Date.now();
+  }
   // 판매자·운영자의 행동은 고객 행동이 아니다. 만들어서 화면 로그 창에는 보여 주되 **쌓지도 보내지도 않는다**
   const suppressed = isStaffSession();
   if (suppressed) {
