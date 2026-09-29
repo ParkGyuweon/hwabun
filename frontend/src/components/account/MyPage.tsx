@@ -154,7 +154,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
             </button>
             {saveState ? (
               <span className="mypage__saved">
-                {saveState.where === 'server' ? '저장했습니다' : '서버에 연결되지 않아 이 브라우저에만 저장했습니다'}
+                {saveState.where === 'server' ? '저장했습니다' : '지금은 계정에 저장하지 못해 이 기기에만 저장해 두었습니다'}
               </span>
             ) : null}
           </div>
@@ -166,7 +166,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
           {ordersLoading ? (
             <p className="mypage__empty">주문 내역을 불러오는 중입니다.</p>
           ) : ordersError ? (
-            <p className="mypage__empty">주문 내역을 불러오지 못했습니다. {ordersError}</p>
+            <p className="mypage__empty">주문 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
           ) : orders.length === 0 ? (
             <p className="mypage__empty">결제 완료된 주문이 없습니다.</p>
           ) : (
@@ -181,7 +181,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
                     <span>상품 {o.itemCount}개</span>
                     <strong>{Math.round(o.paidAmount ?? o.totalAmount).toLocaleString('ko-KR')}원</strong>
                     <span className="mypage__order-mode mypage__order-mode--backend">
-                      {o.paymentProvider === 'PORTONE_TEST' ? '카카오페이 테스트 결제' : '서버 테스트 결제'}
+                      {o.paymentProvider === 'PORTONE_TEST' ? '카카오페이 테스트 결제' : '테스트 결제'}
                     </span>
                   </div>
 
@@ -241,7 +241,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
             </nav>
           ) : null}
           <p className="mypage__note">
-            백엔드에서 확인된 결제 완료 주문만 표시됩니다.
+            결제가 끝난 주문만 보입니다.
             {orders.length > ORDERS_PER_PAGE
               ? ` 전체 ${orders.length}건 중 ${(page - 1) * ORDERS_PER_PAGE + 1}–${Math.min(orders.length, page * ORDERS_PER_PAGE)}건.`
               : ''}
