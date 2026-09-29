@@ -334,10 +334,22 @@ interface IngredientSource {
   synonyms: Record<string, string[]>;
   position_formula: string;
   position_min: number;
+  regulatory_rule?: {
+    functional_full_weight?: Record<string, string[]>;
+    synonym_exclude?: Record<string, string[]>;
+  };
 }
 
 const INGREDIENT_SOURCE = (vocab as unknown as { ingredient_source: IngredientSource }).ingredient_source;
 const POS_MIN = INGREDIENT_SOURCE.position_min ?? 0.1;
+/**
+ * 규제 보정 (어휘집 regulatory_rule). 추천 쪽은 기본 끔이지만 **이 화면은 표시용이라 항상 켠다.**
+ * ① 식약처 기능성 고시 원료(아데노신·나이아신아마이드·레티놀·비타민C 유도체)는 위치와 무관하게 1.0 —
+ *    함량 1% 이하 성분은 순서에 상관없이 적을 수 있어(화장품법 시행규칙 별표 4) 뒤쪽이라고 미량이 아니다.
+ * ② 산화아연은 자외선차단 성분이라 SPF 로만 센다 (Zinc 에서 뺀다).
+ */
+const FULL_WEIGHT = INGREDIENT_SOURCE.regulatory_rule?.functional_full_weight ?? {};
+const SYN_EXCLUDE = INGREDIENT_SOURCE.regulatory_rule?.synonym_exclude ?? {};
 /** 태그 성분이 전성분 앞 30% 안에 없으면 "미량". 명세 I2 */
 export const MINOR_WEIGHT = 0.3;
 
@@ -346,6 +358,7 @@ const splitFull = (p: Product): string[] => splitIngredients(p.ingredients).map(
 
 /**
  * 성분 30종의 위치가중. 전성분에서 처음 나오는 자리로 `max(1 - 위치/전체, 0.1)` (어휘집 position_formula).
+ * 기능성 고시 원료는 위치와 무관하게 1.0, 산화아연은 Zinc 가 아니라 SPF (위 규제 보정).
  * 태그(highlights)에 있으면 1.0 · AI 파트 상품 벡터와 같은 규칙이라 "긁은 성분" 과 "든 성분" 이 같은 이름으로 만난다.
  */
 export function ingredientWeights(p: Product): Map<string, number> {
@@ -357,9 +370,12 @@ export function ingredientWeights(p: Product): Map<string, number> {
       out.set(name, 1);
       continue;
     }
-    const lowered = syns.map((s) => s.toLowerCase());
+    const drop = new Set((SYN_EXCLUDE[name] ?? []).map((s) => s.toLowerCase()));
+    const lowered = syns.map((s) => s.toLowerCase()).filter((s) => !drop.has(s));
     const idx = parts.findIndex((part) => lowered.some((s) => part.includes(s)));
     if (idx >= 0 && parts.length > 0) out.set(name, Math.max(1 - idx / parts.length, POS_MIN));
+    const full = (FULL_WEIGHT[name] ?? []).map((s) => s.toLowerCase());
+    if (full.length && parts.some((part) => full.some((s) => part.includes(s)))) out.set(name, 1);
   }
   return out;
 }
