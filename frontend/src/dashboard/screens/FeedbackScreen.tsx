@@ -45,7 +45,14 @@ const AXIS_COLOR: Record<string, string> = {
 };
 
 /** 업체 처리 상태 문구 (백엔드 계약 2026-09-18). new=OPEN · read=ACKNOWLEDGED · reflected=IMPLEMENTED */
-const STATUS_KO = { new: '아직 안 봤어요', read: '답변했어요', reflected: '반영했어요' } as const;
+const STATUS_KO = { new: '아직 안 봤어요', read: '확인했어요', reflected: '반영했어요' } as const;
+
+/**
+ * 카드에 붙는 상태 문구. 서버는 답변(REPLIED)과 확인만(ACKNOWLEDGED)을 둘 다 ACKNOWLEDGED 로 두므로
+ * read 는 실제로 남긴 답변(reply — 마지막 응답이 REPLIED 일 때 채워진다)이 있을 때만 "답변했어요"라 부른다.
+ */
+const statusLabel = (f: Pick<Feedback, 'status' | 'reply'>) =>
+  f.status === 'read' && f.reply ? '답변했어요' : STATUS_KO[f.status];
 
 /** 분류기가 아직 종류를 정하지 못한 글에 붙이는 이름. 화면 곳곳에서 같은 말을 쓴다 */
 const PENDING_LABEL = '종류 나누는 중';
@@ -566,7 +573,7 @@ export default function FeedbackScreen({ brandId, brandName }: { brandId: string
                       </span>
                     ) : null}
                     <span className="fbx-card__when">{f.created_at.slice(0, 10)}</span>
-                    <span className={`fbx-status fbx-status--${f.status}`}>{STATUS_KO[f.status]}</span>
+                    <span className={`fbx-status fbx-status--${f.status}`}>{statusLabel(f)}</span>
                   </div>
 
                   {hidden ? (

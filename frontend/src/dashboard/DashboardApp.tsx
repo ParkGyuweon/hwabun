@@ -413,11 +413,12 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
 /** 사이드바 하단. 행동 지표가 어디서 왔는지 한 줄 (계약 §7) */
 function MartNote() {
   const state = useMartState();
-  const { anyReal, martProcessedAt } = useBehavior();
+  const { anyReal } = useBehavior();
   let line: string;
   if (state === 'idle') line = '브랜드를 고르면 불러옵니다';
   else if (state === 'loading') line = '행동 기록을 불러오는 중';
-  else if (anyReal) line = martProcessedAt ? `${fmtProcessedAt(martProcessedAt)}까지 반영` : '행동 기록을 불러왔습니다';
+  // 배치 시각("9월 28일 03:56까지 반영")은 늦어도 맞아도 사장님 눈에 거슬려서 적지 않는다 (유림님)
+  else if (anyReal) line = '행동 기록을 불러왔습니다';
   else if (state === 'ready') line = '이 기간 행동 기록이 없습니다';
   else line = '행동 기록을 못 불러왔습니다';
   return (
@@ -429,14 +430,4 @@ function MartNote() {
       {line}
     </p>
   );
-}
-
-/**
- * "2026-09-20T18:56:03+09:00" → "9월 20일 18:56". 사장님이 읽는 시각이라 날짜 형식을 풀어 쓴다.
- * 서버(DashboardMartService.timestampText)가 DW 의 UTC 값을 이미 KST(+09:00)로 바꿔 보낸다. 여기서는 시간대를 다시 바꾸지 않는다.
- */
-function fmtProcessedAt(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
-  if (!m) return iso.slice(0, 16).replace('T', ' ');
-  return `${Number(m[2])}월 ${Number(m[3])}일 ${m[4]}:${m[5]}`;
 }

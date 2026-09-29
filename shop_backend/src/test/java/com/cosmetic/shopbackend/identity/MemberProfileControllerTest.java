@@ -1,6 +1,7 @@
 package com.cosmetic.shopbackend.identity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,6 +60,26 @@ class MemberProfileControllerTest {
     assertNull(m.getHairColorCode());
     assertEquals("brown", m.getEyeColorCode());
     assertEquals("dry", p.skinTypeCode());
+    // 마이페이지에서 스스로 저장하면 피부 정보 동의로 본다. 가입 판(consent_version)은 그대로
+    assertNotNull(m.getSkinInfoAgreedAt());
+    assertNull(m.getConsentVersion());
+  }
+
+  @Test
+  void clearingAllFourDoesNotRecordSkinInfoConsent() {
+    MemberRepository members = mock(MemberRepository.class);
+    Member m = member();
+    when(members.findById("m-1")).thenReturn(Optional.of(m));
+    when(members.save(any(Member.class))).thenAnswer(inv -> inv.getArgument(0));
+    MemberProfileController c = new MemberProfileController(members);
+
+    c.update(
+      new ShopPrincipal("m-1", AccountRole.MEMBER),
+      new MemberProfileController.Profile(null, "", null, null)
+    );
+
+    assertNull(m.getSkinTypeCode());
+    assertNull(m.getSkinInfoAgreedAt());
   }
 
   @Test

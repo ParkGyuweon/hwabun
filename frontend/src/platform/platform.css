@@ -194,6 +194,19 @@ table.data--tenants tbody tr {
   cursor: pointer;
 }
 
+/* 브랜드 이름 칸 버튼: 키보드(Tab·Enter·Space)로 행을 고른다. 모양은 글자 그대로 */
+.row-pick {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.row-pick:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 table.data--tenants tr.is-selected td {
   background: var(--brand-soft);
 }
