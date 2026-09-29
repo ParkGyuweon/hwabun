@@ -482,3 +482,18 @@ export async function fetchMartBundle(q: MartQuery): Promise<MartBundle> {
 export function hasRows<T extends MartEnvelope>(p: T | null): p is T {
   return p !== null && p.source.coverage !== 'none';
 }
+
+/* ---------- 데이터 구성 (`GET /api/seller/dashboard/composition`) ---------- */
+
+/**
+ * 이 브랜드 방문이 어디서 왔는지 (brand_daily_kpi.product_view_sessions, 개요 "방문" 과 같은 값).
+ * real = 실제 고객(actor_type=user) · simulated = 프로그램이 만든 가상 고객 · agent = AI 가 고객 역할로 돈 방문.
+ * 기간은 화면 기간을 따르고, actorType 은 받지 않는다 (전체를 나누는 것이 목적).
+ */
+export interface CompositionPayload extends MartEnvelope {
+  real_visits: number;
+  simulated_visits: number;
+  agent_visits: number;
+}
+
+export const fetchComposition = (q: Pick<MartQuery, 'brandId' | 'days'>) => getMart<CompositionPayload>('composition', q);
