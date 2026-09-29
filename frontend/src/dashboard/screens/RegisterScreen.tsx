@@ -16,6 +16,8 @@ import {
 } from '../../lib/productRegistry';
 import type { RegistrationForm } from '../../lib/productRegistry';
 import { HIGHLIGHT_GROUPS, SECONDARY_CATEGORIES, labelKo } from '../../lib/formLabels';
+import { claimMessage, findClaimTerms } from '../../lib/claimTerms';
+import type { ClaimHit } from '../../lib/claimTerms';
 
 const DRAFT_DEBOUNCE_MS = 250;
 /** 대표 이미지 파일 상한. localStorage 에 data URL 로 들어가므로 작게 */
@@ -36,6 +38,24 @@ function filled(form: RegistrationForm, key: RequiredField): boolean {
   const v = form[key];
   if (key === 'price_krw') return v !== '' && Number(v) > 0;
   return typeof v === 'string' && v.trim().length > 0;
+}
+
+/**
+ * 고객에게 그대로 보이는 글 칸. 화장품 광고에 못 쓰는 표현(치료·재생·아토피 …)이 들어가면 칸 밑에 알려 준다.
+ * 등록은 막지 않는다 (lib/claimTerms.ts). 전성분은 성분명이라 보지 않는다
+ */
+const CLAIM_FIELDS = ['product_name', 'what_it_is', 'highlighted_ingredients', 'ingredient_callouts', 'suggested_usage', 'brand_story'] as const;
+type ClaimField = (typeof CLAIM_FIELDS)[number];
+
+function ClaimNote({ hits }: { hits: ClaimHit[] }) {
+  if (!hits.length) return null;
+  return (
+    <div className="reg-note reg-note--claim" role="status">
+      {hits.map((h) => (
+        <p key={h.term}>{claimMessage(h)}</p>
+      ))}
+    </div>
+  );
 }
 
 const FIELD_HELP: Record<RequiredField, string> = {
@@ -75,6 +95,10 @@ export default function RegisterScreen() {
   const [dragOver, setDragOver] = useState(false);
 
   const { errors, warnings } = useMemo(() => validateForm(form), [form]);
+  const claims = useMemo(
+    () => Object.fromEntries(CLAIM_FIELDS.map((k) => [k, findClaimTerms(form[k])])) as Record<ClaimField, ClaimHit[]>,
+    [form],
+  );
   const tertiaries = CATEGORY_TREE.get(form.secondary_category) ?? [];
   const doneCount = REQUIRED.filter((r) => filled(form, r.key)).length;
   const showError = (key: RequiredField) => (attempted || touched[key]) && !filled(form, key);
@@ -235,6 +259,7 @@ export default function RegisterScreen() {
                 aria-invalid={showError('product_name')}
               />
               {showError('product_name') ? <p className="reg-error">{FIELD_HELP.product_name}</p> : null}
+              <ClaimNote hits={claims.product_name} />
             </div>
 
             <div className="reg-row">
@@ -440,23 +465,28 @@ export default function RegisterScreen() {
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-what">이 제품은</label>
               <textarea id="reg-what" className="reg-input reg-textarea" rows={3} value={form.what_it_is} onChange={(e) => set('what_it_is', e.target.value)} placeholder="어떤 피부의 어떤 고민을 위해 만든 제품인지 한 문단" />
+              <ClaimNote hits={claims.what_it_is} />
             </div>
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-hi">앞세울 성분</label>
               <textarea id="reg-hi" className="reg-input reg-textarea" rows={3} value={form.highlighted_ingredients} onChange={(e) => set('highlighted_ingredients', e.target.value)} placeholder={'줄마다 "성분: 설명"\n병풀추출물: 각질 제거 후 진정\n나이아신아마이드: 톤과 결 정돈'} />
               <p className="reg-hint">상세 페이지에 보여 주는 용도입니다. 추천에는 반영되지 않습니다.</p>
+              <ClaimNote hits={claims.highlighted_ingredients} />
             </div>
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-callout">성분 안내</label>
               <input id="reg-callout" className="reg-input" value={form.ingredient_callouts} onChange={(e) => set('ingredient_callouts', e.target.value)} placeholder="파라벤 무첨가. 향료 포함" />
+              <ClaimNote hits={claims.ingredient_callouts} />
             </div>
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-usage">사용법</label>
               <textarea id="reg-usage" className="reg-input reg-textarea" rows={3} value={form.suggested_usage} onChange={(e) => set('suggested_usage', e.target.value)} placeholder="토너 후 2~3방울을 …" />
+              <ClaimNote hits={claims.suggested_usage} />
             </div>
             <div className="reg-field">
               <label className="reg-label" htmlFor="reg-story">브랜드 이야기</label>
               <textarea id="reg-story" className="reg-input reg-textarea" rows={3} value={form.brand_story} onChange={(e) => set('brand_story', e.target.value)} placeholder="왜 이 브랜드를 만들었는지. 고객이 의견을 남길 때 보는 자리입니다" />
+              <ClaimNote hits={claims.brand_story} />
             </div>
           </section>
 
