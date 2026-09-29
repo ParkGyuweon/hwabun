@@ -129,6 +129,32 @@ ING_SYNONYMS_KO = {
 for _name, _ko in ING_SYNONYMS_KO.items():
     ING_SYNONYMS[_name].extend(_ko)
 POS_MIN = 0.10          # 전성분 뒤쪽 성분의 하한 (미량 성분 과대평가 방지)
+
+# 규제 보정 규칙 (2026-09-29). **인코더 기본값은 끔** — 켜려면 INGREDIENT_REGULATORY_RULE=1.
+# ① 식약처 기능성 고시 원료는 전성분 위치와 무관하게 1.0.
+#    화장품법 시행규칙 별표 4(포장의 표시기준)상 **함량 1% 이하 성분·착향제·착색제는 순서 무관** 표기라
+#    뒤쪽 = 미량이 성립하지 않는다. 아데노신은 고시 함량이 0.04% 라 효능 함량이어도 늘 뒤쪽에 온다
+#    (Cicapair 의 Adenosine 0.355). 고시 함량 표: docs/ai/ingredient-domain-guide.md §1-1
+# ② 산화아연(zinc oxide)은 자외선차단 고시 성분이라 SPF 로만 센다. Zinc(피지·진정) 에도 걸면
+#    무기자차 선크림이 Zinc 축까지 열려 이중 집계된다. SPF 동의어에는 이미 있다
+# synonyms 자체는 바꾸지 않는다 — 프론트 긁기 매칭(useTextSelection)·배너·목업이 그대로 읽는다
+REGULATORY_RULE = {
+    "_note": "기본 꺼짐 (서빙 모델 불변). INGREDIENT_REGULATORY_RULE=1 이면 인코더가 적용, "
+             "대시보드 성분 화면은 표시용으로 항상 적용. "
+             "근거: 화장품법 시행규칙 별표 4 — 1% 이하 성분은 순서에 상관없이 표시 가능",
+    "flag_env": "INGREDIENT_REGULATORY_RULE",
+    "default": False,
+    # 고시 원료 INCI(소문자 부분일치) -> 어휘 값. 알부틴은 어휘 30종 밖이라 목록에만 둔다
+    "functional_full_weight": {
+        "Niacinamide": ["niacinamide", "나이아신아마이드", "니아신아마이드"],
+        "Vitamin C": ["ascorbyl glucoside", "ethyl ascorbyl ether", "3-o-ethyl ascorbic acid",
+                      "아스코빌글루코사이드", "에칠아스코빌에텔"],
+        "Adenosine": ["adenosine", "아데노신"],
+        "Retinol": ["retinol", "retinyl palmitate", "레티놀", "레티닐팔미테이트"],
+    },
+    "functional_not_in_vocab": ["arbutin", "알부틴"],
+    "synonym_exclude": {"Zinc": ["zinc oxide", "징크옥사이드", "산화아연"]},
+}
 PAREN_RE = re.compile(r"\([^)]*\)")
 NOISE_RE = re.compile(r"^(water|aqua|eau)$|^\d|^and$|^or$|^may contain")
 SPLIT_RE = re.compile("[,;" + chr(10) + "]")
@@ -283,6 +309,7 @@ spec = {
         "position_formula": "max(1 - 등장위치/전체성분수, POS_MIN)",
         "position_min": POS_MIN,
         "vocab_criteria": "상위 200개 중 5~120개 상품 보유",
+        "regulatory_rule": REGULATORY_RULE,
     },
     "attribute_affinity": {
         "_note": "콘텐츠 벡터가 아니라 추천 점수의 속성 항(attr_affinity)에서 소비된다. "

@@ -63,8 +63,20 @@ def brand_key(x):
     return str(bid)
 
 
+REGULATORY_RULE_ENV = "INGREDIENT_REGULATORY_RULE"
+
+
+def regulatory_rule_enabled(value=None):
+    """성분 규제 보정 규칙 스위치. **기본 끔** — 서빙 중인 LTR 모델(ltr_model_meta.json)은 이 규칙 없이
+    학습됐으므로 켜면 상품 벡터가 바뀐다. 명시 인자 > 환경변수 INGREDIENT_REGULATORY_RULE(1/true/on) 순"""
+    if value is not None:
+        return bool(value)
+    return os.environ.get(REGULATORY_RULE_ENV, "").strip().lower() in ("1", "true", "on", "yes")
+
+
 class Encoder:
-    def __init__(self, vocab_path=None, products_path=None, review_concern_path=None):
+    def __init__(self, vocab_path=None, products_path=None, review_concern_path=None,
+                 regulatory_rule=None):
         vocab_path = vocab_path or VOCAB
         products_path = products_path or PRODUCTS
         self.V = json.load(open(vocab_path, encoding="utf-8"))
@@ -78,6 +90,14 @@ class Encoder:
         self.N = len(self.products)
         self.ing_syn = self.V["ingredient_source"]["synonyms"]
         self.pos_min = self.V["ingredient_source"]["position_min"]
+        # 규제 보정 (어휘집 ingredient_source.regulatory_rule). 꺼져 있으면 예전과 비트 단위로 같다
+        rule = self.V["ingredient_source"].get("regulatory_rule") or {}
+        self.regulatory_rule = regulatory_rule_enabled(regulatory_rule) and bool(rule)
+        self.ing_full = rule.get("functional_full_weight", {}) if self.regulatory_rule else {}
+        if self.regulatory_rule:
+            drop = {k: set(v) for k, v in rule.get("synonym_exclude", {}).items()}
+            self.ing_syn = {k: [s for s in v if s not in drop.get(k, ())]
+                            for k, v in self.ing_syn.items()}
         self.clean_set = set(self.blk["clean"]["vocab"])
         self.tex_set = set(self.blk["texture"]["vocab"])
         self.review_concern = self._load_review_concern(review_concern_path)
@@ -172,6 +192,12 @@ class Encoder:
                 if any(sy in tok for sy in syns):
                     vals[name] = max(1.0 - pos / n, self.pos_min)
                     break
+            # 식약처 기능성 고시 원료는 위치와 무관하게 1.0 (규제 보정, 기본 끔). 함량 1% 이하 성분은
+            # 순서에 상관없이 적을 수 있어(화장품법 시행규칙 별표 4) 0.04% 가 효능 함량인 아데노신이
+            # 늘 뒤쪽에 온다. 고시 INCI 가 전성분 **어디든** 있으면 된다
+            full = self.ing_full.get(name)
+            if full and vals.get(name, 0.0) < 1.0 and any(f in tok for tok in lst for f in full):
+                vals[name] = 1.0
         # SPF 는 제품명의 법정 표기("SPF 36", "SPF50+")로도 켠다. 미국 선크림은 자차 활성성분을 Drug Facts 에
         # 따로 적어 Sephora 전성분 텍스트에 없다(원천 2개: P456392·P456398). 등록 상품 이름도 같은 표기를
         # 쓰므로 두 집합에 같은 규칙이다. 규제 표기라 1.0 (2026-09-10, Jira 243)
