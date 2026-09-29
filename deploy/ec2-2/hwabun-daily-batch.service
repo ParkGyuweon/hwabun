@@ -3,6 +3,9 @@ Description=HWABUN daily Spark mart batch and DW projection
 Wants=network-online.target
 After=network-online.target docker.service
 Requires=docker.service
+# Non-zero exit (Q2~Q4 abort, Q5 or DW publish failure) -> post to the webhook in
+# /etc/hwabun/alert.env. No URL configured -> the notifier only logs.
+OnFailure=hwabun-batch-notify@%n.service
 
 [Service]
 Type=oneshot

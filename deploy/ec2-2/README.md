@@ -153,6 +153,32 @@ Q1 Raw Sink가 1코어를 쓰므로 Worker가 기본 2코어라면 배치의 `sp
 EC2 자원을 확인하고 `SPARK_WORKER_CORES`를 최소 3으로 설정해야 한다. Q5는 현재 전체
 결정성 검사를 수행하므로 완료까지 시간이 걸릴 수 있다.
 
+### 실패·지연 알림
+
+배치는 lock을 잡은 모든 실행마다 `/opt/hwabun/data/validation/daily-batch-status.json`
+(`DAILY_BATCH_STATUS_PATH`)에 결과를 남긴다. `status`·`exit_code`·`failed_stage`·
+`q5_rc`·`publish_rc`와 **마지막 성공 시각 `last_success_at`**이 들어 있고, 실패한
+실행은 이전 `last_success_at`을 그대로 둔다.
+
+- **실패 알림**: service의 `OnFailure=`가 `hwabun-batch-notify@.service`를 띄워
+  `notify-batch-failure.sh`가 Webhook에 Mattermost 형식(`{"text": ...}`)으로 알린다.
+  URL은 저장소가 아니라 `/etc/hwabun/alert.env`에 둔다. 파일이나 URL이 없으면 로그만
+  남기고 성공 종료하므로 설치만 해 두어도 안전하다.
+- **지연 감시**: `check-batch-freshness.sh`는 마지막 성공이 26시간
+  (`DAILY_BATCH_MAX_AGE_HOURS`)보다 오래되면 1, 상태 파일이 없으면 2로 끝난다.
+  timer 자체가 안 돈 경우처럼 `OnFailure`가 못 잡는 상황을 cron·모니터링에서 잡는다.
+
+```bash
+sudo cp hwabun-batch-notify@.service /etc/systemd/system/
+sudo install -d -m 700 /etc/hwabun
+echo 'HWABUN_ALERT_WEBHOOK_URL=https://<mattermost>/hooks/<id>' | sudo tee /etc/hwabun/alert.env >/dev/null
+sudo chmod 600 /etc/hwabun/alert.env
+sudo systemctl daemon-reload
+# 알림 경로만 시험 (배치를 돌리지 않는다)
+sudo systemctl start hwabun-batch-notify@hwabun-daily-batch.service.service
+bash check-batch-freshness.sh
+```
+
 선택 단계: `RAW_COMPACTION_ENABLED=1`이면 Q2 앞에서 전날(UTC) `raw_ingest_date`
 파티션을 128MB 단위로 다시 쓴다. **기본값은 0(꺼짐)**이다. Q1 sink 로그
 (`_spark_metadata`)가 있는 현재 구성에서는 켜도 Job이 스스로 건너뛴다. 이유와 전제는

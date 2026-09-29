@@ -16,6 +16,48 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# Freshness signal: every run that got the lock leaves a small JSON with its
+# result and the time of the last fully successful run. Alerting only has to
+# read one file (check-batch-freshness.sh), and a failed run keeps the previous
+# last_success_at so staleness is visible even when nobody reads the journal.
+status_path="${DAILY_BATCH_STATUS_PATH:-/opt/hwabun/data/validation/daily-batch-status.json}"
+started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+stage="startup"
+validate_rc=0
+publish_rc=0
+
+write_status() {
+  local rc="$1"
+  local finished_at last_success status tmp
+  finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  last_success=""
+  if [ -f "$status_path" ]; then
+    last_success="$(sed -n 's/^  "last_success_at": "\(.*\)",\{0,1\}$/\1/p' "$status_path" | head -n 1)"
+  fi
+  if [ "$rc" -eq 0 ]; then
+    status="success"
+    last_success="$finished_at"
+  else
+    status="failed"
+  fi
+  mkdir -p "$(dirname "$status_path")"
+  tmp="$status_path.tmp.$$"
+  cat >"$tmp" <<JSON
+{
+  "status": "$status",
+  "exit_code": $rc,
+  "failed_stage": "$([ "$rc" -eq 0 ] && echo "" || echo "$stage")",
+  "q5_rc": $validate_rc,
+  "publish_rc": $publish_rc,
+  "started_at": "$started_at",
+  "finished_at": "$finished_at",
+  "last_success_at": "$last_success"
+}
+JSON
+  mv -f "$tmp" "$status_path"
+}
+trap 'write_status $? || echo "WARNING: could not write $status_path" >&2' EXIT
+
 cd "$compose_dir"
 compose=(docker compose --project-directory "$compose_dir")
 
@@ -35,11 +77,13 @@ wait_for_service() {
   return 1
 }
 
+stage="spark_startup"
 echo "starting Spark services"
 "${compose[@]}" up -d --no-build spark-master spark-worker
 wait_for_service spark-master 8080
 wait_for_service spark-worker 8081
 
+stage="salt_check"
 if ! "${compose[@]}" exec -T spark-master bash -ec '
   test -n "${COMMONS_HASH_SALT//[[:space:]]/}"
 '; then
@@ -70,6 +114,7 @@ submit() {
 # Turning this on is harmless today but only pays off once Q2 stops relying on
 # the sink log. A failure never blocks Q2: the original partition is kept.
 if [ "${RAW_COMPACTION_ENABLED:-0}" = "1" ]; then
+  stage="raw_compaction"
   echo "compacting previous raw_ingest_date partition"
   submit compact_raw_partition_job \
     || echo "WARNING: raw compaction failed; original partition kept, continuing" >&2
@@ -79,6 +124,7 @@ fi
 # from a failed stage would put wrong numbers on the dashboard.
 echo "running Q2~Q4"
 for job in clean_events_job derive_facts_job build_marts_job; do
+  stage="$job"
   submit "$job"
 done
 
@@ -90,6 +136,7 @@ done
 # 2026-09-18 that was 13 failures, 7 of them from one real user on a stale
 # frontend bundle. Record the failure, publish anyway, and keep it in the exit
 # code so systemd and CI still mark the run as failed.
+stage="validate_pipeline_job"
 echo "running Q5 (validation)"
 validate_rc=0
 submit validate_pipeline_job \
@@ -102,6 +149,7 @@ fi
 
 # The projection publishes each Mart atomically (staging table + RENAME) and keeps
 # going when one Mart fails, so a single bad Mart no longer blocks the others.
+stage="dw_projection"
 echo "publishing DW marts"
 publish_rc=0
 "${compose[@]}" --profile dw run --rm --no-deps dw-projection || publish_rc=$?
@@ -110,6 +158,7 @@ if [ "$publish_rc" -ne 0 ]; then
   echo "         See the dw-projection report for the per-Mart status." >&2
 fi
 
+stage="q5_or_publish"
 if [ "$validate_rc" -ne 0 ] || [ "$publish_rc" -ne 0 ]; then
   echo "daily batch completed with failures (Q5=$validate_rc, publish=$publish_rc)" >&2
   exit 1
