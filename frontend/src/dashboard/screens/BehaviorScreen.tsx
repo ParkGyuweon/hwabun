@@ -151,10 +151,14 @@ export default function BehaviorScreen() {
         </Panel>
       </div>
 
-      {/* 접힘 안에 또 접힌 패널이 있어 두 번 눌러야 했다 (2026-09-22 은솔님). 패널 하나만 접어 둔다 */}
-      <Panel title={`행동 종류별 기록 건수 · ${eventVolumes.length}가지`} source={source.friction} fold aside="많이 일어난 순서">
-        <BarList items={eventVolumes.map((e) => ({ label: EVENT_KO[e.name] ?? e.name, value: e.count }))} format={fmt.compact} />
-      </Panel>
+      {/* 행동별 횟수는 사장님이 판단할 거리가 아니라 뒷받침이라 맨 아래 "자세히 보기" 한 번만 접어 둔다.
+          접힘 안에 또 접힌 패널을 두면 두 번 눌러야 한다 (2026-09-22 은솔님) — 그래서 패널 없이 목록만 넣는다 */}
+      {eventVolumes.length ? (
+        <details className="fold">
+          <summary>자세히 보기 · 고객이 한 행동을 많은 순서로</summary>
+          <BarList items={eventVolumes.map((e) => ({ label: EVENT_KO[e.name] ?? e.name, value: e.count }))} format={fmt.compact} />
+        </details>
+      ) : null}
     </div>
   );
 }
