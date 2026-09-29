@@ -166,8 +166,11 @@ Shop backend 인증 요청은 `Authorization: Bearer <JWT>`를 사용합니다. 
 | GET | `/api/seller/dashboard/ingredients` | SELLER | 동일 |
 | GET | `/api/seller/dashboard/friction` | SELLER | 동일 |
 | GET | `/api/seller/dashboard/purchase` | SELLER | 동일 |
+| GET | `/api/seller/dashboard/cross-brand` | SELLER | `brandId`, `from`, `to`, `actorType`, `generatorType` |
+| GET | `/api/seller/dashboard/price-position` | SELLER | 로그인한 판매자의 브랜드 |
+| GET | `/api/seller/dashboard/cohort-position` | SELLER | `from`, `to`, `actorType` (프론트 미사용) |
 
-프론트 `martApi.ts`는 7개 마트 API를 병렬 호출합니다. 날짜는 KST `YYYY-MM-DD`, `actorType`·`generatorType` 기본값은 `all`입니다. 응답은 마트별 동적 JSON이며 `source`, `coverage`를 포함합니다.
+마트 API 는 10개입니다(`DashboardController`). 프론트 `martApi.ts`는 그중 7개를 병렬 호출하고, `cross-brand`·`price-position` 은 해당 화면에서 따로 부릅니다. 날짜는 KST `YYYY-MM-DD`, `actorType`·`generatorType` 기본값은 `all`입니다. 응답은 마트별 동적 JSON이며 `source`, `coverage`를 포함합니다.
 
 ## 8. 관리자·정산
 

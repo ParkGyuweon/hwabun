@@ -42,7 +42,7 @@ Backend → Kafka → Spark
 
 Q1 은 로컬 Parquet 와 checkpoint 를 쓴다. 설계 당시에는 PoC 였고 Delta 전환을
 후속으로 뒀으나, Delta 를 범위에서 빼기로 하면서 **이것이 최종 구현이 됐다.**
-MySQL serving projection 은 구현·운영 중이다 (마트 22종 발행).
+MySQL serving projection 은 구현·운영 중이다 (DW 테이블 24개 계약 중 운영 기본 발행 22종 — `cross_brand_daily`·`category_price_reference` 는 09-28 등록, 발행 목록 밖).
 
 **다만 Parquet append 를 exactly-once 저장소로 해석하지 않는 것은 그대로다.**
 checkpoint 를 잃고 전체 Replay 하면 이미 저장된 Kafka 좌표와의 원자적 비교·Upsert

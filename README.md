@@ -12,8 +12,8 @@
 
 | | 산출물 |
 | --- | --- |
-| 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 11개), 플랫폼 운영 화면 |
-| 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL(발행 대상 24종, 운영 기본 실행 22종) |
+| 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 13개), 플랫폼 운영 화면 |
+| 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW MySQL 테이블 24개(대시보드가 읽는 마트 23 + 추천 서버가 읽는 `user_trait_daily` 1, 운영 기본 발행 목록 22) |
 | AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
 | 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 166개(2026-09-23 운영 배치 기준) |
 
@@ -29,11 +29,11 @@
  페르소나 PC 9,900명 ──▶ POST /api/events ──▶  파티션 3 · key=session_id ──▶ · 실시간 상태 반영  ──▶ · 신규 브랜드 히어로
    │  (생성기)           검증 → Kafka           │                          · 처방 문장(LLM)
  에이전트 PA 100명       백프레셔 429/503       ▼                          · 상품 등록 즉시 편입    브랜드 대시보드
-   (Playwright+LLM)                          Spark Q1~Q5                        ▲                 · 11개 화면
-                                              Q1 raw_sink   (상시)              │                 · 마트 API 7개
+   (Playwright+LLM)                          Spark Q1~Q5                        ▲                 · 13개 화면
+                                              Q1 raw_sink   (상시)              │                 · 마트 API 10개
  세 갈래가 같은 스키마                          Q2 clean_events                   │
  frontend/src/types/log.ts (43종)              Q3 derive_facts                 DW MySQL
- contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      23 테이블
+ contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      24 테이블
                                                Q5 validate     (검사 166개)      ▲
                                                      │                          │
                                                      └── dw projection ─────────┘
@@ -51,14 +51,14 @@
 
 ## 2. 팀 구성과 담당
 
-6명입니다. 괄호 안 숫자는 `git log --no-merges --author=<이름> -- <경로>` 로 센 해당 디렉터리 커밋 수입니다(2026-09-28, 같은 사람의 다른 계정 이름은 합산하지 않았습니다).
+6명입니다. 괄호 안 숫자는 `git log --no-merges --author=<이름> -- <경로>` 로 센 해당 디렉터리 커밋 수입니다(2026-09-29 `origin/dev`. 추유림은 `추유림`·`youlim0314` 두 작성자 이름을 합산했고, 그 밖의 다른 계정 이름은 합산하지 않았습니다).
 
 | 이름 | 역할 | 소유 영역 |
 | --- | --- | --- |
 | 강하린 | 기획 (PM) | 프로젝트 일정·업무 관리 · 서비스 기획 · 발표/영상 콘텐츠 제작 |
 | 추유림 | 프론트엔드 | `frontend/` (203) · `docs/dashboard/` (30) |
-| 최열음 | 백엔드 | `shop_backend/` (66) · `backend/` (31) · `monitoring/` (6) · `Jenkinsfile` |
-| 이은솔 | 데이터 | `streaming/` (165) · `contracts/` (162) · `infra/` (18) |
+| 최열음 | 백엔드 | `shop_backend/` (70) · `backend/` (31) · `monitoring/` (6) · `Jenkinsfile` |
+| 이은솔 | 데이터 | `streaming/` (166) · `contracts/` (162) · `infra/` (18) |
 | 송민우 | 인프라 | `deploy/ec2-2/` · dw projection · `streaming/` (23) · `infra/` (10) |
 | 박규원 | AI | `batch/` (144) · `simulator/` (137) · `docs/ai/` (90) |
 
@@ -76,7 +76,7 @@
 한 코드베이스에서 엔트리 3개를 빌드합니다. 로그가 여기서 출발합니다.
 
 - 쇼핑몰 BLOOM (`index.html`). 상품 목록·상세·장바구니·주문·결제(PortOne)·리뷰(구매자만)·피드백에 추천 카드와 신규 브랜드 히어로 배너를 붙였습니다.
-- 브랜드 대시보드 (`dashboard.html`). 사장님이 묻는 질문 순서로 메뉴 8개(요약 · 상세페이지 · 상품 · 주문 · 고객 · 고객의 말 · 시장 · 상품 등록)이고, 그 안에 탭 화면 11개(콘텐츠·마찰, 주문·정산, 공개 리뷰·받은 피드백 등)가 있습니다. 상세페이지 처방 문장은 AI 서버(`/api/prescription`)가 답하면 그 문장을, 아니면 규칙 표 문장을 씁니다 — 화면이 비는 순간이 없게 한 구조입니다.
+- 브랜드 대시보드 (`dashboard.html`). 사장님이 묻는 질문 순서로 메뉴 8개(요약 · 상세페이지 · 상품 · 주문 · 고객 · 고객의 말 · 시장 · 상품 등록)이고, 그 안에 화면 13개(콘텐츠·마찰, 주문·정산, 공개 리뷰·받은 피드백 등)가 있습니다. 상세페이지 처방 문장은 AI 서버(`/api/prescription`)가 답하면 그 문장을, 아니면 규칙 표 문장을 씁니다 — 화면이 비는 순간이 없게 한 구조입니다.
 - 플랫폼 운영 화면 (`platform.html`).
 - 행동 로거 (`src/lib/logger.ts`). 이벤트 43종을 조립해 버퍼에 담고 전송하며, 429/502/503 은 백오프로 재시도합니다. 이벤트 스키마 `src/types/log.ts` 는 AI·데이터가 직접 import 해서 가중치를 맞추는 단일 출처입니다.
 - 수집 훅 (`src/hooks/`). 스크롤 깊이·정지·되돌아 읽기, 섹션 노출과 체류, 텍스트 선택·복사, 주목 신호(hover/rage/dead click), 이탈 요약을 잡습니다.
@@ -286,7 +286,7 @@ S15P21A306/
 │       ├── hooks/     useImpression · useInteractionSignals · useExitSummary · useTextSelection
 │       │              useAuth · useCatalog · useRecommendation · useFeedback …
 │       ├── pages/     ProductListPage · ProductDetailPage · CartPage
-│       ├── dashboard/ DashboardApp.tsx · screens/(13 파일) · lib/(martApi · martAdapter · insightApi · prescription) · css 4종
+│       ├── dashboard/ DashboardApp.tsx · screens/(15 파일 = 화면 13 + 공용 2) · lib/(martApi · martAdapter · insightApi · prescription) · css 4종
 │       ├── platform/  PlatformApp.tsx · lib
 │       ├── components/ account · auth · banner · cart · common · devtools · feedback · layout · product · review
 │       ├── mocks/     SSAFY Beauty 카탈로그 · 시연용 시드(피드백 30건 등) · 스크립트 산출 샘플 JSON

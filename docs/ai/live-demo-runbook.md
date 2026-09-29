@@ -103,7 +103,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 ## 2-1. 파이프라인 화면 `/pipeline` (Jira 337, 09-16)
 
 `/live` 가 "추천 상태에 반영됐다" 는 마지막 층을 깊게 보는 화면이라면, `/pipeline` 은 다섯 층을 얕게 이어 본다 —
-**① 사이트 활동(페르소나 PC / 에이전트 PA / 실사용자) → ② Kafka 파티션(브로커 끝 오프셋·소비 위치·lag) → ③ Spark(워커·실행 앱) → ④ dw 마트 22개(행 수·갱신) → ⑤ 대시보드(상태 반영·링크)**.
+**① 사이트 활동(페르소나 PC / 에이전트 PA / 실사용자) → ② Kafka 파티션(브로커 끝 오프셋·소비 위치·lag) → ③ Spark(워커·실행 앱) → ④ dw 마트 22개(행 수·갱신. 운영 기본 발행 목록 `DW_PROJECTION_MARTS` 기준 — DW 테이블 24개 중 `cross_brand_daily`·`category_price_reference` 는 목록 밖) → ⑤ 대시보드(상태 반영·링크)**.
 리허설(09-17)에서 로그가 어디까지 흘렀는지 짚는 용도. 다른 파트 자원은 전부 읽기만 한다. 접근은 `/live` 와 같다(컨테이너 8300, 터널).
 
 | 칸 | 출처 | 지금(09-16) | 켜려면 |
@@ -112,7 +112,7 @@ PYTHONPATH=. python3 simulator/generator/demo_live.py --rate 3000 \
 | ② Kafka | 같은 group 의 두 번째 Consumer(구독 안 함)로 워터마크·committed | 됨 | — |
 | ③ Spark | `SPARK_MASTER_UI` 의 `/json` | **동작 (09-17 10:33)** — 민우님 !297 로 EC2-2 가 `SPARK_MASTER_UI_BIND_IP` 로 마스터 UI 를 열었고, EC2-1 `.env` `SPARK_MASTER_UI=http://j15a306a.p.ssafy.io:18080`(Kafka 와 같은 공개 호스트명 — 사설 IP 172.26.1.194 는 무응답) · 실측 워커 1 · 코어 2 · ALIVE | `/json` 은 `/json/` 로 302 하지만 urllib 이 따라간다. 컨테이너 재생성만(재빌드 없음) |
 | ④ dw | `DW_MYSQL_*`(user_trait 와 같은 값), information_schema + 마트 COUNT(*) | **적재됨 (09-18)** — 22 테이블 중 **21종에 행**. `funnel_daily_kpi` 만 0행(Q4 가 NOT NULL 컬럼에 NULL 을 내 발행이 막힘, 데이터 파트 몫). 마트 목록은 `DW_PROJECTION_MARTS`(기본 22) | 0행이 늘면 발행 실패. 마트별 산출 시각은 `mart_processed_at` 로 본다 |
-| ⑤ 대시보드 | `DASHBOARD_URL` 링크 | **링크 (09-17)** — `https://j15a306.p.ssafy.io/dashboard.html`(프론트 별도 엔트리, SELLER 로그인) | 백엔드 마트 API 7개(!296, ec2-1-deploy) 배포 뒤 숫자 붙이기(AI 후속) |
+| ⑤ 대시보드 | `DASHBOARD_URL` 링크 | **링크 (09-17)** — `https://j15a306.p.ssafy.io/dashboard.html`(프론트 별도 엔트리, SELLER 로그인) | 백엔드 마트 API(!296 당시 7개, 지금 10개 · ec2-1-deploy) 배포 뒤 숫자 붙이기(AI 후속) |
 
 버튼 둘. **▶ 페르소나 시작**은 `/live` 와 같은 `POST /live/demo/start`(9,900명·KRW·이어 보내기). 상태 줄 한글은 09-17(344)부터 안 깨진다. **▶ 에이전트 100명**은 발표 노트북의 런처
 `python simulator/agents/agent_launcher.py`(127.0.0.1:8301, GMS_KEY 있는 셸에서)로 가서 `agent_runner --url <배포 사이트> --limit 100 --checkout --workers 5 --simulation-run-id demo-<날짜>` 를 띄운다.

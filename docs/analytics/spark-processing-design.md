@@ -207,7 +207,7 @@ Kafka→Parquet→MySQL 흐름은 E2E 로 검증했다.
 | 상품 Dimension | 상품 데이터 원천과 갱신 방식 |
 | 실제 사용자 ID | 로그인·비로그인 식별 정책 |
 | 검색·구매 Event | 실제 UI Trigger와 `search_id`, `cart_id`, `order_id` 생성 정책 |
-| Mart 적재 | 해소 — 일일 배치가 Parquet Mart 를 MySQL `dw` 로 발행한다 (마트 22종) |
+| Mart 적재 | 해소 — 일일 배치가 Parquet Mart 를 MySQL `dw` 로 발행한다 (DW 테이블 24개 계약 중 운영 기본 발행 22종) |
 
 이 항목은 계약에 임의의 값을 채우지 않는다. 담당 구현이 정해지거나 실제 원천을
 확인한 뒤 계약과 설계에 함께 반영한다.

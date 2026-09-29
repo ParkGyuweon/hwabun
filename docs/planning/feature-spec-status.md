@@ -1,5 +1,7 @@
 # 기능 명세 표
 
+> 2026-09-29 코드(`origin/dev`) 기준으로 "현재 상태" 열을 다시 맞췄다. 근거는 각 행의 API·파일. 09-11 이전에 적은 "미구현" 중 이미 만들어진 것(소비자·판매자 로그인, 주문·결제, 리뷰, 정산, 교차 브랜드 유입, DW 발행 등)을 고쳤다.
+
 ## 0. 서비스 한 문장
 
 | 항목 | 내용 |
@@ -15,18 +17,18 @@
 
 | 기능 | 설명 | 우선순위 | 현재 상태 | 수정 / 구현 필요 |
 |---|---|---|---|---|
-| 회원가입 / 로그인 | 소비자가 하나의 계정으로 여러 브랜드 상품을 이용 | Must | 미구현 | 회원 DB, 로그인 API, 프론트 로그인 화면 필요 |
+| 회원가입 / 로그인 | 소비자가 하나의 계정으로 여러 브랜드 상품을 이용 | Must | 구현 | `POST /api/auth/members` · `POST /api/auth/login`(role=MEMBER), `IdentityController` · 프론트 `lib/auth.ts` |
 | 상품 목록 | 여러 브랜드 상품을 목록으로 탐색 | Must | 부분 구현 | 현재 샘플 데이터 기반, 실제 상품 DB 연결 필요 |
 | 상품 상세 | 상품 정보, 브랜드, 리뷰, 추천 상품 확인 | Must | 부분 구현 | 실제 DB/API 연결, 브랜드 정보 연결 필요 |
-| 장바구니 | 상품 담기, 수량 변경, 삭제 | Must | 부분 구현 | 현재 메모리 기반, 서버 저장 및 주문 연결 필요 |
-| 주문 생성 | 장바구니 상품으로 주문 생성 | Must | 미구현 | 주문 / 주문상품 테이블과 API 필요 |
-| 모의 결제 완료 | 실제 PG 없이 결제 완료 상태 처리 | Must | 미구현 | 주문 상태 `PAID` 처리 필요 |
-| 리뷰 작성 | 구매 완료 상품에 리뷰 작성 | Must | 미구현 | 구매 검증, 리뷰 작성 API 필요 |
-| 개선 피드백 작성 | 상품 개선 의견을 브랜드에 전달 | Must | 부분 구현 | 입력 폼(FE)·저장 API(BE) 필요. 화면 구조 확정 — **왼쪽 축 토글, 오른쪽 그 축의 주관식 칸**. 계약 0.2.0 `contracts/feedback-classification.md`: 입력 6필드(`axis_id` 는 고객이 고른 축) → `labels[]`·금지어 플래그 (Jira 200~202·207·208) |
-| 리뷰 조회 | 상품 상세에서 리뷰 확인 | Must | 부분 구현 | 현재 샘플 리뷰 표시, 실제 리뷰 DB 연결 필요 |
+| 장바구니 | 상품 담기, 수량 변경, 삭제 | Must | 구현 | 서버 저장 `GET /api/cart` · `POST/DELETE /api/cart/items`, 주문과 연결 (`CommerceController`) |
+| 주문 생성 | 장바구니 상품으로 주문 생성 | Must | 구현 | `POST /api/orders` — 서버 장바구니 전체를 주문 (`shop_order` · `order_item`) |
+| 모의 결제 완료 | 실제 PG 없이 결제 완료 상태 처리 | Must | 구현 | `POST /api/orders/{id}/pay`(테스트 결제 → `PAID`) · `POST /api/orders/{id}/confirm`(포트원 결제 조회) |
+| 리뷰 작성 | 구매 완료 상품에 리뷰 작성 | Must | 구현 | `POST /api/reviews` — 이 회원의 결제 완료 주문 품목만 허용 (`FeedbackController`) |
+| 개선 피드백 작성 | 상품 개선 의견을 브랜드에 전달 | Must | 구현 | `POST /api/feedback`(결제 완료 주문 확인) · 상품 상세 입력 폼. 화면 구조 — **왼쪽 축 토글, 오른쪽 그 축의 주관식 칸**. 계약 0.2.0 `contracts/feedback-classification.md`: 입력 6필드(`axis_id` 는 고객이 고른 축) → `labels[]`·금지어 플래그 (Jira 200~202·207·208) |
+| 리뷰 조회 | 상품 상세에서 리뷰 확인 | Must | 구현 | `GET /api/products/{id}/reviews` |
 | 개인화 추천 | 피부 속성, 행동, 상품 유사도 기반 추천 | Must | 부분 구현 | 추천 API 연결, 실시간 추천 반영 필요 |
 | 추천 배너 | 유료 광고가 아닌 추천 상품 강조 영역 | Must | 부분 구현 | 추천 배너 정책, 이벤트, UI 명확화 필요 |
-| 추천 배너 클릭 로그 | 추천 배너 노출/클릭 반응 수집 | Must | 미구현 | 배너 전용 이벤트 추가 필요 |
+| 추천 배너 클릭 로그 | 추천 배너 노출/클릭 반응 수집 | Must | 구현 | `banner_impression` · `banner_click` 이벤트 (`frontend/src/types/log.ts`) |
 
 ---
 
@@ -34,13 +36,13 @@
 
 | 기능 | 설명 | 우선순위 | 현재 상태 | 수정 / 구현 필요 |
 |---|---|---|---|---|
-| 사업자 회원가입 / 로그인 | 브랜드 사장님용 계정 | Must | 미구현 | 사업자 DB, 로그인, 권한 처리 필요 |
-| 사업자 인증 | 사업자등록번호 기반 진위 확인 | Must | 미구현 | 인증 API 연동 또는 상태 관리 필요 |
-| 인증 상태 관리 | `PENDING`, `VERIFIED`, `MISMATCH`, `RETRY_NEEDED`, `INACTIVE` 상태 관리 | Must | 미구현 | 상태 필드, 관리자 확인 화면 필요 |
-| 브랜드 등록 | 사업자가 하나 이상의 브랜드 등록 | Must | 미구현 | 브랜드 테이블, 등록 API 필요 |
-| 브랜드 수정 | 브랜드명, 설명, 상태 등 수정 | Must | 미구현 | 브랜드 수정 API, 권한 검증 필요 |
-| 상품 등록 | 브랜드별 상품 등록 | Must | 계약 문서만 있음 | 상품 등록 폼, API, DB 저장 필요 |
-| 상품 수정 / 비활성화 | 등록한 상품 정보 수정 또는 판매 중지 | Must | 미구현 | 상품 상태값, 수정 API 필요 |
+| 사업자 회원가입 / 로그인 | 브랜드 사장님용 계정 | Must | 구현 | `POST /api/auth/sellers` · `POST /api/auth/login`(role=SELLER), `IdentityController` · `SellerAccount`. 대시보드 API 는 SELLER 권한만 |
+| 사업자 인증 | 사업자등록번호 기반 진위 확인 | Must | 미구현 | 판매자 계정에 사업자등록번호 필드가 없다. 인증 API 연동 또는 상태 관리 필요 |
+| 인증 상태 관리 | `PENDING`, `VERIFIED`, `MISMATCH`, `RETRY_NEEDED`, `INACTIVE` 상태 관리 | Must | 미구현 | 계정 상태는 `ACTIVE`·`INACTIVE`·`LOCKED` 만 있다(`AccountStatus`). 인증 상태 필드, 관리자 확인 화면 필요 |
+| 브랜드 등록 | 사업자가 하나 이상의 브랜드 등록 | Must | 구현 | `POST /api/brands` (`BrandController`) |
+| 브랜드 수정 | 브랜드명, 설명, 상태 등 수정 | Must | 구현 | `PUT /api/brands/{id}` · `PATCH /api/brands/{id}/status` |
+| 상품 등록 | 브랜드별 상품 등록 | Must | 구현 | 대시보드 `상품 등록` 화면(`RegisterScreen.tsx`) → `POST /api/products` (`CatalogController`) |
+| 상품 수정 / 비활성화 | 등록한 상품 정보 수정 또는 판매 중지 | Must | 구현 | `PUT /api/products/{id}` · `PATCH /api/products/{id}/status` · `DELETE /api/products/{id}` |
 | AI 상품 등록 보조 | 대충 입력한 상품 정보를 AI가 데이터 구조에 맞게 매핑 | Should | 미구현 | 기본 상품 등록 이후 후순위 구현 |
 
 ### 사업자와 브랜드 관계
@@ -60,15 +62,15 @@
 
 | 기능 | 설명 | 우선순위 | 현재 상태 | 수정 / 구현 필요 |
 |---|---|---|---|---|
-| 전체 현황 | 사업자 전체 브랜드 성과 요약 | Must | 부분 구현 | 현재 목업/샘플 기반, 실제 API 연결 필요 |
-| 브랜드별 성과 | 브랜드별 조회, 장바구니, 구매, 전환율 확인 | Must | 부분 구현 | 실제 로그/주문 집계 연결 필요 |
-| 상품별 성과 | 상품별 조회수, 장바구니 수, 구매 수, 전환율 | Must | 부분 구현 | 상품별 KPI API 필요 |
+| 전체 현황 | 사업자 전체 브랜드 성과 요약 | Must | 구현 | `GET /api/seller/dashboard/overview`(DW 마트) · `GET /api/seller/dashboard`(주문 원장). 마트 API 가 응답하지 않으면 화면이 모의 지표로 대체 |
+| 브랜드별 성과 | 브랜드별 조회, 장바구니, 구매, 전환율 확인 | Must | 구현 | `brand_daily_kpi` · `funnel_daily_kpi` 마트 → overview API |
+| 상품별 성과 | 상품별 조회수, 장바구니 수, 구매 수, 전환율 | Must | 구현 | `product_daily_kpi` 마트 → `GET /api/seller/dashboard/products` |
 | 리뷰 분석 | 평점, 긍정/부정 리뷰, 반복 키워드 확인 | Must | 부분 구현 | 실제 리뷰 데이터 연결 필요 |
 | 개선 피드백 분석 | 고객이 남긴 개선 요청을 요약 | Must | 부분 구현 | **자동 분류 구현 (0.2.0)** — 축은 고객 입력, 그 축 안 카테고리를 **다중**으로(20종 고정 목록), 극성 없음, 금지어는 `hidden_by_default`. 사람 정답 50건 **F1 94.3%** (입력 축 안, ±10%p 잡음). 집계 grain `(product_id, axis_id, category_id)` — **숫자는 언급 수**(한 피드백이 여러 칸). 저장·대시보드 연결은 BE/FE |
 | 집단 인사이트 | 여러 브랜드가 모여 있어 알 수 있는 익명 비교 지표 | Must | 부분 구현 | 유사 브랜드 기준, 익명 집계, 표본 조건 필요 |
-| 교차 브랜드 유입 | 다른 브랜드 상품을 보던 고객이 내 브랜드로 넘어온 비율 | Must | 미구현 | **재료는 전부 있음** — Fact 에 `session_id`·`sequence_no`·`brand_id`(Join 스냅샷), 추천 경유는 `recommendation_id`. 없는 것은 마트 하나(`dw-schema` §4). 정의·재료 위치는 AI 가 데이터 파트에 요청서로 전달(09-08), 설계는 DATA 결정 |
-| 추천 기반 유입 | 추천 영역을 통해 들어온 고객 비율 | Must | 미구현 | 추천 클릭 이벤트와 상품 조회 연결 필요 |
-| 정산 조회 | 월별 정산 예정/완료 금액 확인 | Must | 미구현 | 정산 테이블, 정산 API 필요 |
+| 교차 브랜드 유입 | 다른 브랜드 상품을 보던 고객이 내 브랜드로 넘어온 비율 | Must | 구현 | `cross_brand_daily` 마트(09-28 DW 등록) → `GET /api/seller/dashboard/cross-brand` → `InflowScreen.tsx`. (이력) **재료는 전부 있음** — Fact 에 `session_id`·`sequence_no`·`brand_id`(Join 스냅샷), 추천 경유는 `recommendation_id`. 없는 것은 마트 하나(`dw-schema` §4). 정의·재료 위치는 AI 가 데이터 파트에 요청서로 전달(09-08), 설계는 DATA 결정 |
+| 추천 기반 유입 | 추천 영역을 통해 들어온 고객 비율 | Must | 구현 | `cross_brand_daily.recommendation_cross_brand_entry_*` · `entry_source_daily` 마트 |
+| 정산 조회 | 월별 정산 예정/완료 금액 확인 | Must | 구현 | `GET /api/settlements` (`SettlementController`) → 대시보드 `SettlementScreen.tsx` |
 
 ### 집단 인사이트 후보
 
@@ -93,7 +95,7 @@
 | 예시 | A 브랜드 상품 조회 → 추천 영역에서 B 브랜드 상품 클릭 → B 브랜드 상품 상세 조회 |
 | 집계 결과 | B 브랜드의 교차 브랜드 유입 1건 |
 | 분리 지표 | 전체 교차 브랜드 유입 / 추천 기반 교차 브랜드 유입 |
-| 현재 상태 | 미구현 (마트 없음) |
+| 현재 상태 | 구현 — `cross_brand_daily` 마트(전체 / 추천 경유 / 배너 경유 분리) |
 | 수정 필요 | ~~이벤트에 브랜드 / 입점사 식별자 포함~~ → **불필요.** `brand_id` 는 이벤트가 아니라 Processed 에서 `dim_product` Join 으로 파생하고 스냅샷 보존 (`event-attribution-contract.md`, 09-07). 남은 것: 세션 첫 조회 브랜드 계산 · 이후 이동 브랜드 계산 · 추천 경유 분리 — 마트 1개 |
 
 ---
@@ -107,7 +109,7 @@
 | 상품 유사도 기반 추천 | 같은 브랜드보다 상품 속성 유사도를 더 중요하게 사용 | Must | 구현 | 학습 결합(LTR) 채택으로 해결 — `cos_brand` 순열 중요도 최하위(0.0104), 모델이 브랜드를 거의 안 본다 (부록 T) |
 | 브랜드 다양성 보정 | Top 10이 같은 브랜드로만 채워지지 않게 조정 | Must | 구현 | MMR λ=0.8 + 신규 브랜드 전용 칸 `reserved` (Jira 129). 최다 브랜드 5.92 → **2.62칸**, 10칸 독점 9.8 → **0.1%**. 브랜드 상한은 측정 후 기각(전 구간 손해) |
 | 추천 배너 | 추천 결과 중 더 눈에 띄게 보여줄 상품 강조 | Must | 부분 구현 | 추천 배너 정책, 이벤트, UI 명확화 필요 |
-| 추천 배너 성과 측정 | 배너 노출, 클릭, 이후 상세 조회, 장바구니, 구매 추적 | Must | 미구현 | 배너 전용 이벤트와 KPI 필요 |
+| 추천 배너 성과 측정 | 배너 노출, 클릭, 이후 상세 조회, 장바구니, 구매 추적 | Must | 부분 구현 | 배너 이벤트와 `banner_daily` 마트는 있으나 Parquet 으로만 두고 DW 에 올리지 않는다. 배너 경유 교차 브랜드 유입은 `cross_brand_daily` 에 있음 |
 | 신상품 / 저노출 상품 탐색 | 신규 상품도 일정 비율 노출 | Should | 구현 | 전용 칸 `reserved` (신규 = 등록 후 14일 이내, 2026-09-11 Jira 247-b). 신규 10% 부하에서 신규 브랜드 적중 16.5 → 43.6%. **자리(메인 안 vs 배너)만 프론트와 확정 필요** |
 | 브랜드 유사도 | 유사 브랜드 추천과 비교 인사이트에 활용 | Should | 미구현 | 상품 속성, 고객 반응, 리뷰 임베딩 기반 계산 가능 |
 | 콜드 스타트 처리 | 신규 브랜드/상품도 추천 후보에 들어가게 함 | Must | 부분 구현 | 상품 속성 기반 추천, 탐색 노출 정책 필요 |
@@ -130,15 +132,15 @@
 
 | 기능 | 설명 | 우선순위 | 현재 상태 | 수정 / 구현 필요 |
 |---|---|---|---|---|
-| 주문 DB 기준 매출 | 행동 로그가 아니라 결제 완료 주문 기준 매출 산정 | Must | 미구현 | 주문/결제 상태 도메인 필요 |
-| 주문 생성 | 장바구니 상품을 주문으로 전환 | Must | 미구현 | 주문 테이블, 주문 상품 테이블 필요 |
-| 모의 결제 완료 | 실제 PG 없이 결제 완료 상태 처리 | Must | 미구현 | 주문 상태 `PAID` 처리 필요 |
-| 구매 완료 정의 | 주문 상태가 `PAID`가 된 시점 | Must | 기획 확정 / 미구현 | 결제 완료 버튼 또는 모의 결제 성공 처리 필요 |
-| 주문 상품별 귀속 | 여러 브랜드 상품이 한 주문에 있어도 상품별 사업자에 귀속 | Must | 미구현 | `order_item` 기준 정산 필요 |
-| 월 단위 정산 | 매월 사업자별 정산 금액 집계 | Must | 기획 확정 / 미구현 | 월별 settlement 생성 필요 |
+| 주문 DB 기준 매출 | 행동 로그가 아니라 결제 완료 주문 기준 매출 산정 | Must | 구현 | `GET /api/seller/dashboard` · `GET /api/seller/orders` 가 쇼핑몰 주문 원장을 읽는다 |
+| 주문 생성 | 장바구니 상품을 주문으로 전환 | Must | 구현 | `POST /api/orders` (`shop_order` · `order_item`) |
+| 모의 결제 완료 | 실제 PG 없이 결제 완료 상태 처리 | Must | 구현 | `POST /api/orders/{id}/pay` · `/confirm` |
+| 구매 완료 정의 | 주문 상태가 `PAID`가 된 시점 | Must | 구현 | `ShopOrder.Status` `CREATED → PAID` |
+| 주문 상품별 귀속 | 여러 브랜드 상품이 한 주문에 있어도 상품별 사업자에 귀속 | Must | 구현 | 정산이 `order_item.brand_id` 기준으로 `settlement_item` 을 만든다 (`SettlementService`) |
+| 월 단위 정산 | 매월 사업자별 정산 금액 집계 | Must | 구현 | `SettlementBatchScheduler`(매일 02:00 KST, 이번 달 정산이 없는 활성 브랜드) · `POST /api/settlements/generate` |
 | 수수료 0% | 프로젝트에서는 플랫폼 수수료 없이 정산 | Must | 기획 확정 | 계산식에 0% 반영 |
-| 정산 상태 관리 | `PENDING`, `COMPLETED` | Must | 미구현 | 정산 상태 저장, 관리자 완료 처리 필요 |
-| 취소 / 환불 | 취소, 환불, 배송 상태 반영 | Should | 미구현 | 6주 MVP에서는 제외 가능 |
+| 정산 상태 관리 | `PENDING`, `COMPLETED` | Must | 구현 | `POST /api/admin/settlements/{id}/complete` 로 `PENDING → COMPLETED` |
+| 취소 / 환불 | 취소, 환불, 배송 상태 반영 | Should | 미구현 | 주문 상태에 `CANCELLED` 값만 있고 처리 API 는 없다. 6주 MVP에서는 제외 |
 
 ### 정산 정책
 
@@ -169,11 +171,11 @@
 
 | 기능 | 설명 | 우선순위 | 현재 상태 | 수정 / 구현 필요 |
 |---|---|---|---|---|
-| 관리자 로그인 | 플랫폼 운영자 접근 | Must | 미구현 | 관리자 권한 처리 필요 |
+| 관리자 로그인 | 플랫폼 운영자 접근 | Must | 구현 | `POST /api/auth/login`(role=ADMIN), `AdminAccount` |
 | 사업자 관리 | 입점 사업자 목록, 인증 상태 확인 | Must | 부분 구현 | 화면은 있으나 실제 API 없음 |
-| 브랜드 관리 | 브랜드 목록, 상태 관리 | Must | 부분 구현 | 목업 데이터 기반, CRUD 필요 |
-| 상품 관리 | 등록 상품 조회, 승인/비활성화 | Must | 미구현 | 관리자 상품 관리 API 필요 |
-| 정산 관리 | 월별 정산 목록 확인, 완료 처리 | Must | 미구현 | `PENDING` → `COMPLETED` 상태 변경 필요 |
+| 브랜드 관리 | 브랜드 목록, 상태 관리 | Must | 부분 구현 | API `PATCH /api/admin/brands/{id}/status` 는 있음. 운영 화면(`platform.html`)은 모의 데이터 |
+| 상품 관리 | 등록 상품 조회, 승인/비활성화 | Must | 부분 구현 | API `PATCH /api/admin/products/{id}/approval` 는 있음. 운영 화면 연결 없음 |
+| 정산 관리 | 월별 정산 목록 확인, 완료 처리 | Must | 부분 구현 | API `GET /api/settlements` · `POST /api/admin/settlements/{id}/complete` 는 있음. 운영 화면 연결 없음 |
 | 추천 배너 관리 | 추천 배너 성과 및 정책 확인 | Should | 미구현 | 배너 노출/클릭 지표 필요 |
 | 로그 모니터링 | 이벤트 수집 상태, Kafka/Spark 처리 상태 확인 | Should | 부분 구현 | 플랫폼 화면은 있으나 실데이터 연결 필요 |
 
@@ -185,13 +187,13 @@
 |---|---|---|---|---|
 | 이벤트 수집 API | 프론트 행동 로그를 Spring Boot가 수집 | Must | 구현 | 현재 `/api/events` 구현됨 |
 | Kafka 전송 | 수집한 이벤트를 Kafka topic으로 전송 | Must | 구현 | 현재 Producer 구현됨 |
-| 이벤트 스키마 | 행동 로그 공통 형식 | Must | 수정 필요 | 현재 `0.2.0-draft`, 브랜드/사업자 식별자 추가 필요 |
+| 이벤트 스키마 | 행동 로그 공통 형식 | Must | 구현 | `0.2.0-draft` 유지, 이벤트 43종 (`frontend/src/types/log.ts`). 브랜드 식별자는 Join 파생이라 추가 불필요 (아래 행) |
 | ~~`tenant_id` 추가~~ | 입점사/브랜드 단위 분석을 위한 식별자 | ~~Must~~ | **철회** | `0.3.0-draft` 의 `tenant_id` 필수 계약은 **철회됐다** (`event-properties-schema.md` §1.1.1, 09-07). 통합몰 1개·브랜드 입점 구조라 입점사 축이 없고, 브랜드 귀속은 `product_id → dim_product.brand_id` Join 으로. (09-08 오전 이 표에 "계약에 이미 있음" 이라 적은 것은 옛 스키마를 본 오류였다) |
-| Raw Events 저장 | Kafka 이벤트를 원천 로그로 저장 | Must | 부분 구현 | Spark job 있음, E2E 검증 필요 |
-| Cleaned Events | 중복/오류 이벤트 분리 | Must | 부분 구현 | 작업 파일 있음, 실제 연결 확인 필요 |
-| Fact 생성 | 분석 가능한 행동 사실 테이블 생성 | Must | 부분 구현 | 브랜드/상품/세션 기준 보강 필요 |
-| KPI Mart | 대시보드 조회용 지표 테이블 | Must | 부분 구현 | 브랜드 대시보드용 Mart 추가 필요 |
-| DW Publish | Mart 결과를 MySQL 대시보드 조회용으로 적재 | Must | 미구현에 가까움 | MySQL projection/API 연결 필요 |
+| Raw Events 저장 | Kafka 이벤트를 원천 로그로 저장 | Must | 구현 | Q1 `raw_sink_job.py` (상시) |
+| Cleaned Events | 중복/오류 이벤트 분리 | Must | 구현 | Q2 `clean_events_job.py` |
+| Fact 생성 | 분석 가능한 행동 사실 테이블 생성 | Must | 구현 | Q3 `derive_facts_job.py` |
+| KPI Mart | 대시보드 조회용 지표 테이블 | Must | 구현 | Q4 `build_marts_job.py` 마트 25종 (DW 발행 대상 24종) · Q5 `validate_pipeline_job.py` 검증 |
+| DW Publish | Mart 결과를 MySQL 대시보드 조회용으로 적재 | Must | 구현 | `publish_user_trait_job.py` staging → RENAME 스왑. DW 테이블 24개(`contracts/dw/schema.sql`) 중 대시보드 마트 API 가 23개, 추천 서버가 `user_trait_daily` 를 읽는다. 운영 기본 발행 목록은 22개(`DW_PROJECTION_MARTS`) |
 
 ### DW / KPI 의미
 
@@ -206,8 +208,8 @@
 
 | 기능 | 설명 | 우선순위 | 현재 상태 | 수정 / 구현 필요 |
 |---|---|---|---|---|
-| 오프라인 평가 | 실제 리뷰 이력 기반 Recall@10 평가 | Must | 구현 | `eval_persona_feature.py` · 고정 평가셋 holdout_a/b 2,000명 · Recall@10 **43.95 / 43.20%**. 문서 `docs/ai/evaluation-framework.md` 부록 T |
-| 동적 시뮬레이션 | 행동이 쌓일 때 추천 순위가 개선되는지 평가 | Must | 구현 | `eval_dynamic.py` — Start/Final/Ever HR@10 · MRR · NDCG · 시작 실패자 구제율. Start 44.05 · Ever 50.50% |
+| 오프라인 평가 | 실제 리뷰 이력 기반 Recall@10 평가 | Must | 구현 | `eval_persona_feature.py` · 고정 평가셋 holdout_a/b 2,000명 · Recall@10 **43.80 / 42.45%** (CBF + CF + LTR 20피처 `cos_seed_w` seed1, 09-16 현행). 선형 기준선 38.15 / 39.25% 대비 +5.65 / +3.20%p. 09-07 의 43.95 / 43.20% 는 성분 태그를 벡터에 싣던 계약 §3.1 위반 상태의 값이라 인용하지 않는다. 문서 `docs/ai/evaluation-framework.md` 맨 위 현재 상태 |
+| 동적 시뮬레이션 | 행동이 쌓일 때 추천 순위가 개선되는지 평가 | Must | 구현 | `eval_dynamic.py` — Start/Final/Ever HR@10 · MRR · NDCG · 시작 실패자 구제율. holdout_a Start 43.45 · Final 39.50 · Ever 48.70% (09-16 현행 모델) |
 | Hidden Preference | 추천 점수와 독립된 가상 선호 함수로 행동 생성 | Must | 구현 | `hidden_preference.py` + 생성기 `--behavior hidden_preference`. 정답 강제 전환 100% → 3% (부록 F) |
 | LLM 검증 | 실제 UI 조작, 로그 계약, 흐름 확인 | Should | 별도 확인 필요 | 정량 정확도와 분리해야 함 |
 
