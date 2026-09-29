@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import SiteHeader from './components/layout/SiteHeader';
+import LiveLog from './components/devtools/LiveLog';
 import { isPreviewMode } from './lib/devtools';
 import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
+import SiteFooter from './components/layout/SiteFooter';
+import ActivityNotice from './components/legal/ActivityNotice';
+import { LEGAL_QUERY, legalPageFromState, legalPageFromUrl } from './lib/legalRoute';
+import type { LegalPage } from './lib/legalRoute';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
 import { EVENT_CURRENCY, createOrderId, orderTotals, orderTotalsKrw, toOrderItems, unitMoneyProps } from './lib/checkout';
@@ -31,9 +38,11 @@ import {
 import type { PaymentMethod } from './lib/payment';
 import type { PlacedOrder } from './lib/checkout';
 import { DEFAULT_STOREFRONT, applyStorefront, storefrontEventProps } from './lib/storefront';
-import { catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
+import { backendCatalogState, catalogSnapshot, ensureBackendDetail, resolveProduct } from './lib/productRegistry';
+import EmptyState from './components/common/EmptyState';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
+import { isBehaviorLinked } from './lib/auth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
 import { useAuthorCounts, useProductReviews, useReviewSkinTypes } from './lib/reviewStore';
 import personasData from './mocks/personas.sample.json';
@@ -47,6 +56,8 @@ import './styles/cart.css';
 import './styles/apple.css';
 // 소상공인이 고른 진열 레이아웃·색. 맨 마지막 — data-storefront / data-theme 로 분기한다
 import './styles/storefront.css';
+// 푸터·약관 화면·첫 방문 안내. 진열 테마와 겹치는 셀렉터가 없다
+import './styles/legal.css';
 
 // 상품은 등록 저장소(초안 + 등록 + 시드 + 세포라)가 준다. 렌더 안에서는 useCatalog() 를 쓴다
 /**
@@ -170,6 +181,13 @@ export default function App() {
   /** 장바구니 화면이 열려 있는지. 상품 상태와 별개로 겹쳐 둔다 */
   const [cartOpen, setCartOpen] = useState(false);
   /**
+   * 약관 화면(`?terms=1` · `?privacy=1`). 장바구니처럼 **아래 화면 위에 겹쳐 둔다** —
+   * 상품·장바구니 상태는 그대로 두고, 뒤로가기로 닫으면 보던 화면으로 돌아간다.
+   * 아래 상태를 건드리지 않으므로 약관을 여닫는 것만으로 page_view 가 새로 찍히지 않는다
+   * (page_type 계약에 약관 화면 값이 없다 — types/log PageType).
+   */
+  const [legalPage, setLegalPage] = useState<LegalPage | null>(() => legalPageFromUrl());
+  /**
    * 장바구니. 서버가 없어 메모리에만 산다.
    * 이 화면의 목적은 view_cart / remove_from_cart 신호다 (조사 7-2).
    */
@@ -213,7 +231,7 @@ export default function App() {
   const userScrolledRef = useRef(false);
 
   /** 목록·상세·장바구니를 구분하는 키. 스크롤 위치 저장에 쓴다 */
-  const viewKey = cartOpen ? 'cart' : (productId ?? 'list');
+  const viewKey = legalPage ? `legal:${legalPage}` : cartOpen ? 'cart' : (productId ?? 'list');
 
   /**
    * 화면이 쓰는 페르소나. 둘 중 하나다.
@@ -314,6 +332,7 @@ export default function App() {
 
   const openProduct = useCallback((nextId: string) => {
     window.history.pushState({ productId: nextId, cart: false }, '', `?product=${nextId}`);
+    setLegalPage(null);
     setCartOpen(false);
     setProductId(nextId);
   }, []);
@@ -326,6 +345,7 @@ export default function App() {
      */
     track('navigation_click', { target: 'home', entry_source: 'breadcrumb' });
     window.history.pushState({ productId: null, cart: false }, '', '/');
+    setLegalPage(null);
     setCartOpen(false);
     setProductId(null);
   }, []);
@@ -352,12 +372,30 @@ export default function App() {
    */
   const cartSummaryRef = useRef(cartSummary);
   cartSummaryRef.current = cartSummary;
+  /** popstate 에서 "이미 장바구니를 보고 있었나" 를 읽는다. 약관을 닫고 장바구니로 돌아올 때 view_cart 를 두 번 세지 않게 */
+  const cartOpenRef = useRef(cartOpen);
+  cartOpenRef.current = cartOpen;
 
   const openCart = useCallback(() => {
     track('view_cart', cartSummary());
     window.history.pushState({ productId, cart: true }, '', '?cart=1');
+    setLegalPage(null);
     setCartOpen(true);
   }, [cartSummary, productId]);
+
+  /**
+   * 약관 화면 열기. 아래 화면(상품·장바구니)은 history.state 에 그대로 실어 둔다 —
+   * 뒤로가기의 popstate 가 그 값으로 보던 화면을 되살린다.
+   * 이동 이벤트는 남기지 않는다. 약관 보기는 쇼핑 행동이 아니고, 새 target 값은 계약에 없다.
+   */
+  const openLegal = useCallback(
+    (page: LegalPage) => {
+      if (legalPage === page) return;
+      window.history.pushState({ productId, cart: cartOpen, legal: page }, '', LEGAL_QUERY[page]);
+      setLegalPage(page);
+    },
+    [productId, cartOpen, legalPage],
+  );
 
   /** 같은 상품·옵션이면 수량을 합친다 */
   const addToCart = useCallback((item: CartItem) => {
@@ -486,6 +524,7 @@ export default function App() {
          * 장바구니 단계가 실제보다 커지고, "담기 → 장바구니 → 주문" 이탈률이 흐려진다.
          */
         window.history.pushState({ productId: null, cart: true }, '', '?cart=1');
+        setLegalPage(null);
         setCartOpen(true);
       }
     },
@@ -544,7 +583,7 @@ export default function App() {
           failPayment(
             localOrderId,
             `cart_clear_${cleared.status}`,
-            `서버 장바구니를 정리하지 못해 주문을 멈췄습니다. ${cleared.reason} 잠시 뒤 다시 시도해 주세요.`,
+            '주문을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.',
             isPaymentEnabled() ? 'kakaopay' : 'test',
             localOrderId,
           );
@@ -560,7 +599,7 @@ export default function App() {
             return;
           }
           if (created.totalAmountKrw === null) {
-            failPayment(created.orderId, 'no_total_amount', '주문 응답에 결제 금액(totalAmount)이 없어 결제창을 열 수 없습니다.', 'kakaopay', localOrderId);
+            failPayment(created.orderId, 'no_total_amount', '결제 금액을 확인하지 못해 결제창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.', 'kakaopay', localOrderId);
             return;
           }
           // 모바일은 결제창으로 페이지가 떠났다 돌아온다. 돌아와서 confirm 을 부르려면 여기 두어야 한다
@@ -584,7 +623,7 @@ export default function App() {
           const confirmed = await confirmBackendOrder(created.orderId, pay.paymentId);
           clearPendingPayment();
           if (!confirmed.ok) {
-            failPayment(created.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', localOrderId);
+            failPayment(created.orderId, `confirm_${confirmed.status}`, '결제 확인을 마치지 못했습니다. 잠시 후 주문 내역에서 확인해 주세요.', 'kakaopay', localOrderId);
             return;
           }
           finishOrder({
@@ -622,8 +661,8 @@ export default function App() {
      * 바로 구매도 같은 길이라 여기서 갈리지 않는다 — 막힌 이유는 origin 과 무관하다.
      */
     const message = source.some((i) => !i.variant_id)
-      ? '백엔드에 등록되지 않은 상품은 결제할 수 없습니다.'
-      : '결제하려면 고객 로그인이 필요합니다.';
+      ? '지금 주문할 수 없는 상품이 장바구니에 있습니다.'
+      : '결제하려면 로그인이 필요합니다.';
     failPayment(localOrderId, 'backend_checkout_required', message, 'test', localOrderId);
   }, [paying, member, finishOrder, failPayment]);
 
@@ -651,7 +690,7 @@ export default function App() {
          * 여기서는 이벤트를 남기지 않는다. 새 이름(`buy_now_blocked` 같은)은 계약
          * (`event-schema.json` · 수집기 INTENTS)에 등록되기 전에는 `unregistered_event` 로 거절된다.
          */
-        requestLogin('바로 구매는 고객 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
+        requestLogin('바로 구매하려면 로그인이 필요합니다. 로그인하면 이어서 주문할 수 있습니다.');
         return;
       }
       const orderId = createOrderId();
@@ -699,7 +738,7 @@ export default function App() {
     const paymentId = ret.paymentId;
     void confirmBackendOrder(pending.orderId, paymentId).then((confirmed) => {
       if (!confirmed.ok) {
-        failPayment(pending.orderId, `confirm_${confirmed.status}`, `결제는 됐지만 서버 확인에 실패했습니다. ${confirmed.reason}`, 'kakaopay', pending.clientOrderId);
+        failPayment(pending.orderId, `confirm_${confirmed.status}`, '결제 확인을 마치지 못했습니다. 잠시 후 주문 내역에서 확인해 주세요.', 'kakaopay', pending.clientOrderId);
         return;
       }
       finishOrder({
@@ -757,10 +796,13 @@ export default function App() {
     const onPop = (event: PopStateEvent) => {
       const next = (event.state?.productId as string | null | undefined) ?? null;
       const nextCart = Boolean(event.state?.cart);
+      const nextLegal = legalPageFromState(event.state?.legal);
+      setLegalPage(nextLegal);
+      // 약관을 열고 닫는 것은 아래 화면이 바뀌지 않는다. 아래 화면이 그대로면 page_view·view_cart 를 다시 남기지 않는다
       navigationSourceRef.current = 'history_back';
       // 뒤로 온 화면은 보던 자리에서 이어봐야 한다
       restoreScrollRef.current = true;
-      if (nextCart) {
+      if (nextCart && !nextLegal && !cartOpenRef.current) {
         track('view_cart', {
           ...cartSummaryRef.current(),
           navigation_source: 'history_back',
@@ -817,7 +859,7 @@ export default function App() {
   useEffect(() => {
     const previous = window.history.scrollRestoration;
     window.history.scrollRestoration = 'manual';
-    window.history.replaceState({ productId: initialProductId() }, '', window.location.href);
+    window.history.replaceState({ productId: initialProductId(), legal: legalPageFromUrl() }, '', window.location.href);
 
     return () => {
       window.history.scrollRestoration = previous;
@@ -905,10 +947,12 @@ export default function App() {
 
   /** 탭 제목. 히스토리 목록에도 이 값이 남는다 */
   useEffect(() => {
-    document.title = product
-      ? `${product.product_name} - ${product.brand_name} | BLOOM`
-      : 'BLOOM';
-  }, [product]);
+    document.title = legalPage
+      ? `${legalPage === 'terms' ? '이용약관' : '개인정보처리방침'} | BLOOM`
+      : product
+        ? `${product.product_name} - ${product.brand_name} | BLOOM`
+        : 'BLOOM';
+  }, [product, legalPage]);
 
   /**
    * 식별자가 바뀌면 새 방문으로 본다.
@@ -918,8 +962,10 @@ export default function App() {
    * 지금 보고 있는 화면 정보를 함께 넘긴다. startSession 은 같은 식별자면
    * 아무것도 하지 않으므로 productId 변경으로 다시 실행돼도 무해하다.
    */
-  // 로그인 회원이 최우선. 아니면 **고른** 페르소나. 둘 다 없으면 주인 없는 방문이라 null 이다
-  const logIdentity = member?.id ?? (personaChosen ? personaId || null : null);
+  // 로그인 회원이 최우선. 아니면 **고른** 페르소나. 둘 다 없으면 주인 없는 방문이라 null 이다.
+  // 가입 때 기록 연결에 동의하지 않은 회원은 회원 id 를 싣지 않는다 (logger 도 토큰을 빼고 보낸다)
+  const linkedMemberId = member && isBehaviorLinked(member) ? member.id : null;
+  const logIdentity = linkedMemberId ?? (personaChosen ? personaId || null : null);
   useEffect(() => {
     setLoggerContext({
       pageType: cartOpen ? 'cart' : productId ? 'product_detail' : 'product_list',
@@ -943,6 +989,22 @@ export default function App() {
    * 아니다 (2026-09-18). 담기·구매도 미리보기에서는 아무 일도 하지 않는다.
    */
   const preview = isPreviewMode();
+  /*
+   * 주소의 `?product=` 가 카탈로그에 끝내 없으면(오타·내린 상품) 조용히 목록으로 떨구지 않고 "없는 상품" 을 알린다.
+   * 백엔드 목록이 아직 오는 중이면 판정을 미룬다 — 백엔드에만 있는 상품은 목록이 온 뒤에 열린다 (위 effect).
+   * 미리보기는 초안이 늦게 오거나 지워지는 게 정상이라 제외한다.
+   */
+  const requestedProductId = new URLSearchParams(window.location.search).get('product');
+  const catalogState = backendCatalogState();
+  const productMissing =
+    !preview &&
+    !cartOpen &&
+    productId === null &&
+    requestedProductId !== null &&
+    catalogState !== 'idle' &&
+    catalogState !== 'loading' &&
+    // 목록이 막 와서 effect 가 곧 열어 줄 상품이면 "없음" 을 한 프레임도 비추지 않는다
+    resolveProduct(requestedProductId, products, draft) === null;
   return (
     <>
       {preview ? null : (
@@ -960,7 +1022,11 @@ export default function App() {
       />
       )}
 
-      {cartOpen ? (
+      {legalPage === 'terms' && !preview ? (
+        <TermsPage />
+      ) : legalPage === 'privacy' && !preview ? (
+        <PrivacyPage />
+      ) : cartOpen ? (
         <CartPage
           items={cartItems}
           onQuantityChange={changeCartQuantity}
@@ -996,6 +1062,15 @@ export default function App() {
             onReviewWritten={() => setReviewNonce((n) => n + 1)}
           />
         </>
+      ) : productMissing ? (
+        <main className="page cart">
+          <div className="cart__empty">
+            <EmptyState message="상품을 찾을 수 없습니다. 판매가 끝났거나 주소가 바뀌었을 수 있습니다." />
+            <button type="button" className="cart__continue" onClick={goHome}>
+              상품 목록으로 가기
+            </button>
+          </div>
+        </main>
       ) : (
         <ProductListPage
           products={products}
@@ -1011,6 +1086,10 @@ export default function App() {
         />
       )}
 
+      {preview ? null : <SiteFooter onOpenLegal={openLegal} />}
+      {preview ? null : <ActivityNotice onOpenPrivacy={() => openLegal('privacy')} />}
+      {/* 우하단 실시간 행동 기록 · 늘 켜짐 (2026-09-29 새로 만듦). 상품 등록 미리보기에는 없다 */}
+      {!preview ? <LiveLog /> : null}
     </>
   );
 }

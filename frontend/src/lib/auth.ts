@@ -2,7 +2,8 @@
  * 로그인 — shop_backend(`feat/shop-backend`, 머지 전) 의 `/api/auth` 계약에 맞춘다.
  *
  *   POST /api/auth/login    { email, password, role }        → 200 AccountResponse · 401
- *   POST /api/auth/members  { email, password, nickname }    → 201 AccountResponse · 409 (이미 가입)
+ *   POST /api/auth/members  { email, password, nickname, agreeTerms, agreePrivacy, agreeSkinInfo?, agreeBehaviorLink? }
+ *                                                            → 201 AccountResponse · 409 (이미 가입) · 400 consent_required
  *   POST /api/auth/sellers  { email, password, name }        → 201 AccountResponse · 409
  *   AccountResponse = { id, email, name, role, status, token }
  *
@@ -27,6 +28,16 @@ export interface AccountSession {
   token: string;
   /** JWT `exp` (epoch ms). 못 읽으면 null — 만료는 서버 401 로 안다 */
   expires_at: number | null;
+  /**
+   * 둘러본 기록을 이 계정과 이어도 되나 (서버 `behaviorLinked`). 가입 때 연결에 동의하지 않은 회원만 false.
+   * 이 필드가 생기기 전에 저장된 세션은 값이 없고, 없으면 지금처럼 이어진 것으로 본다.
+   */
+  behavior_linked?: boolean;
+}
+
+/** 행동 로그를 이 회원 계정과 이을지. 값이 없는(예전) 세션은 이어진 것으로 본다 */
+export function isBehaviorLinked(session: AccountSession | null): boolean {
+  return session !== null && session.behavior_linked !== false;
 }
 
 export const ROLE_LABEL: Record<AccountRole, string> = {
@@ -138,6 +149,7 @@ interface AccountResponse {
   role: string;
   status: string;
   token: string;
+  behaviorLinked?: boolean;
 }
 
 async function post(path: string, body: unknown): Promise<Response> {
@@ -148,7 +160,19 @@ async function post(path: string, body: unknown): Promise<Response> {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new AuthError('서버에 연결할 수 없습니다. 백엔드(8090)가 떠 있는지 확인해 주세요.', 'unavailable');
+    throw new AuthError('지금은 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.', 'unavailable');
+  }
+}
+
+/** 429 {"error":"too_many_attempts","message":…}. 서버 문구가 한국어면 그대로, 아니면 같은 뜻의 기본 문장 */
+async function tooManyMessage(res: Response): Promise<string> {
+  const fallback = '로그인 시도가 너무 많아요. 잠시 후 다시 시도해 주세요.';
+  try {
+    const body = (await res.json()) as { message?: unknown } | null;
+    const m = body?.message;
+    return typeof m === 'string' && /[가-힣]/.test(m) ? m : fallback;
+  } catch {
+    return fallback;
   }
 }
 
@@ -156,13 +180,19 @@ async function toSession(res: Response, role: AccountRole): Promise<AccountSessi
   if (res.status === 401) throw new AuthError('이메일 또는 비밀번호가 맞지 않습니다.', 'credentials', 401);
   if (res.status === 403) throw new AuthError('이 계정으로는 들어갈 수 없습니다.', 'forbidden', 403);
   if (res.status === 409) throw new AuthError('이미 가입된 이메일입니다. 로그인해 주세요.', 'conflict', 409);
-  if (res.status === 400) throw new AuthError('입력값을 확인해 주세요. 비밀번호는 8자 이상입니다.', 'validation', 400);
+  if (res.status === 400) {
+    // 필수 동의가 빠지면 서버가 { error: 'consent_required', message } 로 돌려준다. 그 문장을 그대로 보여 준다
+    const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+    if (body?.error === 'consent_required' && body.message) throw new AuthError(body.message, 'validation', 400);
+    throw new AuthError('입력값을 확인해 주세요. 비밀번호는 8자 이상입니다.', 'validation', 400);
+  }
+  if (res.status === 429) throw new AuthError(await tooManyMessage(res), 'unknown', 429);
   if (res.status === 502 || res.status === 503 || res.status === 504)
-    throw new AuthError('서버에 연결할 수 없습니다. 백엔드(8090)가 떠 있는지 확인해 주세요.', 'unavailable', res.status);
-  if (!res.ok) throw new AuthError(`요청이 실패했습니다 (${res.status}).`, 'unknown', res.status);
+    throw new AuthError('지금은 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.', 'unavailable', res.status);
+  if (!res.ok) throw new AuthError('요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'unknown', res.status);
 
   const a = (await res.json()) as AccountResponse;
-  if (a.role !== role) throw new AuthError('역할이 다른 계정입니다.', 'forbidden', res.status);
+  if (a.role !== role) throw new AuthError('이 화면에서는 쓸 수 없는 계정입니다.', 'forbidden', res.status);
   return {
     id: a.id,
     email: a.email,
@@ -171,6 +201,7 @@ async function toSession(res: Response, role: AccountRole): Promise<AccountSessi
     status: a.status,
     token: a.token,
     expires_at: decodeExp(a.token),
+    behavior_linked: a.behaviorLinked !== false,
   };
 }
 
@@ -186,13 +217,16 @@ export async function login(role: AccountRole, email: string, password: string):
  *
  * MEMBER 는 피부 프로필 4개(`skinTypeCode` …)를 같이 싣는다 (AI 요청 2026-09-10 §1). 백엔드 `RegisterMember` 가
  * 아직 이 필드를 안 받으면 무시될 뿐 가입은 된다. 프론트는 같은 값을 이 브라우저에도 남긴다 (lib/memberProfile).
+ *
+ * 동의 4개도 extra 로 싣는다: `agreeTerms`·`agreePrivacy`(필수, 없으면 400), `agreeSkinInfo`·`agreeBehaviorLink`(선택).
+ * 서버는 `agreeSkinInfo` 가 true 가 아니면 피부 프로필 4개를 저장하지 않는다.
  */
 export async function register(
   role: Exclude<AccountRole, 'ADMIN'>,
   email: string,
   password: string,
   name: string,
-  extra: Record<string, string | null> = {},
+  extra: Record<string, string | boolean | null> = {},
 ): Promise<AccountSession> {
   const path = role === 'MEMBER' ? '/api/auth/members' : '/api/auth/sellers';
   const body =
@@ -218,16 +252,28 @@ export async function authFetch(role: AccountRole, input: string, init: RequestI
   headers.set('Authorization', `Bearer ${s.token}`);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
   const res = await fetch(input, { ...init, headers });
-  /**
-   * 401 이면 세션을 지운다. 단, **인증 확인용 호출(GET /api/brands)에서만.**
-   * shop_backend 는 /error 가 permitAll 이 아니라서 어떤 4xx 도 401 {"error":"unauthorized"} 로
-   * 바뀐다 (2026-09-10 실측). 상품 등록 400 한 번에 판매자가 로그아웃되는 걸 막기 위해, 다른
-   * 경로의 401 은 세션을 건드리지 않고 호출부가 실패로 처리한다. 토큰이 정말 만료됐으면
-   * 대시보드가 첫 화면에서 부르는 /api/brands 가 401 을 돌려 그때 지워진다.
-   */
-  const probe = input.startsWith('/api/brands') && (init.method ?? 'GET').toUpperCase() === 'GET';
-  if (res.status === 401 && probe) write(role, null);
+  if (res.status === 401 && (await isTokenRejected(res, input, init))) write(role, null);
   return res;
+}
+
+/**
+ * 이 401 이 "토큰이 틀렸다" 는 뜻인가.
+ *
+ * shop_backend 의 인증 진입점(SecurityConfig authenticationEntryPoint)은 401 `{"error":"unauthorized"}` 를
+ * 돌려준다. 이 본문이면 어느 경로든 토큰이 만료·무효라는 뜻이라 세션을 지운다.
+ * 예전에는 /error 가 permitAll 이 아니라서 모든 4xx 가 이 본문의 401 로 바뀌었기 때문에 GET /api/brands 에서만
+ * 지웠는데, 백엔드가 /error 를 permitAll 로 연 뒤로(SecurityConfig) 그 문제는 없다.
+ * 본문이 다른 401 은 예전처럼 인증 확인용 호출(GET /api/brands)에서만 세션을 지우고, 그 밖은 호출부가 실패로 처리한다.
+ */
+async function isTokenRejected(res: Response, input: string, init: RequestInit): Promise<boolean> {
+  const probe = input.startsWith('/api/brands') && (init.method ?? 'GET').toUpperCase() === 'GET';
+  if (probe) return true;
+  try {
+    const body = (await res.clone().json()) as { error?: unknown } | null;
+    return body !== null && typeof body === 'object' && body.error === 'unauthorized';
+  } catch {
+    return false;
+  }
 }
 
 /** 개발자 모드 세션의 토큰. 이 값이면 `authFetch` 가 백엔드를 부르지 않는다 */
@@ -241,8 +287,8 @@ export function isDevSession(session: AccountSession | null): boolean {
 /**
  * 개발자 모드 · 모의 세션. 백엔드 없이 대시보드·플랫폼 화면을 전부 보기 위한 것.
  *
- * 배포 화면(j15a306.p.ssafy.io)에도 버튼이 있다 (2026-09-14 요청) — shop_backend 가 배포에 아직 없어 로그인이 안 되고,
- * 그 상태로도 대시보드 내용을 확인해야 해서다. 이 세션이면 `authFetch` 가 서버를 부르지 않고 503 을 돌려주므로
+ * 버튼은 로컬 개발이거나 주소에 ?dev=1 이 있을 때만 보인다 (AuthGate, 2026-09-29). 배포 화면에서 누구나 누르면
+ * 모의 화면을 실제 화면으로 오해할 수 있어서다. 이 세션이면 `authFetch` 가 서버를 부르지 않고 503 을 돌려주므로
  * 화면은 전부 모의 데이터(배지 "모의")로 그려지고, 401 로 튕기지도 않는다. 실제 계정으로 로그인하면 덮어써진다.
  */
 export function devSession(role: AccountRole): void {
