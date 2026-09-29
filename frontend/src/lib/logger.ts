@@ -538,7 +538,8 @@ export function startPageView(productId: string | null, navigationSource = 'in_a
 
 /**
  * 판매자·운영자 세션이라 지금 로그를 **보내지 않는** 상태인가. 서버로는 한 건도 안 나간다.
- * (화면 로그 창이 이 값을 적었는데, 창은 2026-09-28 뺐다)
+ * 이벤트는 여전히 만들어져 우하단 실시간 행동 기록(components/devtools/LiveLog)에는 흐른다 —
+ * 대시보드에 로그인해 둔 같은 브라우저로 시연해도 찍혀야 한다. 그때 창은 점을 회색으로, "전송 안 함" 을 적는다.
  */
 export function isSuppressed(): boolean {
   return isStaffSession();

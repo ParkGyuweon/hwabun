@@ -1,0 +1,223 @@
+/* ---------- 우하단 실시간 행동 기록 (components/devtools/LiveLog.tsx) ----------
+ * 화면 테마와 상관없이 늘 어두운 유리 카드. 강조색은 하나(--ll-accent).
+ * z-index 50: 본문 위, 모달·알림 창(1000대) 아래. 좌하단은 비워 둔다. */
+
+.live-log,
+.live-log__fab {
+  --ll-bg: rgba(18, 18, 22, 0.78);
+  --ll-line: rgba(255, 255, 255, 0.08);
+  --ll-text: #f5f5f7;
+  --ll-sub: rgba(245, 245, 247, 0.46);
+  --ll-faint: rgba(245, 245, 247, 0.3);
+  --ll-accent: #7ee2b8;
+  --ll-muted-dot: #8e8e93;
+
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  color: var(--ll-text);
+  background: var(--ll-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--ll-line);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif);
+}
+
+.live-log {
+  width: min(420px, calc(100vw - 32px));
+  border-radius: 18px;
+  padding: 14px 0 6px;
+  animation: live-log-in 240ms ease-out;
+}
+
+/* ---- 머리 ---- */
+
+.live-log__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 12px 18px;
+  border-bottom: 1px solid var(--ll-line);
+}
+
+.live-log__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ll-sub);
+}
+
+.live-log__hint {
+  font-size: 11px;
+  color: var(--ll-faint);
+  padding: 2px 7px;
+  border: 1px solid var(--ll-line);
+  border-radius: 999px;
+}
+
+.live-log__close {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ll-sub);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.live-log__close:hover,
+.live-log__close:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ll-text);
+}
+
+/* ---- 살아 있는 점 ---- */
+
+.live-log__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ll-accent);
+  box-shadow: 0 0 0 0 rgba(126, 226, 184, 0.5);
+  animation: live-log-pulse 2s ease-out infinite;
+}
+
+.live-log__dot.is-muted {
+  background: var(--ll-muted-dot);
+  animation: none;
+  box-shadow: none;
+}
+
+/* ---- 줄 ---- */
+
+.live-log__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* 한 줄 약 58px × 7 */
+  max-height: 408px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+
+.live-log__list::-webkit-scrollbar {
+  display: none;
+}
+
+.live-log__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ll-line);
+  transition: opacity 360ms ease;
+  animation: live-log-row-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.live-log__row:last-child {
+  border-bottom: 0;
+}
+
+/* 오래된 줄일수록 옅게 */
+.live-log__row:nth-child(n + 2) { opacity: 0.86; }
+.live-log__row:nth-child(n + 3) { opacity: 0.72; }
+.live-log__row:nth-child(n + 5) { opacity: 0.56; }
+.live-log__row:nth-child(n + 7) { opacity: 0.42; }
+
+/* 두 칸 모두 크게: 몇 초 전 · 이벤트 이름 */
+.live-log__time {
+  min-width: 4.8em;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ll-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.live-log__row:first-child .live-log__time {
+  color: var(--ll-accent);
+}
+
+.live-log__raw {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ll-text);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.live-log__empty {
+  margin: 0;
+  padding: 22px 18px 18px;
+  font-size: 14px;
+  color: var(--ll-sub);
+}
+
+/* ---- 접힌 모양: 동그란 점 버튼 ---- */
+
+.live-log__fab {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.live-log__fab:hover,
+.live-log__fab:focus-visible {
+  transform: scale(1.06);
+}
+
+.live-log__fab .live-log__dot {
+  width: 10px;
+  height: 10px;
+}
+
+/* ---- 움직임 ---- */
+
+@keyframes live-log-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes live-log-row-in {
+  from { opacity: 0; transform: translateY(-8px); background: rgba(126, 226, 184, 0.1); }
+  to { transform: none; background: transparent; }
+}
+
+@keyframes live-log-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(126, 226, 184, 0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(126, 226, 184, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(126, 226, 184, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-log,
+  .live-log__row,
+  .live-log__dot {
+    animation: none;
+  }
+  .live-log__fab,
+  .live-log__row {
+    transition: none;
+  }
+}
