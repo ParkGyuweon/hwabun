@@ -51,21 +51,51 @@ const BEHAVIOR_KO: Record<string, string> = {
   text_copy: '성분명 복사',
 };
 
+/**
+ * 막힌 자리 이름. 계약 event-properties-schema §3.1 section_id 11종 + §3.2 content_kind 를 다 둔다.
+ * 모르는 값이 와도 영어 id 를 그대로 내지 않고 "기타 영역" 으로 묶는다 (2026-09-29).
+ */
+export const OTHER_AREA = '기타 영역';
 const SECTION_KO: Record<string, string> = {
-  product_image: '상품 이미지',
-  gallery: '상품 이미지',
-  ingredient_list: '성분 목록',
+  // §3.1 section_id
+  product_hero: '상품 첫 화면',
+  highlights: '핵심 특징',
+  about_product: '상품 설명',
   ingredients: '성분 목록',
-  variant_option: '옵션 선택',
-  variants: '옵션 선택',
-  user_review: '리뷰',
+  how_to_use: '사용법',
+  similar_products: '비슷한 상품 추천',
   reviews: '리뷰',
-  review_more: '리뷰 더보기',
-  cta: '담기 버튼',
-  add_to_cart: '담기 버튼',
+  promo_row: '기획전 줄',
+  list_controls: '정렬·필터',
+  product_grid: '상품 목록',
+  cart_items: '장바구니 상품',
+  // §3.2 content_kind
+  product_image: '상품 이미지',
   price: '가격',
-  usage_guide: '사용법',
+  variant_option: '옵션 선택',
+  cta: '담기 버튼',
+  highlight_badge: '특징 표시',
+  what_it_is: '제품 소개',
+  what_else: '추가 설명',
+  ingredient_list: '성분 목록',
+  ingredient_callout: '성분 특징',
   clinical_claim: '임상 결과',
+  usage_guide: '사용법',
+  brand_story: '브랜드 소개',
+  persona_match: '나와 맞는 피부 안내',
+  product_meta: '용량·기본 정보',
+  user_review: '리뷰',
+  review_stats: '평점 분포',
+  review_filter: '리뷰 거르기',
+  recommendation_card: '추천 상품 칸',
+  product_card: '상품 칸',
+  cart_item: '장바구니 상품',
+  navigation: '메뉴',
+  // 예전 값
+  gallery: '상품 이미지',
+  variants: '옵션 선택',
+  review_more: '리뷰 더보기',
+  add_to_cart: '담기 버튼',
 };
 
 const FRICTION_KO: Record<string, { ko: string; meaning: string }> = {
@@ -75,11 +105,14 @@ const FRICTION_KO: Record<string, { ko: string; meaning: string }> = {
   hover_dwell: { ko: '누르기 전에 머뭇거렸습니다', meaning: '커서를 얹고 망설였습니다' },
 };
 
+/** 들어온 길. 계약 §3.3 entry_source 6종 + 예전 값. 모르는 값은 "기타" */
 const ENTRY_KO: Record<string, string> = {
-  similar_products: '유사 상품 추천',
+  list_grid: '상품 목록',
   promo_pick: '맞춤 기획전',
-  list_grid: '목록',
-  quick_look: '빠른 보기에서',
+  similar_products: '비슷한 상품 추천',
+  quick_look: '빠른 보기',
+  cart: '장바구니',
+  breadcrumb: '상단 분류 경로',
   search: '검색',
   banner: '배너',
   hero: '첫 화면 큰 배너',
@@ -305,19 +338,26 @@ function toFriction(p: FrictionPayload, base: BehaviorMetrics) {
   const byLocation = p.by_location
     ? p.by_location
         .map((f) => ({
-          where: SECTION_KO[f.section_id] ?? f.section_id,
+          where: SECTION_KO[f.section_id] ?? OTHER_AREA,
           event: f.event_name,
-          ko: FRICTION_KO[f.event_name]?.ko ?? f.event_name,
+          ko: FRICTION_KO[f.event_name]?.ko ?? '기타 반응',
           count: f.event_count,
           meaning: FRICTION_KO[f.event_name]?.meaning ?? '',
         }))
+        // 이름이 같아진 줄(모르는 자리 여럿 → "기타 영역", ingredients·ingredient_list → "성분 목록")은 합친다
+        .reduce<{ where: string; event: string; ko: string; count: number; meaning: string }[]>((acc, r) => {
+          const same = acc.find((x) => x.where === r.where && x.event === r.event);
+          if (same) same.count += r.count;
+          else acc.push({ ...r });
+          return acc;
+        }, [])
         .sort((a, b) => b.count - a.count)
     : base.frictionByLocation;
   const entry = p.entry_source
     ? p.entry_source
         .map((e) => ({
           source: e.entry_source,
-          ko: ENTRY_KO[e.entry_source] ?? e.entry_source,
+          ko: ENTRY_KO[e.entry_source] ?? '기타',
           sessions: e.product_view_sessions,
           cartRate: cartRateOf(e),
         }))

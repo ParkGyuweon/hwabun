@@ -3,6 +3,7 @@ import { fmt } from '../lib/metrics';
 import { EVENT_KO } from '../lib/behavior';
 import { josa } from '../../lib/format';
 import { useBehavior } from '../lib/useBehavior';
+import { OTHER_AREA } from '../lib/martAdapter';
 
 /**
  * 막히는 곳 (명세 §2-7).
@@ -20,7 +21,8 @@ export default function BehaviorScreen() {
 
   // 머뭇거림(hover_dwell)은 막힌 것과 다른 축이라 결론에서 뺀다
   // 0 끼리는 순위가 없다. 한 번도 안 일어난 자리를 "가장 많이 막힌 자리"로 세우지 않는다 (2026-09-18)
-  const worst = [...frictionByLocation].filter((f) => f.event !== 'hover_dwell' && f.count > 0).sort((a, b) => b.count - a.count)[0];
+  // 어느 자리인지 모르는 줄(기타 영역)은 결론으로 세우지 않는다 — "기타 영역을 눌렀을 때" 는 할 일이 안 된다
+  const worst = [...frictionByLocation].filter((f) => f.event !== 'hover_dwell' && f.count > 0 && f.where !== OTHER_AREA).sort((a, b) => b.count - a.count)[0];
   const best = [...entryConversion].filter((e) => e.cartRate > 0).sort((a, b) => b.cartRate - a.cartRate)[0];
   const base = entryConversion.find((e) => e.source === 'list_grid') ?? entryConversion[0];
   const noFriction = source.friction === 'none';
@@ -156,7 +158,7 @@ export default function BehaviorScreen() {
       {eventVolumes.length ? (
         <details className="fold">
           <summary>자세히 보기 · 고객이 한 행동을 많은 순서로</summary>
-          <BarList items={eventVolumes.map((e) => ({ label: EVENT_KO[e.name] ?? e.name, value: e.count }))} format={fmt.compact} />
+          <BarList items={eventVolumes.map((e) => ({ label: EVENT_KO[e.name] ?? '기타 행동', value: e.count }))} format={fmt.compact} />
         </details>
       ) : null}
     </div>
