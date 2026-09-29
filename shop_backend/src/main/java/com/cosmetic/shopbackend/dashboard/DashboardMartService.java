@@ -42,7 +42,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class DashboardMartService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-  private static final Set<String> ACTOR_TYPES = Set.of("all", "web", "synthetic");
+  /**
+   * DW 의 `actor_type` 은 `user` · `synthetic` 두 값뿐이다 (clean_events_job). `all` 은 필터를 걸지 않는 조회값이다.
+   * `web` 은 `user` 의 예전 이름이라 받아서 `user` 로 바꾼다 (계약 §1-2).
+   */
+  private static final Set<String> ACTOR_TYPES = Set.of("all", "user", "synthetic");
+  private static final String LEGACY_USER_ACTOR = "web";
   private static final Pattern DW_TABLE = Pattern.compile("dw\\.([a-z_]+)");
 
   /** 계약 §1-2. 넘으면 400 range_too_long */
@@ -1328,6 +1333,7 @@ public class DashboardMartService {
   record Query(String brand, LocalDate from, LocalDate to, String actor) {
     static Query parse(String brand, String rawFrom, String rawTo, String rawActor) {
       String actor = rawActor == null || rawActor.isBlank() ? "all" : rawActor;
+      if (LEGACY_USER_ACTOR.equals(actor)) actor = "user";
       if (!ACTOR_TYPES.contains(actor)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad_actor_type");
       LocalDate end;
       LocalDate start;

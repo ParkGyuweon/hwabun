@@ -10,7 +10,8 @@
  */
 import { authFetch } from '../../lib/auth';
 
-export type ActorType = 'all' | 'web' | 'synthetic';
+/** DW 의 actor_type 은 user · synthetic 뿐이다. `web` 은 user 의 예전 이름이라 새 호출에서 쓰지 않는다 (계약 §1-2) */
+export type ActorType = 'all' | 'user' | 'synthetic';
 
 export interface MartSource {
   marts: string[];
