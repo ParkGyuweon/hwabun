@@ -5,10 +5,7 @@ import com.cosmetic.shopbackend.brand.BrandRepository;
 import com.cosmetic.shopbackend.security.JwtTokenService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
-import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -220,39 +217,13 @@ public class IdentityController {
     java.util.function.Consumer<String> replace,
     java.util.function.Supplier<?> persist
   ) {
-    if (isLegacySha256(stored)) {
-      String candidate = legacyHash(submitted);
-      if (
-        !MessageDigest.isEqual(
-          stored.getBytes(StandardCharsets.US_ASCII),
-          candidate.getBytes(StandardCharsets.US_ASCII)
-        )
-      ) return false;
+    if (PasswordHashes.isLegacySha256(stored)) {
+      if (!PasswordHashes.legacyMatches(stored, submitted)) return false;
       replace.accept(encoder.encode(submitted));
       persist.get();
       return true;
     }
     return encoder.matches(submitted, stored);
-  }
-
-  private static boolean isLegacySha256(String value) {
-    return (
-      value != null &&
-      value.length() == 64 &&
-      Pattern.matches("[0-9a-fA-F]{64}", value)
-    );
-  }
-
-  private static String legacyHash(String value) {
-    try {
-      return HexFormat.of().formatHex(
-        MessageDigest.getInstance("SHA-256").digest(
-          value.getBytes(StandardCharsets.UTF_8)
-        )
-      );
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
-    }
   }
 
   private AccountResponse response(
