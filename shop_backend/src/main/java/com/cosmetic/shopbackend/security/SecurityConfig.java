@@ -46,6 +46,9 @@ public class SecurityConfig {
             "/swagger-ui.html"
           )
           .permitAll()
+          // PortOne 웹훅: 본문은 신호일 뿐이고 서버가 PortOne 을 다시 조회해 검증한다.
+          .requestMatchers(HttpMethod.POST, "/api/payments/portone/webhook")
+          .permitAll()
           .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**")
           .permitAll()
           .requestMatchers(HttpMethod.GET, "/api/products/{productId}/reviews")

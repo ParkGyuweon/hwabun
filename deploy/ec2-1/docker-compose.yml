@@ -34,6 +34,9 @@ services:
       PORTONE_API_SECRET: ${PORTONE_API_SECRET:?Set PORTONE_API_SECRET in .env}
       PORTONE_API_URL: ${PORTONE_API_URL:-https://api.portone.io}
       PORTONE_TIMEOUT_MS: ${PORTONE_TIMEOUT_MS:-10000}
+      # 결제 대조(confirm 누락 주문을 PortOne 재조회로 PAID 처리). 5분마다, 생성 2분~24시간 CREATED 주문.
+      SHOP_PAYMENT_RECONCILE_ENABLED: ${SHOP_PAYMENT_RECONCILE_ENABLED:-true}
+      SHOP_PAYMENT_RECONCILE_INTERVAL_MS: ${SHOP_PAYMENT_RECONCILE_INTERVAL_MS:-300000}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-ec2}
       # 결제 없이 PAID 로 표시하는 테스트 주문(/api/orders/{id}/pay)을 부를 수 있는 회원 ID 접두.
