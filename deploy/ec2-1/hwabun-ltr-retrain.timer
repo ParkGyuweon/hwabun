@@ -1,0 +1,10 @@
+[Unit]
+Description=HWABUN LTR weekly retrain timer (Mon 03:00 KST = Sun 18:00 UTC)
+
+[Timer]
+OnCalendar=Sun *-*-* 18:00:00 UTC
+Persistent=true
+Unit=hwabun-ltr-retrain.service
+
+[Install]
+WantedBy=timers.target

@@ -105,6 +105,23 @@ class TestServer(unittest.TestCase):
         self.assertEqual(self.h["products"], N_SEED + self.h["registered_products"])
         self.assertIn(self.h["scorer"], ("ltr", "linear"))
 
+    def test_model_reload_keeps_model_and_reports_dir(self):
+        """POST /api/model/reload — 같은 모델이면 changed=false, health.ltr_model 이 폴더·학습 시각을 싣는다"""
+        h = self.h["ltr_model"]
+        self.assertEqual(h["scorer"], self.h["scorer"])
+        if self.h["scorer"] == "ltr":
+            self.assertTrue(h["dir"] and h["trained_at"] and h["n_trees"])
+        r = client.post("/api/model/reload").json()
+        self.assertIn(r["reason"], ("reloaded", "model_not_found"))
+        self.assertFalse(r["changed"])                         # 파일이 안 바뀌었으니 알고리즘 문자열도 그대로
+        h2 = client.get("/health").json()
+        self.assertEqual(h2["scorer"], self.h["scorer"])
+        self.assertEqual(h2["ltr_trees"], self.h["ltr_trees"])
+        if r["reason"] == "reloaded":
+            self.assertTrue(h2["ltr_model"]["reloaded_at"])
+        rec = client.get("/api/recommend", params={"persona_id": PID, "size": 10}).json()
+        self.assertEqual(len(rec["items"]), 10)
+
     def test_cold_start_returns_full_list(self):
         r = client.get("/api/recommend", params={"persona_id": PID, "size": 10}).json()
         self.assertEqual(r["state_source"], "cold_start")

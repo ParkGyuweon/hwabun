@@ -59,8 +59,15 @@ public class IdentityController {
     @Size(max = 32) String skinTypeCode,
     @Size(max = 32) String skinToneCode,
     @Size(max = 32) String hairColorCode,
-    @Size(max = 32) String eyeColorCode
+    @Size(max = 32) String eyeColorCode,
+    Boolean agreeTerms,
+    Boolean agreePrivacy,
+    Boolean agreeSkinInfo,
+    Boolean agreeBehaviorLink
   ) {}
+
+  /** 가입 화면에 보여 주는 약관·개인정보 처리 안내의 판. 문구가 바뀌면 올린다 */
+  public static final String CONSENT_VERSION = "2026-09-29";
 
   public record RegisterSeller(
     @Email @NotBlank String email,
@@ -80,24 +87,47 @@ public class IdentityController {
     String name,
     String role,
     String status,
-    String token
+    String token,
+    /** 행동 로그를 이 계정과 이어도 되나. 회원만 false 가 될 수 있고 판매자·운영자는 늘 true */
+    boolean behaviorLinked
   ) {}
 
   @PostMapping("/members")
-  public ResponseEntity<AccountResponse> member(
-    @Valid @RequestBody RegisterMember r
-  ) {
+  public ResponseEntity<?> member(@Valid @RequestBody RegisterMember r) {
+    if (
+      !Boolean.TRUE.equals(r.agreeTerms()) ||
+      !Boolean.TRUE.equals(r.agreePrivacy())
+    ) return ResponseEntity.badRequest().body(
+      Map.of(
+        "error",
+        "consent_required",
+        "message",
+        "이용약관과 개인정보 수집·이용에 동의해 주셔야 가입할 수 있어요."
+      )
+    );
     if (
       members.findByEmail(r.email()).isPresent()
     ) return ResponseEntity.status(HttpStatus.CONFLICT).build();
+    java.time.LocalDateTime now = java.time.LocalDateTime.now();
+    boolean skinInfo = Boolean.TRUE.equals(r.agreeSkinInfo());
     Member m = new Member();
     m.setEmail(r.email());
     m.setNickname(r.nickname());
     m.setPasswordHash(encoder.encode(r.password()));
-    m.setSkinTypeCode(r.skinTypeCode());
-    m.setSkinToneCode(r.skinToneCode());
-    m.setHairColorCode(r.hairColorCode());
-    m.setEyeColorCode(r.eyeColorCode());
+    // 피부 정보 수집에 동의하지 않았으면 값이 와도 저장하지 않는다
+    if (skinInfo) {
+      m.setSkinTypeCode(r.skinTypeCode());
+      m.setSkinToneCode(r.skinToneCode());
+      m.setHairColorCode(r.hairColorCode());
+      m.setEyeColorCode(r.eyeColorCode());
+      m.setSkinInfoAgreedAt(now);
+    }
+    m.setTermsAgreedAt(now);
+    m.setPrivacyAgreedAt(now);
+    if (Boolean.TRUE.equals(r.agreeBehaviorLink())) m.setBehaviorLinkAgreedAt(
+      now
+    );
+    m.setConsentVersion(CONSENT_VERSION);
     members.save(m);
     return ResponseEntity.status(HttpStatus.CREATED).body(
       response(
@@ -105,7 +135,8 @@ public class IdentityController {
         m.getEmail(),
         m.getNickname(),
         AccountRole.MEMBER,
-        m.getStatus()
+        m.getStatus(),
+        m.isBehaviorLinked()
       )
     );
   }
@@ -146,7 +177,8 @@ public class IdentityController {
               x.getEmail(),
               x.getNickname(),
               AccountRole.MEMBER,
-              x.getStatus()
+              x.getStatus(),
+              x.isBehaviorLinked()
             )
           )
         )
@@ -262,6 +294,17 @@ public class IdentityController {
     AccountRole role,
     AccountStatus status
   ) {
+    return response(id, email, name, role, status, true);
+  }
+
+  private AccountResponse response(
+    String id,
+    String email,
+    String name,
+    AccountRole role,
+    AccountStatus status,
+    boolean behaviorLinked
+  ) {
     String brandId = null;
     if (role == AccountRole.SELLER && brands != null) {
       brandId = brands.findAllBySeller_Id(id).stream()
@@ -275,7 +318,8 @@ public class IdentityController {
       name,
       role.name(),
       status.name(),
-      tokens.issue(id, role, brandId)
+      tokens.issue(id, role, brandId),
+      behaviorLinked
     );
   }
 }

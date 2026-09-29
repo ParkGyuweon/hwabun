@@ -1626,6 +1626,18 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
             if convert:
                 e.tick(); e.emit("add_to_cart", g, quantity=1,
                                  **price_props(catalog, g), content_kind="cta")
+                if g in REGISTERED_IDS:
+                    discovered.append((g, e.sid))   # 등록 상품은 결제 후보로 (아래 p_new_brand_buy)
+            elif g in REGISTERED_IDS and rng.random() < SC["p_new_brand_cart"]:
+                # ── 신규 브랜드 발견 구매 — hidden 경로에도 같은 문을 둔다 (2026-09-29) ──
+                # hidden preference 는 리뷰 이력에서 만든 취향이라 리뷰가 없는 등록 브랜드(SSAFY Beauty)를
+                # 판단할 재료가 없다. 09-29 실측(1,000명·LTR 노출): 등록 상품 상세 353건에 담기 3·구매 1.
+                # 규칙 경로의 근거 그대로 — 실제 쇼핑몰에서도 신규 브랜드는 리뷰 없이 상세를 보고 팔린다.
+                if rng.random() < SC["wishlist_p_target"]:
+                    e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
+                e.tick(); e.emit("add_to_cart", g, quantity=1,
+                                 **price_props(catalog, g), content_kind="cta")
+                discovered.append((g, e.sid))
         elif is_target:
             if rng.random() < SC["wishlist_p_target"]:
                 e.tick(); e.emit("wishlist_toggle", g, action="add"); liked = True
