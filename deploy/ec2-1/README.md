@@ -112,6 +112,62 @@ sudo certbot renew --dry-run
 sudo docker compose exec -T nginx nginx -s reload
 ```
 
+## 5. MySQL 백업과 복구
+
+`backup-mysql.sh` 가 `shop_backend` 와 `dw` 를 DB 별로 `mysqldump --single-transaction`
+(테이블 잠금 없음, 서비스 중에 돌려도 된다) → gzip 으로 `/var/backups/hwabun/mysql/<db>-<시각>.sql.gz`
+에 남기고, 7일 지난 파일은 지운다. `BACKUP_S3_URI` 가 있으면 `aws s3 cp` 로도 올린다.
+root 비밀번호는 MySQL 컨테이너 자신의 `MYSQL_ROOT_PASSWORD` 에서 읽으므로 스크립트에 비밀값이 없다.
+컨테이너는 `ec2-1-mysql-1` 또는 `shop-backend-mysql` 중 떠 있는 것을 고른다(둘 다/둘 다 아니면 멈춘다 →
+`MYSQL_CONTAINER=` 로 지정).
+
+**타이머는 자동으로 켜지지 않는다.** 한 번 손으로 돌려 파일이 생기는지 본 뒤 켠다.
+
+```bash
+cd /home/ubuntu/S15P21A306
+sudo bash deploy/ec2-1/backup-mysql.sh
+sudo ls -lh /var/backups/hwabun/mysql
+
+# (선택) S3 업로드·컨테이너 지정
+echo 'BACKUP_S3_URI=s3://<bucket>/hwabun/mysql' | sudo tee /etc/default/hwabun-mysql-backup
+
+# 매일 04:30 KST 실행 등록
+sudo cp deploy/ec2-1/hwabun-mysql-backup.service deploy/ec2-1/hwabun-mysql-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hwabun-mysql-backup.timer
+systemctl list-timers hwabun-mysql-backup.timer
+journalctl -u hwabun-mysql-backup.service -n 50
+```
+
+덤프에는 사용자·권한(`mysql` 시스템 DB)이 들어가지 않는다. 새 서버에 복구하면 `dw_reader` · `dw_writer`
+계정은 [`streaming/DW_PROJECTION.md`](../../streaming/DW_PROJECTION.md) 절차로 다시 만든다.
+
+### 복구
+
+파일은 `CREATE DATABASE` / `USE` 없이 만들어져 **복구할 DB 를 직접 지정**한다. 각 테이블은
+`DROP TABLE IF EXISTS` 후 다시 만들어지므로, 운영 DB 에 바로 붓기 전에 먼저 임시 DB 로 확인한다.
+
+```bash
+C=ec2-1-mysql-1            # 또는 shop-backend-mysql
+F=/var/backups/hwabun/mysql/shop_backend-20260930T043000.sql.gz
+
+# 1) 임시 DB 에 복구해 내용 확인 (운영 영향 없음)
+sudo docker exec $C sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "CREATE DATABASE restore_check"'
+gunzip -c "$F" | sudo docker exec -i $C sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot restore_check'
+sudo docker exec $C sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SELECT COUNT(*) FROM restore_check.member; SELECT COUNT(*) FROM restore_check.order_item"'
+
+# 2) 운영 DB 로 되돌리기: 쓰는 쪽을 먼저 멈춘다
+sudo docker compose -p ec2-1 --env-file deploy/ec2-1/.env -f deploy/ec2-1/docker-compose.yml stop shop-backend
+gunzip -c "$F" | sudo docker exec -i $C sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot shop_backend'
+sudo docker compose -p ec2-1 --env-file deploy/ec2-1/.env -f deploy/ec2-1/docker-compose.yml start shop-backend
+
+# 3) 정리
+sudo docker exec $C sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "DROP DATABASE restore_check"'
+```
+
+`dw` 도 같은 방법이다(대상 DB 이름만 `dw`). `dw` 는 EC2-2 의 일일 배치가 다시 발행할 수 있으므로
+보통은 `shop_backend` 복구가 우선이다. S3 에서 받을 때는 `aws s3 cp s3://<bucket>/hwabun/mysql/<파일> .`.
+
 ## 추천 추론 서버 (AI, Jira 219 · 2026-09-11 EC2-1 최초 배포)
 
 > **재배포는 로컬에서 한 줄 (2026-09-15, Jira 305):** `bash deploy/ec2-1/redeploy-local.sh`

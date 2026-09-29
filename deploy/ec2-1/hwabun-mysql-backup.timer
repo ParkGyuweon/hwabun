@@ -1,0 +1,12 @@
+[Unit]
+Description=Run HWABUN EC2-1 MySQL backup daily
+
+[Timer]
+# 19:30 UTC = 04:30 KST, after the EC2-2 daily batch (03:00 KST) has written dw.
+OnCalendar=*-*-* 19:30:00 UTC
+Persistent=true
+RandomizedDelaySec=5m
+Unit=hwabun-mysql-backup.service
+
+[Install]
+WantedBy=timers.target
