@@ -531,6 +531,16 @@ spark-submit streaming/jobs/validate_pipeline_job.py --require-events \
 - Processed Fact·Mart에 상위 소유 주체 식별 축이 없는지
 - Funnel Session, 상품 일간 Mart, Funnel 일간 Mart의 grain 유일성
 
+실패로 치지 않고 `warnings`에만 남기는 항목도 있다.
+
+- Raw의 같은 `event_id` 반복 (`raw_event_id_duplicates`)
+- **Raw 완전성**: `(kafka_cluster_id, kafka_topic, kafka_partition)`마다 Raw에 남은
+  첫 offset과 마지막 offset 사이에 빈 offset이 있는지 (`raw_kafka_offset_gaps`).
+  Collector Producer는 멱등·비트랜잭션이라 정상이면 구멍이 없다. 구멍이 있으면 Q1이
+  Kafka 기록을 건너뛴 것이다. 첫 offset 이전(Kafka 보존 만료분)은 세지 않고, Q1
+  재생으로 같은 좌표가 반복된 것도 구멍이 아니다. 결과는 매번 리포트의
+  `raw_offset_continuity`(`partitions_checked`·`gap_count`·`missing_offsets`)에 남는다
+
 K01~K16 시나리오에서 예상 Event ID·Kafka 좌표·정본 ID를 먼저 기록하고 이
 검증 결과와 Kafka offset/lag를 함께 보관한다. Q1 Streaming Query의 실시간
 처리율·입력 행 수·batch duration은 Spark UI 또는 `StreamingQuery` progress에서

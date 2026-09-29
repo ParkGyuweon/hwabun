@@ -663,6 +663,53 @@ def _raw_event_id_duplicate_group_count(raw: Any) -> int:
     )
 
 
+RAW_OFFSET_PARTITION_KEYS = ("kafka_cluster_id", "kafka_topic", "kafka_partition")
+
+
+def _raw_kafka_offset_gaps(raw: Any) -> dict[str, int]:
+    """Count holes in ``kafka_offset`` per (cluster, topic, partition) in Raw.
+
+    Completeness signal for Q1: the Collector's producer is idempotent and not
+    transactional, so every record Kafka assigned an offset to should appear in
+    Raw with no hole between the first and last offset Q1 kept. A hole means Q1
+    skipped records (e.g. a checkpoint restored past data, or files lost).
+
+    Only the span between each partition's min and max offset is checked:
+    records that expired from Kafka before Q1 first read them are not "gaps".
+    Repeated coordinates (Q1 replay) are collapsed first. The result is a
+    warning, not a failure -- a transactional producer would legitimately
+    leave control-record holes.
+    """
+
+    from pyspark.sql import Window
+    from pyspark.sql import functions as F
+
+    keys = list(RAW_OFFSET_PARTITION_KEYS)
+    offsets = (
+        raw.where(F.col("kafka_offset").isNotNull())
+        .select(*keys, "kafka_offset")
+        .distinct()
+    )
+    ordered = Window.partitionBy(*keys).orderBy("kafka_offset")
+    step = F.col("kafka_offset") - F.lag("kafka_offset").over(ordered)
+    summary = (
+        offsets.withColumn("_step", step)
+        .agg(
+            F.countDistinct(*keys).alias("partitions"),
+            F.count(F.when(F.col("_step") > 1, True)).alias("gaps"),
+            F.coalesce(
+                F.sum(F.when(F.col("_step") > 1, F.col("_step") - 1)), F.lit(0)
+            ).alias("missing"),
+        )
+        .first()
+    )
+    return {
+        "partitions_checked": int(summary["partitions"] or 0),
+        "gap_count": int(summary["gaps"] or 0),
+        "missing_offsets": int(summary["missing"] or 0),
+    }
+
+
 def _check(name: str, passed: bool, details: str) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
 
@@ -1221,6 +1268,19 @@ def validate_frames(
                 "name": "raw_event_id_duplicates",
                 "count": raw_duplicate_groups,
                 "details": "Raw preserves repeated event_id values; Q2 owns canonicalization",
+            }
+        )
+    raw_offset_continuity = _raw_kafka_offset_gaps(raw)
+    if raw_offset_continuity["gap_count"]:
+        warnings.append(
+            {
+                "name": "raw_kafka_offset_gaps",
+                "count": raw_offset_continuity["gap_count"],
+                "details": (
+                    "kafka_offset has holes within (cluster, topic, partition) in Raw; "
+                    f"missing_offsets={raw_offset_continuity['missing_offsets']} "
+                    f"partitions_checked={raw_offset_continuity['partitions_checked']}"
+                ),
             }
         )
 
@@ -3509,6 +3569,7 @@ def validate_frames(
         "counts": counts,
         "checks": checks,
         "product_attribution": attribution,
+        "raw_offset_continuity": raw_offset_continuity,
         "warnings": warnings,
         "failure_count": len(failures),
     }
