@@ -217,3 +217,36 @@ nginx(`deploy/nginx/default.conf`) 경로: `= /api/events` → `backend`(수집�
 nginx 에 따로 열지 않는다(요청서 §5). 처방 LLM 스위치 `/api/prescription/llm` 과 `/live` · `/pipeline` 은 열려 있지 않다.
 로컬 개발은 Vite 프록시(`frontend/vite.config.ts`)가 8300 으로 직결한다. 임시로 직접 열어야 하면 `location /api/recommend { proxy_pass http://recommend:8300; }`
 를 `/api/` 앞에 두면 된다.
+
+## 배포 확인과 되돌리기 (Jenkins)
+
+Jenkins `EC2 배포` 단계는 `up -d --build` 앞뒤로 `deploy-helpers.sh` 를 부른다.
+
+1. **배포 전** `tag-previous`: 지금 돌고 있는 컨테이너의 이미지를 `ec2-1-<서비스>:previous` 로 남긴다.
+2. **배포 후** `tag-commit`: 새 이미지를 `ec2-1-<서비스>:<커밋 SHA 12자리>` 로 태그한다. 서비스별 최근 5개만 남긴다(`KEEP_IMAGE_TAGS`).
+3. **헬스 체크** `health`: 배포한 서비스마다 최대 180초(5초 × 36회) 기다린다. 하나라도 응답이 없으면 로그 80줄을 찍고 **빌드를 실패로 표시한다.**
+   - `backend` → `http://backend:8080/actuator/health`, `shop-backend` → `http://shop-backend:8090/actuator/health`,
+     `recommend` → `http://recommend:8300/health` (nginx 컨테이너 안에서 `wget`, 앱 포트는 호스트에 안 열려 있다)
+   - `nginx` → `nginx -t` + 호스트에서 `https://j15a306.p.ssafy.io/` 를 127.0.0.1 로 고정해 호출
+   - prometheus·grafana 는 확인하지 않는다
+   - 수집기 헬스는 Kafka 상태를 따라갈 수 있다. EC2-2 Kafka 가 꺼져 있으면 코드 문제 없이도 빨간 빌드가 된다.
+
+태그 단계는 실패해도 배포를 멈추지 않는다. **헬스 체크 실패 시 자동 롤백은 하지 않는다** — 컨테이너는 새 버전 그대로다.
+판단 후 아래처럼 직전 이미지로 되돌린다 (EC2-1, Jenkins 작업공간에서).
+
+```bash
+cd /home/ubuntu/S15P21A306/deploy-workspace
+DC="docker compose -p ec2-1 --env-file /home/ubuntu/S15P21A306/deploy/ec2-1/.env -f deploy/ec2-1/docker-compose.yml"
+SVC=shop-backend                          # backend | shop-backend | recommend | nginx
+
+docker image ls ec2-1-$SVC                 # previous / 커밋 SHA 태그 확인
+
+# 직전 이미지로 (또는 :<SHA> 로 특정 커밋)
+docker tag ec2-1-$SVC:previous ec2-1-$SVC:latest
+$DC up -d --no-deps --no-build --force-recreate $SVC
+bash deploy/ec2-1/deploy-helpers.sh health $SVC   # EC2_ENV_FILE 을 export 해 두고
+```
+
+`--no-build` 를 빼면 Compose 가 작업공간 코드로 다시 빌드해 되돌린 이미지를 덮어쓴다. 되돌린 뒤 Jenkins 로
+다시 배포하면 그 시점 코드가 새로 올라간다. `:previous` 는 배포 때마다 덮어써지므로 두 단계 이상 전으로 갈 때는
+커밋 SHA 태그를 쓴다(이 변경이 들어간 뒤 배포한 이미지부터 생긴다). MySQL 데이터는 이미지와 무관하다 — 데이터는 위 5장 백업으로 되돌린다.
