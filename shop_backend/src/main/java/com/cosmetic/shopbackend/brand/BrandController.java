@@ -106,8 +106,27 @@ public class BrandController {
     @AuthenticationPrincipal ShopPrincipal actor
   ) {
     Brand b = authorized(id, actor);
+    if (
+      actor.role() == AccountRole.SELLER &&
+      !sellerMayChangeStatus(b.getStatus(), status)
+    ) throw new ResponseStatusException(
+      HttpStatus.FORBIDDEN,
+      "비활성 브랜드를 다시 여는 것은 운영자만 할 수 있어요."
+    );
     b.setStatus(status);
     return view(brands.save(b));
+  }
+
+  /**
+   * 판매자가 자기 브랜드 상태를 바꿀 수 있는가.
+   *
+   * 판매자는 브랜드를 내리는 것(INACTIVE)만 할 수 있다. INACTIVE 는 운영자가 내린 것인지 판매자가
+   * 내린 것인지 구분할 컬럼이 없으므로, INACTIVE → ACTIVE 로 되살리는 것은 운영자
+   * (`PATCH /api/admin/brands/{id}/status`)만 한다. 같은 상태로 두는 것은 막지 않는다.
+   */
+  static boolean sellerMayChangeStatus(BrandStatus current, BrandStatus next) {
+    if (next == current) return true;
+    return next == BrandStatus.INACTIVE;
   }
 
   private Brand authorized(String id, ShopPrincipal actor) {
@@ -123,9 +142,35 @@ public class BrandController {
   }
 
   private static void copy(Brand b, BrandRequest r) {
+    if (!validLogoUrl(r.logoUrl())) throw new ResponseStatusException(
+      HttpStatus.BAD_REQUEST,
+      "로고 주소는 https:// 로 시작하는 주소나 /images 같은 사이트 안 경로만 쓸 수 있어요."
+    );
     b.setName(r.name());
     b.setDescription(r.description());
     b.setLogoUrl(r.logoUrl());
+  }
+
+  /**
+   * 로고 주소로 받아 줄 값인가. 쓸 때(생성·수정)만 본다 — 이미 저장된 값은 읽을 때 막지 않는다.
+   *
+   * 비어 있으면 로고 없음이다. 그 밖에는 호스트가 있는 `https://` 주소나 `/` 로 시작하는 사이트 안
+   * 경로만 받는다. `javascript:`·`data:`·`http://`·`//다른호스트` 같은 값은 400 이다.
+   */
+  static boolean validLogoUrl(String url) {
+    if (url == null || url.isBlank()) return true;
+    String v = url.trim();
+    if (v.startsWith("/")) return !v.startsWith("//") && !v.contains("\\");
+    try {
+      java.net.URI u = new java.net.URI(v);
+      return (
+        "https".equalsIgnoreCase(u.getScheme()) &&
+        u.getHost() != null &&
+        !u.getHost().isBlank()
+      );
+    } catch (java.net.URISyntaxException e) {
+      return false;
+    }
   }
 
   private static BrandResponse view(Brand b) {

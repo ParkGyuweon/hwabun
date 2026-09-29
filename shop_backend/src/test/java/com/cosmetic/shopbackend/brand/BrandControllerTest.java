@@ -1,38 +1,137 @@
 package com.cosmetic.shopbackend.brand;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.cosmetic.shopbackend.identity.AccountRole;
+import com.cosmetic.shopbackend.identity.SellerAccount;
 import com.cosmetic.shopbackend.identity.SellerAccountRepository;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 class BrandControllerTest {
-  private final BrandController controller = new BrandController(
-    mock(BrandRepository.class),
-    mock(SellerAccountRepository.class)
+
+  private static final ShopPrincipal SELLER = new ShopPrincipal(
+    "seller-1",
+    AccountRole.SELLER
   );
-  private final BrandController.BrandRequest request =
-    new BrandController.BrandRequest("새 브랜드", null, null);
+  private static final ShopPrincipal ADMIN = new ShopPrincipal(
+    "admin-1",
+    AccountRole.ADMIN
+  );
+
+  private BrandRepository brands;
+  private BrandController controller;
+  private Brand brand;
+
+  @BeforeEach
+  void setUp() {
+    brands = mock(BrandRepository.class);
+    controller = new BrandController(
+      brands,
+      mock(SellerAccountRepository.class)
+    );
+    SellerAccount seller = new SellerAccount();
+    seller.setId("seller-1");
+    brand = new Brand();
+    brand.setId("b1");
+    brand.setSeller(seller);
+    brand.setName("브랜드");
+    when(brands.findByIdAndSeller_Id("b1", "seller-1")).thenReturn(
+      Optional.of(brand)
+    );
+    when(brands.findById("b1")).thenReturn(Optional.of(brand));
+    when(brands.save(any(Brand.class))).thenAnswer(i -> i.getArgument(0));
+  }
 
   @Test
+  @DisplayName("판매자는 자기 브랜드를 내릴 수 있다")
+  void sellerCanDeactivate() {
+    assertEquals(
+      "INACTIVE",
+      controller.status("b1", BrandStatus.INACTIVE, SELLER).status()
+    );
+  }
+
+  @Test
+  @DisplayName("판매자는 비활성 브랜드를 다시 열 수 없다 — 운영자만 한다")
+  void sellerCannotReactivate() {
+    brand.setStatus(BrandStatus.INACTIVE);
+    ResponseStatusException e = assertThrows(
+      ResponseStatusException.class,
+      () -> controller.status("b1", BrandStatus.ACTIVE, SELLER)
+    );
+    assertEquals(403, e.getStatusCode().value());
+    assertEquals(BrandStatus.INACTIVE, brand.getStatus());
+  }
+
+  @Test
+  @DisplayName("로고는 https 주소·사이트 안 경로·빈 값만 받는다")
+  void logoUrlAllowList() {
+    assertTrue(BrandController.validLogoUrl(null));
+    assertTrue(BrandController.validLogoUrl(""));
+    assertTrue(BrandController.validLogoUrl("https://cdn.example.com/logo.png"));
+    assertTrue(BrandController.validLogoUrl("/images/brand/logo.png"));
+    assertFalse(BrandController.validLogoUrl("http://cdn.example.com/logo.png"));
+    assertFalse(BrandController.validLogoUrl("javascript:alert(1)"));
+    assertFalse(BrandController.validLogoUrl("data:image/png;base64,AAAA"));
+    assertFalse(BrandController.validLogoUrl("//evil.example.com/x.png"));
+    assertFalse(BrandController.validLogoUrl("/\\evil.example.com/x.png"));
+    assertFalse(BrandController.validLogoUrl("https:///nohost"));
+  }
+
+  @Test
+  @DisplayName("잘못된 로고 주소로 수정하면 400 이고 저장하지 않는다")
+  void updateRejectsBadLogo() {
+    ResponseStatusException e = assertThrows(
+      ResponseStatusException.class,
+      () ->
+        controller.update(
+          "b1",
+          SELLER,
+          new BrandController.BrandRequest("브랜드", null, "javascript:alert(1)")
+        )
+    );
+    assertEquals(400, e.getStatusCode().value());
+    assertEquals(null, brand.getLogoUrl());
+  }
+
+  @Test
+  @DisplayName("운영자는 비활성 브랜드를 다시 열 수 있다")
+  void adminCanReactivate() {
+    brand.setStatus(BrandStatus.INACTIVE);
+    assertEquals(
+      "ACTIVE",
+      controller.status("b1", BrandStatus.ACTIVE, ADMIN).status()
+    );
+  }
+
+  @Test
+  @DisplayName("로그인 없이 브랜드를 만들면 500 이 아니라 401")
   void createWithoutActorIsUnauthorizedNotServerError() {
     ResponseStatusException exception = assertThrows(
       ResponseStatusException.class,
-      () -> controller.create(null, request)
+      () -> controller.create(null, new BrandController.BrandRequest("새 브랜드", null, null))
     );
     assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
   }
 
   @Test
+  @DisplayName("판매자가 아니면 브랜드를 만들 수 없다")
   void createByNonSellerIsForbidden() {
     ResponseStatusException exception = assertThrows(
       ResponseStatusException.class,
-      () -> controller.create(new ShopPrincipal("member-1", AccountRole.MEMBER), request)
+      () -> controller.create(new ShopPrincipal("member-1", AccountRole.MEMBER), new BrandController.BrandRequest("새 브랜드", null, null))
     );
     assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
   }
