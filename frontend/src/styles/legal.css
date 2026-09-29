@@ -1,0 +1,253 @@
+/*
+ * 푸터 · 약관 화면 · 첫 방문 안내.
+ * apple.css 의 토큰(--color-ink · --color-line-soft · --page-max …)을 그대로 쓴다.
+ */
+
+/* ---------- 푸터 ---------- */
+
+.site-footer {
+  margin-top: 72px;
+  border-top: 1px solid var(--color-line-soft, #e8e8ed);
+  background: var(--color-surface-soft, #f5f5f7);
+  color: var(--color-ink-soft, #6e6e73);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.site-footer__inner {
+  max-width: var(--page-max, 1120px);
+  margin: 0 auto;
+  padding: 28px 22px 40px;
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-line-soft, #e8e8ed);
+}
+
+.site-footer__links a {
+  color: var(--color-ink-soft, #6e6e73);
+  text-decoration: none;
+}
+
+.site-footer__links a:hover {
+  color: var(--color-ink, #1d1d1f);
+  text-decoration: underline;
+}
+
+.site-footer__links .site-footer__privacy {
+  font-weight: 700;
+  color: var(--color-ink, #1d1d1f);
+}
+
+.site-footer__info {
+  padding-top: 14px;
+}
+
+.site-footer__info p {
+  margin: 0;
+}
+
+.site-footer__brand {
+  margin-bottom: 4px !important;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--color-ink, #1d1d1f);
+}
+
+/* ---------- 약관 화면 ---------- */
+
+.legal {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 22px 24px;
+  color: var(--color-ink, #1d1d1f);
+  font-size: 15px;
+  line-height: 1.75;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.legal__title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.legal__meta {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--color-ink-faint, #86868b);
+}
+
+.legal__intro {
+  margin-top: 20px;
+  color: var(--color-ink-soft, #6e6e73);
+}
+
+.legal__intro p {
+  margin: 0;
+}
+
+.legal__toc {
+  margin: 28px 0 8px;
+  padding: 18px 22px;
+  border-radius: var(--radius-md, 18px);
+  background: var(--color-surface-soft, #f5f5f7);
+  font-size: 14px;
+}
+
+.legal__toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.legal__toc a {
+  color: var(--color-ink-soft, #6e6e73);
+  text-decoration: none;
+}
+
+.legal__toc a:hover {
+  color: var(--color-ink, #1d1d1f);
+  text-decoration: underline;
+}
+
+.legal__section {
+  padding-top: 32px;
+  scroll-margin-top: 64px;
+}
+
+.legal__section h2 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.legal__section h3 {
+  margin: 18px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.legal__section p {
+  margin: 0 0 10px;
+}
+
+.legal__section ul {
+  margin: 0 0 10px;
+  padding-left: 1.2em;
+}
+
+.legal__section li + li {
+  margin-top: 4px;
+}
+
+.legal__section strong {
+  font-weight: 700;
+}
+
+.legal__table {
+  width: 100%;
+  margin: 4px 0 12px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.legal__table th,
+.legal__table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-line-soft, #e8e8ed);
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal__table th {
+  font-weight: 600;
+  color: var(--color-ink-soft, #6e6e73);
+  background: var(--color-surface-soft, #f5f5f7);
+}
+
+.legal__foot {
+  margin: 40px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-line-soft, #e8e8ed);
+  font-size: 13px;
+  color: var(--color-ink-faint, #86868b);
+}
+
+@media (max-width: 600px) {
+  .legal {
+    padding-top: 32px;
+  }
+
+  .legal__title {
+    font-size: 26px;
+  }
+
+  .legal__table th,
+  .legal__table td {
+    padding: 8px;
+  }
+}
+
+/* ---------- 첫 방문 안내 (왼쪽 아래) ---------- */
+
+.activity-notice {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 12px 12px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-soft, #6e6e73);
+}
+
+.activity-notice__text {
+  margin: 0;
+  word-break: keep-all;
+}
+
+.activity-notice__text a {
+  color: var(--color-ink, #1d1d1f);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.activity-notice__ok {
+  flex: none;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--radius-pill, 980px);
+  background: var(--color-ink, #1d1d1f);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activity-notice__ok:hover {
+  opacity: 0.85;
+}

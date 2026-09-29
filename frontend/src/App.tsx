@@ -5,6 +5,12 @@ import Breadcrumb from './components/product/Breadcrumb';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductListPage from './pages/ProductListPage';
 import CartPage from './pages/CartPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
+import SiteFooter from './components/layout/SiteFooter';
+import ActivityNotice from './components/legal/ActivityNotice';
+import { LEGAL_QUERY, legalPageFromState, legalPageFromUrl } from './lib/legalRoute';
+import type { LegalPage } from './lib/legalRoute';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { setTraitProfile } from './lib/trait';
 import { EVENT_CURRENCY, createOrderId, orderTotals, orderTotalsKrw, toOrderItems, unitMoneyProps } from './lib/checkout';
@@ -47,6 +53,8 @@ import './styles/cart.css';
 import './styles/apple.css';
 // 소상공인이 고른 진열 레이아웃·색. 맨 마지막 — data-storefront / data-theme 로 분기한다
 import './styles/storefront.css';
+// 푸터·약관 화면·첫 방문 안내. 진열 테마와 겹치는 셀렉터가 없다
+import './styles/legal.css';
 
 // 상품은 등록 저장소(초안 + 등록 + 시드 + 세포라)가 준다. 렌더 안에서는 useCatalog() 를 쓴다
 /**
@@ -170,6 +178,13 @@ export default function App() {
   /** 장바구니 화면이 열려 있는지. 상품 상태와 별개로 겹쳐 둔다 */
   const [cartOpen, setCartOpen] = useState(false);
   /**
+   * 약관 화면(`?terms=1` · `?privacy=1`). 장바구니처럼 **아래 화면 위에 겹쳐 둔다** —
+   * 상품·장바구니 상태는 그대로 두고, 뒤로가기로 닫으면 보던 화면으로 돌아간다.
+   * 아래 상태를 건드리지 않으므로 약관을 여닫는 것만으로 page_view 가 새로 찍히지 않는다
+   * (page_type 계약에 약관 화면 값이 없다 — types/log PageType).
+   */
+  const [legalPage, setLegalPage] = useState<LegalPage | null>(() => legalPageFromUrl());
+  /**
    * 장바구니. 서버가 없어 메모리에만 산다.
    * 이 화면의 목적은 view_cart / remove_from_cart 신호다 (조사 7-2).
    */
@@ -213,7 +228,7 @@ export default function App() {
   const userScrolledRef = useRef(false);
 
   /** 목록·상세·장바구니를 구분하는 키. 스크롤 위치 저장에 쓴다 */
-  const viewKey = cartOpen ? 'cart' : (productId ?? 'list');
+  const viewKey = legalPage ? `legal:${legalPage}` : cartOpen ? 'cart' : (productId ?? 'list');
 
   /**
    * 화면이 쓰는 페르소나. 둘 중 하나다.
@@ -314,6 +329,7 @@ export default function App() {
 
   const openProduct = useCallback((nextId: string) => {
     window.history.pushState({ productId: nextId, cart: false }, '', `?product=${nextId}`);
+    setLegalPage(null);
     setCartOpen(false);
     setProductId(nextId);
   }, []);
@@ -326,6 +342,7 @@ export default function App() {
      */
     track('navigation_click', { target: 'home', entry_source: 'breadcrumb' });
     window.history.pushState({ productId: null, cart: false }, '', '/');
+    setLegalPage(null);
     setCartOpen(false);
     setProductId(null);
   }, []);
@@ -352,12 +369,30 @@ export default function App() {
    */
   const cartSummaryRef = useRef(cartSummary);
   cartSummaryRef.current = cartSummary;
+  /** popstate 에서 "이미 장바구니를 보고 있었나" 를 읽는다. 약관을 닫고 장바구니로 돌아올 때 view_cart 를 두 번 세지 않게 */
+  const cartOpenRef = useRef(cartOpen);
+  cartOpenRef.current = cartOpen;
 
   const openCart = useCallback(() => {
     track('view_cart', cartSummary());
     window.history.pushState({ productId, cart: true }, '', '?cart=1');
+    setLegalPage(null);
     setCartOpen(true);
   }, [cartSummary, productId]);
+
+  /**
+   * 약관 화면 열기. 아래 화면(상품·장바구니)은 history.state 에 그대로 실어 둔다 —
+   * 뒤로가기의 popstate 가 그 값으로 보던 화면을 되살린다.
+   * 이동 이벤트는 남기지 않는다. 약관 보기는 쇼핑 행동이 아니고, 새 target 값은 계약에 없다.
+   */
+  const openLegal = useCallback(
+    (page: LegalPage) => {
+      if (legalPage === page) return;
+      window.history.pushState({ productId, cart: cartOpen, legal: page }, '', LEGAL_QUERY[page]);
+      setLegalPage(page);
+    },
+    [productId, cartOpen, legalPage],
+  );
 
   /** 같은 상품·옵션이면 수량을 합친다 */
   const addToCart = useCallback((item: CartItem) => {
@@ -486,6 +521,7 @@ export default function App() {
          * 장바구니 단계가 실제보다 커지고, "담기 → 장바구니 → 주문" 이탈률이 흐려진다.
          */
         window.history.pushState({ productId: null, cart: true }, '', '?cart=1');
+        setLegalPage(null);
         setCartOpen(true);
       }
     },
@@ -757,10 +793,13 @@ export default function App() {
     const onPop = (event: PopStateEvent) => {
       const next = (event.state?.productId as string | null | undefined) ?? null;
       const nextCart = Boolean(event.state?.cart);
+      const nextLegal = legalPageFromState(event.state?.legal);
+      setLegalPage(nextLegal);
+      // 약관을 열고 닫는 것은 아래 화면이 바뀌지 않는다. 아래 화면이 그대로면 page_view·view_cart 를 다시 남기지 않는다
       navigationSourceRef.current = 'history_back';
       // 뒤로 온 화면은 보던 자리에서 이어봐야 한다
       restoreScrollRef.current = true;
-      if (nextCart) {
+      if (nextCart && !nextLegal && !cartOpenRef.current) {
         track('view_cart', {
           ...cartSummaryRef.current(),
           navigation_source: 'history_back',
@@ -817,7 +856,7 @@ export default function App() {
   useEffect(() => {
     const previous = window.history.scrollRestoration;
     window.history.scrollRestoration = 'manual';
-    window.history.replaceState({ productId: initialProductId() }, '', window.location.href);
+    window.history.replaceState({ productId: initialProductId(), legal: legalPageFromUrl() }, '', window.location.href);
 
     return () => {
       window.history.scrollRestoration = previous;
@@ -905,10 +944,12 @@ export default function App() {
 
   /** 탭 제목. 히스토리 목록에도 이 값이 남는다 */
   useEffect(() => {
-    document.title = product
-      ? `${product.product_name} - ${product.brand_name} | BLOOM`
-      : 'BLOOM';
-  }, [product]);
+    document.title = legalPage
+      ? `${legalPage === 'terms' ? '이용약관' : '개인정보처리방침'} | BLOOM`
+      : product
+        ? `${product.product_name} - ${product.brand_name} | BLOOM`
+        : 'BLOOM';
+  }, [product, legalPage]);
 
   /**
    * 식별자가 바뀌면 새 방문으로 본다.
@@ -960,7 +1001,11 @@ export default function App() {
       />
       )}
 
-      {cartOpen ? (
+      {legalPage === 'terms' && !preview ? (
+        <TermsPage />
+      ) : legalPage === 'privacy' && !preview ? (
+        <PrivacyPage />
+      ) : cartOpen ? (
         <CartPage
           items={cartItems}
           onQuantityChange={changeCartQuantity}
@@ -1011,6 +1056,8 @@ export default function App() {
         />
       )}
 
+      {preview ? null : <SiteFooter onOpenLegal={openLegal} />}
+      {preview ? null : <ActivityNotice onOpenPrivacy={() => openLegal('privacy')} />}
     </>
   );
 }
