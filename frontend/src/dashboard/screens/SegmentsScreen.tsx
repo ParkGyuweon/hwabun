@@ -3,6 +3,7 @@ import { Heatmap, Kpi, Panel } from '../components';
 import { PRICE_BIN_ORDER, SKIN_TONE_ORDER, SKIN_TYPE_KO, fmt, priceBinKo } from '../lib/metrics';
 import type { CohortM, SegmentByType } from '../lib/behavior';
 import { useBehavior } from '../lib/useBehavior';
+import { isThinEstimate, pickByLowerBound } from '../lib/wilson';
 
 const TONE_KO: Record<string, string> = {
   fair: '가장 밝은 톤',
@@ -139,7 +140,7 @@ export default function SegmentsScreen() {
   /** 가격대 표. 정해진 5구간 순서 + 가격 미입력 행은 맨 아래 */
   const binIndex = (bin: string | null) => (bin === null ? 99 : (PRICE_BIN_ORDER as readonly string[]).indexOf(bin));
   const bandRows = [...priceBands].sort((a, b) => binIndex(a.bin) - binIndex(b.bin));
-  const bandBest = bandRows.filter((b) => b.sessions >= THIN_VISITS && (b.cartRate ?? 0) > 0).sort((a, b) => (b.cartRate ?? 0) - (a.cartRate ?? 0))[0] ?? null;
+  const bandBest = pickByLowerBound(bandRows.filter((b) => b.sessions >= THIN_VISITS && (b.cartRate ?? 0) > 0), (b) => b.cartRate ?? 0, (b) => b.sessions);
 
   /** 피부 타입 × 가격대 칸. 가격 미입력 칸은 격자에 넣지 않는다 (열이 없다) */
   const priceCells: Record<string, Record<string, { value: number; n: number }>> = {};
@@ -153,11 +154,15 @@ export default function SegmentsScreen() {
   const shown = segmentMatrix.flatMap((r) => r.cells.map((c) => ({ type: r.type, ...c }))).filter((c) => c.sessions >= MIN_CELL_VISITS);
   // 0 끼리는 순위가 없다. 담기율이 전부 0 이면 "최고 전환 고객군"도 없다 (2026-09-18)
   const converting = shown.filter((c) => c.cartRate > 0);
-  const best = converting.length > 0 ? converting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
+  // 칸이 많으면 방문 적은 칸이 운으로 1등이 된다. 원래 비율이 아니라 윌슨 95% 하한으로 고른다 (lib/wilson.ts)
+  const best = pickByLowerBound(converting, (c) => c.cartRate, (c) => c.sessions);
   const typesConverting = (segmentByType ?? []).filter((t) => t.cartRate > 0);
-  const bestType = typesConverting.length > 0 ? typesConverting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
+  const bestType = pickByLowerBound(typesConverting, (t) => t.cartRate, (t) => t.sessions);
   const tonesConverting = segmentByTone.filter((t) => t.cartRate > 0 && t.sessions >= MIN_CELL_VISITS);
-  const bestTone = tonesConverting.length > 0 ? tonesConverting.reduce((a, b) => (a.cartRate >= b.cartRate ? a : b)) : null;
+  const bestTone = pickByLowerBound(tonesConverting, (t) => t.cartRate, (t) => t.sessions);
+  /** "상세 N건 중 X%" 에 표본이 적으면 꼬리를 붙인다 */
+  const pickSub = (x: { sessions: number; cartRate: number }) =>
+    `상세 ${fmt.int(x.sessions)}건 중 ${fmt.pct(x.cartRate)}${isThinEstimate(x.cartRate, x.sessions) ? ' · 표본이 적어 참고만' : ''}`;
 
   const cells: Record<string, Record<string, { value: number; n: number }>> = {};
   for (const r of segmentMatrix) {
@@ -178,21 +183,21 @@ export default function SegmentsScreen() {
           <Kpi
             label="가장 많이 담는 고객군"
             value={cellName(best.type, best.tone)}
-            sub={`상세 ${fmt.int(best.sessions)}건 중 ${fmt.pct(best.cartRate)}`}
+            sub={pickSub(best)}
             source="real"
           />
         ) : bestType ? (
           <Kpi
             label="가장 많이 담는 피부 타입"
             value={SKIN_TYPE_KO[bestType.type] ?? bestType.type}
-            sub={`상세 ${fmt.int(bestType.sessions)}건 중 ${fmt.pct(bestType.cartRate)}`}
+            sub={pickSub(bestType)}
             source="real"
           />
         ) : best ? (
           <Kpi
             label="가장 많이 담는 고객군"
             value={cellName(best.type, best.tone)}
-            sub={`상세 ${fmt.int(best.sessions)}건 중 ${fmt.pct(best.cartRate)}`}
+            sub={pickSub(best)}
             source="none"
           />
         ) : (
@@ -212,7 +217,7 @@ export default function SegmentsScreen() {
         <Kpi
           label="가장 많이 담는 피부 톤"
           value={bestTone ? TONE_KO[bestTone.type] ?? bestTone.type : '-'}
-          sub={bestTone ? `상세 ${fmt.int(bestTone.sessions)}건 중 ${fmt.pct(bestTone.cartRate)}` : noSegments ? '아직 기록 없음' : '담은 고객 아직 없음'}
+          sub={bestTone ? pickSub(bestTone) : noSegments ? '아직 기록 없음' : '담은 고객 아직 없음'}
           source={source.segments}
         />
       </div>
