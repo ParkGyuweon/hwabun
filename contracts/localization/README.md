@@ -9,6 +9,11 @@ JSON 으로 옮긴 것이다. **이 폴더의 JSON 은 직접 고치지 말고**
 python batch/ingest/build_ko_catalog.py
 ```
 
+> **예외 (2026-09-29).** `products-ko.json` 의 광고 금지 표현(아토피·치료·재생·항염·콜라겐 생성·최고·완벽 등)은
+> JSON 에 직접 고쳤다. 빌더가 리뷰 대조(20,000건 확장 뒤 EN≠원본)에서 멈춰 다시 만들 수 없었다. 대조표에는 아직
+> 반영하지 않았으므로 빌더를 다시 돌리기 전에 대조표 KO 열에 같은 교정을 옮겨야 한다. 남은 금지 표현 검사:
+> `python -m unittest contracts.tests.test_product_copy_claims`
+
 빌더는 대조표의 영문 원문 열을 `frontend/src/mocks/products.sample.json` · `reviews.sample.json` 과
 한 글자씩 대조해 어긋나면 실패한다. 그래서 각 행이 어느 `product_id`·`review_id` 인지 확실하다.
 
