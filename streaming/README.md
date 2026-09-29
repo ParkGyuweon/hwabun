@@ -86,9 +86,30 @@ PowerShell에서는 `infra/kafka/topics.ps1`을 사용할 수 있다.
 | `RAW_EVENTS_PATH` | `data/raw_events` |
 | `RAW_EVENTS_CHECKPOINT_PATH` | `data/checkpoints/raw-events` |
 | `RAW_EVENTS_STARTING_OFFSETS` | `earliest` |
-| `RAW_EVENTS_TRIGGER_INTERVAL` | `10 seconds` |
+| `RAW_EVENTS_TRIGGER_INTERVAL` | `60 seconds` |
 | `RAW_EVENTS_MAX_OFFSETS_PER_TRIGGER` | 미설정 |
 | `KAFKA_CLUSTER_ID` | `local` |
+
+### Trigger 60초와 작은 파일
+
+Q1은 micro-batch마다 Kafka Partition 수만큼 Parquet 파일을 만든다. 10초 trigger는
+하루 최대 3 × 8,640 = 약 2.6만 개, 60초는 약 4,300개다. 기본값을 60초로 둔 이유는
+Raw를 10초 안에 읽는 소비자가 없기 때문이다 (2026-09-29 확인).
+
+- 추천 서버(`batch/serving`)는 Raw Parquet이 아니라 Kafka를 직접 구독한다.
+- 대시보드는 하루 한 번 배치(Q2~Q5 → DW)가 만든 Mart를 읽는다.
+- `raw_events`를 읽는 코드는 Q2 `clean_events_job`과 Q5 `validate_pipeline_job`뿐이다.
+
+더 빨리 보고 싶으면 `.env`의 `RAW_EVENTS_TRIGGER_INTERVAL`로 되돌린다.
+
+전날 파티션을 128MB 단위로 다시 쓰는 `compact_raw_partition_job.py`가 있지만
+**기본은 꺼져 있다** (`RAW_COMPACTION_ENABLED=1`로 켠다). Parquet file sink가 남기는
+`_spark_metadata` 로그가 있으면 Q2가 Raw 파일 목록을 디렉터리가 아니라 그 로그에서
+읽는다. 파일을 바꿔 쓰면 Q2가 새 파일을 못 보고 지운 파일을 찾다 실패하므로, Job은
+로그를 발견하면 아무것도 하지 않고 `sink_log_present`로 건너뛴다. 실제로 켜려면 Q2가
+로그 없이 읽도록(파티션 경로 glob + 좌표 축약) 먼저 바꿔야 하고, 이는 Mart 숫자 검증이
+필요한 변경이라 시연 뒤로 미룬다. 켜진 경우에도 임시 경로에 쓰고 행 수·Kafka 좌표 수가
+원본과 같을 때만 교체하며, 실패하면 원본을 그대로 두고 배치를 계속한다.
 
 ## 복구와 한계
 

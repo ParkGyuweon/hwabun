@@ -92,6 +92,9 @@ class RawSinkConfigTest(unittest.TestCase):
         self.assertEqual("localhost:9092", config.bootstrap_servers)
         self.assertEqual("activity-events", config.topic)
         self.assertEqual("earliest", config.starting_offsets)
+        # 60s keeps Raw at ~1/6 the files of a 10s trigger; nothing downstream
+        # reads Raw faster than the daily batch.
+        self.assertEqual("60 seconds", config.trigger_interval)
         self.assertIsNone(config.max_offsets_per_trigger)
 
     def test_raw_schema_keeps_kafka_coordinates_and_original_value(self):

@@ -135,7 +135,7 @@ services:
       RAW_EVENTS_PATH: ${RAW_EVENTS_PATH:-/opt/project/data/raw_events}
       RAW_EVENTS_CHECKPOINT_PATH: ${RAW_EVENTS_CHECKPOINT_PATH:-/opt/project/data/checkpoints/raw-events}
       RAW_EVENTS_STARTING_OFFSETS: ${RAW_EVENTS_STARTING_OFFSETS:-earliest}
-      RAW_EVENTS_TRIGGER_INTERVAL: ${RAW_EVENTS_TRIGGER_INTERVAL:-10 seconds}
+      RAW_EVENTS_TRIGGER_INTERVAL: ${RAW_EVENTS_TRIGGER_INTERVAL:-60 seconds}
     depends_on:
       kafka:
         condition: service_healthy

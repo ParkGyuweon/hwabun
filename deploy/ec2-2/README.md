@@ -153,6 +153,11 @@ Q1 Raw Sink가 1코어를 쓰므로 Worker가 기본 2코어라면 배치의 `sp
 EC2 자원을 확인하고 `SPARK_WORKER_CORES`를 최소 3으로 설정해야 한다. Q5는 현재 전체
 결정성 검사를 수행하므로 완료까지 시간이 걸릴 수 있다.
 
+선택 단계: `RAW_COMPACTION_ENABLED=1`이면 Q2 앞에서 전날(UTC) `raw_ingest_date`
+파티션을 128MB 단위로 다시 쓴다. **기본값은 0(꺼짐)**이다. Q1 sink 로그
+(`_spark_metadata`)가 있는 현재 구성에서는 켜도 Job이 스스로 건너뛴다. 이유와 전제는
+[streaming/README.md](../../streaming/README.md)의 "Trigger 60초와 작은 파일"을 본다.
+
 timer나 service 파일을 수정한 뒤에는 다시 `/etc/systemd/system/`에 복사하고
 `sudo systemctl daemon-reload` 및 `sudo systemctl restart hwabun-daily-batch.timer`를
 실행한다.

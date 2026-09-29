@@ -63,6 +63,18 @@ submit() {
   ' _ "$job" "$@"
 }
 
+# Optional Q1 small-file compaction of yesterday's (UTC) raw_ingest_date
+# partition, before Q2 reads Raw. Default OFF: Q1's Parquet file sink keeps a
+# _spark_metadata log, and while that log exists Q2 lists Raw files from it,
+# so the job detects the log and skips itself (see compact_raw_partition_job.py).
+# Turning this on is harmless today but only pays off once Q2 stops relying on
+# the sink log. A failure never blocks Q2: the original partition is kept.
+if [ "${RAW_COMPACTION_ENABLED:-0}" = "1" ]; then
+  echo "compacting previous raw_ingest_date partition"
+  submit compact_raw_partition_job \
+    || echo "WARNING: raw compaction failed; original partition kept, continuing" >&2
+fi
+
 # Q2~Q4 build the Marts. A failure here must stop the run: publishing Marts built
 # from a failed stage would put wrong numbers on the dashboard.
 echo "running Q2~Q4"
