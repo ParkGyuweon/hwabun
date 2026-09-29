@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
 import OrdersScreen from './screens/OrdersScreen';
 import ProductsScreen from './screens/ProductsScreen';
@@ -320,7 +321,11 @@ export default function DashboardApp() {
           <h1>{active.title}</h1>
           <p>{active.desc}</p>
           {/* 어느 브랜드 데이터인지 항상 적는다. 스코프가 둘이라 이게 없으면 숫자를 잘못 읽는다 */}
-          <ScopeNote scope={active.scope} brandName={brand?.name ?? null} />
+          {/*
+            행동 숫자를 쓰는 화면은 요약에서 고른 기간을 그대로 따른다. 기간 고르기가 없는 화면이라도 몇 일치인지는 적는다 —
+            안 적으면 사장님은 전체 기간으로 읽는다 (2026-09-29)
+          */}
+          <ScopeNote scope={active.scope} brandName={brand?.name ?? null} period={PERIOD_LABEL_SCREENS.has(screen) ? `최근 ${days}일` : null} />
 
           <div className="main__controls">
             {screen === 'overview' || screen === 'inflow' ? (
@@ -358,17 +363,19 @@ export default function DashboardApp() {
           </div>
         ) : null}
 
-        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
-        {screen === 'products' ? <ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
+        {screen === 'overview' ? <BehaviorGate><OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /></BehaviorGate> : null}
+        {screen === 'products' ? <BehaviorGate><ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /></BehaviorGate> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
-        {screen === 'content' ? <ContentScreen brandName={brand?.name ?? ''} /> : null}
-        {screen === 'segments' ? <SegmentsScreen /> : null}
-        {screen === 'behavior' ? <BehaviorScreen /> : null}
+        {screen === 'content' ? <BehaviorGate><ContentScreen brandName={brand?.name ?? ''} /></BehaviorGate> : null}
+        {screen === 'segments' ? <BehaviorGate><SegmentsScreen /></BehaviorGate> : null}
+        {screen === 'behavior' ? <BehaviorGate><BehaviorScreen /></BehaviorGate> : null}
         {screen === 'reviews' ? (
           <ReviewsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
         ) : null}
         {screen === 'ingredients' ? (
-          <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
+          <BehaviorGate>
+            <IngredientsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} productId={productId} onProductChange={setProductId} />
+          </BehaviorGate>
         ) : null}
         {screen === 'price' ? <PriceScreen brandId={brand?.id ?? null} /> : null}
         {screen === 'inflow' ? <InflowScreen brandId={brand?.id ?? null} days={days} /> : null}
@@ -394,7 +401,32 @@ export default function DashboardApp() {
  *
  * 피드백·등록 스코프는 마트와 무관한 로컬 분류본이라 언제나 고정 라벨이다.
  */
-function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string | null }) {
+/**
+ * 행동 기록을 받는 동안에는 화면 대신 "불러오는 중" 만 그린다. 받기 전 빈 묶음을 그대로 그리면
+ * "0.0%"·"아직 기록이 없습니다" 가 잠깐 떴다 바뀌어, 사장님은 그 0 을 진짜로 읽는다 (2026-09-29)
+ */
+function BehaviorGate({ children }: { children: ReactNode }) {
+  const state = useMartState();
+  if (state !== 'loading') return <>{children}</>;
+  return (
+    <div className="stack" aria-busy="true">
+      <p className="loading-state" role="status" aria-live="polite">
+        고객 행동 기록을 불러오는 중…
+      </p>
+      <div className="grid grid--kpi" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="loading-block" />
+        ))}
+      </div>
+      <div className="loading-block loading-block--tall" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** 기간 고르기는 없지만 요약의 기간(days)을 따르는 화면. 헤더에 "최근 N일" 을 적는다 */
+const PERIOD_LABEL_SCREENS = new Set<ScreenKey>(['content', 'behavior', 'products', 'segments', 'ingredients']);
+
+function ScopeNote({ scope, brandName, period }: { scope: ScopeKind; brandName: string | null; period?: string | null }) {
   const { anyReal } = useBehavior();
   const label = SCOPE_LABEL[scope];
   const live = scope === 'behavior' && anyReal;
@@ -405,6 +437,7 @@ function ScopeNote({ scope, brandName }: { scope: ScopeKind; brandName: string |
     <p className="main__scope" title={source}>
       <span className="main__scope-what">{label.what}</span>
       <strong>{brand}</strong>
+      {period ? <span className="main__scope-period">{period}</span> : null}
       <span className="main__scope-src">{source}</span>
     </p>
   );

@@ -10,7 +10,7 @@ import { rankInsights } from '../lib/insight';
 import { useBehavior } from '../lib/useBehavior';
 import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
-import { feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
+import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
 import type { Feedback } from '../../types/feedback';
 import { PURCHASE_REASONS } from '../../lib/checkout';
@@ -94,7 +94,8 @@ export default function OverviewScreen({
     const local = brandName ? feedbackForBrand(all, brandName) : [];
     const server = remote && remote.brand === brandName ? remote.rows : [];
     const seen = new Set(local.map((f) => f.feedback_id));
-    return [...server.filter((f) => !seen.has(f.feedback_id)), ...local];
+    // 진짜 의견이 있으면 번들 샘플은 "가장 많이 나온 말" 에서 뺀다
+    return dropSamplesIfReal([...server.filter((f) => !seen.has(f.feedback_id)), ...local]);
   }, [all, remote, brandName]);
   const fbTop = useMemo(() => {
     const map = new Map<string, number>();
@@ -107,7 +108,7 @@ export default function OverviewScreen({
     if (prev === undefined || prev === null) return '';
     const d = (cur - prev) * 100;
     if (Math.abs(d) < 0.05) return ' · 앞 기간과 같음';
-    return ` · 앞 기간보다 ${Math.abs(d).toFixed(1)}%p ${d > 0 ? '↑' : '↓'}`;
+    return ` · 앞 기간보다 ${Math.abs(d).toFixed(1)}포인트 ${d > 0 ? '올라감' : '내려감'}`;
   };
   /** 행동 기록이 하나도 없을 때 비율 카드 아래에 적는 이유. 0.0% 를 "정말 0" 으로 읽지 않게 한다 */
   const noBehavior = overview.detailViews === 0 && overview.sessions === 0;
@@ -151,7 +152,11 @@ export default function OverviewScreen({
         <section className="headline" aria-label="지금 상황 한 마디">
           <p className="headline__eyebrow">
             지금 무슨 일이 · 최근 {days}일
-            {headlineOrigin(headline) === 'rule' ? <span className="headline__tag" title="이번에는 문장으로 풀지 못해 숫자만 그대로 적었습니다">숫자 그대로</span> : null}
+            {headlineOrigin(headline) === 'rule' ? (
+              <span className="headline__tag" title="이번에는 문장으로 풀지 못해 숫자만 그대로 적었습니다">숫자 그대로</span>
+            ) : (
+              <span className="headline__tag" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">AI가 쓴 문장</span>
+            )}
           </p>
           <p className="headline__line">{headline.headline}</p>
           {/* 섹션 줄은 접어 둔다. 첫눈에 읽는 건 한 문장이고, 나머지는 원할 때만 (2026-09-21 유림님: 글이 너무 많다) */}
@@ -161,9 +166,13 @@ export default function OverviewScreen({
               <ul className="headline__sections">
                 {headline.sections.map((s) => (
                   <li key={s.id}>
-                    <span className="headline__label">{sectionLabel.get(s.id) ?? s.id}</span>
+                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
                     <span>{s.line}</span>
-                    {lineOrigin(headline, s) === 'rule' ? <span className="headline__tag" title="이 줄은 숫자만 그대로 적었습니다">숫자 그대로</span> : null}
+                    {lineOrigin(headline, s) === 'rule' ? (
+                      <span className="headline__tag" title="이 줄은 숫자만 그대로 적었습니다">숫자 그대로</span>
+                    ) : (
+                      <span className="headline__tag" title="AI가 문장으로 풀어 쓴 줄입니다">AI가 쓴 문장</span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -171,11 +180,15 @@ export default function OverviewScreen({
           ) : null}
         </section>
       ) : null}
+      {/*
+        주문·매출·판매 수량은 기간을 고르지 않은 전체 합이다. 아래 행동 숫자(최근 N일)와 섞어 읽지 않게 묶음마다 기간을 적는다 (2026-09-29)
+      */}
+      {pulse ? <p className="kpi-period">주문·매출 · 전체 기간</p> : null}
       {pulse ? (
         <div className="grid grid--kpi">
-          <Kpi label="주문" value={`${fmt.int(pulse.orders)}건`} sub={pulse.orders > 0 ? '결제 완료 · 전체 기간' : '아직 주문이 없습니다'} source="real" />
+          <Kpi label="주문" value={`${fmt.int(pulse.orders)}건`} sub={pulse.orders > 0 ? '결제 완료' : '아직 주문이 없습니다'} source="real" />
           {/* 원 단위 그대로 적으면 카드에서 줄이 넘어간다. 100만 원 넘으면 만 원 단위로 줄이고 정확한 값은 아래 한 줄에 */}
-          <Kpi label="매출" value={wonCompact(pulse.revenue)} sub={pulse.revenue >= 1_000_000 ? `${Math.round(pulse.revenue).toLocaleString('ko-KR')}원` : pulse.revenue > 0 ? '결제 완료 · 전체 기간' : '아직 매출이 없습니다'} source="real" />
+          <Kpi label="매출" value={wonCompact(pulse.revenue)} sub={pulse.revenue >= 1_000_000 ? `${Math.round(pulse.revenue).toLocaleString('ko-KR')}원` : pulse.revenue > 0 ? '결제 완료' : '아직 매출이 없습니다'} source="real" />
           {/*
             주문 수만 보면 "5건" 이 5개인지 50개인지 알 수 없다. 팔린 개수와 가짓수를 따로 적는다 —
             한 상품이 5번 팔린 것과 다섯 상품이 하나씩 팔린 것은 다음에 할 일이 다르다.
@@ -283,6 +296,7 @@ export default function OverviewScreen({
         </section>
       )}
 
+      <p className="kpi-period">고객 행동 · 최근 {days}일</p>
       <div className="grid grid--kpi">
         <Kpi
           label="상세를 보고 담은 비율"
@@ -305,7 +319,7 @@ export default function OverviewScreen({
         <Kpi
           label="고객 의견에서 가장 많이 나온 말"
           value={fbTop ? categoryLabel(fbTop[0]) : '아직 없음'}
-          sub={fbTop ? `${fbTop[1]}번 · 의견 ${fb.length}건` : '아직 의견이 없습니다'}
+          sub={fbTop ? `${fbTop[1]}번 · 의견 ${fb.length}건 · 기간 없이 전체` : '아직 의견이 없습니다'}
           source={feedbackSource(fb)}
         />
       </div>
@@ -358,7 +372,11 @@ export default function OverviewScreen({
             </span>
           }
         >
-          <LineChart points={series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts }))} />
+          <LineChart
+            points={series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts }))}
+            label={trend === 'visits' ? '날짜별 방문 수 변화' : '날짜별 장바구니 담기 변화'}
+            emptyText={trend === 'visits' ? '아직 방문 기록이 없습니다' : '아직 담기 기록이 없습니다'}
+          />
         </Panel>
         <Panel title="구매까지 가는 단계" source={source.funnel} aside="단계마다 남은 방문">
           <Funnel steps={standardFunnel} />

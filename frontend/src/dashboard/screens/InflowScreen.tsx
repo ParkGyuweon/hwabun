@@ -74,7 +74,10 @@ export default function InflowScreen({ brandId, days }: { brandId: string | null
       </div>
 
       <Panel title={`날짜별 넘어온 방문 · 최근 ${days}일`} source="real" aside="사람 수가 아닌 방문 수 · 여러 날 들르면 날마다 셉니다">
-        <LineChart points={(data?.daily ?? []).map((d) => ({ label: d.event_date_kst.slice(5).replace('-', '/'), value: d.cross_brand_entry_sessions }))} />
+        <LineChart points={(data?.daily ?? []).map((d) => ({ label: d.event_date_kst.slice(5).replace('-', '/'), value: d.cross_brand_entry_sessions }))}
+          label="날짜별 다른 브랜드에서 넘어온 방문 수 변화"
+          emptyText="아직 넘어온 방문이 없습니다"
+        />
       </Panel>
     </div>
   );

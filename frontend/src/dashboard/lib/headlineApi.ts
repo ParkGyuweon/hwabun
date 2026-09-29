@@ -84,7 +84,7 @@ export function buildOverviewHeadlineRequest(
   const thin = o.detailViews < THIN_DETAIL_VIEWS;
   const sections: HeadlineRequest['sections'] = [];
 
-  // 찾아온 사람
+  // 찾아온 방문 — 방문 수(건)라 "사람" 이 아니다
   {
     const facts = [
       { label_ko: '방문', value_text: `${fmt.int(o.sessions)}건` },
@@ -96,7 +96,7 @@ export function buildOverviewHeadlineRequest(
     if (p) {
       comparisons.push(compare('상세를 본 횟수', `${fmt.int(p.detailViews)}번`, `${fmt.int(o.detailViews)}번`, p.detailViews, o.detailViews, periodText));
     }
-    sections.push({ id: 'traffic', label_ko: '찾아온 사람', facts, comparisons, thin });
+    sections.push({ id: 'traffic', label_ko: '찾아온 방문', facts, comparisons, thin });
   }
 
   // 담기
