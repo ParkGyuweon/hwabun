@@ -170,6 +170,17 @@ export function saveMemberProfile(accountId: string, profile: MemberProfile): vo
   for (const l of listeners) l();
 }
 
+/** 이 계정의 브라우저 사본을 지운다. 회원 탈퇴 뒤에 남기지 않기 위해서다 (lib/memberWithdraw) */
+export function clearMemberProfile(accountId: string): void {
+  try {
+    window.localStorage.removeItem(keyFor(accountId));
+  } catch {
+    /* 저장소를 못 쓰는 브라우저면 지울 것도 없다 */
+  }
+  snapshotCache.delete(accountId);
+  for (const l of listeners) l();
+}
+
 /** useSyncExternalStore 용. 다른 탭의 변경도 따라온다 */
 export function subscribeMemberProfile(listener: () => void): () => void {
   listeners.add(listener);

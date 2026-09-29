@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { AccountSession } from '../../lib/auth';
 import { logout } from '../../lib/auth';
@@ -16,6 +16,8 @@ import type { MemberProfile, ProfileField } from '../../lib/memberProfile';
 import { fetchBackendOrders } from '../../lib/shopApi';
 import { saveMemberProfileServer, useSyncMemberProfile } from '../../lib/memberProfileApi';
 import WriteReview from '../review/WriteReview';
+import WithdrawDialog from './WithdrawDialog';
+import { finishWithdrawal } from '../../lib/memberWithdraw';
 import { useBackdropClose } from '../../hooks/useBackdropClose';
 import type { BackendOrder } from '../../lib/shopApi';
 
@@ -29,12 +31,26 @@ import type { BackendOrder } from '../../lib/shopApi';
  * 저장은 서버에 먼저 쓴 뒤 사본을 맞춘다. 서버가 없을 때만 사본에 저장하고 그렇다고 적는다.
  * 주문 내역은 백엔드의 결제 완료 주문만 조회한다.
  *
- * 비밀번호 변경·회원 탈퇴는 백엔드 API 가 없어 넣지 않았다. 빈 버튼을 두는 것보다 없는 것이 낫다.
+ * 회원 탈퇴는 아래쪽에 조용한 글자 버튼으로 둔다 (DELETE /api/members/me, 2026-09-29). 누르면 확인 창(WithdrawDialog)이
+ * 한 겹 더 뜨고, 끝나면 이 브라우저의 회원 흔적을 지운 뒤 로그아웃한다 (lib/memberWithdraw).
+ * 비밀번호 변경은 백엔드 API 가 없어 아직 넣지 않았다. 빈 버튼을 두는 것보다 없는 것이 낫다.
  *
  * 모달은 `document.body` 로 포털한다. 헤더(`.site-header`)에 `backdrop-filter` 가 있어 그 안의 `position: fixed` 는
  * 화면이 아니라 헤더 상자를 기준으로 잡힌다 — 헤더 높이 안에서 가운데 정렬돼 카드 윗부분이 잘렸다 (팀원 제보 09-14).
  */
-export default function MyPage({ session, onClose }: { session: AccountSession; onClose: () => void }) {
+export default function MyPage({
+  session,
+  onClose,
+  onWithdrawn,
+}: {
+  session: AccountSession;
+  onClose: () => void;
+  /** 탈퇴가 끝났을 때. 여는 쪽(AccountMenu)이 창을 닫고 인사 문구를 띄운다 */
+  onWithdrawn: () => void;
+}) {
+  /** 탈퇴 확인 창. 열려 있는 동안 Esc 는 그 창만 닫는다 */
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const withdrawBtnRef = useRef<HTMLButtonElement>(null);
   const getProfile = useCallback(() => loadMemberProfile(session.id), [session.id]);
   const saved = useSyncExternalStore(subscribeMemberProfile, getProfile, getProfile);
   /**
@@ -81,11 +97,23 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !withdrawOpen) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, withdrawOpen]);
+
+  const closeWithdraw = useCallback(() => {
+    setWithdrawOpen(false);
+    // 닫히면 누른 자리로 포커스를 돌려준다
+    requestAnimationFrame(() => withdrawBtnRef.current?.focus());
+  }, []);
+
+  const withdrawn = () => {
+    // 창을 먼저 닫게 하고 세션을 지운다. 세션이 지워지면 이 컴포넌트는 곧 사라진다
+    onWithdrawn();
+    finishWithdrawal(session.id);
+  };
 
   const dirty = PROFILE_FIELDS.some((f) => draft[f] !== saved[f]);
   // 주문 번호 같은 글자를 긁어 복사하다 창이 닫히지 않게 (useBackdropClose)
@@ -249,6 +277,16 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
         </section>
 
         <footer className="mypage__foot">
+          {/* 탈퇴는 눈에 띄지 않게. 찾는 사람만 찾으면 된다 */}
+          <button
+            ref={withdrawBtnRef}
+            type="button"
+            className="mypage__withdraw"
+            aria-haspopup="dialog"
+            onClick={() => setWithdrawOpen(true)}
+          >
+            회원 탈퇴
+          </button>
           <button
             type="button"
             className="account__btn"
@@ -260,6 +298,7 @@ export default function MyPage({ session, onClose }: { session: AccountSession; 
             로그아웃
           </button>
         </footer>
+        {withdrawOpen ? <WithdrawDialog onCancel={closeWithdraw} onDone={withdrawn} /> : null}
       </div>
     </div>,
     document.body,

@@ -20,6 +20,14 @@ export default function AccountMenu() {
   useSyncMemberProfile(session?.id);
   const [open, setOpen] = useState(false);
   const [mypage, setMypage] = useState(false);
+  /** 탈퇴 직후 잠깐 띄우는 인사. 세션이 사라져 로그인 버튼 자리에서 보여 준다 */
+  const [farewell, setFarewell] = useState(false);
+
+  useEffect(() => {
+    if (!farewell) return;
+    const timer = window.setTimeout(() => setFarewell(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [farewell]);
 
   /*
    * 화면 다른 곳(상품 상세의 "바로 구매")에서 로그인을 요청하면 여기서 연다.
@@ -54,13 +62,30 @@ export default function AccountMenu() {
           <span className="account__name">{session.name}</span>
           <span className="account__me">내 정보</span>
         </button>
-        {mypage ? <MyPage session={session} onClose={() => setMypage(false)} /> : null}
+        {mypage ? (
+          <MyPage
+            session={session}
+            onClose={() => setMypage(false)}
+            onWithdrawn={() => {
+              setMypage(false);
+              setFarewell(true);
+            }}
+          />
+        ) : null}
       </div>
     );
   }
 
   return (
     <>
+      {farewell
+        ? createPortal(
+            <p className="account-toast" role="status">
+              탈퇴가 끝났어요. 그동안 이용해 주셔서 감사해요.
+            </p>,
+            document.body,
+          )
+        : null}
       <button type="button" className="account__btn account__btn--login" onClick={() => setOpen(true)}>
         로그인
       </button>
