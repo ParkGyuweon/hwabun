@@ -485,7 +485,43 @@ function beginFreshSession(productId: string | null): void {
   track('session_start', { entry_page: context.pageType });
   track('page_view', { product_id: productId, navigation_source: 'session_start' });
   trackProductView(productId, 'session_start');
+  reemitOpenQuickLook();
   if (startedSessionKey !== NOT_STARTED) persistSession(startedSessionKey);
+}
+
+/**
+ * 지금 열려 있는 목록 퀵룩. 퀵룩은 모달이라 `context.productId` 를 바꾸지 않아서, 퀵룩을 30분 넘게 열어 둔 채 담으면
+ * 새 세션에 상세 단계(product_view·quick_look) 없이 add_to_cart 만 남았다 (Q5 퍼널 상한 검사 위반).
+ * 열 때 `quick_look` 과 같은 속성을 여기 적어 두고, 새 세션이 열리면 그 세션 몫으로 노출·quick_look 을 다시 낸다.
+ */
+export interface OpenQuickLook {
+  product_id: string;
+  entry_source: string;
+  position: number;
+}
+let openQuickLook: OpenQuickLook | null = null;
+
+/** 퀵룩을 열 때(quick_look 을 낸 뒤) 적고, 닫을 때 null 로 비운다 */
+export function setOpenQuickLook(quickLook: OpenQuickLook | null): void {
+  openQuickLook = quickLook;
+}
+
+function reemitOpenQuickLook(): void {
+  if (openQuickLook === null) return;
+  const { product_id, entry_source, position } = openQuickLook;
+  // 상세 진입은 노출을 짝으로 가져야 한다 (Q5 detail-without-impression). 목록의 퀵룩 보강과 같은 모양이다
+  if (!impressedProducts.has(product_id)) {
+    impressedProducts.add(product_id);
+    track('product_impression', {
+      product_id,
+      list_id: entry_source,
+      position,
+      hold_ms: 0,
+      visible_ratio: IMPRESSION_VISIBLE_RATIO,
+      impression_origin: 'implied_by_quick_look',
+    });
+  }
+  track('quick_look', { product_id, entry_source, position });
 }
 
 /**

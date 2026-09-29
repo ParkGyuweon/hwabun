@@ -14,7 +14,7 @@ import { useScrollDepth } from '../hooks/useScrollDepth';
 import { useTextSelection } from '../hooks/useTextSelection';
 import { useInteractionSignals } from '../hooks/useInteractionSignals';
 import { useExitSummary } from '../hooks/useExitSummary';
-import { setNextProductViewEntry, track } from '../lib/logger';
+import { setNextProductViewEntry, setOpenQuickLook, track } from '../lib/logger';
 import type { FilterKind } from '../types/log';
 import { categoryKo, concernKo } from '../lib/localize';
 import { listPriceKrw } from '../lib/discount';
@@ -151,6 +151,11 @@ export default function ProductListPage({
   const [columns, setColumns] = useState(1);
   /** 요약 창에 띄운 상품. 세포라 Quicklook */
   const [quickLook, setQuickLook] = useState<Product | null>(null);
+  // 퀵룩이 닫히거나(상세로 넘어가기 포함) 목록을 떠나면 로거의 "열린 퀵룩" 도 비운다
+  useEffect(() => {
+    if (quickLook === null) setOpenQuickLook(null);
+  }, [quickLook]);
+  useEffect(() => () => setOpenQuickLook(null), []);
 
   /** 카테고리 탭. 실제 데이터에 있는 값만 쓰고 개수를 함께 보여준다 */
   const categories = useMemo(() => {
@@ -534,11 +539,10 @@ export default function ProductListPage({
       source.findIndex((p) => p.product_id === productId) + (listId === 'promo_pick' ? 0 : pageOffset);
     // 퀵룩 열기는 클릭이 아니다. 합성 노출의 출처를 따로 적는다
     confirmListImpression(listId, productId, position + 1, 'implied_by_quick_look');
-    track('quick_look', {
-      product_id: productId,
-      entry_source: listId,
-      position: position + 1,
-    });
+    const quickLookProps = { product_id: productId, entry_source: listId, position: position + 1 };
+    track('quick_look', quickLookProps);
+    // 열어 둔 채 30분이 지나 새 세션이 열리면 로거가 이 값으로 quick_look 을 다시 낸다. 낸 뒤에 적어야 두 번 안 나간다
+    setOpenQuickLook(quickLookProps);
     // 퀵룩에서도 담기가 된다. 백엔드 옵션(variant_id)이 없으면 서버 주문을 못 타므로 여기서도 상세를 받아 둔다
     ensureBackendDetail(productId);
     setQuickLook(products.find((p) => p.product_id === productId) ?? null);
