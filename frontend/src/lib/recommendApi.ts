@@ -142,17 +142,24 @@ export function fromServer(body: ServerRecommendResponse, personaId: string): Re
   };
 }
 
-export function buildRecommendUrl(q: RecommendQuery): string {
+/**
+ * 배포(PROD)에서는 `persona_id` 와 피부 타입·톤·머리색·눈색 네 값을 주소에 싣지 않는다.
+ * 배포의 /api/recommend 는 nginx → Shop Backend(RecommendationController)로 가고, 거기는 로그인 회원 id 와
+ * 회원 정보에서 이 값들을 직접 읽어 추천 서버에 넘긴다 — 주소로 온 값은 받지도 않는다. 실으면 nginx 접근 로그에
+ * 피부 정보만 남는다. 비로그인 요청은 백엔드가 401 로 거절해 원래도 목으로 물러나므로 persona_id 도 필요 없다.
+ * 개발(Vite 프록시 → 8300 추천 서버 직통)에서는 이 값으로 개인화하므로 그대로 싣는다.
+ */
+export function buildRecommendUrl(q: RecommendQuery, forwardIdentity: boolean = !import.meta.env.PROD): string {
   const axes = q.axes.filter((a) => SERVER_AXES.has(a));
   const params = new URLSearchParams({
-    persona_id: q.personaId,
+    ...(forwardIdentity ? { persona_id: q.personaId } : {}),
     size: String(q.size),
     banner_slots: String(q.bannerSlots),
     reserved: String(q.reserved),
     hero: q.hero,
   });
   if (axes.length > 0) params.set('axes', axes.join(','));
-  if (q.profile) {
+  if (forwardIdentity && q.profile) {
     for (const field of ['skin_type', 'skin_tone', 'hair_color', 'eye_color'] as const) {
       const v = q.profile[field];
       if (v) params.set(field, v);
