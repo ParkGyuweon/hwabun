@@ -196,9 +196,8 @@ class Engine:
         self.planner = BannerPlanner(self.enc, self.products, self.index)   # §5-1 hero·banners (Jira 218)
         # 클릭·상세 진입 이벤트가 그대로 싣는 값 (event-properties recommendation_click.algorithm).
         # 모델이 바뀌면 문자열이 바뀌어야 하므로 학습 시각과 트리 수를 넣는다
-        m = self.ltr_meta or {}
-        self.algorithm = (f"ltr-{m.get('n_trees', '?')}t-{str(m.get('trained_at', ''))[:10]}"
-                          if ltr else "linear-cbf-cf")
+        self.algorithm = self._algorithm_name()
+        self.ltr_reloaded_at = None
         self.personas = {}
         for fn in sorted(glob.glob(os.path.join(PDIR, "personas_*.json"))):
             with open(fn, encoding="utf-8") as f:
@@ -216,6 +215,37 @@ class Engine:
         n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False, source="replay"))
         self.session_replayed = {"personas": n_p, "events": n_e, "ms": ms, "path": self.session_log.path}
         self.load_ms = (time.perf_counter() - t0) * 1000
+
+    def _algorithm_name(self):
+        m = self.ltr_meta or {}
+        return (f"ltr-{m.get('n_trees', '?')}t-{str(m.get('trained_at', ''))[:10]}"
+                if self.ltr else "linear-cbf-cf")
+
+    def ltr_model_health(self):
+        """/health.ltr_model — 어느 폴더의 모델을 쓰는지, 언제 학습·리로드됐는지 (재학습 경로)"""
+        m = self.ltr_meta or {}
+        return {"scorer": self.scorer, "n_trees": m.get("n_trees"), "trained_at": m.get("trained_at"),
+                "dir": m.get("_dir"), "model_dir_env": os.environ.get("LTR_MODEL_DIR") or None,
+                "reloaded_at": self.ltr_reloaded_at, "algorithm": self.algorithm}
+
+    def reload_ltr(self):
+        """재학습 산출물을 재시작 없이 집는다 (`POST /api/model/reload`). `load_ltr()` 가 보는 순서
+        (LTR_MODEL_DIR → 이미지 serving/) 그대로 다시 읽고 Recommender 를 새로 만든다. 세션 상태·등록
+        상품은 그대로다. 진행 중인 요청은 옛 Recommender 객체를 끝까지 쓰고, 다음 요청부터 새것을 쓴다.
+        모델을 못 찾으면 바꾸지 않고 그대로 둔다 — 리로드 한 번으로 선형으로 떨어지면 안 된다."""
+        before = self.ltr_model_health()
+        ltr = load_ltr()
+        if ltr is None:
+            return {"changed": False, "reason": "model_not_found", "before": before, "after": before}
+        self.ltr, self.ltr_meta = ltr, ltr[1]
+        self._assemble()
+        self.scorer = "ltr"
+        self.algorithm = self._algorithm_name()
+        self.ltr_reloaded_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+        after = self.ltr_model_health()
+        return {"changed": (before.get("trained_at"), before.get("n_trees"), before.get("dir"))
+                           != (after.get("trained_at"), after.get("n_trees"), after.get("dir")),
+                "reason": "reloaded", "before": before, "after": after, "algorithm": self.algorithm}
 
     def _assemble(self):
         """배열들로 Recommender·LtrFeatures 를 (다시) 만든다. 상품이 늘 때마다 부른다 —
@@ -783,6 +813,7 @@ def health():
         "feedback_classify": _fc_health(),                        # 처방 LLM 스위치·호출 수 (Jira 325)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
+            "ltr_model": e.ltr_model_health(),                      # 재학습 경로 — 모델 폴더·학습 시각·리로드 시각
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
 
 
@@ -994,6 +1025,13 @@ def _rx_health() -> dict:
 @app.get("/api/prescription/llm")
 def prescription_llm_state():
     return _rx_health()
+
+
+@app.post("/api/model/reload")
+def model_reload():
+    """재학습한 LTR 모델을 재시작 없이 집는다 (`batch/jobs/retrain_ltr.py --reload-url` 가 부른다).
+    내부망 전용 — nginx 가 밖에 열지 않는다. 모델을 못 찾으면 바꾸지 않는다 (changed=false)"""
+    return get_engine().reload_ltr()
 
 
 @app.post("/api/prescription/llm")

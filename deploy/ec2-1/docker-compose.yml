@@ -114,6 +114,8 @@ services:
       # EC2-2 의 발행 대상과 같은 목록이어야 한다 — 다르면 발행은 됐는데 화면에 안 잡힌다.
       DW_PROJECTION_MARTS: ${DW_PROJECTION_MARTS:-}
       NEW_BRAND_ALWAYS_PREFIX: ${NEW_BRAND_ALWAYS_PREFIX:-SB}   # 기간 무관 신규로 둘 product_id 접두. SB = 시연 브랜드 SSAFY Beauty 8개 (2026-09-14 결정, Jira 249). 비우려면 .env 에 빈 값
+      # 재학습 산출물 (deploy/ec2-1/retrain-ltr.sh → batch/jobs/retrain_ltr.py). 볼륨이 비어 있으면 이미지 안 모델.
+      LTR_MODEL_DIR: /data/ltr
     volumes:
       - recommend-data:/data
     expose:
