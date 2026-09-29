@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 from streaming.jobs.compact_raw_partition_job import (
@@ -36,6 +37,14 @@ def _skip(**overrides):
     }
     args.update(overrides)
     return skip_reason(**args)
+
+def _row_multiset(rows):
+    """행 순서와 무관하게 같은 행이 같은 개수만큼 있는지 비교한다.
+
+    Row.asDict() 끼리는 정렬할 수 없어(dict < dict 는 TypeError) 정렬 대신 다중집합으로 센다.
+    값은 repr 로 바꿔 날짜·Decimal 같은 값도 해시 가능하게 둔다.
+    """
+    return Counter(tuple(sorted((k, repr(v)) for k, v in r.asDict().items())) for r in rows)
 
 
 class CompactPlanTest(unittest.TestCase):
@@ -100,9 +109,7 @@ class CompactRawPartitionSparkTest(unittest.TestCase):
 
     def test_fragmented_partition_is_rewritten_with_the_same_rows(self):
         self.assertGreater(len(self._parquet_files()), 1)
-        before = sorted(
-            r.asDict() for r in self.spark.read.parquet(str(self.root)).collect()
-        )
+        before = _row_multiset(self.spark.read.parquet(str(self.root)).collect())
 
         report = run(
             self.spark,
@@ -115,11 +122,8 @@ class CompactRawPartitionSparkTest(unittest.TestCase):
         self.assertFalse((self.root / "_compaction_tmp" / self.partition.name).exists())
         self.assertFalse((self.root / "_compaction_backup" / self.partition.name).exists())
         # Q2 reads the Raw root with partition discovery; the result must not move.
-        after = sorted(
-            r.asDict()
-            for r in self.spark.read.option("mergeSchema", "true")
-            .parquet(str(self.root))
-            .collect()
+        after = _row_multiset(
+            self.spark.read.option("mergeSchema", "true").parquet(str(self.root)).collect()
         )
         self.assertEqual(before, after)
 
