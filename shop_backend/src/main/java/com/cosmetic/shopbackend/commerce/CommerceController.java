@@ -58,9 +58,10 @@ public class CommerceController {
    * 누구나 토큰으로 이 엔드포인트를 직접 부를 수 있다. 실제 차단은 여기서 한다.
    *
    * 값은 러너 계정의 `member_id` 접두다 (`PA00001`~`PA00100`, 시드 `shop_backend_seed.sql`).
-   * 빈 값으로 두면 제한하지 않는다 — 로컬 개발처럼 결제 키가 없는 환경에서 막히면 안 된다.
+   * 빈 값이면 **아무도 통과하지 못한다**(닫힌 채로 실패). 설정이 빠진 배포가 모든 회원에게
+   * 테스트 결제를 열어 주면 안 되기 때문이다. 로컬 개발도 application.yml 기본값 `PA` 로 돈다.
    */
-  @Value("${shop.test-pay.allowed-member-prefix:}")
+  @Value("${shop.test-pay.allowed-member-prefix:PA}")
   private String testPayAllowedMemberPrefix;
 
   public CommerceController(
@@ -427,21 +428,23 @@ public class CommerceController {
   /**
    * 테스트 주문(`/pay`)을 부를 수 있는 계정인가.
    *
-   * 접두가 비어 있으면 제한하지 않는다. 설정한 환경(배포 EC2)에서는 그 접두로 시작하는 회원만
-   * 통과하고 나머지는 403 이다 — 조용히 실패시키지 않고 이유를 준다. 프론트는 이 응답을
+   * 설정한 접두로 시작하는 회원만 통과하고 나머지는 403 이다 — 조용히 실패시키지 않고 이유를 준다.
+   * 접두가 비어 있으면 모두 막는다(설정 누락이 전체 허용이 되지 않게). 프론트는 이 응답을
    * "주문에 실패했습니다" 로 화면에 그대로 띄우므로 사용자가 막힌 것을 안다.
    */
   private void requireTestPayAllowed(ShopPrincipal actor) {
-    String prefix = testPayAllowedMemberPrefix == null
-      ? ""
-      : testPayAllowedMemberPrefix.trim();
-    if (prefix.isEmpty()) return;
     if (
-      actor.accountId() == null || !actor.accountId().startsWith(prefix)
+      !testPayAllowed(testPayAllowedMemberPrefix, actor.accountId())
     ) throw new ResponseStatusException(
       HttpStatus.FORBIDDEN,
       "test payment is limited to agent runner accounts"
     );
+  }
+
+  static boolean testPayAllowed(String configuredPrefix, String accountId) {
+    String prefix = configuredPrefix == null ? "" : configuredPrefix.trim();
+    if (prefix.isEmpty()) return false;
+    return accountId != null && accountId.startsWith(prefix);
   }
 
   private void requireMember(ShopPrincipal actor) {
