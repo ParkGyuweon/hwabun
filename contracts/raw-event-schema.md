@@ -68,7 +68,7 @@ Kafka tombstone이나 비정상 record도 좌표를 잃지 않도록 `raw_value`
 | `source` | string | Y | `source` | Collector가 기록한 유입 경로 |
 | `persona_id` | string | Y | `persona_id` | Persona ID |
 | `account_id` | string | Y | `account_id` | Collector가 JWT `sub`에서 뽑은 로그인 계정. 비로그인은 NULL |
-| `session_id` | string | Y | `session_id` | 세션 ID |
+| `session_id` | string | Y | `session_id` | 세션 ID. 탭 단위 + 30분 비활성 시 새 세션 (프론트 로거 `SESSION_IDLE_MS`) |
 | `page_view_id` | string | Y | `page_view_id` | 페이지 방문 ID |
 | `sequence_no` | int | Y | `sequence_no` | 세션 내 Event 순서 |
 | `page_type` | string | Y | `page_type` | 화면 유형 |

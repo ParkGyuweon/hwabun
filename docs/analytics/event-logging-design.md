@@ -20,7 +20,7 @@ DW를 거쳐 상품 반응, 콘텐츠 관심도, Funnel 및 고객군별 인사�
 | --- | --- |
 | 이름 | `lower_snake_case` |
 | 전송 단위 | 공통 Envelope + Event별 `properties` |
-| 세션 | 쇼핑 흐름은 `session_id`, 페이지 방문은 `page_view_id` |
+| 세션 | 쇼핑 흐름은 `session_id`, 페이지 방문은 `page_view_id`. 세션은 **탭 단위 + 30분 비활성 시 새 세션** (새로고침은 이어 쓰고, 탭 복제·30분 넘게 이벤트가 없던 뒤의 첫 이벤트는 새 `session_id`) |
 | 상품 대상 | 상품 관련 Event는 대상 상품의 `product_id` 사용 |
 | 비동기 전송 | 화면 동작은 로그 저장을 기다리지 않고 batch 전송 |
 | 재시도 | 같은 행동 재전송 시 동일 `event_id` 유지 |
@@ -56,7 +56,7 @@ Redis나 DB로 막지 않고 Spark가 `received_at → topic → partition → o
 
 | event_name | Trigger | 주의사항 |
 | --- | --- | --- |
-| `session_start` | 사용자·Persona가 새 세션을 시작하거나 Persona가 변경될 때 | 새 `session_id`, 첫 `page_view_id` 발급 |
+| `session_start` | 사용자·Persona가 새 세션을 시작하거나 Persona가 변경될 때, 또는 30분 비활성 뒤 첫 이벤트·탭 복제 시 | 새 `session_id`, 첫 `page_view_id` 발급 |
 | `page_view` | 라우트 진입 또는 상세 상품 변경 완료 | 첫 화면 이후 이동은 새 `page_view_id` 발급 |
 | `navigation_click` | 상품 대상이 아닌 이동 UI 클릭 | 이동 완료 `page_view`는 별도 |
 | `product_view` | 상세 데이터 렌더링과 `product_id` 확정 | `page_view`와 별도, 같은 `page_view_id` |
