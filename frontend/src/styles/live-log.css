@@ -18,6 +18,9 @@
   /* 1200: 빠른 보기·로그인 모달(60)·알림 창(70·1100)·상단 띠(1000) 위.
    * 50 이면 발표 중 모달·알림을 열 때마다 기록 창이 가려졌다 (2026-09-30) */
   z-index: 1200;
+  /* 전체를 70% 로 (2026-09-30 유림님). 글자·여백·폭을 하나씩 줄이지 않고 한 곳에서 줄인다.
+   * transform: scale 은 떠오르는 애니메이션·눌림 효과와 부딪혀 zoom 을 쓴다 (Chrome·Edge·Safari·Firefox 126+) */
+  zoom: 0.7;
   color: var(--ll-text);
   background: var(--ll-bg);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -30,7 +33,7 @@
 }
 
 .live-log {
-  width: min(420px, calc(100vw - 32px));
+  width: min(500px, calc(100vw - 32px));
   border-radius: 18px;
   padding: 14px 0 6px;
   animation: live-log-in 240ms ease-out;
@@ -105,12 +108,8 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  /* 한 줄 약 58px × 7 */
-  max-height: 408px;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
-  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  /* 3줄만 그린다 (LiveLog.tsx VISIBLE_ROWS). 아래를 흐리게 하던 마스크는 3번째 줄을 지워서 뺐다 (2026-09-30) */
+  overflow: hidden;
 }
 
 .live-log__list::-webkit-scrollbar {
@@ -138,9 +137,8 @@
 .live-log__row:nth-child(n + 5) { opacity: 0.56; }
 .live-log__row:nth-child(n + 7) { opacity: 0.42; }
 
-/* 두 칸 모두 크게: 몇 초 전 · 이벤트 이름 */
+/* 두 칸 모두 크게: 시각(밀리초까지) · 이벤트 이름 */
 .live-log__time {
-  min-width: 4.8em;
   font-size: 18px;
   font-weight: 700;
   color: var(--ll-text);
