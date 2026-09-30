@@ -57,6 +57,23 @@ docker compose up -d backend recommend
 - 현재 Kafka는 인증 없는 PLAINTEXT다. EC2-2의 보안 그룹/방화벽에서 TCP 9092는
   EC2-1의 실제 접속 출발지에만 허용한다. 인터넷 전체에 개방하지 않는다.
 - Controller 9093, 내부 Kafka 19092, Spark RPC 7077은 호스트에 공개하지 않는다.
+
+> **경고 — Kafka 9092 기본 바인드는 `0.0.0.0` 이다.**
+> `KAFKA_BIND_IP` 를 비워 두면 인증 없는 PLAINTEXT Kafka 가 EC2-2 의 **모든 인터페이스**에
+> 열린다. Docker 가 포트 공개 규칙을 iptables 에 직접 넣기 때문에 **UFW 는 이 포트를 막지 못한다**.
+> 지금 외부 차단은 AWS 보안 그룹 하나에만 기대고 있다.
+>
+> 시연 중 배포가 깨지지 않도록 Compose 기본값은 바꾸지 않았다(값이 없는 `.env` 로도 지금처럼 뜬다).
+> 시연이 끝나면 아래 순서로 좁힌다.
+>
+> 1. EC2-2 사설 IP 확인: `hostname -I` (또는 `ip -4 addr show`)
+> 2. EC2-1 에서 그 사설 IP 로 닿는지 확인: `nc -vz <EC2-2 사설 IP> 9092`
+> 3. `.env` 에 `KAFKA_BIND_IP=<EC2-2 사설 IP>` 를 넣고, `KAFKA_ADVERTISED_HOST` 도 같은 사설 주소인지 확인
+> 4. `docker compose up -d kafka` 후 `ss -ltnp | grep 9092` 가 `0.0.0.0` 이 아니라 사설 IP 인지 확인
+> 5. EC2-1 에서 `docker compose logs --tail=50 backend recommend` 로 Kafka 연결 오류가 없는지 확인
+>
+> 주의: 사설 IP 로 좁히면 EC2-2 호스트에서 `127.0.0.1:9092` 로 붙던 도구(예: 호스트에서 직접 돌리는
+> `demo_live.py`)는 더 이상 붙지 않는다. 컨테이너 안(`kafka:19092`)이나 사설 IP 를 쓴다.
 - Spark UI는 기본적으로 `127.0.0.1:18080`, History UI는 `127.0.0.1:18081`이다.
   EC2-1의 `/pipeline`에서 Spark Master의 `/json`을 읽어야 할 때만 `.env`의
   `SPARK_MASTER_UI_BIND_IP`를 EC2-2 사설 IP로 바꾼다. 외부 인터넷에 공개하지 않는다.

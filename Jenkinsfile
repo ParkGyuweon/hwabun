@@ -212,11 +212,22 @@ pipeline {
                     fi
 
                     echo "변경된 서비스만 배포합니다:$services"
+
+                    # 되돌리기용: 지금 돌고 있는 이미지를 <이미지>:previous 로 남긴다 (실패해도 배포는 계속)
+                    bash deploy/ec2-1/deploy-helpers.sh tag-previous $services || true
+
                     docker compose \\
                       -p ec2-1 \\
                       --env-file "$EC2_ENV_FILE" \\
                       -f deploy/ec2-1/docker-compose.yml \\
                       up -d --build --no-deps $services
+
+                    # 새 이미지에 커밋 SHA 태그 (서비스별 최근 5개만 유지, 실패해도 배포는 계속)
+                    bash deploy/ec2-1/deploy-helpers.sh tag-commit "$(git rev-parse --short=12 HEAD)" $services || true
+
+                    # 헬스 체크: 뜨지 않으면 빌드를 실패로 표시한다. 자동 롤백은 하지 않는다 —
+                    # 되돌리기 절차는 deploy/ec2-1/README.md "배포 확인과 되돌리기".
+                    bash deploy/ec2-1/deploy-helpers.sh health $services
                 '''
             }
         }

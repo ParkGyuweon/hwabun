@@ -1,0 +1,19 @@
+[Unit]
+Description=HWABUN EC2-1 MySQL backup (shop_backend, dw)
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+# Optional overrides (see backup-mysql.sh header). Create the file only if needed:
+#   BACKUP_S3_URI=s3://<bucket>/hwabun/mysql
+#   MYSQL_CONTAINER=ec2-1-mysql-1
+EnvironmentFile=-/etc/default/hwabun-mysql-backup
+ExecStart=/usr/bin/bash /home/ubuntu/S15P21A306/deploy/ec2-1/backup-mysql.sh
+# Low priority so a dump never competes with the site for CPU or disk.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=1h
