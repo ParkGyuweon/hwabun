@@ -1089,7 +1089,8 @@ export default function App() {
       {preview ? null : <SiteFooter onOpenLegal={openLegal} />}
       {preview ? null : <ActivityNotice onOpenPrivacy={() => openLegal('privacy')} />}
       {/* 우하단 실시간 행동 기록 · 늘 켜짐 (2026-09-29 새로 만듦). 상품 등록 미리보기에는 없다 */}
-      {!preview ? <LiveLog /> : null}
+      {/* 로그인한 고객에게만 보인다 (2026-09-30) */}
+      {!preview && member ? <LiveLog /> : null}
     </>
   );
 }
