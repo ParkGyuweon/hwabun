@@ -161,8 +161,30 @@ public class IdentityController {
     );
   }
 
+  static final String TOO_MANY_ATTEMPTS_MESSAGE =
+    "로그인 시도가 너무 많아요. 잠시 후 다시 시도해 주세요.";
+
+  private final LoginAttemptLimiter loginLimiter = new LoginAttemptLimiter();
+
+  /**
+   * 로그인. 같은 (역할, 이메일)로 10분 안에 10번 틀리면 그 10분이 지날 때까지 429 다
+   * ({@link LoginAttemptLimiter}). 성공하면 실패 기록을 지운다.
+   */
   @PostMapping("/login")
-  public ResponseEntity<AccountResponse> login(@Valid @RequestBody Login r) {
+  public ResponseEntity<?> login(@Valid @RequestBody Login r) {
+    String key = LoginAttemptLimiter.key(r.role(), r.email());
+    if (loginLimiter.blocked(key)) return ResponseEntity.status(
+      HttpStatus.TOO_MANY_REQUESTS
+    ).body(
+      Map.of("error", "too_many_attempts", "message", TOO_MANY_ATTEMPTS_MESSAGE)
+    );
+    ResponseEntity<AccountResponse> result = authenticateLogin(r);
+    if (result.getStatusCode().is2xxSuccessful()) loginLimiter.reset(key);
+    else loginLimiter.recordFailure(key);
+    return result;
+  }
+
+  private ResponseEntity<AccountResponse> authenticateLogin(Login r) {
     return switch (r.role()) {
       case MEMBER -> members
         .findByEmail(r.email())
