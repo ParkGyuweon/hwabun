@@ -1053,6 +1053,61 @@ def _over_clicked_banner_count(
     )
 
 
+def _period_overflow_count(
+    frame: Any,
+    identity_columns: list[str],
+    all_day_pairs: list[tuple[str, str]],
+    positive_day_pairs: list[tuple[str, str]] = (),
+) -> int:
+    """날짜를 합산했을 때 분자가 분모를 넘는 칸을 센다.
+
+    ``event_date_kst`` 로 칸을 나누는 Mart 는 분자와 분모를 각자 자기 Event 의
+    날짜로 센다. 세션이 자정을 넘으면 앞 단계는 앞날, 뒤 단계는 뒷날에 찍혀 뒷날
+    칸에서 분자가 분모보다 커진다 — 23:50 상세 · 00:05 담기면 뒷날은 담기 1 ·
+    상세 0 이다. 정상 동선이라 일자 칸에서는 막을 수 없고, 날짜를 걷어내면 앞날과
+    상쇄된다. 분모 없는 분자는 합쳐도 남아서 그대로 잡힌다.
+
+    두 묶음은 일자 검사가 보던 범위를 그대로 옮긴 것이다. 매일 성립하던 부등식은
+    합에서도 성립하므로, 이 검사는 일자 검사가 통과시키던 Mart 를 실패시키지 않는다.
+
+    * ``all_day_pairs`` — 개수 비교(``분자 > 분모``). 일자 검사가 분모 0 인 날도
+      봤으므로 모든 날짜를 더한다.
+    * ``positive_day_pairs`` — 비율 상한(``비율 > 1``). 일자 검사는 비율이 NULL 인
+      날, 곧 분모 0 인 날을 보지 않았다. 그날 분자를 더하면 일자 검사에 없던
+      실패가 생기므로 분모가 0 보다 큰 날만 더한다.
+
+    **Mart 전체 기간을 읽어야 한다.** 최근 며칠만 보면 앞날이 잘려 자정을 넘긴
+    세션이 다시 걸린다 — 증분 처리를 도입해도 이 검사의 범위는 줄이지 않는다.
+    """
+
+    from pyspark.sql import functions as F
+
+    aggregations = []
+    conditions = []
+    for index, (numerator, denominator) in enumerate(all_day_pairs):
+        aggregations += [
+            F.coalesce(F.sum(numerator), F.lit(0)).alias(f"_all_n{index}"),
+            F.coalesce(F.sum(denominator), F.lit(0)).alias(f"_all_d{index}"),
+        ]
+        conditions.append(F.col(f"_all_n{index}") > F.col(f"_all_d{index}"))
+    for index, (numerator, denominator) in enumerate(positive_day_pairs):
+        counted = F.col(denominator) > 0
+        aggregations += [
+            F.coalesce(
+                F.sum(F.when(counted, F.col(numerator))), F.lit(0)
+            ).alias(f"_pos_n{index}"),
+            F.coalesce(
+                F.sum(F.when(counted, F.col(denominator))), F.lit(0)
+            ).alias(f"_pos_d{index}"),
+        ]
+        conditions.append(F.col(f"_pos_n{index}") > F.col(f"_pos_d{index}"))
+
+    overflow = conditions[0]
+    for condition in conditions[1:]:
+        overflow = overflow | condition
+    return frame.groupBy(*identity_columns).agg(*aggregations).where(overflow).count()
+
+
 COHORT_COLLAPSED_GRAIN = ["snapshot_week_kst", "cohort_key", "metric_name"]
 
 
@@ -1788,10 +1843,11 @@ def validate_frames(
         f"invalid_rows={invalid_brand_ids}",
     ))
     # 담기는 Quick Look에서도 일어나므로 분모는 상세를 연 세션이다.
-    # 정보 조회는 상품 상세에서만 일어나 product_view 기준을 유지한다.
+    # 정보 조회는 상품 상세에서만 일어나 product_view 기준을 유지한다. 정보 조회는
+    # Mart 가 같은 날 상세를 연 세션으로 좁혀 두어(§4.14) 일자 칸에서 성립한다.
+    # 담기 ≤ 상세는 자정을 넘긴 세션에서 일자 칸이 깨지므로 날짜 합산 검사가 본다.
     invalid_brand_counts = brand_daily.where(
-        (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
-        | (F.col("information_view_sessions") > F.col("product_view_sessions"))
+        (F.col("information_view_sessions") > F.col("product_view_sessions"))
         | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
         | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
     ).count()
@@ -1803,11 +1859,18 @@ def validate_frames(
     rate_columns = [
         "detail_entry_rate", "information_view_rate", "view_to_cart_rate"
     ]
+    # 상세 진입률·담기율은 분자와 분모의 날짜가 따로라 상한을 날짜 합산 검사로
+    # 넘기고 여기서는 음수만 본다. 정보 조회율은 일자 칸에서 0~1 을 지킨다.
+    day_bounded_rates = {"information_view_rate"}
     invalid_brand_rates = brand_daily.where(
         F.greatest(*[
             F.when(
                 F.col(column).isNotNull()
-                & ~F.col(column).between(0.0, 1.0),
+                & (
+                    ~F.col(column).between(0.0, 1.0)
+                    if column in day_bounded_rates
+                    else F.col(column) < 0.0
+                ),
                 F.lit(1),
             ).otherwise(F.lit(0))
             for column in rate_columns
@@ -1824,6 +1887,18 @@ def validate_frames(
         "brand_daily_rates_follow_contract",
         invalid_brand_rates == 0 and invalid_zero_denominators == 0,
         f"out_of_range={invalid_brand_rates}; non_null_zero_denominator={invalid_zero_denominators}",
+    ))
+    brand_period_overflow = _period_overflow_count(
+        brand_daily,
+        [column for column in brand_grain if column != "event_date_kst"],
+        all_day_pairs=[("add_to_cart_sessions", "detail_view_sessions")],
+        positive_day_pairs=[("detail_view_sessions", "impression_sessions")],
+    )
+    checks.append(_check(
+        "brand_daily_stages_are_bounded_over_period",
+        brand_period_overflow == 0,
+        f"overflowing_brands={brand_period_overflow}; 담기 ≤ 상세, 상세 ≤ 노출을 "
+        "날짜 합산으로 본다 (자정을 넘긴 세션은 일자 칸에서 분자가 분모보다 크다)",
     ))
 
     try:
@@ -1856,12 +1931,10 @@ def validate_frames(
         | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
         | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
         | (F.col("detail_view_sessions") > F.col("session_count"))
-        | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
-        | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
         # 분모는 노출 세 Event 의 합이다 (IMPRESSION_EVENTS · §4.1, 프론트 확인
         # 2026-09-17). 추천 카드 클릭도 product_click 이라 product_impression 만
-        # 보면 1 을 넘는다. 아래 줄이 합산 정의 자체도 같이 본다.
-        | (F.col("product_click_count") > F.col("impression_count"))
+        # 보면 1 을 넘는다. 아래 줄이 합산 정의를 본다. 클릭 ≤ 노출과 담기·구매 ≤
+        # 상세는 자정을 넘긴 세션에서 일자 칸이 깨지므로 날짜 합산 검사가 본다.
         | (F.col("impression_count")
            != F.col("product_impression_count")
            + F.col("recommendation_impression_count")
@@ -1877,10 +1950,12 @@ def validate_frames(
     product_rate_columns = [
         "product_ctr", "detail_entry_rate", "add_to_cart_rate", "purchase_rate"
     ]
+    # 네 비율 모두 분자와 분모가 다른 Event 라 자정을 넘기면 일자 칸에서 1 을
+    # 넘는다. 여기서는 음수만 보고 상한은 아래 날짜 합산 검사가 본다.
     invalid_product_rates = product_daily.where(
         F.greatest(*[
             F.when(
-                F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                F.col(column).isNotNull() & (F.col(column) < 0.0),
                 F.lit(1),
             ).otherwise(F.lit(0))
             for column in product_rate_columns
@@ -1898,6 +1973,28 @@ def validate_frames(
         invalid_product_rates == 0 and invalid_product_denominators == 0,
         f"out_of_range={invalid_product_rates}; "
         f"non_null_zero_denominator={invalid_product_denominators}",
+    ))
+    # 담기율·구매율·CTR 의 상한은 개수 비교의 합이 함께 본다. 상세 진입률만
+    # 개수 비교가 없어 비율 상한 범위(분모 > 0 인 날)로 따로 둔다.
+    product_period_overflow = _period_overflow_count(
+        product_daily,
+        [
+            "product_id", "actor_type", "source", "generator_type",
+            "scenario_id", "simulation_run_id",
+        ],
+        all_day_pairs=[
+            ("add_to_cart_sessions", "detail_view_sessions"),
+            ("purchase_sessions", "detail_view_sessions"),
+            ("product_click_count", "impression_count"),
+        ],
+        positive_day_pairs=[("product_view_count", "impression_count")],
+    )
+    checks.append(_check(
+        "product_daily_stages_are_bounded_over_period",
+        product_period_overflow == 0,
+        f"overflowing_products={product_period_overflow}; 담기·구매 ≤ 상세, "
+        "클릭·상세 조회 ≤ 노출을 날짜 합산으로 본다 (자정을 넘긴 세션은 일자 칸에서 "
+        "분자가 분모보다 크다)",
     ))
 
     # 상품 Dimension 매칭. Fact 단계에는 같은 검사가 있지만 Mart 단계에는 없었다.
@@ -2261,6 +2358,9 @@ def validate_frames(
     # `impression_count - click_count` 라(§4.10) 클릭이 노출보다 많은 칸에서 자동으로
     # 음수가 된다 — 자정을 넘긴 세션이 만드는 그 칸이다. 아래 날짜 합산 검사가
     # 클릭과 함께 본다. 2026-09-23 배치에서 이 조건 하나만 남아 실패했다.
+    # `banner_ctr` 의 상한도 같은 이유로 일자 칸에서는 보지 않는다 — 앞날 노출 1 ·
+    # 뒷날 노출 1 · 클릭 2 면 뒷날 CTR 이 2 다. 상한은 같은 날짜 합산 검사가 보고
+    # 여기서는 음수만 본다.
     invalid_banner_counts = banner_daily.where(
         F.col("click_count").isNull()
         | F.col("impression_count").isNull()
@@ -2273,7 +2373,7 @@ def validate_frames(
             (F.col("impression_count") > 0)
             & (
                 F.col("banner_ctr").isNull()
-                | ~F.col("banner_ctr").between(0, 1)
+                | (F.col("banner_ctr") < 0)
             )
         )
     ).count()
@@ -2516,8 +2616,6 @@ def validate_frames(
             | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
             | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
             | (F.col("detail_view_sessions") > F.col("session_count"))
-            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
-            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
             | (F.col("impression_sessions") > F.col("session_count"))
         ).count()
         checks.append(_check(
@@ -2528,10 +2626,12 @@ def validate_frames(
         segment_rate_columns = [
             "view_to_cart_rate", "view_to_purchase_rate", "detail_entry_rate"
         ]
+        # 세 비율 모두 분자와 분모의 날짜가 따로다. 상한과 담기·구매 ≤ 상세는
+        # 자정을 넘긴 세션에서 일자 칸이 깨지므로 아래 날짜 합산 검사가 본다.
         invalid_segment_rates = persona_segment.where(
             F.greatest(*[
                 F.when(
-                    F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                    F.col(column).isNotNull() & (F.col(column) < 0.0),
                     F.lit(1),
                 ).otherwise(F.lit(0))
                 for column in segment_rate_columns
@@ -2549,6 +2649,23 @@ def validate_frames(
             invalid_segment_rates == 0 and invalid_segment_denominators == 0,
             f"out_of_range={invalid_segment_rates}; "
             f"non_null_zero_denominator={invalid_segment_denominators}",
+        ))
+        segment_period_overflow = _period_overflow_count(
+            persona_segment,
+            [
+                "brand_id", "segment_type", "segment_value", *EXECUTION_AXES,
+            ],
+            all_day_pairs=[
+                ("add_to_cart_sessions", "detail_view_sessions"),
+                ("purchase_sessions", "detail_view_sessions"),
+            ],
+            positive_day_pairs=[("detail_view_sessions", "impression_sessions")],
+        )
+        checks.append(_check(
+            "persona_segment_stages_are_bounded_over_period",
+            segment_period_overflow == 0,
+            f"overflowing_segments={segment_period_overflow}; 담기·구매 ≤ 상세, "
+            "상세 ≤ 노출을 날짜 합산으로 본다",
         ))
 
         # 세그먼트 세션 합은 브랜드 전체와 같지 않다 — persona 없는 세션을 귀속하지
@@ -2599,8 +2716,6 @@ def validate_frames(
             | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
             | (F.col("quick_look_sessions") > F.col("detail_view_sessions"))
             | (F.col("detail_view_sessions") > F.col("session_count"))
-            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
-            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
             | (F.col("product_count") < 1)
         ).count()
         checks.append(_check(
@@ -2612,10 +2727,12 @@ def validate_frames(
         price_rate_columns = [
             "detail_entry_rate", "view_to_cart_rate", "view_to_purchase_rate"
         ]
+        # 세 비율 모두 분자와 분모의 날짜가 따로다. 상한과 담기·구매 ≤ 상세는
+        # 자정을 넘긴 세션에서 일자 칸이 깨지므로 아래 날짜 합산 검사가 본다.
         invalid_price_rates = price_band.where(
             F.greatest(*[
                 F.when(
-                    F.col(column).isNotNull() & ~F.col(column).between(0.0, 1.0),
+                    F.col(column).isNotNull() & (F.col(column) < 0.0),
                     F.lit(1),
                 ).otherwise(F.lit(0))
                 for column in price_rate_columns
@@ -2632,6 +2749,21 @@ def validate_frames(
             invalid_price_rates == 0 and invalid_price_denominators == 0,
             f"out_of_range={invalid_price_rates}; "
             f"non_null_zero_denominator={invalid_price_denominators}",
+        ))
+        price_period_overflow = _period_overflow_count(
+            price_band,
+            ["brand_id", "price_bin", "currency", *EXECUTION_AXES],
+            all_day_pairs=[
+                ("add_to_cart_sessions", "detail_view_sessions"),
+                ("purchase_sessions", "detail_view_sessions"),
+            ],
+            positive_day_pairs=[("detail_view_sessions", "impression_sessions")],
+        )
+        checks.append(_check(
+            "price_band_stages_are_bounded_over_period",
+            price_period_overflow == 0,
+            f"overflowing_bands={price_period_overflow}; 담기·구매 ≤ 상세, "
+            "상세 ≤ 노출을 날짜 합산으로 본다",
         ))
 
         checks.append(_check(
@@ -3385,20 +3517,20 @@ def validate_frames(
             f"허용 축={sorted(PERSONA_SEGMENT_TYPES)}; 교차 축은 제외한다",
         ))
 
+        # 담기·구매 ≤ 상세와 두 비율의 상한은 자정을 넘긴 세션에서 일자 칸이
+        # 깨지므로 아래 날짜 합산 검사가 본다. 여기서는 비율의 음수만 본다.
         invalid_s5 = segment_price_band.where(
             (F.col("session_count") <= 0)
             | (F.col("segment_user_count") <= 0)
             | (F.col("product_view_sessions") > F.col("detail_view_sessions"))
-            | (F.col("add_to_cart_sessions") > F.col("detail_view_sessions"))
-            | (F.col("purchase_sessions") > F.col("detail_view_sessions"))
             | (F.col("detail_view_sessions") > F.col("session_count"))
             | (F.col("product_count") <= 0)
             | F.col("segment_value").isNull()
             | F.col("brand_id").isNull()
             | (F.col("view_to_cart_rate").isNotNull()
-               & ~F.col("view_to_cart_rate").between(0.0, 1.0))
+               & (F.col("view_to_cart_rate") < 0.0))
             | (F.col("view_to_purchase_rate").isNotNull()
-               & ~F.col("view_to_purchase_rate").between(0.0, 1.0))
+               & (F.col("view_to_purchase_rate") < 0.0))
             | ((F.col("detail_view_sessions") == 0)
                & F.col("view_to_cart_rate").isNotNull())
             | ((F.col("detail_view_sessions") > 0)
@@ -3407,7 +3539,20 @@ def validate_frames(
         checks.append(_check(
             "segment_price_band_values_follow_contract",
             invalid_s5 == 0,
-            f"invalid_rows={invalid_s5}; 분자 <= 분모 · 0~1 · 분모 0이면 NULL",
+            f"invalid_rows={invalid_s5}; 분자 <= 분모 · 음수 없음 · 분모 0이면 NULL",
+        ))
+        s5_period_overflow = _period_overflow_count(
+            segment_price_band,
+            [column for column in s5_key if column != "event_date_kst"],
+            all_day_pairs=[
+                ("add_to_cart_sessions", "detail_view_sessions"),
+                ("purchase_sessions", "detail_view_sessions"),
+            ],
+        )
+        checks.append(_check(
+            "segment_price_band_stages_are_bounded_over_period",
+            s5_period_overflow == 0,
+            f"overflowing_cells={s5_period_overflow}; 담기·구매 ≤ 상세를 날짜 합산으로 본다",
         ))
 
         # price_bin 은 어휘집에서 파생한 값이어야 한다. NULL 은 가격 결측 보존이다.

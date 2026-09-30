@@ -415,6 +415,24 @@ source = dim_product, contracts/product-feature-vocab.json
 사용하고, `scenario_id`, `simulation_run_id`가 NULL인 Web 행도 같은 grain 규칙으로
 집계한다.
 
+**Event 날짜로 칸을 나누는 Mart는 일자 칸에서 분자가 분모를 넘을 수 있다.**
+`product_daily_kpi`(§4.1), `brand_daily_kpi`(§4.14), `persona_segment_daily_kpi`(§4.6),
+`brand_price_band_daily_kpi`(§4.6-1), `segment_price_band_daily_kpi`(§4.26),
+`banner_daily`(§4.10)는 분자와 분모를 각자 자기 Event의 `event_date_kst`로 센다. 세션이
+자정을 넘으면 앞 단계는 앞날, 뒤 단계는 뒷날에 찍혀 뒷날 칸은 담기 1 · 상세 0이나 노출 1 ·
+클릭 2가 되고, 그 칸의 비율은 1을 넘는다. 정상 동선이므로 Mart는 값을 옮기지 않는다.
+따라서 이 Mart들의 **담기·구매 ≤ 상세, 클릭·상세 ≤ 노출과 비율의 상한은 날짜를 걷어낸
+합에서만 보장한다.** Q5는 이 조건을 grain에서 날짜만 뺀 칸으로 **Mart 전체 기간**을 합산해
+보고(`*_stages_are_bounded_over_period`, 배너는 `banner_clicks_do_not_exceed_impressions`),
+일자 칸에서는 비율의 음수와 분모 0 → NULL만 본다. 비율 상한은 분모가 0보다 큰 날만 더한다
+— 그날 비율이 NULL이라 일자 검사도 보지 않던 범위다. 증분 처리를 도입해도 이 검사를 최근
+며칠로 줄이지 않는다. 앞날이 잘리면 자정을 넘긴 세션이 다시 걸린다.
+
+이 규칙은 조회에 영향을 주지 않는다. 대시보드는 저장된 비율을 읽지 않고 기간의 분자·분모를
+합산해 다시 나눈다. 반대로 분모 세션에 날짜 하나를 주는 Mart(`funnel_daily_kpi`, §4.4,
+§4.19~§4.23)와 `brand_daily_kpi`의 정보 확인 세션은 일자 칸에서 성립하므로 일자 검사를
+유지한다.
+
 ### 4.0 시드 Event 제외 범위
 
 `is_seeded=true`인 Event는 생성기가 Persona의 사전 선호를 주입한 표식이라 관측된
@@ -1054,7 +1072,9 @@ NULL이다. `skip_count`는 `impression_count - click_count`다. `banner_skip` E
 넘겨 노출이 앞날, 클릭이 뒷날에 찍히면 뒷날 칸이 음수가 된다 — 클릭이 노출보다 많은
 그 칸의 다른 표현이다. 그래서 음수 여부는 일자별로 보지 않고 날짜를 합산해
 `banner_clicks_do_not_exceed_impressions`가 클릭·노출과 한자리에서 본다. 일자별로
-막으면 자정을 넘긴 정상 동선이 걸린다(2026-09-23 운영 배치가 그것 하나로 실패했다). `banner_value_is_valid`는 원문
+막으면 자정을 넘긴 정상 동선이 걸린다(2026-09-23 운영 배치가 그것 하나로 실패했다).
+같은 이유로 `banner_ctr`도 일자 칸에서 1을 넘을 수 있다 — 앞날 노출 1 · 뒷날 노출 1 ·
+클릭 2면 뒷날 CTR이 2다. 상한은 같은 날짜 합산 검사가 보고 일자 칸에서는 음수만 본다(§4 도입). `banner_value_is_valid`는 원문
 어휘집 검증 결과이고 `new_brand`만 NULL을 허용한다.
 
 `policy_version`을 key에 두는 이유는 배너·정렬 정책 배포 전후를 같은 Mart 안에서
