@@ -250,3 +250,117 @@ bash deploy/ec2-1/deploy-helpers.sh health $SVC   # EC2_ENV_FILE 을 export 해 
 `--no-build` 를 빼면 Compose 가 작업공간 코드로 다시 빌드해 되돌린 이미지를 덮어쓴다. 되돌린 뒤 Jenkins 로
 다시 배포하면 그 시점 코드가 새로 올라간다. `:previous` 는 배포 때마다 덮어써지므로 두 단계 이상 전으로 갈 때는
 커밋 SHA 태그를 쓴다(이 변경이 들어간 뒤 배포한 이미지부터 생긴다). MySQL 데이터는 이미지와 무관하다 — 데이터는 위 5장 백업으로 되돌린다.
+
+## 발표 기간 배포 순서 (2026-09-30 ~ 발표 끝)
+
+라이브 사이트(`https://j15a306.p.ssafy.io`)로 사흘 내리 발표한다. 배포는 전처럼 Jenkins 수동 빌드이고,
+바뀐 것은 **shop-backend 를 다시 띄우기 전에 마이그레이션이 자동으로 돈다**는 것 하나다.
+
+### 가. 언제·어떻게
+
+- **발표와 발표 사이 쉬는 시간에만.** 발표 중에는 누르지 않는다.
+- **한 번에 한 서비스.** `DEPLOY_FRONTEND` / `DEPLOY_BACKEND` / `DEPLOY_SHOP_BACKEND` / `DEPLOY_RECOMMEND` 중 하나만 켠다.
+  아래 "라. 배포 후 5분 점검" 이 통과하면 다음 것.
+- **`DEPLOY_TO_EC2`(자동 판별)는 쓰지 않는다.** 최근 머지에서 `Jenkinsfile` 이나 `deploy/ec2-1/docker-compose.yml` 이
+  바뀌었으면 backend·shop-backend·recommend·prometheus·grafana·nginx **전부**를 한꺼번에 다시 만든다.
+  이 변경도 `Jenkinsfile` 을 바꾸므로 머지 뒤 첫 자동 판별은 전부 재기동이다.
+- shop-backend 배포 전에는 백업을 한 번 떠 둔다: `sudo bash deploy/ec2-1/backup-mysql.sh` (서비스 중에 돌려도 된다, 5장).
+
+### 나. 파라미터별로 무엇이 다시 뜨나
+
+어느 경우든 Jenkins 는 테스트/빌드 검증 → `tag-previous` → (shop-backend 가 대상이면 마이그레이션) →
+`docker compose up -d --build --no-deps <서비스>` → `tag-commit` → `health` 순서로 돈다. `--no-deps` 라
+**MySQL 은 재시작하지 않는다.** 이미지를 빌드하는 동안은 옛 컨테이너가 그대로 서비스한다.
+
+| 켜는 파라미터 | 다시 만드는 컨테이너 | 사용자에게 보이는 영향 |
+| --- | --- | --- |
+| `DEPLOY_FRONTEND` | `nginx` — 프론트 번들과 `deploy/nginx/default.conf` 가 한 이미지에 구워진다 | 정적 파일만 바뀌는 게 아니라 **nginx 컨테이너 자체가 교체**된다. 교체 순간 몇 초 동안 사이트 전체(화면과 `/api` 전부)가 끊기고, 진행 중인 요청·결제창 복귀가 끊길 수 있다. 백엔드들은 그대로 |
+| `DEPLOY_BACKEND` | `backend` (행동 로그 수집기) | 기동 20~40초 동안 `POST /api/events` 가 502. 그 사이 행동 로그 일부가 빠질 수 있다. 쇼핑·로그인·대시보드는 영향 없음 |
+| `DEPLOY_SHOP_BACKEND` | `shop-backend` | 먼저 마이그레이션(다). 그 뒤 기동 20~40초 동안 `/api/*`(상품·로그인·주문·결제·대시보드 데이터)가 502. 화면 파일은 뜬다 |
+| `DEPLOY_RECOMMEND` | `recommend` | 모델·페르소나를 읽는 동안 추천·처방 문장·`/api/headline` 이 실패하거나 비어 보인다. 세션 상태는 `session_events.jsonl` 재생으로 돌아온다 |
+
+nginx 설정만 바꾼 경우도 `DEPLOY_FRONTEND` 로 반영된다(이미지에 들어 있으므로). 발표용 요청 제한 완화
+(로그인 60r/m·burst 150, `/api/events` 300r/s·burst 1500 — PA 러너 100명 동시 로그인과 헤드리스 브라우저
+20~100개, 한 NAT 뒤 청중까지 제한 없던 때처럼 통과)도 `DEPLOY_FRONTEND` 를 한 번 돌려야 적용된다.
+
+### 다. shop-backend 배포와 마이그레이션
+
+shop-backend 는 `ddl-auto: validate` 라 엔티티에 있는 컬럼이 DB 에 없으면 **아예 뜨지 않는다.** 그래서 배포 대상에
+shop-backend 가 있으면(`DEPLOY_SHOP_BACKEND` 또는 자동 판별) Jenkins 가 `compose up` 전에
+`deploy/ec2-1/apply-shop-migrations.sh` 를 돌린다.
+
+- 스크립트의 `MIGRATIONS` 목록만 순서대로: `20260929_add_member_signup_consent.sql`(가입 동의 5칸) →
+  `20260929_add_member_withdrawal.sql`(`status` ENUM 에 `WITHDRAWN`, `withdrawn_at`). 둘 다 `information_schema` 로 본 뒤
+  없을 때만 `ALTER` 하므로 **매 배포마다 다시 돌아도 아무 일 없다.** 모두 NULL 허용 컬럼 추가·ENUM 끝에 값 추가라
+  옛 이미지와 지금 dev 코드 모두 validate 를 통과한다.
+- 대상은 이 compose 의 `mysql` 서비스(shop-backend 가 `mysql:3306` 으로 붙는 DB). DB 이름·root 비밀번호는 컨테이너
+  env(`MYSQL_DATABASE`, `MYSQL_ROOT_PASSWORD`)에서 읽고 출력하지 않는다.
+- **실패하면 빌드가 빨갛게 멈추고 어떤 서비스도 다시 만들지 않는다** — 옛 shop-backend 가 계속 서비스한다.
+  Jenkins 로그의 `[shop-migrate]` 줄을 본다.
+- 새 마이그레이션을 추가할 때는 재실행해도 안전한지 먼저 확인하고 `MIGRATIONS` 목록 끝에 넣는다.
+
+손으로 돌리기·확인 (EC2-1, Jenkins 작업공간에서):
+
+```bash
+cd /home/ubuntu/S15P21A306/deploy-workspace
+export EC2_ENV_FILE=/home/ubuntu/S15P21A306/deploy/ec2-1/.env
+bash deploy/ec2-1/apply-shop-migrations.sh        # 마지막 줄: ok: member has all 6 columns
+
+DC="docker compose -p ec2-1 --env-file $EC2_ENV_FILE -f deploy/ec2-1/docker-compose.yml"
+$DC exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE"' <<'SQL'
+SHOW COLUMNS FROM member LIKE 'terms_agreed_at';
+SHOW COLUMNS FROM member LIKE 'consent_version';
+SHOW COLUMNS FROM member LIKE 'withdrawn_at';
+SHOW COLUMNS FROM member LIKE 'status';
+SQL
+```
+
+앞 세 줄이 한 줄씩 나오고 `status` 의 Type 에 `'WITHDRAWN'` 이 있으면 정상.
+
+### 라. 배포 후 5분 점검
+
+자격 증명 없이 어디서나(노트북에서):
+
+```bash
+S=https://j15a306.p.ssafy.io
+curl -sS -o /dev/null -w '/               %{http_code}\n' $S/                        # 200
+curl -sS -o /dev/null -w '/dashboard.html %{http_code}\n' $S/dashboard.html          # 200
+curl -sS -o /dev/null -w '/platform.html  %{http_code}\n' $S/platform.html           # 200
+curl -sS -o /dev/null -w 'products        %{http_code} %{size_download}B\n' $S/api/products    # 200, 수백 KB
+curl -sS -o /dev/null -w 'product SB      %{http_code}\n' $S/api/products/SB000001   # 200
+# 아래 둘은 일부러 빈 요청이다. 400/401 = 서버가 살아서 거절한 것.
+# 502/504 = 컨테이너가 안 떠 있음, 429 = 요청 제한, events 가 503 = 수집기는 살았고 Kafka 가 문제
+curl -sS -o /dev/null -w 'login(empty)    %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' $S/api/auth/login
+curl -sS -o /dev/null -w 'events(empty)   %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' $S/api/events
+curl -sSI $S/ | grep -i strict-transport-security                                    # 헤더 1줄
+```
+
+`https://…/actuator/health` 는 nginx 가 앱으로 넘기지 않아 **index.html 이 200 으로 온다 — 헬스로 쓰지 않는다.**
+앱 헬스는 EC2-1 에서 `bash deploy/ec2-1/deploy-helpers.sh health shop-backend backend recommend nginx`
+(`EC2_ENV_FILE` export 후).
+
+**Jenkins 헬스는 초록인데 사이트의 `/api` 만 502 이면** nginx 가 옛 컨테이너 IP 를 들고 있는 것이다. nginx 는
+`proxy_pass` 의 호스트 이름을 기동 때 한 번만 풀고, 헬스 체크는 nginx 안에서 `wget` 으로 새로 풀어서 이 경우를 못 잡는다.
+`$DC exec -T nginx nginx -s reload` 한 줄이면 끊김 없이 풀린다.
+
+브라우저로:
+- 쇼핑몰 첫 화면·상품 상세가 뜨고, PA 계정 하나로 로그인된다
+- 대시보드(`/dashboard.html`) 로그인 후 첫 화면 숫자·문장이 뜬다
+- 테스트 결제 1건이 주문 완료까지 간다
+- shop-backend 를 배포했으면 신규 가입 1건(동의 화면)까지
+
+### 마. 되돌리기
+
+위 "배포 확인과 되돌리기" 그대로다: `docker tag ec2-1-$SVC:previous ec2-1-$SVC:latest` →
+`$DC up -d --no-deps --no-build --force-recreate $SVC` → `deploy-helpers.sh health $SVC`. `--no-build` 를 빼지 않는다.
+shop-backend 를 되돌려도 **마이그레이션은 되돌리지 않는다** — 추가된 칸은 모두 NULL 허용이고 옛 코드는 그 칸을
+모르므로 옛 이미지가 그대로 뜬다. 데이터 자체를 되돌려야 할 때만 5장 백업 복구.
+
+### 바. EC2-2 (Kafka/Spark) — 발표 기간에는 건드리지 않는다
+
+dev 에 들어온 EC2-2 변경(!506: `activity-events` 보존 24h→72h 재적용, raw sink 트리거 10s→60s,
+`restart: unless-stopped`)은 EC2-2 에서 누군가 `docker compose up -d kafka-init spark-raw-sink` 를 돌려야만 적용된다.
+Jenkins 는 EC2-2 를 배포하지 않는다. **사흘 동안은 돌리지 않는다.** 안 돌리면 지금처럼 24시간 보존·10초 트리거로
+계속 돈다 = 발표 전과 똑같다. spark-raw-sink 를 다시 만들면 스트리밍 잡이 재시작돼 그동안 적재가 밀린다.
+꼭 필요할 때(예: 72시간 보존이 당장 필요)만, 쉬는 시간에.
+
