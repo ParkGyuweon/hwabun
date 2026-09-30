@@ -8,7 +8,7 @@ CREATE TABLE seller_account (
 );
 CREATE TABLE member (
  member_id VARCHAR(64) PRIMARY KEY, email VARCHAR(320) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL, nickname VARCHAR(100) NOT NULL,
- status ENUM('ACTIVE','INACTIVE','LOCKED') NOT NULL DEFAULT 'ACTIVE', skin_type_code VARCHAR(32) NULL, skin_tone_code VARCHAR(32) NULL, hair_color_code VARCHAR(32) NULL, eye_color_code VARCHAR(32) NULL,
+ status ENUM('ACTIVE','INACTIVE','LOCKED','WITHDRAWN') NOT NULL DEFAULT 'ACTIVE', withdrawn_at DATETIME(6) NULL, skin_type_code VARCHAR(32) NULL, skin_tone_code VARCHAR(32) NULL, hair_color_code VARCHAR(32) NULL, eye_color_code VARCHAR(32) NULL,
  terms_agreed_at DATETIME(6) NULL, privacy_agreed_at DATETIME(6) NULL, skin_info_agreed_at DATETIME(6) NULL, behavior_link_agreed_at DATETIME(6) NULL, consent_version VARCHAR(32) NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
 );

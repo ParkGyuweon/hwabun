@@ -55,6 +55,10 @@ public class Member {
   @Column(nullable = false)
   private AccountStatus status = AccountStatus.ACTIVE;
 
+  /** 탈퇴 시각. 탈퇴하지 않은 회원은 NULL */
+  @Column(name = "withdrawn_at")
+  private LocalDateTime withdrawnAt;
+
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt;
 

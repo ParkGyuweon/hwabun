@@ -5,7 +5,7 @@
 ## 계정·브랜드
 
 - seller_account: 브랜드별 관리자 로그인 계정(브랜드 하나당 하나)
-- member: 구매자 계정과 피부 타입·피부 톤·헤어 색·눈동자 색 FK
+- member: 구매자 계정과 피부 타입·피부 톤·헤어 색·눈동자 색 FK. 탈퇴는 행을 지우지 않고 `status='WITHDRAWN'`·`withdrawn_at` 을 남긴 뒤 이메일·닉네임·피부 프로필·비밀번호를 지운다 (주문·리뷰는 5년 보존)
 - admin_account: 운영자 로그인 계정
 - brand: 브랜드 본체. `seller_account_id`로 전용 관리자 계정과 1:1 연결
 
