@@ -8,6 +8,9 @@ import com.cosmetic.shopbackend.catalog.ProductVariant;
 import com.cosmetic.shopbackend.catalog.ProductVariantRepository;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -84,7 +87,13 @@ public class CommerceController {
     this.jdbc = jdbc;
   }
 
-  public record CartRequest(String variantId, int quantity) {}
+  /** 한 상품 수량 상한. 화면도 99 에서 멈춘다 — 그보다 큰 값은 연타·조작으로 부풀려진 것이다 */
+  static final int MAX_CART_QUANTITY = 99;
+
+  public record CartRequest(
+    String variantId,
+    @Min(1) @Max(MAX_CART_QUANTITY) int quantity
+  ) {}
 
   public record OrderRequest(String idempotencyKey) {}
 
@@ -207,10 +216,14 @@ public class CommerceController {
   @Transactional
   public ResponseEntity<?> add(
     @AuthenticationPrincipal ShopPrincipal actor,
-    @RequestBody CartRequest request
+    @Valid @RequestBody CartRequest request
   ) {
     requireMember(actor);
-    if (request.quantity() < 1 || request.variantId() == null) {
+    if (
+      request.quantity() < 1 ||
+      request.quantity() > MAX_CART_QUANTITY ||
+      request.variantId() == null
+    ) {
       return ResponseEntity.badRequest().body("invalid cart item");
     }
     if (activeVariant(request.variantId()).isEmpty()) {
@@ -220,6 +233,17 @@ public class CommerceController {
     }
 
     Cart cart = cart(actor.accountId());
+    /*
+     * 같은 상품을 또 담으면 수량이 더해진다(`addQuantity`). 더한 값도 상한을 넘으면 받지 않는다 —
+     * 한 번에 99 씩 여러 번 보내 상한을 우회하지 못하게.
+     */
+    int already = cartItems
+      .findByCartIdAndVariantId(cart.getId(), request.variantId())
+      .map(CartItem::getQuantity)
+      .orElse(0);
+    if (already + request.quantity() > MAX_CART_QUANTITY) {
+      return ResponseEntity.badRequest().body("cart quantity limit exceeded");
+    }
     cartItems.addQuantity(
       UUID.randomUUID().toString(),
       cart.getId(),

@@ -321,7 +321,11 @@ export async function registerProductBackend(form: RegistrationForm): Promise<Re
 /* ------------------------------------------------------------------ 장바구니·주문·결제 (고객) */
 
 export type CheckoutResult = { ok: true; orderId: string; status: string } | ApiFailure;
-export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null } | ApiFailure;
+/**
+ * `status` 는 서버 주문 상태(`CREATED` · `PAID` …). 같은 주문 번호로 다시 보내면 서버가 **이미 있는 주문**을
+ * 그대로 돌려주므로, 앞선 시도에서 결제까지 끝났으면 여기서 `PAID` 가 온다 — 그때 결제창을 또 열면 안 된다.
+ */
+export type CreateOrderResult = { ok: true; orderId: string; totalAmountKrw: number | null; status: string | null; paidAt: string | null } | ApiFailure;
 export type ConfirmResult = { ok: true; orderId: string; status: string; paidAt: string | null } | ApiFailure;
 
 /** 주문에 든 품목. 리뷰를 쓰려면 `orderItemId` 가 필요하다 */
@@ -469,7 +473,9 @@ export async function createBackendOrder(items: CartItem[], idempotencyKey: stri
     const orderId = String(order.orderId ?? order.id ?? order.order_id ?? '');
     if (!orderId) return { ok: false, status: created.status, reason: '주문 번호를 받지 못했습니다.' };
     const amt = Number(order.totalAmount ?? order.total_amount);
-    return { ok: true, orderId, totalAmountKrw: Number.isFinite(amt) && amt > 0 ? Math.round(amt) : null };
+    const status = typeof order.status === 'string' ? order.status : null;
+    const paidAt = typeof order.paidAt === 'string' ? order.paidAt : typeof order.paid_at === 'string' ? order.paid_at : null;
+    return { ok: true, orderId, totalAmountKrw: Number.isFinite(amt) && amt > 0 ? Math.round(amt) : null, status, paidAt };
   } catch {
     return offline();
   }
@@ -514,6 +520,8 @@ export async function confirmBackendOrder(orderId: string, paymentId: string): P
 export async function checkoutOnBackend(items: CartItem[], idempotencyKey: string): Promise<CheckoutResult> {
   const created = await createBackendOrder(items, idempotencyKey);
   if (!created.ok) return created;
+  // 같은 주문 번호의 앞선 시도가 이미 끝났으면 다시 표시하지 않는다
+  if (created.status === 'PAID') return { ok: true, orderId: created.orderId, status: 'PAID' };
   return payBackendOrder(created.orderId);
 }
 

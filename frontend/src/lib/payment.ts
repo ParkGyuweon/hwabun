@@ -184,6 +184,11 @@ export interface PendingPayment {
   total: number;
   paid: number;
   totalAmountKrw: number;
+  /**
+   * 장바구니 주문인지 "바로 구매" 인지. 복귀 뒤 장바구니를 비울지가 이 값에 달렸다 —
+   * 빠지면 바로 구매로 돌아와도 모아 둔 장바구니가 지워졌다. 예전에 저장된 값에는 없으니 없으면 'cart' 로 본다.
+   */
+  origin?: 'cart' | 'buy_now';
 }
 
 export function savePendingPayment(p: PendingPayment): void {
