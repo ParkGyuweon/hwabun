@@ -21,8 +21,16 @@ interface BehaviorContextValue {
   metrics: BehaviorMetrics;
   /** 마트 호출 상태. 사이드바 문구에 쓴다 */
   martState: MartState;
+  /** 화면을 "불러오는 중" 으로 가려 둘지. 받는 중이어도 오래 걸리면 false 가 된다 (useMartWaiting) */
+  waiting: boolean;
   days: number;
 }
+
+/**
+ * 행동 기록이 이만큼 안 오면 기다리기를 그만두고 받은 것만으로 그린다. 마트 호출에는 제한 시간이 없어서,
+ * 서버 하나가 늦으면 화면이 "불러오는 중" 에 영영 멈춘다 (2026-09-30). 늦게 오면 그때 숫자가 채워진다
+ */
+const GATE_TIMEOUT_MS = 8000;
 
 const Ctx = createContext<BehaviorContextValue | null>(null);
 
@@ -70,6 +78,15 @@ export function BehaviorProvider({
   const bundle = key ? (cache.get(key) ?? (fetched?.key === key ? fetched.bundle : null)) : null;
   const martState: MartState = !key ? 'idle' : bundle ? (anyPayload(bundle) ? 'ready' : 'unavailable') : 'loading';
 
+  // 받는 중으로 GATE_TIMEOUT_MS 가 지난 key. 이 key 는 더 가리지 않는다
+  const [slowKey, setSlowKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (martState !== 'loading' || !key) return;
+    const t = window.setTimeout(() => setSlowKey(key), GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [martState, key]);
+  const waiting = martState === 'loading' && slowKey !== key;
+
   const metrics = useMemo(() => {
     const base = emptyBehavior();
     if (!bundle || !anyPayload(bundle)) return base;
@@ -81,7 +98,7 @@ export function BehaviorProvider({
     return fromMart(bundle, base, mine);
   }, [bundle, days, brandName, serverProducts]);
 
-  const value = useMemo(() => ({ metrics, martState, days }), [metrics, martState, days]);
+  const value = useMemo(() => ({ metrics, martState, waiting, days }), [metrics, martState, waiting, days]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -97,6 +114,33 @@ export function useBehavior(): BehaviorMetrics {
 
 export function useMartState(): MartState {
   return useContext(Ctx)?.martState ?? 'idle';
+}
+
+/** 행동 기록을 아직 기다리는 중인지. 받는 중이라도 오래 걸리면 false — 화면을 영영 가리지 않는다 */
+export function useMartWaiting(): boolean {
+  return useContext(Ctx)?.waiting ?? false;
+}
+
+/**
+ * 행동 기록을 받는 동안에는 감싼 부분 대신 "불러오는 중" 만 그린다. 받기 전 빈 묶음을 그대로 그리면
+ * "0.0%"·"아직 기록이 없습니다" 가 잠깐 떴다 바뀌어, 사장님은 그 0 을 진짜로 읽는다 (2026-09-29).
+ * 행동 기록에서 나온 부분만 감싼다 — 주문·매출처럼 따로 받는 숫자는 먼저 온 대로 바로 보여야 한다 (2026-09-30)
+ */
+export function BehaviorGate({ children }: { children: ReactNode }) {
+  if (!useMartWaiting()) return <>{children}</>;
+  return (
+    <div className="stack" aria-busy="true">
+      <p className="loading-state" role="status" aria-live="polite">
+        고객 행동 기록을 불러오는 중…
+      </p>
+      <div className="grid grid--kpi" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="loading-block" />
+        ))}
+      </div>
+      <div className="loading-block loading-block--tall" aria-hidden="true" />
+    </div>
+  );
 }
 
 const FALLBACK = emptyBehavior();
