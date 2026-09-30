@@ -235,7 +235,7 @@ export default function ProductListPage({
     }),
     [products, persona, reviewSkinTypes, cartProductIds, trait.axes, trait.trait_source, memberId, memberProfile, recommendIdentityId],
   );
-  const { recommendation, source: recommendationSource } = useRecommendation(recommendationInput);
+  const { recommendation, source: recommendationSource, settled: recommendationSettled } = useRecommendation(recommendationInput);
 
   const productsById = useMemo(() => new Map(products.map((p) => [p.product_id, p])), [products]);
 
@@ -635,8 +635,9 @@ export default function ProductListPage({
         <header className="list__promo-head">
           <h2>
             지금 주목할 상품
-            {/* 추천 서버 응답이 없어 기본 목록으로 채웠을 때. 모델 추천처럼 보이지 않게 작게 밝힌다 (2026-09-29) */}
-            {recommendationSource === 'mock' ? (
+            {/* 추천 서버 응답이 없어 기본 목록으로 채웠을 때. 모델 추천처럼 보이지 않게 작게 밝힌다 (2026-09-29).
+                요청이 끝나기 전(로그 전송 대기 + 서버 호출)에는 띄우지 않는다 — 로딩 중에 번쩍였다 (2026-09-30) */}
+            {recommendationSource === 'mock' && recommendationSettled ? (
               <small
                 data-recommend-fallback
                 style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, letterSpacing: 0, opacity: 0.55, verticalAlign: 'middle' }}

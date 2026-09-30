@@ -44,7 +44,12 @@ export interface UseRecommendationInput extends BuildInput {
   profile?: MemberProfile | null;
 }
 
-export function useRecommendation(input: UseRecommendationInput): { recommendation: RecommendResponse; source: RecommendationSource } {
+export function useRecommendation(input: UseRecommendationInput): {
+  recommendation: RecommendResponse;
+  source: RecommendationSource;
+  /** 이번 key 의 요청이 끝났다 (성공·실패 무관). 부르지 않는 경우(식별자 없음)도 true. 로딩 중 '기본 추천' 표시를 막는 데 쓴다 */
+  settled: boolean;
+} {
   const { identityId, products, excluded, axes, heroPolicy, k, bannerSlots, reserved, profile = null } = input;
 
   const mock = useMemo(() => buildRecommendation(input), [input]);
@@ -53,6 +58,9 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
   const profileKey = profile ? `${profile.skin_type ?? ''}/${profile.skin_tone ?? ''}/${profile.hair_color ?? ''}/${profile.eye_color ?? ''}` : '';
   const key = identityId ? `${identityId}|${k}|${bannerSlots}|${reserved}|${heroPolicy ?? 'top'}|${axesKey}|${profileKey}` : null;
   const [server, setServer] = useState<{ key: string; identityId: string; response: RecommendResponse } | null>(null);
+  /** 마지막으로 끝난 요청의 key. 실패·빈 응답도 끝난 것으로 친다 */
+  const [doneKey, setDoneKey] = useState<string | null>(null);
+  const settled = !key || doneKey === key;
 
   useEffect(() => {
     if (!key || !identityId) return;
@@ -68,6 +76,7 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
       .then((res) => {
         if (controller.signal.aborted) return;
         if (res) setServer({ key, identityId, response: res });
+        setDoneKey(key);
       });
     return () => controller.abort();
     // key 가 입력 전부를 담는다. axes 배열 참조가 바뀌어도 내용이 같으면 다시 부르지 않는다
@@ -100,15 +109,17 @@ export function useRecommendation(input: UseRecommendationInput): { recommendati
   }, [longTerm]);
 
   return useMemo(() => {
-    const fresh = server && server.key === key ? server.response : null;
-    if (!fresh) return { recommendation: mock, source: 'mock' as const };
+    // 새 key 를 기다리는 동안은 같은 사람의 직전 서버 목록을 그대로 둔다 — 진짜 목록 위로 목이 번쩍이지 않게
+    const fresh =
+      server && (server.key === key || (!settled && server.identityId === identityId)) ? server.response : null;
+    if (!fresh) return { recommendation: mock, source: 'mock' as const, settled };
 
     // 카탈로그에 없는 상품(등록·동기화 시차)과 담은 상품은 뺀다. 순위(rank)는 서버 값 그대로 둔다 — position 로그가 응답과 같아야 한다
     const known = new Set(products.map((p) => p.product_id));
     const items = fresh.items.filter((it) => known.has(it.product_id) && !excluded.has(it.product_id));
-    if (items.length === 0) return { recommendation: mock, source: 'mock' as const };
+    if (items.length === 0) return { recommendation: mock, source: 'mock' as const, settled };
     const hero = fresh.hero && known.has(fresh.hero.product_id) && !excluded.has(fresh.hero.product_id) ? fresh.hero : null;
     const banners = fresh.banners.filter((b) => known.has(b.product_id) && !excluded.has(b.product_id));
-    return { recommendation: { ...fresh, items, hero, banners }, source: 'server' as const };
-  }, [server, key, mock, products, excluded]);
+    return { recommendation: { ...fresh, items, hero, banners }, source: 'server' as const, settled };
+  }, [server, key, identityId, settled, mock, products, excluded]);
 }
