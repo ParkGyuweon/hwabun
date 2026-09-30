@@ -22,9 +22,7 @@ import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
 import { BehaviorGate, BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
-import { fetchComposition, hasRows } from './lib/martApi';
-import type { ActorType, CompositionPayload } from './lib/martApi';
-import { fmt } from './lib/metrics';
+import type { ActorType } from './lib/martApi';
 
 /**
  * 화면 하나. **이름을 바꾸지 않았다** — `insight.ts`·`prescription.ts` 가 "이 인사이트는 어느 화면으로
@@ -330,8 +328,6 @@ export default function DashboardApp() {
             안 적으면 사장님은 전체 기간으로 읽는다 (2026-09-29)
           */}
           <ScopeNote scope={active.scope} brandName={brand?.name ?? null} period={PERIOD_LABEL_SCREENS.has(screen) ? `최근 ${days}일` : null} />
-          {/* 심사·시연에서 "이 숫자 중 진짜가 얼마냐" 에 화면이 먼저 답한다. 고객 행동 화면에만 */}
-          {MIX_SCREENS.has(screen) ? <DataMix brandId={brand?.id ?? null} days={days} /> : null}
 
           <div className="main__controls">
             {MIX_SCREENS.has(screen) ? (
@@ -416,50 +412,8 @@ export default function DashboardApp() {
  */
 /** 기간 고르기는 없지만 요약의 기간(days)을 따르는 화면. 헤더에 "최근 N일" 을 적는다 */
 const PERIOD_LABEL_SCREENS = new Set<ScreenKey>(['content', 'behavior', 'products', 'segments', 'ingredients']);
-/** 고객 행동 기록(BehaviorProvider)을 읽는 화면. 방문 구성 한 줄과 "실제 방문만" 고르기를 둔다 */
+/** 고객 행동 기록(BehaviorProvider)을 읽는 화면. "실제 방문만" 고르기를 둔다 */
 const MIX_SCREENS = new Set<ScreenKey>(['overview', ...PERIOD_LABEL_SCREENS]);
-
-/** 브랜드:기간 → 방문 구성. 한 탭 안에서만 산다 */
-const mixCache = new Map<string, CompositionPayload | null>();
-
-/**
- * 헤더 아래 한 줄 · 이 기간 방문이 실제 고객·가상 고객·AI 고객 중 어디서 왔는지.
- * 숫자는 서버의 방문 구성(개요 "방문" 과 같은 값)을 그대로 적는다. 못 받았으면 아무것도 안 그린다.
- */
-function DataMix({ brandId, days }: { brandId: string | null; days: number }) {
-  const key = brandId ? `${brandId}:${days}` : null;
-  const [mix, setMix] = useState<{ key: string; body: CompositionPayload | null } | null>(null);
-  useEffect(() => {
-    if (!key || !brandId || mixCache.has(key)) return;
-    let alive = true;
-    void fetchComposition({ brandId, days }).then((body) => {
-      mixCache.set(key, body);
-      if (alive) setMix({ key, body });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [key, brandId, days]);
-  const body = key ? (mixCache.get(key) ?? (mix?.key === key ? mix.body : null)) : null;
-  if (!body || !hasRows(body)) return null;
-  const { real_visits: real, simulated_visits: simulated, agent_visits: agent } = body;
-  const total = real + simulated + agent;
-  if (total <= 0) return null;
-  const demo = simulated + agent > 0;
-  return (
-    <p
-      className="main__scope main__mix"
-      title="가상 고객은 시연을 위해 프로그램이 만든 방문, AI 고객은 AI가 고객 역할로 둘러본 방문이에요. 실제 방문은 진짜 고객이 남긴 기록이에요."
-    >
-      <span className="main__scope-what">{demo ? '시연 데이터' : '방문 구성'}</span>
-      <span>
-        실제 방문 <strong>{fmt.int(real)}건</strong> ({fmt.pct(real / total)})
-      </span>
-      {simulated > 0 ? <span>가상 고객 {fmt.int(simulated)}건</span> : null}
-      {agent > 0 ? <span>AI 고객 {fmt.int(agent)}건</span> : null}
-    </p>
-  );
-}
 
 function ScopeNote({ scope, brandName, period }: { scope: ScopeKind; brandName: string | null; period?: string | null }) {
   const { anyReal } = useBehavior();
