@@ -16,6 +16,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 class BrandControllerTest {
@@ -113,5 +114,25 @@ class BrandControllerTest {
       "ACTIVE",
       controller.status("b1", BrandStatus.ACTIVE, ADMIN).status()
     );
+  }
+
+  @Test
+  @DisplayName("로그인 없이 브랜드를 만들면 500 이 아니라 401")
+  void createWithoutActorIsUnauthorizedNotServerError() {
+    ResponseStatusException exception = assertThrows(
+      ResponseStatusException.class,
+      () -> controller.create(null, new BrandController.BrandRequest("새 브랜드", null, null))
+    );
+    assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+  }
+
+  @Test
+  @DisplayName("판매자가 아니면 브랜드를 만들 수 없다")
+  void createByNonSellerIsForbidden() {
+    ResponseStatusException exception = assertThrows(
+      ResponseStatusException.class,
+      () -> controller.create(new ShopPrincipal("member-1", AccountRole.MEMBER), new BrandController.BrandRequest("새 브랜드", null, null))
+    );
+    assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
   }
 }

@@ -3,6 +3,8 @@ package com.cosmetic.shopbackend.settlement;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,7 +49,19 @@ public class SettlementController {
   ) {
     requireSeller(actor);
     owns(actor.accountId(), brandId);
-    return settlements.generate(brandId, LocalDate.parse(month + "-01"));
+    return settlements.generate(brandId, firstDayOf(month));
+  }
+
+  /** "2026-09" 모양만 받는다. 틀린 값은 500 이 아니라 400 으로 돌려준다. */
+  static LocalDate firstDayOf(String month) {
+    try {
+      return YearMonth.parse(month).atDay(1);
+    } catch (DateTimeParseException exception) {
+      throw new ResponseStatusException(
+        HttpStatus.BAD_REQUEST,
+        "invalid month (expected yyyy-MM)"
+      );
+    }
   }
 
   private void owns(String seller, String brand) {

@@ -26,7 +26,10 @@ class FeedbackResponseControllerTest {
     FeedbackController controller = new FeedbackController(
       jdbc,
       new tools.jackson.databind.ObjectMapper(),
-      notifications
+      notifications,
+      new com.cosmetic.shopbackend.brand.SellerBrandResolver(
+        mock(com.cosmetic.shopbackend.brand.BrandRepository.class)
+      )
     );
 
     doAnswer(invocation -> {

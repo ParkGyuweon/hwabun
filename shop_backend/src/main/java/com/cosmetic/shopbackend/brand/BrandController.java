@@ -58,14 +58,22 @@ public class BrandController {
     @AuthenticationPrincipal ShopPrincipal actor,
     @Valid @RequestBody BrandRequest r
   ) {
+    if (actor == null) throw new ResponseStatusException(
+      HttpStatus.UNAUTHORIZED,
+      "authentication required"
+    );
     if (actor.role() != AccountRole.SELLER) throw new ResponseStatusException(
-      HttpStatus.FORBIDDEN
+      HttpStatus.FORBIDDEN,
+      "seller role required"
     );
     Brand b = new Brand();
     b.setSeller(
       sellers
         .findById(actor.accountId())
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED))
+        .orElseThrow(() -> new ResponseStatusException(
+          HttpStatus.UNAUTHORIZED,
+          "seller account not found"
+        ))
     );
     copy(b, r);
     brands.save(b);

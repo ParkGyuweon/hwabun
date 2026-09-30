@@ -1,5 +1,6 @@
 package com.cosmetic.shopbackend.feedback;
 
+import com.cosmetic.shopbackend.brand.SellerBrandResolver;
 import com.cosmetic.shopbackend.identity.AccountRole;
 import com.cosmetic.shopbackend.notification.NotificationService;
 import com.cosmetic.shopbackend.security.ShopPrincipal;
@@ -36,14 +37,17 @@ public class FeedbackController {
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
   private final NotificationService notifications;
+  private final SellerBrandResolver sellerBrands;
   public FeedbackController(
     JdbcTemplate jdbc,
     ObjectMapper objectMapper,
-    NotificationService notifications
+    NotificationService notifications,
+    SellerBrandResolver sellerBrands
   ) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
     this.notifications = notifications;
+    this.sellerBrands = sellerBrands;
   }
 
   @PostMapping("/reviews")
@@ -436,10 +440,7 @@ public class FeedbackController {
 
   private String ownedBrandId(ShopPrincipal actor, String requestedBrandId) {
     requireRole(actor, AccountRole.SELLER);
-    String ownedBrandId = actor.brandId();
-    if (ownedBrandId == null || ownedBrandId.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand claim required");
-    }
+    String ownedBrandId = sellerBrands.brandIdOf(actor);
     if (requestedBrandId != null && !requestedBrandId.isBlank() &&
       !ownedBrandId.equals(requestedBrandId)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "brand access denied");
