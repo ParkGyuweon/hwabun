@@ -63,7 +63,7 @@ Backend의 Topic 자동 생성은 사용하지 않고 이 디렉터리의 Topic 
 | `ACTIVITY_EVENTS_TOPIC` | `activity-events` | 생성할 Topic 이름 |
 | `ACTIVITY_EVENTS_PARTITIONS` | `3` | 신규 Topic Partition 수 |
 | `KAFKA_TOPIC_REPLICATION_FACTOR` | `1` | 신규 Topic Replication Factor |
-| `KAFKA_TOPIC_RETENTION_MS` | `86400000` | 신규 Topic 보존 시간(ms) |
+| `KAFKA_TOPIC_RETENTION_MS` | `259200000` (72시간) | 신규 Topic 보존 시간(ms) |
 
 이미 존재하는 Topic에는 `--if-not-exists`가 적용되므로 스크립트를 다시 실행해도 Partition 수를 변경하지 않는다. Partition 확장은 별도의 영향 분석과 전환 절차가 필요한 작업이다.
 

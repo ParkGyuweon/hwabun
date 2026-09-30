@@ -86,9 +86,30 @@ PowerShell에서는 `infra/kafka/topics.ps1`을 사용할 수 있다.
 | `RAW_EVENTS_PATH` | `data/raw_events` |
 | `RAW_EVENTS_CHECKPOINT_PATH` | `data/checkpoints/raw-events` |
 | `RAW_EVENTS_STARTING_OFFSETS` | `earliest` |
-| `RAW_EVENTS_TRIGGER_INTERVAL` | `10 seconds` |
+| `RAW_EVENTS_TRIGGER_INTERVAL` | `60 seconds` |
 | `RAW_EVENTS_MAX_OFFSETS_PER_TRIGGER` | 미설정 |
 | `KAFKA_CLUSTER_ID` | `local` |
+
+### Trigger 60초와 작은 파일
+
+Q1은 micro-batch마다 Kafka Partition 수만큼 Parquet 파일을 만든다. 10초 trigger는
+하루 최대 3 × 8,640 = 약 2.6만 개, 60초는 약 4,300개다. 기본값을 60초로 둔 이유는
+Raw를 10초 안에 읽는 소비자가 없기 때문이다 (2026-09-29 확인).
+
+- 추천 서버(`batch/serving`)는 Raw Parquet이 아니라 Kafka를 직접 구독한다.
+- 대시보드는 하루 한 번 배치(Q2~Q5 → DW)가 만든 Mart를 읽는다.
+- `raw_events`를 읽는 코드는 Q2 `clean_events_job`과 Q5 `validate_pipeline_job`뿐이다.
+
+더 빨리 보고 싶으면 `.env`의 `RAW_EVENTS_TRIGGER_INTERVAL`로 되돌린다.
+
+전날 파티션을 128MB 단위로 다시 쓰는 `compact_raw_partition_job.py`가 있지만
+**기본은 꺼져 있다** (`RAW_COMPACTION_ENABLED=1`로 켠다). Parquet file sink가 남기는
+`_spark_metadata` 로그가 있으면 Q2가 Raw 파일 목록을 디렉터리가 아니라 그 로그에서
+읽는다. 파일을 바꿔 쓰면 Q2가 새 파일을 못 보고 지운 파일을 찾다 실패하므로, Job은
+로그를 발견하면 아무것도 하지 않고 `sink_log_present`로 건너뛴다. 실제로 켜려면 Q2가
+로그 없이 읽도록(파티션 경로 glob + 좌표 축약) 먼저 바꿔야 하고, 이는 Mart 숫자 검증이
+필요한 변경이라 시연 뒤로 미룬다. 켜진 경우에도 임시 경로에 쓰고 행 수·Kafka 좌표 수가
+원본과 같을 때만 교체하며, 실패하면 원본을 그대로 두고 배치를 계속한다.
 
 ## 복구와 한계
 
@@ -135,12 +156,13 @@ Q2는 같은 `event_id` 후보 중 **`received_at`이 가장 이른 것**을 정
 
 ### 재전송 창 — 지우게 될 때의 경계
 
-재전송은 Kafka에 원본이 남아 있어야 가능하다. **토픽 보존은 24시간이다**
-(`deploy/ec2-2/docker-compose.yml` 의 `KAFKA_TOPIC_RETENTION_MS` 기본값 86400000).
-운영도 이 기본값으로 돌고 있고 토픽 동적 설정(`retention.ms`)도 같은 값이다
-(2026-09-21 확인).
+재전송은 Kafka에 원본이 남아 있어야 가능하다. **토픽 보존은 72시간이다**
+(`deploy/ec2-2/docker-compose.yml` 의 `KAFKA_TOPIC_RETENTION_MS` 기본값 259200000,
+2026-09-29 24시간에서 상향). `kafka-init`이 기존 토픽의 동적 설정(`retention.ms`)도
+같은 값으로 다시 적용한다. 2026-09-21 확인 시점의 운영값은 24시간이었으므로 배포 후
+`kafka-configs.sh --describe`로 다시 확인한다.
 
-따라서 **24시간이 지난 파티션에는 중복 짝이 새로 생길 수 없다.** 언젠가 지우게 되면
+따라서 **72시간이 지난 파티션에는 중복 짝이 새로 생길 수 없다.** 언젠가 지우게 되면
 `Kafka 보존 + 여유`가 근거 있는 경계다 — 임의로 정한 숫자가 아니라 Kafka 설정이
 정해 주는 자연스러운 경계다. **이 값이 바뀌면 재전송 창도 같이 바뀐다.**
 
@@ -508,6 +530,16 @@ spark-submit streaming/jobs/validate_pipeline_job.py --require-events \
 - 상품 미귀속 Event가 `brand_id=NULL`을 유지하는지
 - Processed Fact·Mart에 상위 소유 주체 식별 축이 없는지
 - Funnel Session, 상품 일간 Mart, Funnel 일간 Mart의 grain 유일성
+
+실패로 치지 않고 `warnings`에만 남기는 항목도 있다.
+
+- Raw의 같은 `event_id` 반복 (`raw_event_id_duplicates`)
+- **Raw 완전성**: `(kafka_cluster_id, kafka_topic, kafka_partition)`마다 Raw에 남은
+  첫 offset과 마지막 offset 사이에 빈 offset이 있는지 (`raw_kafka_offset_gaps`).
+  Collector Producer는 멱등·비트랜잭션이라 정상이면 구멍이 없다. 구멍이 있으면 Q1이
+  Kafka 기록을 건너뛴 것이다. 첫 offset 이전(Kafka 보존 만료분)은 세지 않고, Q1
+  재생으로 같은 좌표가 반복된 것도 구멍이 아니다. 결과는 매번 리포트의
+  `raw_offset_continuity`(`partitions_checked`·`gap_count`·`missing_offsets`)에 남는다
 
 K01~K16 시나리오에서 예상 Event ID·Kafka 좌표·정본 ID를 먼저 기록하고 이
 검증 결과와 Kafka offset/lag를 함께 보관한다. Q1 Streaming Query의 실시간

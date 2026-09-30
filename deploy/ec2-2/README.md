@@ -30,10 +30,16 @@ docker compose ps -a
 docker compose logs --tail=100 kafka-init spark-raw-sink
 ```
 
-`kafka-init`은 Kafka가 준비되면 `activity-events`를 3 Partition / RF1 / 보존 24시간으로
+`kafka-init`은 Kafka가 준비되면 `activity-events`를 3 Partition / RF1 / 보존 72시간으로
 생성하고 정상 종료한다. `Exited (0)`이 정상이다. 토픽 생성이 성공한 뒤 Q1이 시작된다.
-기존 토픽은 `--if-not-exists`로 보존하므로 `.env`를 바꾸고 재실행해도 기존 토픽의
-Partition·보존 정책을 변경하지 않는다.
+기존 토픽은 `--if-not-exists`로 보존하므로 Partition 수는 바꾸지 않는다. 보존 시간
+(`retention.ms`)만은 `kafka-configs.sh --alter`로 매번 다시 적용하므로
+`docker compose up -d kafka-init`을 다시 돌리면 기존 토픽에도 `.env` 값이 반영된다.
+
+보존을 72시간으로 둔 이유: Q1(`spark-raw-sink`)이 주말·야간에 멈춰도 사흘 안에만
+되살리면 Kafka에서 빠짐없이 따라잡는다. 24시간이면 금요일 밤 장애가 월요일에 발견될 때
+기록이 이미 만료되고, `failOnDataLoss=true`라 Q1이 그 지점에서 멈춘다.
+디스크 추정은 [kafka/README.md §6.3](../../kafka/README.md)을 따른다.
 
 Kafka Connector는 최초 Q1 시작 시 Maven 저장소에서 다운로드해 Ivy Volume에 캐시한다.
 EC2-2의 외부 다운로드 연결이 필요하다. Worker 기본 자원은 Executor용 2코어·2GB이며,
@@ -164,6 +170,37 @@ Q1 Raw Sink가 1코어를 쓰므로 Worker가 기본 2코어라면 배치의 `sp
 EC2 자원을 확인하고 `SPARK_WORKER_CORES`를 최소 3으로 설정해야 한다. Q5는 현재 전체
 결정성 검사를 수행하므로 완료까지 시간이 걸릴 수 있다.
 
+### 실패·지연 알림
+
+배치는 lock을 잡은 모든 실행마다 `/opt/hwabun/data/validation/daily-batch-status.json`
+(`DAILY_BATCH_STATUS_PATH`)에 결과를 남긴다. `status`·`exit_code`·`failed_stage`·
+`q5_rc`·`publish_rc`와 **마지막 성공 시각 `last_success_at`**이 들어 있고, 실패한
+실행은 이전 `last_success_at`을 그대로 둔다.
+
+- **실패 알림**: service의 `OnFailure=`가 `hwabun-batch-notify@.service`를 띄워
+  `notify-batch-failure.sh`가 Webhook에 Mattermost 형식(`{"text": ...}`)으로 알린다.
+  URL은 저장소가 아니라 `/etc/hwabun/alert.env`에 둔다. 파일이나 URL이 없으면 로그만
+  남기고 성공 종료하므로 설치만 해 두어도 안전하다.
+- **지연 감시**: `check-batch-freshness.sh`는 마지막 성공이 26시간
+  (`DAILY_BATCH_MAX_AGE_HOURS`)보다 오래되면 1, 상태 파일이 없으면 2로 끝난다.
+  timer 자체가 안 돈 경우처럼 `OnFailure`가 못 잡는 상황을 cron·모니터링에서 잡는다.
+
+```bash
+sudo cp hwabun-batch-notify@.service /etc/systemd/system/
+sudo install -d -m 700 /etc/hwabun
+echo 'HWABUN_ALERT_WEBHOOK_URL=https://<mattermost>/hooks/<id>' | sudo tee /etc/hwabun/alert.env >/dev/null
+sudo chmod 600 /etc/hwabun/alert.env
+sudo systemctl daemon-reload
+# 알림 경로만 시험 (배치를 돌리지 않는다)
+sudo systemctl start hwabun-batch-notify@hwabun-daily-batch.service.service
+bash check-batch-freshness.sh
+```
+
+선택 단계: `RAW_COMPACTION_ENABLED=1`이면 Q2 앞에서 전날(UTC) `raw_ingest_date`
+파티션을 128MB 단위로 다시 쓴다. **기본값은 0(꺼짐)**이다. Q1 sink 로그
+(`_spark_metadata`)가 있는 현재 구성에서는 켜도 Job이 스스로 건너뛴다. 이유와 전제는
+[streaming/README.md](../../streaming/README.md)의 "Trigger 60초와 작은 파일"을 본다.
+
 timer나 service 파일을 수정한 뒤에는 다시 `/etc/systemd/system/`에 복사하고
 `sudo systemctl daemon-reload` 및 `sudo systemctl restart hwabun-daily-batch.timer`를
 실행한다.
@@ -226,6 +263,9 @@ sudo docker compose --profile dw run --rm \
 - Raw / Processed / Mart / 체크포인트: `SPARK_DATA_PATH` 호스트 폴더.
 - Spark 실행 로그 / Connector 캐시: Compose Named Volume.
 - `docker compose restart spark-raw-sink`는 기존 체크포인트에서 이어서 처리한다.
+- `spark-raw-sink`는 `restart: unless-stopped`다. 예전 `on-failure:5`는 Kafka·Master가
+  잠깐 흔들려 다섯 번 연달아 실패하면 그대로 멈춰 있었다. 이제는 사람이 `stop`하기
+  전까지 재기동하고, 체크포인트 덕에 재기동마다 이어서 읽는다.
 - `RAW_EVENTS_STARTING_OFFSETS`는 새 체크포인트를 사용하는 최초 시작에만 적용된다.
 - `docker compose down`은 데이터를 보존한다. `down -v`는 Kafka 데이터와 Named Volume을
   삭제하므로 일반 배포·재시작에는 사용하지 않는다.

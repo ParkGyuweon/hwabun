@@ -24,7 +24,7 @@ DEFAULT_TOPIC = "activity-events"
 DEFAULT_OUTPUT_PATH = "data/raw_events"
 DEFAULT_CHECKPOINT_PATH = "data/checkpoints/raw-events"
 DEFAULT_STARTING_OFFSETS = "earliest"
-DEFAULT_TRIGGER_INTERVAL = "10 seconds"
+DEFAULT_TRIGGER_INTERVAL = "60 seconds"
 DEFAULT_CLUSTER_ID = "local"
 
 # This is the output contract of Q1, independent of Spark's internal Kafka
@@ -134,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--trigger-interval",
         default=_env("RAW_EVENTS_TRIGGER_INTERVAL", DEFAULT_TRIGGER_INTERVAL),
-        help="Structured Streaming processing trigger, e.g. '10 seconds'",
+        help="Structured Streaming processing trigger, e.g. '60 seconds'",
     )
     parser.add_argument(
         "--cluster-id",

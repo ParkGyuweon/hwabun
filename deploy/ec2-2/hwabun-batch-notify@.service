@@ -1,0 +1,9 @@
+[Unit]
+Description=Notify webhook that %i failed
+
+[Service]
+Type=oneshot
+# Optional: HWABUN_ALERT_WEBHOOK_URL=... (and DAILY_BATCH_STATUS_PATH if moved).
+# Missing file or unset URL -> the script only logs, it does not fail.
+EnvironmentFile=-/etc/hwabun/alert.env
+ExecStart=/usr/bin/bash /home/ubuntu/S15P21A306/deploy/ec2-2/notify-batch-failure.sh %i

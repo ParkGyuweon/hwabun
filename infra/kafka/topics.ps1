@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($replicationFactor)) {
 
 $retentionMs = $env:KAFKA_TOPIC_RETENTION_MS
 if ([string]::IsNullOrWhiteSpace($retentionMs)) {
-    $retentionMs = '86400000'
+    $retentionMs = '259200000'
 }
 
 $createArgs = @(

@@ -25,7 +25,7 @@ collector:
     topic: ${ACTIVITY_EVENTS_TOPIC:activity-events}
     partitions: ${ACTIVITY_EVENTS_PARTITIONS:3}
     replication-factor: ${KAFKA_TOPIC_REPLICATION_FACTOR:1}
-    retention-ms: ${KAFKA_TOPIC_RETENTION_MS:86400000}
+    retention-ms: ${KAFKA_TOPIC_RETENTION_MS:259200000}
     create-topic: ${CREATE_ACTIVITY_EVENTS_TOPIC:false}
     publisher-executor:
       core-pool-size: ${KAFKA_PUBLISHER_CORE_POOL_SIZE:16}
