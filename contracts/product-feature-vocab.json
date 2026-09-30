@@ -674,7 +674,47 @@
     "tag_value": 1.0,
     "position_formula": "max(1 - 등장위치/전체성분수, POS_MIN)",
     "position_min": 0.1,
-    "vocab_criteria": "상위 200개 중 5~120개 상품 보유"
+    "vocab_criteria": "상위 200개 중 5~120개 상품 보유",
+    "regulatory_rule": {
+      "_note": "기본 꺼짐 (서빙 모델 불변). INGREDIENT_REGULATORY_RULE=1 이면 인코더가 적용, 대시보드 성분 화면(metrics.ts 상수 INGREDIENT_REGULATORY_RULE)도 기본 끔 — Spark 성분 마트(ingredient_weekly_interest)와 같은 정의를 지키려고 셋을 함께 켠다 (2026-09-30). 근거: 화장품법 시행규칙 별표 4 — 1% 이하 성분은 순서에 상관없이 표시 가능",
+      "flag_env": "INGREDIENT_REGULATORY_RULE",
+      "default": false,
+      "functional_full_weight": {
+        "Niacinamide": [
+          "niacinamide",
+          "나이아신아마이드",
+          "니아신아마이드"
+        ],
+        "Vitamin C": [
+          "ascorbyl glucoside",
+          "ethyl ascorbyl ether",
+          "3-o-ethyl ascorbic acid",
+          "아스코빌글루코사이드",
+          "에칠아스코빌에텔"
+        ],
+        "Adenosine": [
+          "adenosine",
+          "아데노신"
+        ],
+        "Retinol": [
+          "retinol",
+          "retinyl palmitate",
+          "레티놀",
+          "레티닐팔미테이트"
+        ]
+      },
+      "functional_not_in_vocab": [
+        "arbutin",
+        "알부틴"
+      ],
+      "synonym_exclude": {
+        "Zinc": [
+          "zinc oxide",
+          "징크옥사이드",
+          "산화아연"
+        ]
+      }
+    }
   },
   "attribute_affinity": {
     "_note": "콘텐츠 벡터가 아니라 추천 점수의 속성 항(attr_affinity)에서 소비된다. 사용자 속성으로 조회하는 테이블이므로 사용자별 가중치 분기가 가능하다.",

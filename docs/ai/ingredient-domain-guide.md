@@ -51,7 +51,7 @@
 | AHA/Glycolic Acid | 각질·결(수용성) | Dullness, Dark spots | normal, combination | 민감·붉음 주의, 자차 필수 | glycolic acid |
 | Lactic Acid | 각질·결(순한 AHA) | Dullness, Dryness | dry, 민감 | — | lactic acid |
 | Willow Bark | 각질·모공(천연 살리실산 유래) | Pores, Acne | oily | — | salix alba bark extract |
-| Zinc | 피지·진정 | Pores, Acne, Redness | oily | — | zinc PCA, zinc oxide |
+| Zinc | 피지·진정 | Pores, Acne, Redness | oily | — | zinc PCA, zinc gluconate, zinc oxide (규제 보정 규칙을 켜면 zinc oxide 는 SPF 로만 — 아래 §1-1, 지금은 끔) |
 | Niacinamide | 톤·피지·장벽 (다기능) | Dullness, Dark spots, Pores, Redness | 전부 | 고농도(10%+)는 일부 붉음 | niacinamide |
 | Vitamin C | 톤·항산화 | Dullness, Dark spots, Anti-Aging | normal, combination | 순수형(ascorbic acid)은 민감 주의 | ascorbic acid, ascorbyl glucoside, 3-o-ethyl ascorbic acid |
 | Licorice | 톤·진정 | Dark spots, Redness | 전부 | — | glycyrrhiza glabra |
@@ -82,7 +82,19 @@
 ### 1-1. 식약처 기능성 화장품 고시 원료 `[공개]` — 함량이 "말이 되는" 기준
 
 한국 데이터를 받을 때 등록 폼의 함량(%)이 이 범위 안이면 기능성 표방이 가능한 함량이라는
-뜻이다. 추천에는 쓰지 않고 **등록 검증과 표시 문구** 에 쓴다.
+뜻이다. **등록 검증과 표시 문구** 에 쓴다. 함량 수치는 추천에 쓰지 않는다.
+
+**위치가중 보정 규칙으로도 정의해 두었다 (2026-09-29, 지금은 끔).** 전성분은 함량순이지만 화장품법 시행규칙 별표 4 에 따라
+**1% 이하 성분은 순서에 상관없이** 적을 수 있다. 아래 원료는 고시 함량 자체가 1% 안팎이거나 그
+아래라(아데노신 0.04%) 뒤쪽에 있어도 미량이라 볼 수 없다. 그래서 이 원료가 전성분 어디든 있으면
+위치가중을 1.0 으로 둔다 (어휘집 `ingredient_source.regulatory_rule.functional_full_weight`).
+**다만 지금은 추천 인코더와 대시보드 성분 화면 모두 끈다 (2026-09-30 결정).** Spark 성분 마트
+(`ingredient_weekly_interest`)가 위치가중만 쓰므로 셋이 같은 정의여야 하기 때문이다. 켤 때는 셋을 함께 —
+인코더 `INGREDIENT_REGULATORY_RULE=1` 로 `product_ingredient.csv` 재내보내기(마트가 따라옴) +
+`frontend/src/dashboard/lib/metrics.ts` 상수 `INGREDIENT_REGULATORY_RULE = true` + 추천용이면 LTR 재학습.
+측정과 적용 범위: `contracts/product-feature-spec.md` "위치가중의 한계와 규제 보정 규칙".
+같은 규칙에서 **산화아연(징크옥사이드)은 자외선차단 고시 성분이라 `SPF` 로만** 센다 (켰을 때) — `Zinc` 에도 걸면
+무기자차 선크림이 두 축에 이중으로 잡힌다.
 
 | 기능 | 원료 | 고시 함량 |
 |---|---|---|
@@ -205,6 +217,7 @@ u_ing⁻[i] = Σ_events  w_event × decay(t) × ing_weight(product, i)     기�
 
 ing_weight(product, i) = 어휘집 위치가중  max(1 − 등장위치/전체성분수, 0.1)
                           (product-feature-vocab.json ingredient_source.position_formula 와 같은 식)
+                          단, §1-1 고시 원료는 1.0 · 산화아연은 SPF 로만 (regulatory_rule, 추천·대시보드 모두 지금은 끔)
                           × 0.5  if 씻어 내는 제품 (§1-2 "남기나" 열)
 text_selection 은 matched_ingredients 에 든 성분만 1.0
 ```
