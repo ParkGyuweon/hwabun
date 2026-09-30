@@ -252,7 +252,7 @@ v_u⁻ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    얕게 본 미
 
 | 원천 (`log.ts`) | 내용 |
 |---|---|
-| `EVENT_WEIGHT` | 이벤트 33종의 가중치 (`add_to_cart` 4.0 ~ `rage_click` −2.0) |
+| `EVENT_WEIGHT` | 이벤트 43종의 가중치 (`purchase` 8.0 ~ `rage_click`·`remove_from_cart` −2.0) |
 | `SECTION_DWELL_WEIGHT` | 섹션 11종의 체류 가중치 (`ingredients`·`reviews` 1.5 ~ `list_controls` 0.3) |
 | `scrollDepthWeight()` | 도달률 → 가중치 (25% 0.2 / 50% 0.5 / 75% 1.0 / 100% 1.5) |
 | `EVENT_INTENT` | 이벤트 → intent 8종 (`session` `exposure` `interest` `comparison` `validation` `hesitation` `conversion` `friction`) |
