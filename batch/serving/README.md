@@ -78,6 +78,7 @@ python -m unittest test_catalog_registry test_catalog_sync test_kafka_state test
 python -m unittest test_headline test_feedback_classify   # 29·23 = 52  ← LLM 은 가짜 클라이언트
 python -m unittest test_live                  # 7    ← /live (Jira 295). TestClient 를 여니 따로 돌린다
 python -m unittest test_pipeline test_pipeline_html   # 9·4 = 13  ← /pipeline (Jira 337) · 페이지 JS 문법
+python -m unittest test_llm_guard              # 공개 LLM 자리 과금 방어 (model 무시 · force 는 운영 토큰) · 시간 초과 폴백
 ```
 테스트는 등록 상품 파일 복사본과 임시 세션 로그를 쓰므로 레포 파일을 건드리지 않는다. `test_prescription.test_live_once` 는 `RUN_LIVE`+`GMS_KEY` 가 있을 때만.
 

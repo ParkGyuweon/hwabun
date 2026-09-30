@@ -39,6 +39,8 @@ ROOT = os.path.normpath(os.path.join(BD, "..", ".."))
 PROMPT_VERSION = "0.4"
 MODEL = os.environ.get("PRESCRIPTION_MODEL", "gpt-4.1-mini")
 GMS_BASE = os.environ.get("GMS_BASE", "https://gms.ssafy.io/gmsapi/api.openai.com/v1")
+LLM_TIMEOUT_S = float(os.environ.get("LLM_TIMEOUT_S") or 20)
+LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES") or 1)
 STORE_PATH = os.environ.get("PRESCRIPTIONS_PATH") or os.path.join(
     ROOT, "batch", "ingest", "data", "serving", "prescriptions.jsonl")
 CLAIM_TERMS_PATH = os.path.join(ROOT, "contracts", "cosmetic-claim-banned-terms.json")
@@ -380,7 +382,9 @@ def make_client():
     if not key:
         return None
     from openai import OpenAI
-    return OpenAI(api_key=key, base_url=GMS_BASE)
+    # 기본값(600초·재시도 2회)이면 느린 호출 하나가 워커 1개짜리 서버의 추천까지 세운다.
+    # 처방·한 마디·피드백 분류가 모두 이 클라이언트를 쓴다. 넘기면 규칙 문장/503/FAILED 로 떨어진다.
+    return OpenAI(api_key=key, base_url=GMS_BASE, timeout=LLM_TIMEOUT_S, max_retries=LLM_MAX_RETRIES)
 
 
 def input_hash(inp: PrescriptionInput) -> str:

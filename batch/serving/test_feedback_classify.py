@@ -238,5 +238,58 @@ class Route(unittest.TestCase):
         self.assertIn("enabled", h["feedback_classify"])
 
 
+class RedactPii(unittest.TestCase):
+    """외부 LLM 에 전화번호·메일·카드/계좌 번호를 보내지 않는다. 저장 원문과 금지어 대조는 그대로"""
+
+    def test_국내_휴대폰_세_형식(self):
+        for s in ("010-1234-5678", "01012345678", "010 1234 5678", "010.1234.5678", "011-123-4567"):
+            self.assertEqual("연락 [전화번호] 주세요", fc.redact_pii(f"연락 {s} 주세요"), s)
+
+    def test_국제_형식(self):
+        for s in ("+82-10-1234-5678", "+82 10 1234 5678", "+821012345678", "82-10-1234-5678", "+82 (0)10-1234-5678"):
+            self.assertEqual("번호 [전화번호]", fc.redact_pii(f"번호 {s}"), s)
+
+    def test_유선_번호(self):
+        self.assertEqual("매장 [전화번호]", fc.redact_pii("매장 02-123-4567"))
+        self.assertEqual("매장 [전화번호]", fc.redact_pii("매장 031-1234-5678"))
+
+    def test_이메일(self):
+        self.assertEqual("메일은 [이메일] 로", fc.redact_pii("메일은 kim.a+1@naver.co.kr 로"))
+
+    def test_카드_계좌_같은_긴_숫자(self):
+        self.assertEqual("카드 [번호] 환불", fc.redact_pii("카드 1234-5678-9012-3456 환불"))
+        self.assertEqual("계좌 [번호]", fc.redact_pii("계좌 110123456789"))
+        # 카드 번호 안의 010 조각을 전화로 먼저 잡지 않는다
+        self.assertEqual("카드 [번호]", fc.redact_pii("카드 4010-1234-5678-9012"))
+
+    def test_평범한_숫자는_그대로(self):
+        for s in ("50ml 두 개 샀는데 3일 만에 트러블", "가격 29,900원", "2026-09-29 주문", "주문번호 12345678",
+                  "SPF50+ PA++++"):
+            self.assertEqual(s, fc.redact_pii(s))
+
+    def test_빈_값(self):
+        self.assertEqual("", fc.redact_pii(""))
+        self.assertIsNone(fc.redact_pii(None))
+
+    def test_LLM_프롬프트에는_가린_문장만_간다(self):
+        c = FakeClient('{"categories": ["끈적임"]}')
+        seen = []
+        orig = c.chat.completions.create
+
+        def spy(**kw):
+            seen.append(kw["messages"][-1]["content"])
+            return orig(**kw)
+
+        c.chat.completions.create = spy
+        body = "끈적여요 010-1234-5678 로 연락 주세요 a@b.com"
+        got = one(c, body=body)
+        self.assertEqual(got["status"], "COMPLETED")
+        self.assertTrue(seen)
+        self.assertNotIn("010-1234-5678", seen[0])
+        self.assertNotIn("a@b.com", seen[0])
+        self.assertIn("[전화번호]", seen[0])
+        self.assertIn("[이메일]", seen[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
