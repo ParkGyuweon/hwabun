@@ -35,7 +35,7 @@ pipeline {
         booleanParam(
             name: 'DEPLOY_SHOP_BACKEND',
             defaultValue: false,
-            description: '쇼핑 백엔드(shop-backend)만 재빌드·재기동합니다. MySQL은 건드리지 않습니다.'
+            description: '쇼핑 백엔드(shop-backend)만 재빌드·재기동합니다. 재기동 전에 멱등 마이그레이션(deploy/ec2-1/apply-shop-migrations.sh)을 먼저 적용하고, 실패하면 재기동하지 않습니다. MySQL 컨테이너는 재시작하지 않습니다.'
         )
         booleanParam(
             name: 'DEPLOY_RECOMMEND',
@@ -215,6 +215,15 @@ pipeline {
 
                     # 되돌리기용: 지금 돌고 있는 이미지를 <이미지>:previous 로 남긴다 (실패해도 배포는 계속)
                     bash deploy/ec2-1/deploy-helpers.sh tag-previous $services || true
+
+                    # shop-backend 는 ddl-auto: validate 라 컬럼이 없으면 뜨지 않는다. 다시 띄우기 전에
+                    # 멱등 마이그레이션을 먼저 적용한다. 실패하면 set -e 로 여기서 멈추고
+                    # 어떤 서비스도 재기동하지 않는다 (지금 돌고 있는 컨테이너는 그대로).
+                    case " $services " in
+                        *" shop-backend "*)
+                            bash deploy/ec2-1/apply-shop-migrations.sh
+                            ;;
+                    esac
 
                     docker compose \\
                       -p ec2-1 \\
