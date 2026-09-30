@@ -13,7 +13,8 @@ import ActivityNotice from './components/legal/ActivityNotice';
 import { LEGAL_QUERY, legalPageFromState, legalPageFromUrl } from './lib/legalRoute';
 import type { LegalPage } from './lib/legalRoute';
 import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
-import { setTraitProfile } from './lib/trait';
+import { resetTrait, setTraitProfile } from './lib/trait';
+import { setWishlistOwner } from './lib/wishlist';
 import { EVENT_CURRENCY, createOrderId, orderTotals, orderTotalsKrw, toOrderItems, unitMoneyProps } from './lib/checkout';
 import {
   canCheckoutOnBackend,
@@ -264,6 +265,20 @@ export default function App() {
    * 세션 상태(좋아요 → 목록 반영)가 이어진다 (계약 recommendation-io-spec §5 · AI 파트 요청 2026-09-14 §1).
    */
   const member = useAuth('MEMBER');
+
+  /*
+   * 로그인한 사람이 바뀌면(로그아웃·다른 계정·새로 가입) 이 탭에 남은 앞 사람의 찜과 세션 성향을 넘기지 않는다 (2026-09-30).
+   * 전에는 새 계정에 앞 사람 하트가 눌린 채 보여, 누르면 '찜 취소' 가 나가고 추천 요청 축도 앞 사람 성향이었다 —
+   * 시연의 "좋아요 → 싸피뷰티가 추천에 올라온다" 가 가끔 안 됐다. 새로고침으로 같은 계정이 복원될 때는 그대로 둔다.
+   * paint 전에 바꿔야 하트가 한 번 번쩍이지 않는다 → useLayoutEffect.
+   */
+  const memberId = member?.id ?? null;
+  const prevMemberIdRef = useRef<string | null>(memberId);
+  useLayoutEffect(() => {
+    setWishlistOwner(memberId);
+    if (prevMemberIdRef.current !== memberId) resetTrait();
+    prevMemberIdRef.current = memberId;
+  }, [memberId]);
   const getMemberProfile = useCallback(() => loadMemberProfile(member?.id), [member?.id]);
   const memberProfile = useSyncExternalStore(subscribeMemberProfile, getMemberProfile, getMemberProfile);
   const persona = useMemo(() => {
