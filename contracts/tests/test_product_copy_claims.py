@@ -4,9 +4,10 @@
       + product_copy.extra_banned. allow·product_copy.allow 는 대조 전에 지운다.
 정규화는 batch/serving/prescription.py 와 같다 (NFC · 한글/영문/숫자만 남김 · 부분 일치).
 
-대상: 고객에게 보이는 한국어 상품명·설명
-    contracts/localization/products-ko.json   (세포라 200개 번역본)
+대상: 우리가 직접 쓴 한국어 상품명·설명
     frontend/src/mocks/products.ssafy-beauty.json   (SSAFY Beauty 8개, 한국어 원본)
+세포라 200개 번역본(contracts/localization/products-ko.json)은 대상이 아니다 — 각 브랜드가 쓴 원문을
+번역만 한 것이라 표현을 우리가 바꾸지 않는다 (2026-09-30 유림님).
 전성분(ingredients)과 고객 리뷰는 대상이 아니다 — 리뷰는 고객이 쓴 글이라 이 목록의 적용 범위 밖이다.
 
 실행 (저장소 루트에서):
@@ -24,7 +25,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TERMS_PATH = ROOT / "contracts" / "cosmetic-claim-banned-terms.json"
 TARGETS = [
-    ROOT / "contracts" / "localization" / "products-ko.json",
     ROOT / "frontend" / "src" / "mocks" / "products.ssafy-beauty.json",
 ]
 
