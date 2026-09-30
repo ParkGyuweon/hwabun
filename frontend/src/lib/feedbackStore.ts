@@ -38,6 +38,15 @@ export const isSeedFeedback = (f: Pick<Feedback, 'feedback_id'>): boolean => SEE
 export const feedbackSource = (list: Pick<Feedback, 'feedback_id'>[]): 'real' | 'seed' =>
   list.some((f) => !isSeedFeedback(f)) ? 'real' : 'seed';
 
+/**
+ * 진짜 의견이 한 건이라도 있으면 번들 샘플은 뺀다. 샘플만 있으면 그대로 두고, 화면이 한 건마다 "예시" 를 붙인다.
+ * 지금 스냅샷은 샘플을 섞지 않지만(아래 feedbackSnapshot), 예전 저장본·서버 응답에 샘플 id 가 섞여 와도
+ * 진짜 의견과 한데 세지 않도록 두 화면(고객의 말·요약)이 이 함수를 거친다 (2026-09-29).
+ */
+export function dropSamplesIfReal<T extends Pick<Feedback, 'feedback_id'>>(list: T[]): T[] {
+  return list.some((f) => !isSeedFeedback(f)) ? list.filter((f) => !isSeedFeedback(f)) : list;
+}
+
 const listeners = new Set<() => void>();
 let stored: Stored | null = null;
 let snapshot: Feedback[] | null = null;

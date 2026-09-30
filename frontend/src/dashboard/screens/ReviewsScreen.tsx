@@ -141,7 +141,7 @@ export default function ReviewsScreen({
       <div className="grid grid--kpi">
         <Kpi
           label="평균 평점"
-          value={stats.sampleSize === 0 ? '-' : stats.avgRating.toFixed(2)}
+          value={stats.sampleSize === 0 ? '-' : `${stats.avgRating.toFixed(1)}점`}
           sub={stats.sampleSize === 0 ? '리뷰 없음' : '5점 만점'}
           source="real"
         />
@@ -153,14 +153,14 @@ export default function ReviewsScreen({
         />
         <Kpi
           label="자극 언급"
-          value={stats.withText === 0 ? '-' : fmt.pct(stats.irritationRate)}
-          sub={stats.withText === 0 ? '글 있는 리뷰 없음' : '따가움·가려움 등 언급'}
+          value={stats.withText === 0 ? '-' : stats.englishTexts === 0 ? '해당 없음' : fmt.pct(stats.irritationRate)}
+          sub={stats.withText === 0 ? '글 있는 리뷰 없음' : stats.englishTexts === 0 ? '지금은 영어 리뷰에서만 찾습니다' : `영어 리뷰 ${fmt.int(stats.englishTexts)}건 중 따가움·가려움 등`}
           source="real"
         />
         <Kpi
           label="트러블 언급"
-          value={stats.withText === 0 ? '-' : fmt.pct(stats.troubleRate)}
-          sub={stats.withText === 0 ? '글 있는 리뷰 없음' : '뾰루지·붉어짐 등 언급'}
+          value={stats.withText === 0 ? '-' : stats.englishTexts === 0 ? '해당 없음' : fmt.pct(stats.troubleRate)}
+          sub={stats.withText === 0 ? '글 있는 리뷰 없음' : stats.englishTexts === 0 ? '지금은 영어 리뷰에서만 찾습니다' : `영어 리뷰 ${fmt.int(stats.englishTexts)}건 중 뾰루지·붉어짐 등`}
           source="real"
         />
       </div>
@@ -249,11 +249,11 @@ export default function ReviewsScreen({
                     </td>
                     <td>{fmt.int(st.sampleSize)}건</td>
                     <td>
-                      <b>{st.avgRating.toFixed(2)}</b>
+                      <b>{st.avgRating.toFixed(1)}</b>
                     </td>
                     <td>{fmt.pct(st.recommendRate, 0)}</td>
-                    <td>{st.withText === 0 ? '글 없음' : fmt.pct(st.irritationRate, 0)}</td>
-                    <td>{st.withText === 0 ? '글 없음' : fmt.pct(st.troubleRate, 0)}</td>
+                    <td>{st.withText === 0 ? '글 없음' : st.englishTexts === 0 ? '해당 없음' : fmt.pct(st.irritationRate, 0)}</td>
+                    <td>{st.withText === 0 ? '글 없음' : st.englishTexts === 0 ? '해당 없음' : fmt.pct(st.troubleRate, 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -274,7 +274,7 @@ export default function ReviewsScreen({
             <li>
               {SKIN_TYPE_KO[hi.type]} 리뷰 {hi.n}건 · {SKIN_TYPE_KO[lo.type]} 리뷰 {lo.n}건 · 차이 {split.toFixed(1)}점
             </li>
-            {lo.irritationRate > hi.irritationRate + 0.05 ? (
+            {lo.englishTexts > 0 && hi.englishTexts > 0 && lo.irritationRate > hi.irritationRate + 0.05 ? (
               <li>
                 자극 언급 {SKIN_TYPE_KO[lo.type]} {fmt.pct(lo.irritationRate, 0)} · {SKIN_TYPE_KO[hi.type]} {fmt.pct(hi.irritationRate, 0)}
               </li>
@@ -298,7 +298,9 @@ export default function ReviewsScreen({
         </Panel>
 
         <Panel title="리뷰에 자주 나오는 이야기" source="real">
-          {stats.withText === 0 || stats.factors.every((f) => f.count === 0) ? (
+          {stats.withText > 0 && stats.englishTexts === 0 ? (
+            <p className="note">해당 없음 · 지금은 영어 리뷰에서만 찾습니다</p>
+          ) : stats.withText === 0 || stats.factors.every((f) => f.count === 0) ? (
             <p className="note">찾은 표현이 없습니다</p>
           ) : (
             <BarList
@@ -337,9 +339,9 @@ export default function ReviewsScreen({
                   <tr key={r.type} className={r.n < 20 ? 'is-thin' : ''}>
                     <td>{SKIN_TYPE_KO[r.type]}</td>
                     <td>
-                      <b>{r.avgRating.toFixed(2)}</b>
+                      <b>{r.avgRating.toFixed(1)}</b>
                     </td>
-                    <td>{fmt.pct(r.irritationRate, 0)}</td>
+                    <td>{r.englishTexts === 0 ? '해당 없음' : fmt.pct(r.irritationRate, 0)}</td>
                     <td>{r.n}건</td>
                   </tr>
                 ))}

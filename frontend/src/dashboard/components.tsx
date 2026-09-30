@@ -61,7 +61,8 @@ export type DataOrigin = 'mine' | 'shared';
 const ORIGIN_TEXT: Record<DataOrigin, { label: string; title: string }> = {
   mine: { label: '내 브랜드', title: '내 브랜드 기록만으로 낸 숫자입니다' },
   shared: {
-    label: '전체 평균',
+    // 평균이 아니라 여러 브랜드 값의 한가운데 값(중앙값)이다. "평균" 이라 적으면 틀린 말이 된다
+    label: '여러 브랜드 종합',
     title: '여러 브랜드 기록을 모아 낸 숫자입니다',
   },
 };
@@ -356,15 +357,20 @@ export function MotifLine({
 export function LineChart({
   points,
   height = 160,
+  label = '날짜별 변화',
+  emptyText = '아직 기록이 없습니다',
 }: {
   points: Array<{ label: string; value: number }>;
   height?: number;
+  /** 화면 읽기 프로그램이 읽는 그래프 이름. 선이 무엇을 세는지 적는다 (방문·담기·넘어온 방문) */
+  label?: string;
+  emptyText?: string;
 }) {
   const width = 640;
   const pad = 6;
   // 점이 하나도 없으면 그릴 선도 없다. 0 으로 채운 평평한 선을 그리면 "방문이 0 이었다" 로 읽힌다
   if (points.length === 0) {
-    return <p className="note">아직 방문 기록이 없습니다</p>;
+    return <p className="note">{emptyText}</p>;
   }
   const max = Math.max(1, ...points.map((p) => p.value));
   // 축은 0 부터. 아래를 잘라 내면 작은 흔들림이 큰 변화처럼 보인다 (명세 §3-1)
@@ -379,7 +385,7 @@ export function LineChart({
       className="line-chart"
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="날짜별 방문 수 변화"
+      aria-label={label}
     >
       <polygon
         points={`${pad},${height - pad} ${path} ${width - pad},${height - pad}`}
@@ -515,7 +521,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
           <g key={v}>
             <line className="scatter__grid" x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} />
             <text className="scatter__tick" x={x0 - 10} y={sy(v) + 4} textAnchor="end">
-              {v.toFixed(1)}×
+              {v.toFixed(1)}배
             </text>
           </g>
         ))}
@@ -524,7 +530,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
         <line className="scatter__ref scatter__ref--strong" x1={x0} y1={cy} x2={x1} y2={cy} />
         <line className="scatter__ref" x1={cx} y1={y0} x2={cx} y2={y1} />
         <text className="scatter__ref-label" x={x1 - 6} y={cy - 8} textAnchor="end">
-          담기 도움 1.0× = 평균
+          담기 도움 1.0배 = 평균
         </text>
         <text className="scatter__ref-label" x={cx + 6} y={y1 + 16}>
           평균 읽은 시간 {meanX.toFixed(0)}초
@@ -566,7 +572,7 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
               <text className="scatter__name" x={tx} y={ty} textAnchor={anchor}>
                 {p.label}
                 <tspan className="scatter__lift" dx="6">
-                  {p.y.toFixed(1)}×
+                  {p.y.toFixed(1)}배
                 </tspan>
               </text>
             </g>
@@ -575,8 +581,8 @@ export function Scatter({ points, height = 420 }: { points: ScatterPoint[]; heig
       </svg>
 
       <p className="scatter-legend">
-        <span className="scatter-legend__key scatter-legend__key--lift" /> 평균보다 많이 담음 (1.0× 이상)
-        <span className="scatter-legend__key scatter-legend__key--fix" /> 평균보다 적게 담음 (1.0× 미만)
+        <span className="scatter-legend__key scatter-legend__key--lift" /> 평균보다 많이 담음 (1.0배 이상)
+        <span className="scatter-legend__key scatter-legend__key--fix" /> 평균보다 적게 담음 (1.0배 미만)
         <span className="scatter-legend__size" /> 큰 원 = 많이 읽힘 · 흐린 원 = 200명 미만
       </p>
     </div>

@@ -873,6 +873,17 @@ button.chip:disabled {
 .main__scope-what::after {
   content: ':';
 }
+/* 개요 KPI 묶음 위 기간 한 줄. 전체 기간(주문·매출)과 최근 N일(행동)을 섞어 읽지 않게 */
+.kpi-period {
+  margin: 0 0 -8px;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.main__scope-period {
+  color: var(--ink);
+  font-weight: 600;
+}
 .main__scope-src {
   font-size: var(--fs-xs);
   color: var(--ink-faint);
@@ -1388,4 +1399,31 @@ table.data td.is-warn {
 }
 .table--price td:first-child {
   min-width: 9em;
+}
+
+/* ---------- 불러오는 중 (행동 기록을 받기 전) ---------- */
+.loading-state {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+}
+.loading-block {
+  height: 96px;
+  border-radius: 12px;
+  background: var(--line, rgba(0, 0, 0, 0.06));
+  opacity: 0.6;
+  animation: loading-pulse 1.4s ease-in-out infinite;
+}
+.loading-block--tall {
+  height: 220px;
+}
+@keyframes loading-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-block {
+    animation: none;
+  }
 }

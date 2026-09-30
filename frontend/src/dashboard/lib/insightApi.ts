@@ -11,6 +11,12 @@
 import { authFetch } from '../../lib/auth';
 import type { RefreshJobState, RefreshResult, SellerInsight } from '../../types/insight';
 
+/**
+ * 서버에 /api/seller/insights* 가 생기기 전까지는 카드를 아예 그리지 않는다 (2026-09-29).
+ * 켜 두면 "연결 전" 이라 적힌 빈 카드가 고객의 말 화면 맨 위를 차지한다. 서버가 붙으면 true 로 바꾼다.
+ */
+export const INSIGHT_API_READY = false;
+
 export type InsightRead = { kind: 'ready'; insight: SellerInsight } | { kind: 'empty' } | { kind: 'unavailable' };
 
 function asInsight(raw: unknown): SellerInsight | null {

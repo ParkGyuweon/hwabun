@@ -2447,7 +2447,7 @@ table.data tr:hover td {
 
 .band__row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 2fr 44px;
+  grid-template-columns: minmax(120px, 1fr) 2fr 84px;
   align-items: center;
   gap: 10px;
   font-size: 13px;
@@ -2461,6 +2461,7 @@ table.data tr:hover td {
 
 .band__w {
   text-align: right;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
   font-size: 12px;

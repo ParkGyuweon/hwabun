@@ -11,7 +11,7 @@ import type { SellerInsight } from '../../types/insight';
  * 사장님은 원문 수백 줄을 읽지 않는다. 그 대신 **무엇이 가장 많이 나왔고, 안 산 사람은 왜 안 샀고, 지금 뭘 하면
  * 되는지** 세 가지만 본다. 근거 원문은 접어 둔다 — 감추는 게 아니라 결론부터 읽게 하려는 것.
  *
- * 요약은 서버가 06:00 에 하루 한 번 만든다. 그 뒤 쌓인 글이 있으면 `newSince` 가 0 보다 크고, 사장님이 "즉시 반영"
+ * 요약은 서버가 정해진 때 만든다(주기는 서버가 정한다 — 화면에 시각을 약속하지 않는다). 그 뒤 쌓인 글이 있으면 `newSince` 가 0 보다 크고, 사장님이 "즉시 반영"
  * 을 누르면 그 시점까지의 글로 다시 만든다. 프론트는 버튼·조회·기다리는 표시만 한다.
  *
  * 서버가 아직 없으면(`unavailable`) 그 사실을 적고 버튼을 잠근다. 규칙 표로 대신 쓰지 않는다 — 원문 없이 만든
@@ -112,7 +112,7 @@ export default function InsightCard({ brandId, productId }: { brandId: string | 
         onClick={refresh}
         disabled={!brandId || unavailable || phase !== 'idle' || locked}
         aria-busy={phase !== 'idle'}
-        title={unavailable ? 'AI 정리가 연결되면 누를 수 있습니다' : '쌓인 리뷰·피드백을 읽어 다시 정리합니다. 매일 아침 6시에는 자동으로 정리됩니다'}
+        title={unavailable ? 'AI 정리가 연결되면 누를 수 있습니다' : '쌓인 리뷰·의견을 읽어 다시 정리합니다'}
       >
         {phase === 'idle' ? '지금 다시 정리' : '다시 읽는 중'}
       </button>
@@ -144,7 +144,7 @@ function stampOf(read: InsightRead | { kind: 'loading' }): string {
   if (read.kind !== 'ready') return read.kind === 'unavailable' ? '연결 전' : read.kind === 'empty' ? '아직 없음' : '';
   const i = read.insight;
   const at = i.generatedAt.slice(0, 16).replace('T', ' ');
-  const how = i.source === 'manual' ? '직접 요청' : '아침 6시 자동';
+  const how = i.source === 'manual' ? '직접 요청' : '자동 정리';
   const fresh = i.newSince > 0 ? ` · 이후 새 의견 ${fmt.int(i.newSince)}건` : '';
   return `마지막 정리 ${at} (${how})${fresh}`;
 }

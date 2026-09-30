@@ -147,6 +147,11 @@ export const STEP_KO: Record<ProductMetrics['bottleneck'], string> = {
 
 /** 리뷰 본문에서 찾을 표현. 데이터셋 리뷰가 영문이라 영문 패턴을 쓴다 */
 const IRRITATION_PATTERN = /irritat|sting|burn|tingl|itch|sensitiv/i;
+/**
+ * 자극·트러블·자주 나오는 이야기 패턴은 영어 낱말이다. 한글 리뷰에서는 무조건 0 이 나오므로 분모에서 뺀다 —
+ * 영어 리뷰가 하나도 없으면 비율은 "0%" 가 아니라 "해당 없음" 이다 (화면이 englishTexts 로 가른다).
+ */
+const isEnglishText = (t: string | null): t is string => !!t && /[a-z]{3,}/i.test(t) && !/[가-힣]/.test(t);
 const TROUBLE_PATTERN = /break\s?out|breakout|acne|pimple|rash|redness|bumps/i;
 
 const FACTOR_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
@@ -168,6 +173,8 @@ function scopeReviews(reviews: DashboardReview[], productId: string | null, mine
 export interface ReviewStats {
   sampleSize: number;
   withText: number;
+  /** 영어로 쓴 글 수. 자극·트러블·자주 나오는 이야기 비율의 분모 */
+  englishTexts: number;
   avgRating: number;
   ratingDist: number[];
   recommendRate: number;
@@ -182,7 +189,8 @@ export interface ReviewStats {
  */
 export function reviewStats(reviews: DashboardReview[], productId: string | null, mine: Product[]): ReviewStats {
   const scoped = scopeReviews(reviews, productId, mine);
-  const texts = scoped.filter((r) => r.review_text);
+  const withText = scoped.filter((r) => r.review_text).length;
+  const texts = scoped.filter((r) => isEnglishText(r.review_text));
 
   const ratingDist = [0, 0, 0, 0, 0];
   for (const r of scoped) ratingDist[Math.min(4, Math.max(0, Math.round(r.rating) - 1))] += 1;
@@ -196,7 +204,8 @@ export function reviewStats(reviews: DashboardReview[], productId: string | null
 
   return {
     sampleSize: scoped.length,
-    withText: texts.length,
+    withText,
+    englishTexts: texts.length,
     avgRating: scoped.length === 0 ? 0 : scoped.reduce((s, r) => s + r.rating, 0) / scoped.length,
     ratingDist,
     recommendRate:
@@ -224,7 +233,7 @@ export const troubleRanking = (reviews: DashboardReview[], mine: Product[]) => m
       product: p,
       irritationRate: stats.irritationRate,
       troubleRate: stats.troubleRate,
-      sampleSize: stats.withText,
+      sampleSize: stats.englishTexts,
     };
   })
   .sort((a, b) => b.troubleRate + b.irritationRate - (a.troubleRate + a.irritationRate));
@@ -276,8 +285,9 @@ export const cautionPrevalence = CAUTION_INGREDIENTS.map(({ label, pattern }) =>
 export const fmt = {
   int: (n: number) => n.toLocaleString('ko-KR'),
   pct: (n: number, digits = 1) => `${(n * 100).toFixed(digits)}%`,
+  /** 1만 이상만 "1.2만" 으로 줄인다. 그 아래는 "1,200" 처럼 그대로 — "1.2천" 은 입말이 아니다 */
   compact: (n: number) =>
-    n >= 10000 ? `${(n / 10000).toFixed(1)}만` : n >= 1000 ? `${(n / 1000).toFixed(1)}천` : String(n),
+    n >= 10000 ? `${(n / 10000).toFixed(1).replace(/\.0$/, '')}만` : Math.round(n).toLocaleString('ko-KR'),
 };
 
 
@@ -385,6 +395,8 @@ export interface SkinReviewRow {
   n: number;
   avgRating: number;
   irritationRate: number;
+  /** 영어로 쓴 글 수. 0 이면 자극 언급은 "해당 없음" */
+  englishTexts: number;
 }
 
 /**
@@ -395,12 +407,13 @@ export function reviewsBySkinType(reviews: DashboardReview[], productId: string 
   const scoped = scopeReviews(reviews, productId, mine);
   return ['dry', 'oily', 'combination', 'normal'].map((type) => {
     const rows = scoped.filter((r) => r.skin_type === type);
-    const texts = rows.filter((r) => r.review_text);
+    const texts = rows.filter((r) => isEnglishText(r.review_text));
     return {
       type,
       n: rows.length,
       avgRating: rows.length === 0 ? 0 : rows.reduce((s, r) => s + r.rating, 0) / rows.length,
       irritationRate: texts.length === 0 ? 0 : texts.filter((r) => IRRITATION_PATTERN.test(r.review_text as string)).length / texts.length,
+      englishTexts: texts.length,
     };
   });
 }

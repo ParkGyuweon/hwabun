@@ -111,7 +111,7 @@ function AxisTable({ head, rows, label }: { head: string; rows: SegmentByType[];
         <tr>
           <th>{head}</th>
           <th title="이 기간에 들른 횟수 · 같은 고객이 여러 번 오면 따로 셉니다">방문</th>
-          <th>상세 방문</th>
+          <th title="상세를 연 방문 수. 한 고객이 여러 번 오면 여러 건입니다">상세 방문</th>
           <th title="상세를 본 뒤 담은 비율">담기</th>
         </tr>
       </thead>
@@ -119,8 +119,9 @@ function AxisTable({ head, rows, label }: { head: string; rows: SegmentByType[];
         {rows.map((s) => (
           <tr key={s.type} className={s.sessions < THIN_VISITS ? 'is-thin' : ''}>
             <td>{label(s.type)}</td>
+            {/* 방문은 하루 단위로 센 합이라 같은 고객이 여러 번 오면 따로 센다 */}
             <td>{fmt.int(s.visits)}건</td>
-            <td>{fmt.int(s.sessions)}</td>
+            <td>{fmt.int(s.sessions)}건</td>
             <td>
               <strong>{fmt.pct(s.cartRate)}</strong>
             </td>
