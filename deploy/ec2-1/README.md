@@ -364,3 +364,17 @@ Jenkins 는 EC2-2 를 배포하지 않는다. **사흘 동안은 돌리지 않�
 계속 돈다 = 발표 전과 똑같다. spark-raw-sink 를 다시 만들면 스트리밍 잡이 재시작돼 그동안 적재가 밀린다.
 꼭 필요할 때(예: 72시간 보존이 당장 필요)만, 쉬는 시간에.
 
+### 사. 호환성 확인 (09-28 → 09-30 dev 의 환경 변수)
+
+`.env` 에 값이 없어도 뜨는지 확인했다. 없으면 compose 가 멈추는 `:?` 값은 예전과 같은 7개
+(`KAFKA_BOOTSTRAP_SERVERS` · `ALLOWED_ORIGINS` · `SHOP_BACKEND_JWT_SECRET` · `MYSQL_PASSWORD` · `MYSQL_ROOT_PASSWORD` ·
+`PORTONE_API_SECRET` · `GRAFANA_ADMIN_PASSWORD`)뿐이고, 새로 생긴 필수 값은 없다.
+
+| 변수 | 어디 | 비어 있을 때 |
+| --- | --- | --- |
+| `LTR_MODEL_DIR` | compose recommend, `/data/ltr` 고정 | 폴더가 비어 있으면 이미지 안 모델을 쓴다(재학습 전과 같음) |
+| `KAFKA_TOPIC_RETENTION_MS` | backend application.yml 기본값 24h→72h | compose 가 `CREATE_ACTIVITY_EVENTS_TOPIC=false` 라 수집기는 토픽을 만들지도 바꾸지도 않는다. 영향 없음 |
+| `TEST_PAY_ALLOWED_MEMBER_PREFIX` | compose `:-PA` (yml 기본은 빈 값) | compose 기본값 `PA` — PA 러너만 테스트 결제 |
+| `RECOMMEND_TIMEOUT_MS`, `RECOMMEND_FEEDBACK_TIMEOUT_MS` | shop-backend application.yml | 300ms, 30s. compose 에 없으므로 늘 이 기본값 |
+| `SERVING_ADMIN_TOKEN` | recommend_server.py | compose 가 넘기지 않아 빈 값 → 관리자 `force` 요청만 무시된다(의도된 기본) |
+| `SHOP_PAYMENT_RECONCILE_*` | **dev 에 아직 없음** (브랜치 `S15P21A306-be-payment-reconcile`) | 그 브랜치는 모두 기본값을 둔다(`enabled=true`, 5분 간격 등). 머지되면 결제 대조 작업이 **기본으로 켜진다** — 발표 기간 머지 여부는 따로 판단 |
