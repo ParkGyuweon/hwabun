@@ -1,6 +1,6 @@
 /* ---------- 우하단 실시간 행동 기록 (components/devtools/LiveLog.tsx) ----------
  * 화면 테마와 상관없이 늘 어두운 유리 카드. 강조색은 하나(--ll-accent).
- * z-index 50: 본문 위, 모달·알림 창(1000대) 아래. 좌하단은 비워 둔다. */
+ * z-index 1200: 빠른 보기·로그인(60)·알림 창(70·1100)·상단 띠(1000) 위. 시연 중 어떤 창을 열어도 기록 창이 가려지지 않는다. 좌하단은 비워 둔다. */
 
 .live-log,
 .live-log__fab {
@@ -15,7 +15,9 @@
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 50;
+  /* 1200: 빠른 보기·로그인 모달(60)·알림 창(70·1100)·상단 띠(1000) 위.
+   * 50 이면 발표 중 모달·알림을 열 때마다 기록 창이 가려졌다 (2026-09-30) */
+  z-index: 1200;
   color: var(--ll-text);
   background: var(--ll-bg);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
