@@ -12,7 +12,7 @@
     5. 무엇을 했든 `--out-dir/retrain_log.jsonl` 에 한 줄 남긴다 (두 수치·판정·트리 수).
 
 무엇이 아닌가
-    학습 표본은 `train_ltr.py` 가 읽는 리뷰 기반 train 분할 5,954명 그대로다. 로그가 쌓여도
+    학습 표본은 `train_ltr.py --split all` 의 리뷰 기반 9,900명 그대로다(2026-09-30). 로그가 쌓여도
     표본은 안 바뀌므로 **같은 데이터면 같은 모델**이 나온다 — 이 스크립트는 "재학습을 사람 손 없이
     안전하게 교체하는 길" 이지 온라인 학습이 아니다. 로그를 학습 표본으로 쓰는 것은 별도 설계
     (정답 정의·시점 피처·평가 틀)가 필요하다.
@@ -126,7 +126,7 @@ def main():
     work = tempfile.mkdtemp(prefix="ltr_candidate_")
     log(f"후보 학습 → {work} (seed {a.seed})")
     out = run([sys.executable, os.path.join(BD, "train_ltr.py"), "--out", work,
-               "--no-importance", "--seed", str(a.seed)])
+               "--no-importance", "--seed", str(a.seed), "--split", "all"])   # 정본은 9,900명 전체 (2026-09-30)
     trees = re.search(r"트리 (\d+)개", out)
     log(f"학습 끝 — 트리 {trees.group(1) if trees else '?'}개")
 
