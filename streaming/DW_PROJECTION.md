@@ -3,19 +3,31 @@
 `jobs/publish_user_trait_job.py`는 Spark가 완료한 Mart Parquet을 PyArrow로 최대 1,000행씩
 읽는 독립 Python Job이다. Spark 재집계나 JDBC 연결이 필요하지 않다. 현재 projection
 allowlist는 `contracts/dw/schema.sql`의 24개 DW Mart와 맞춰져 있으며, `--marts`로
-발행 대상을 선택한다. **EC2-2 Compose의 기본 실행은 아직 22종이다** — 시장 비교 2종
-(`cross_brand_daily`, `category_price_reference`)은 DDL만 갖춘 상태이고 운영 MySQL에
-테이블이 없다. 테이블을 만들기 전에 발행 목록에 넣으면 그 종만 실패한다(발행은 Mart마다
-독립이라 나머지는 정상 발행된다).
+발행 대상을 선택한다. **EC2-2 Compose의 기본 실행은 22종이다.** 2026-09-28에 등록한 시장
+비교 2종은 상태가 다르다.
+
+- `cross_brand_daily` — 운영 MySQL 테이블은 2026-09-28에 만들었다(계약 DDL과 같다). 발행하려면
+  `dw-projection` 이미지 재빌드와 발행 목록 설정이 남았다(아래 "발행 목록에 Mart를 새로 넣을 때").
+- `category_price_reference` — **발행하지 않는다.** 대시보드의 가격 위치는 백엔드가 쇼핑몰
+  카탈로그로 직접 계산한다(`DashboardMartService.pricePosition`). 운영 MySQL에 테이블이 없으므로
+  발행 목록에 넣으면 그 종만 실패한다. DDL과 Q5 검사는 그대로 둔다 — Q5가 검사 목록과
+  `build_ddl.GRAINS`가 같을 것을 요구한다(`validate_pipeline_job.py` `PROJECTION_MART_FRAMES`).
+
+발행은 Mart마다 독립이라 한 종이 실패해도 나머지는 정상 발행된다.
 DDL·grain·NULL 정책은 `contracts/dw/schema.sql`과 `build_ddl.py`에서
 읽고 수정하지 않는다.
 
 ## 실행 순서
 
-1. EC2-2에서 Q2~Q4를 실행하고 Q5 검증을 통과시킨다.
+1. EC2-2에서 Q2~Q4를 실행하고 Q5 검증 보고서를 확인한다.
 2. 해당 Mart Parquet을 덮어쓰는 배치가 없는 상태에서 projection을 실행한다.
 3. Mart별 staging 적재·검증을 통과하면 각 조회 테이블을 하나의 `RENAME TABLE`로 발행한다.
 4. 추천 서버와 Dashboard API가 다음 조회에서 MySQL projection을 사용한다.
+
+운영에서는 `deploy/ec2-2/run-daily-batch.sh`가 Q2~Q5 뒤에 이 Job을 이어서 호출한다.
+**Q5가 실패해도 발행은 진행되고** 실패는 종료 코드와 `pipeline-report.json`으로만 남는다 —
+Q5는 발행을 막는 조건이 아니다. 발행을 막는 검증은 이 Job의 staging 검증(아래 "검증과 실패
+처리")이다.
 
 `_SUCCESS`와 각 파일의 경로·크기·수정 시각으로 입력 변경을 검사한다. 이것은 배치와의
 공유 잠금이 아니므로 **같은 입력의 overwrite와 projection을 동시에 실행하면 안 된다.**
@@ -28,8 +40,8 @@ Q1의 Raw 수집은 계속 실행할 수 있다.
 빈 `dw`를 처음 만들 때만 저장소 루트에서 다음 절차를 사용한다.
 
 ```bash
-sudo docker cp contracts/dw/schema.sql shop-backend-mysql:/tmp/hwabun-dw-schema.sql
-sudo docker exec -it shop-backend-mysql mysql -uroot -p
+sudo docker cp contracts/dw/schema.sql ec2-1-mysql-1:/tmp/hwabun-dw-schema.sql
+sudo docker exec -it ec2-1-mysql-1 mysql -uroot -p
 ```
 
 MySQL 프롬프트에서:
@@ -65,21 +77,22 @@ sudo docker exec ec2-1-mysql-1 rm -f /tmp/dw-mart-columns.sql
 - JDBC/MySQL 외부 포트 기본은 호스트 13306 → 컨테이너 3306이다. 실제 설정을 확인한다.
 - TCP 13306은 EC2-2 및 승인된 소비자 출발지에만 허용한다.
 
-추천 컨테이너는 EC2-1 Compose에서 MySQL의 외부 `shop-backend-db` 네트워크에도
-연결한다. 따라서 EC2-1의 `deploy/ec2-1/.env`는 공개 포트가 아니라 Docker DNS를
-사용해 다음처럼 설정한다.
+MySQL은 EC2-1 Compose의 `mysql` 서비스(컨테이너 `ec2-1-mysql-1`)다. 추천 서버와 쇼핑몰
+서버가 같은 Compose 네트워크에 있으므로 EC2-1의 `deploy/ec2-1/.env`는 공개 포트가 아니라
+서비스 이름으로 설정한다. 쇼핑몰 서버의 대시보드 조회(`DASHBOARD_MART_MYSQL_URL`)도 같은
+`DW_MYSQL_HOST`를 쓰고, 값이 비면 `mysql`로 간다.
 
 ```dotenv
-DW_MYSQL_HOST=shop-backend-mysql
+DW_MYSQL_HOST=mysql
 DW_MYSQL_PORT=3306
 DW_MYSQL_DB=dw
 DW_MYSQL_USER=dw_reader
 DW_MYSQL_PASSWORD=<조회 전용 계정 비밀번호>
 ```
 
-`shop-backend-db`는 `shop_backend/docker-compose.mysql.yml`을 먼저 실행해야 생긴다.
-반대로 EC2-2의 발행 컨테이너는 다른 호스트에 있으므로 EC2-1의 사설 IP와 공개 포트
-`13306`으로 접근한다. `localhost`는 각 컨테이너 자신을 뜻하므로 어느 쪽에도 쓰지
+반대로 EC2-2의 발행 컨테이너는 다른 호스트에 있으므로 EC2-1의 사설 IP와 포트 `13306`으로
+접근한다. 이 포트는 EC2-1 `.env`의 `SHOP_BACKEND_MYSQL_BIND_ADDRESS`에 사설 IP를 넣어야
+열린다(기본값은 loopback). `localhost`는 각 컨테이너 자신을 뜻하므로 어느 쪽에도 쓰지
 않는다.
 
 ## 발행 (EC2-2)
@@ -100,7 +113,8 @@ sudo docker compose --profile dw build dw-projection
 sudo docker compose --profile dw run --rm dw-projection
 ```
 
-기본 실행은 Compose가 넘기는 목록(현재 22종)을 순서대로 발행한다.
+기본 실행은 Compose가 넘기는 목록(`.env`에 `DW_PROJECTION_MARTS`가 없으면 22종)을 순서대로
+발행한다.
 stdout의 전체 `status=published`, 각 Mart의 `published=true`와
 `source_rows=inserted_rows`를 확인한다. JSON 보고서는 `dw-projection-reports` Volume의
 `/reports/dw-projection.json`에도 Mart별로 남는다.
@@ -109,9 +123,9 @@ Mart 사이의 `RENAME TABLE`은 하나의 트랜잭션으로 묶지 않는다. 
 앞에서 성공한 Mart만 새 값으로 발행될 수 있으므로, 보고서의 실패 Mart만 원인 해결 후
 재실행한다.
 
-기존 EC2-2 `.env`에 7종의 `DW_PROJECTION_MARTS`가 지정돼 있으면 아래 목록으로
-갱신한다. `.env` 값은 Compose 기본값보다 우선한다. 특정 Mart만 발행할 때도 이 변수를
-사용할 수 있다.
+`.env`의 `DW_PROJECTION_MARTS`는 Compose 기본값보다 우선한다. 운영 EC2-2 `.env`에는
+2026-09-29 기준 이 키가 없어 Compose 기본 22종으로 발행된다. 특정 Mart만 발행할 때도 이
+변수를 사용할 수 있다.
 
 **발행 목록에 Mart를 새로 넣을 때는 두 가지가 선행한다.**
 
@@ -127,18 +141,19 @@ Mart 사이의 `RENAME TABLE`은 하나의 트랜잭션으로 묶지 않는다. 
    `streaming/Dockerfile.dw`가 `COPY jobs/ /app/streaming/jobs/`로 **Job 코드를 빌드 시점에
    이미지 안으로 복사한다.** Spark 컨테이너와 달리 bind mount가 아니다(`contracts/`만
    마운트한다). 그래서
-   `git pull`만으로는 새 Mart의 파티션 축이 컨테이너에 반영되지 않고,
-   `MART_PARTITION_COLUMNS[mart]`가 직접 색인이라(`dw_projection_source.py`) 옛 이미지에서는
-   **그 Mart만 `KeyError`로 실패한다.**
+   `git pull`만으로는 새 Mart의 파티션 축이 컨테이너에 반영되지 않고, 옛 이미지의
+   `MART_PARTITION_COLUMNS`(`dw_projection_source.py`)에 그 Mart가 없어 **그 Mart만
+   `ProjectionError: No partition contract for Mart: <mart>`로 실패한다.**
 
 둘 중 하나라도 빠지면 발행은 그 Mart에서만 실패하고 나머지는 정상 발행된다(Jira 359).
 보고서에서 실패한 Mart를 확인한 뒤 원인을 해결하고 그 Mart만 재실행하면 된다.
 
-아래 목록 끝의 `cross_brand_daily`·`category_price_reference`가 지금 이 조건에 해당한다 —
-`contracts/dw/schema.sql`에 DDL은 있으나 운영 MySQL에는 테이블이 없다.
+지금 이 조건에 걸린 것은 `cross_brand_daily`다. 1은 끝났고(2026-09-28 테이블 생성) 2가 남았다.
+2를 마친 뒤 EC2-2 `.env`에 아래 23종 목록을 넣는다. 기본 22종 끝에 `cross_brand_daily`를
+더한 것이다. `category_price_reference`는 발행하지 않으므로 넣지 않는다.
 
 ```dotenv
-DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily,cross_brand_daily,category_price_reference
+DW_PROJECTION_MARTS=user_trait_daily,brand_daily_kpi,product_daily_kpi,funnel_daily_kpi,brand_repurchase_daily,product_repurchase_daily,purchase_reason_daily,persona_segment_daily_kpi,brand_price_band_daily_kpi,segment_price_band_daily_kpi,brand_cohort_dim,commons_cohort_weekly,ingredient_weekly_interest,product_exit_daily,segment_content_daily,friction_daily,exit_daily,entry_source_daily,content_daily_kpi,content_conversion_daily,behavior_conversion_daily,event_daily,cross_brand_daily
 ```
 
 특정 Mart 하나만 재발행할 때는 다음처럼 실행한다.
@@ -224,7 +239,11 @@ sudo docker compose logs --tail=100 recommend
 - 필수 NULL, VARCHAR 초과, 정수 범위 초과, NaN/Infinity를 거부한다. SQL strict mode도 켠다.
 - Spark UTC timestamp는 UTC `DATETIME(3)`로 저장한다. 마이크로초의 밀리초 미만은 절삭한다.
 - DB `GET_LOCK`으로 같은 Mart 발행을 하나로 제한한다. 프로세스가 종료되면 연결 잠금이 풀린다.
-- 실패한 staging은 남긴다. 다음 성공 발행이 이 Job 형식의 과거 staging과 `__old`를 정리한다.
+- 실패한 staging은 남긴다. 발행에 성공하면 **같은 실행에서** 이전 테이블 `__old`와 이 Job
+  형식의 과거 staging을 정리한다(`cleanup()`). 교체 직전에도 남아 있던 `__old`를 지운다
+  (`prepare_swap()`). 그래서 성공한 발행을 되돌릴 백업 테이블은 남지 않는다 — 되돌리려면
+  이전 Mart Parquet으로 다시 발행해야 하는데, 배치가 Mart를 덮어쓰므로 별도 run 디렉터리를
+  보존한 경우에만 가능하다.
 - `status=publication_unknown`은 RENAME 응답이 끊긴 경우 등을 뜻한다. DB에서 조회 테이블과
   해당 run의 staging·`__old`를 먼저 확인한다. 이 상태를 "기존 결과 보존 확정"으로 보고하지 않는다.
 - RENAME 성공 후 정리 실패는 `published`와 warning으로 보고한다. 이미 발행된 데이터를 되돌리지 않는다.
@@ -238,7 +257,7 @@ Python 3.12 환경에서:
 
 ```bash
 python -m pip install -r streaming/requirements-dw.txt
-python -m unittest streaming.tests.test_dw_projection_source streaming.tests.test_dw_projection_publish streaming.tests.test_dw_projection_marts
+python -m unittest streaming.tests.test_dw_projection_source streaming.tests.test_dw_projection_publish streaming.tests.test_dw_projection_marts streaming.tests.test_dw_projection_types streaming.tests.test_dw_projection_jsonl
 python -m unittest discover -s contracts/dw -p test_build_ddl.py
 ```
 
