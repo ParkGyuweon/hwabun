@@ -688,6 +688,173 @@
   border-top: 1px solid var(--color-line-soft, var(--color-line));
 }
 
+/* 회원 탈퇴 — 로그아웃 왼쪽 끝의 작은 글자 버튼. 눈에 띄지 않게 둔다 */
+.mypage__foot {
+  align-items: center;
+}
+
+.mypage__withdraw {
+  margin-right: auto;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-ink-faint, #86868b);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.mypage__withdraw:hover {
+  color: var(--color-ink-soft, #6e6e73);
+  text-decoration-color: currentColor;
+}
+
+.mypage__withdraw:focus-visible {
+  outline: 2px solid var(--color-ink, #1d1d1f);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- 회원 탈퇴 확인 창 (WithdrawDialog) ---------- */
+
+/* 마이페이지 위에 한 겹 더 */
+.auth-modal--stacked {
+  z-index: 61;
+  background: rgb(0 0 0 / 0.2);
+}
+
+.withdraw {
+  width: min(420px, 100%);
+}
+
+.withdraw__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px 14px 32px;
+  border-radius: var(--a-radius, 8px);
+  background: var(--color-line-soft, #f5f5f7);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--a-ink-soft, #6e6e73);
+}
+
+.withdraw__list li::marker {
+  color: var(--a-ink-faint, #86868b);
+}
+
+.withdraw__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--a-ink, #1d1d1f);
+  cursor: pointer;
+}
+
+.withdraw__check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--a-ink, #1d1d1f);
+  cursor: pointer;
+}
+
+.withdraw__check input:focus-visible {
+  outline: 2px solid var(--a-brand-deep, #000);
+  outline-offset: 2px;
+}
+
+.withdraw__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.withdraw__cancel,
+.withdraw__submit {
+  height: 42px;
+  padding: 0 18px;
+  border-radius: var(--a-radius, 8px);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.withdraw__cancel {
+  border: 1px solid var(--a-line, #d2d2d7);
+  background: var(--a-surface, #fff);
+  color: var(--a-ink, #1d1d1f);
+}
+
+.withdraw__cancel:hover:not(:disabled) {
+  border-color: var(--a-ink, #1d1d1f);
+}
+
+/* 되돌릴 수 없는 버튼. 브랜드색이 아니라 가라앉은 붉은색 */
+.withdraw__submit {
+  border: 1px solid #b3261e;
+  background: #b3261e;
+  color: #fff;
+}
+
+.withdraw__submit:hover:not(:disabled) {
+  border-color: #8c1d17;
+  background: #8c1d17;
+}
+
+.withdraw__cancel:focus-visible,
+.withdraw__submit:focus-visible {
+  outline: 2px solid var(--a-brand-deep, #000);
+  outline-offset: 2px;
+}
+
+.withdraw__cancel:disabled,
+.withdraw__submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 탈퇴 직후 인사 — 화면 아래 가운데 잠깐 */
+.account-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 70;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 12px 20px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-ink, #1d1d1f);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+  transform: translateX(-50%);
+  animation: account-toast-in 0.25s ease-out;
+}
+
+@keyframes account-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-toast {
+    animation: none;
+  }
+}
+
 /* ---------- 주문 품목 · 리뷰 쓰기 ---------- */
 
 .mypage__order-items {

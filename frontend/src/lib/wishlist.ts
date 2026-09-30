@@ -47,6 +47,17 @@ export function setWished(productId: string, on: boolean): void {
   persist(next);
 }
 
+/** 찜을 전부 지운다. 회원 탈퇴 뒤 이 탭에 남기지 않기 위해서다 (lib/memberWithdraw) */
+export function clearWishlist(): void {
+  cache = new Set();
+  try {
+    window.sessionStorage.removeItem(KEY);
+  } catch {
+    /* 저장소를 못 쓰면 메모리만 비운다 */
+  }
+  for (const l of listeners) l();
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);

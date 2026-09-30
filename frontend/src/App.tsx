@@ -44,6 +44,7 @@ import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { isBehaviorLinked } from './lib/auth';
 import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
+import { MEMBER_WITHDRAWN_EVENT } from './lib/memberWithdraw';
 import { useAuthorCounts, useProductReviews, useReviewSkinTypes } from './lib/reviewStore';
 import personasData from './mocks/personas.sample.json';
 import type { PersonaProfile } from './types/persona';
@@ -192,6 +193,15 @@ export default function App() {
    * 이 화면의 목적은 view_cart / remove_from_cart 신호다 (조사 7-2).
    */
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  /**
+   * 회원 탈퇴가 끝나면 장바구니를 비운다 (lib/memberWithdraw). 로그아웃은 장바구니를 그대로 두지만,
+   * 탈퇴한 사람이 담은 것을 다음 손님이 이어받게 두지 않는다.
+   */
+  useEffect(() => {
+    const onWithdrawn = () => setCartItems([]);
+    window.addEventListener(MEMBER_WITHDRAWN_EVENT, onWithdrawn);
+    return () => window.removeEventListener(MEMBER_WITHDRAWN_EVENT, onWithdrawn);
+  }, []);
   /** 다음 page_view 가 어떻게 발생했는지. 뒤로가기와 화면 안 이동을 구분한다 */
   const navigationSourceRef = useRef('in_app');
 
