@@ -7,7 +7,7 @@ import { fmt } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
-import { useBehavior } from '../lib/useBehavior';
+import { BehaviorGate, useBehavior, useMartWaiting } from '../lib/useBehavior';
 import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
@@ -138,7 +138,12 @@ export default function OverviewScreen({
    * 개요에만 붙인다 (2026-09-21 결정, headlineApi.ts 머리말).
    */
   const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
-  const headlineReq = useMemo(() => (pulse === undefined ? null : buildOverviewHeadlineRequest(m, brand, days, pulse)), [m, brand, days, pulse]);
+  // 행동 기록을 기다리는 동안에는 빈 숫자로 한 마디를 부르지 않는다 — 받은 뒤 다시 부르면 LLM 을 두 번 태운다
+  const waiting = useMartWaiting();
+  const headlineReq = useMemo(
+    () => (pulse === undefined || waiting ? null : buildOverviewHeadlineRequest(m, brand, days, pulse)),
+    [m, brand, days, pulse, waiting],
+  );
   const headline = useHeadline(headlineReq);
   const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
 
@@ -205,6 +210,8 @@ export default function OverviewScreen({
           */}
         </div>
       ) : null}
+      {/* 여기부터는 고객 행동 기록에서 나온 숫자다. 위 주문·매출은 기다리지 않고 먼저 보인다 (2026-09-30) */}
+      <BehaviorGate>
       {/*
         재구매 배지 · 단위 = 브랜드 (ai-insight-rules §2-1, 2026-09-10 확정). 상품이 달라도 같은 브랜드를 다시 사면 재구매다.
         마트(brand_repurchase_daily)가 있을 때만 그린다. 모의값을 두지 않는다 — 재구매를 흉내 내면 사장님이 진짜로 읽는다.
@@ -448,6 +455,7 @@ export default function OverviewScreen({
           </p>
         </Panel>
       </section>
+      </BehaviorGate>
     </div>
   );
 }

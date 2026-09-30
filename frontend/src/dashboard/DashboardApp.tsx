@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import OverviewScreen from './screens/OverviewScreen';
 import OrdersScreen from './screens/OrdersScreen';
 import ProductsScreen from './screens/ProductsScreen';
@@ -22,7 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
-import { BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
+import { BehaviorGate, BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
 import { fetchComposition, hasRows } from './lib/martApi';
 import type { ActorType, CompositionPayload } from './lib/martApi';
 import { fmt } from './lib/metrics';
@@ -376,7 +375,8 @@ export default function DashboardApp() {
           </div>
         ) : null}
 
-        {screen === 'overview' ? <BehaviorGate><OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /></BehaviorGate> : null}
+        {/* 요약은 주문·매출 카드를 먼저 그리고 행동 기록 부분만 화면 안에서 가린다 (2026-09-30) */}
+        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <BehaviorGate><ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /></BehaviorGate> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'content' ? <BehaviorGate><ContentScreen brandName={brand?.name ?? ''} /></BehaviorGate> : null}
@@ -414,28 +414,6 @@ export default function DashboardApp() {
  *
  * 피드백·등록 스코프는 마트와 무관한 로컬 분류본이라 언제나 고정 라벨이다.
  */
-/**
- * 행동 기록을 받는 동안에는 화면 대신 "불러오는 중" 만 그린다. 받기 전 빈 묶음을 그대로 그리면
- * "0.0%"·"아직 기록이 없습니다" 가 잠깐 떴다 바뀌어, 사장님은 그 0 을 진짜로 읽는다 (2026-09-29)
- */
-function BehaviorGate({ children }: { children: ReactNode }) {
-  const state = useMartState();
-  if (state !== 'loading') return <>{children}</>;
-  return (
-    <div className="stack" aria-busy="true">
-      <p className="loading-state" role="status" aria-live="polite">
-        고객 행동 기록을 불러오는 중…
-      </p>
-      <div className="grid grid--kpi" aria-hidden="true">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="loading-block" />
-        ))}
-      </div>
-      <div className="loading-block loading-block--tall" aria-hidden="true" />
-    </div>
-  );
-}
-
 /** 기간 고르기는 없지만 요약의 기간(days)을 따르는 화면. 헤더에 "최근 N일" 을 적는다 */
 const PERIOD_LABEL_SCREENS = new Set<ScreenKey>(['content', 'behavior', 'products', 'segments', 'ingredients']);
 /** 고객 행동 기록(BehaviorProvider)을 읽는 화면. 방문 구성 한 줄과 "실제 방문만" 고르기를 둔다 */
