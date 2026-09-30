@@ -22,7 +22,6 @@ import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
 import { BehaviorGate, BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
-import type { ActorType } from './lib/martApi';
 
 /**
  * 화면 하나. **이름을 바꾸지 않았다** — `insight.ts`·`prescription.ts` 가 "이 인사이트는 어느 화면으로
@@ -191,8 +190,6 @@ export default function DashboardApp() {
   const brand = brands.kind === 'ready' ? (brands.brands.find((b) => b.id === brandId) ?? null) : null;
   const [screen, setScreen] = useState<ScreenKey>('overview');
   const [days, setDays] = useState(14);
-  /** 고객 행동 숫자를 전체로 볼지, 실제 방문만 볼지. 기본은 전체 */
-  const [actorType, setActorType] = useState<ActorType>('all');
   /** 리뷰·성분 화면이 공유하는 상품 선택 */
   const [productId, setProductId] = useState<string | null>(null);
 
@@ -205,7 +202,7 @@ export default function DashboardApp() {
      * 행동 지표는 여기서 한 번 받는다 (마트 API 6개 병렬 · contracts/dashboard-mart-api-spec.md).
      * 서버 브랜드가 없으면 부르지 않고 값은 전부 0 이다. 화면은 useBehavior() 로 같은 모양을 읽는다.
      */
-    <BehaviorProvider brandId={brand?.id ?? null} brandName={brand?.name ?? null} days={days} actorType={actorType}>
+    <BehaviorProvider brandId={brand?.id ?? null} brandName={brand?.name ?? null} days={days}>
     <div className="console">
       <aside className="sidebar">
         <div className="sidebar__brand">
@@ -330,12 +327,6 @@ export default function DashboardApp() {
           <ScopeNote scope={active.scope} brandName={brand?.name ?? null} period={PERIOD_LABEL_SCREENS.has(screen) ? `최근 ${days}일` : null} />
 
           <div className="main__controls">
-            {MIX_SCREENS.has(screen) ? (
-              <select value={actorType} onChange={(e) => setActorType(e.target.value as ActorType)} aria-label="어떤 방문을 볼지">
-                <option value="all">전체 방문</option>
-                <option value="user">실제 방문만</option>
-              </select>
-            ) : null}
             {screen === 'overview' || screen === 'inflow' ? (
               <select
                 value={days}
@@ -412,8 +403,6 @@ export default function DashboardApp() {
  */
 /** 기간 고르기는 없지만 요약의 기간(days)을 따르는 화면. 헤더에 "최근 N일" 을 적는다 */
 const PERIOD_LABEL_SCREENS = new Set<ScreenKey>(['content', 'behavior', 'products', 'segments', 'ingredients']);
-/** 고객 행동 기록(BehaviorProvider)을 읽는 화면. "실제 방문만" 고르기를 둔다 */
-const MIX_SCREENS = new Set<ScreenKey>(['overview', ...PERIOD_LABEL_SCREENS]);
 
 function ScopeNote({ scope, brandName, period }: { scope: ScopeKind; brandName: string | null; period?: string | null }) {
   const { anyReal } = useBehavior();
