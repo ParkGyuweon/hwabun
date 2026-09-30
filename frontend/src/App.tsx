@@ -12,9 +12,9 @@ import SiteFooter from './components/layout/SiteFooter';
 import ActivityNotice from './components/legal/ActivityNotice';
 import { LEGAL_QUERY, legalPageFromState, legalPageFromUrl } from './lib/legalRoute';
 import type { LegalPage } from './lib/legalRoute';
-import { setLoggerContext, startPageView, startSession, track } from './lib/logger';
+import { clearHistory, setLoggerContext, startPageView, startSession, track } from './lib/logger';
 import { resetTrait, setTraitProfile } from './lib/trait';
-import { setWishlistOwner } from './lib/wishlist';
+import { clearAllWishlists, setWishlistOwner } from './lib/wishlist';
 import { EVENT_CURRENCY, createOrderId, orderTotals, orderTotalsKrw, toOrderItems, unitMoneyProps } from './lib/checkout';
 import {
   canCheckoutOnBackend,
@@ -45,7 +45,7 @@ import EmptyState from './components/common/EmptyState';
 import { useCatalog, useDraft } from './hooks/useCatalog';
 import { useAuth } from './hooks/useAuth';
 import { isBehaviorLinked } from './lib/auth';
-import { loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
+import { clearMemberProfile, loadMemberProfile, profileToPersona, subscribeMemberProfile } from './lib/memberProfile';
 import { MEMBER_WITHDRAWN_EVENT } from './lib/memberWithdraw';
 import { useAuthorCounts, useProductReviews, useReviewSkinTypes } from './lib/reviewStore';
 import personasData from './mocks/personas.sample.json';
@@ -267,16 +267,31 @@ export default function App() {
   const member = useAuth('MEMBER');
 
   /*
-   * 로그인한 사람이 바뀌면(로그아웃·다른 계정·새로 가입) 이 탭에 남은 앞 사람의 찜과 세션 성향을 넘기지 않는다 (2026-09-30).
-   * 전에는 새 계정에 앞 사람 하트가 눌린 채 보여, 누르면 '찜 취소' 가 나가고 추천 요청 축도 앞 사람 성향이었다 —
-   * 시연의 "좋아요 → 싸피뷰티가 추천에 올라온다" 가 가끔 안 됐다. 새로고침으로 같은 계정이 복원될 때는 그대로 둔다.
-   * paint 전에 바꿔야 하트가 한 번 번쩍이지 않는다 → useLayoutEffect.
+   * 로그인한 사람이 바뀌면(로그아웃·다른 계정·새로 가입·다른 탭에서 로그아웃) 앞 사람의 것을 이 브라우저에 남기지 않는다
+   * (2026-09-30). 전에는 새 계정에 앞 사람 하트가 눌린 채 보여 누르면 '찜 취소' 가 나갔고, 세션 성향·장바구니·피부 정보
+   * 사본도 넘어가 추천이 앞 사람 쪽으로 계산됐다 — 시연의 "좋아요 → 싸피뷰티가 추천에 올라온다" 가 가끔 안 됐다.
+   *
+   * 지우는 것: 찜 · 세션 성향 · 앞 사람 피부 정보 사본(서버가 정본이라 다시 로그인하면 받아 온다) · 결제 대기 · 장바구니 ·
+   * 우하단 기록 창의 지난 기록. 새로고침으로 같은 계정이 복원될 때는 아무것도 지우지 않는다.
+   * **앞 사람이 회원이었을 때만** 지운다 — 비회원이 장바구니에 담고 로그인해 결제하는 흐름은 그대로 이어져야 한다.
+   * 찜은 계정마다 키가 따로라(lib/wishlist) 비회원 하트도 새 계정으로 넘어가지 않는다.
    */
   const memberId = member?.id ?? null;
   const prevMemberIdRef = useRef<string | null>(memberId);
+  const leftMember = prevMemberIdRef.current !== null && prevMemberIdRef.current !== memberId;
+  // 기록 창(LiveLog)은 처음 그릴 때 기록을 읽으므로 자식보다 먼저 비운다. React 상태를 건드리지 않는 일이라 렌더 중에 해도 된다
+  if (leftMember) clearHistory();
   useLayoutEffect(() => {
+    // paint 전에 바꿔야 앞 사람 하트가 한 번 번쩍이지 않는다
+    const prev = prevMemberIdRef.current;
+    if (prev !== null && prev !== memberId) {
+      clearAllWishlists();
+      resetTrait();
+      clearPendingPayment();
+      setCartItems([]);
+      if (prev) clearMemberProfile(prev);
+    }
     setWishlistOwner(memberId);
-    if (prevMemberIdRef.current !== memberId) resetTrait();
     prevMemberIdRef.current = memberId;
   }, [memberId]);
   const getMemberProfile = useCallback(() => loadMemberProfile(member?.id), [member?.id]);

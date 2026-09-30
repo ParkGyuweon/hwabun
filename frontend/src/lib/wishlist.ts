@@ -84,6 +84,25 @@ export function clearWishlist(): void {
   notify();
 }
 
+/**
+ * 이 탭의 찜을 사람 가리지 않고 전부 지운다. 로그인한 사람이 바뀔 때(로그아웃·다른 계정·새로 가입) App 이 부른다 —
+ * 계정 정보가 브라우저에 남지 않게 한다 (2026-09-30).
+ */
+export function clearAllWishlists(): void {
+  cache = new Set();
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i += 1) {
+      const k = window.sessionStorage.key(i);
+      if (k && (k === BASE || k.startsWith(`${BASE}:`))) keys.push(k);
+    }
+    for (const k of keys) window.sessionStorage.removeItem(k);
+  } catch {
+    /* 저장소를 못 쓰면 메모리만 비운다 */
+  }
+  notify();
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
