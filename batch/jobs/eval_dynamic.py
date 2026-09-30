@@ -285,7 +285,7 @@ def summarize(results, label):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=("train", "valid", "test", "all",
-                                        "holdout_a", "holdout_b"),
+                                        "holdout_a", "holdout_b", "holdout_c"),
                     default="valid")
     # CF 가점은 **채택됐다** (2026-09-07). 기본이 켬이고 끄려면 --no-cf 다.
     ap.add_argument("--no-cf", dest="cf", action="store_false", default=True,

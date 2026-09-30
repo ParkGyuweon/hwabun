@@ -1,6 +1,6 @@
 # batch/ — AI 파트 (상품 인코딩 · 학습 · 추천 서버)
 
-기준일 2026-09-16. 어휘집 0.7(price_bin 원화, 벡터 불변). 대표 지표는 `docs/ai/evaluation-framework.md` 상태 블록 (holdout_a 43.80 / holdout_b 42.45%, LTR 239 트리·20피처 — 09-16 가중 평균 코사인 채택, 09-10 19피처 모델은 42.15 / 43.15).
+기준일 2026-09-30 (LTR 9,900명 학습·holdout_c). 이전 기준일 2026-09-16. 어휘집 0.7(price_bin 원화, 벡터 불변). 대표 지표는 `docs/ai/evaluation-framework.md` 상태 블록 (holdout_a 43.80 / holdout_b 42.45%, LTR 239 트리·20피처 — 09-16 가중 평균 코사인 채택, 09-10 19피처 모델은 42.15 / 43.15).
 
 | 폴더 | 무엇 | 진입점 |
 |---|---|---|
@@ -15,7 +15,7 @@
 products_200.json + registered_products.jsonl ─ product_encoder ─→ product_feature.jsonl (148차원)
 reviews(844,865) ─ build_affinity_lift ─→ affinity_lift.csv        (속성 친화도)
 personas(9,900)  ─ build_cooc ─────────→ item_cooc.npz             (CF 동시발생, 홀드아웃 제외)
-                 ─ train_ltr ──────────→ ltr_model.pkl (239 트리)   (20 피처 = ltr_features.py)
+                 ─ train_ltr ──────────→ ltr_model.pkl (382 트리, 9,900명 학습)   (20 피처 = ltr_features.py)
                                           ↓
 recommend_server.py (8300)  ←─ GET /api/recommend  ←─ 프론트(로컬 Vite) / 쇼핑몰 백엔드 프록시(운영, 09-14 머지)
         ↑ POST /api/events · Kafka activity-events (kafka_state.py)  ← 수집기 / 시뮬레이터

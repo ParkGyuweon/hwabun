@@ -5,8 +5,12 @@
     (사용자, 후보 상품) 쌍마다 피처 19개를 뽑고 정답=1 / 나머지=0 으로 학습한다.
     후보 199개를 다 쓰면 무거우므로 **음성 표본추출**한다 (정답 1 + 무작위 N).
 
-    학습은 **train 5,954명에서만** 한다. eval_metadata 의 train 분할이고,
-    valid/test/holdout 은 한 명도 안 들어간다. 홀드아웃 확인은 별도 스크립트다.
+    학습 인원은 `--split` 으로 정한다. 기본 train 은 5,954명(eval_metadata 의 train 분할),
+    `--split all` 은 페르소나 9,900명 전부다. **정본은 2026-09-30 부터 all** —
+    홀드아웃 a/b/c 는 페르소나 파일이 달라 어느 쪽이든 학습에 안 들어가고, valid/test 는
+    홀드아웃 체계(부록 Q) 뒤로 쓰임이 없어 학습에 넣었다. 조기종료는 내부 10% 를 뗀다.
+    holdout_c(6,400명, c 제외 동시발생) 세 시드: train 43.02/43.23/42.89 → all 44.06/44.16/44.39 (평균 +1.15%p),
+    a 42.05→43.45 · b 41.35→42.75. 정본 seed 1, 382 트리.
 
 왜 선형을 버렸나
     선형 합은 **조건부 규칙을 표현할 수 없다.** 부록 M 이 정확히 그 벽에 부딪혔다 —
@@ -59,11 +63,11 @@ def log(m):
     print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
 
 
-def training_rows(index):
+def training_rows(index, split="train"):
     profiles = {p["persona_id"]: p
                 for p in json.load(open(PERSONAS, encoding="utf-8"))}
     out = []
-    for r in load_metadata(split="train"):
+    for r in load_metadata(split=split):
         p = profiles.get(r["persona_id"])
         if p is None:
             continue
@@ -89,6 +93,8 @@ def main():
                     help="가중 평균 코사인 cos_seed_w 피처 (기본 켬, Jira 322). 시드 강도 = 리뷰 평점 → 이벤트 가중치")
     ap.add_argument("--no-weighted", dest="weighted", action="store_false",
                     help="19피처 옛 모델 재현용")
+    ap.add_argument("--split", default="train", choices=("train", "all"),
+                    help="학습에 넣는 분할. all = train+valid+test 9,900명 (홀드아웃 a/b/c 는 페르소나 파일이 달라 어차피 안 들어간다). 2026-09-30 실험")
     ap.add_argument("--seed", type=int, default=PARAMS["random_state"],
                     help="학습 난수(검증 분할·조기종료). 잡음 폭을 볼 때만 바꾼다. 정본은 0")
     a = ap.parse_args()
@@ -112,7 +118,7 @@ def main():
             "  `python batch/jobs/build_cooc.py` 를 먼저 도십시오.")
 
     F = LtrFeatures(enc, V, prior, affinity, cooc, supporters, weighted=a.weighted)
-    rows = training_rows(index)
+    rows = training_rows(index, a.split)
     if a.weighted:
         log(f"가중 평균 코사인 켬 — 피처 {len(F.names)}개 (cos_seed_w 추가, 강도 = 평점→이벤트 가중치)")
     log(f"train {len(rows):,}명 · 음성 {a.neg}개씩 -> 약 {len(rows)*(a.neg+1):,}행")
@@ -151,7 +157,7 @@ def main():
     joblib.dump(clf, model_path)
     meta = {
         "trained_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "split": "train",
+        "split": a.split,
         "n_persona": len(rows),
         "n_rows": int(len(X)),
         "n_negative_per_persona": a.neg,

@@ -61,7 +61,7 @@ def share_same_brand(engine, personas, seeds, brand_of, use_persona=True, k=10):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=300)
-    ap.add_argument("--split", default="holdout_a", choices=("holdout_a", "holdout_b"))
+    ap.add_argument("--split", default="holdout_a", choices=("holdout_a", "holdout_b", "holdout_c"))
     ap.add_argument("--min-brand-size", type=int, default=7)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)

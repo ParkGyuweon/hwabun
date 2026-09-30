@@ -107,8 +107,10 @@ STEPS = [
     # 학습 결합 모델. eval_metadata 의 train 분할과 동시발생을 읽으므로 7·5.5 뒤다.
     # **9번의 골든이 이 모델로 만들어지므로 반드시 그 앞이어야 한다** — 없으면
     # 골든이 조용히 선형 기준으로 나오고, 자바가 그것을 재현하면 서빙이 틀린다.
+    # --split all: 2026-09-30 부터 9,900명 전부로 학습한다 (홀드아웃 a/b/c 는 별도 파일이라 안 섞인다).
+    #   holdout_c 6,400명에서 train 5,954 → all 9,900 이 세 시드 평균 43.05 → 44.20% (+1.15%p, 시드 폭 밖), a/b 도 +1.40.
     (8.5, "학습 결합 모델 (LTR)",
-     ["batch/jobs/train_ltr.py"],
+     ["batch/jobs/train_ltr.py", "--split", "all"],
      [os.path.join(DATA, "serving", "ltr_model.pkl"),
       os.path.join(DATA, "serving", "ltr_model_meta.json")], False),
     (9, "서빙 산출물 + 순위 대조 기준",

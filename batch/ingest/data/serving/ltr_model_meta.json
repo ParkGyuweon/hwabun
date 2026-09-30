@@ -1,12 +1,12 @@
 {
-  "trained_at": "2026-09-16T10:34:17",
-  "split": "train",
-  "n_persona": 5954,
-  "n_rows": 231005,
+  "trained_at": "2026-09-30T09:17:52",
+  "split": "all",
+  "n_persona": 9900,
+  "n_rows": 383967,
   "n_negative_per_persona": 30,
   "augment_fraction": 0.25,
-  "n_augmented_rows": 46431,
-  "n_trees": 239,
+  "n_augmented_rows": 77067,
+  "n_trees": 382,
   "params": {
     "max_iter": 800,
     "learning_rate": 0.08,
@@ -38,6 +38,27 @@
     "cos_brand",
     "cos_seed_w"
   ],
-  "permutation_importance": null,
+  "permutation_importance": {
+    "cf_rank": 0.1798,
+    "pop_rank": 0.1089,
+    "prior": 0.1061,
+    "supporters": 0.0811,
+    "cos_all": 0.0709,
+    "cos_concern": 0.0623,
+    "affinity": 0.054,
+    "cos_ingredient": 0.0536,
+    "cf": 0.0496,
+    "price_prox": 0.0464,
+    "cos_seed_w": 0.0452,
+    "cos_clean": 0.042,
+    "cos_price_bin": 0.0299,
+    "n_seed": 0.0283,
+    "cos_secondary_category": 0.0278,
+    "cos_tertiary_category": 0.0186,
+    "cos_texture": 0.011,
+    "same_brand": 0.0065,
+    "cos_brand": 0.0045,
+    "cos_rating": 0.0006
+  },
   "sklearn_version": "1.7.0"
 }
