@@ -1406,6 +1406,20 @@ table.data tr:hover td {
   font-size: 12px;
 }
 
+/* 광고 금지 표현 안내. 칸 바로 밑에 붙는 노란 쪽지 — 막지 않고 알려만 준다 */
+.reg-note--claim {
+  margin-top: 6px;
+  padding: 6px 10px;
+}
+
+.reg-note--claim p {
+  margin: 0;
+}
+
+.reg-note--claim p + p {
+  margin-top: 2px;
+}
+
 .reg-segment {
   display: inline-flex;
   margin-left: 10px;

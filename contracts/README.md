@@ -71,6 +71,7 @@ property·타입·enum 위반을 탐지하므로 종료 코드 2가 정상이다
 
 ```bash
 python contracts/validate_product_registration.py <상품 JSON 또는 JSONL>
+python contracts/tests/test_product_copy_claims.py   # 우리가 직접 쓴 상품 문구(SSAFY Beauty)의 광고 금지 표현 (걸리면 종료 코드 1). 세포라 번역본은 원문 그대로라 검사하지 않는다
 ```
 
 **등록 입력에만 사용한다.** 기존 카탈로그 `products_200.json`은 Sephora 원천이라
