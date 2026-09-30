@@ -34,6 +34,9 @@ services:
       PORTONE_API_SECRET: ${PORTONE_API_SECRET:?Set PORTONE_API_SECRET in .env}
       PORTONE_API_URL: ${PORTONE_API_URL:-https://api.portone.io}
       PORTONE_TIMEOUT_MS: ${PORTONE_TIMEOUT_MS:-10000}
+      # 결제 대조(confirm 누락 주문을 PortOne 재조회로 PAID 처리). 5분마다, 생성 2분~24시간 CREATED 주문.
+      SHOP_PAYMENT_RECONCILE_ENABLED: ${SHOP_PAYMENT_RECONCILE_ENABLED:-true}
+      SHOP_PAYMENT_RECONCILE_INTERVAL_MS: ${SHOP_PAYMENT_RECONCILE_INTERVAL_MS:-300000}
       RECOMMEND_URL: ${RECOMMEND_URL:-http://recommend:8300}
       # 추천 API 응답 대기(ms). 너무 짧으면 프론트가 조용히 예시 추천으로 바뀐다
       RECOMMEND_TIMEOUT_MS: ${RECOMMEND_TIMEOUT_MS:-1500}

@@ -10,6 +10,8 @@ import java.time.ZoneId;
 import java.util.Map;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -20,7 +22,10 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class PaymentConfirmationService {
 
+  private static final Logger log = LoggerFactory.getLogger(PaymentConfirmationService.class);
   private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+  /** 프론트(frontend/src/lib/payment.ts paymentIdFor)와 같은 규칙이다. 주문 하나에 결제 id 하나. */
+  static final String PAYMENT_ID_PREFIX = "hwabun-";
   private final ShopOrderRepository orders;
   private final PortOneClient portOne;
   private final TransactionTemplate transactions;
@@ -41,7 +46,7 @@ public class PaymentConfirmationService {
 
   public Confirmation confirm(String orderId, String memberId, String paymentId) {
     ShopOrder order = ownedOrder(orderId, memberId);
-    String expectedPaymentId = "hwabun-" + orderId;
+    String expectedPaymentId = paymentIdFor(orderId);
     if (!expectedPaymentId.equals(paymentId)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "paymentId does not match order");
     }
@@ -59,6 +64,82 @@ public class PaymentConfirmationService {
     return transactions.execute(status ->
       complete(orderId, memberId, paymentId, order.getTotalAmount(), paidAt)
     );
+  }
+
+  public static String paymentIdFor(String orderId) {
+    return PAYMENT_ID_PREFIX + orderId;
+  }
+
+  /** paymentId 가 우리 규칙(hwabun-주문번호)이면 주문번호를, 아니면 null 을 준다. */
+  public static String orderIdFromPaymentId(String paymentId) {
+    if (paymentId == null || !paymentId.startsWith(PAYMENT_ID_PREFIX)) return null;
+    String orderId = paymentId.substring(PAYMENT_ID_PREFIX.length());
+    return orderId.isBlank() || orderId.length() > 64 ? null : orderId;
+  }
+
+  /**
+   * 브라우저의 confirm 호출이 실패·누락된 주문을 서버가 스스로 맞춘다(스케줄러·웹훅 공용).
+   * 회원 소유 검사 대신 PortOne 을 다시 조회해 confirm 과 같은 검증(상태·통화·금액·customData.orderId)을
+   * 통과할 때만 CREATED→PAID 로 바꾼다. 조건부 update 라 confirm 과 동시에 돌아도 한 번만 반영된다.
+   * PortOne 조회 자체가 실패(타임아웃·5xx)하면 예외를 그대로 던진다 — 다음 회차에 다시 시도한다.
+   */
+  public ReconcileResult reconcile(String orderId) {
+    ShopOrder order = orders.findById(orderId).orElse(null);
+    if (order == null) return ReconcileResult.ORDER_NOT_FOUND;
+    if (order.getStatus() == ShopOrder.Status.PAID) return ReconcileResult.ALREADY_PAID;
+    if (order.getStatus() != ShopOrder.Status.CREATED) return ReconcileResult.NOT_PAYABLE;
+
+    String paymentId = paymentIdFor(orderId);
+    Map<String, Object> payment;
+    try {
+      payment = portOne.payment(paymentId);
+    } catch (ResponseStatusException exception) {
+      // PortOneClient 는 PortOne 404 를 409 로 바꾼다 — 결제창을 열지 않았거나 결제가 안 만들어진 주문.
+      if (exception.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
+        return ReconcileResult.NO_PAYMENT;
+      }
+      throw exception;
+    }
+    if (!"PAID".equals(String.valueOf(payment.get("status")))) return ReconcileResult.NOT_PAID;
+    try {
+      validate(payment, order, paymentId);
+    } catch (ResponseStatusException exception) {
+      log.warn(
+        "payment reconcile mismatch orderId={} paymentId={} reason={}",
+        orderId,
+        paymentId,
+        exception.getReason()
+      );
+      return ReconcileResult.MISMATCH;
+    }
+    LocalDateTime paidAt = paidAt(payment.get("paidAt"));
+    String memberId = order.getMemberId();
+    try {
+      transactions.execute(status ->
+        complete(orderId, memberId, paymentId, order.getTotalAmount(), paidAt)
+      );
+    } catch (ResponseStatusException exception) {
+      if (exception.getStatusCode().value() == HttpStatus.CONFLICT.value()) {
+        return ReconcileResult.NOT_PAYABLE;
+      }
+      throw exception;
+    }
+    log.info("payment reconciled orderId={} paymentId={}", orderId, paymentId);
+    return ReconcileResult.RECOVERED;
+  }
+
+  public enum ReconcileResult {
+    /** PortOne 에 결제 완료가 있어 이번에 PAID 로 바꿨다. */
+    RECOVERED,
+    ALREADY_PAID,
+    /** PortOne 에 이 주문 결제가 없다(결제창 미진입 등). */
+    NO_PAYMENT,
+    /** PortOne 결제가 아직 PAID 가 아니다(READY·FAILED·CANCELLED 등). */
+    NOT_PAID,
+    /** PortOne 은 PAID 인데 금액·통화·주문번호가 안 맞는다 — 사람이 봐야 한다(환불 후보). */
+    MISMATCH,
+    NOT_PAYABLE,
+    ORDER_NOT_FOUND,
   }
 
   private Confirmation complete(
