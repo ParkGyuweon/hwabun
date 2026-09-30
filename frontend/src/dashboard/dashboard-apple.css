@@ -888,16 +888,6 @@ button.chip:disabled {
   font-size: var(--fs-xs);
   color: var(--ink-faint);
 }
-/* 방문 구성 한 줄. 스코프 줄 바로 아래에 조용히 */
-.main__mix {
-  margin-top: -10px;
-  font-size: var(--fs-xs);
-}
-.main__mix span + span:not(:nth-child(2))::before {
-  content: '· ';
-  color: var(--ink-faint);
-}
-
 
 /* ---------- 결론 카드 확장: 근거 목록 · 권고 단위 · 근거 화면 이동 ---------- */
 
