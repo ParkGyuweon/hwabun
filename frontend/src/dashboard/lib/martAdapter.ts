@@ -257,10 +257,10 @@ function toSegments(p: SegmentsPayload, emptyMatrix: BehaviorMetrics['segmentMat
   const types = ['dry', 'oily', 'combination', 'normal'];
   const byType = p.by_segment
     .filter((s) => s.segment_type === 'skin_type')
-    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s), users: s.segment_user_count }));
+    .map((s) => ({ type: s.segment_value, sessions: s.product_view_sessions, cartRate: cartRateOf(s), visits: s.session_count }));
   const byTone = SKIN_TONE_ORDER.flatMap((tone) => {
     const s = p.by_segment.find((x) => x.segment_type === 'skin_tone' && x.segment_value === tone);
-    return s ? [{ type: tone, sessions: s.product_view_sessions, cartRate: cartRateOf(s), users: s.segment_user_count }] : [];
+    return s ? [{ type: tone, sessions: s.product_view_sessions, cartRate: cartRateOf(s), visits: s.session_count }] : [];
   });
 
   const matrix = p.grid

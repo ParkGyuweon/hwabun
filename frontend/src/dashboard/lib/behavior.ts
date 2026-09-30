@@ -149,8 +149,11 @@ export interface SegmentByType {
   type: string;
   sessions: number;
   cartRate: number;
-  /** 이 고객군 사람 수 (segment_user_count) */
-  users: number;
+  /**
+   * 이 고객군이 들른 방문 수 (session_count). 사람 수가 아니다 — 마트의 segment_user_count 는 하루 단위로 센
+   * 고객을 기간 동안 더한 값이라 같은 고객이 여러 날 오면 여러 번 들어간다. 그래서 "명" 으로 보여 주지 않는다.
+   */
+  visits: number;
 }
 
 /**
