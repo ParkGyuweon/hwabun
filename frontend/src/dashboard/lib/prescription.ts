@@ -124,11 +124,11 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
 
   return {
     clinical_claim: {
-      how: `임상 결과를 ${after('clinical_claim')} 바로 아래로 옮기고, 인원·기간·항목·결과 4줄 표로 바꾸세요.`,
+      how: `임상 결과를 ${after('clinical_claim')} 바로 아래로 옮기고 인원·기간·항목·결과 4줄 표로 바꿔 본 뒤, 담기가 오르는지 확인해 보세요.`,
       basis: [
         {
           from: '상세페이지 설명 글',
-          text: `평균의 ${liftOf('clinical_claim')}배 담는데, 본 사람은 ${viewPct('clinical_claim')}뿐`,
+          text: `본 방문은 평균의 ${liftOf('clinical_claim')}배 담았는데, 본 사람은 ${viewPct('clinical_claim')}뿐`,
         },
         segmentBasis('임상 결과') ?? {
           from: '고객군',
@@ -139,15 +139,15 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
           text: `전성분 펼친 방문 담기 ${fmt.pct(expand?.cartRateWith ?? 0)} · 안 펼친 방문 ${fmt.pct(expand?.cartRateWithout ?? 0)}`,
         },
       ],
-      verify: `본 비율 ${viewPct('clinical_claim')} → 50%, 담기 효과 2.0배 유지`,
+      verify: `본 비율 ${viewPct('clinical_claim')} → 50%, 본 방문 담기 배수 2.0배 유지`,
     },
 
     ingredient_callout: {
-      how: `성분 특징을 ${after('ingredient_callout')} 바로 아래로 옮기고, ${josa(drag3.join('·'), '을/를')} 맨 앞 카드로 세우세요.`,
+      how: `성분 특징을 ${after('ingredient_callout')} 바로 아래로 옮기고 ${josa(drag3.join('·'), '을/를')} 맨 앞 카드로 세워 본 뒤, 담기가 오르는지 확인해 보세요.`,
       basis: [
         {
           from: '상세페이지 설명 글',
-          text: `평균의 ${liftOf('ingredient_callout')}배 담는데, 본 사람은 ${viewPct('ingredient_callout')}뿐`,
+          text: `본 방문은 평균의 ${liftOf('ingredient_callout')}배 담았는데, 본 사람은 ${viewPct('ingredient_callout')}뿐`,
         },
         {
           from: '성분',
@@ -162,11 +162,11 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
     },
 
     usage_guide: {
-      how: `사용법을 아침·저녁 2열 표로 바꾸세요. 순서·양·겹칠 때 먼저 쓸 것, 세 줄만.`,
+      how: `사용법을 아침·저녁 2열 표로 바꿔 보세요. 순서·양·겹칠 때 먼저 쓸 것, 세 줄만. 바꾼 뒤 담기가 오르는지 확인해 보세요.`,
       basis: [
         {
           from: '상세페이지 설명 글',
-          text: `${dwellSec('usage_guide')}초나 읽는데 담기는 평균의 ${liftOf('usage_guide')}배`,
+          text: `${dwellSec('usage_guide')}초나 읽는데 본 방문 담기 배수는 ${liftOf('usage_guide')}배`,
         },
         {
           from: '상세페이지 설명 글',
@@ -177,15 +177,15 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
           text: `담기 버튼 위에서 머뭇거림 ${fmt.int(hesitate?.count ?? 0)}건`,
         },
       ],
-      verify: `읽는 시간 ${dwellSec('usage_guide')}초 → 8초, 담기 ${liftOf('usage_guide')}배 → 1.0배 이상`,
+      verify: `읽는 시간 ${dwellSec('usage_guide')}초 → 8초, 본 방문 담기 배수 ${liftOf('usage_guide')}배 → 1.0배 이상`,
     },
 
     what_else: {
-      how: `추가 설명 칸을 빼고, 남길 내용은 성분 특징·사용법 안으로 옮기세요.`,
+      how: `추가 설명 칸을 빼고 남길 내용은 성분 특징·사용법 안으로 옮겨 본 뒤, 담기가 줄지 않는지 확인해 보세요.`,
       basis: [
         {
           from: '상세페이지 설명 글',
-          text: `담기 평균의 ${liftOf('what_else')}배로 열 종 중 최저 · 본 사람 ${viewPct('what_else')}`,
+          text: `본 방문 담기 배수 ${liftOf('what_else')}배로 열 종 중 최저 · 본 사람 ${viewPct('what_else')}`,
         },
         {
           from: '상세페이지 설명 글',
@@ -200,7 +200,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
     },
 
     user_review: {
-      how: `리뷰 위 "내 피부 타입만 보기"를 기본으로 켜 두세요.`,
+      how: `리뷰 위 "내 피부 타입만 보기"를 기본으로 켜 두고, 담기가 오르는지 확인해 보세요.`,
       basis: [
         {
           from: '상세페이지 설명 글',
@@ -215,7 +215,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
     },
 
     ingredient_list: {
-      how: `전성분을 펼친 상태로 두거나 앞 5개를 미리 보이게 하세요. 지금 펼침 ${fmt.pct(expand?.doneRate ?? 0)}.`,
+      how: `전성분을 펼친 상태로 두거나 앞 5개를 미리 보이게 해 보세요. 지금 펼침 ${fmt.pct(expand?.doneRate ?? 0)}.`,
       basis: [
         {
           from: '상세페이지 설명 글',
@@ -230,7 +230,7 @@ export function buildPrescriptions(m: BehaviorMetrics): Record<string, Prescript
     },
 
     product_image: {
-      how: `상품 이미지를 누르면 확대되게 하세요. 지금은 눌러도 반응이 없습니다.`,
+      how: `상품 이미지를 누르면 확대되게 해 보세요. 지금은 눌러도 반응이 없습니다.`,
       basis: [
         {
           from: '고객이 막히는 자리',

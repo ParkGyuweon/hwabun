@@ -265,6 +265,53 @@ public class DashboardMartService {
     return summary;
   }
 
+  /* ------------------------------------------------------------------ 데이터 구성 */
+
+  /**
+   * 이 브랜드 방문(`brand_daily_kpi.product_view_sessions`, 개요 화면 "방문" 과 같은 값)이 어디서 왔는지 세 갈래로 센다.
+   *   · `real`      actor_type=user — 실제 방문
+   *   · `agent`     actor_type=synthetic · generator_type=agent_llm — AI 가 고객 역할로 돌아다닌 방문
+   *   · `simulated` 그 밖의 synthetic — 프로그램이 만든 가상 고객 방문
+   * actorType 인자는 받지 않는다 · 전체를 나누는 것이 목적이다.
+   */
+  public Map<String, Object> composition(String seller, String brand, String from, String to) {
+    Read read = open(seller, brand, from, to, "all");
+    Query q = read.q;
+    List<Map<String, Object>> rows = read.required(
+      "brand_daily_kpi",
+      () ->
+        many(
+          "select actor_type,generator_type,coalesce(sum(product_view_sessions),0) visits," +
+            "max(mart_processed_at) mart_processed_at " +
+            "from dw.brand_daily_kpi where " + q.where("event_date_kst") +
+            " group by actor_type,generator_type",
+          q.args()
+        )
+    );
+    long real = 0;
+    long agent = 0;
+    long simulated = 0;
+    Object processedAt = null;
+    for (Map<String, Object> row : rows) {
+      long visits = longOf(row.get("visits"));
+      if ("user".equals(row.get("actor_type"))) real += visits;
+      else if ("agent_llm".equals(row.get("generator_type"))) agent += visits;
+      else simulated += visits;
+      Object candidate = row.get("mart_processed_at");
+      if (candidate instanceof Timestamp timestamp &&
+        (!(processedAt instanceof Timestamp current) || timestamp.after(current))) {
+        processedAt = timestamp;
+      } else if (processedAt == null && candidate != null) {
+        processedAt = candidate;
+      }
+    }
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("real_visits", real);
+    body.put("simulated_visits", simulated);
+    body.put("agent_visits", agent);
+    return read.envelope(List.of("brand_daily_kpi"), !rows.isEmpty(), processedAt, body);
+  }
+
   /* ------------------------------------------------------------------ E1 overview */
 
   public Map<String, Object> overview(String seller, String brand, String from, String to, String actor) {

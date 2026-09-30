@@ -64,6 +64,10 @@ public class DashboardController {
     return marts.crossBrandInflow(requireSeller(actor), brandId, from, to, actorType, generatorType);
   }
 
+  /** 방문이 실제·가상 고객·AI 고객 중 어디서 왔는지. 브랜드 소유 확인은 서비스가 한다 */
+  @GetMapping("/composition")
+  public Map<String, Object> composition(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to) { return marts.composition(requireSeller(actor), brandId, from, to); }
+
   @GetMapping("/ingredients")
   public Map<String, Object> ingredients(@AuthenticationPrincipal ShopPrincipal actor, @RequestParam String brandId, @RequestParam(required = false) String from, @RequestParam(required = false) String to, @RequestParam(required = false) String actorType) { return marts.ingredients(requireSeller(actor), brandId, from, to, actorType); }
 

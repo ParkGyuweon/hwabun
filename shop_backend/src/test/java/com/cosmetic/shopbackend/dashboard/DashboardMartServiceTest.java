@@ -100,6 +100,42 @@ class DashboardMartServiceTest {
     assertThrows(ResponseStatusException.class, () -> service.crossBrandInflow("other-seller", BRAND, FROM, TO, "all", "all"));
   }
 
+  @Test
+  @DisplayName("데이터 구성은 방문을 실제·가상 고객·AI 고객으로 나눠 센다")
+  void compositionSplitsVisitsByActorAndGenerator() {
+    compositionDay("user", null, 30);
+    compositionDay("synthetic", "python_batch", 500);
+    compositionDay("synthetic", "agent_llm", 20);
+    compositionDay("synthetic", null, 7);
+
+    Map<String, Object> response = service.composition(SELLER, BRAND, FROM, TO);
+    assertEquals(30L, number(response.get("real_visits")));
+    assertEquals(507L, number(response.get("simulated_visits")));
+    assertEquals(20L, number(response.get("agent_visits")));
+    assertEquals("full", coverage(response));
+    assertThrows(ResponseStatusException.class, () -> service.composition("other-seller", BRAND, FROM, TO));
+  }
+
+  @Test
+  @DisplayName("데이터 구성은 기록이 없으면 0 과 coverage none 이다")
+  void compositionIsZeroWithoutRows() {
+    Map<String, Object> response = service.composition(SELLER, BRAND, FROM, TO);
+    assertEquals(0L, number(response.get("real_visits")));
+    assertEquals("none", coverage(response));
+  }
+
+  private void compositionDay(String actorType, String generatorType, int productViews) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("brand_id", BRAND);
+    row.put("event_date_kst", "2026-09-10");
+    row.put("actor_type", actorType);
+    row.put("generator_type", generatorType);
+    row.put("scenario_id", generatorType == null ? "none-" + actorType : generatorType);
+    row.put("product_view_sessions", productViews);
+    row.put("mart_processed_at", "2026-09-11 02:00:00");
+    insert("dw.brand_daily_kpi", row);
+  }
+
   /* ---------------------------------------------------------------- E1 overview */
 
   @Test

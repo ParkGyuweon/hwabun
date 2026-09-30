@@ -10,7 +10,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Product } from '../../types/product';
 import { type BehaviorMetrics, emptyBehavior } from './behavior';
-import { fetchMartBundle, type MartBundle } from './martApi';
+import { fetchMartBundle, type ActorType, type MartBundle } from './martApi';
 import { fromMart } from './martAdapter';
 import { catalogProducts } from './metrics';
 import { useBrandProducts } from './useBrandProducts';
@@ -34,7 +34,7 @@ const GATE_TIMEOUT_MS = 8000;
 
 const Ctx = createContext<BehaviorContextValue | null>(null);
 
-/** 브랜드:기간 → 응답. 한 탭 안에서만 산다 */
+/** 브랜드:기간:방문 종류 → 응답. 한 탭 안에서만 산다 */
 const cache = new Map<string, MartBundle>();
 const pending = new Set<string>();
 
@@ -42,6 +42,7 @@ export function BehaviorProvider({
   brandId,
   brandName,
   days,
+  actorType = 'all',
   children,
 }: {
   /** shop_backend 브랜드 id. 없으면(서버 미연결) 마트를 부르지 않는다 */
@@ -49,9 +50,11 @@ export function BehaviorProvider({
   /** 성분 갭의 "내 라인" 판정용. 카탈로그에 같은 이름 브랜드가 있으면 그 상품들 */
   brandName: string | null;
   days: number;
+  /** 'all' 이 기본. 'user' 면 실제 방문만 센다 */
+  actorType?: ActorType;
   children: ReactNode;
 }) {
-  const key = brandId ? `${brandId}:${days}` : null;
+  const key = brandId ? `${brandId}:${days}:${actorType}` : null;
   /**
    * 마지막으로 받은 응답을 컴포넌트 상태로도 든다. 모듈 캐시만 믿으면 개발 중 HMR 로 모듈이 다시 실행될 때
    * 캐시는 비고 effect 는 의존성이 안 바뀌어 다시 안 돌아 "받는 중" 에 갇힌다. 상태는 Fast Refresh 가 보존한다
@@ -62,7 +65,7 @@ export function BehaviorProvider({
     if (!key || !brandId || cache.has(key) || pending.has(key)) return;
     pending.add(key);
     let alive = true;
-    void fetchMartBundle({ brandId, days }).then((b) => {
+    void fetchMartBundle({ brandId, days, actorType }).then((b) => {
       cache.set(key, b);
       pending.delete(key);
       if (alive) setFetched({ key, bundle: b });
@@ -70,7 +73,7 @@ export function BehaviorProvider({
     return () => {
       alive = false;
     };
-  }, [key, brandId, days]);
+  }, [key, brandId, days, actorType]);
 
   // 쇼핑몰에 등록된 이 브랜드 상품. 번들 카탈로그에 없는 새 상품도 이름을 붙이려고 받는다
   const { products: serverProducts } = useBrandProducts(brandId, brandName);

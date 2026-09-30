@@ -43,7 +43,7 @@ function verbOf(kind: string, lift: number, viewRate: number, sampleSize: number
 
 /**
  * 사장님이 고칠 수 없는 글. 리뷰 원문과 평점 분포는 고객이 쓴 값이라 "손보기·올리기" 대상이 아니다.
- * 표에는 "고객이 만든 값" 으로 적고, 할 일 목록과 맨 위 결론에서는 뺀다. 순위·담기 효과 관찰은 그대로 보인다.
+ * 표에는 "고객이 만든 값" 으로 적고, 할 일 목록과 맨 위 결론에서는 뺀다. 순위·담기 배수 관찰은 그대로 보인다.
  */
 const CUSTOMER_MADE = new Set(['user_review', 'review_stats']);
 
@@ -100,10 +100,10 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
       what: r.ko,
       why:
         r.verb === 'up'
-          ? `평균의 ${r.conversionLift.toFixed(1)}배 담는데, 본 사람은 ${fmt.pct(r.viewRate)}뿐`
+          ? `본 방문은 평균의 ${r.conversionLift.toFixed(1)}배 담았는데, 본 비율은 ${fmt.pct(r.viewRate)}뿐`
           : `${(r.avgDwellMs / 1000).toFixed(0)}초나 읽는데 담기는 평균 아래`,
       num: `${r.conversionLift.toFixed(1)}배`,
-      unit: '담기 효과 (평균이 1.0배)',
+      unit: '본 방문 담기 배수 (평균이 1.0배)',
       how: rx?.rx?.how,
       basis: rx?.rx?.basis,
       verify: rx?.rx?.verify,
@@ -121,7 +121,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
     ? '아직 상세페이지 글을 읽은 기록이 없습니다'
     : liftPending
       ? '담기 비율 계산이 준비되면 할 일이 나옵니다'
-      : `${firstUp ? `${josa(firstUp.ko, '을/를')} 위로 올리고, ` : ''}${firstFix ? `${josa(firstFix.ko, '을/를')} 손보세요` : '지금 순서를 그대로 두세요'}`;
+      : `${firstUp ? `${josa(firstUp.ko, '을/를')} 위로 올려 보고, ` : ''}${firstFix ? `${josa(firstFix.ko, '을/를')} 손봐 보세요` : '지금 순서를 그대로 두세요'}`;
 
   return (
     <div className="stack">
@@ -135,13 +135,13 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             <li>기록이 쌓이면 여기에 나옵니다</li>
           ) : (
             <li>
-              글 {rows.length}종을 <b>담기 효과</b> 순으로 세운 결과
+              글 {rows.length}종을 <b>본 방문 담기 배수</b> 순으로 세운 결과
             </li>
           )}
-          {!noData && liftPending ? <li>담기 효과는 계산 준비 중</li> : null}
+          {!noData && liftPending ? <li>본 방문 담기 배수는 계산 준비 중</li> : null}
           {best && !liftPending ? (
             <li>
-              가장 잘 먹히는 글: {best.ko} · {best.conversionLift.toFixed(1)}배
+              본 방문이 가장 많이 담은 글: {best.ko} · {best.conversionLift.toFixed(1)}배
             </li>
           ) : null}
         </ul>
@@ -152,9 +152,9 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
         source={source.contentLift}
         aside={
           <span
-            title={`평균보다 덜 담긴 글은 손보고, 1.5배 넘게 담기는데 절반도 안 본 글은 위로 올리라고 알려 드려요 (AI가 쓴 안내 ${llmCount}건 · 기본 안내 ${ruleCount}건)`}
+            title={`본 방문이 평균보다 덜 담은 글은 손봐 보고, 1.5배 넘게 담았는데 절반도 안 본 글은 위로 올려 보라고 알려 드려요. 바꾼 뒤 담기가 실제로 오르는지 꼭 확인해 보세요 (AI가 쓴 안내 ${llmCount}건 · 기본 안내 ${ruleCount}건)`}
           >
-            담기 효과 기준
+            본 방문 담기 배수 기준
           </span>
         }
       >
@@ -162,14 +162,14 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           <Actions items={actions} />
         ) : (
           <p className="note">
-            {noData ? '아직 할 일이 없습니다' : liftPending ? '담기 효과 계산 준비 중입니다' : '지금 순서를 그대로 두세요'}
+            {noData ? '아직 할 일이 없습니다' : liftPending ? '본 방문 담기 배수 계산 준비 중입니다' : '지금 순서를 그대로 두세요'}
           </p>
         )}
       </Panel>
 
       <div className="grid grid--kpi">
         <Kpi
-          label="가장 잘 먹히는 글"
+          label="본 방문이 가장 많이 담은 글"
           value={best && !liftPending ? best.ko : '-'}
           sub={best && !liftPending ? `평균의 ${best.conversionLift.toFixed(1)}배 담기` : noData ? '아직 기록 없음' : '계산 준비 중'}
           source={source.contentLift}
@@ -207,7 +207,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
               <th title="상세페이지를 연 방문 중 그 글까지 본 비율이에요">본 비율</th>
               <th title="상세페이지를 한 번 열 때 그 글을 평균 얼마나 읽었는지예요">읽은 시간</th>
               <th title="그 글을 본 방문 중 장바구니에 담은 비율">본 고객 담기</th>
-              <th title="그 글을 본 고객이 내 브랜드 평균보다 몇 배 더 담았는지예요">담기 효과</th>
+              <th title="그 글을 본 방문이 내 브랜드 평균보다 몇 배 더 담았는지예요. 같이 움직였다는 뜻이지 그 글 때문이라는 뜻은 아니에요">본 방문 담기 배수</th>
               {anyCopy ? <th title="그 글에서 글자를 복사한 횟수">복사</th> : null}
               <th>할 일</th>
             </tr>
@@ -242,7 +242,7 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
           </tbody>
         </table>
         <details className="fold">
-          <summary>읽은 시간과 담기 효과를 한 그림으로</summary>
+          <summary>읽은 시간과 본 방문 담기 배수를 한 그림으로</summary>
           <Scatter
             points={rows.map((c) => ({
               label: c.ko,
@@ -265,8 +265,8 @@ export default function ContentScreen({ brandName }: { brandName: string }) {
             <dd>상세페이지를 한 번 열 때 그 글을 평균 얼마나 읽었는지. 글 3개 이상이 한 화면에 겹친 시간은 뺐습니다.</dd>
             <dt>본 고객 담기</dt>
             <dd>그 글을 본 방문 중 장바구니에 담은 비율.</dd>
-            <dt>담기 효과</dt>
-            <dd>그 글을 본 고객이 내 브랜드 평균보다 몇 배 더 담았는지. 1.0배가 평균입니다. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
+            <dt>본 방문 담기 배수</dt>
+            <dd>그 글을 본 방문이 내 브랜드 평균보다 몇 배 더 담았는지. 1.0배가 평균입니다. 같이 움직인다는 뜻이고 원인이라는 뜻은 아닙니다.</dd>
             <dt>기록 수</dt>
             <dd>그 글이 보인 방문 수. {fmt.int(THIN_VIEWS)}건 미만은 흐리게, 50건 미만은 그림에서 제외.</dd>
           </dl>

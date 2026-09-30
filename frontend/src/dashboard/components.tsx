@@ -686,8 +686,8 @@ export interface ActionItem {
 }
 
 const VERB_KO: Record<ActionItem['verb'], string> = {
-  up: '위로 올리세요',
-  fix: '손보세요',
+  up: '위로 올려 보세요',
+  fix: '손봐 보세요',
   keep: '그대로 두세요',
 };
 
@@ -724,7 +724,7 @@ export function Actions({ items }: { items: ActionItem[] }) {
           {a.how ? (
             <div className="act__rx">
               <p className="act__how">
-                <span className="act__rx-tag">이렇게 하세요</span>
+                <span className="act__rx-tag">이렇게 해 보세요</span>
                 {a.how}
                 {a.tags?.map((t) => (
                   <span key={t} className="act__note-tag">
