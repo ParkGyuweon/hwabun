@@ -112,7 +112,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 
 - EC2-2 를 구축했습니다. Kafka 브로커(KRaft), Spark 마스터/워커/히스토리, Q1 상시 가동 컨테이너가 떠 있습니다.
 - 일일 배치 자동화. `run-daily-batch.sh` 가 flock 으로 중복 실행을 막고, systemd service·timer 가 매일 18:00 UTC(03:00 KST)에 Q2→Q3→Q4→Q5→발행을 한 번에 돌립니다.
-- dw projection `publish_user_trait_job`. 마트 Parquet 을 MySQL 로 옮깁니다. staging 테이블에 적재하고 행 수·grain 유일성·NOT NULL 을 검증한 뒤 RENAME 으로 원자적으로 스왑하고 `__old` 를 백업으로 남깁니다. 발행 대상 마트 24종(운영 기본 실행 22종)
+- dw projection `publish_user_trait_job`. 마트 Parquet 을 MySQL 로 옮깁니다. staging 테이블에 적재하고 행 수·grain 유일성·NOT NULL 을 검증한 뒤 RENAME 으로 원자적으로 스왑합니다. 검증에 실패하면 기존 테이블이 그대로 남고, 발행에 성공하면 이전 테이블(`__old`)은 같은 실행에서 정리해 롤백용 백업은 남지 않습니다. 발행 대상 마트 24종(운영 기본 실행 22종)
 - DW 스키마 마이그레이션을 관리합니다 (`deploy/ec2-1/migrations/`).
 - 퍼널 Fact 와 일간 KPI 마트를 초기 구현했습니다.
 
