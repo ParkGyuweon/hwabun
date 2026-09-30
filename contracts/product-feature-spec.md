@@ -334,7 +334,7 @@ Cicapair Tiger Grass Cream(전성분 62개)의 실제 값입니다.
 
 이 처리가 없으면 히알루론산 세럼과 히알루론산이 0.01% 들어간 클렌저가 같은 값을 받습니다.
 
-##### 위치가중의 한계와 규제 보정 규칙 (2026-09-29, **추천 기본 끔**)
+##### 위치가중의 한계와 규제 보정 규칙 (2026-09-29 정의, **추천·대시보드 모두 끔** — 2026-09-30)
 
 **전성분 순서가 함량 순서인 것은 1% 초과 성분까지입니다.** 화장품법 시행규칙 별표 4(화장품 포장의
 표시기준 및 표시방법)는 함량이 많은 것부터 적게 하되, **1% 이하로 사용된 성분·착향제·착색제는
@@ -352,15 +352,21 @@ Cicapair Tiger Grass Cream(전성분 62개)의 실제 값입니다.
 비타민C 는 유도체 전부가 아니라 **고시 원료만** 1.0 입니다 (`ascorbic acid` 같은 순수형은 위치가중 유지).
 `synonyms` 는 바꾸지 않습니다 — 프론트 긁기 매칭(`useTextSelection`)·배너·목업이 그대로 읽기 때문입니다.
 
-**적용 범위 — 스위치로 나눕니다.**
+**적용 범위 — 규칙은 정의만 해 두고 모든 경로에서 끕니다 (2026-09-30 결정).**
+성분 관심도는 추천·대시보드·Spark 마트가 **한 정의** 여야 합니다. Spark 성분 마트
+(`ingredient_weekly_interest`, `build_marts_job` 이 `product_ingredient.csv` 를 읽음)는 위치가중만
+쓰므로, 마트가 이 규칙을 받기 전까지는 나머지 둘도 끕니다. 끈 상태의 값은 규칙 도입 전과 같습니다.
 
-| 경로 | 규칙 | 이유 |
+| 경로 | 스위치 (기본값) | 끈 상태 |
 |---|---|---|
-| 추천 인코더 (`product_encoder.Encoder`, 서빙·평가·`product_ingredient.csv` 내보내기) | **기본 끔.** `INGREDIENT_REGULATORY_RULE=1` 또는 `Encoder(regulatory_rule=True)` 일 때만 | 서빙 LTR 모델(`ltr_model_meta.json`, 2026-09-16 학습)은 이 규칙 없이 학습됐다. 끈 상태의 상품 벡터는 규칙 도입 전과 비트 단위로 같다 |
-| 대시보드 성분 화면 (`frontend/src/dashboard/lib/metrics.ts` `ingredientWeights`) | **항상 켬** | 표시용. 고시 원료가 "미량" 경고로 잘못 읽히지 않게 한다 |
+| 추천 인코더 (`batch/jobs/product_encoder.py` `Encoder`, 서빙·평가·`product_ingredient.csv` 내보내기) | 환경변수 `INGREDIENT_REGULATORY_RULE=1` 또는 `Encoder(regulatory_rule=True)` (**끔**) | 상품 벡터가 규칙 도입 전과 비트 단위로 같다 (`test_ingredient_regulatory_rule.py`). 서빙 LTR 모델(`ltr_model_meta.json`, 2026-09-16 학습)도 규칙 없이 학습됐다 |
+| 대시보드 성분 화면 (`frontend/src/dashboard/lib/metrics.ts` `ingredientWeights`) | 상수 `INGREDIENT_REGULATORY_RULE` (**false**) | 위치가중 공식 그대로 — 규칙 도입 전 화면과 같은 값 |
+| Spark 성분 마트 (`ingredient_weekly_interest`) | 없음 — `product_ingredient.csv` 를 따른다 | 위치가중만 |
 
-대시보드의 주간 성분 관심도 마트(`build_marts_job`)는 `product_ingredient.csv` 를 읽으므로 인코더를 따라
-**끈 값** 입니다. 추천에 켤 때 함께 바뀝니다.
+**켤 때는 셋을 함께 켭니다.** ① 인코더를 `INGREDIENT_REGULATORY_RULE=1` 로 돌려 `product_ingredient.csv`
+를 다시 내보내고(마트는 이 파일을 읽으므로 다음 마트 빌드부터 따라온다) ② `metrics.ts` 상수를 `true`
+로 바꿔 대시보드를 다시 빌드하고 ③ 추천에도 쓰려면 아래 측정 절대로 LTR 재학습·재측정을 거칩니다.
+하나만 켜면 대시보드 성분 화면과 마트·추천의 숫자가 어긋납니다.
 
 **측정 (리뷰 재생 평가 `eval_review_replay.py`, 기존 LTR 모델 그대로 · 재학습 없음, 2026-09-29).**
 
