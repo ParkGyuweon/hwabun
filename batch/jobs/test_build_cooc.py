@@ -91,10 +91,15 @@ class TestRealHoldoutsExcluded(unittest.TestCase):
                                           f"{os.path.basename(fp)} 양쪽에 있다")
                 seen[a] = os.path.basename(fp)
 
-    def test_holdout_size_is_2000_each(self):
-        # 계약이 아니라 현재 체계(holdout-two-set-protocol) 의 값이다. 바뀌면 여기도 바꾼다
+    def test_holdout_size_matches_protocol(self):
+        # 계약이 아니라 현재 체계(holdout-two-set-protocol) 의 값이다. 바뀌면 여기도 바꾼다.
+        # a·b 2,000명(고르기·확인), c 6,400명(2026-09-30, 미사용 인원 전부 — 1%p 급을 보려고)
+        expected = {"personas_holdout_a.json": 2000, "personas_holdout_b.json": 2000,
+                    "personas_holdout_c.json": 6400}
         for fp in self.holdouts:
-            self.assertEqual(len(_authors(fp)), 2000, os.path.basename(fp))
+            name = os.path.basename(fp)
+            self.assertIn(name, expected, f"{name} 은 체계에 없는 홀드아웃이다")
+            self.assertEqual(len(_authors(fp)), expected[name], name)
 
 
 if __name__ == "__main__":

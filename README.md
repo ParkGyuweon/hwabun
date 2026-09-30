@@ -14,7 +14,7 @@
 | --- | --- |
 | 서비스 | 통합 쇼핑몰 BLOOM, 브랜드 대시보드(메뉴 8개 · 화면 13개), 플랫폼 운영 화면 |
 | 데이터 | 직접 설계한 행동 로그 43종 → Kafka → Spark 5단계(Q1~Q5) → 마트 25종 → DW 계약 테이블 24개 = 대시보드용 22(`cross_brand_daily` 발행 대기 포함) + 추천 서버용 `user_trait_daily` 1 + 계약만 있고 쓰지 않는 `category_price_reference` 1, 운영 기본 발행 22 |
-| AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 239트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
+| AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 382트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
 | 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 166개(2026-09-23 운영 배치 기준) |
 
 기준일 2026-09-28(발표 종료일). 아래 수치는 이 날짜에 레포(`origin/dev`)와 배포 서버에서 직접 확인한 값입니다.
@@ -155,7 +155,7 @@ LLM 을 쓰는 곳은 넷이고 경로가 다릅니다.
 | 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, 키 `session_id`. 운영은 EC2-2, 로컬은 `infra/kafka/` |
 | 분산 처리 | Spark Structured Streaming / Batch | 3.5.6 | `streaming/` Q1~Q5, 출력은 Parquet. 로컬은 `infra/spark/` |
 | | PyArrow · PyMySQL[rsa] | 19.0.1 · 1.1.1 | dw projection (`streaming/Dockerfile.dw`) |
-| 추천 · AI | Python · NumPy · scikit-learn · joblib | 3.13 · 2.2.6 · 1.7.0 · 1.5.3 | HistGradientBoosting 239트리·피처 20개, 학습 5,954명 231,005행 (`ltr_model_meta.json`). sklearn 은 pkl 을 만든 버전과 정확히 같아야 로드됩니다. |
+| 추천 · AI | Python · NumPy · scikit-learn · joblib | 3.13 · 2.2.6 · 1.7.0 · 1.5.3 | HistGradientBoosting 382트리·피처 20개, 학습 5,954명 231,005행 (`ltr_model_meta.json`). sklearn 은 pkl 을 만든 버전과 정확히 같아야 로드됩니다. |
 | | FastAPI · uvicorn · pydantic | 0.141.1 · 0.52.4 · 2.13.4 | 추천 추론 서버 `batch/serving/` 8300, 내부 전용 |
 | | confluent-kafka | 2.15.0 | 추천 서버의 `activity-events` 구독 |
 | | pymysql · cryptography | 1.1.1 · ≥42 | DW `user_trait_daily` 읽기. MySQL 8 의 `caching_sha2_password` 때문에 cryptography 가 필요합니다. |

@@ -197,7 +197,7 @@ def main():
     ap.add_argument("--no-ltr", dest="ltr", action="store_false", default=True,
                     help="학습 결합을 끄고 선형 결합으로 돈다 (옛 수치 재현용)")
     ap.add_argument("--split", choices=("train", "valid", "test", "all",
-                                        "holdout_a", "holdout_b"),
+                                        "holdout_a", "holdout_b", "holdout_c"),
                     default="valid")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--positive-event", choices=("add_to_cart", "purchase"), default="add_to_cart",

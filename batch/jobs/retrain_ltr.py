@@ -112,7 +112,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out-dir", default=os.environ.get("LTR_MODEL_DIR") or SERVING,
                     help="교체할 모델 폴더. 컨테이너는 /data/ltr (볼륨), 노트북은 serving/")
-    ap.add_argument("--split", default="holdout_a", choices=("holdout_a", "holdout_b", "valid"),
+    ap.add_argument("--split", default="holdout_a", choices=("holdout_a", "holdout_b", "holdout_c", "valid"),
                     help="고르는 집합. holdout_b 는 확인용이라 자동 교체 기준으로 쓰지 않는다")
     ap.add_argument("--tolerance", type=float, default=TOLERANCE_PP,
                     help="현행보다 이만큼(%%p)까지 낮아도 교체한다. 잡음 폭")

@@ -167,7 +167,7 @@ def main():
                          "행을 하나 더 낸다. 지금 카탈로그는 신규가 0개라 두 행이 같아야 한다")
     ap.add_argument("--split",
                     choices=("train", "valid", "test", "all",
-                             "holdout_a", "holdout_b"),
+                             "holdout_a", "holdout_b", "holdout_c"),
                     default="valid",
                     help="기본은 valid — 파라미터를 고르는 집합이다. "
                          "test 는 선택이 끝난 뒤 최종 보고에만 쓴다 (docs/ai/"
@@ -222,7 +222,7 @@ def main():
                                  f"eval_metadata_holdout_{tag}.jsonl")
         for f_ in (persona_path, meta_path):
             if not os.path.exists(f_):
-                seed = "43" if tag == "a" else "44"
+                seed = {"a": "43", "b": "44", "c": "45"}.get(tag, "45")
                 raise SystemExit(
                     os.path.relpath(f_, ROOT) + " 가 없습니다." + chr(10) +
                     "  python simulator/personas/build_personas.py "

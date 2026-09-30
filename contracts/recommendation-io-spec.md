@@ -1055,7 +1055,7 @@ GET /api/recommend?persona_id={id}&size=10
   "n_products": 3,
   "recommendation_id": "3f9c1e2a7b4d4c0e9a1b2c3d4e5f6071",
   "list_id": "main",
-  "algorithm": "ltr-239t-2026-09-16",
+  "algorithm": "ltr-382t-2026-09-30",
   "state_source": "events",
   "reserved_filled": 0,
   "weights": { "cosine": 0.60, "attr": 0.35, "prior": 0.05 },

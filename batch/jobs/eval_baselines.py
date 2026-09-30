@@ -156,7 +156,7 @@ def load_split(split):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="holdout_a",
-                    choices=("valid", "test", "holdout_a", "holdout_b"))
+                    choices=("valid", "test", "holdout_a", "holdout_b", "holdout_c"))
     ap.add_argument("--no-model", dest="model", action="store_false", default=True,
                     help="모델(LTR) 행을 빼고 기준선만 낸다")
     ap.add_argument("--limit", type=int, default=None)
