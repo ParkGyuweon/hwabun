@@ -28,7 +28,7 @@
 ## 3. 요청
 
 ```
-POST /api/headline?force=false&model=gpt-4.1-mini
+POST /api/headline?force=false
 ```
 
 ```json
@@ -62,7 +62,7 @@ POST /api/headline?force=false&model=gpt-4.1-mini
 | 같은 `id` 가 두 번 | `duplicate_section_id` |
 | 한 섹션의 `facts` 8개 초과 | `too_many_facts:<id>` |
 | `facts` 도 `comparisons` 도 비었음 | `empty_section:<id>` |
-| `force=true` | 저장본을 무시하고 다시 생성 |
+| `force=true` | 헤더 `X-Admin-Token` 이 서버 env `SERVING_ADMIN_TOKEN` 과 같을 때만 저장본을 무시하고 다시 생성. 아니면 무시. 모델은 요청으로 고르지 않는다 (env `HEADLINE_MODEL`, 공개 자리 과금 방어) |
 
 ## 4. 응답 (200)
 

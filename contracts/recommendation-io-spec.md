@@ -252,7 +252,7 @@ v_u⁻ = sum(w_k x decay(t_k) x v_i_k) / sum(w_k x decay(t_k))    얕게 본 미
 
 | 원천 (`log.ts`) | 내용 |
 |---|---|
-| `EVENT_WEIGHT` | 이벤트 33종의 가중치 (`add_to_cart` 4.0 ~ `rage_click` −2.0) |
+| `EVENT_WEIGHT` | 이벤트 43종의 가중치 (`purchase` 8.0 ~ `rage_click`·`remove_from_cart` −2.0) |
 | `SECTION_DWELL_WEIGHT` | 섹션 11종의 체류 가중치 (`ingredients`·`reviews` 1.5 ~ `list_controls` 0.3) |
 | `scrollDepthWeight()` | 도달률 → 가중치 (25% 0.2 / 50% 0.5 / 75% 1.0 / 100% 1.5) |
 | `EVENT_INTENT` | 이벤트 → intent 8종 (`session` `exposure` `interest` `comparison` `validation` `hesitation` `conversion` `friction`) |
@@ -1196,6 +1196,8 @@ Spark 정본을 우회하는 것이 아니라 Spark 가 맡지 않는 시간 단
 `session_events.jsonl` 에 append 하고, 기동 때 순서대로 다시 `observe` 한다 — 스냅샷이 아니라 **이벤트 로그 + 재생**이라
 UserVector 규칙이 바뀌어도 재생하면 새 규칙으로 상태가 만들어진다. 재시작 뒤 `state_source=events` 가 그대로 남는다.
 `/health.sessions` 에 재생 페르소나·이벤트 수·ms. 파일이 자라면 `POST /api/sessions/compact?keep_last=500` 으로 페르소나별 마지막 N건만 남긴다.
+
+**모델 리로드 (2026-09-29).** `POST /api/model/reload` — 재학습 산출물(`LTR_MODEL_DIR`, 배포는 `/data/ltr`; 비어 있으면 이미지 안 `serving/`)을 재시작 없이 다시 읽어 Recommender 를 새로 만든다. 세션 상태·등록 상품은 그대로. 모델을 못 찾으면 바꾸지 않는다(`changed=false`, 선형으로 떨어지지 않음). 응답 `{changed, reason, before, after, algorithm}`. `/health.ltr_model` 에 폴더·학습 시각·리로드 시각. 부르는 쪽은 `batch/jobs/retrain_ltr.py --reload-url`(EC2-1 `hwabun-ltr-retrain.timer` 주 1회). 내부망 전용.
 **워커 1개 전제는 그대로**다 — 프로세스가 여럿이면 서로의 append 를 못 본다. 확장은 Redis Streams 로 같은 모양(append → replay)으로 옮긴다.
 
 ### 배포 (Jira 219)

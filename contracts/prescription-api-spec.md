@@ -16,7 +16,7 @@
 ## 2. 요청
 
 ```
-POST /api/prescription?force=false&model=gpt-4.1-mini
+POST /api/prescription?force=false
 ```
 
 본문은 규격 §3 그대로 (`brand · target · page_context · cross_screen_signals`). 비율·배수는 **`_text` 문자열**(`view_rate_text: "34.0%"`, `cart_lift_text: "2.1배"`), `dwell_sec` 은 초.
@@ -30,7 +30,7 @@ v0.1 수치 필드(`view_rate · cart_lift · avg_dwell_ms`)도 받아 `_text` �
 | 표본 200 이상 신호가 2개 미만 / 6개 초과 | `signals_lt_2` / `signals_gt_6` |
 | `from` 이 여섯 화면 밖 | `signal_from_unknown` |
 | `insert_after` 가 순서 표에 없음 | `insert_after_not_in_blocks` |
-| `force=true` | 저장본을 무시하고 다시 생성 |
+| `force=true` | 헤더 `X-Admin-Token` 이 서버 env `SERVING_ADMIN_TOKEN` 과 같을 때만 저장본을 무시하고 다시 생성. 아니면 무시. 모델은 요청으로 고르지 않는다 (env `PRESCRIPTION_MODEL`, 공개 자리 과금 방어) |
 
 `from` 허용 화면 여섯: `무엇을 보고 사나 · 누가 사나 · 고객이 찾는 성분 · 상품마다 어디서 멈추나 · 고객이 고쳐 달라는 것 · 막히는 곳`.
 

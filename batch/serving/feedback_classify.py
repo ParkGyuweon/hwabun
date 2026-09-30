@@ -17,6 +17,7 @@
 금지어 대조에는 LLM 을 쓰지 않는다. 사전 대조라 분류가 실패해도 결과가 나온다.
 """
 import os
+import re
 import sys
 
 BD = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +45,27 @@ def load():
         _by_id = {ax["id"]: ax["label"] for ax in _vocab["axes"]}
         _banned = BannedTerms()
     return _vocab, _axes, _by_id, _banned
+
+
+# ── 개인정보 가리기 ─────────────────────────────────────────────────────────
+# 고객이 주관식 칸에 전화번호·메일·카드/계좌 번호를 적는 일이 있다. 외부 LLM 에는 가린 문장만 보낸다.
+# **저장본(body)은 바꾸지 않는다** — 이 함수의 결과는 프롬프트에만 들어간다. 금지어 대조도 원문으로 한다.
+# 순서가 중요하다: +82 전화 → 12자리 이상 숫자 → 국내 전화. 카드 번호 안의 "010-…" 조각을 전화로 먼저 잡지 않게.
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+_PHONE_INTL = re.compile(r"\+?82[\s.-]?\(?0?\)?1[016789][\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)")
+_LONG_DIGITS = re.compile(r"(?<!\d)\d(?:[ -]?\d){11,}(?!\d)")
+_PHONE_KR = re.compile(r"(?<!\d)(?:01[016789][\s.-]?\d{3,4}[\s.-]?\d{4}|0\d{1,2}-\d{3,4}-\d{4})(?!\d)")
+
+
+def redact_pii(text: str) -> str:
+    """전화번호 → [전화번호], 메일 → [이메일], 12자리 이상 숫자(카드·계좌) → [번호]."""
+    if not text:
+        return text
+    t = _EMAIL.sub("[이메일]", text)
+    t = _PHONE_INTL.sub("[전화번호]", t)
+    t = _LONG_DIGITS.sub("[번호]", t)
+    t = _PHONE_KR.sub("[전화번호]", t)
+    return t
 
 
 def axis_label(axis_id: str):
@@ -86,7 +108,7 @@ def classify_one(clf: Classifier, item: dict, product_name: str = "") -> dict:
         return {**out, "status": "FAILED", "labels": [], "primary_category_id": None,
                 "off_axis_hint": None, "error": "empty body"}
     try:
-        got = clf.classify_in_axis(body, label, product=product_name)
+        got = clf.classify_in_axis(redact_pii(body), label, product=product_name)   # LLM 에는 가린 문장만
     except Exception as exc:                      # noqa: BLE001  한 건의 실패가 배치를 세우면 안 된다
         return {**out, "status": "FAILED", "labels": [], "primary_category_id": None,
                 "off_axis_hint": None, "error": f"{type(exc).__name__}: {exc}"}

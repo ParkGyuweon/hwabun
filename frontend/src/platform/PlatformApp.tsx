@@ -77,7 +77,7 @@ export default function PlatformApp() {
           <p>
             참여 브랜드 {totals.tenants}개 · 상품 {totals.products}개
             <br />
-            브랜드별 행동 지표는 수집 API 연결 전까지 모의 집계입니다.
+            브랜드 수·상품 수 외의 숫자는 "예시 값" 입니다.
           </p>
         </div>
       </aside>
@@ -105,7 +105,9 @@ function OverviewScreen({ onPick }: { onPick: (id: string) => void }) {
   return (
     <div className="stack">
       <section className="verdict">
-        <p className="verdict__eyebrow">지금 인프라는</p>
+        <p className="verdict__eyebrow">
+          지금 인프라는 <SourceBadge kind="mock" />
+        </p>
         <h2 className="verdict__headline">
           브랜드 {totals.tenants}개 중 {totals.live}개가 1분 안에 이벤트를 보내고 있습니다
         </h2>
@@ -115,7 +117,7 @@ function OverviewScreen({ onPick }: { onPick: (id: string) => void }) {
         </p>
         <p className="verdict__action">
           {totals.watch > 0
-            ? `주의 ${totals.watch}개 브랜드는 이탈률이 벤치마크 밖입니다. 해당 브랜드 담당자에게 알림이 나갑니다.`
+            ? `주의 ${totals.watch}개 브랜드는 이탈률이나 상세 진입률이 벤치마크 밖입니다. 참여 브랜드 화면에서 확인하세요.`
             : '벤치마크 밖으로 벗어난 브랜드가 없습니다.'}
         </p>
         <p className="verdict__sample">표본 브랜드 {totals.tenants}개 · 상품 {totals.products}개</p>
@@ -129,20 +131,8 @@ function OverviewScreen({ onPick }: { onPick: (id: string) => void }) {
       </div>
 
       <div className="grid grid--2">
-        <Panel title="파이프라인 상태" source="mock" aside="Collector → Kafka → Spark → Mart">
-          <ul className="pipe">
-            {pipeline.map((p) => (
-              <li key={p.stage} className={`pipe__row pipe__row--${p.state}`}>
-                <span className="pipe__dot" aria-hidden="true" />
-                <span className="pipe__stage">{p.stage}</span>
-                <span className="pipe__detail">{p.detail}</span>
-                <span className="pipe__metric">{p.metric}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="note">
-            Collector·Kafka 는 구현 완료. Spark 작업 5개는 작성됐고 연결 검증 중, Mart 는 스키마 확정 후 적재 전이다.
-          </p>
+        <Panel title="파이프라인 상태" source="mock" aside="수집 → 대기열 → 분산 처리 → 집계">
+          <PipelineList />
         </Panel>
 
         <Panel title="살펴볼 브랜드" source="mock" aside={`${attention.length}개`}>
@@ -242,7 +232,20 @@ function TenantsScreen({
                   className={selected === t.id ? 'is-selected' : ''}
                   onClick={() => onSelect(selected === t.id ? null : t.id)}
                 >
-                  <td>{t.name}</td>
+                  <td>
+                    {/* 키보드로도 고를 수 있게 이름 칸을 버튼으로 둔다. 클릭은 tr 이 받으므로 여기서는 전파를 막는다 */}
+                    <button
+                      type="button"
+                      className="row-pick"
+                      aria-pressed={selected === t.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelect(selected === t.id ? null : t.id);
+                      }}
+                    >
+                      {t.name}
+                    </button>
+                  </td>
                   <td>
                     <StatusPill status={t.status} />
                   </td>
@@ -267,8 +270,7 @@ function TenantsScreen({
           </table>
         </div>
         <p className="note">
-          비율 옆 ▲▼ 는 참여 브랜드 중앙값 대비다. 브랜드 하나만 보면 이 열이 있을 수 없다 — 비교 대상이 없기 때문이다.
-          행을 누르면 벤치마크 화면에서 그 브랜드 위치를 표시한다.
+          비율 옆 ▲▼ 는 참여 브랜드 중앙값과의 차이입니다. 브랜드 이름을 누르면 벤치마크 화면에서 그 브랜드 위치가 표시됩니다.
         </p>
       </Panel>
     </div>
@@ -283,7 +285,9 @@ function BenchmarkScreen({ selected }: { selected: string | null }) {
   return (
     <div className="stack">
       <section className="verdict">
-        <p className="verdict__eyebrow">왜 모여야 하는가</p>
+        <p className="verdict__eyebrow">
+          왜 모여야 하는가 <SourceBadge kind="mock" />
+        </p>
         <h2 className="verdict__headline">각자의 데이터는 혼자 쓸 땐 노이즈, 합치면 신호입니다</h2>
         <p className="verdict__reason">
           브랜드 하나의 방문자 수백 명으로는 "건성 고객이 성분을 보고 사는가" 에 답할 수 없습니다.
@@ -334,24 +338,24 @@ function BenchmarkScreen({ selected }: { selected: string | null }) {
         />
       </div>
 
-      <Panel title="한 브랜드로는 답할 수 없는 질문 세 가지" aside="발표의 논리 뼈대">
+      <Panel title="한 브랜드로는 답할 수 없는 질문 세 가지">
         <ol className="qlist">
           <li>
             <strong>"건성 고객은 성분을 보고 사나, 리뷰를 보고 사나?"</strong>
-            <span>한 브랜드 방문자 300명으로는 표본이 안 된다. 모이면 고객군 × 콘텐츠 교차가 성립한다.</span>
+            <span>한 브랜드 방문자 수백 명으로는 표본이 부족합니다. 모이면 고객군과 콘텐츠를 교차해 볼 수 있습니다.</span>
           </li>
           <li>
             <strong>"내 상세페이지 이탈률이 높은 편인가?"</strong>
-            <span>비교 대상이 없으면 높은지 낮은지 말할 수 없다. 위 분포의 중앙값이 그 기준선이다.</span>
+            <span>비교 대상이 없으면 높은지 낮은지 말할 수 없습니다. 위 분포의 중앙값이 그 기준선입니다.</span>
           </li>
           <li>
             <strong>"나이아신아마이드 설명이 부족한 게 내 문제인가, 업계 공통인가?"</strong>
-            <span>긁어간 성분(<code>matched_ingredients</code>)을 브랜드 전체로 합치면 공통인지 개별인지 갈린다.</span>
+            <span>고객이 드래그해 본 성분을 브랜드 전체로 합치면 공통 문제인지 개별 문제인지 갈립니다.</span>
           </li>
         </ol>
         <p className="note">
-          이 구조는 리테일 미디어 모델과 같다 — 유통이 브랜드에 파는 것은 광고 지면이 아니라 **합쳐진 행동 데이터**다.
-          우리는 그것을 소규모 브랜드용으로 만든다. 50개분 트래픽을 실시간으로 합쳐 처리해야 하니 분산처리가 필요하다.
+          유통 플랫폼이 브랜드에 파는 것은 광고 지면이 아니라 <strong>합쳐진 행동 데이터</strong>입니다.
+          HWABUN 은 그것을 소규모 브랜드용으로 만듭니다. 여러 브랜드의 트래픽을 실시간으로 합쳐 처리하기 위해 분산 처리를 씁니다.
         </p>
       </Panel>
     </div>
@@ -419,37 +423,26 @@ function InfraScreen() {
   return (
     <div className="stack">
       <div className="grid grid--kpi">
-        <Kpi label="현재 TPS" value={fmt.int(series[new Date().getHours()]?.value ?? 0)} sub="이벤트/초 · 브랜드 전체" source="mock" />
-        <Kpi label="오늘 최고 TPS" value={fmt.int(peak.value)} sub={peak.label} source="mock" />
-        <Kpi label="격리된 이벤트" value={fmt.int(badTotal)} sub="계약 위반 · bad_events" source="mock" />
-        <Kpi label="Kafka lag" value="0" sub="activity-events 6 파티션" source="mock" />
+        <Kpi label="현재 초당 처리량 (TPS)" value={fmt.int(series[new Date().getHours()]?.value ?? 0)} sub="초당 이벤트 · 브랜드 전체" source="mock" />
+        <Kpi label="오늘 최고 초당 처리량 (TPS)" value={fmt.int(peak.value)} sub={peak.label} source="mock" />
+        <Kpi label="걸러낸 이벤트 (bad_events)" value={fmt.int(badTotal)} sub="형식 검사 불통과" source="mock" />
+        <Kpi label="수집 대기열 지연 (Kafka lag)" value="0" sub="파티션 6개" source="mock" />
       </div>
 
-      <Panel title="시간대별 처리량" source="mock" aside="최근 24시간 · 이벤트/초">
+      <Panel title="시간대별 처리량" source="mock" aside="최근 24시간 · 초당 이벤트">
         <LineChart points={series} height={180} />
-        <p className="note">
-          10,000명 동시 접속 시 17,000 TPS 가 설계 목표다 (log-transport-contract). 지금 표시는 오늘 참여 브랜드 합계를 시간 분포로 나눈 값이다.
-        </p>
+        <p className="note">오늘 참여 브랜드 이벤트 합계를 시간대 분포로 나눈 값입니다.</p>
       </Panel>
 
       <div className="grid grid--2">
         <Panel title="단계별 상태" source="mock">
-          <ul className="pipe">
-            {pipeline.map((p) => (
-              <li key={p.stage} className={`pipe__row pipe__row--${p.state}`}>
-                <span className="pipe__dot" aria-hidden="true" />
-                <span className="pipe__stage">{p.stage}</span>
-                <span className="pipe__detail">{p.detail}</span>
-                <span className="pipe__metric">{p.metric}</span>
-              </li>
-            ))}
-          </ul>
+          <PipelineList />
         </Panel>
 
-        <Panel title="격리 사유" source="mock" aside="contracts/validate_events.py 기준">
+        <Panel title="걸러낸 사유" source="mock">
           <BarList items={badEvents.map((b) => ({ label: b.reason, value: b.count }))} />
           <p className="note">
-            봉투 검증은 Collector 가, 필수 property 검증은 Spark cleaned_events 단계가 맡는다. 둘 다 통과한 것만 Mart 로 간다.
+            기본 필드는 수집 서버가, 필수 항목은 분산 처리의 정제 단계가 검사합니다. 둘 다 통과한 이벤트만 집계 테이블로 갑니다.
           </p>
         </Panel>
       </div>
@@ -458,6 +451,22 @@ function InfraScreen() {
 }
 
 /* ---------- 조각 ---------- */
+
+/** 파이프라인 단계 목록 (예시 값). 개요·인프라 두 화면이 같이 쓴다 */
+function PipelineList() {
+  return (
+    <ul className="pipe">
+      {pipeline.map((p) => (
+        <li key={p.stage} className={`pipe__row pipe__row--${p.state}`}>
+          <span className="pipe__dot" aria-hidden="true" />
+          <span className="pipe__stage">{p.stage}</span>
+          <span className="pipe__detail">{p.detail}</span>
+          <span className="pipe__metric">{p.metric}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function StatusPill({ status }: { status: TenantStatus }) {
   return <span className={`pill pill--${status}`}>{STATUS_LABEL[status]}</span>;

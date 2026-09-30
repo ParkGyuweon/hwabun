@@ -81,6 +81,7 @@ reserved 칸은 카탈로그에 신규 상품(지지자 <3 또는 어휘집 밖 
 """
 import glob
 import datetime
+import hmac
 import json
 import os
 import sys
@@ -89,7 +90,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
 
 BD = os.path.dirname(os.path.abspath(__file__))
@@ -196,9 +197,8 @@ class Engine:
         self.planner = BannerPlanner(self.enc, self.products, self.index)   # §5-1 hero·banners (Jira 218)
         # 클릭·상세 진입 이벤트가 그대로 싣는 값 (event-properties recommendation_click.algorithm).
         # 모델이 바뀌면 문자열이 바뀌어야 하므로 학습 시각과 트리 수를 넣는다
-        m = self.ltr_meta or {}
-        self.algorithm = (f"ltr-{m.get('n_trees', '?')}t-{str(m.get('trained_at', ''))[:10]}"
-                          if ltr else "linear-cbf-cf")
+        self.algorithm = self._algorithm_name()
+        self.ltr_reloaded_at = None
         self.personas = {}
         for fn in sorted(glob.glob(os.path.join(PDIR, "personas_*.json"))):
             with open(fn, encoding="utf-8") as f:
@@ -216,6 +216,37 @@ class Engine:
         n_p, n_e, ms = self.session_log.replay(lambda pid, evs: self.observe(pid, evs, persist=False, source="replay"))
         self.session_replayed = {"personas": n_p, "events": n_e, "ms": ms, "path": self.session_log.path}
         self.load_ms = (time.perf_counter() - t0) * 1000
+
+    def _algorithm_name(self):
+        m = self.ltr_meta or {}
+        return (f"ltr-{m.get('n_trees', '?')}t-{str(m.get('trained_at', ''))[:10]}"
+                if self.ltr else "linear-cbf-cf")
+
+    def ltr_model_health(self):
+        """/health.ltr_model — 어느 폴더의 모델을 쓰는지, 언제 학습·리로드됐는지 (재학습 경로)"""
+        m = self.ltr_meta or {}
+        return {"scorer": self.scorer, "n_trees": m.get("n_trees"), "trained_at": m.get("trained_at"),
+                "dir": m.get("_dir"), "model_dir_env": os.environ.get("LTR_MODEL_DIR") or None,
+                "reloaded_at": self.ltr_reloaded_at, "algorithm": self.algorithm}
+
+    def reload_ltr(self):
+        """재학습 산출물을 재시작 없이 집는다 (`POST /api/model/reload`). `load_ltr()` 가 보는 순서
+        (LTR_MODEL_DIR → 이미지 serving/) 그대로 다시 읽고 Recommender 를 새로 만든다. 세션 상태·등록
+        상품은 그대로다. 진행 중인 요청은 옛 Recommender 객체를 끝까지 쓰고, 다음 요청부터 새것을 쓴다.
+        모델을 못 찾으면 바꾸지 않고 그대로 둔다 — 리로드 한 번으로 선형으로 떨어지면 안 된다."""
+        before = self.ltr_model_health()
+        ltr = load_ltr()
+        if ltr is None:
+            return {"changed": False, "reason": "model_not_found", "before": before, "after": before}
+        self.ltr, self.ltr_meta = ltr, ltr[1]
+        self._assemble()
+        self.scorer = "ltr"
+        self.algorithm = self._algorithm_name()
+        self.ltr_reloaded_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+        after = self.ltr_model_health()
+        return {"changed": (before.get("trained_at"), before.get("n_trees"), before.get("dir"))
+                           != (after.get("trained_at"), after.get("n_trees"), after.get("dir")),
+                "reason": "reloaded", "before": before, "after": after, "algorithm": self.algorithm}
 
     def _assemble(self):
         """배열들로 Recommender·LtrFeatures 를 (다시) 만든다. 상품이 늘 때마다 부른다 —
@@ -783,6 +814,7 @@ def health():
         "feedback_classify": _fc_health(),                        # 처방 LLM 스위치·호출 수 (Jira 325)
             "personas": len(e.personas), "cf": e.cooc is not None,
             "ltr_trees": (e.ltr_meta or {}).get("n_trees"),
+            "ltr_model": e.ltr_model_health(),                      # 재학습 경로 — 모델 폴더·학습 시각·리로드 시각
             "lambda_mmr": LAMBDA_MMR, "load_ms": round(e.load_ms)}
 
 
@@ -913,14 +945,29 @@ def _rx_deps():
     return _rx_store, _rx_client
 
 
+def _force_allowed(force: bool, admin_token: Optional[str]) -> bool:
+    """공개 엔드포인트의 force(저장본 무시 재생성)는 운영 토큰이 맞을 때만 따른다.
+
+    nginx 가 /api/prescription · /api/headline 을 인증 없이 열어 두므로, 아무나 force=true 로
+    저장본을 건너뛰면 매 요청이 과금 호출이 된다. 대시보드 화면은 force 를 보내지 않는다.
+    env SERVING_ADMIN_TOKEN 이 비어 있으면 force 는 늘 무시된다."""
+    if not force:
+        return False
+    want = os.environ.get("SERVING_ADMIN_TOKEN") or ""
+    return bool(want) and hmac.compare_digest(want.encode("utf-8"), (admin_token or "").encode("utf-8"))
+
+
 @app.post("/api/prescription")
 def prescribe(body: rx.PrescriptionInput,
-              force: bool = Query(False, description="저장본이 있어도 다시 생성"),
-              model: str = Query(rx.MODEL)):
+              force: bool = Query(False, description="저장본이 있어도 다시 생성 (X-Admin-Token 이 맞을 때만)"),
+              x_admin_token: Optional[str] = Header(None)):
     """브랜드 대시보드 할 일 처방 문장 (docs/dashboard/action-prescription-prompt.md v0.3, Jira 225).
     판정(verb)과 옮길 위치(insert_after)는 프론트가 정해서 보낸다. 여기서는 문장만 만들고 §7 자동 거부 11개를 건다 —
     거부되면 prescription=null, rejected_by 에 코드. 실증 필요 표현은 needs_evidence 꼬리표.
     봉투는 프론트 PrescriptionEnvelope (input_hash 포함). 같은 입력은 저장본을 준다 (cached=true)."""
+    # 모델은 요청에서 받지 않는다 — 비싼 모델을 골라 부르는 과금 공격을 막는다 (env PRESCRIPTION_MODEL 로만 바꾼다)
+    model = rx.MODEL
+    force = _force_allowed(force, x_admin_token)
     store, client = _rx_deps()
     problems = rx.input_problems(body)
     if problems:                       # LLM 을 부르기 전에 끝나는 경우 — 키가 없어도 답한다
@@ -935,7 +982,10 @@ def prescribe(body: rx.PrescriptionInput,
     if client is None:
         raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": "GMS_KEY 가 없어 처방 문장을 만들 수 없습니다"})
     _rx_stats["llm_calls"] += 1
-    return rx.prescribe(body, client, store, force=force, model=model)
+    try:
+        return rx.prescribe(body, client, store, force=force, model=model)
+    except Exception as exc:           # noqa: BLE001  시간 초과·GMS 장애 — 프론트는 503 을 규칙표 문장으로 받는다
+        raise HTTPException(503, {"code": "LLM_UNAVAILABLE", "message": f"처방 LLM 호출 실패: {type(exc).__name__}"})
 
 
 # ── 화면·섹션별 한 마디 (Jira 365) ─────────────────────────────────────────
@@ -953,14 +1003,16 @@ def _hl_deps():
 
 @app.post("/api/headline")
 def headline_lines(body: hl.HeadlineInput,
-                   force: bool = Query(False, description="저장본이 있어도 다시 생성"),
-                   model: str = Query(hl.MODEL)):
+                   force: bool = Query(False, description="저장본이 있어도 다시 생성 (X-Admin-Token 이 맞을 때만)"),
+                   x_admin_token: Optional[str] = Header(None)):
     """대시보드 화면 하나의 한 마디 (contracts/headline-api-spec.md, Jira 365).
 
     숫자는 프론트가 화면에 그린 문자열 그대로 보낸다 — 서버는 계산하지 않는다.
     비교·변화 판단은 `comparisons` 에 넣어 보낸 문장 안에서만 쓸 수 있다.
     **503 을 내지 않는다.** 키가 없거나 문장이 거부되면 규칙 문장(origin="rule")으로 답한다 —
     설명 한 줄 때문에 화면이 비면 표만 남아 읽을 사람이 더 막힌다."""
+    model = hl.MODEL                               # 요청에서 받지 않는다 (env HEADLINE_MODEL 로만)
+    force = _force_allowed(force, x_admin_token)
     store, client = _hl_deps()
     key = hl.store_key(body, model)
     if not force and store.get(key):
@@ -969,7 +1021,10 @@ def headline_lines(body: hl.HeadlineInput,
     use = client if _rx_enabled else None          # 처방 스위치를 같이 따른다
     if use is not None:
         _hl_stats["llm_calls"] += 1
-    env = hl.headline(body, use, store, force=force, model=model)
+    try:
+        env = hl.headline(body, use, store, force=force, model=model)
+    except Exception:                  # noqa: BLE001  시간 초과·GMS 장애 — 503 대신 규칙 문장 (저장하지 않는다)
+        env = hl.headline(body, None, None, model=model)
     if env.get("origin") == "rule":
         _hl_stats["rule_fallbacks"] += 1
     return env
@@ -994,6 +1049,13 @@ def _rx_health() -> dict:
 @app.get("/api/prescription/llm")
 def prescription_llm_state():
     return _rx_health()
+
+
+@app.post("/api/model/reload")
+def model_reload():
+    """재학습한 LTR 모델을 재시작 없이 집는다 (`batch/jobs/retrain_ltr.py --reload-url` 가 부른다).
+    내부망 전용 — nginx 가 밖에 열지 않는다. 모델을 못 찾으면 바꾸지 않는다 (changed=false)"""
+    return get_engine().reload_ltr()
 
 
 @app.post("/api/prescription/llm")

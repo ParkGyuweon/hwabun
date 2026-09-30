@@ -16,6 +16,18 @@ import { track } from '../../lib/logger';
 
 type Mode = 'login' | 'register';
 
+/** 가입 동의 항목. 필수 둘이 켜져야 가입 버튼이 눌린다 */
+type ConsentKey = 'terms' | 'privacy' | 'skinInfo' | 'behaviorLink';
+
+const CONSENTS: { key: ConsentKey; required: boolean; label: string; view?: string; hint?: string }[] = [
+  { key: 'terms', required: true, label: '이용약관 동의', view: '?terms=1' },
+  { key: 'privacy', required: true, label: '개인정보 수집·이용 동의', view: '?privacy=1' },
+  { key: 'skinInfo', required: false, label: '피부 정보 수집·이용 동의 (맞춤 추천용)', view: '?privacy=1' },
+  { key: 'behaviorLink', required: false, label: '둘러본 기록을 내 계정과 연결해 추천에 쓰기', view: '?privacy=1', hint: '끄면 찜·장바구니·구매가 추천에 반영되지 않아 맞춤 추천이 약해져요.' },
+];
+
+const NO_CONSENT: Record<ConsentKey, boolean> = { terms: false, privacy: false, skinInfo: false, behaviorLink: false };
+
 /* 눈 아이콘. 아이콘 라이브러리를 넣지 않으려고 인라인 SVG 로 둔다 */
 function EyeIcon() {
   return (
@@ -78,10 +90,20 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
    * 옮길 때도 그대로 들어간다. 전부 "선택 안 함"(null) 가능 — 억지로 채우게 하지 않는다 (AI 요청 §1.2).
    */
   const [profile, setProfile] = useState<MemberProfile>(EMPTY_PROFILE);
+  /** 고객 가입 동의. 피부 정보 동의가 꺼져 있으면 피부 입력을 숨기고 값도 보내지 않는다 */
+  const [consent, setConsent] = useState<Record<ConsentKey, boolean>>(NO_CONSENT);
+  const needsConsent = mode === 'register' && role === 'MEMBER';
+  const allConsented = CONSENTS.every((c) => consent[c.key]);
+  const requiredConsented = consent.terms && consent.privacy;
 
   const nameLabel = role === 'MEMBER' ? '닉네임' : '담당자 이름';
   const valid =
-    /\S+@\S+\.\S+/.test(email.trim()) && password.length >= 8 && (mode === 'login' || name.trim().length > 0);
+    /\S+@\S+\.\S+/.test(email.trim()) &&
+    password.length >= 8 &&
+    (mode === 'login' || name.trim().length > 0) &&
+    (!needsConsent || requiredConsented);
+  /** 동의하지 않았으면 서버에도 이 브라우저에도 피부 정보를 남기지 않는다 */
+  const sentProfile = consent.skinInfo ? profile : EMPTY_PROFILE;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -92,9 +114,23 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
       const session =
         mode === 'login' || role === 'ADMIN'
           ? await login(role, email, password)
-          : await register(role, email, password, name, role === 'MEMBER' ? profileToApi(profile) : {});
+          : await register(
+              role,
+              email,
+              password,
+              name,
+              role === 'MEMBER'
+                ? {
+                    ...(consent.skinInfo ? profileToApi(profile) : {}),
+                    agreeTerms: consent.terms,
+                    agreePrivacy: consent.privacy,
+                    agreeSkinInfo: consent.skinInfo,
+                    agreeBehaviorLink: consent.behaviorLink,
+                  }
+                : {},
+            );
       // 백엔드 프로필 API 가 열리기 전까지 이 브라우저가 프로필을 든다. 리뷰 필터·"내 피부 타입" 칩이 바로 켜진다
-      if (mode === 'register' && role === 'MEMBER') saveMemberProfile(session.id, profile);
+      if (mode === 'register' && role === 'MEMBER') saveMemberProfile(session.id, sentProfile);
       /**
        * `login` 이벤트 (계약 event-properties-schema.md :78 · intent session · properties 없음). "익명 → 계정 전환 시점" 이라
        * 가입 직후도 같은 시점이다. 고객(MEMBER)만 — 판매자·운영자는 로거가 어차피 막는다. 수집기가 JWT 로 account_id 를
@@ -205,7 +241,54 @@ export default function AuthForm({ role, onSuccess, initialMode = 'login', title
         </label>
       ) : null}
 
-      {mode === 'register' && role === 'MEMBER' ? (
+      {needsConsent ? (
+        <fieldset className="auth__consent">
+          <legend className="auth__sr">약관 동의</legend>
+          <label className="auth__consent-all">
+            <input
+              type="checkbox"
+              checked={allConsented}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setConsent({ terms: on, privacy: on, skinInfo: on, behaviorLink: on });
+              }}
+            />
+            <span>전체 동의</span>
+          </label>
+          <ul className="auth__consent-list">
+            {CONSENTS.map((c) => (
+              <li key={c.key} className="auth__consent-item">
+                <label>
+                  <input
+                    type="checkbox"
+                    name={`agree-${c.key}`}
+                    checked={consent[c.key]}
+                    onChange={(e) => setConsent((prev) => ({ ...prev, [c.key]: e.target.checked }))}
+                  />
+                  <span>
+                    <em className={c.required ? 'auth__consent-tag is-required' : 'auth__consent-tag'}>
+                      {c.required ? '필수' : '선택'}
+                    </em>
+                    {c.label}
+                    {c.hint ? <small className="auth__consent-hint">{c.hint}</small> : null}
+                  </span>
+                </label>
+                {c.view ? (
+                  // 새 탭으로 연다 — 같은 탭에서 열면 쓰던 가입 양식이 사라진다
+                  <a className="auth__consent-view" href={c.view} target="_blank" rel="noopener noreferrer">
+                    보기
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {!requiredConsented ? (
+            <p className="auth__consent-note">필수 항목에 동의하시면 가입할 수 있어요.</p>
+          ) : null}
+        </fieldset>
+      ) : null}
+
+      {needsConsent && consent.skinInfo ? (
         <fieldset className="auth__profile">
           <legend>
             피부 정보 <span className="auth__optional">선택</span>
