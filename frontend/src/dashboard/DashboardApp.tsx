@@ -411,12 +411,12 @@ function ScopeNote({ scope, brandName, period }: { scope: ScopeKind; brandName: 
   // 대시보드가 적는 브랜드는 언제나 로그인한 브랜드다. 못 받았으면 남의 이름을 적느니 비워 둔다 (피드백 스코프도 2026-09-18 부터)
   const brand = brandName ?? (label.brand || '브랜드 확인 중');
   const source = live ? '내 쇼핑몰 실제 기록' : label.source;
+  // 출처("내 쇼핑몰 실제 기록" 등)는 화면에 적지 않는다 — 발표 화면에서 거슬린다 (2026-10-01 유림님). 마우스를 올리면 title 로 보인다
   return (
     <p className="main__scope" title={source}>
       <span className="main__scope-what">{label.what}</span>
       <strong>{brand}</strong>
       {period ? <span className="main__scope-period">{period}</span> : null}
-      <span className="main__scope-src">{source}</span>
     </p>
   );
 }
