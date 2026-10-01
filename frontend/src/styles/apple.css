@@ -836,7 +836,7 @@ body {
   color: var(--color-star);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .list__promo-head h2 {
     font-size: 30px;
   }

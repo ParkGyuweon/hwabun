@@ -254,7 +254,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 640px) {
   .cart__layout {
     grid-template-columns: 1fr;
   }

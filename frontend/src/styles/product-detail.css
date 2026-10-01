@@ -1128,7 +1128,12 @@
 
 /* ---------- 반응형 ---------- */
 
-@media (max-width: 960px) {
+/*
+ * 한 열(모바일)로 접는 기준은 **휴대폰 폭(640px 이하)** 뿐이다 (2026-10-01 유림님). 전에는 960px 이하에서 접혀서, 시연 때 쇼핑몰과
+ * 대시보드를 화면 반반으로 띄우면(≈900px) PC 로 충분히 보이는 폭인데도 모바일 모양이 됐다. 좀 작더라도 PC 배치를 유지한다.
+ * 같은 기준이 product-list.css · cart.css · apple.css · storefront.css 에도 있다 — 같이 바꾼다.
+ */
+@media (max-width: 640px) {
   .pdp {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-5);

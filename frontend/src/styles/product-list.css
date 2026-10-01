@@ -437,7 +437,7 @@
   text-decoration: underline;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .list__grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
@@ -711,7 +711,7 @@
   color: #a63d5c;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .qlook__dialog {
     grid-template-columns: 1fr;
     padding: var(--space-5);
@@ -893,7 +893,7 @@
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 640px) {
   .hero-banner__link {
     grid-template-columns: 1fr;
   }
