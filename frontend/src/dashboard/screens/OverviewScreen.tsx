@@ -4,7 +4,7 @@ import { loadBrandId } from '../../lib/brands';
 import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
 import { rangeOf } from '../lib/martApi';
 import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
-import { fmt } from '../lib/metrics';
+import { fmt, periodLabel } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
@@ -212,23 +212,11 @@ export default function OverviewScreen({
   const shownSales = sales !== undefined ? sales : (periodSales?.value ?? null);
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
 
-  /**
-   * **하루 숫자** 한 줄 (2026-10-01 유림님). AI 한 마디 바로 아래에 숫자 넷을 그대로 둔다.
-   * 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것 — 늘 오늘이다.
-   * 방문·담기는 마트의 날짜별 줄인데, 마트는 하루 한 번 새벽 3시(KST)에만 만들어져 낮에는 오늘 줄이 없다.
-   * 전에는 그때 "집계 전" 을 적었는데 발표 리뷰에서 "데이터가 제대로 안 모인 것처럼 보인다" 는 지적을 받았다.
-   * 이제 **집계가 끝난 가장 최근 날**을 그 날짜와 함께 보여 준다 — 오늘 줄이 있으면 "오늘", 어제면 "어제", 그보다 앞이면 "09/29".
+  /*
+   * 맨 위 "오늘" 숫자 넷(오늘 방문·담기·주문·매출)은 뺐다 (2026-10-01 유림님: 정신없다). 대신 기간 필터에 "오늘" 이 있어
+   * 그걸 고르면 아래 주문·매출·행동 숫자가 모두 오늘 것으로 바뀐다. 주문·매출은 실시간, 행동 기록은 새벽에 하루치가 들어온다.
    */
   const waiting = useMartWaiting();
-  const dayLabels = useMemo(() => {
-    const p = (n: number) => String(n).padStart(2, '0');
-    const md = (d: Date) => `${p(d.getMonth() + 1)}/${p(d.getDate())}`;
-    const now = new Date();
-    const y = new Date(now.getTime() - 86_400_000);
-    return { today: md(now), yesterday: md(y) };
-  }, []);
-  const latestPoint = series.length > 0 ? series[series.length - 1] : null;
-  const latestWord = !latestPoint ? null : latestPoint.label === dayLabels.today ? '오늘' : latestPoint.label === dayLabels.yesterday ? '어제' : latestPoint.label;
 
   /**
    * AI 한 마디 (contracts/headline-api-spec.md) — 2026-10-01 오후에 되살렸다 (팀 의견: AI 가 요약해 주는 자리가 있는 게 낫다).
@@ -314,39 +302,11 @@ export default function OverviewScreen({
           <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
         </section>
       )}
-      {/* 하루 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
-      <p className="kpi-period">{latestWord === null || latestWord === '오늘' ? '오늘' : '최근 하루'}</p>
-      <div className="grid grid--kpi">
-        <Kpi
-          label={`${latestWord ?? '오늘'} 방문`}
-          value={waiting ? '…' : latestPoint ? `${fmt.int(latestPoint.visits)}번` : '—'}
-          sub={latestPoint ? `${latestWord === '오늘' || latestWord === '어제' ? `${latestWord}(${latestPoint.label})` : latestPoint.label} 상품 상세를 본 방문` : '아직 방문 기록이 없습니다'}
-          source="real"
-        />
-        <Kpi
-          label={`${latestWord ?? '오늘'} 담기`}
-          value={waiting ? '…' : latestPoint ? `${fmt.int(latestPoint.carts)}번` : '—'}
-          sub={latestPoint ? `${latestWord === '오늘' || latestWord === '어제' ? `${latestWord}(${latestPoint.label})` : latestPoint.label} 장바구니에 담은 방문` : '아직 담기 기록이 없습니다'}
-          source="real"
-        />
-        <Kpi
-          label="오늘 주문"
-          value={shownSales ? `${fmt.int(shownSales.today.orders)}건` : salesKey ? '…' : '—'}
-          sub={shownSales ? (shownSales.today.orders > 0 ? '결제 완료' : '아직 오늘 주문이 없습니다') : salesKey ? '불러오는 중' : '브랜드를 확인하면 보입니다'}
-          source="real"
-        />
-        <Kpi
-          label="오늘 매출"
-          value={shownSales ? wonCompact(shownSales.today.revenue) : salesKey ? '…' : '—'}
-          sub={shownSales ? (shownSales.today.revenue >= 1_000_000 ? `${Math.round(shownSales.today.revenue).toLocaleString('ko-KR')}원` : '결제 완료 기준') : salesKey ? '불러오는 중' : '브랜드를 확인하면 보입니다'}
-          source="real"
-        />
-      </div>
       {/*
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · 최근 ${shownDays}일` : '주문·매출 · 전체 기간'}</p> : null}
+      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : '주문·매출 · 전체 기간'}</p> : null}
       {shownSales ? (
         <div className="grid grid--kpi">
           <Kpi
@@ -482,7 +442,7 @@ export default function OverviewScreen({
         </section>
       )}
 
-      <p className="kpi-period">고객 행동 · 최근 {days}일</p>
+      <p className="kpi-period">고객 행동 · {periodLabel(days)}</p>
       <div className="grid grid--kpi">
         <Kpi
           label="상세를 보고 담은 비율"
@@ -541,7 +501,7 @@ export default function OverviewScreen({
       ) : null}
       <div className="grid grid--2">
         <Panel
-          title={`날짜별 ${trend === 'visits' ? '방문' : '담기'} · 최근 ${days}일`}
+          title={`날짜별 ${trend === 'visits' ? '방문' : '담기'} · ${periodLabel(days)}`}
           source={source.overview}
           aside={
             <span className="chips chips--inline">
@@ -610,8 +570,8 @@ export default function OverviewScreen({
       {/* 접지 않고 바로 보인다 (2026-09-22 은솔님). 접힌 제목이 안의 카드 숫자를 그대로 되읊어 펼칠 이유가 없었다 */}
       <section className="stack" aria-label="기본 숫자">
         <div className="grid grid--kpi">
-          <Kpi label="방문" value={`${fmt.int(overview.sessions)}번`} sub={noBehavior ? emptyWhy : `최근 ${days}일`} />
-          <Kpi label="상품 상세 본 횟수" value={`${fmt.int(overview.detailViews)}번`} sub={noBehavior ? emptyWhy : `최근 ${days}일`} />
+          <Kpi label="방문" value={`${fmt.int(overview.sessions)}번`} sub={noBehavior ? emptyWhy : periodLabel(days)} />
+          <Kpi label="상품 상세 본 횟수" value={`${fmt.int(overview.detailViews)}번`} sub={noBehavior ? emptyWhy : periodLabel(days)} />
           <Kpi label="목록에서 상세로 들어온 비율" value={fmt.pct(overview.detailRate)} sub={noBehavior ? emptyWhy : '목록에 보인 횟수 기준'} />
           <Kpi
             label="상세만 보고 그냥 나간 비율"
