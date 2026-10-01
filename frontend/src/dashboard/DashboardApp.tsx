@@ -363,7 +363,7 @@ export default function DashboardApp() {
         ) : null}
 
         {/* 요약은 주문·매출 카드를 먼저 그리고 행동 기록 부분만 화면 안에서 가린다 (2026-09-30) */}
-        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
+        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} brandLoading={brands.kind === 'loading'} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <BehaviorGate><ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /></BehaviorGate> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'content' ? <BehaviorGate><ContentScreen brandName={brand?.name ?? ''} /></BehaviorGate> : null}

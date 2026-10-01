@@ -502,14 +502,45 @@ body {
 
 /*
  * 답을 기다리는 동안에도 같은 자리·같은 높이 (2026-10-01) — 답이 와서 바뀔 때 아래 카드가 밀리지 않게.
- * 높이는 "문장 두 줄 + 자세히 한 줄" 기준이다 — 짧은 답이 와도 줄지 않고, 세 줄을 넘을 때만 늘어난다.
+ * 높이는 "문장 최대 줄 수 + 자세히 한 줄" 로 잡고, 문장은 그 줄 수에서 자른다(전체는 title). 그래서 어떤 길이의 답이 와도
+ * 접힌 상태의 카드 높이는 같다. 넓은 화면 2줄, 641~860px 3줄, 640px 이하 4줄 (한 줄에 들어가는 글자가 적다).
+ * "자세히" 를 펼치는 것만 높이를 바꾼다 — 사장님이 직접 누른 것이라 괜찮다.
  */
 .headline {
   min-height: 116px;
   align-content: start;
 }
 
-.headline__line--loading {
+.headline > .headline__line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* 카드 폭은 사이드바를 뺀 나머지라 화면 폭보다 훨씬 좁다 — 768px 화면에서 카드는 약 410px 라 긴 문장이 3줄이다 */
+@media (max-width: 860px) and (min-width: 641px) {
+  .headline {
+    min-height: 141px;
+  }
+  .headline > .headline__line {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+}
+
+@media (max-width: 640px) {
+  .headline {
+    min-height: 166px;
+  }
+  .headline > .headline__line {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+}
+
+.headline > .headline__line--loading {
   display: flex;
   align-items: center;
   gap: 10px;

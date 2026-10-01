@@ -201,17 +201,24 @@ export function buildOverviewHeadlineRequest(
 
 const inflight = new Map<string, Promise<HeadlineEnvelope | null>>();
 
+/** AI 한 마디를 기다리는 최대 시간. 보통 1.5~3초, 처음 만드는 문장도 10초 안쪽이다 */
+const HEADLINE_TIMEOUT_MS = 15_000;
+
 /** 서버가 못 답하면 null. 계약상 503 은 없지만 경로가 없으면(404) 그냥 안 그린다 */
 export function fetchHeadline(req: HeadlineRequest): Promise<HeadlineEnvelope | null> {
   const key = JSON.stringify(req);
   const hit = inflight.get(key);
   if (hit) return hit;
   const p = (async () => {
+    // 답이 안 오면 "분석 중" 이 끝나지 않는다 — HEADLINE_TIMEOUT_MS 뒤 끊고 기본 문장으로 간다 (2026-10-01)
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), HEADLINE_TIMEOUT_MS);
     try {
       const res = await fetch('/api/headline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: key,
+        signal: ctrl.signal,
       });
       if (!res.ok) return null;
       const body = (await res.json()) as HeadlineEnvelope;
@@ -219,9 +226,15 @@ export function fetchHeadline(req: HeadlineRequest): Promise<HeadlineEnvelope | 
       return body;
     } catch {
       return null;
+    } finally {
+      window.clearTimeout(timer);
     }
   })();
   inflight.set(key, p);
+  // 실패는 기억하지 않는다 — 기간을 바꿨다 돌아오는 등 다음에 같은 요청을 만들면 다시 묻는다
+  void p.then((env) => {
+    if (env === null) inflight.delete(key);
+  });
   return p;
 }
 

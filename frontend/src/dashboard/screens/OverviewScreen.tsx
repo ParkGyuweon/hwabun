@@ -62,11 +62,14 @@ function wonCompact(krw: number): string {
 export default function OverviewScreen({
   days,
   brandName,
+  brandLoading = false,
   onGo,
 }: {
   days: number;
   /** 로그인한 브랜드 이름. 피드백 시드는 이 이름과 같은 것만 센다 — 못 받았으면 아무것도 안 센다 */
   brandName: string | null;
+  /** 내 브랜드 목록을 아직 받는 중. 그동안 brandName 은 null 이지만 "브랜드 없음" 이 아니다 */
+  brandLoading?: boolean;
   onGo?: (screen: string) => void;
 }) {
   const m = useBehavior();
@@ -203,7 +206,8 @@ export default function OverviewScreen({
   );
   const { loading: headlineLoading, env: headline } = useHeadlineState(headlineReq);
   // 요청을 만들 재료(행동 기록·주문 합계)를 아직 받는 중이면 그것도 "분석 중" 이다
-  const headlinePending = headlineLoading || (!!brandName && (pulse === undefined || !salesSettled || waiting));
+  // 브랜드 목록을 받는 동안도 기다리는 중이다 — 아니면 그 사이 기본 문장이 잠깐 떴다가 "분석 중" 으로 바뀐다 (2026-10-01 로컬 실측)
+  const headlinePending = headlineLoading || brandLoading || (!!brandName && (pulse === undefined || !salesSettled || waiting));
   /*
    * AI 가 쓴 줄만 쓴다. 서버는 걸린 줄만 규칙 문장(숫자 나열)으로 바꿔 `mixed` 로 돌려주는데, 첫 문장만 걸려도 카드째 기본 문장이
    * 되면 통과한 AI 줄까지 버린다 (2026-10-01 실측: "크게 늘었" 이 unsupported_comparison 으로 걸려 첫 문장이 "…방문의 방문은
@@ -227,7 +231,7 @@ export default function OverviewScreen({
       */}
       {headlineAi ? (
         <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
-          <p className="headline__line">{headlineAi.line}</p>
+          <p className="headline__line" title={headlineAi.line}>{headlineAi.line}</p>
           {headlineAi.more.length > 0 ? (
             <details className="headline__more">
               <summary>자세히</summary>
