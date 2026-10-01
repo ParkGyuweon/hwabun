@@ -1010,6 +1010,19 @@
   background: var(--color-surface, #fff);
   color: var(--color-ink, #1d1d1f);
   cursor: pointer;
+  /*
+   * 브라우저 기본 버튼 안쪽 여백(1px 6px)을 지운다 — 30px 안에 쓸 자리가 16px 뿐이라 18px 종이 넘쳐 오른쪽으로 밀리고
+   * 찌그러져 보였다 (2026-10-01 팀 제보). 아이콘은 줄 높이 영향을 안 받게 block 으로, 크기는 고정
+   */
+  padding: 0;
+  line-height: 0;
+}
+
+.notif__bell > svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
 .notif__bell.has-unread {
