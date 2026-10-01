@@ -193,14 +193,14 @@ export default function OverviewScreen({
         />
         <Kpi
           label="오늘 주문"
-          value={shownSales ? `${fmt.int(shownSales.today.orders)}건` : '…'}
-          sub={shownSales ? (shownSales.today.orders > 0 ? '결제 완료' : '아직 오늘 주문이 없습니다') : '불러오는 중'}
+          value={shownSales ? `${fmt.int(shownSales.today.orders)}건` : salesKey ? '…' : '—'}
+          sub={shownSales ? (shownSales.today.orders > 0 ? '결제 완료' : '아직 오늘 주문이 없습니다') : salesKey ? '불러오는 중' : '브랜드를 확인하면 보입니다'}
           source="real"
         />
         <Kpi
           label="오늘 매출"
-          value={shownSales ? wonCompact(shownSales.today.revenue) : '…'}
-          sub={shownSales ? (shownSales.today.revenue >= 1_000_000 ? `${Math.round(shownSales.today.revenue).toLocaleString('ko-KR')}원` : '결제 완료 기준') : '불러오는 중'}
+          value={shownSales ? wonCompact(shownSales.today.revenue) : salesKey ? '…' : '—'}
+          sub={shownSales ? (shownSales.today.revenue >= 1_000_000 ? `${Math.round(shownSales.today.revenue).toLocaleString('ko-KR')}원` : '결제 완료 기준') : salesKey ? '불러오는 중' : '브랜드를 확인하면 보입니다'}
           source="real"
         />
       </div>
