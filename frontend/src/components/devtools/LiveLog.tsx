@@ -4,7 +4,7 @@ import type { LogEnvelope } from '../../types/log';
 import '../../styles/live-log.css';
 
 /**
- * 우하단 실시간 행동 기록 (2026-09-29 새로 만듦. 옛 LogPanel 은 09-28 뺐다).
+ * 우하단 실시간 로그 기록 (2026-09-29 새로 만듦. 옛 LogPanel 은 09-28 뺐다).
  *
  * 발표에서 "고객이 움직이는 순간 기록이 찍힌다" 를 보여 주는 자리라 **시각 · 이벤트 이름 두 가지만** 크게 적는다.
  * 이벤트 이름은 실제 로그에 찍히는 원래 이름(`product_click`) 그대로다. JSON·id·건수는 없다.
@@ -53,8 +53,8 @@ export default function LiveLog() {
         className="live-log__fab"
         onClick={() => setOpen(true)}
         aria-expanded="false"
-        aria-label="실시간 행동 기록 펼치기"
-        title="실시간 행동 기록"
+        aria-label="실시간 로그 기록 펼치기"
+        title="실시간 로그 기록"
       >
         <span className="live-log__dot" aria-hidden="true" />
       </button>
@@ -62,16 +62,16 @@ export default function LiveLog() {
   }
 
   return (
-    <aside className="live-log" aria-label="실시간 행동 기록">
+    <aside className="live-log" aria-label="실시간 로그 기록">
       <header className="live-log__head">
         <span className="live-log__dot" aria-hidden="true" />
-        <span className="live-log__title">실시간 행동 기록</span>
+        <span className="live-log__title">실시간 로그 기록</span>
         <button
           type="button"
           className="live-log__close"
           onClick={() => setOpen(false)}
           aria-expanded="true"
-          aria-label="실시간 행동 기록 접기"
+          aria-label="실시간 로그 기록 접기"
         >
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
