@@ -199,6 +199,30 @@ export function useHeadline(req: HeadlineRequest | null): HeadlineEnvelope | nul
   return state && state.key === key ? state.env : null;
 }
 
+/**
+ * `useHeadline` 과 같지만 **기다리는 중**을 따로 알려 준다 — 개요가 자리를 미리 잡고 "분석 중" 을 띄우려면
+ * "아직 답이 없다" 와 "못 받았다(null)" 를 갈라야 한다 (2026-10-01). 요청이 null 이면 기다릴 것이 없다.
+ */
+export function useHeadlineState(req: HeadlineRequest | null): { loading: boolean; env: HeadlineEnvelope | null } {
+  const key = useMemo(() => (req ? JSON.stringify(req) : null), [req]);
+  const [state, setState] = useState<{ key: string; env: HeadlineEnvelope | null } | null>(null);
+
+  useEffect(() => {
+    if (!req || !key) return;
+    let alive = true;
+    void fetchHeadline(req).then((env) => {
+      if (alive) setState({ key, env });
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (!key) return { loading: false, env: null };
+  return state && state.key === key ? { loading: false, env: state.env } : { loading: true, env: null };
+}
+
 /** 줄 하나의 출처. `mixed` 면 줄마다, 아니면 봉투 값을 따른다 */
 export function lineOrigin(env: HeadlineEnvelope, line: { origin?: 'llm' | 'rule' }): 'llm' | 'rule' {
   if (env.origin === 'mixed') return line.origin ?? 'rule';

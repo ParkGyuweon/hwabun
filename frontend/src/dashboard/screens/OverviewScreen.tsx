@@ -9,12 +9,21 @@ import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { BehaviorGate, useBehavior, useMartWaiting } from '../lib/useBehavior';
-import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline } from '../lib/headlineApi';
+import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadlineState } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
 import type { Feedback } from '../../types/feedback';
 import { PURCHASE_REASONS } from '../../lib/checkout';
+
+/**
+ * AI 한 마디를 못 받았을 때의 기본 문장 — 숫자와 무관하게 늘 맞는 말만 쓴다 (2026-10-01 유림님).
+ * 숫자를 넣으면 카드와 어긋날 수 있고, "방문의 방문은…" 같은 되읊기가 된다.
+ */
+const HEADLINE_FALLBACK = {
+  line: '방문부터 담기·주문까지, 고객이 어디서 머물고 어디서 떠나는지 아래에 정리했습니다.',
+  hint: '"첫 번째 할 일" 부터 보시면 지금 가장 먼저 손볼 곳을 알 수 있습니다.',
+};
 
 const REASON_KO = new Map(PURCHASE_REASONS.map((r) => [r.key, r.label]));
 
@@ -177,7 +186,8 @@ export default function OverviewScreen({
   /**
    * AI 한 마디 (contracts/headline-api-spec.md) — 2026-10-01 오후에 되살렸다 (팀 의견: AI 가 요약해 주는 자리가 있는 게 낫다).
    * 오전에 뺀 이유였던 규칙 문장("…방문의 방문은 1,170건입니다")은 그대로 숨기고, **첫 문장을 AI 가 쓴 때만** 맨 위에 그린다.
-   * 못 받거나 AI 가 못 쓰면 자리도 없다 — 아래 "오늘" 숫자부터 보인다.
+   * 자리는 **처음부터** 잡아 둔다 (2026-10-01 유림님: 답이 온 뒤 위에서 끼어들어 아래가 밀리면 안 된다). 기다리는 동안은
+   * "AI가 분석 중입니다", 못 받거나 AI 가 못 쓰면 숫자와 무관한 기본 문장(HEADLINE_FALLBACK)을 둔다.
    * 주문·매출은 카드와 같은 **기간 합계**로 보낸다 (전체 합을 보내면 문장과 카드 숫자가 어긋난다). 기간 합계를 받는 중이면 기다린다.
    */
   const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
@@ -191,7 +201,10 @@ export default function OverviewScreen({
     },
     [m, brand, days, pulse, sales, salesSettled, waiting],
   );
-  const headline = useHeadline(headlineReq);
+  const { loading: headlineLoading, env: headline } = useHeadlineState(headlineReq);
+  // 요청을 만들 재료(행동 기록·주문 합계)를 아직 받는 중이면 그것도 "분석 중" 이다
+  const headlinePending = headlineLoading || (!!brandName && (pulse === undefined || !salesSettled || waiting));
+  const headlineAi = headline && headline.headline && headlineOrigin(headline) === 'llm' ? headline : null;
   const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
 
   return (
@@ -200,24 +213,39 @@ export default function OverviewScreen({
         머리말("지금 무슨 일이")과 "AI가 쓴 문장" 꼬리표는 달지 않는다 — 발표 화면에서 거슬리고, 사장님에게는 문장 자체가 중요하다.
         출처는 title 로 남겨 마우스를 올리면 보인다. 섹션 줄은 "자세히" 로 접어 둔다 (2026-09-21 유림님: 글이 너무 많다).
       */}
-      {headline && headline.headline && headlineOrigin(headline) === 'llm' ? (
+      {headlineAi ? (
         <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
-          <p className="headline__line">{headline.headline}</p>
-          {headline.sections.length > 0 ? (
+          <p className="headline__line">{headlineAi.headline}</p>
+          {headlineAi.sections.length > 0 ? (
             <details className="headline__more">
               <summary>자세히</summary>
               <ul className="headline__sections">
-                {headline.sections.map((s) => (
+                {headlineAi.sections.map((s) => (
                   <li key={s.id}>
                     <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
-                    <span title={lineOrigin(headline, s) === 'rule' ? '이 줄은 숫자만 그대로 적었습니다' : 'AI가 문장으로 풀어 쓴 줄입니다'}>{s.line}</span>
+                    <span title={lineOrigin(headlineAi, s) === 'rule' ? '이 줄은 숫자만 그대로 적었습니다' : 'AI가 문장으로 풀어 쓴 줄입니다'}>{s.line}</span>
                   </li>
                 ))}
               </ul>
             </details>
-          ) : null}
+          ) : (
+            <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
+          )}
         </section>
-      ) : null}
+      ) : headlinePending ? (
+        <section className="headline headline--loading" aria-label="지금 상황 한 마디" aria-busy="true">
+          <p className="headline__line headline__line--loading">
+            <span className="ai__dot" aria-hidden="true" />
+            AI가 분석 중입니다<span className="headline__dots" aria-hidden="true" />
+          </p>
+          <span className="headline__skeleton" aria-hidden="true" />
+        </section>
+      ) : (
+        <section className="headline" aria-label="지금 상황 한 마디">
+          <p className="headline__line">{HEADLINE_FALLBACK.line}</p>
+          <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
+        </section>
+      )}
       {/* 오늘 — 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
       <p className="kpi-period">오늘</p>
       <div className="grid grid--kpi">
