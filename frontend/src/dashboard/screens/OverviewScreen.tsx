@@ -204,7 +204,19 @@ export default function OverviewScreen({
   const { loading: headlineLoading, env: headline } = useHeadlineState(headlineReq);
   // 요청을 만들 재료(행동 기록·주문 합계)를 아직 받는 중이면 그것도 "분석 중" 이다
   const headlinePending = headlineLoading || (!!brandName && (pulse === undefined || !salesSettled || waiting));
-  const headlineAi = headline && headline.headline && headlineOrigin(headline) === 'llm' ? headline : null;
+  /*
+   * AI 가 쓴 줄만 쓴다. 서버는 걸린 줄만 규칙 문장(숫자 나열)으로 바꿔 `mixed` 로 돌려주는데, 첫 문장만 걸려도 카드째 기본 문장이
+   * 되면 통과한 AI 줄까지 버린다 (2026-10-01 실측: "크게 늘었" 이 unsupported_comparison 으로 걸려 첫 문장이 "…방문의 방문은
+   * 1,170건입니다" 가 됐고, 서버가 그 결과를 저장해 새로고침해도 같았다). 첫 문장이 걸렸으면 통과한 AI 줄 첫째를 맨 위로 올린다.
+   * 규칙 줄은 "자세히" 에서도 뺀다 — "찾아온 방문은 방문 1,170건" 같은 되읊기다.
+   */
+  const headlineAi = useMemo(() => {
+    if (!headline) return null;
+    const lines = headline.sections.filter((s) => s.line && lineOrigin(headline, s) === 'llm');
+    if (headline.headline && headlineOrigin(headline) === 'llm') return { line: headline.headline, more: lines };
+    if (lines.length === 0) return null;
+    return { line: lines[0].line, more: lines.slice(1) };
+  }, [headline]);
   const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
 
   return (
@@ -215,15 +227,15 @@ export default function OverviewScreen({
       */}
       {headlineAi ? (
         <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
-          <p className="headline__line">{headlineAi.headline}</p>
-          {headlineAi.sections.length > 0 ? (
+          <p className="headline__line">{headlineAi.line}</p>
+          {headlineAi.more.length > 0 ? (
             <details className="headline__more">
               <summary>자세히</summary>
               <ul className="headline__sections">
-                {headlineAi.sections.map((s) => (
+                {headlineAi.more.map((s) => (
                   <li key={s.id}>
                     <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
-                    <span title={lineOrigin(headlineAi, s) === 'rule' ? '이 줄은 숫자만 그대로 적었습니다' : 'AI가 문장으로 풀어 쓴 줄입니다'}>{s.line}</span>
+                    <span>{s.line}</span>
                   </li>
                 ))}
               </ul>
