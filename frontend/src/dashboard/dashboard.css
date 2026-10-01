@@ -2715,15 +2715,6 @@ table.data tr:hover td {
   vertical-align: 1px;
 }
 
-/* 사이드바 하단 · 마트 연결 상태 */
-.sidebar__mart {
-  margin: 0 0 6px;
-}
-.sidebar__mart b {
-  color: var(--ink);
-  font-weight: 600;
-}
-
 .act__more {
   margin-top: 10px;
 }

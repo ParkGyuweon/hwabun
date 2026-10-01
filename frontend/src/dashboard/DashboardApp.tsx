@@ -21,7 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
-import { BehaviorGate, BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
+import { BehaviorGate, BehaviorProvider, useBehavior } from './lib/useBehavior';
 
 /**
  * 화면 하나. **이름을 바꾸지 않았다** — `insight.ts`·`prescription.ts` 가 "이 인사이트는 어느 화면으로
@@ -306,7 +306,6 @@ export default function DashboardApp() {
               </button>
             </div>
           ) : null}
-          <MartNote />
           {/* 결론 색 범례. 연두 = 내 브랜드 데이터만, 핑크 = 플랫폼 전체(다른 브랜드 포함) 종합 (components DataOrigin) */}
           <p className="sidebar__legend" aria-label="숫자 출처 색 안내">
             <OriginBadge kind="mine" />
@@ -417,28 +416,6 @@ function ScopeNote({ scope, brandName, period }: { scope: ScopeKind; brandName: 
       <span className="main__scope-what">{label.what}</span>
       <strong>{brand}</strong>
       {period ? <span className="main__scope-period">{period}</span> : null}
-    </p>
-  );
-}
-
-/** 사이드바 하단. 행동 지표가 어디서 왔는지 한 줄 (계약 §7) */
-function MartNote() {
-  const state = useMartState();
-  const { anyReal } = useBehavior();
-  let line: string;
-  if (state === 'idle') line = '브랜드를 고르면 불러옵니다';
-  else if (state === 'loading') line = '행동 기록을 불러오는 중';
-  // 배치 시각("9월 28일 03:56까지 반영")은 늦어도 맞아도 사장님 눈에 거슬려서 적지 않는다 (유림님)
-  else if (anyReal) line = '행동 기록을 불러왔습니다';
-  else if (state === 'ready') line = '이 기간 행동 기록이 없습니다';
-  else line = '행동 기록을 못 불러왔습니다';
-  return (
-    <p>
-      <span className="sidebar__mart">
-        고객 행동 기록
-      </span>
-      <br />
-      {line}
     </p>
   );
 }
