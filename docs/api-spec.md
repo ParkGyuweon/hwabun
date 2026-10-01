@@ -144,6 +144,7 @@ Shop backend 인증 요청은 `Authorization: Bearer <JWT>`를 사용합니다. 
 | GET | `/api/products/{productId}/reviews` | 공개 | 상품 리뷰 목록 |
 | GET | `/api/seller/reviews?brandId={id}` | SELLER/ADMIN | 판매자 리뷰 목록 |
 | POST | `/api/feedback` | MEMBER | 제품 축별 피드백 |
+| GET | `/api/feedback/mine?productId=` | MEMBER | 내가 보낸 피드백 + 판매자 응답 이력 `responses[]` (2026-10-01 요청 — 없으면 화면은 빈 목록) |
 | GET | `/api/seller/feedback?brandId={id}` | SELLER | 판매자 피드백 |
 | POST | `/api/seller/feedback/{feedbackId}/responses` | SELLER | 피드백 확인·답변·반영 처리 |
 | POST | `/api/seller/feedback/classify` | 내부/SELLER | 피드백 분류 |

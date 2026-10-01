@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { submitFeedbackBackend } from '../../lib/shopApi';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchMyFeedback, submitFeedbackBackend } from '../../lib/shopApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeedback } from '../../hooks/useFeedback';
 import { feedbackForProduct, submitFeedback } from '../../lib/feedbackStore';
 import { FEEDBACK_INPUT_AXES, axisLabel, categoryLabel, labelsOf } from '../../types/feedback';
+import type { Feedback } from '../../types/feedback';
 import type { PersonaProfile } from '../../types/persona';
 import type { Product } from '../../types/product';
 
@@ -28,18 +29,47 @@ const MIN_TEXT = 5;
  *
  * 로그: 이벤트를 새로 만들지 않는다. 계약에 없는 이벤트를 보내면 격리된다. 백엔드 API 와
  * 함께 `feedback_submit` 을 계약에 올린 뒤 켠다. 원문은 어차피 로그에 싣지 않는다.
+ *
+ * 저장소는 둘이다 (2026-10-01).
+ *   백엔드 상품(`backend_brand_id`)  서버. 보내기는 `POST /api/feedback`, 읽기는 `GET /api/feedback/mine`.
+ *     전에는 보내기만 있고 읽기가 없어 "내가 보낸 의견" · 보냄 ✓ · 반영 건수 · 사장님 답글이 늘 비어 있었다.
+ *   목 상품                          localStorage (lib/feedbackStore). 대시보드와 같은 브라우저에서 주고받는 시연용.
  */
 export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) {
   const all = useFeedback();
   /** 로그인했으면 계정 id 가 작성자다. 백엔드 피드백 API 의 주체와 같게 둔다. 아니면 페르소나 */
   const account = useAuth('MEMBER');
   const userId = account?.id ?? persona?.persona_id ?? null;
+  const onBackend = Boolean(product.backend_brand_id);
   const forProduct = useMemo(() => feedbackForProduct(all, product.product_id), [all, product.product_id]);
+  /**
+   * 서버 상품이면 내 의견은 서버에서 받는다. `null` 은 아직 못 받았거나(로그인 없음·옛 서버) 받는 중 — 그때는 빈 목록이다.
+   * 보낸 직후(`reloadNonce`)와 상품·계정이 바뀔 때 다시 받는다. 사장님 답글은 다음에 이 상품을 열 때 보인다.
+   */
+  const fetchKey = onBackend && account ? `${account.id}:${product.product_id}` : null;
+  // 받은 결과를 "누구의 어느 상품" 키와 함께 둔다 — 상품·계정이 바뀌면 옛 결과를 그리지 않고, 효과 안에서 동기로 비울 필요도 없다
+  const [fetched, setFetched] = useState<{ key: string; rows: Feedback[] | null } | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  useEffect(() => {
+    if (!fetchKey) return;
+    let alive = true;
+    void fetchMyFeedback(product.product_id, product.brand_name).then((rows) => {
+      if (alive) setFetched({ key: fetchKey, rows });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [fetchKey, product.product_id, product.brand_name, reloadNonce]);
+  const serverMine = fetchKey !== null && fetched?.key === fetchKey ? fetched.rows : null;
   const mine = useMemo(
-    () => forProduct.filter((f) => f.user_id === userId),
-    [forProduct, userId],
+    () => (onBackend ? (serverMine ?? []) : forProduct.filter((f) => f.user_id === userId)),
+    [onBackend, serverMine, forProduct, userId],
   );
-  const reflectedCount = useMemo(() => forProduct.filter((f) => f.status === 'reflected').length, [forProduct]);
+  /** 서버 상품은 내 것만 알 수 있어 "내 의견 중 반영된 것" 이고, 목 상품은 이 브라우저의 전부다 */
+  const reflectedCount = useMemo(
+    () => (onBackend ? mine : forProduct).filter((f) => f.status === 'reflected').length,
+    [onBackend, mine, forProduct],
+  );
   /** 내가 이 상품에 이미 보낸 축. 토글에 점으로 표시 */
   const sentAxes = useMemo(() => new Set(mine.map((f) => f.axis_id).filter(Boolean)), [mine]);
 
@@ -82,6 +112,7 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
         );
         return;
       }
+      setReloadNonce((n) => n + 1);
     } else {
       submitFeedback({
         product_id: product.product_id,
@@ -103,7 +134,13 @@ export default function FeedbackPanel({ product, persona }: FeedbackPanelProps) 
           <h3 className="feedback__title">이 제품에 의견 남기기</h3>
           <p className="feedback__lead">
             왼쪽에서 주제를 고르고 오른쪽 칸에 <strong>자유롭게</strong> 적어 주세요. 주제마다 따로 보낼 수 있습니다.
-            {reflectedCount > 0 ? ` 지금까지 ${reflectedCount}건이 제품에 반영됐습니다.` : ' 첫 의견을 남겨 보세요.'}
+            {reflectedCount > 0
+              ? onBackend
+                ? ` 내 의견 ${reflectedCount}건이 제품에 반영됐습니다.`
+                : ` 지금까지 ${reflectedCount}건이 제품에 반영됐습니다.`
+              : mine.length > 0
+                ? ''
+                : ' 첫 의견을 남겨 보세요.'}
           </p>
         </div>
       </div>
