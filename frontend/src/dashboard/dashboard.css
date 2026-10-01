@@ -212,6 +212,12 @@ body {
   padding: 28px 36px 64px;
   max-width: 1240px;
   width: 100%;
+  /*
+   * 한글은 낱말 단위로만 줄을 바꾼다. 기본값은 글자마다 꺾어 "…30% 넘는 상 / 품", "아직 없 / 음" 처럼 한 글자가
+   * 다음 줄로 떨어졌다 (2026-10-01 점검). 긴 영문·숫자 덩어리는 칸을 넘지 않게 그 안에서 꺾는다.
+   */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .main__head {
