@@ -243,6 +243,8 @@ export default function OverviewScreen({
    */
   const shownSales = sales !== undefined ? sales : (periodSales?.value ?? null);
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
+  /** 주문·매출을 아직 받는 중 (브랜드 확인 포함). 맨 위 자리를 미리 잡는 데 쓴다 */
+  const ordersPending = !shownSales && !pulse && (brandLoading || pulse === undefined || (salesKey !== null && sales === undefined));
 
   /*
    * 맨 위 "오늘" 숫자 넷(오늘 방문·담기·주문·매출)은 뺐다 (2026-10-01 유림님: 정신없다). 대신 기간 필터에 "오늘" 이 있어
@@ -303,7 +305,7 @@ export default function OverviewScreen({
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : '주문·매출 · 전체 기간'}</p> : null}
+      {shownSales || pulse || ordersPending ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : pulse ? '주문·매출 · 전체 기간' : `주문·매출 · ${periodLabel(days)}`}</p> : null}
       {shownSales ? (
         <div className="grid grid--kpi">
           <Kpi
@@ -344,6 +346,13 @@ export default function OverviewScreen({
             팔린 상품 가짓수·리뷰·받은 의견 칸은 뺐다 (2026-09-22 유림님). 요약에서 볼 만큼 중요한 숫자가 아니고
             가짓수는 상품 화면, 리뷰·의견은 고객의 말 화면에 그대로 있다.
           */}
+        </div>
+      ) : ordersPending ? (
+        // 받는 동안에도 자리를 잡아 둔다 — 맨 위라서, 숫자가 온 뒤 끼어들면 아래 전부가 밀린다
+        <div className="grid grid--kpi" aria-busy="true">
+          <Kpi label="주문" value="…" sub="불러오는 중" />
+          <Kpi label="매출" value="…" sub="불러오는 중" />
+          <Kpi label="판매 수량" value="…" sub="불러오는 중" />
         </div>
       ) : null}
       {/*
