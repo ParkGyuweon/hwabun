@@ -266,7 +266,8 @@ table.data th {
 
 .main {
   padding: 40px 48px 96px;
-  max-width: 1180px;
+  /* 1180px 에서 멈춰 넓은 모니터에서 오른쪽이 통째로 비었다 (2026-10-01 유림님: 창을 넓혀도 안 커진다). 카드 줄은 auto-fit 이라 따라 넓어진다 */
+  max-width: 1600px;
 }
 
 .main__head {

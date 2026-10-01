@@ -210,7 +210,7 @@ body {
 
 .main {
   padding: 28px 36px 64px;
-  max-width: 1240px;
+  max-width: 1600px;
   width: 100%;
   /*
    * 한글은 낱말 단위로만 줄을 바꾼다. 기본값은 글자마다 꺾어 "…30% 넘는 상 / 품", "아직 없 / 음" 처럼 한 글자가
