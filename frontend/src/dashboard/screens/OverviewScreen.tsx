@@ -532,10 +532,9 @@ export default function OverviewScreen({
                 <dd>{fmt.int(Math.round(trendStats.avg))}번</dd>
               </div>
               <div>
-                <dt>가장 많은 날</dt>
-                <dd>
-                  {trendStats.peak.label} · {fmt.int(trendStats.peak.value)}번
-                </dd>
+                {/* 날짜는 제목 쪽에 — 숫자 칸에 "09/28 · 767번" 을 함께 넣으면 반쪽 창에서 "번" 이 다음 줄로 떨어졌다 */}
+                <dt>가장 많은 날 · {trendStats.peak.label}</dt>
+                <dd>{fmt.int(trendStats.peak.value)}번</dd>
               </div>
             </dl>
           ) : null}

@@ -1060,6 +1060,7 @@ body {
 }
 
 .line-summary dd {
+  white-space: nowrap;
   margin: 4px 0 0;
   font-size: 18px;
   font-weight: 600;
