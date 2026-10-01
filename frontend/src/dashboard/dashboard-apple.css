@@ -287,7 +287,8 @@ table.data th {
   color: var(--ink-soft);
 }
 
-.main__controls select {
+.main__controls select,
+.period-select {
   padding: 8px 30px 8px 14px;
   border-radius: 999px;
   border-color: var(--line);
