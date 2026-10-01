@@ -77,26 +77,6 @@ export default function OverviewScreen({
   const top = insights[0];
   const rest = insights.slice(1, 4);
   const [trend, setTrend] = useState<'visits' | 'carts'>('visits');
-
-  /*
-   * 다른 브랜드에서 넘어온 방문 (2026-10-01 팀 요청: 시장 > 넘어온 방문 지표를 요약에서도 한 번에). 다른 브랜드 기록이 모여야
-   * 나오는 숫자라 "여러 브랜드 종합" 표시를 단다. 못 받았거나 아직 행이 없으면 자리도 없다. 추천·배너 비중은 넘어온 방문
-   * 화면에만 둔다 — 둘을 더하면 100% 를 넘어(한 방문이 두 길로 다 잡힌다) 요약에서는 오해를 산다.
-   */
-  const [cross, setCross] = useState<{ key: string; summary: CrossBrandCounts | null } | null>(null);
-  const crossKey = loadBrandId() ? `${loadBrandId()}:${days}` : null;
-  useEffect(() => {
-    const brandId = loadBrandId();
-    if (!brandId || !crossKey) return;
-    let alive = true;
-    void fetchCrossBrand({ brandId, days }).then((d) => {
-      if (alive) setCross({ key: crossKey, summary: d?.summary ?? null });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [crossKey, days]);
-  const crossNow = cross && cross.key === crossKey ? cross.summary : null;
   // 결제할 때 고른 "왜 샀나요" 답. 답을 안 고른 주문(reason null)은 비율에서 빠진다 (서버 reason_share 와 같은 규칙)
   const reasons = (repurchase?.reasons ?? [])
     .filter((r): r is typeof r & { reason: string } => r.reason !== null && r.orderCount > 0)
@@ -144,6 +124,26 @@ export default function OverviewScreen({
   /** 행동 기록이 하나도 없을 때 비율 카드 아래에 적는 이유. 0.0% 를 "정말 0" 으로 읽지 않게 한다 */
   const noBehavior = overview.detailViews === 0 && overview.sessions === 0;
   const emptyWhy = '아직 기록이 없습니다';
+
+  /*
+   * 다른 브랜드에서 넘어온 방문 (2026-10-01 팀 요청: 시장 > 넘어온 방문 지표를 요약에서도 한 번에). 다른 브랜드 기록이 모여야
+   * 나오는 숫자라 "여러 브랜드 종합" 표시를 단다. 못 받았거나 아직 행이 없으면 자리도 없다. 추천·배너 비중은 넘어온 방문
+   * 화면에만 둔다 — 둘을 더하면 100% 를 넘어(한 방문이 두 길로 다 잡힌다) 요약에서는 오해를 산다.
+   */
+  const [cross, setCross] = useState<{ key: string; summary: CrossBrandCounts | null } | null>(null);
+  const crossKey = loadBrandId() ? `${loadBrandId()}:${days}` : null;
+  useEffect(() => {
+    const brandId = loadBrandId();
+    if (!brandId || !crossKey) return;
+    let alive = true;
+    void fetchCrossBrand({ brandId, days }).then((d) => {
+      if (alive) setCross({ key: crossKey, summary: d?.summary ?? null });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [crossKey, days]);
+  const crossNow = cross && cross.key === crossKey ? cross.summary : null;
 
   /**
    * 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다.
