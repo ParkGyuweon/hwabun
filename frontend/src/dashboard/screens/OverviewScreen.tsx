@@ -511,14 +511,13 @@ export default function OverviewScreen({
         >
           <LineChart
             points={trendPoints}
-            height={240}
-            fill
+            height={260}
             unit="번"
             label={trend === 'visits' ? '날짜별 방문 수 변화' : '날짜별 장바구니 담기 변화'}
             emptyText={trend === 'visits' ? '아직 방문 기록이 없습니다' : '아직 담기 기록이 없습니다'}
           />
           {/*
-            그래프 아래 숫자 셋 (2026-10-01). 옆 "구매까지 가는 단계" 카드가 길어 이 카드 아래가 비어 보였다.
+            그래프 아래 숫자 셋 (2026-10-01). 그래프만으로는 "얼마나" 가 한눈에 안 읽힌다.
             기록이 있는 날만 센다 — 기록이 없는 날을 0 으로 넣지 않는다(그래프와 같은 규칙).
           */}
           {trendStats ? (

@@ -377,13 +377,9 @@ export function LineChart({
   label = '날짜별 변화',
   emptyText = '아직 기록이 없습니다',
   unit = '',
-  fill = false,
 }: {
   points: Array<{ label: string; value: number }>;
-  /** 그래프 높이. fill 이면 최소 높이 */
   height?: number;
-  /** 카드의 남은 높이를 채운다. 옆 카드가 길어 이 카드 아래가 비는 자리(요약의 날짜별 그래프)에 쓴다 */
-  fill?: boolean;
   /** 화면 읽기 프로그램이 읽는 그래프 이름. 선이 무엇을 세는지 적는다 (방문·담기·넘어온 방문) */
   label?: string;
   emptyText?: string;
@@ -392,7 +388,6 @@ export function LineChart({
 }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(640);
-  const [boxH, setBoxH] = useState(0);
   const empty = points.length === 0;
   // 빈 그래프에서 점이 생기면 그때 상자가 붙는다 — empty 가 바뀔 때 다시 잰다
   useEffect(() => {
@@ -401,7 +396,6 @@ export function LineChart({
     const measure = () => {
       const r = el.getBoundingClientRect();
       if (r.width > 0) setWidth(Math.round(r.width));
-      setBoxH(Math.round(r.height));
     };
     // 붙자마자 한 번 잰다 — ResizeObserver 는 화면이 그려질 때에야 알려 준다(가려진 탭에서는 늦다)
     measure();
@@ -419,12 +413,12 @@ export function LineChart({
     return <p className="note">{emptyText}</p>;
   }
   const fmtN = (n: number) => Math.round(n).toLocaleString('ko-KR');
-  // fill 이면 상자 높이(카드가 늘어난 만큼)로 그린다. 상자는 SVG 크기를 따르지 않게(absolute) 해서 서로 키우지 않는다
-  const height = fill ? Math.max(baseHeight, boxH) : baseHeight;
+  const height = baseHeight;
   const top = niceCeil(Math.max(1, ...points.map((p) => p.value)));
   const ticks = [0, top / 2, top];
   const tickW = Math.max(...ticks.map((t) => fmtN(t).length)) * 7 + 10;
-  const pad = { l: tickW, r: 16, t: 22, b: 26 };
+  // 날짜 글자(약 36px)를 점 바로 아래 가운데에 둔다 — 양 끝 점도 그렇게 두려면 반 글자만큼 안쪽에서 시작한다
+  const pad = { l: Math.max(tickW, 22) + 6, r: 22, t: 22, b: 26 };
   const x0 = pad.l;
   const x1 = Math.max(x0 + 40, width - pad.r);
   const y0 = pad.t;
@@ -440,7 +434,7 @@ export function LineChart({
   const showX = (i: number) => i === 0 || i === lastI || (i % step === 0 && lastI - i >= step * 0.6);
 
   return (
-    <div ref={boxRef} className={`line-chart-box${fill ? ' line-chart-box--fill' : ''}`} style={fill ? { minHeight: baseHeight } : undefined}>
+    <div ref={boxRef} className="line-chart-box">
       <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={label}>
         {ticks.map((t) => (
           <g key={t}>
@@ -452,7 +446,7 @@ export function LineChart({
         ))}
         {points.map((p, i) =>
           showX(i) ? (
-            <text key={`x${i}`} x={x(i)} y={height - 6} textAnchor={i === 0 && points.length > 1 ? 'start' : i === lastI && points.length > 1 ? 'end' : 'middle'} className="line-chart__tick">
+            <text key={`x${i}`} x={x(i)} y={height - 6} textAnchor="middle" className="line-chart__tick">
               {p.label}
             </text>
           ) : null,
@@ -464,7 +458,7 @@ export function LineChart({
             <title>{`${p.label} · ${fmtN(p.value)}${unit}`}</title>
           </circle>
         ))}
-        <text x={x(lastI)} y={y(last.value) - 9} textAnchor={points.length > 1 ? 'end' : 'middle'} className="line-chart__last">
+        <text x={x(lastI)} y={y(last.value) - 10} textAnchor={points.length > 1 ? 'end' : 'middle'} className="line-chart__last">
           {`${fmtN(last.value)}${unit}`}
         </text>
       </svg>

@@ -427,14 +427,18 @@ table.data th {
 }
 
 .bars__row {
-  grid-template-columns: minmax(0, 1fr) 116px 74px;
-  gap: 14px;
-  padding: 8px 10px;
+  /*
+   * 이름 · 막대 · 값. 막대를 116px 로 묶어 두니 넓은 카드에서 이름과 막대 사이가 텅 비고 막대는 구석에 짧게 붙었다
+   * (2026-10-01 팀 제보: 글자도 작다). 막대가 남는 폭을 쓰고, 이름은 넉넉히 두되 너무 길면 줄인다.
+   */
+  grid-template-columns: minmax(150px, 34%) minmax(80px, 1fr) 84px;
+  gap: 18px;
+  padding: 10px 10px;
   border-radius: 10px;
 }
 
 .bars--rank .bars__row {
-  grid-template-columns: 18px minmax(0, 1fr) 116px 74px;
+  grid-template-columns: 18px minmax(150px, 34%) minmax(80px, 1fr) 84px;
   gap: 10px 14px;
 }
 
@@ -459,7 +463,7 @@ table.data th {
 }
 
 .bars__name b {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   line-height: 1.35;
   color: var(--ink);
@@ -469,7 +473,7 @@ table.data th {
 }
 
 .bars__name small {
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.3;
   color: var(--ink-faint);
   white-space: nowrap;
@@ -478,7 +482,7 @@ table.data th {
 }
 
 .bars__track {
-  height: 6px;
+  height: 8px;
   background: var(--line-soft);
 }
 
@@ -493,7 +497,7 @@ table.data th {
 .bars__value em {
   display: block;
   margin: 1px 0 0;
-  font-size: 10.5px;
+  font-size: 12.5px;
   font-weight: 400;
 }
 
@@ -847,7 +851,7 @@ button.chip:disabled {
   font-weight: 650;
 }
 .bars__value {
-  font-size: var(--fs-md);
+  font-size: 17px;
   line-height: var(--lh-md);
   letter-spacing: var(--ls-md);
   font-weight: 600;

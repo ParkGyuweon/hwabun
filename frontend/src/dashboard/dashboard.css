@@ -1001,21 +1001,6 @@ body {
   max-width: 100%;
 }
 
-/* 카드 남은 높이를 채우는 그래프. 카드를 세로 흐름으로 바꾸고, SVG 는 상자 크기에 끼어들지 않게 띄운다 */
-.panel:has(> .line-chart-box--fill) {
-  display: flex;
-  flex-direction: column;
-}
-
-.line-chart-box--fill {
-  position: relative;
-  flex: 1 1 auto;
-}
-
-.line-chart-box--fill > .line-chart {
-  position: absolute;
-  inset: 0 auto auto 0;
-}
 
 .line-chart__grid {
   stroke: var(--line);
@@ -1039,6 +1024,19 @@ body {
   font-weight: 600;
   fill: var(--ink);
   font-variant-numeric: tabular-nums;
+  /* 선 위에 겹쳐도 읽히게 카드 색 테두리 */
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/*
+ * 날짜별 그래프와 구매 단계 카드가 한 줄인데 구매 단계가 훨씬 길다. 전에는 그래프 카드가 그 높이로 늘어 안이 비었고,
+ * 그래프를 그만큼 늘리니 점 몇 개짜리 선이 세로로 찌그러졌다 (2026-10-01). 그래프 카드는 제 높이만 쓴다.
+ */
+.grid--2 > .panel:has(.line-chart-box) {
+  align-self: start;
 }
 
 .line-chart__pt {
