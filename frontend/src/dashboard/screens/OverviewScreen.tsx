@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SELLER_ORDER_LIMIT, fetchSellerFeedback, fetchSellerOrders, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
@@ -15,6 +15,7 @@ import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/f
 import { categoryLabel, labelsOf } from '../../types/feedback';
 import type { Feedback } from '../../types/feedback';
 import { PURCHASE_REASONS } from '../../lib/checkout';
+import { onOrdersChanged } from '../../lib/notifySignal';
 
 /**
  * AI 한 마디를 못 받았을 때의 기본 문장 — 숫자와 무관하게 늘 맞는 말만 쓴다 (2026-10-01 유림님).
@@ -24,6 +25,9 @@ const HEADLINE_FALLBACK = {
   line: '방문부터 담기·주문까지, 고객이 어디서 머물고 어디서 떠나는지 아래에 정리했습니다.',
   hint: '"첫 번째 할 일" 부터 보시면 지금 가장 먼저 손볼 곳을 알 수 있습니다.',
 };
+
+/** 화면이 보이는 동안 주문·매출을 다시 받는 간격. 다른 기기에서 들어온 주문용 — 같은 브라우저의 결제는 신호로 바로 온다 */
+const ORDERS_REFRESH_MS = 10_000;
 
 const REASON_KO = new Map(PURCHASE_REASONS.map((r) => [r.key, r.label]));
 
@@ -129,19 +133,54 @@ export default function OverviewScreen({
    * `undefined` 는 아직 답을 못 받은 상태다. 한 마디 요청은 이 값이 정해진 뒤에 만든다 — 먼저 마트만으로 부르고
    * 주문이 도착해 다시 부르면 입력이 달라져 LLM 을 두 번 태운다.
    */
+  /*
+   * 주문은 실시간이어야 한다 (2026-10-01 유림님). 전에는 화면을 열 때 한 번만 받아, 열어 둔 채 들어온 주문은 새로고침 전까지
+   * 안 보였다. 이 숫자가 바뀔 때마다 주문·매출을 다시 받는다 — 같은 브라우저의 결제 신호(lib/notifySignal) · 창 복귀 ·
+   * 보이는 동안 ORDERS_REFRESH_MS 마다. 숨은 탭은 묻지 않는다.
+   */
+  const [ordersTick, setOrdersTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setOrdersTick((n) => n + 1);
+    let timer: number | null = null;
+    const start = () => {
+      if (timer === null && document.visibilityState === 'visible') timer = window.setInterval(bump, ORDERS_REFRESH_MS);
+    };
+    const stop = () => {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        bump();
+        start();
+      } else stop();
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', bump);
+    const off = onOrdersChanged(bump);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', bump);
+      off();
+    };
+  }, []);
+
   const [pulse, setPulse] = useState<SellerPulse | null | undefined>(() => (loadBrandId() ? undefined : null));
   useEffect(() => {
     const brandId = loadBrandId();
     if (!brandId) return;
     let alive = true;
     void fetchSellerPulse(brandId).then((p) => {
-      if (alive) setPulse(p);
+      // 다시 받다가 한 번 실패하면 전에 받은 값을 지우지 않는다 — 숫자가 사라졌다 돌아오면 결함처럼 보인다
+      if (alive) setPulse((cur) => (p === null && cur ? cur : p));
     });
     return () => {
       alive = false;
     };
     // 브랜드를 바꾸면(brandName) 다시 받는다. 전에는 처음 한 번만 받아 다른 브랜드의 주문 수가 남아 있었다
-  }, [brandName]);
+  }, [brandName, ordersTick]);
 
   /**
    * **고른 기간**의 주문·매출·판매 수량 (2026-10-01). 위 `pulse` 는 `GET /api/seller/dashboard` 가 기간을 받지 않아 전체 합이다 —
@@ -156,12 +195,14 @@ export default function OverviewScreen({
     if (!salesKey || !brandIdNow) return;
     let alive = true;
     void fetchSellerOrders(brandIdNow, rangeOf(days)).then((rows) => {
-      if (alive) setPeriodSales({ key: salesKey, days, value: rows ? summarizeOrders(rows) : null });
+      if (!alive) return;
+      // 같은 기간을 다시 받다가 실패하면 전에 받은 값을 둔다
+      setPeriodSales((cur) => (rows === null && cur?.key === salesKey && cur.value ? cur : { key: salesKey, days, value: rows ? summarizeOrders(rows) : null }));
     });
     return () => {
       alive = false;
     };
-  }, [salesKey, brandIdNow, days]);
+  }, [salesKey, brandIdNow, days, ordersTick]);
   /** 지금 고른 기간의 합계. `undefined` 는 받는 중 */
   const sales: PeriodSales | null | undefined = salesKey && periodSales?.key === salesKey ? periodSales.value : undefined;
   /**
@@ -172,16 +213,22 @@ export default function OverviewScreen({
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
 
   /**
-   * **오늘** 한 줄 (2026-10-01 유림님). AI 한 마디 바로 아래에 오늘 숫자 넷을 그대로 둔다 — 방문·담기는 마트의 날짜별 줄에서 오늘(KST), 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것.
-   * 마트는 배치가 돈 뒤에야 오늘 줄이 생기므로, 없으면 0 이 아니라 "집계 전" 이다.
+   * **하루 숫자** 한 줄 (2026-10-01 유림님). AI 한 마디 바로 아래에 숫자 넷을 그대로 둔다.
+   * 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것 — 늘 오늘이다.
+   * 방문·담기는 마트의 날짜별 줄인데, 마트는 하루 한 번 새벽 3시(KST)에만 만들어져 낮에는 오늘 줄이 없다.
+   * 전에는 그때 "집계 전" 을 적었는데 발표 리뷰에서 "데이터가 제대로 안 모인 것처럼 보인다" 는 지적을 받았다.
+   * 이제 **집계가 끝난 가장 최근 날**을 그 날짜와 함께 보여 준다 — 오늘 줄이 있으면 "오늘", 어제면 "어제", 그보다 앞이면 "09/29".
    */
   const waiting = useMartWaiting();
-  const todayLabel = useMemo(() => {
-    const now = new Date();
+  const dayLabels = useMemo(() => {
     const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(now.getMonth() + 1)}/${p(now.getDate())}`;
+    const md = (d: Date) => `${p(d.getMonth() + 1)}/${p(d.getDate())}`;
+    const now = new Date();
+    const y = new Date(now.getTime() - 86_400_000);
+    return { today: md(now), yesterday: md(y) };
   }, []);
-  const todayPoint = series.find((d) => d.label === todayLabel) ?? null;
+  const latestPoint = series.length > 0 ? series[series.length - 1] : null;
+  const latestWord = !latestPoint ? null : latestPoint.label === dayLabels.today ? '오늘' : latestPoint.label === dayLabels.yesterday ? '어제' : latestPoint.label;
 
   /**
    * AI 한 마디 (contracts/headline-api-spec.md) — 2026-10-01 오후에 되살렸다 (팀 의견: AI 가 요약해 주는 자리가 있는 게 낫다).
@@ -192,14 +239,23 @@ export default function OverviewScreen({
    */
   const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
   const salesSettled = salesKey === null || sales !== undefined;
+  /*
+   * 한 마디에 넣는 주문 숫자는 **그 기간을 처음 받은 값**으로 묶는다. 주문 칸은 실시간으로 다시 받는데, 그때마다 한 마디를
+   * 새로 부르면 카드가 "분석 중" 으로 깜빡이고 LLM 을 주문마다 태운다. 기간·브랜드를 바꾸면 다시 묶는다.
+   */
+  const headlineSalesRef = useRef<{ key: string | null; pulse: SellerPulse | null; sales: PeriodSales | null } | null>(null);
+  if (pulse !== undefined && salesSettled && headlineSalesRef.current?.key !== salesKey) {
+    headlineSalesRef.current = { key: salesKey, pulse, sales: sales ?? null };
+  }
+  const frozen = headlineSalesRef.current?.key === salesKey ? headlineSalesRef.current : null;
   const headlineReq = useMemo(
     () => {
       // 행동 기록을 기다리는 동안에는 빈 숫자로 부르지 않는다 — 받은 뒤 다시 부르면 LLM 을 두 번 태운다
-      if (pulse === undefined || !salesSettled || waiting) return null;
-      const forHeadline = pulse && sales ? { ...pulse, orders: sales.orders, revenue: sales.revenue, units: sales.units } : pulse;
+      if (!frozen || waiting) return null;
+      const forHeadline = frozen.pulse && frozen.sales ? { ...frozen.pulse, orders: frozen.sales.orders, revenue: frozen.sales.revenue, units: frozen.sales.units } : frozen.pulse;
       return buildOverviewHeadlineRequest(m, brand, days, forHeadline);
     },
-    [m, brand, days, pulse, sales, salesSettled, waiting],
+    [m, brand, days, frozen, waiting],
   );
   const { loading: headlineLoading, env: headline } = useHeadlineState(headlineReq);
   // 요청을 만들 재료(행동 기록·주문 합계)를 아직 받는 중이면 그것도 "분석 중" 이다
@@ -258,19 +314,19 @@ export default function OverviewScreen({
           <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
         </section>
       )}
-      {/* 오늘 — 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
-      <p className="kpi-period">오늘</p>
+      {/* 하루 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
+      <p className="kpi-period">{latestWord === null || latestWord === '오늘' ? '오늘' : '최근 하루'}</p>
       <div className="grid grid--kpi">
         <Kpi
-          label="오늘 방문"
-          value={waiting ? '…' : todayPoint ? `${fmt.int(todayPoint.visits)}번` : '집계 전'}
-          sub={todayPoint ? '상품 상세를 본 방문' : '오늘 기록은 다음 집계에 들어옵니다'}
+          label={`${latestWord ?? '오늘'} 방문`}
+          value={waiting ? '…' : latestPoint ? `${fmt.int(latestPoint.visits)}번` : '—'}
+          sub={latestPoint ? `${latestWord === '오늘' || latestWord === '어제' ? `${latestWord}(${latestPoint.label})` : latestPoint.label} 상품 상세를 본 방문` : '아직 방문 기록이 없습니다'}
           source="real"
         />
         <Kpi
-          label="오늘 담기"
-          value={waiting ? '…' : todayPoint ? `${fmt.int(todayPoint.carts)}번` : '집계 전'}
-          sub={todayPoint ? '장바구니에 담은 방문' : '오늘 기록은 다음 집계에 들어옵니다'}
+          label={`${latestWord ?? '오늘'} 담기`}
+          value={waiting ? '…' : latestPoint ? `${fmt.int(latestPoint.carts)}번` : '—'}
+          sub={latestPoint ? `${latestWord === '오늘' || latestWord === '어제' ? `${latestWord}(${latestPoint.label})` : latestPoint.label} 장바구니에 담은 방문` : '아직 담기 기록이 없습니다'}
           source="real"
         />
         <Kpi
