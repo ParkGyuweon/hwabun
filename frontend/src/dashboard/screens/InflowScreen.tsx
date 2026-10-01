@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Kpi, LineChart, Panel } from '../components';
 import { fetchCrossBrand } from '../lib/martApi';
 import type { CrossBrandPayload } from '../lib/martApi';
-import { fmt } from '../lib/metrics';
+import { fmt, periodLabel } from '../lib/metrics';
 
 /**
  * 시장 · 다른 브랜드에서 넘어온 고객 (GET /api/seller/dashboard/cross-brand, 2026-09-28).
@@ -73,7 +73,7 @@ export default function InflowScreen({ brandId, days }: { brandId: string | null
         />
       </div>
 
-      <Panel title={`날짜별 넘어온 방문 · 최근 ${days}일`} source="real" aside="사람 수가 아닌 방문 수 · 여러 날 들르면 날마다 셉니다">
+      <Panel title={`날짜별 넘어온 방문 · ${periodLabel(days)}`} source="real" aside="사람 수가 아닌 방문 수 · 여러 날 들르면 날마다 셉니다">
         <LineChart points={(data?.daily ?? []).map((d) => ({ label: d.event_date_kst.slice(5).replace('-', '/'), value: d.cross_brand_entry_sessions }))}
           label="날짜별 다른 브랜드에서 넘어온 방문 수 변화"
           emptyText="아직 넘어온 방문이 없습니다"

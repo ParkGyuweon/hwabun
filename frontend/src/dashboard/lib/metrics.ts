@@ -282,6 +282,18 @@ export const cautionPrevalence = CAUTION_INGREDIENTS.map(({ label, pattern }) =>
 
 /* ---------- 세그먼트 (리뷰 실측 + 전환 모의) ---------- */
 
+/**
+ * 기간 필터 글자. 1 이면 "오늘" (2026-10-01: 요약 맨 위 "오늘" 카드 넷을 없애고 필터에 "오늘" 을 넣었다), 아니면 "최근 N일".
+ */
+export function periodLabel(days: number): string {
+  return days === 1 ? '오늘' : `최근 ${days}일`;
+}
+
+/** 앞 기간을 가리키는 말. 1 이면 "어제", 아니면 "직전 N일" */
+export function previousPeriodLabel(days: number): string {
+  return days === 1 ? '어제' : `직전 ${days}일`;
+}
+
 export const fmt = {
   int: (n: number) => n.toLocaleString('ko-KR'),
   pct: (n: number, digits = 1) => `${(n * 100).toFixed(digits)}%`,

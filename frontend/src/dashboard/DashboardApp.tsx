@@ -18,6 +18,7 @@ import NotificationBell from '../components/notifications/NotificationBell';
 import { SCOPE_LABEL } from './lib/scope';
 import type { ScopeKind } from './lib/scope';
 import { useAuth } from '../hooks/useAuth';
+import { periodLabel } from './lib/metrics';
 import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
@@ -324,7 +325,7 @@ export default function DashboardApp() {
             행동 숫자를 쓰는 화면은 요약에서 고른 기간을 그대로 따른다. 기간 고르기가 없는 화면이라도 몇 일치인지는 적는다 —
             안 적으면 사장님은 전체 기간으로 읽는다 (2026-09-29)
           */}
-          <ScopeNote scope={active.scope} brandName={brand?.name ?? null} period={PERIOD_LABEL_SCREENS.has(screen) ? `최근 ${days}일` : null} />
+          <ScopeNote scope={active.scope} brandName={brand?.name ?? null} period={PERIOD_LABEL_SCREENS.has(screen) ? periodLabel(days) : null} />
 
           <div className="main__controls">
             {screen === 'overview' || screen === 'inflow' ? (
@@ -333,6 +334,7 @@ export default function DashboardApp() {
                 onChange={(e) => setDays(Number(e.target.value))}
                 aria-label="기간"
               >
+                <option value={1}>오늘</option>
                 <option value={7}>최근 7일</option>
                 <option value={14}>최근 14일</option>
                 <option value={30}>최근 30일</option>
