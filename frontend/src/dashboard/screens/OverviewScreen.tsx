@@ -9,7 +9,6 @@ import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { BehaviorGate, useBehavior, useMartWaiting } from '../lib/useBehavior';
-import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
@@ -163,59 +162,48 @@ export default function OverviewScreen({
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
 
   /**
-   * 한 마디 (contracts/headline-api-spec.md). 이 화면의 숫자를 그대로 보내 서술문 한 줄과 섹션 줄을 받는다.
-   * 마트가 실측일 때만 부르고, 못 받으면 자리도 없다 — 아래 숫자·결론이 그대로 남아 화면이 비지 않는다.
-   * 개요에만 붙인다 (2026-09-21 결정, headlineApi.ts 머리말).
+   * **오늘** 한 줄 (2026-10-01 유림님). 전에는 AI 한 마디("…방문의 방문은 1,170건입니다")가 여기 있었는데 무슨 뜻인지 읽히지 않았다.
+   * 그 자리에 오늘 숫자 넷을 그대로 둔다 — 방문·담기는 마트의 날짜별 줄에서 오늘(KST), 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것.
+   * 마트는 배치가 돈 뒤에야 오늘 줄이 생기므로, 없으면 0 이 아니라 "집계 전" 이다.
    */
-  const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
-  // 행동 기록을 기다리는 동안에는 빈 숫자로 한 마디를 부르지 않는다 — 받은 뒤 다시 부르면 LLM 을 두 번 태운다
   const waiting = useMartWaiting();
-  /*
-   * 주문·매출 섹션은 카드와 같은 **기간 합계**로 보낸다. 전체 합을 보내면 문장은 "최근 14일 320건" 이라 쓰고 카드는 12건이라
-   * 서로 어긋난다. 기간 합계를 아직 받는 중이면 기다린다 (브랜드가 없어 부를 수 없을 때는 기다릴 것이 없다).
-   */
-  const salesSettled = salesKey === null || sales !== undefined;
-  const headlineReq = useMemo(
-    () => {
-      if (pulse === undefined || !salesSettled || waiting) return null;
-      const forHeadline = pulse && sales ? { ...pulse, orders: sales.orders, revenue: sales.revenue, units: sales.units } : pulse;
-      return buildOverviewHeadlineRequest(m, brand, days, forHeadline);
-    },
-    [m, brand, days, pulse, sales, salesSettled, waiting],
-  );
-  const headline = useHeadline(headlineReq);
-  const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
+  const todayLabel = useMemo(() => {
+    const now = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(now.getMonth() + 1)}/${p(now.getDate())}`;
+  }, []);
+  const todayPoint = series.find((d) => d.label === todayLabel) ?? null;
 
   return (
     <div className="stack">
-      {/*
-        규칙 문장(origin rule)은 아래 카드 숫자를 한 줄로 되읊는 것뿐이라 그리지 않는다 (2026-09-21 유림님: 구구절절).
-        LLM 이 쓴 문장(llm·mixed)만 보여 준다. 그때도 첫 문장만 펼치고 섹션 줄은 접는다.
-      */}
-      {/*
-        **첫 문장이 AI 가 쓴 것일 때만** 그린다 (2026-10-01 유림님). `mixed` 봉투라도 첫 문장이 규칙(rule)이면 "최근 14일 … 방문의 방문은
-        1,170건입니다" 같은 되읊기라 카드째 뺀다. "지금 무슨 일이" 머리말과 "숫자 그대로 · AI가 쓴 문장" 꼬리표도 뺐다 — 발표 화면에서
-        거슬리고, 사장님에게는 문장이 어디서 왔는지보다 문장 자체가 중요하다. 출처는 title 로 남겨 마우스를 올리면 보인다.
-      */}
-      {headline && headline.headline && headlineOrigin(headline) === 'llm' ? (
-        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
-          <p className="headline__line">{headline.headline}</p>
-          {/* 섹션 줄은 접어 둔다. 첫눈에 읽는 건 한 문장이고, 나머지는 원할 때만 (2026-09-21 유림님: 글이 너무 많다) */}
-          {headline.sections.length > 0 ? (
-            <details className="headline__more">
-              <summary>자세히</summary>
-              <ul className="headline__sections">
-                {headline.sections.map((s) => (
-                  <li key={s.id}>
-                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
-                    <span title={lineOrigin(headline, s) === 'rule' ? '이 줄은 숫자만 그대로 적었습니다' : 'AI가 문장으로 풀어 쓴 줄입니다'}>{s.line}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </section>
-      ) : null}
+      {/* 오늘 — 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
+      <p className="kpi-period">오늘</p>
+      <div className="grid grid--kpi">
+        <Kpi
+          label="오늘 방문"
+          value={waiting ? '…' : todayPoint ? `${fmt.int(todayPoint.visits)}번` : '집계 전'}
+          sub={todayPoint ? '상품 상세를 본 방문' : '오늘 기록은 다음 집계에 들어옵니다'}
+          source="real"
+        />
+        <Kpi
+          label="오늘 담기"
+          value={waiting ? '…' : todayPoint ? `${fmt.int(todayPoint.carts)}번` : '집계 전'}
+          sub={todayPoint ? '장바구니에 담은 방문' : '오늘 기록은 다음 집계에 들어옵니다'}
+          source="real"
+        />
+        <Kpi
+          label="오늘 주문"
+          value={shownSales ? `${fmt.int(shownSales.today.orders)}건` : '…'}
+          sub={shownSales ? (shownSales.today.orders > 0 ? '결제 완료' : '아직 오늘 주문이 없습니다') : '불러오는 중'}
+          source="real"
+        />
+        <Kpi
+          label="오늘 매출"
+          value={shownSales ? wonCompact(shownSales.today.revenue) : '…'}
+          sub={shownSales ? (shownSales.today.revenue >= 1_000_000 ? `${Math.round(shownSales.today.revenue).toLocaleString('ko-KR')}원` : '결제 완료 기준') : '불러오는 중'}
+          source="real"
+        />
+      </div>
       {/*
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
@@ -519,15 +507,33 @@ interface PeriodSales {
   revenue: number;
   units: number;
   truncated: boolean;
+  /** 결제 시각이 오늘(로컬)인 주문만 */
+  today: { orders: number; revenue: number };
+}
+
+/** 로컬(Asia/Seoul) 기준 YYYY-MM-DD. ISO 를 UTC 로 자르면 자정 근처 주문이 어제로 간다 (MyProducts 와 같은 규칙) */
+function localDay(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 /** 결제 완료 주문 목록 → 주문 수 · 내 브랜드 줄의 매출 합 · 팔린 개수. 다른 브랜드가 섞인 주문은 서버가 내 몫만 준다 (brand_amount) */
 function summarizeOrders(rows: SellerOrder[]): PeriodSales {
+  const today = localDay(new Date().toISOString());
   let revenue = 0;
   let units = 0;
+  const todaySum = { orders: 0, revenue: 0 };
   for (const o of rows) {
-    revenue += Number(o.brand_amount) || 0;
+    const amount = Number(o.brand_amount) || 0;
+    revenue += amount;
     units += Number(o.item_count) || 0;
+    if (localDay(o.ordered_at) === today) {
+      todaySum.orders += 1;
+      todaySum.revenue += amount;
+    }
   }
-  return { orders: rows.length, revenue, units, truncated: rows.length >= SELLER_ORDER_LIMIT };
+  return { orders: rows.length, revenue, units, truncated: rows.length >= SELLER_ORDER_LIMIT, today: todaySum };
 }
