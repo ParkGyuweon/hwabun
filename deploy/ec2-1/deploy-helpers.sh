@@ -16,6 +16,7 @@
 # Environment:
 #   COMPOSE_PROJECT (ec2-1), COMPOSE_FILE_PATH (deploy/ec2-1/docker-compose.yml),
 #   EC2_ENV_FILE (required for compose), HEALTH_RETRIES (36), HEALTH_INTERVAL (5 s),
+#   NGINX_HEALTH_RESOLVE_IP (default 127.0.0.1 for direct EC2 host execution),
 #   KEEP_IMAGE_TAGS (5)
 set -uo pipefail
 
@@ -101,10 +102,11 @@ probe() {
         recommend)    url="http://recommend:8300/health" ;;
         nginx)
             dc exec -T nginx nginx -t >/dev/null 2>&1 || return 1
-            # Real TLS path on the host port, pinned to loopback (no hairpin to the public IP).
+            # Jenkins runs curl in its own container, so its loopback is not the EC2 host.
+            # Keep the public hostname for TLS verification while resolving it to the host IP.
             if command -v curl >/dev/null 2>&1; then
                 curl -fsS -o /dev/null --max-time 5 \
-                    --resolve j15a306.p.ssafy.io:443:127.0.0.1 https://j15a306.p.ssafy.io/
+                    --resolve "j15a306.p.ssafy.io:443:${NGINX_HEALTH_RESOLVE_IP:-127.0.0.1}" https://j15a306.p.ssafy.io/
             fi
             return
             ;;
