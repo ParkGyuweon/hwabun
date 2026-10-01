@@ -191,9 +191,10 @@ table.data th {
 
 /*
  * 폭 규칙은 넓은 화면에서만. 이 파일이 마지막에 로드되므로 조건 없이 두면
- * dashboard.css 의 900px 이하 한 열 접힘을 덮어써서 좁은 화면에 가로 스크롤이 생긴다.
+ * dashboard.css 의 640px 이하 한 열 접힘을 덮어써서 좁은 화면에 가로 스크롤이 생긴다.
+ * 기준(640)은 dashboard.css 와 같아야 한다 — 시연의 반반 창(≈960px)에서도 좌측 목록을 유지한다 (2026-10-01).
  */
-@media (min-width: 901px) {
+@media (min-width: 641px) {
   .console {
     grid-template-columns: 248px minmax(0, 1fr);
   }
@@ -690,7 +691,7 @@ button.chip:disabled {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 640px) {
   .main {
     padding: 24px 20px 64px;
   }
