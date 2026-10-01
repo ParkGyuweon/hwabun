@@ -76,6 +76,13 @@ export default function OverviewScreen({
   const top = insights[0];
   const rest = insights.slice(1, 4);
   const [trend, setTrend] = useState<'visits' | 'carts'>('visits');
+  const trendPoints = useMemo(() => series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts })), [series, trend]);
+  const trendStats = useMemo(() => {
+    if (trendPoints.length === 0) return null;
+    const total = trendPoints.reduce((a, p) => a + p.value, 0);
+    const peak = trendPoints.reduce((a, p) => (p.value > a.value ? p : a), trendPoints[0]);
+    return { days: trendPoints.length, total, avg: total / trendPoints.length, peak };
+  }, [trendPoints]);
   // 결제할 때 고른 "왜 샀나요" 답. 답을 안 고른 주문(reason null)은 비율에서 빠진다 (서버 reason_share 와 같은 규칙)
   const reasons = (repurchase?.reasons ?? [])
     .filter((r): r is typeof r & { reason: string } => r.reason !== null && r.orderCount > 0)
@@ -503,10 +510,35 @@ export default function OverviewScreen({
           }
         >
           <LineChart
-            points={series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts }))}
+            points={trendPoints}
+            height={240}
+            fill
+            unit="번"
             label={trend === 'visits' ? '날짜별 방문 수 변화' : '날짜별 장바구니 담기 변화'}
             emptyText={trend === 'visits' ? '아직 방문 기록이 없습니다' : '아직 담기 기록이 없습니다'}
           />
+          {/*
+            그래프 아래 숫자 셋 (2026-10-01). 옆 "구매까지 가는 단계" 카드가 길어 이 카드 아래가 비어 보였다.
+            기록이 있는 날만 센다 — 기록이 없는 날을 0 으로 넣지 않는다(그래프와 같은 규칙).
+          */}
+          {trendStats ? (
+            <dl className="line-summary">
+              <div>
+                <dt>기록 있는 {trendStats.days}일 합계</dt>
+                <dd>{fmt.int(trendStats.total)}번</dd>
+              </div>
+              <div>
+                <dt>하루 평균</dt>
+                <dd>{fmt.int(Math.round(trendStats.avg))}번</dd>
+              </div>
+              <div>
+                <dt>가장 많은 날</dt>
+                <dd>
+                  {trendStats.peak.label} · {fmt.int(trendStats.peak.value)}번
+                </dd>
+              </div>
+            </dl>
+          ) : null}
         </Panel>
         <Panel title="구매까지 가는 단계" source={source.funnel} aside="단계마다 남은 방문">
           <Funnel steps={standardFunnel} />

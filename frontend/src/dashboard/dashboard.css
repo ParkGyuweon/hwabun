@@ -336,6 +336,16 @@ body {
   color: var(--ink-soft);
 }
 
+/*
+ * 이름과 비율은 한 덩어리로 끊지 않는다 — 오른쪽 설명이 길면 "상품을 누 / 른 방문" 처럼 이름이 글자 중간에서
+ * 꺾였다 (2026-10-01 팀 제보). 길어지면 설명만 자기 칸 안에서 줄을 바꾸고 오른쪽 끝에 맞춘다.
+ */
+.funnel__aside span,
+.funnel__aside b {
+  flex: none;
+  white-space: nowrap;
+}
+
 .funnel__aside b {
   font-size: 15px;
   color: var(--ink);
@@ -343,9 +353,13 @@ body {
 }
 
 .funnel__aside em {
+  flex: 1 1 auto;
+  min-width: 0;
   margin-left: auto;
   font-style: normal;
   color: var(--ink-faint);
+  text-align: right;
+  word-break: keep-all;
 }
 
 .stack {
@@ -975,10 +989,89 @@ body {
 
 /* ---------- 선 그래프 ---------- */
 
-.line-chart {
+/* 실제 폭을 재서 그 크기로 그린다(components LineChart) — 글자가 화면 폭 따라 줄지 않게 */
+.line-chart-box {
   width: 100%;
-  height: auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.line-chart {
   display: block;
+  max-width: 100%;
+}
+
+/* 카드 남은 높이를 채우는 그래프. 카드를 세로 흐름으로 바꾸고, SVG 는 상자 크기에 끼어들지 않게 띄운다 */
+.panel:has(> .line-chart-box--fill) {
+  display: flex;
+  flex-direction: column;
+}
+
+.line-chart-box--fill {
+  position: relative;
+  flex: 1 1 auto;
+}
+
+.line-chart-box--fill > .line-chart {
+  position: absolute;
+  inset: 0 auto auto 0;
+}
+
+.line-chart__grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.line-chart__base {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.line-chart__tick {
+  font-size: 11px;
+  fill: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.line-chart__last {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.line-chart__pt {
+  fill: var(--brand);
+}
+
+/* 날짜별 그래프 아래 숫자 셋 (요약) */
+.line-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.line-summary dt {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.line-summary dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .line-summary {
+    grid-template-columns: 1fr;
+  }
 }
 
 .line-chart__area {
@@ -2263,7 +2356,7 @@ table.data tr:hover td {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--ink-soft);
 }
 
@@ -2280,7 +2373,7 @@ table.data tr:hover td {
   padding: 1px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--ink-soft);
 }
 
@@ -2292,7 +2385,7 @@ table.data tr:hover td {
   margin-left: auto;
   padding: 2px 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -2314,7 +2407,7 @@ table.data tr:hover td {
 
 .fbx-card__body {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 16px;
   line-height: 1.6;
   color: var(--ink);
 }
@@ -2326,7 +2419,7 @@ table.data tr:hover td {
   border-radius: 6px;
   background: var(--line-soft);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-soft);
   cursor: pointer;
 }
@@ -2339,11 +2432,11 @@ table.data tr:hover td {
   border-left: 3px solid var(--brand);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   background: var(--panel);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .fbx-card__reply small {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--ink-faint);
 }
 
@@ -2362,7 +2455,7 @@ table.data tr:hover td {
   border-radius: 999px;
   background: var(--panel);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-soft);
   cursor: pointer;
@@ -2410,7 +2503,7 @@ table.data tr:hover td {
   border-radius: 8px;
   background: var(--panel);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
 }
 
@@ -2425,7 +2518,7 @@ table.data tr:hover td {
 
 .fbx-reply__warn {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: #7a2f45;
 }
 
@@ -3155,7 +3248,7 @@ table.data tr:hover td {
 
 /* 의견 작성자가 산 사람인지. 두 말은 무게가 달라서 한눈에 갈라 보이게 한다 */
 .fbx-card__buyer {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
