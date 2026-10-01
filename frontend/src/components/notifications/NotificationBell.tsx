@@ -31,7 +31,7 @@ import '../../styles/auth.css';
  * `placement="above"` 는 대시보드 사이드바 발 부분용(종 왼쪽 맞춤·위로), 기본 below 는 헤더용(종 오른쪽 맞춤·아래로).
  */
 /** 화면이 보이는 동안 안 읽은 수를 묻는 간격 */
-const POLL_MS = 5_000;
+const POLL_MS = 3_000;
 
 export default function NotificationBell({
   role,
