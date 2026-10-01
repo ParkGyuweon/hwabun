@@ -142,18 +142,25 @@ export default function OverviewScreen({
    */
   const brandIdNow = loadBrandId();
   const salesKey = brandIdNow ? `${brandIdNow}:${days}` : null;
-  const [periodSales, setPeriodSales] = useState<{ key: string; value: PeriodSales | null } | null>(null);
+  const [periodSales, setPeriodSales] = useState<{ key: string; days: number; value: PeriodSales | null } | null>(null);
   useEffect(() => {
     if (!salesKey || !brandIdNow) return;
     let alive = true;
     void fetchSellerOrders(brandIdNow, rangeOf(days)).then((rows) => {
-      if (alive) setPeriodSales({ key: salesKey, value: rows ? summarizeOrders(rows) : null });
+      if (alive) setPeriodSales({ key: salesKey, days, value: rows ? summarizeOrders(rows) : null });
     });
     return () => {
       alive = false;
     };
   }, [salesKey, brandIdNow, days]);
+  /** 지금 고른 기간의 합계. `undefined` 는 받는 중 */
   const sales: PeriodSales | null | undefined = salesKey && periodSales?.key === salesKey ? periodSales.value : undefined;
+  /**
+   * 화면에 그릴 기간 합계. 기간을 바꿔 새 값을 받는 동안은 **직전에 받은 기간 값**을 그 기간 표시 그대로 둔다 —
+   * 그 사이 전체 합으로 바뀌었다 돌아오면 숫자가 1,2xx → 12 로 튀어 발표 중에 결함처럼 보인다. 한 번도 못 받았거나 실패했을 때만 전체 합이다.
+   */
+  const shownSales = sales !== undefined ? sales : (periodSales?.value ?? null);
+  const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
 
   /**
    * 한 마디 (contracts/headline-api-spec.md). 이 화면의 숫자를 그대로 보내 서술문 한 줄과 섹션 줄을 받는다.
@@ -163,9 +170,18 @@ export default function OverviewScreen({
   const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
   // 행동 기록을 기다리는 동안에는 빈 숫자로 한 마디를 부르지 않는다 — 받은 뒤 다시 부르면 LLM 을 두 번 태운다
   const waiting = useMartWaiting();
+  /*
+   * 주문·매출 섹션은 카드와 같은 **기간 합계**로 보낸다. 전체 합을 보내면 문장은 "최근 14일 320건" 이라 쓰고 카드는 12건이라
+   * 서로 어긋난다. 기간 합계를 아직 받는 중이면 기다린다 (브랜드가 없어 부를 수 없을 때는 기다릴 것이 없다).
+   */
+  const salesSettled = salesKey === null || sales !== undefined;
   const headlineReq = useMemo(
-    () => (pulse === undefined || waiting ? null : buildOverviewHeadlineRequest(m, brand, days, pulse)),
-    [m, brand, days, pulse, waiting],
+    () => {
+      if (pulse === undefined || !salesSettled || waiting) return null;
+      const forHeadline = pulse && sales ? { ...pulse, orders: sales.orders, revenue: sales.revenue, units: sales.units } : pulse;
+      return buildOverviewHeadlineRequest(m, brand, days, forHeadline);
+    },
+    [m, brand, days, pulse, sales, salesSettled, waiting],
   );
   const headline = useHeadline(headlineReq);
   const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
@@ -204,26 +220,26 @@ export default function OverviewScreen({
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {sales || pulse ? <p className="kpi-period">{sales ? `주문·매출 · 최근 ${days}일` : '주문·매출 · 전체 기간'}</p> : null}
-      {sales ? (
+      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · 최근 ${shownDays}일` : '주문·매출 · 전체 기간'}</p> : null}
+      {shownSales ? (
         <div className="grid grid--kpi">
           <Kpi
             label="주문"
-            value={`${fmt.int(sales.orders)}건`}
-            sub={sales.truncated ? `${fmt.int(SELLER_ORDER_LIMIT)}건까지만 셌습니다` : pulse ? `전체 기간 ${fmt.int(pulse.orders)}건` : sales.orders > 0 ? '결제 완료' : '이 기간에는 주문이 없습니다'}
+            value={`${fmt.int(shownSales.orders)}건`}
+            sub={shownSales.truncated ? `${fmt.int(SELLER_ORDER_LIMIT)}건까지만 셌습니다` : pulse ? `전체 기간 ${fmt.int(pulse.orders)}건` : shownSales.orders > 0 ? '결제 완료' : '이 기간에는 주문이 없습니다'}
             source="real"
           />
           {/* 원 단위 그대로 적으면 카드에서 줄이 넘어간다. 100만 원 넘으면 만 원 단위로 줄이고 정확한 값은 아래 한 줄에 */}
           <Kpi
             label="매출"
-            value={wonCompact(sales.revenue)}
-            sub={sales.revenue >= 1_000_000 ? `${Math.round(sales.revenue).toLocaleString('ko-KR')}원` : pulse ? `전체 기간 ${wonCompact(pulse.revenue)}` : sales.revenue > 0 ? '결제 완료' : '이 기간에는 매출이 없습니다'}
+            value={wonCompact(shownSales.revenue)}
+            sub={shownSales.truncated ? `${fmt.int(SELLER_ORDER_LIMIT)}건까지의 합입니다` : shownSales.revenue >= 1_000_000 ? `${Math.round(shownSales.revenue).toLocaleString('ko-KR')}원` : pulse ? `전체 기간 ${wonCompact(pulse.revenue)}` : shownSales.revenue > 0 ? '결제 완료' : '이 기간에는 매출이 없습니다'}
             source="real"
           />
           <Kpi
             label="판매 수량"
-            value={`${fmt.int(sales.units)}개`}
-            sub={sales.orders > 0 ? `한 주문에 평균 ${(sales.units / sales.orders).toFixed(1)}개` : pulse ? `전체 기간 ${fmt.int(pulse.units)}개` : '이 기간에는 팔린 수량이 없습니다'}
+            value={`${fmt.int(shownSales.units)}개`}
+            sub={shownSales.truncated ? `${fmt.int(SELLER_ORDER_LIMIT)}건까지의 합입니다` : shownSales.orders > 0 ? `한 주문에 평균 ${(shownSales.units / shownSales.orders).toFixed(1)}개` : pulse ? `전체 기간 ${fmt.int(pulse.units)}개` : '이 기간에는 팔린 수량이 없습니다'}
             source="real"
           />
         </div>
