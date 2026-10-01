@@ -247,7 +247,8 @@ body {
   gap: 8px;
 }
 
-.main__controls select {
+.main__controls select,
+.period-select {
   font: inherit;
   font-size: 13px;
   padding: 7px 10px;
@@ -542,7 +543,8 @@ body {
 .headline {
   /* 22px 문장 두 줄(약 64) + 자세히(18) + 여백 */
   min-height: 132px;
-  align-content: start;
+  /* 한 줄 문장이면 남는 높이가 아래에 몰려 빈칸처럼 보였다 — 가운데에 둔다 (2026-10-01 유림님) */
+  align-content: center;
 }
 
 .headline > .headline__line {
@@ -3461,4 +3463,17 @@ table.data tr:hover td {
 
 .cross-sum__go {
   margin-top: 4px;
+}
+
+/* 요약 · "주문·매출 · 기간" 글과 기간 고르기를 한 줄에 */
+.kpi-period-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 -8px;
+}
+
+.kpi-period-row > .kpi-period {
+  margin: 0;
 }

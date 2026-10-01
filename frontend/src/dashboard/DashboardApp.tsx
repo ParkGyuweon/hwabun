@@ -198,6 +198,15 @@ export default function DashboardApp() {
   /** 지금 열린 섹션. 화면 키 하나만 상태로 두고 섹션은 거기서 끌어낸다 — 둘을 따로 두면 어긋난다 */
   const activeSection = ALL_SECTIONS.find((sec) => sec.key === active.section) ?? ALL_SECTIONS[0];
 
+  const periodSelect = (
+    <select className="period-select" value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="기간">
+      <option value={1}>오늘</option>
+      <option value={7}>최근 7일</option>
+      <option value={14}>최근 14일</option>
+      <option value={30}>최근 30일</option>
+    </select>
+  );
+
   return (
     /*
      * 행동 지표는 여기서 한 번 받는다 (마트 API 6개 병렬 · contracts/dashboard-mart-api-spec.md).
@@ -326,20 +335,8 @@ export default function DashboardApp() {
           */}
           <ScopeNote scope={active.scope} brandName={brand?.name ?? null} period={PERIOD_LABEL_SCREENS.has(screen) ? periodLabel(days) : null} />
 
-          <div className="main__controls">
-            {screen === 'overview' || screen === 'inflow' ? (
-              <select
-                value={days}
-                onChange={(e) => setDays(Number(e.target.value))}
-                aria-label="기간"
-              >
-                <option value={1}>오늘</option>
-                <option value={7}>최근 7일</option>
-                <option value={14}>최근 14일</option>
-                <option value={30}>최근 30일</option>
-              </select>
-            ) : null}
-          </div>
+          {/* 요약은 기간 고르기를 "주문·매출" 줄 오른쪽에 둔다 (혼자 한 줄을 차지해 빈칸이 컸다). 넘어온 방문은 여기 */}
+          {screen === 'inflow' ? <div className="main__controls">{periodSelect}</div> : null}
         </header>
 
         {/*
@@ -364,7 +361,7 @@ export default function DashboardApp() {
         ) : null}
 
         {/* 요약은 주문·매출 카드를 먼저 그리고 행동 기록 부분만 화면 안에서 가린다 (2026-09-30) */}
-        {screen === 'overview' ? <OverviewScreen days={days} brandName={brand?.name ?? null} brandLoading={brands.kind === 'loading'} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
+        {screen === 'overview' ? <OverviewScreen days={days} periodPicker={periodSelect} brandName={brand?.name ?? null} brandLoading={brands.kind === 'loading'} onGo={(s) => setScreen(s as ScreenKey)} /> : null}
         {screen === 'products' ? <BehaviorGate><ProductsScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /></BehaviorGate> : null}
         {screen === 'orders' ? <OrdersScreen brandId={brand?.id ?? null} brandName={brand?.name ?? null} /> : null}
         {screen === 'content' ? <BehaviorGate><ContentScreen brandName={brand?.name ?? ''} /></BehaviorGate> : null}

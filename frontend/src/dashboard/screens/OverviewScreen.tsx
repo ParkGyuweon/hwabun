@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { SELLER_ORDER_LIMIT, fetchSellerFeedback, fetchSellerOrders, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
@@ -66,11 +67,14 @@ function wonCompact(krw: number): string {
 
 export default function OverviewScreen({
   days,
+  periodPicker,
   brandName,
   brandLoading = false,
   onGo,
 }: {
   days: number;
+  /** 기간 고르기. "주문·매출" 줄 오른쪽에 둔다 */
+  periodPicker?: ReactNode;
   /** 로그인한 브랜드 이름. 피드백 시드는 이 이름과 같은 것만 센다 — 못 받았으면 아무것도 안 센다 */
   brandName: string | null;
   /** 내 브랜드 목록을 아직 받는 중. 그동안 brandName 은 null 이지만 "브랜드 없음" 이 아니다 */
@@ -344,7 +348,10 @@ export default function OverviewScreen({
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {shownSales || pulse || ordersPending ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : pulse ? '주문·매출 · 전체 기간' : `주문·매출 · ${periodLabel(days)}`}</p> : null}
+      <div className="kpi-period-row">
+        {shownSales || pulse || ordersPending ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : pulse ? '주문·매출 · 전체 기간' : `주문·매출 · ${periodLabel(days)}`}</p> : <span />}
+        {periodPicker}
+      </div>
       {shownSales ? (
         <div className="grid grid--kpi">
           <Kpi
