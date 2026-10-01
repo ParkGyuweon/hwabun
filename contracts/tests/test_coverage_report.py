@@ -38,7 +38,12 @@ class PropertyContractCoverageTest(unittest.TestCase):
 
     def test_contract_parser_reads_impression_origin_enum_and_type(self) -> None:
         self.assertEqual(
-            {"observed", "implied_by_click", "implied_by_quick_look"},
+            {
+                "observed",
+                "implied_by_click",
+                "implied_by_quick_look",
+                "implied_by_direct_view",
+            },
             self.enums["impression_origin"],
         )
         for event_name in (
