@@ -540,7 +540,7 @@
 
 /* ---------- 좁은 화면 ---------- */
 
-@media (max-width: 900px) {
+@media (max-width: 640px) {
   :root[data-storefront='catalog'] .list__catalog {
     display: flex;
     flex-direction: column;
