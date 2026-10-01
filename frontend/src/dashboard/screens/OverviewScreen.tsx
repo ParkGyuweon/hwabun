@@ -9,6 +9,7 @@ import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { BehaviorGate, useBehavior, useMartWaiting } from '../lib/useBehavior';
+import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadline } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
@@ -162,8 +163,7 @@ export default function OverviewScreen({
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
 
   /**
-   * **오늘** 한 줄 (2026-10-01 유림님). 전에는 AI 한 마디("…방문의 방문은 1,170건입니다")가 여기 있었는데 무슨 뜻인지 읽히지 않았다.
-   * 그 자리에 오늘 숫자 넷을 그대로 둔다 — 방문·담기는 마트의 날짜별 줄에서 오늘(KST), 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것.
+   * **오늘** 한 줄 (2026-10-01 유림님). AI 한 마디 바로 아래에 오늘 숫자 넷을 그대로 둔다 — 방문·담기는 마트의 날짜별 줄에서 오늘(KST), 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것.
    * 마트는 배치가 돈 뒤에야 오늘 줄이 생기므로, 없으면 0 이 아니라 "집계 전" 이다.
    */
   const waiting = useMartWaiting();
@@ -174,8 +174,50 @@ export default function OverviewScreen({
   }, []);
   const todayPoint = series.find((d) => d.label === todayLabel) ?? null;
 
+  /**
+   * AI 한 마디 (contracts/headline-api-spec.md) — 2026-10-01 오후에 되살렸다 (팀 의견: AI 가 요약해 주는 자리가 있는 게 낫다).
+   * 오전에 뺀 이유였던 규칙 문장("…방문의 방문은 1,170건입니다")은 그대로 숨기고, **첫 문장을 AI 가 쓴 때만** 맨 위에 그린다.
+   * 못 받거나 AI 가 못 쓰면 자리도 없다 — 아래 "오늘" 숫자부터 보인다.
+   * 주문·매출은 카드와 같은 **기간 합계**로 보낸다 (전체 합을 보내면 문장과 카드 숫자가 어긋난다). 기간 합계를 받는 중이면 기다린다.
+   */
+  const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
+  const salesSettled = salesKey === null || sales !== undefined;
+  const headlineReq = useMemo(
+    () => {
+      // 행동 기록을 기다리는 동안에는 빈 숫자로 부르지 않는다 — 받은 뒤 다시 부르면 LLM 을 두 번 태운다
+      if (pulse === undefined || !salesSettled || waiting) return null;
+      const forHeadline = pulse && sales ? { ...pulse, orders: sales.orders, revenue: sales.revenue, units: sales.units } : pulse;
+      return buildOverviewHeadlineRequest(m, brand, days, forHeadline);
+    },
+    [m, brand, days, pulse, sales, salesSettled, waiting],
+  );
+  const headline = useHeadline(headlineReq);
+  const sectionLabel = useMemo(() => new Map((headlineReq?.sections ?? []).map((s) => [s.id, s.label_ko])), [headlineReq]);
+
   return (
     <div className="stack">
+      {/*
+        머리말("지금 무슨 일이")과 "AI가 쓴 문장" 꼬리표는 달지 않는다 — 발표 화면에서 거슬리고, 사장님에게는 문장 자체가 중요하다.
+        출처는 title 로 남겨 마우스를 올리면 보인다. 섹션 줄은 "자세히" 로 접어 둔다 (2026-09-21 유림님: 글이 너무 많다).
+      */}
+      {headline && headline.headline && headlineOrigin(headline) === 'llm' ? (
+        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
+          <p className="headline__line">{headline.headline}</p>
+          {headline.sections.length > 0 ? (
+            <details className="headline__more">
+              <summary>자세히</summary>
+              <ul className="headline__sections">
+                {headline.sections.map((s) => (
+                  <li key={s.id}>
+                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
+                    <span title={lineOrigin(headline, s) === 'rule' ? '이 줄은 숫자만 그대로 적었습니다' : 'AI가 문장으로 풀어 쓴 줄입니다'}>{s.line}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </section>
+      ) : null}
       {/* 오늘 — 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
       <p className="kpi-period">오늘</p>
       <div className="grid grid--kpi">
