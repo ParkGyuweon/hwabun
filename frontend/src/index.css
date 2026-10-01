@@ -78,6 +78,12 @@ body {
 
 body {
   -webkit-font-smoothing: antialiased;
+  /*
+   * 한글은 낱말 단위로만 줄을 바꾼다 — 기본값은 글자마다 꺾어 상품명이 "…비타민 C 함 / 유" 처럼 한 글자씩 떨어졌다
+   * (2026-10-01 점검). 긴 영문 성분명·주소는 칸을 넘지 않게 그 안에서 꺾는다.
+   */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 h1,

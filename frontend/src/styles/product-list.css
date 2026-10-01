@@ -384,6 +384,9 @@
 
 /* 상품명은 두 줄로 고정한다. 줄 수가 다르면 카드마다 평점 위치가 어긋난다 */
 .card__name {
+  /* 상품명이 "…토닝 솔루 / 션" 처럼 한 글자씩 꺾이지 않게 낱말 단위로 (2026-10-01 점검) */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   font-size: 14px;
   line-height: 1.45;
   color: var(--color-ink);
