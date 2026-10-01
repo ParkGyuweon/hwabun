@@ -3285,12 +3285,30 @@ table.data tr:hover td {
   background: rgba(0, 0, 0, 0.04);
 }
 
-/* 요약 · 다른 브랜드에서 넘어온 방문 (한 줄 요약 카드) */
+/* 요약 · 첫 번째 할 일(넓게) + 다른 브랜드에서 넘어온 방문(좁게) 한 줄 */
+.verdict-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.verdict-row > .panel {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .verdict-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 좁은 칸이라 숫자 · 설명 · 자세히 보기를 위아래로 */
 .cross-sum {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .cross-sum__value {
@@ -3304,12 +3322,11 @@ table.data tr:hover td {
 
 .cross-sum__sub {
   margin: 0;
-  flex: 1 1 260px;
   font-size: 14px;
   color: var(--ink-soft);
   word-break: keep-all;
 }
 
 .cross-sum__go {
-  margin-left: auto;
+  margin-top: 4px;
 }

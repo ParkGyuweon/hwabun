@@ -144,6 +144,7 @@ export default function OverviewScreen({
     };
   }, [crossKey, days]);
   const crossNow = cross && cross.key === crossKey ? cross.summary : null;
+  const crossShown = !!crossNow && crossNow.cross_brand_entry_rate != null && crossNow.brand_view_sessions > 0;
 
   /**
    * 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다.
@@ -406,6 +407,11 @@ export default function OverviewScreen({
           />
         </div>
       ) : null}
+      {/*
+        첫 번째 할 일 옆에 "다른 브랜드에서 넘어온 방문" (2026-10-01 유림님). 둘 다 다른 브랜드와 견주는 숫자라 한 줄에 둔다.
+        넘어온 방문이 없으면 첫 번째 할 일이 혼자 전체 폭을 쓴다. 좁은 화면에서는 위아래로.
+      */}
+      <div className={crossShown ? 'verdict-row' : undefined}>
       {top ? (
         <section className={`verdict verdict--${top.origin}`}>
           <p className="verdict__eyebrow">
@@ -443,9 +449,25 @@ export default function OverviewScreen({
                 : '상세페이지 설명 글 하나를 200명 넘게 읽거나, 한 고객군의 방문이 200건을 넘으면 그때부터 결론을 냅니다.'}
             </li>
           </ul>
-          <p className="verdict__action">지금은 아래 주문·매출 숫자와 방문 추이만 참고해 주세요.</p>
+          <p className="verdict__action">지금은 주문·매출 숫자와 방문 추이만 참고해 주세요.</p>
         </section>
       )}
+      {crossShown && crossNow ? (
+        <Panel title="다른 브랜드에서 넘어온 방문" origin="shared" aside={days === 1 ? '오늘' : `최근 ${days}일`}>
+          <div className="cross-sum">
+            <p className="cross-sum__value">{fmt.pct(crossNow.cross_brand_entry_rate ?? 0)}</p>
+            <p className="cross-sum__sub">
+              우리 상품을 본 방문 {fmt.int(crossNow.brand_view_sessions)}건 중 {fmt.int(crossNow.cross_brand_entry_sessions)}건이 다른 브랜드를 보다가 넘어왔습니다
+            </p>
+            {onGo ? (
+              <button type="button" className="chip cross-sum__go" onClick={() => onGo('inflow')}>
+                자세히 보기
+              </button>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
+      </div>
 
       <p className="kpi-period">고객 행동 · 최근 {days}일</p>
       <div className="grid grid--kpi">
@@ -584,21 +606,6 @@ export default function OverviewScreen({
             sub={overview.bounceRate === null ? '준비 중' : '아무 행동 없이 나감'}
           />
         </div>
-        {crossNow && crossNow.cross_brand_entry_rate != null && crossNow.brand_view_sessions > 0 ? (
-          <Panel title="다른 브랜드에서 넘어온 방문" origin="shared" aside={days === 1 ? '오늘' : `최근 ${days}일`}>
-            <div className="cross-sum">
-              <p className="cross-sum__value">{fmt.pct(crossNow.cross_brand_entry_rate)}</p>
-              <p className="cross-sum__sub">
-                우리 상품을 본 방문 {fmt.int(crossNow.brand_view_sessions)}건 중 {fmt.int(crossNow.cross_brand_entry_sessions)}건이 다른 브랜드를 보다가 넘어왔습니다
-              </p>
-              {onGo ? (
-                <button type="button" className="chip cross-sum__go" onClick={() => onGo('inflow')}>
-                  자세히 보기
-                </button>
-              ) : null}
-            </div>
-          </Panel>
-        ) : null}
         <Panel title="고객이 가장 관심 보인 상품 5개" source={source.products} fold aside="담기·누르기는 더하고 담았다 뺀 것은 빼서 매긴 점수">
           <BarList
             items={productMetrics.slice(0, 5).map((p) => ({
