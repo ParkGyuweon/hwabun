@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -95,7 +96,12 @@ public class CommerceController {
     @Min(1) @Max(MAX_CART_QUANTITY) int quantity
   ) {}
 
-  public record OrderRequest(String idempotencyKey) {}
+  public record OrderLineRequest(String variantId, int quantity) {}
+
+  /** items가 있으면 장바구니와 독립적으로 해당 품목만 주문한다. */
+  public record OrderRequest(String idempotencyKey, List<OrderLineRequest> items, Boolean clearCart) {}
+
+  public record CartQuantityRequest(@Min(1) @Max(MAX_CART_QUANTITY) int quantity) {}
 
   public record OrderResponse(
     String orderId,
@@ -278,6 +284,27 @@ public class CommerceController {
       .orElseGet(() -> ResponseEntity.notFound().build());
   }
 
+  @PatchMapping("/cart/items/{id}")
+  @Transactional
+  public ResponseEntity<?> updateCartQuantity(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @PathVariable String id,
+    @Valid @RequestBody CartQuantityRequest request
+  ) {
+    requireMember(actor);
+    if (request.quantity() < 1 || request.quantity() > MAX_CART_QUANTITY) {
+      return ResponseEntity.badRequest().body("invalid cart quantity");
+    }
+    return cartItems.findById(id)
+      .filter(item -> carts.findById(item.getCartId())
+        .map(cart -> cart.getMemberId().equals(actor.accountId())).orElse(false))
+      .map(item -> {
+        item.quantity(request.quantity());
+        return ResponseEntity.ok(cartItems.save(item));
+      })
+      .orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
   @PostMapping("/orders")
   @Transactional
   public ResponseEntity<?> order(
@@ -291,18 +318,40 @@ public class CommerceController {
       return ResponseEntity.badRequest().build();
     }
 
+    List<CartItem> requestedItems = null;
+    if (request.items() != null) {
+      if (request.items().isEmpty()) return ResponseEntity.badRequest().body("order items are empty");
+      requestedItems = new ArrayList<>();
+      java.util.Set<String> seenVariantIds = new java.util.HashSet<>();
+      for (OrderLineRequest line : request.items()) {
+        if (line == null || line.variantId() == null || line.variantId().isBlank() ||
+            line.quantity() < 1 || line.quantity() > MAX_CART_QUANTITY) {
+          return ResponseEntity.badRequest().body("invalid order item");
+        }
+        if (!seenVariantIds.add(line.variantId())) {
+          return ResponseEntity.badRequest().body("duplicate order variant");
+        }
+        requestedItems.add(new CartItem(UUID.randomUUID().toString(), "", line.variantId(), line.quantity()));
+      }
+    }
+    // 생략 시 전체 장바구니 주문은 기존 동작대로 비우고, 지정 품목 주문은 유지한다.
+    boolean clearCartOnPaid = request.clearCart() != null
+      ? request.clearCart()
+      : requestedItems == null;
+
     Optional<ShopOrder> existing = orders.findByMemberIdAndIdempotencyKey(
       actor.accountId(),
       request.idempotencyKey()
     );
     if (existing.isPresent()) {
-      List<CartItem> retryItems = carts
+      List<CartItem> retryItems = requestedItems != null ? requestedItems : carts
         .findByMemberId(actor.accountId())
         .map(cart -> cartItems.findByCartId(cart.getId()))
         .orElseGet(List::of);
       if (
-        !retryItems.isEmpty() &&
-        !existing.get().getRequestHash().equals(hash(retryItems))
+        (!retryItems.isEmpty() && !existing.get().getRequestHash().equals(hash(retryItems, clearCartOnPaid))) ||
+        ((requestedItems != null || request.clearCart() != null) &&
+          existing.get().shouldClearCartOnPaid() != clearCartOnPaid)
       ) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
           "idempotency key reused with different cart"
@@ -311,8 +360,8 @@ public class CommerceController {
       return ResponseEntity.ok(orderView(existing.get()));
     }
 
-    Cart cart = cart(actor.accountId());
-    List<CartItem> items = cartItems.findByCartId(cart.getId());
+    Cart cart = requestedItems == null ? cart(actor.accountId()) : null;
+    List<CartItem> items = requestedItems != null ? requestedItems : cartItems.findByCartId(cart.getId());
     if (items.isEmpty()) {
       return ResponseEntity.badRequest().body("cart is empty");
     }
@@ -362,12 +411,11 @@ public class CommerceController {
         orderId,
         actor.accountId(),
         request.idempotencyKey(),
-        hash(items),
+        hash(items, clearCartOnPaid),
         total
       )
     );
     orderItems.saveAll(snapshots);
-    cartItems.deleteByCartId(cart.getId());
     return ResponseEntity.status(HttpStatus.CREATED).body(orderView(order));
   }
 
@@ -383,11 +431,14 @@ public class CommerceController {
     if (
       order.isEmpty() || !order.get().getMemberId().equals(actor.accountId())
     ) return ResponseEntity.notFound().build();
-    orders.markPaid(
+    int updated = orders.markPaid(
       id,
       actor.accountId(),
       java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul"))
     );
+    if (updated > 0 && order.get().shouldClearCartOnPaid()) {
+      removeOrderedQuantitiesFromCart(actor.accountId(), id);
+    }
     return ResponseEntity.ok(orderView(orders.findById(id).orElseThrow()));
   }
 
@@ -424,6 +475,26 @@ public class CommerceController {
       order.getCreatedAt(),
       itemCount,
       items
+    );
+  }
+
+  private void removeOrderedQuantitiesFromCart(String memberId, String orderId) {
+    jdbc.update(
+      "delete ci from cart_item ci " +
+        "join cart c on c.cart_id=ci.cart_id " +
+        "join order_item oi on oi.variant_id=ci.variant_id and oi.order_id=? " +
+        "where c.member_id=? and ci.quantity<=oi.quantity",
+      orderId,
+      memberId
+    );
+    jdbc.update(
+      "update cart_item ci " +
+        "join cart c on c.cart_id=ci.cart_id " +
+        "join order_item oi on oi.variant_id=ci.variant_id and oi.order_id=? " +
+        "set ci.quantity=ci.quantity-oi.quantity " +
+        "where c.member_id=? and ci.quantity>oi.quantity",
+      orderId,
+      memberId
     );
   }
 
@@ -494,5 +565,10 @@ public class CommerceController {
     } catch (Exception exception) {
       throw new IllegalStateException(exception);
     }
+  }
+
+  private String hash(List<CartItem> items, boolean clearCartOnPaid) {
+    String itemHash = hash(items);
+    return (clearCartOnPaid ? "T" : "F") + itemHash.substring(1);
   }
 }

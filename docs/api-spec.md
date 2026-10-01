@@ -102,8 +102,9 @@ Shop backend 인증 요청은 `Authorization: Bearer <JWT>`를 사용합니다. 
 |---|---|---|---|
 | GET | `/api/cart` | MEMBER | 장바구니 조회 |
 | POST | `/api/cart/items` | MEMBER | 옵션 추가·수량 누적 |
+| PATCH | `/api/cart/items/{itemId}` | MEMBER | 항목 수량 변경 (1~99) |
 | DELETE | `/api/cart/items/{itemId}` | MEMBER | 항목 삭제 |
-| POST | `/api/orders` | MEMBER | 서버 장바구니 전체로 주문 생성 |
+| POST | `/api/orders` | MEMBER | `items`가 있으면 지정 품목, 없으면 서버 장바구니 전체로 주문 생성. `clearCart`는 PAID 전환 때 주문에 포함된 수량을 장바구니에서 제거할지 지정 |
 | GET | `/api/orders` | MEMBER | 결제 완료 주문 목록 |
 | POST | `/api/orders/{orderId}/pay` | MEMBER* | 테스트 결제 완료 |
 | POST | `/api/orders/{orderId}/confirm` | MEMBER | PortOne 결제 확인 |
@@ -112,14 +113,17 @@ Shop backend 인증 요청은 `Authorization: Bearer <JWT>`를 사용합니다. 
 // POST /api/cart/items
 { "variantId": "variant-id", "quantity": 2 }
 
-// POST /api/orders
+// POST /api/orders — legacy cart checkout
 { "idempotencyKey": "client-generated-unique-key" }
+
+// POST /api/orders — selected items / buy now
+{ "idempotencyKey": "client-generated-unique-key", "items": [{ "variantId": "variant-id", "quantity": 1 }], "clearCart": false }
 
 // POST /api/orders/{orderId}/confirm
 { "paymentId": "portone-payment-id" }
 ```
 
-주문 응답은 `orderId`, `status`, `totalAmount`, `paidAmount`, `currency`, `paymentId`, `paymentProvider`, `paidAt`, `createdAt`, `itemCount`를 포함합니다. 동일 회원이 같은 idempotency key를 다른 장바구니로 재사용하면 `409`입니다. `/pay`는 테스트 계정 prefix 설정에 따라 제한됩니다.
+주문 응답은 `orderId`, `status`, `totalAmount`, `paidAmount`, `currency`, `paymentId`, `paymentProvider`, `paidAt`, `createdAt`, `itemCount`를 포함합니다. 같은 idempotency key를 다른 품목이나 `clearCart` 값으로 재사용하면 `409`입니다. `clearCart`가 적용된 주문은 결제 확정(`/confirm`, 웹훅·대조 포함) 또는 테스트 결제(`/pay`)로 CREATED→PAID 전환에 성공하면 주문 품목 수량만 장바구니에서 차감합니다. 주문 수량보다 장바구니 수량이 많으면 차감 후 초과 수량이 남습니다. 미지정 시 장바구니 전체 주문은 `true`, 지정 품목 주문은 `false`입니다. `/pay`는 테스트 계정 prefix 설정에 따라 제한됩니다.
 
 ### 5.1 결제 대조(confirm 누락 복구)와 웹훅
 
