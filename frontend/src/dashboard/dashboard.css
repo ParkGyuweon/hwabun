@@ -3278,3 +3278,32 @@ table.data tr:hover td {
 .data tr.is-hit td {
   background: rgba(0, 0, 0, 0.04);
 }
+
+/* 요약 · 다른 브랜드에서 넘어온 방문 (한 줄 요약 카드) */
+.cross-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
+.cross-sum__value {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.cross-sum__sub {
+  margin: 0;
+  flex: 1 1 260px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  word-break: keep-all;
+}
+
+.cross-sum__go {
+  margin-left: auto;
+}

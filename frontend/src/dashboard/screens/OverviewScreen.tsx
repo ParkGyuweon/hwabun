@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { SELLER_ORDER_LIMIT, fetchSellerFeedback, fetchSellerOrders, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
-import { rangeOf } from '../lib/martApi';
+import { fetchCrossBrand, rangeOf } from '../lib/martApi';
+import type { CrossBrandCounts } from '../lib/martApi';
 import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
@@ -76,6 +77,26 @@ export default function OverviewScreen({
   const top = insights[0];
   const rest = insights.slice(1, 4);
   const [trend, setTrend] = useState<'visits' | 'carts'>('visits');
+
+  /*
+   * 다른 브랜드에서 넘어온 방문 (2026-10-01 팀 요청: 시장 > 넘어온 방문 지표를 요약에서도 한 번에). 다른 브랜드 기록이 모여야
+   * 나오는 숫자라 "여러 브랜드 종합" 표시를 단다. 못 받았거나 아직 행이 없으면 자리도 없다. 추천·배너 비중은 넘어온 방문
+   * 화면에만 둔다 — 둘을 더하면 100% 를 넘어(한 방문이 두 길로 다 잡힌다) 요약에서는 오해를 산다.
+   */
+  const [cross, setCross] = useState<{ key: string; summary: CrossBrandCounts | null } | null>(null);
+  const crossKey = loadBrandId() ? `${loadBrandId()}:${days}` : null;
+  useEffect(() => {
+    const brandId = loadBrandId();
+    if (!brandId || !crossKey) return;
+    let alive = true;
+    void fetchCrossBrand({ brandId, days }).then((d) => {
+      if (alive) setCross({ key: crossKey, summary: d?.summary ?? null });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [crossKey, days]);
+  const crossNow = cross && cross.key === crossKey ? cross.summary : null;
   // 결제할 때 고른 "왜 샀나요" 답. 답을 안 고른 주문(reason null)은 비율에서 빠진다 (서버 reason_share 와 같은 규칙)
   const reasons = (repurchase?.reasons ?? [])
     .filter((r): r is typeof r & { reason: string } => r.reason !== null && r.orderCount > 0)
@@ -563,6 +584,21 @@ export default function OverviewScreen({
             sub={overview.bounceRate === null ? '준비 중' : '아무 행동 없이 나감'}
           />
         </div>
+        {crossNow && crossNow.cross_brand_entry_rate != null && crossNow.brand_view_sessions > 0 ? (
+          <Panel title="다른 브랜드에서 넘어온 방문" origin="shared" aside={`최근 ${days}일`}>
+            <div className="cross-sum">
+              <p className="cross-sum__value">{fmt.pct(crossNow.cross_brand_entry_rate)}</p>
+              <p className="cross-sum__sub">
+                우리 상품을 본 방문 {fmt.int(crossNow.brand_view_sessions)}건 중 {fmt.int(crossNow.cross_brand_entry_sessions)}건이 다른 브랜드를 보다가 넘어왔습니다
+              </p>
+              {onGo ? (
+                <button type="button" className="chip cross-sum__go" onClick={() => onGo('inflow')}>
+                  자세히 보기
+                </button>
+              ) : null}
+            </div>
+          </Panel>
+        ) : null}
         <Panel title="고객이 가장 관심 보인 상품 5개" source={source.products} fold aside="담기·누르기는 더하고 담았다 뺀 것은 빼서 매긴 점수">
           <BarList
             items={productMetrics.slice(0, 5).map((p) => ({
