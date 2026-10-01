@@ -266,43 +266,7 @@ export default function OverviewScreen({
   return (
     <div className="stack">
       {/*
-        머리말("지금 무슨 일이")과 "AI가 쓴 문장" 꼬리표는 달지 않는다 — 발표 화면에서 거슬리고, 사장님에게는 문장 자체가 중요하다.
-        출처는 title 로 남겨 마우스를 올리면 보인다. 섹션 줄은 "자세히" 로 접어 둔다 (2026-09-21 유림님: 글이 너무 많다).
-      */}
-      {headlineAi ? (
-        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
-          <p className="headline__line">{headlineAi.line}</p>
-          {headlineAi.more.length > 0 ? (
-            <details className="headline__more">
-              <summary>자세히</summary>
-              <ul className="headline__sections">
-                {headlineAi.more.map((s) => (
-                  <li key={s.id}>
-                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
-                    <span>{s.line}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : (
-            <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
-          )}
-        </section>
-      ) : headlinePending ? (
-        <section className="headline headline--loading" aria-label="지금 상황 한 마디" aria-busy="true">
-          <p className="headline__line headline__line--loading">
-            <span className="ai__dot" aria-hidden="true" />
-            AI가 분석 중입니다<span className="headline__dots" aria-hidden="true" />
-          </p>
-          <span className="headline__skeleton" aria-hidden="true" />
-        </section>
-      ) : (
-        <section className="headline" aria-label="지금 상황 한 마디">
-          <p className="headline__line">{HEADLINE_FALLBACK.line}</p>
-          <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
-        </section>
-      )}
-      {/*
+        주문·매출은 맨 위 (2026-10-01 유림님). 사장님이 제일 먼저 보는 숫자다.
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
@@ -349,7 +313,44 @@ export default function OverviewScreen({
           */}
         </div>
       ) : null}
-      {/* 여기부터는 고객 행동 기록에서 나온 숫자다. 위 주문·매출은 기다리지 않고 먼저 보인다 (2026-09-30) */}
+      {/*
+        머리말("지금 무슨 일이")과 "AI가 쓴 문장" 꼬리표는 달지 않는다 — 발표 화면에서 거슬리고, 사장님에게는 문장 자체가 중요하다.
+        출처는 title 로 남겨 마우스를 올리면 보인다. 섹션 줄은 "자세히" 로 접어 둔다 (2026-09-21 유림님: 글이 너무 많다).
+      */}
+      {headlineAi ? (
+        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
+          <p className="headline__line">{headlineAi.line}</p>
+          {headlineAi.more.length > 0 ? (
+            <details className="headline__more">
+              <summary>자세히</summary>
+              <ul className="headline__sections">
+                {headlineAi.more.map((s) => (
+                  <li key={s.id}>
+                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
+                    <span>{s.line}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : (
+            <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
+          )}
+        </section>
+      ) : headlinePending ? (
+        <section className="headline headline--loading" aria-label="지금 상황 한 마디" aria-busy="true">
+          <p className="headline__line headline__line--loading">
+            <span className="ai__dot" aria-hidden="true" />
+            AI가 분석 중입니다<span className="headline__dots" aria-hidden="true" />
+          </p>
+          <span className="headline__skeleton" aria-hidden="true" />
+        </section>
+      ) : (
+        <section className="headline" aria-label="지금 상황 한 마디">
+          <p className="headline__line">{HEADLINE_FALLBACK.line}</p>
+          <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
+        </section>
+      )}
+      {/* 여기부터는 고객 행동 기록에서 나온 숫자다. 맨 위 주문·매출은 기다리지 않고 먼저 보인다 (2026-09-30) */}
       <BehaviorGate>
       {/*
         재구매 배지 · 단위 = 브랜드 (ai-insight-rules §2-1, 2026-09-10 확정). 상품이 달라도 같은 브랜드를 다시 사면 재구매다.
