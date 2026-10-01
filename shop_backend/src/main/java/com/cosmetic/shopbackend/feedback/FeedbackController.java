@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -167,6 +168,48 @@ public class FeedbackController {
       "classificationStatus",
       "PENDING"
     );
+  }
+
+  @GetMapping("/feedback/mine")
+  public List<Map<String, Object>> myFeedback(
+    @AuthenticationPrincipal ShopPrincipal actor,
+    @RequestParam(required = false) String productId
+  ) {
+    requireRole(actor, AccountRole.MEMBER);
+    String sql = "select f.feedback_id feedbackId,f.product_id productId,f.axis_id axisId," +
+      "f.body,f.handling_status handlingStatus,f.created_at createdAt," +
+      "f.last_responded_at lastRespondedAt," +
+      "fr.action responseAction,fr.body responseBody,fr.created_at responseCreatedAt " +
+      "from feedback f left join feedback_response fr on fr.feedback_id=f.feedback_id " +
+      "where f.member_id=? and f.status='VISIBLE'" +
+      (productId == null ? "" : " and f.product_id=?") +
+      " order by f.created_at desc,f.feedback_id,fr.created_at,fr.feedback_response_id";
+    List<Map<String, Object>> rows = productId == null
+      ? jdbc.queryForList(sql, actor.accountId())
+      : jdbc.queryForList(sql, actor.accountId(), productId);
+    Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
+    for (Map<String, Object> row : rows) {
+      String id = String.valueOf(row.get("feedbackId"));
+      Map<String, Object> feedback = grouped.get(id);
+      if (feedback == null) {
+        feedback = new LinkedHashMap<>();
+        for (String key : List.of("feedbackId", "productId", "axisId", "body", "handlingStatus", "createdAt", "lastRespondedAt")) {
+          feedback.put(key, row.get(key));
+        }
+        feedback.put("responses", new ArrayList<Map<String, Object>>());
+        grouped.put(id, feedback);
+      }
+      if (row.get("responseAction") != null) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("action", row.get("responseAction"));
+        response.put("body", row.get("responseBody"));
+        response.put("createdAt", row.get("responseCreatedAt"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> responses = (List<Map<String, Object>>) feedback.get("responses");
+        responses.add(response);
+      }
+    }
+    return new ArrayList<>(grouped.values());
   }
 
   @PostMapping("/seller/feedback/{feedbackId}/responses")

@@ -9,6 +9,8 @@ pipeline {
     environment {
         // Git 작업공간과 분리된 EC2-1 운영 환경 파일을 애플리케이션 배포에 사용한다.
         EC2_ENV_FILE = '/home/ubuntu/S15P21A306/deploy/ec2-1/.env'
+        // 헬스체크 curl은 Jenkins 컨테이너에서 실행된다. EC2 호스트의 접근 가능한 주소를 사용한다.
+        NGINX_HEALTH_RESOLVE_IP = '172.26.8.48'
     }
 
     options {
@@ -211,6 +213,13 @@ pipeline {
                         exit 0
                     fi
 
+                    # MySQL은 Jenkins 자동 배포에서 절대 대상으로 삼지 않는다.
+                    # 서비스 계산 로직이 바뀌어 mysql이 포함되면 배포 전에 실패시킨다.
+                    if printf '%s\\n' "$services" | tr ' ' '\\n' | grep -Fxq 'mysql'; then
+                        echo 'MySQL은 Jenkins 배포 대상이 아닙니다. DB 컨테이너는 변경하지 않습니다.' >&2
+                        exit 1
+                    fi
+
                     echo "변경된 서비스만 배포합니다:$services"
 
                     # 되돌리기용: 지금 돌고 있는 이미지를 <이미지>:previous 로 남긴다 (실패해도 배포는 계속)
@@ -225,6 +234,7 @@ pipeline {
                             ;;
                     esac
 
+                    # --no-deps로 대상 서비스의 의존 서비스(MySQL 포함)도 기동·재생성하지 않는다.
                     docker compose \\
                       -p ec2-1 \\
                       --env-file "$EC2_ENV_FILE" \\

@@ -166,6 +166,25 @@ public class PaymentConfirmationService {
     if (updated == 0 && !paymentId.equals(current.getPaymentId())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "order payment changed concurrently");
     }
+    if (updated > 0 && current.shouldClearCartOnPaid()) {
+      jdbc.update(
+        "delete ci from cart_item ci " +
+          "join cart c on c.cart_id=ci.cart_id " +
+          "join order_item oi on oi.variant_id=ci.variant_id and oi.order_id=? " +
+          "where c.member_id=? and ci.quantity<=oi.quantity",
+        orderId,
+        memberId
+      );
+      jdbc.update(
+        "update cart_item ci " +
+          "join cart c on c.cart_id=ci.cart_id " +
+          "join order_item oi on oi.variant_id=ci.variant_id and oi.order_id=? " +
+          "set ci.quantity=ci.quantity-oi.quantity " +
+          "where c.member_id=? and ci.quantity>oi.quantity",
+        orderId,
+        memberId
+      );
+    }
     return view(current);
   }
 

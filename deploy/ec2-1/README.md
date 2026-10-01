@@ -227,7 +227,7 @@ Jenkins `EC2 배포` 단계는 `up -d --build` 앞뒤로 `deploy-helpers.sh` 를
 3. **헬스 체크** `health`: 배포한 서비스마다 최대 180초(5초 × 36회) 기다린다. 하나라도 응답이 없으면 로그 80줄을 찍고 **빌드를 실패로 표시한다.**
    - `backend` → `http://backend:8080/actuator/health`, `shop-backend` → `http://shop-backend:8090/actuator/health`,
      `recommend` → `http://recommend:8300/health` (nginx 컨테이너 안에서 `wget`, 앱 포트는 호스트에 안 열려 있다)
-   - `nginx` → `nginx -t` + 호스트에서 `https://j15a306.p.ssafy.io/` 를 127.0.0.1 로 고정해 호출
+   - `nginx` → `nginx -t` + Jenkins 컨테이너에서 `https://j15a306.p.ssafy.io/` 를 EC2 주소(`NGINX_HEALTH_RESOLVE_IP`)로 고정해 호출. EC2 호스트에서 직접 실행할 때는 기본값 127.0.0.1 사용
    - prometheus·grafana 는 확인하지 않는다
    - 수집기 헬스는 Kafka 상태를 따라갈 수 있다. EC2-2 Kafka 가 꺼져 있으면 코드 문제 없이도 빨간 빌드가 된다.
 

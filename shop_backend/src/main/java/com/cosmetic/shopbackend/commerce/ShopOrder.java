@@ -77,6 +77,12 @@ public class ShopOrder {
     return requestHash;
   }
 
+  public boolean shouldClearCartOnPaid() {
+    // 이 API에서 만든 주문은 request_hash 앞 글자로 결제 뒤 장바구니 처리 여부를 표시한다.
+    // 기존 SHA-256 값은 T로 시작하지 않으므로 이전 주문의 동작은 바뀌지 않는다.
+    return requestHash != null && requestHash.startsWith("T");
+  }
+
   public BigDecimal getTotalAmount() {
     return totalAmount;
   }
