@@ -585,7 +585,7 @@ export default function OverviewScreen({
           />
         </div>
         {crossNow && crossNow.cross_brand_entry_rate != null && crossNow.brand_view_sessions > 0 ? (
-          <Panel title="다른 브랜드에서 넘어온 방문" origin="shared" aside={`최근 ${days}일`}>
+          <Panel title="다른 브랜드에서 넘어온 방문" origin="shared" aside={days === 1 ? '오늘' : `최근 ${days}일`}>
             <div className="cross-sum">
               <p className="cross-sum__value">{fmt.pct(crossNow.cross_brand_entry_rate)}</p>
               <p className="cross-sum__sub">
