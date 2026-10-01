@@ -1037,6 +1037,7 @@ body {
  */
 .grid--2 > .panel:has(.line-chart-box) {
   align-self: start;
+  height: auto;
 }
 
 .line-chart__pt {
