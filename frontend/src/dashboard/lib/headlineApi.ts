@@ -135,7 +135,8 @@ export function buildOverviewHeadlineRequest(
   // 찾아온 방문 — 방문 수(건)라 "사람" 이 아니다
   {
     const facts = [
-      { label_ko: '방문', value_text: `${fmt.int(o.sessions)}건` },
+      // "방문 3,560건" 을 AI 가 "3,560명이 방문해" 로 바꿔 썼다 (2026-10-01 실측) — 사람 수가 아니라 횟수라는 걸 이름에 박는다
+      { label_ko: '방문 횟수', value_text: `${fmt.int(o.sessions)}번` },
       // 둘 다 방문 수가 아니라 횟수다 (product_view_count·add_to_cart_count). "방문" 으로 적으면 한 마디가 틀린 말을 한다
       { label_ko: '상세를 본 횟수', value_text: `${fmt.int(o.detailViews)}번` },
       { label_ko: '장바구니에 담은 횟수', value_text: `${fmt.int(o.addToCart)}번` },
@@ -293,4 +294,12 @@ export function lineOrigin(env: HeadlineEnvelope, line: { origin?: 'llm' | 'rule
 export function headlineOrigin(env: HeadlineEnvelope): 'llm' | 'rule' {
   if (env.origin === 'mixed') return env.headline_origin ?? 'rule';
   return env.origin === 'llm' ? 'llm' : 'rule';
+}
+
+/**
+ * 방문·조회 횟수를 사람 수("○명이 방문")로 바꿔 쓴 줄인가. 서버 검사는 숫자만 대조해 단위가 바뀐 건 못 잡는다 (2026-10-01).
+ * 이런 줄은 화면에 쓰지 않는다 — 우리가 보내는 방문 숫자는 전부 횟수다.
+ */
+export function misreadsVisitsAsPeople(line: string): boolean {
+  return /[\d,]+\s*명[이가]?\s*(방문|찾아|들어|다녀)/.test(line) || /방문(한|자|객)\s*[\d,]+\s*명/.test(line);
 }

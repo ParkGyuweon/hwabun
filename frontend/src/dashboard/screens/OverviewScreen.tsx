@@ -2,14 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SELLER_ORDER_LIMIT, fetchSellerFeedback, fetchSellerOrders, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
-import { rangeOf } from '../lib/martApi';
+import { fetchCrossBrand, rangeOf } from '../lib/martApi';
+import type { CrossBrandCounts } from '../lib/martApi';
 import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
 import { fmt, periodLabel } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { BehaviorGate, useBehavior, useMartWaiting } from '../lib/useBehavior';
-import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadlineState } from '../lib/headlineApi';
+import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, misreadsVisitsAsPeople, useHeadlineState } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
@@ -138,6 +139,27 @@ export default function OverviewScreen({
   const noBehavior = overview.detailViews === 0 && overview.sessions === 0;
   const emptyWhy = '아직 기록이 없습니다';
 
+  /*
+   * 다른 브랜드에서 넘어온 방문 (2026-10-01 팀 요청: 시장 > 넘어온 방문 지표를 요약에서도 한 번에). 다른 브랜드 기록이 모여야
+   * 나오는 숫자라 "여러 브랜드 종합" 표시를 단다. 못 받았거나 아직 행이 없으면 자리도 없다. 추천·배너 비중은 넘어온 방문
+   * 화면에만 둔다 — 둘을 더하면 100% 를 넘어(한 방문이 두 길로 다 잡힌다) 요약에서는 오해를 산다.
+   */
+  const [cross, setCross] = useState<{ key: string; summary: CrossBrandCounts | null } | null>(null);
+  const crossKey = loadBrandId() ? `${loadBrandId()}:${days}` : null;
+  useEffect(() => {
+    const brandId = loadBrandId();
+    if (!brandId || !crossKey) return;
+    let alive = true;
+    void fetchCrossBrand({ brandId, days }).then((d) => {
+      if (alive) setCross({ key: crossKey, summary: d?.summary ?? null });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [crossKey, days]);
+  const crossNow = cross && cross.key === crossKey ? cross.summary : null;
+  const crossShown = !!crossNow && crossNow.cross_brand_entry_rate != null && crossNow.brand_view_sessions > 0;
+
   /**
    * 백엔드 실측 (GET /api/seller/dashboard). 있으면 맨 아래에 한 줄. 없으면 자리도 없다.
    * `undefined` 는 아직 답을 못 받은 상태다. 한 마디 요청은 이 값이 정해진 뒤에 만든다 — 먼저 마트만으로 부르고
@@ -221,6 +243,8 @@ export default function OverviewScreen({
    */
   const shownSales = sales !== undefined ? sales : (periodSales?.value ?? null);
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
+  /** 주문·매출을 아직 받는 중 (브랜드 확인 포함). 맨 위 자리를 미리 잡는 데 쓴다 */
+  const ordersPending = !shownSales && !pulse && (brandLoading || pulse === undefined || (salesKey !== null && sales === undefined));
 
   /*
    * 맨 위 "오늘" 숫자 넷(오늘 방문·담기·주문·매출)은 뺐다 (2026-10-01 유림님: 정신없다). 대신 기간 필터에 "오늘" 이 있어
@@ -267,8 +291,9 @@ export default function OverviewScreen({
    */
   const headlineAi = useMemo(() => {
     if (!headline) return null;
-    const lines = headline.sections.filter((s) => s.line && lineOrigin(headline, s) === 'llm');
-    if (headline.headline && headlineOrigin(headline) === 'llm') return { line: headline.headline, more: lines };
+    // 방문 횟수를 "○명" 으로 바꿔 쓴 줄은 통과했어도 쓰지 않는다 — 다음 AI 줄이 맨 위로 올라가거나 기본 문장이 된다
+    const lines = headline.sections.filter((s) => s.line && lineOrigin(headline, s) === 'llm' && !misreadsVisitsAsPeople(s.line));
+    if (headline.headline && headlineOrigin(headline) === 'llm' && !misreadsVisitsAsPeople(headline.headline)) return { line: headline.headline, more: lines };
     if (lines.length === 0) return null;
     return { line: lines[0].line, more: lines.slice(1) };
   }, [headline]);
@@ -281,7 +306,7 @@ export default function OverviewScreen({
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : '주문·매출 · 전체 기간'}</p> : null}
+      {shownSales || pulse || ordersPending ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : pulse ? '주문·매출 · 전체 기간' : `주문·매출 · ${periodLabel(days)}`}</p> : null}
       {shownSales ? (
         <div className="grid grid--kpi">
           <Kpi
@@ -322,6 +347,13 @@ export default function OverviewScreen({
             팔린 상품 가짓수·리뷰·받은 의견 칸은 뺐다 (2026-09-22 유림님). 요약에서 볼 만큼 중요한 숫자가 아니고
             가짓수는 상품 화면, 리뷰·의견은 고객의 말 화면에 그대로 있다.
           */}
+        </div>
+      ) : ordersPending ? (
+        // 받는 동안에도 자리를 잡아 둔다 — 맨 위라서, 숫자가 온 뒤 끼어들면 아래 전부가 밀린다
+        <div className="grid grid--kpi" aria-busy="true">
+          <Kpi label="주문" value="…" sub="불러오는 중" />
+          <Kpi label="매출" value="…" sub="불러오는 중" />
+          <Kpi label="판매 수량" value="…" sub="불러오는 중" />
         </div>
       ) : null}
       {/*
@@ -385,7 +417,7 @@ export default function OverviewScreen({
           */}
           <Kpi
             label="다시 사기까지 걸린 날"
-            value={repurchase.brand.medianDays === null ? (repurchase.brand.repeatBuyerCount > 0 ? '계산 전' : '아직 없음') : `${Math.round(repurchase.brand.medianDays)}일`}
+            value={repurchase.brand.medianDays === null ? (repurchase.brand.repeatBuyerCount > 0 ? '계산 전' : '아직 없음') : (Math.round(repurchase.brand.medianDays) === 0 ? '같은 날' : `${Math.round(repurchase.brand.medianDays)}일`)}
             sub={
               repurchase.brand.medianDays !== null
                 ? '처음 산 날부터 다시 산 날까지 · 고객마다 달라서 한가운데 값'
@@ -413,6 +445,11 @@ export default function OverviewScreen({
           />
         </div>
       ) : null}
+      {/*
+        첫 번째 할 일 옆에 "다른 브랜드에서 넘어온 방문" (2026-10-01 유림님). 둘 다 다른 브랜드와 견주는 숫자라 한 줄에 둔다.
+        넘어온 방문이 없으면 첫 번째 할 일이 혼자 전체 폭을 쓴다. 좁은 화면에서는 위아래로.
+      */}
+      <div className={crossShown ? 'verdict-row' : undefined}>
       {top ? (
         <section className={`verdict verdict--${top.origin}`}>
           <p className="verdict__eyebrow">
@@ -450,9 +487,25 @@ export default function OverviewScreen({
                 : '상세페이지 설명 글 하나를 200명 넘게 읽거나, 한 고객군의 방문이 200건을 넘으면 그때부터 결론을 냅니다.'}
             </li>
           </ul>
-          <p className="verdict__action">지금은 아래 주문·매출 숫자와 방문 추이만 참고해 주세요.</p>
+          <p className="verdict__action">지금은 주문·매출 숫자와 방문 추이만 참고해 주세요.</p>
         </section>
       )}
+      {crossShown && crossNow ? (
+        <Panel title="다른 브랜드에서 넘어온 방문" origin="shared" aside={days === 1 ? '오늘' : `최근 ${days}일`}>
+          <div className="cross-sum">
+            <p className="cross-sum__value">{fmt.pct(crossNow.cross_brand_entry_rate ?? 0)}</p>
+            <p className="cross-sum__sub">
+              우리 상품을 본 방문 {fmt.int(crossNow.brand_view_sessions)}건 중 {fmt.int(crossNow.cross_brand_entry_sessions)}건이 다른 브랜드를 보다가 넘어왔습니다
+            </p>
+            {onGo ? (
+              <button type="button" className="chip cross-sum__go" onClick={() => onGo('inflow')}>
+                자세히 보기
+              </button>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
+      </div>
 
       <p className="kpi-period">고객 행동 · {periodLabel(days)}</p>
       <div className="grid grid--kpi">

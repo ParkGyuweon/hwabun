@@ -210,8 +210,14 @@ body {
 
 .main {
   padding: 28px 36px 64px;
-  max-width: 1240px;
+  max-width: 1600px;
   width: 100%;
+  /*
+   * 한글은 낱말 단위로만 줄을 바꾼다. 기본값은 글자마다 꺾어 "…30% 넘는 상 / 품", "아직 없 / 음" 처럼 한 글자가
+   * 다음 줄로 떨어졌다 (2026-10-01 점검). 긴 영문·숫자 덩어리는 칸을 넘지 않게 그 안에서 꺾는다.
+   */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .main__head {
@@ -376,10 +382,15 @@ body {
   padding: 20px 22px;
 }
 
+/*
+ * 반쪽 카드(약 530px)에서 제목 · "아직 없음" 배지 · 오른쪽 설명을 한 줄에 밀어 넣어 "…10가 / 지", "아직 없 / 음" 처럼
+ * 한두 글자가 다음 줄로 떨어졌다 (2026-10-01 점검). 제목은 낱말 단위로만 꺾고, 배지는 꺾지 않으며, 모자라면 설명이 다음 줄로 간다.
+ */
 .panel__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   margin-bottom: 18px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line-soft);
@@ -390,6 +401,13 @@ body {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  min-width: 0;
+  word-break: keep-all;
+}
+
+.panel__head .badge {
+  flex: none;
+  white-space: nowrap;
 }
 
 .panel__aside {
@@ -833,6 +851,7 @@ body {
 /* ---------- 배지 ---------- */
 
 .badge {
+  white-space: nowrap;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2839,15 +2858,6 @@ table.data tr:hover td {
   vertical-align: 1px;
 }
 
-/* 사이드바 하단 · 마트 연결 상태 */
-.sidebar__mart {
-  margin: 0 0 6px;
-}
-.sidebar__mart b {
-  color: var(--ink);
-  font-weight: 600;
-}
-
 .act__more {
   margin-top: 10px;
 }
@@ -3397,4 +3407,50 @@ table.data tr:hover td {
 
 .data tr.is-hit td {
   background: rgba(0, 0, 0, 0.04);
+}
+
+/* 요약 · 첫 번째 할 일(넓게) + 다른 브랜드에서 넘어온 방문(좁게) 한 줄 */
+.verdict-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.verdict-row > .panel {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .verdict-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 좁은 칸이라 숫자 · 설명 · 자세히 보기를 위아래로 */
+.cross-sum {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.cross-sum__value {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.cross-sum__sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+  word-break: keep-all;
+}
+
+.cross-sum__go {
+  margin-top: 4px;
 }
