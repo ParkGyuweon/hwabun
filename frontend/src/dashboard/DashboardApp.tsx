@@ -18,11 +18,11 @@ import NotificationBell from '../components/notifications/NotificationBell';
 import { SCOPE_LABEL } from './lib/scope';
 import type { ScopeKind } from './lib/scope';
 import { useAuth } from '../hooks/useAuth';
+import { periodLabel } from './lib/metrics';
 import { logout } from '../lib/auth';
 import { createBrand, fetchMyBrands, loadBrandId, saveBrandId } from '../lib/brands';
 import type { BrandsState } from '../lib/brands';
 import { BehaviorGate, BehaviorProvider, useBehavior, useMartState } from './lib/useBehavior';
-import { periodLabel } from './lib/metrics';
 
 /**
  * 화면 하나. **이름을 바꾸지 않았다** — `insight.ts`·`prescription.ts` 가 "이 인사이트는 어느 화면으로
