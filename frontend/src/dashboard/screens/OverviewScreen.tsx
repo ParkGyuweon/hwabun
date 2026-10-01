@@ -10,7 +10,7 @@ import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
 import { BehaviorGate, useBehavior, useMartWaiting } from '../lib/useBehavior';
-import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, useHeadlineState } from '../lib/headlineApi';
+import { buildOverviewHeadlineRequest, headlineOrigin, lineOrigin, misreadsVisitsAsPeople, useHeadlineState } from '../lib/headlineApi';
 import { useFeedback } from '../../hooks/useFeedback';
 import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/feedbackStore';
 import { categoryLabel, labelsOf } from '../../types/feedback';
@@ -291,8 +291,9 @@ export default function OverviewScreen({
    */
   const headlineAi = useMemo(() => {
     if (!headline) return null;
-    const lines = headline.sections.filter((s) => s.line && lineOrigin(headline, s) === 'llm');
-    if (headline.headline && headlineOrigin(headline) === 'llm') return { line: headline.headline, more: lines };
+    // 방문 횟수를 "○명" 으로 바꿔 쓴 줄은 통과했어도 쓰지 않는다 — 다음 AI 줄이 맨 위로 올라가거나 기본 문장이 된다
+    const lines = headline.sections.filter((s) => s.line && lineOrigin(headline, s) === 'llm' && !misreadsVisitsAsPeople(s.line));
+    if (headline.headline && headlineOrigin(headline) === 'llm' && !misreadsVisitsAsPeople(headline.headline)) return { line: headline.headline, more: lines };
     if (lines.length === 0) return null;
     return { line: lines[0].line, more: lines.slice(1) };
   }, [headline]);
@@ -416,7 +417,7 @@ export default function OverviewScreen({
           */}
           <Kpi
             label="다시 사기까지 걸린 날"
-            value={repurchase.brand.medianDays === null ? (repurchase.brand.repeatBuyerCount > 0 ? '계산 전' : '아직 없음') : `${Math.round(repurchase.brand.medianDays)}일`}
+            value={repurchase.brand.medianDays === null ? (repurchase.brand.repeatBuyerCount > 0 ? '계산 전' : '아직 없음') : (Math.round(repurchase.brand.medianDays) === 0 ? '같은 날' : `${Math.round(repurchase.brand.medianDays)}일`)}
             sub={
               repurchase.brand.medianDays !== null
                 ? '처음 산 날부터 다시 산 날까지 · 고객마다 달라서 한가운데 값'
