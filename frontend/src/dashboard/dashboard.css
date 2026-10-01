@@ -525,8 +525,9 @@ body {
 
 .headline__line {
   margin: 0;
-  font-size: 17px;
-  font-weight: 500;
+  /* 요약 맨 위 한 문장이라 크게 (2026-10-01 유림님: 요약 느낌나게). 화면 폭별 크기·높이는 아래 .headline 단계와 함께 바꾼다 */
+  font-size: 22px;
+  font-weight: 600;
   line-height: 1.45;
   letter-spacing: -0.01em;
   text-wrap: balance;
@@ -539,7 +540,8 @@ body {
  * "자세히" 를 펼치는 것만 높이를 바꾼다 — 사장님이 직접 누른 것이라 괜찮다.
  */
 .headline {
-  min-height: 116px;
+  /* 22px 문장 두 줄(약 64) + 자세히(18) + 여백 */
+  min-height: 132px;
   align-content: start;
 }
 
@@ -554,9 +556,10 @@ body {
 /* 카드 폭은 사이드바를 뺀 나머지라 화면 폭보다 훨씬 좁다 — 768px 화면에서 카드는 약 410px 라 긴 문장이 3줄이다 */
 @media (max-width: 860px) and (min-width: 641px) {
   .headline {
-    min-height: 141px;
+    min-height: 156px;
   }
   .headline > .headline__line {
+    font-size: 20px;
     -webkit-line-clamp: 3;
     line-clamp: 3;
   }
@@ -564,9 +567,10 @@ body {
 
 @media (max-width: 640px) {
   .headline {
-    min-height: 166px;
+    min-height: 180px;
   }
   .headline > .headline__line {
+    font-size: 19px;
     -webkit-line-clamp: 4;
     line-clamp: 4;
   }
@@ -624,6 +628,10 @@ body {
   .headline__dots::after {
     content: '...';
   }
+}
+
+.headline__more > summary:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .headline__more > summary {
