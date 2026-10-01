@@ -26,6 +26,7 @@ class PaymentConfirmationServiceTest {
     org.springframework.jdbc.core.JdbcTemplate jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
     ShopOrder created = order("order-1", ShopOrder.Status.CREATED, null);
     ShopOrder paid = order("order-1", ShopOrder.Status.PAID, "hwabun-order-1");
+    when(paid.shouldClearCartOnPaid()).thenReturn(true);
     when(orders.findById("order-1"))
       .thenReturn(Optional.of(created), Optional.of(paid));
     when(portOne.payment("hwabun-order-1")).thenReturn(
@@ -52,6 +53,16 @@ class PaymentConfirmationServiceTest {
       eq("hwabun-order-1"),
       eq(new BigDecimal("31900")),
       any(LocalDateTime.class)
+    );
+    verify(jdbc).update(
+      contains("delete ci from cart_item ci"),
+      eq("order-1"),
+      eq("member-1")
+    );
+    verify(jdbc).update(
+      contains("update cart_item ci"),
+      eq("order-1"),
+      eq("member-1")
     );
   }
 
