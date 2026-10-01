@@ -57,14 +57,61 @@ export interface HeadlineEnvelope {
 /** 화면이 이미 흐리게 그리는 기준. 상세 조회가 이보다 적으면 결론 대신 "이르다" 쪽으로 간다 */
 const THIN_DETAIL_VIEWS = 200;
 
+/** 받침이 있으면 앞, 없으면 뒤. 한글이 아니면(숫자·%) 읽는 소리로 — "%" 는 "퍼센트" 라 받침 없음 */
+function josa(word: string, withBatchim: string, without: string, rieulAsNone = false): string {
+  const ch = word.trim().slice(-1);
+  if (ch === '%') return without;
+  if (ch >= '가' && ch <= '힣') {
+    const jong = (ch.charCodeAt(0) - 0xac00) % 28;
+    if (jong === 0) return without;
+    // "으로/로" 는 ㄹ 받침 뒤에서 "로" 다 (1,170일로)
+    if (rieulAsNone && jong === 8) return without;
+    return withBatchim;
+  }
+  return withBatchim;
+}
+
+/**
+ * 변화의 크기를 말로. **서버는 비교 문장에 있는 말만 쓰게 한다** — "크게"·"소폭" 이 여기 없으면 AI 가 그 말을 쓴 줄은
+ * unsupported_comparison 으로 걸려 숫자 나열이 된다 (2026-10-01 실측: "크게 늘었습니다" 가 걸렸다). 그래서 실제 폭을
+ * 재서 맞는 말을 미리 넣어 준다. 지어낸 크기가 아니라 계산한 크기다.
+ *   - 횟수·건수: 직전 대비 30% 이상 "크게", 10% 미만 "소폭"
+ *   - 비율: 5%p 이상 "크게", 1%p 미만 "소폭"
+ */
+function magnitude(prev: number, cur: number, kind: 'count' | 'rate'): string {
+  const diff = Math.abs(cur - prev);
+  if (kind === 'rate') {
+    const pts = diff * 100;
+    if (pts >= 5) return '크게 ';
+    if (pts < 1) return '소폭 ';
+    return '';
+  }
+  if (prev <= 0) return '';
+  const rel = diff / prev;
+  if (rel >= 0.3) return '크게 ';
+  if (rel < 0.1) return '소폭 ';
+  return '';
+}
+
 /**
  * 두 값의 비교를 완성 문장으로. 서버는 이 문장 안의 말로만 변화를 말할 수 있다 (계약 §3).
  * 숫자 표기는 facts 와 글자까지 같아야 한다 — 같은 포매터를 쓴다.
  */
-function compare(label: string, prevText: string, curText: string, prev: number, cur: number, periodText: string, up = '늘었습니다', down = '줄었습니다'): string {
+function compare(
+  label: string,
+  prevText: string,
+  curText: string,
+  prev: number,
+  cur: number,
+  periodText: string,
+  up = '늘었습니다',
+  down = '줄었습니다',
+  kind: 'count' | 'rate' = 'count',
+): string {
+  const subj = `${label}${josa(label, '이', '가')}`;
   const same = Math.abs(cur - prev) < 1e-9 || prevText === curText;
-  if (same) return `${label}이 직전 ${periodText}과 같은 ${curText}입니다.`;
-  return `${label}이 직전 ${periodText} ${prevText}에서 ${curText}으로 ${cur > prev ? up : down}.`;
+  if (same) return `${subj} 직전 ${periodText}${josa(periodText, '과', '와')} 같은 ${curText}입니다.`;
+  return `${subj} 직전 ${periodText} ${prevText}에서 ${curText}${josa(curText, '으로', '로', true)} ${magnitude(prev, cur, kind)}${cur > prev ? up : down}.`;
 }
 
 /**
@@ -108,8 +155,8 @@ export function buildOverviewHeadlineRequest(
     ];
     const comparisons: string[] = [];
     if (p) {
-      comparisons.push(compare('상세에서 담기까지 간 비율', fmt.pct(p.cartRate), fmt.pct(o.cartRate), p.cartRate, o.cartRate, periodText, '올랐습니다', '내렸습니다'));
-      comparisons.push(compare('담았다 뺀 비율', fmt.pct(p.removalRate), fmt.pct(o.removalRate), p.removalRate, o.removalRate, periodText, '올랐습니다', '내렸습니다'));
+      comparisons.push(compare('상세에서 담기까지 간 비율', fmt.pct(p.cartRate), fmt.pct(o.cartRate), p.cartRate, o.cartRate, periodText, '올랐습니다', '내렸습니다', 'rate'));
+      comparisons.push(compare('담았다 뺀 비율', fmt.pct(p.removalRate), fmt.pct(o.removalRate), p.removalRate, o.removalRate, periodText, '올랐습니다', '내렸습니다', 'rate'));
     }
     sections.push({ id: 'cart', label_ko: '담기', facts, comparisons, thin });
   }
