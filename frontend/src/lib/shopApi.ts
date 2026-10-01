@@ -119,7 +119,7 @@ interface VariantDto {
   size: string | null;
   priceKrw: number | string;
   salePriceKrw: number | string | null;
-  status: string;
+  status?: string;
   /** 옵션 이미지·스와치. `product_variant.image_url · swatch_url` 컬럼은 있는데 `VariantView` 가 아직 안 준다 — 오면 바로 쓴다 */
   imageUrl?: string | null;
   swatchUrl?: string | null;
@@ -549,29 +549,34 @@ export async function submitFeedbackBackend(input: { productId: string; axisId: 
 interface SellerFeedbackRow {
   feedbackId: string;
   productId: string;
-  productName: string;
-  authorMemberId: string;
+  productName?: string;
+  /** 내 피드백 응답에는 없다 (내 것이니까) */
+  authorMemberId?: string;
   /** 산 사람의 의견인지. 옛 서버는 안 준다 */
   purchased?: boolean;
-  authorSkinTypeCode: string | null;
-  authorSkinToneCode: string | null;
+  authorSkinTypeCode?: string | null;
+  authorSkinToneCode?: string | null;
   axisId: string;
   body: string;
   status: string;
   createdAt: string;
-  labels: Array<{ axisId: string; categoryId: string }>;
-  primary: { axisId: string; categoryId: string } | null;
-  offAxisHint: string | null;
-  classifier: string | null;
-  vocabVersion: string | null;
-  classifiedAt: string | null;
-  bannedTerms: string[];
-  classificationStatus: string;
-  hiddenByDefault: boolean;
+  labels?: Array<{ axisId: string; categoryId: string }>;
+  primary?: { axisId: string; categoryId: string } | null;
+  offAxisHint?: string | null;
+  classifier?: string | null;
+  vocabVersion?: string | null;
+  classifiedAt?: string | null;
+  bannedTerms?: string[];
+  classificationStatus?: string;
+  hiddenByDefault?: boolean;
   /** 업체 처리 상태 (2026-09-18). 옛 서버는 안 준다 */
   handlingStatus?: string | null;
   lastRespondedAt?: string | null;
   latestResponse?: { action: string; body: string | null; createdAt: string } | null;
+  /** 내 피드백(`/api/feedback/mine`)은 응답 이력 전부를 준다. 오래된 것부터 */
+  responses?: Array<{ action: string; body: string | null; createdAt: string }> | null;
+  /** 판매자 목록 쿼리의 이름. `purchased` 와 같은 뜻 */
+  isPurchaser?: boolean;
 }
 
 /**
@@ -600,49 +605,83 @@ export async function startFeedbackClassification(brandId: string): Promise<Clas
   }
 }
 
-/** GET /api/seller/feedback?brandId= 를 화면 타입(Feedback)으로. 분류 전이면 labels 가 빈 배열로 온다 */
+/** 서버 행 → 화면 타입(Feedback). 판매자 목록과 "내 피드백" 이 같은 모양이라 같이 쓴다. 분류 전이면 labels 가 빈 배열로 온다 */
+function feedbackFromRow(r: SellerFeedbackRow, brandName: string): Feedback {
+  /*
+   * 응답 이력. 판매자 목록은 `latestResponse` 하나, 내 피드백(`/api/feedback/mine`)은 `responses[]` 전부를 준다 (백엔드 요청
+   * 2026-10-01). 소비자에게 보이는 답글은 **가장 최근 REPLIED** 의 본문이다 — 그 뒤에 "반영했어요" 가 와도 답글 문장은 남는다.
+   */
+  const responses = Array.isArray(r.responses) ? r.responses : r.latestResponse ? [r.latestResponse] : [];
+  const latest = responses.length > 0 ? responses[responses.length - 1] : null;
+  const replied = [...responses].reverse().find((x) => x.action === 'REPLIED' && x.body);
+  return {
+    feedback_id: r.feedbackId,
+    user_id: r.authorMemberId ?? null,
+    product_id: r.productId,
+    body: r.body,
+    created_at: r.createdAt,
+    axis_id: r.axisId,
+    axis: axisLabel(r.axisId),
+    // 백엔드는 id 만 준다 (계약 0.2.0). 표시 라벨은 어휘집에서 여기서 붙인다 — 화면이 label.axis·label.category 를 바로 읽는다
+    labels: (r.labels ?? []).map((l) => ({ axis_id: l.axisId, axis: axisLabel(l.axisId), category_id: l.categoryId, category: categoryLabel(l.categoryId) })) as Feedback['labels'],
+    primary: r.primary
+      ? ({ axis_id: r.primary.axisId, axis: axisLabel(r.primary.axisId), category_id: r.primary.categoryId, category: categoryLabel(r.primary.categoryId) } as Feedback['primary'])
+      : null,
+    off_axis_hint: r.offAxisHint ?? null,
+    category_id: r.primary?.categoryId ?? null,
+    category: null,
+    classifier: r.classifier ?? null,
+    vocab_version: r.vocabVersion ?? null,
+    classified_at: r.classifiedAt ?? null,
+    banned_terms: r.bannedTerms ?? [],
+    hidden_by_default: Boolean(r.hiddenByDefault),
+    brand_name: brandName,
+    profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
+    // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
+    purchased: typeof r.purchased === 'boolean' ? r.purchased : typeof r.isPurchaser === 'boolean' ? r.isPurchaser : undefined,
+    classification_status: r.classificationStatus ?? null,
+    // 처리 상태는 서버 것이다. 옛 서버(handlingStatus 없음)는 전부 '업체 확인 대기'
+    status: statusOfHandling(r.handlingStatus),
+    handling_status: (r.handlingStatus as Feedback['handling_status']) ?? null,
+    latest_response: latest
+      ? { action: latest.action as FeedbackResponseAction, body: latest.body ?? null, created_at: latest.createdAt }
+      : null,
+    reply: replied?.body ?? null,
+    replied_at: r.lastRespondedAt ?? null,
+    source: 'backend',
+  };
+}
+
+/** GET /api/seller/feedback?brandId= 를 화면 타입(Feedback)으로 */
 export async function fetchSellerFeedback(brandId: string, brandName: string): Promise<Feedback[] | null> {
   try {
     const res = await authFetch('SELLER', `/api/seller/feedback?brandId=${encodeURIComponent(brandId)}`);
     if (!res.ok) return null;
     const rows = (await res.json()) as SellerFeedbackRow[];
     if (!Array.isArray(rows)) return null;
-    return rows.map((r) => ({
-      feedback_id: r.feedbackId,
-      user_id: r.authorMemberId,
-      product_id: r.productId,
-      body: r.body,
-      created_at: r.createdAt,
-      axis_id: r.axisId,
-      axis: axisLabel(r.axisId),
-      // 백엔드는 id 만 준다 (계약 0.2.0). 표시 라벨은 어휘집에서 여기서 붙인다 — 화면이 label.axis·label.category 를 바로 읽는다
-      labels: (r.labels ?? []).map((l) => ({ axis_id: l.axisId, axis: axisLabel(l.axisId), category_id: l.categoryId, category: categoryLabel(l.categoryId) })) as Feedback['labels'],
-      primary: r.primary
-        ? ({ axis_id: r.primary.axisId, axis: axisLabel(r.primary.axisId), category_id: r.primary.categoryId, category: categoryLabel(r.primary.categoryId) } as Feedback['primary'])
-        : null,
-      off_axis_hint: r.offAxisHint,
-      category_id: r.primary?.categoryId ?? null,
-      category: null,
-      classifier: r.classifier,
-      vocab_version: r.vocabVersion,
-      classified_at: r.classifiedAt,
-      banned_terms: r.bannedTerms ?? [],
-      hidden_by_default: Boolean(r.hiddenByDefault),
-      brand_name: brandName,
-      profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
-      // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
-      purchased: typeof r.purchased === 'boolean' ? r.purchased : undefined,
-      classification_status: r.classificationStatus ?? null,
-      // 처리 상태는 서버 것이다. 옛 서버(handlingStatus 없음)는 전부 '업체 확인 대기'
-      status: statusOfHandling(r.handlingStatus),
-      handling_status: (r.handlingStatus as Feedback['handling_status']) ?? null,
-      latest_response: r.latestResponse
-        ? { action: r.latestResponse.action as FeedbackResponseAction, body: r.latestResponse.body ?? null, created_at: r.latestResponse.createdAt }
-        : null,
-      reply: r.latestResponse?.action === 'REPLIED' ? (r.latestResponse.body ?? null) : null,
-      replied_at: r.lastRespondedAt ?? null,
-      source: 'backend',
-    }));
+    return rows.map((r) => feedbackFromRow(r, brandName));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `GET /api/feedback/mine?productId=` — **내가** 보낸 의견과 사장님 응답 (백엔드 요청 2026-10-01).
+ *
+ * 전에는 서버 상품의 의견을 서버로 보내고 나면 읽을 길이 없어, "내가 보낸 의견" 목록 · 보냄 ✓ · 반영 건수 · 사장님 답글이
+ * 전부 빈 채였다 (localStorage 사본은 서버 상품에는 안 쓴다). `null` 은 "못 받았다" — 아직 없는 서버(404)·로그인 없음·연결
+ * 실패 전부. 화면은 그때 지금처럼 빈 채로 두고 오류를 띄우지 않는다.
+ */
+export async function fetchMyFeedback(productId: string, brandName: string): Promise<Feedback[] | null> {
+  if (!hasMemberSession()) return null;
+  try {
+    const res = await authFetch('MEMBER', `/api/feedback/mine?productId=${encodeURIComponent(productId)}`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as SellerFeedbackRow[] | { items?: SellerFeedbackRow[] };
+    const rows = Array.isArray(body) ? body : Array.isArray(body.items) ? body.items : null;
+    if (!rows) return null;
+    // 서버가 productId 필터를 아직 안 받으면 전부 올 수 있다 — 여기서 한 번 더 거른다
+    return rows.filter((r) => r.productId === productId).map((r) => feedbackFromRow(r, brandName));
   } catch {
     return null;
   }
