@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SELLER_ORDER_LIMIT, fetchSellerFeedback, fetchSellerOrders, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
 import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
 import { fetchCrossBrand, rangeOf } from '../lib/martApi';
 import type { CrossBrandCounts } from '../lib/martApi';
 import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
-import { fmt } from '../lib/metrics';
+import { fmt, periodLabel } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
 import type { Repurchase } from '../lib/behavior';
 import { rankInsights } from '../lib/insight';
@@ -16,6 +16,7 @@ import { dropSamplesIfReal, feedbackForBrand, feedbackSource } from '../../lib/f
 import { categoryLabel, labelsOf } from '../../types/feedback';
 import type { Feedback } from '../../types/feedback';
 import { PURCHASE_REASONS } from '../../lib/checkout';
+import { onOrdersChanged } from '../../lib/notifySignal';
 
 /**
  * AI 한 마디를 못 받았을 때의 기본 문장 — 숫자와 무관하게 늘 맞는 말만 쓴다 (2026-10-01 유림님).
@@ -25,6 +26,9 @@ const HEADLINE_FALLBACK = {
   line: '방문부터 담기·주문까지, 고객이 어디서 머물고 어디서 떠나는지 아래에 정리했습니다.',
   hint: '"첫 번째 할 일" 부터 보시면 지금 가장 먼저 손볼 곳을 알 수 있습니다.',
 };
+
+/** 화면이 보이는 동안 주문·매출을 다시 받는 간격. 다른 기기에서 들어온 주문용 — 같은 브라우저의 결제는 신호로 바로 온다 */
+const ORDERS_REFRESH_MS = 10_000;
 
 const REASON_KO = new Map(PURCHASE_REASONS.map((r) => [r.key, r.label]));
 
@@ -63,11 +67,14 @@ function wonCompact(krw: number): string {
 export default function OverviewScreen({
   days,
   brandName,
+  brandLoading = false,
   onGo,
 }: {
   days: number;
   /** 로그인한 브랜드 이름. 피드백 시드는 이 이름과 같은 것만 센다 — 못 받았으면 아무것도 안 센다 */
   brandName: string | null;
+  /** 내 브랜드 목록을 아직 받는 중. 그동안 brandName 은 null 이지만 "브랜드 없음" 이 아니다 */
+  brandLoading?: boolean;
   onGo?: (screen: string) => void;
 }) {
   const m = useBehavior();
@@ -77,6 +84,13 @@ export default function OverviewScreen({
   const top = insights[0];
   const rest = insights.slice(1, 4);
   const [trend, setTrend] = useState<'visits' | 'carts'>('visits');
+  const trendPoints = useMemo(() => series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts })), [series, trend]);
+  const trendStats = useMemo(() => {
+    if (trendPoints.length === 0) return null;
+    const total = trendPoints.reduce((a, p) => a + p.value, 0);
+    const peak = trendPoints.reduce((a, p) => (p.value > a.value ? p : a), trendPoints[0]);
+    return { days: trendPoints.length, total, avg: total / trendPoints.length, peak };
+  }, [trendPoints]);
   // 결제할 때 고른 "왜 샀나요" 답. 답을 안 고른 주문(reason null)은 비율에서 빠진다 (서버 reason_share 와 같은 규칙)
   const reasons = (repurchase?.reasons ?? [])
     .filter((r): r is typeof r & { reason: string } => r.reason !== null && r.orderCount > 0)
@@ -151,19 +165,54 @@ export default function OverviewScreen({
    * `undefined` 는 아직 답을 못 받은 상태다. 한 마디 요청은 이 값이 정해진 뒤에 만든다 — 먼저 마트만으로 부르고
    * 주문이 도착해 다시 부르면 입력이 달라져 LLM 을 두 번 태운다.
    */
+  /*
+   * 주문은 실시간이어야 한다 (2026-10-01 유림님). 전에는 화면을 열 때 한 번만 받아, 열어 둔 채 들어온 주문은 새로고침 전까지
+   * 안 보였다. 이 숫자가 바뀔 때마다 주문·매출을 다시 받는다 — 같은 브라우저의 결제 신호(lib/notifySignal) · 창 복귀 ·
+   * 보이는 동안 ORDERS_REFRESH_MS 마다. 숨은 탭은 묻지 않는다.
+   */
+  const [ordersTick, setOrdersTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setOrdersTick((n) => n + 1);
+    let timer: number | null = null;
+    const start = () => {
+      if (timer === null && document.visibilityState === 'visible') timer = window.setInterval(bump, ORDERS_REFRESH_MS);
+    };
+    const stop = () => {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        bump();
+        start();
+      } else stop();
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', bump);
+    const off = onOrdersChanged(bump);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', bump);
+      off();
+    };
+  }, []);
+
   const [pulse, setPulse] = useState<SellerPulse | null | undefined>(() => (loadBrandId() ? undefined : null));
   useEffect(() => {
     const brandId = loadBrandId();
     if (!brandId) return;
     let alive = true;
     void fetchSellerPulse(brandId).then((p) => {
-      if (alive) setPulse(p);
+      // 다시 받다가 한 번 실패하면 전에 받은 값을 지우지 않는다 — 숫자가 사라졌다 돌아오면 결함처럼 보인다
+      if (alive) setPulse((cur) => (p === null && cur ? cur : p));
     });
     return () => {
       alive = false;
     };
     // 브랜드를 바꾸면(brandName) 다시 받는다. 전에는 처음 한 번만 받아 다른 브랜드의 주문 수가 남아 있었다
-  }, [brandName]);
+  }, [brandName, ordersTick]);
 
   /**
    * **고른 기간**의 주문·매출·판매 수량 (2026-10-01). 위 `pulse` 는 `GET /api/seller/dashboard` 가 기간을 받지 않아 전체 합이다 —
@@ -178,12 +227,14 @@ export default function OverviewScreen({
     if (!salesKey || !brandIdNow) return;
     let alive = true;
     void fetchSellerOrders(brandIdNow, rangeOf(days)).then((rows) => {
-      if (alive) setPeriodSales({ key: salesKey, days, value: rows ? summarizeOrders(rows) : null });
+      if (!alive) return;
+      // 같은 기간을 다시 받다가 실패하면 전에 받은 값을 둔다
+      setPeriodSales((cur) => (rows === null && cur?.key === salesKey && cur.value ? cur : { key: salesKey, days, value: rows ? summarizeOrders(rows) : null }));
     });
     return () => {
       alive = false;
     };
-  }, [salesKey, brandIdNow, days]);
+  }, [salesKey, brandIdNow, days, ordersTick]);
   /** 지금 고른 기간의 합계. `undefined` 는 받는 중 */
   const sales: PeriodSales | null | undefined = salesKey && periodSales?.key === salesKey ? periodSales.value : undefined;
   /**
@@ -193,17 +244,11 @@ export default function OverviewScreen({
   const shownSales = sales !== undefined ? sales : (periodSales?.value ?? null);
   const shownDays = sales !== undefined ? days : (periodSales?.days ?? days);
 
-  /**
-   * **오늘** 한 줄 (2026-10-01 유림님). AI 한 마디 바로 아래에 오늘 숫자 넷을 그대로 둔다 — 방문·담기는 마트의 날짜별 줄에서 오늘(KST), 주문·매출은 쇼핑몰 원장의 결제 시각이 오늘인 것.
-   * 마트는 배치가 돈 뒤에야 오늘 줄이 생기므로, 없으면 0 이 아니라 "집계 전" 이다.
+  /*
+   * 맨 위 "오늘" 숫자 넷(오늘 방문·담기·주문·매출)은 뺐다 (2026-10-01 유림님: 정신없다). 대신 기간 필터에 "오늘" 이 있어
+   * 그걸 고르면 아래 주문·매출·행동 숫자가 모두 오늘 것으로 바뀐다. 주문·매출은 실시간, 행동 기록은 새벽에 하루치가 들어온다.
    */
   const waiting = useMartWaiting();
-  const todayLabel = useMemo(() => {
-    const now = new Date();
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(now.getMonth() + 1)}/${p(now.getDate())}`;
-  }, []);
-  const todayPoint = series.find((d) => d.label === todayLabel) ?? null;
 
   /**
    * AI 한 마디 (contracts/headline-api-spec.md) — 2026-10-01 오후에 되살렸다 (팀 의견: AI 가 요약해 주는 자리가 있는 게 낫다).
@@ -214,18 +259,28 @@ export default function OverviewScreen({
    */
   const brand = useMemo(() => ({ name: brandName ?? '', productCount: productMetrics.length }), [brandName, productMetrics.length]);
   const salesSettled = salesKey === null || sales !== undefined;
+  /*
+   * 한 마디에 넣는 주문 숫자는 **그 기간을 처음 받은 값**으로 묶는다. 주문 칸은 실시간으로 다시 받는데, 그때마다 한 마디를
+   * 새로 부르면 카드가 "분석 중" 으로 깜빡이고 LLM 을 주문마다 태운다. 기간·브랜드를 바꾸면 다시 묶는다.
+   */
+  const headlineSalesRef = useRef<{ key: string | null; pulse: SellerPulse | null; sales: PeriodSales | null } | null>(null);
+  if (pulse !== undefined && salesSettled && headlineSalesRef.current?.key !== salesKey) {
+    headlineSalesRef.current = { key: salesKey, pulse, sales: sales ?? null };
+  }
+  const frozen = headlineSalesRef.current?.key === salesKey ? headlineSalesRef.current : null;
   const headlineReq = useMemo(
     () => {
       // 행동 기록을 기다리는 동안에는 빈 숫자로 부르지 않는다 — 받은 뒤 다시 부르면 LLM 을 두 번 태운다
-      if (pulse === undefined || !salesSettled || waiting) return null;
-      const forHeadline = pulse && sales ? { ...pulse, orders: sales.orders, revenue: sales.revenue, units: sales.units } : pulse;
+      if (!frozen || waiting) return null;
+      const forHeadline = frozen.pulse && frozen.sales ? { ...frozen.pulse, orders: frozen.sales.orders, revenue: frozen.sales.revenue, units: frozen.sales.units } : frozen.pulse;
       return buildOverviewHeadlineRequest(m, brand, days, forHeadline);
     },
-    [m, brand, days, pulse, sales, salesSettled, waiting],
+    [m, brand, days, frozen, waiting],
   );
   const { loading: headlineLoading, env: headline } = useHeadlineState(headlineReq);
   // 요청을 만들 재료(행동 기록·주문 합계)를 아직 받는 중이면 그것도 "분석 중" 이다
-  const headlinePending = headlineLoading || (!!brandName && (pulse === undefined || !salesSettled || waiting));
+  // 브랜드 목록을 받는 동안도 기다리는 중이다 — 아니면 그 사이 기본 문장이 잠깐 떴다가 "분석 중" 으로 바뀐다 (2026-10-01 로컬 실측)
+  const headlinePending = headlineLoading || brandLoading || (!!brandName && (pulse === undefined || !salesSettled || waiting));
   /*
    * AI 가 쓴 줄만 쓴다. 서버는 걸린 줄만 규칙 문장(숫자 나열)으로 바꿔 `mixed` 로 돌려주는데, 첫 문장만 걸려도 카드째 기본 문장이
    * 되면 통과한 AI 줄까지 버린다 (2026-10-01 실측: "크게 늘었" 이 unsupported_comparison 으로 걸려 첫 문장이 "…방문의 방문은
@@ -244,75 +299,11 @@ export default function OverviewScreen({
   return (
     <div className="stack">
       {/*
-        머리말("지금 무슨 일이")과 "AI가 쓴 문장" 꼬리표는 달지 않는다 — 발표 화면에서 거슬리고, 사장님에게는 문장 자체가 중요하다.
-        출처는 title 로 남겨 마우스를 올리면 보인다. 섹션 줄은 "자세히" 로 접어 둔다 (2026-09-21 유림님: 글이 너무 많다).
-      */}
-      {headlineAi ? (
-        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
-          <p className="headline__line">{headlineAi.line}</p>
-          {headlineAi.more.length > 0 ? (
-            <details className="headline__more">
-              <summary>자세히</summary>
-              <ul className="headline__sections">
-                {headlineAi.more.map((s) => (
-                  <li key={s.id}>
-                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
-                    <span>{s.line}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : (
-            <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
-          )}
-        </section>
-      ) : headlinePending ? (
-        <section className="headline headline--loading" aria-label="지금 상황 한 마디" aria-busy="true">
-          <p className="headline__line headline__line--loading">
-            <span className="ai__dot" aria-hidden="true" />
-            AI가 분석 중입니다<span className="headline__dots" aria-hidden="true" />
-          </p>
-          <span className="headline__skeleton" aria-hidden="true" />
-        </section>
-      ) : (
-        <section className="headline" aria-label="지금 상황 한 마디">
-          <p className="headline__line">{HEADLINE_FALLBACK.line}</p>
-          <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
-        </section>
-      )}
-      {/* 오늘 — 숫자 넷. 기간과 무관하게 맨 위에 둔다. 주문·매출은 기간 합계를 받을 때 같이 센다 */}
-      <p className="kpi-period">오늘</p>
-      <div className="grid grid--kpi">
-        <Kpi
-          label="오늘 방문"
-          value={waiting ? '…' : todayPoint ? `${fmt.int(todayPoint.visits)}번` : '집계 전'}
-          sub={todayPoint ? '상품 상세를 본 방문' : '오늘 기록은 다음 집계에 들어옵니다'}
-          source="real"
-        />
-        <Kpi
-          label="오늘 담기"
-          value={waiting ? '…' : todayPoint ? `${fmt.int(todayPoint.carts)}번` : '집계 전'}
-          sub={todayPoint ? '장바구니에 담은 방문' : '오늘 기록은 다음 집계에 들어옵니다'}
-          source="real"
-        />
-        <Kpi
-          label="오늘 주문"
-          value={shownSales ? `${fmt.int(shownSales.today.orders)}건` : salesKey ? '…' : '—'}
-          sub={shownSales ? (shownSales.today.orders > 0 ? '결제 완료' : '아직 오늘 주문이 없습니다') : salesKey ? '불러오는 중' : '브랜드를 확인하면 보입니다'}
-          source="real"
-        />
-        <Kpi
-          label="오늘 매출"
-          value={shownSales ? wonCompact(shownSales.today.revenue) : salesKey ? '…' : '—'}
-          sub={shownSales ? (shownSales.today.revenue >= 1_000_000 ? `${Math.round(shownSales.today.revenue).toLocaleString('ko-KR')}원` : '결제 완료 기준') : salesKey ? '불러오는 중' : '브랜드를 확인하면 보입니다'}
-          source="real"
-        />
-      </div>
-      {/*
+        주문·매출은 맨 위 (2026-10-01 유림님). 사장님이 제일 먼저 보는 숫자다.
         주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
         전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · 최근 ${shownDays}일` : '주문·매출 · 전체 기간'}</p> : null}
+      {shownSales || pulse ? <p className="kpi-period">{shownSales ? `주문·매출 · ${periodLabel(shownDays)}` : '주문·매출 · 전체 기간'}</p> : null}
       {shownSales ? (
         <div className="grid grid--kpi">
           <Kpi
@@ -355,7 +346,44 @@ export default function OverviewScreen({
           */}
         </div>
       ) : null}
-      {/* 여기부터는 고객 행동 기록에서 나온 숫자다. 위 주문·매출은 기다리지 않고 먼저 보인다 (2026-09-30) */}
+      {/*
+        머리말("지금 무슨 일이")과 "AI가 쓴 문장" 꼬리표는 달지 않는다 — 발표 화면에서 거슬리고, 사장님에게는 문장 자체가 중요하다.
+        출처는 title 로 남겨 마우스를 올리면 보인다. 섹션 줄은 "자세히" 로 접어 둔다 (2026-09-21 유림님: 글이 너무 많다).
+      */}
+      {headlineAi ? (
+        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
+          <p className="headline__line" title={headlineAi.line}>{headlineAi.line}</p>
+          {headlineAi.more.length > 0 ? (
+            <details className="headline__more">
+              <summary>자세히</summary>
+              <ul className="headline__sections">
+                {headlineAi.more.map((s) => (
+                  <li key={s.id}>
+                    <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
+                    <span>{s.line}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : (
+            <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
+          )}
+        </section>
+      ) : headlinePending ? (
+        <section className="headline headline--loading" aria-label="지금 상황 한 마디" aria-busy="true">
+          <p className="headline__line headline__line--loading">
+            <span className="ai__dot" aria-hidden="true" />
+            AI가 분석 중입니다<span className="headline__dots" aria-hidden="true" />
+          </p>
+          <span className="headline__skeleton" aria-hidden="true" />
+        </section>
+      ) : (
+        <section className="headline" aria-label="지금 상황 한 마디">
+          <p className="headline__line">{HEADLINE_FALLBACK.line}</p>
+          <p className="headline__hint">{HEADLINE_FALLBACK.hint}</p>
+        </section>
+      )}
+      {/* 여기부터는 고객 행동 기록에서 나온 숫자다. 맨 위 주문·매출은 기다리지 않고 먼저 보인다 (2026-09-30) */}
       <BehaviorGate>
       {/*
         재구매 배지 · 단위 = 브랜드 (ai-insight-rules §2-1, 2026-09-10 확정). 상품이 달라도 같은 브랜드를 다시 사면 재구매다.
@@ -469,7 +497,7 @@ export default function OverviewScreen({
       ) : null}
       </div>
 
-      <p className="kpi-period">고객 행동 · 최근 {days}일</p>
+      <p className="kpi-period">고객 행동 · {periodLabel(days)}</p>
       <div className="grid grid--kpi">
         <Kpi
           label="상세를 보고 담은 비율"
@@ -523,12 +551,13 @@ export default function OverviewScreen({
               hint: `${fmt.int(r.orderCount)}건`,
             }))}
             format={(v) => fmt.pct(v, 0)}
+            columns={2}
           />
         </Panel>
       ) : null}
       <div className="grid grid--2">
         <Panel
-          title={`날짜별 ${trend === 'visits' ? '방문' : '담기'} · 최근 ${days}일`}
+          title={`날짜별 ${trend === 'visits' ? '방문' : '담기'} · ${periodLabel(days)}`}
           source={source.overview}
           aside={
             <span className="chips chips--inline">
@@ -546,10 +575,33 @@ export default function OverviewScreen({
           }
         >
           <LineChart
-            points={series.map((d) => ({ label: d.label, value: trend === 'visits' ? d.visits : d.carts }))}
+            points={trendPoints}
+            height={260}
+            unit="번"
             label={trend === 'visits' ? '날짜별 방문 수 변화' : '날짜별 장바구니 담기 변화'}
             emptyText={trend === 'visits' ? '아직 방문 기록이 없습니다' : '아직 담기 기록이 없습니다'}
           />
+          {/*
+            그래프 아래 숫자 셋 (2026-10-01). 그래프만으로는 "얼마나" 가 한눈에 안 읽힌다.
+            기록이 있는 날만 센다 — 기록이 없는 날을 0 으로 넣지 않는다(그래프와 같은 규칙).
+          */}
+          {trendStats ? (
+            <dl className="line-summary">
+              <div>
+                <dt>기록 있는 {trendStats.days}일 합계</dt>
+                <dd>{fmt.int(trendStats.total)}번</dd>
+              </div>
+              <div>
+                <dt>하루 평균</dt>
+                <dd>{fmt.int(Math.round(trendStats.avg))}번</dd>
+              </div>
+              <div>
+                {/* 날짜는 제목 쪽에 — 숫자 칸에 "09/28 · 767번" 을 함께 넣으면 반쪽 창에서 "번" 이 다음 줄로 떨어졌다 */}
+                <dt>가장 많은 날 · {trendStats.peak.label}</dt>
+                <dd>{fmt.int(trendStats.peak.value)}번</dd>
+              </div>
+            </dl>
+          ) : null}
         </Panel>
         <Panel title="구매까지 가는 단계" source={source.funnel} aside="단계마다 남은 방문">
           <Funnel steps={standardFunnel} />
@@ -597,8 +649,8 @@ export default function OverviewScreen({
       {/* 접지 않고 바로 보인다 (2026-09-22 은솔님). 접힌 제목이 안의 카드 숫자를 그대로 되읊어 펼칠 이유가 없었다 */}
       <section className="stack" aria-label="기본 숫자">
         <div className="grid grid--kpi">
-          <Kpi label="방문" value={`${fmt.int(overview.sessions)}번`} sub={noBehavior ? emptyWhy : `최근 ${days}일`} />
-          <Kpi label="상품 상세 본 횟수" value={`${fmt.int(overview.detailViews)}번`} sub={noBehavior ? emptyWhy : `최근 ${days}일`} />
+          <Kpi label="방문" value={`${fmt.int(overview.sessions)}번`} sub={noBehavior ? emptyWhy : periodLabel(days)} />
+          <Kpi label="상품 상세 본 횟수" value={`${fmt.int(overview.detailViews)}번`} sub={noBehavior ? emptyWhy : periodLabel(days)} />
           <Kpi label="목록에서 상세로 들어온 비율" value={fmt.pct(overview.detailRate)} sub={noBehavior ? emptyWhy : '목록에 보인 횟수 기준'} />
           <Kpi
             label="상세만 보고 그냥 나간 비율"

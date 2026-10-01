@@ -18,7 +18,7 @@
  *     실패하면 로컬 등록으로 물러난다.
  *   · 새 상품은 DRAFT 로 만들어져 목록에 안 뜬다. 등록 성공 직후 ACTIVE 로 바꾸는 요청을 한 번 더 보낸다.
  */
-import { signalNotificationsChanged } from './notifySignal';
+import { signalNotificationsChanged, signalOrdersChanged } from './notifySignal';
 import { authFetch, sessionSnapshot } from './auth';
 import type { AccountRole } from './auth';
 import { loadBrandId } from './brands';
@@ -488,6 +488,8 @@ export async function payBackendOrder(orderId: string): Promise<CheckoutResult> 
     const paid = await authFetch('MEMBER', `/api/orders/${encodeURIComponent(orderId)}/pay`, { method: 'POST' });
     if (!paid.ok) return fail(paid);
     const body = (await paid.json()) as Record<string, unknown>;
+    // 옆 창 대시보드의 오늘 주문·매출이 바로 다시 세게 (2026-10-01)
+    signalOrdersChanged();
     return { ok: true, orderId, status: String(body.status ?? 'PAID') };
   } catch {
     return offline();
@@ -508,6 +510,7 @@ export async function confirmBackendOrder(orderId: string, paymentId: string): P
     if (!res.ok) return fail(res);
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     const paidAt = typeof body.paidAt === 'string' ? body.paidAt : typeof body.paid_at === 'string' ? body.paid_at : null;
+    signalOrdersChanged();
     return { ok: true, orderId, status: String(body.status ?? 'PAID'), paidAt };
   } catch {
     return offline();

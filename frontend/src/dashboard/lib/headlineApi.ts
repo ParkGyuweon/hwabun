@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SellerPulse } from '../../lib/shopApi';
 import type { BehaviorMetrics, Overview } from './behavior';
-import { fmt } from './metrics';
+import { fmt, periodLabel, previousPeriodLabel } from './metrics';
 
 /** 계약 §3 입력 */
 export interface HeadlineRequest {
@@ -110,8 +110,8 @@ function compare(
 ): string {
   const subj = `${label}${josa(label, '이', '가')}`;
   const same = Math.abs(cur - prev) < 1e-9 || prevText === curText;
-  if (same) return `${subj} 직전 ${periodText}${josa(periodText, '과', '와')} 같은 ${curText}입니다.`;
-  return `${subj} 직전 ${periodText} ${prevText}에서 ${curText}${josa(curText, '으로', '로', true)} ${magnitude(prev, cur, kind)}${cur > prev ? up : down}.`;
+  if (same) return `${subj} ${periodText}${josa(periodText, '과', '와')} 같은 ${curText}입니다.`;
+  return `${subj} ${periodText} ${prevText}에서 ${curText}${josa(curText, '으로', '로', true)} ${magnitude(prev, cur, kind)}${cur > prev ? up : down}.`;
 }
 
 /**
@@ -127,7 +127,8 @@ export function buildOverviewHeadlineRequest(
   if (m.source.overview !== 'real' || !brand.name) return null;
   const o: Overview = m.overview;
   const p: Overview | null = m.previous;
-  const periodText = `${days}일`;
+  // 비교 문장의 앞 기간 말 — "직전 14일" · 오늘이면 "어제"
+  const periodText = previousPeriodLabel(days);
   const thin = o.detailViews < THIN_DETAIL_VIEWS;
   const sections: HeadlineRequest['sections'] = [];
 
@@ -194,12 +195,15 @@ export function buildOverviewHeadlineRequest(
 
   return {
     brand: { name: brand.name, product_count: brand.productCount },
-    screen: { id: 'overview', label_ko: '한눈에 보기', period_text: `최근 ${periodText}` },
+    screen: { id: 'overview', label_ko: '한눈에 보기', period_text: periodLabel(days) },
     sections,
   };
 }
 
 const inflight = new Map<string, Promise<HeadlineEnvelope | null>>();
+
+/** AI 한 마디를 기다리는 최대 시간. 보통 1.5~3초, 처음 만드는 문장도 10초 안쪽이다 */
+const HEADLINE_TIMEOUT_MS = 15_000;
 
 /** 서버가 못 답하면 null. 계약상 503 은 없지만 경로가 없으면(404) 그냥 안 그린다 */
 export function fetchHeadline(req: HeadlineRequest): Promise<HeadlineEnvelope | null> {
@@ -207,11 +211,15 @@ export function fetchHeadline(req: HeadlineRequest): Promise<HeadlineEnvelope | 
   const hit = inflight.get(key);
   if (hit) return hit;
   const p = (async () => {
+    // 답이 안 오면 "분석 중" 이 끝나지 않는다 — HEADLINE_TIMEOUT_MS 뒤 끊고 기본 문장으로 간다 (2026-10-01)
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), HEADLINE_TIMEOUT_MS);
     try {
       const res = await fetch('/api/headline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: key,
+        signal: ctrl.signal,
       });
       if (!res.ok) return null;
       const body = (await res.json()) as HeadlineEnvelope;
@@ -219,9 +227,15 @@ export function fetchHeadline(req: HeadlineRequest): Promise<HeadlineEnvelope | 
       return body;
     } catch {
       return null;
+    } finally {
+      window.clearTimeout(timer);
     }
   })();
   inflight.set(key, p);
+  // 실패는 기억하지 않는다 — 기간을 바꿨다 돌아오는 등 다음에 같은 요청을 만들면 다시 묻는다
+  void p.then((env) => {
+    if (env === null) inflight.delete(key);
+  });
   return p;
 }
 
