@@ -1437,6 +1437,11 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     regret = None          # 담았다 뺄 이탈 상품 (최대 1개)
     discovered = []        # 리뷰 이력 없이 담은 등록 브랜드 상품 (신규 브랜드 발견 구매)
     ql_carted = []         # Quick Look 으로 담은 상품 — 결제 목록에 올린다
+    # 목표 상품을 **이 세션에서 실제로 담았나**. 규칙 경로는 항상 담지만 hidden 경로는 pref 가 높아
+    # convert 가 걸릴 때만 담는다. 결제는 담은 것만 — 프론트는 담기 없이 결제할 동선이 없다
+    # (바로구매도 add_to_cart 를 먼저 남긴다). 이걸 안 가르면 09-30 run 처럼 담기 없는 결제가
+    # 결제의 30% 가 되어 funnel_daily 의 checkout <= add_to_cart 가 깨진다 (데이터 파트 10-01).
+    target_carted = False
     cat = catalog[target]["cat"]
     n_bounce = int(rng.integers(*SC["bounce_range"]))
     if exposure is not None:
@@ -1628,6 +1633,8 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                                  **price_props(catalog, g), content_kind="cta")
                 if g in REGISTERED_IDS:
                     discovered.append((g, e.sid))   # 등록 상품은 결제 후보로 (아래 p_new_brand_buy)
+                if g == target:
+                    target_carted = True
             elif g in REGISTERED_IDS and rng.random() < SC["p_new_brand_cart"]:
                 # ── 신규 브랜드 발견 구매 — hidden 경로에도 같은 문을 둔다 (2026-09-29) ──
                 # hidden preference 는 리뷰 이력에서 만든 취향이라 리뷰가 없는 등록 브랜드(SSAFY Beauty)를
@@ -1649,6 +1656,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                        dwell_ms=int(rng.integers(600, 9000)))
             e.tick(); e.emit("add_to_cart", g, quantity=1,
                              **price_props(catalog, g), content_kind="cta")
+            target_carted = True
         elif regret is None and rng.random() < SC["p_cart_regret"]:
             # 충동적으로 담는다. 아래 장바구니 화면에서 도로 뺀다
             e.tick(); e.emit("add_to_cart", g, quantity=1,
@@ -1684,7 +1692,10 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     # 프론트는 헤더 장바구니를 누를 때 view_cart 를 남긴다 (App.tsx openCart).
     # product_id 는 싣지 않는다 — 화면 단위 이벤트라 특정 상품의 증거가 아니다.
     # 결제까지 가는 세션 (Jira 312). 목표 상품만 결제한다 — 시드는 과거에 이미 산 것이고, 이탈 상품은 빼는 중이다
+    # **추첨을 먼저 하고 거른다** (아래 here_now 와 같은 이유 — RNG 스트림을 안 밀리게).
+    # hidden 경로에서 목표 상품을 안 담았으면 살 수도 없다 (target_carted).
     buy = rng.random() < SC["p_purchase_after_cart"]
+    buy = buy and target_carted
     # 발견 구매한 등록 상품 중 결제까지 가는 것 (위 p_new_brand_cart 로 담긴 것들)
     # 담은 것 중 결제까지 가는 것. 목표 상품 외에 담긴 것들(발견 구매 · Quick Look)이 대상이다.
     # 시드는 과거에 이미 산 것이라 뺀다.
@@ -1701,7 +1712,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
     # 밀리고, 그 뒤 궤적이 통째로 달라진다 (노출·클릭까지 바뀌어 grain 검사가 깨졌다).
     buy_new = [g for g in extra if rng.random() < SC["p_new_brand_buy"] and g in here_now]
     if regret is not None or buy or buy_new or rng.random() < SC["p_view_cart"]:
-        cart = [g for g in seeds] + [target] + extra + ([regret] if regret else [])
+        cart = [g for g in seeds] + ([target] if target_carted else []) + extra + ([regret] if regret else [])
         e.new_page("cart")
         e.tick(); e.emit("page_view", navigation_source="in_app")
         e.tick(300, 2000)
@@ -1712,7 +1723,7 @@ def gen_persona(p, catalog, by_cat, popular, rng, sink, context,
                currency=CURRENCY)   # 계약 §3.2: 금액은 currency 와 함께 (Jira 303·340)
         # 수량 조절. 프론트는 entry_source="cart" 를 싣는다 (App.tsx)
         q = 1
-        if rng.random() < SC["p_quantity_change"]:
+        if rng.random() < SC["p_quantity_change"] and target_carted:   # 추첨 먼저, 거르기는 뒤
             q = int(rng.integers(2, 4))
             e.tick(500, 4000)
             e.emit("quantity_change", target, quantity=q, entry_source="cart")
