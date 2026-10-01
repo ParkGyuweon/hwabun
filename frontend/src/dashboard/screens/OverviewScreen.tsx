@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchSellerFeedback, fetchSellerPulse } from '../../lib/shopApi';
+import { SELLER_ORDER_LIMIT, fetchSellerFeedback, fetchSellerOrders, fetchSellerPulse } from '../../lib/shopApi';
 import { loadBrandId } from '../../lib/brands';
-import type { SellerPulse } from '../../lib/shopApi';
+import type { SellerOrder, SellerPulse } from '../../lib/shopApi';
+import { rangeOf } from '../lib/martApi';
 import { BarList, Funnel, Kpi, LineChart, OriginBadge, Panel } from '../components';
 import { fmt } from '../lib/metrics';
 import type { ProductMetrics } from '../lib/metrics';
@@ -130,7 +131,29 @@ export default function OverviewScreen({
     return () => {
       alive = false;
     };
-  }, []);
+    // 브랜드를 바꾸면(brandName) 다시 받는다. 전에는 처음 한 번만 받아 다른 브랜드의 주문 수가 남아 있었다
+  }, [brandName]);
+
+  /**
+   * **고른 기간**의 주문·매출·판매 수량 (2026-10-01). 위 `pulse` 는 `GET /api/seller/dashboard` 가 기간을 받지 않아 전체 합이다 —
+   * 그래서 7일·14일을 바꿔도 주문 수가 그대로였다 (유림님 제보). 쇼핑몰 원장 `GET /api/seller/orders?from&to` 가 결제 시각으로
+   * 거르므로 그걸로 센다. 기간은 행동 지표와 같은 `rangeOf(days)` (오늘까지 N일). 전체 합은 아래 줄에 참고로 남긴다.
+   * `undefined` 는 받는 중, `null` 은 못 받음 — 그때는 전체 합을 그대로 보여 주고 그렇게 적는다.
+   */
+  const brandIdNow = loadBrandId();
+  const salesKey = brandIdNow ? `${brandIdNow}:${days}` : null;
+  const [periodSales, setPeriodSales] = useState<{ key: string; value: PeriodSales | null } | null>(null);
+  useEffect(() => {
+    if (!salesKey || !brandIdNow) return;
+    let alive = true;
+    void fetchSellerOrders(brandIdNow, rangeOf(days)).then((rows) => {
+      if (alive) setPeriodSales({ key: salesKey, value: rows ? summarizeOrders(rows) : null });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [salesKey, brandIdNow, days]);
+  const sales: PeriodSales | null | undefined = salesKey && periodSales?.key === salesKey ? periodSales.value : undefined;
 
   /**
    * 한 마디 (contracts/headline-api-spec.md). 이 화면의 숫자를 그대로 보내 서술문 한 줄과 섹션 줄을 받는다.
@@ -153,16 +176,13 @@ export default function OverviewScreen({
         규칙 문장(origin rule)은 아래 카드 숫자를 한 줄로 되읊는 것뿐이라 그리지 않는다 (2026-09-21 유림님: 구구절절).
         LLM 이 쓴 문장(llm·mixed)만 보여 준다. 그때도 첫 문장만 펼치고 섹션 줄은 접는다.
       */}
-      {headline && (headline.origin === 'llm' || headline.origin === 'mixed') && headline.headline ? (
-        <section className="headline" aria-label="지금 상황 한 마디">
-          <p className="headline__eyebrow">
-            지금 무슨 일이 · 최근 {days}일
-            {headlineOrigin(headline) === 'rule' ? (
-              <span className="headline__tag" title="이번에는 문장으로 풀지 못해 숫자만 그대로 적었습니다">숫자 그대로</span>
-            ) : (
-              <span className="headline__tag" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">AI가 쓴 문장</span>
-            )}
-          </p>
+      {/*
+        **첫 문장이 AI 가 쓴 것일 때만** 그린다 (2026-10-01 유림님). `mixed` 봉투라도 첫 문장이 규칙(rule)이면 "최근 14일 … 방문의 방문은
+        1,170건입니다" 같은 되읊기라 카드째 뺀다. "지금 무슨 일이" 머리말과 "숫자 그대로 · AI가 쓴 문장" 꼬리표도 뺐다 — 발표 화면에서
+        거슬리고, 사장님에게는 문장이 어디서 왔는지보다 문장 자체가 중요하다. 출처는 title 로 남겨 마우스를 올리면 보인다.
+      */}
+      {headline && headline.headline && headlineOrigin(headline) === 'llm' ? (
+        <section className="headline" aria-label="지금 상황 한 마디" title="아래 숫자를 보고 AI가 문장으로 풀어 썼습니다">
           <p className="headline__line">{headline.headline}</p>
           {/* 섹션 줄은 접어 둔다. 첫눈에 읽는 건 한 문장이고, 나머지는 원할 때만 (2026-09-21 유림님: 글이 너무 많다) */}
           {headline.sections.length > 0 ? (
@@ -172,12 +192,7 @@ export default function OverviewScreen({
                 {headline.sections.map((s) => (
                   <li key={s.id}>
                     <span className="headline__label">{sectionLabel.get(s.id) ?? ''}</span>
-                    <span>{s.line}</span>
-                    {lineOrigin(headline, s) === 'rule' ? (
-                      <span className="headline__tag" title="이 줄은 숫자만 그대로 적었습니다">숫자 그대로</span>
-                    ) : (
-                      <span className="headline__tag" title="AI가 문장으로 풀어 쓴 줄입니다">AI가 쓴 문장</span>
-                    )}
+                    <span title={lineOrigin(headline, s) === 'rule' ? '이 줄은 숫자만 그대로 적었습니다' : 'AI가 문장으로 풀어 쓴 줄입니다'}>{s.line}</span>
                   </li>
                 ))}
               </ul>
@@ -186,13 +201,35 @@ export default function OverviewScreen({
         </section>
       ) : null}
       {/*
-        주문·매출·판매 수량은 기간을 고르지 않은 전체 합이다. 아래 행동 숫자(최근 N일)와 섞어 읽지 않게 묶음마다 기간을 적는다 (2026-09-29)
+        주문·매출·판매 수량은 **고른 기간(최근 N일)** 으로 센다 (2026-10-01). 기간 집계를 못 받았거나 아직 받는 중이면
+        전체 합(pulse)을 그대로 두고 "전체 기간" 이라고 적는다 — 묶음마다 기간을 적어 아래 행동 숫자와 섞어 읽지 않게 한다 (2026-09-29)
       */}
-      {pulse ? <p className="kpi-period">주문·매출 · 전체 기간</p> : null}
-      {pulse ? (
+      {sales || pulse ? <p className="kpi-period">{sales ? `주문·매출 · 최근 ${days}일` : '주문·매출 · 전체 기간'}</p> : null}
+      {sales ? (
+        <div className="grid grid--kpi">
+          <Kpi
+            label="주문"
+            value={`${fmt.int(sales.orders)}건`}
+            sub={sales.truncated ? `${fmt.int(SELLER_ORDER_LIMIT)}건까지만 셌습니다` : pulse ? `전체 기간 ${fmt.int(pulse.orders)}건` : sales.orders > 0 ? '결제 완료' : '이 기간에는 주문이 없습니다'}
+            source="real"
+          />
+          {/* 원 단위 그대로 적으면 카드에서 줄이 넘어간다. 100만 원 넘으면 만 원 단위로 줄이고 정확한 값은 아래 한 줄에 */}
+          <Kpi
+            label="매출"
+            value={wonCompact(sales.revenue)}
+            sub={sales.revenue >= 1_000_000 ? `${Math.round(sales.revenue).toLocaleString('ko-KR')}원` : pulse ? `전체 기간 ${wonCompact(pulse.revenue)}` : sales.revenue > 0 ? '결제 완료' : '이 기간에는 매출이 없습니다'}
+            source="real"
+          />
+          <Kpi
+            label="판매 수량"
+            value={`${fmt.int(sales.units)}개`}
+            sub={sales.orders > 0 ? `한 주문에 평균 ${(sales.units / sales.orders).toFixed(1)}개` : pulse ? `전체 기간 ${fmt.int(pulse.units)}개` : '이 기간에는 팔린 수량이 없습니다'}
+            source="real"
+          />
+        </div>
+      ) : pulse ? (
         <div className="grid grid--kpi">
           <Kpi label="주문" value={`${fmt.int(pulse.orders)}건`} sub={pulse.orders > 0 ? '결제 완료' : '아직 주문이 없습니다'} source="real" />
-          {/* 원 단위 그대로 적으면 카드에서 줄이 넘어간다. 100만 원 넘으면 만 원 단위로 줄이고 정확한 값은 아래 한 줄에 */}
           <Kpi label="매출" value={wonCompact(pulse.revenue)} sub={pulse.revenue >= 1_000_000 ? `${Math.round(pulse.revenue).toLocaleString('ko-KR')}원` : pulse.revenue > 0 ? '결제 완료' : '아직 매출이 없습니다'} source="real" />
           {/*
             주문 수만 보면 "5건" 이 5개인지 50개인지 알 수 없다. 팔린 개수와 가짓수를 따로 적는다 —
@@ -458,4 +495,23 @@ export default function OverviewScreen({
       </BehaviorGate>
     </div>
   );
+}
+
+/** 고른 기간의 주문 합계. `truncated` 는 서버 상한(SELLER_ORDER_LIMIT)만큼 돌아와 더 있을 수 있다는 뜻 */
+interface PeriodSales {
+  orders: number;
+  revenue: number;
+  units: number;
+  truncated: boolean;
+}
+
+/** 결제 완료 주문 목록 → 주문 수 · 내 브랜드 줄의 매출 합 · 팔린 개수. 다른 브랜드가 섞인 주문은 서버가 내 몫만 준다 (brand_amount) */
+function summarizeOrders(rows: SellerOrder[]): PeriodSales {
+  let revenue = 0;
+  let units = 0;
+  for (const o of rows) {
+    revenue += Number(o.brand_amount) || 0;
+    units += Number(o.item_count) || 0;
+  }
+  return { orders: rows.length, revenue, units, truncated: rows.length >= SELLER_ORDER_LIMIT };
 }
