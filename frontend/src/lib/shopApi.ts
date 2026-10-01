@@ -119,7 +119,7 @@ interface VariantDto {
   size: string | null;
   priceKrw: number | string;
   salePriceKrw: number | string | null;
-  status?: string;
+  status: string;
   /** 옵션 이미지·스와치. `product_variant.image_url · swatch_url` 컬럼은 있는데 `VariantView` 가 아직 안 준다 — 오면 바로 쓴다 */
   imageUrl?: string | null;
   swatchUrl?: string | null;
@@ -558,7 +558,7 @@ interface SellerFeedbackRow {
   authorSkinToneCode?: string | null;
   axisId: string;
   body: string;
-  status: string;
+  status?: string;
   createdAt: string;
   labels?: Array<{ axisId: string; categoryId: string }>;
   primary?: { axisId: string; categoryId: string } | null;
@@ -605,13 +605,19 @@ export async function startFeedbackClassification(brandId: string): Promise<Clas
   }
 }
 
+/** true/false 또는 1/0 → boolean. 그 외(없음)는 "모른다" */
+const boolish = (v: unknown): boolean | undefined =>
+  typeof v === 'boolean' ? v : typeof v === 'number' ? v !== 0 : undefined;
+
 /** 서버 행 → 화면 타입(Feedback). 판매자 목록과 "내 피드백" 이 같은 모양이라 같이 쓴다. 분류 전이면 labels 가 빈 배열로 온다 */
 function feedbackFromRow(r: SellerFeedbackRow, brandName: string): Feedback {
   /*
    * 응답 이력. 판매자 목록은 `latestResponse` 하나, 내 피드백(`/api/feedback/mine`)은 `responses[]` 전부를 준다 (백엔드 요청
    * 2026-10-01). 소비자에게 보이는 답글은 **가장 최근 REPLIED** 의 본문이다 — 그 뒤에 "반영했어요" 가 와도 답글 문장은 남는다.
    */
-  const responses = Array.isArray(r.responses) ? r.responses : r.latestResponse ? [r.latestResponse] : [];
+  // 이력이 비어 있으면(`[]`) latestResponse 로 물러난다. 순서는 서버가 어느 쪽으로 주든 createdAt 으로 오래된 것부터 맞춘다
+  const src = r.responses?.length ? r.responses : r.latestResponse ? [r.latestResponse] : [];
+  const responses = [...src].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   const latest = responses.length > 0 ? responses[responses.length - 1] : null;
   const replied = [...responses].reverse().find((x) => x.action === 'REPLIED' && x.body);
   return {
@@ -638,7 +644,8 @@ function feedbackFromRow(r: SellerFeedbackRow, brandName: string): Feedback {
     brand_name: brandName,
     profile: r.authorSkinTypeCode ? { skin_type: r.authorSkinTypeCode, skin_tone: r.authorSkinToneCode ?? '' } : null,
     // 옛 서버는 이 값을 안 준다. 그때는 `undefined` 로 두어 화면이 "모른다" 로 읽게 한다
-    purchased: typeof r.purchased === 'boolean' ? r.purchased : typeof r.isPurchaser === 'boolean' ? r.isPurchaser : undefined,
+    // 판매자 목록은 `isPurchaser` 로 주고(SQL case 식이라 드라이버에 따라 0/1 로도 온다), 옛 이름 `purchased` 도 받는다
+    purchased: boolish(r.purchased ?? r.isPurchaser),
     classification_status: r.classificationStatus ?? null,
     // 처리 상태는 서버 것이다. 옛 서버(handlingStatus 없음)는 전부 '업체 확인 대기'
     status: statusOfHandling(r.handlingStatus),
