@@ -18,6 +18,7 @@
  *     실패하면 로컬 등록으로 물러난다.
  *   · 새 상품은 DRAFT 로 만들어져 목록에 안 뜬다. 등록 성공 직후 ACTIVE 로 바꾸는 요청을 한 번 더 보낸다.
  */
+import { signalNotificationsChanged } from './notifySignal';
 import { authFetch, sessionSnapshot } from './auth';
 import type { AccountRole } from './auth';
 import { loadBrandId } from './brands';
@@ -540,6 +541,8 @@ export async function submitFeedbackBackend(input: { productId: string; axisId: 
     });
     if (!res.ok) return fail(res);
     const j = (await res.json()) as { feedbackId: string };
+    // 서버가 같은 요청 안에서 판매자 알림을 만든다 — 옆에 떠 있는 대시보드 종이 바로 다시 받게
+    signalNotificationsChanged();
     return { ok: true, feedbackId: j.feedbackId };
   } catch {
     return offline();
@@ -916,7 +919,10 @@ export async function respondToFeedback(
       body: JSON.stringify(action === 'REPLIED' ? { action, body: body ?? '' } : { action }),
     });
     if (!res.ok) return null;
-    return (await res.json()) as FeedbackResponseResult;
+    const result = (await res.json()) as FeedbackResponseResult;
+    // 서버가 같은 요청 안에서 고객 알림을 만든다 — 옆에 떠 있는 쇼핑몰 종에 빨간 점이 바로 뜨게 (2026-10-01)
+    signalNotificationsChanged();
+    return result;
   } catch {
     return null;
   }
@@ -940,7 +946,7 @@ export interface AppNotification {
 
 /**
  * 알림 API. 회원·판매자가 같은 경로를 쓰고 누구에게 어떤 알림이 가는지는 서버가 거른다.
- * 정기 polling 은 없다 — 세션 복원 · 탭 복귀 · 종 클릭에서만 부른다 (components/notifications/NotificationBell).
+ * 정기 polling 은 없다 — 세션 복원 · 탭 복귀 · 창 포커스 · 종 클릭 · 같은 브라우저의 알림 신호(lib/notifySignal)에서만 부른다.
  * 전부 못 읽으면 null 이다. 0 과 "못 읽음" 을 화면이 구분해야 배지를 잘못 지우지 않는다.
  */
 export async function fetchNotifications(role: AccountRole, limit = 20): Promise<AppNotification[] | null> {
