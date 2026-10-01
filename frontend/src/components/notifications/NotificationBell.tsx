@@ -11,12 +11,15 @@ import '../../styles/auth.css';
 /**
  * 인앱 알림함 — 헤더의 종 아이콘, 안 읽은 수 배지, 최근 알림 20개 패널.
  *
- * 브라우저 푸시가 아니다. 정기 polling 도 하지 않는다 (백엔드 요청 2026-09-18). 서버를 보는 때는 이것뿐이다.
+ * 브라우저 푸시가 아니다. 서버를 보는 때는 이것뿐이다.
  *   1. 로그인 세션이 복원된 직후
  *   2. 탭이 다시 보이게 됐을 때 (visibilitychange → visible) · 창에 포커스가 돌아왔을 때
  *   3. 종을 눌러 패널을 열 때 — 이때는 안 읽은 수와 목록을 둘 다 받는다
  *   4. 같은 브라우저에서 알림을 만드는 요청이 성공했을 때 (lib/notifySignal, 2026-10-01) — 판매자가 반영을 누르면
  *      옆 창 쇼핑몰의 종에 빨간 점이 바로 뜬다. 패널이 열려 있으면 목록도 다시 받는다
+ *   5. 화면이 보이는 동안 POLL_MS 마다 안 읽은 수만 (2026-10-01 유림님: 다른 기기여도 실제 앱처럼 바로 떠야 한다).
+ *      09-18 백엔드 요청으로 정기 polling 을 안 했는데 되살렸다 — 숨은 탭은 묻지 않고, 묻는 것은 가벼운 unread-count 하나다.
+ *      서버가 알림을 밀어 주는 길(SSE 등)이 생기면 이것을 뗀다
  *
  * 회원과 판매자가 같은 UI 를 쓴다. 누가 어떤 알림을 받는지는 서버가 거른다 — 회원은 자기 의견의 확인·답변·반영,
  * 판매자는 새 의견. 알림을 누르면 `onOpen` 이 화면을 옮기고(회원은 상품 상세, 판매자는 피드백 화면) 읽음으로 남긴다.
@@ -27,6 +30,9 @@ import '../../styles/auth.css';
  * 화면에 안 들어가면 반대쪽으로 연다 — 자세한 규칙은 아래 useLayoutEffect.
  * `placement="above"` 는 대시보드 사이드바 발 부분용(종 왼쪽 맞춤·위로), 기본 below 는 헤더용(종 오른쪽 맞춤·아래로).
  */
+/** 화면이 보이는 동안 안 읽은 수를 묻는 간격 */
+const POLL_MS = 5_000;
+
 export default function NotificationBell({
   role,
   onOpen,
@@ -128,6 +134,26 @@ export default function NotificationBell({
     const onFocus = () => void refreshCount();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
+  }, [sessionKey, refreshCount]);
+
+  // 5. 보이는 동안 POLL_MS 마다. 숨으면 멈추고, 다시 보이면 2번이 바로 받은 뒤 다시 돈다
+  useEffect(() => {
+    if (!sessionKey) return;
+    let timer: number | null = null;
+    const start = () => {
+      if (timer === null && document.visibilityState === 'visible') timer = window.setInterval(() => void refreshCount(), POLL_MS);
+    };
+    const stop = () => {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => (document.visibilityState === 'visible' ? start() : stop());
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [sessionKey, refreshCount]);
 
   // 4. 같은 브라우저에서 알림이 생겼을 때. 패널이 열려 있으면 목록도

@@ -946,7 +946,7 @@ export interface AppNotification {
 
 /**
  * 알림 API. 회원·판매자가 같은 경로를 쓰고 누구에게 어떤 알림이 가는지는 서버가 거른다.
- * 정기 polling 은 없다 — 세션 복원 · 탭 복귀 · 창 포커스 · 종 클릭 · 같은 브라우저의 알림 신호(lib/notifySignal)에서만 부른다.
+ * 세션 복원 · 탭 복귀 · 창 포커스 · 종 클릭 · 같은 브라우저의 알림 신호(lib/notifySignal) · 보이는 동안 5초마다 부른다.
  * 전부 못 읽으면 null 이다. 0 과 "못 읽음" 을 화면이 구분해야 배지를 잘못 지우지 않는다.
  */
 export async function fetchNotifications(role: AccountRole, limit = 20): Promise<AppNotification[] | null> {
