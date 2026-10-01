@@ -27,6 +27,7 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
     : deriveSkinTypesFromReviews(reviews);
   const description = product.description;
 
+  const brandStory = stripDemoNote(description?.brand_story ?? null);
   return (
     <div className="about">
       {description ? (
@@ -84,10 +85,10 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
            * content_kind 21종 중 brand_story 만 화면에 없어서 대시보드의 콘텐츠
            * 주목도 표에서도 이 줄만 영원히 비어 있었다.
            */}
-          {description.brand_story ? (
+          {brandStory ? (
             <section data-log-content="brand_story">
               <h3>About the Brand</h3>
-              <p className="about__pre">{description.brand_story}</p>
+              <p className="about__pre">{brandStory}</p>
             </section>
           ) : null}
         </div>
@@ -169,4 +170,15 @@ export default function AboutProduct({ product, persona, reviews }: AboutProduct
       </dl>
     </div>
   );
+}
+
+/**
+ * SSAFY Beauty 시드의 브랜드 소개 끝에 붙은 "이 페이지의 상품은 시연용 가상 브랜드이며 …" 안내를 화면에서만 뺀다
+ * (2026-10-01 점검: 발표 화면에 "가상 브랜드입니다" 같은 말이 보였다). 서버 시드·API 는 그대로 둔다 — 프론트 담당 범위.
+ */
+const DEMO_NOTE = /\s*이 페이지의 상품은 시연용 가상 브랜드이며[^.]*\./g;
+function stripDemoNote(text: string | null): string | null {
+  if (!text) return text;
+  const cleaned = text.replace(DEMO_NOTE, '').trim();
+  return cleaned || null;
 }
