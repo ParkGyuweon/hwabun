@@ -487,6 +487,7 @@ export default function OverviewScreen({
               hint: `${fmt.int(r.orderCount)}건`,
             }))}
             format={(v) => fmt.pct(v, 0)}
+            columns={2}
           />
         </Panel>
       ) : null}

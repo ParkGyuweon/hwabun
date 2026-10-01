@@ -204,18 +204,25 @@ export function BarList({
   items,
   format,
   rank = false,
+  columns = 1,
 }: {
   items: Array<{ label: string; value: number; hint?: string; sub?: string }>;
   format?: (value: number) => string;
   /** 순위 번호를 붙인다. TOP N 목록에만 쓰고 분포 목록에는 쓰지 않는다 */
   rank?: boolean;
+  /** 넓은 화면에서 두 줄씩 나란히 놓는다. 항목이 많은 분포 목록이 세로로 길게 늘어질 때 (구매 이유) */
+  columns?: 1 | 2;
 }) {
   // 비어 있으면 빈 목록 대신 이유를 적는다. 빈 <ul> 은 화면에서 아무것도 안 보여 "고장났나" 로 읽힌다
   if (items.length === 0) {
     return <p className="note">아직 기록이 없습니다</p>;
   }
   const values = items.map((item) => item.value);
-  const max = Math.max(1, ...values);
+  /*
+   * 막대는 가장 큰 값이 꽉 찬다. 전에는 최소 1 로 잡아 비율(0~1) 목록은 가장 큰 14% 도 막대의 14% 만 칠해져 차이가
+   * 안 보였다 (2026-10-01). 전부 0 이면 1 로 둬 나눗셈을 막는다.
+   */
+  const max = Math.max(...values) > 0 ? Math.max(...values) : 1;
   const min = Math.min(...values);
   const mean = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
   /*
@@ -235,7 +242,7 @@ export function BarList({
 
   return (
     <>
-      <ul className={`bars bars--${mode}${rank ? ' bars--rank' : ''}`}>
+      <ul className={`bars bars--${mode}${rank ? ' bars--rank' : ''}${columns === 2 ? ' bars--2col' : ''}`}>
         {items.map((item, index) => (
           <li key={item.label} className="bars__row">
             {rank ? <span className="bars__rank">{index + 1}</span> : null}
