@@ -17,7 +17,7 @@
 | AI | 상품 벡터 148차원(멀티핫 블록 8종 + 스칼라), 학습 결합 추천(LTR 382트리·피처 20개), Kafka 구독 실시간 상태 반영, 대시보드 처방 문장 |
 | 검증 | 페르소나 9,900명 합성 로그 약 1,049만 건, LLM 에이전트 100명이 실제 브라우저 조작, 파이프라인 품질 검증 171개(2026-09-30 기준, 오프셋 연속성 경고 제외) |
 
-기준일 2026-09-28(발표 종료일). 아래 수치는 이 날짜에 레포(`origin/dev`)와 배포 서버에서 직접 확인한 값입니다.
+기준일 2026-09-28(발표 종료일). 아래 수치는 이 날짜에 레포(`origin/dev`)와 배포 서버에서 직접 확인한 값입니다. 코드에서 세는 수치(LTR 모델, 라우트·API 수, 테스트 파일 수, 폴더 구조)는 2026-10-01 `dev` 로 다시 맞췄습니다.
 
 ## 1. 아키텍처
 
@@ -30,7 +30,7 @@
    │  (생성기)           검증 → Kafka           │                          · 처방 문장(LLM)
  에이전트 PA 100명       백프레셔 429/503       ▼                          · 상품 등록 즉시 편입    브랜드 대시보드
    (Playwright+LLM)                          Spark Q1~Q5                        ▲                 · 13개 화면
-                                              Q1 raw_sink   (상시)              │                 · 마트 API 10개
+                                              Q1 raw_sink   (상시)              │                 · 마트 API 11개
  세 갈래가 같은 스키마                          Q2 clean_events                   │
  frontend/src/types/log.ts (43종)              Q3 derive_facts                 DW MySQL
  contracts/event-properties-schema.md          Q4 build_marts  → 마트 25종      24 테이블
@@ -105,7 +105,7 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 - Q5 `validate_pipeline_job`. 품질 검증 171개로 grain 유일성, 비율 0~1(Event 날짜로 칸을 나누는 Mart 는 자정을 넘긴 세션 때문에 일자 칸이 아니라 날짜 합산으로 본다 — `dw-schema.md` §4 도입), 재계산 결정성, 통화 일관성, 부분집합 관계, 상품 귀속, 발행 대상 마트의 NOT NULL 계약, 세션 안에서 클릭에 대응하는 노출이 있는지를 확인합니다.
 - 계약 문서를 소유합니다. `dw-schema.md`, `processed-schema.md`, `raw-event-schema.md`, `event-properties-schema.md`, `persona-schema.md`, `event-attribution-contract.md`, 그리고 대시보드 마트 조회 계약 `dashboard-mart-api-spec.md`
 - Job 이 실제로 읽는 계약 파일도 같이 관리합니다. `purchase-reason-trait-map.json`(Q4·Q5), `user-trait-weights.json`(Q4), `dw/build_ddl.py`(DDL 생성 · projection 과 Q5 의 NOT NULL 정책 정본) 와 `dw/schema.sql`, `event-schema.json`(Q5 가 `impression_origin` 허용값을 여기서 읽습니다 — Q2 와 수집기는 같은 규칙을 각자 코드로 구현합니다)
-- 노출 정의 통일. 노출 이벤트 셋(product, recommendation, banner)을 CTR 분모에 합산하고, 뒤로가기 재조회는 상세 진입에서 뺍니다. 선행 노출 없이 클릭·Quick Look 이 먼저 일어나면 프론트가 노출을 합성해 남기고, 그 사실을 `impression_origin`(`observed` · `implied_by_click` · `implied_by_quick_look`) 으로 구분합니다. 합성분도 분모에 넣습니다.
+- 노출 정의 통일. 노출 이벤트 셋(product, recommendation, banner)을 CTR 분모에 합산하고, 뒤로가기 재조회는 상세 진입에서 뺍니다. 선행 노출 없이 클릭·Quick Look 이 먼저 일어나거나 목록을 거치지 않고 상세에 바로 들어오면 프론트가 노출을 합성해 남기고, 그 사실을 `impression_origin`(`observed` · `implied_by_click` · `implied_by_quick_look` · `implied_by_direct_view`) 으로 구분합니다. 합성분도 분모에 넣습니다.
 - 로컬 Kafka·Spark compose 를 만들었습니다 (`infra/`).
 
 ### 송민우 · 인프라
@@ -121,10 +121,10 @@ Kafka 부터 마트까지 다섯 단계와, 파트 사이를 잇는 계약 문�
 추천 모델과 추천 서버, 그리고 그 둘을 검증할 트래픽을 만드는 시뮬레이터를 맡습니다.
 
 - 상품 벡터 148차원. 어휘집 0.7 기준 멀티핫 블록 8종(카테고리 2·고민·성분·클린·제형·가격대·브랜드) + 스칼라 `rating`. 블록 가중치는 문서 빈도에서 계산합니다.
-- 추천 점수. 콘텐츠 유사도에 페르소나 속성 친화도 4,000행과 CF 동시발생(200×200)을 얹고 LTR 로 결합합니다. 트리 239개·피처 20개, 학습 5,954명 231,005행. 학습과 서빙이 `ltr_features.py` 를 같이 씁니다.
+- 추천 점수. 콘텐츠 유사도에 페르소나 속성 친화도 4,000행과 CF 동시발생(200×200)을 얹고 LTR 로 결합합니다. 트리 382개·피처 20개, 학습 9,900명 383,967행. 학습과 서빙이 `ltr_features.py` 를 같이 씁니다.
 - 노출 정책. MMR 다양성, 신규 브랜드 전용 슬롯, 콜드스타트 폴백. `regenerate_all.py` 가 16단계를 mtime 확인 후 필요한 것만 다시 만듭니다.
-- 평가 축 3개 분리. 오프라인 leave-last-out, 리뷰 이력 순차 재생, 동적 시뮬레이션. 홀드아웃 2세트(각 2,000명)로 a 에서 고르고 b 에서 확인합니다.
-- 추천 서버 `batch/serving/` 8300, 라우트 23개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장·한 마디(`/api/headline`), 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/live/users`·`/pipeline`
+- 평가 축 3개 분리. 오프라인 leave-last-out, 리뷰 이력 순차 재생, 동적 시뮬레이션. 홀드아웃 3세트(a·b 각 2,000명, c 6,400명). a 에서 고르고 b 에서 확인하며, c 는 1%p 급 차이를 보려고 09-30 에 더 뗐습니다.
+- 추천 서버 `batch/serving/` 8300, 라우트 24개. 추천(items 10 + hero), 상품 등록·중단, 이벤트 수신, 대시보드 처방 문장·한 마디(`/api/headline`), 고객 피드백 분류, 카탈로그 동기화, 시연 화면 `/live`·`/live/users`·`/pipeline`
 - 실시간 상태. `activity-events` 를 별도 컨슈머 그룹으로 구독해 세션 상태를 초 단위로 갱신하고, DW `user_trait_daily` 를 읽어 응답에 `long_term_trait` 을 싣습니다.
 - 시뮬레이터. 페르소나 9,900명 합성 로그(약 1,049만 건)와 LLM 에이전트 100명. 에이전트는 Playwright 로 실제 브라우저를 띄워 프론트 로거를 그대로 탑니다. 성향 6축이 "어떻게 보는가"만 바꾸고 "무엇을 고르는가"에는 관여하지 않습니다.
 - 고객 피드백 분류. 축 5종은 고객이 고르고 분류기는 그 축 안 카테고리 20종에서만 고릅니다. 사람 정답 50건 대비 F1 94.3, 금지어 599개 대조
@@ -155,7 +155,7 @@ LLM 을 쓰는 곳은 넷이고 경로가 다릅니다.
 | 메시징 | Apache Kafka (KRaft) | 4.2.0 | 토픽 `activity-events`, 파티션 3, 키 `session_id`. 운영은 EC2-2, 로컬은 `infra/kafka/` |
 | 분산 처리 | Spark Structured Streaming / Batch | 3.5.6 | `streaming/` Q1~Q5, 출력은 Parquet. 로컬은 `infra/spark/` |
 | | PyArrow · PyMySQL[rsa] | 19.0.1 · 1.1.1 | dw projection (`streaming/Dockerfile.dw`) |
-| 추천 · AI | Python · NumPy · scikit-learn · joblib | 3.13 · 2.2.6 · 1.7.0 · 1.5.3 | HistGradientBoosting 382트리·피처 20개, 학습 5,954명 231,005행 (`ltr_model_meta.json`). sklearn 은 pkl 을 만든 버전과 정확히 같아야 로드됩니다. |
+| 추천 · AI | Python · NumPy · scikit-learn · joblib | 3.13 · 2.2.6 · 1.7.0 · 1.5.3 | HistGradientBoosting 382트리·피처 20개, 학습 9,900명 383,967행 (`ltr_model_meta.json`). sklearn 은 pkl 을 만든 버전과 정확히 같아야 로드됩니다. |
 | | FastAPI · uvicorn · pydantic | 0.141.1 · 0.52.4 · 2.13.4 | 추천 추론 서버 `batch/serving/` 8300, 내부 전용 |
 | | confluent-kafka | 2.15.0 | 추천 서버의 `activity-events` 구독 |
 | | pymysql · cryptography | 1.1.1 · ≥42 | DW `user_trait_daily` 읽기. MySQL 8 의 `caching_sha2_password` 때문에 cryptography 가 필요합니다. |
@@ -166,7 +166,7 @@ LLM 을 쓰는 곳은 넷이고 경로가 다릅니다.
 | 운영 | Docker Compose · nginx · certbot | — | EC2-1 7서비스, EC2-2 7서비스 |
 | | Jenkins | — | `Jenkinsfile` 6 스테이지 |
 | | Prometheus · Grafana | 3.5.0 · 12.1.0 | 대시보드 3종 프로비저닝 |
-| 데이터셋 | Sephora 리뷰 | — | 속성 4개가 모두 채워진 리뷰 844,865건(전체의 77.2%), 상품 200개(+ 등록 8 = 카탈로그 208), 페르소나 14,000명(9,900 + 홀드아웃 2,000×2 + 에이전트 100) |
+| 데이터셋 | Sephora 리뷰 | — | 속성 4개가 모두 채워진 리뷰 844,865건(전체의 77.2%), 상품 200개(+ 등록 8 = 카탈로그 208), 페르소나 9,900명(합성 로그 생성 · LTR 학습) + 추천 평가용 홀드아웃 10,400명(a·b 각 2,000, c 6,400) + 에이전트 100명 |
 
 Sephora 데이터를 쓴 이유는 여러 브랜드가 한 쇼핑몰에 섞여 있어 우리 추천 환경(통합몰)과 가장 가깝기 때문입니다. 단일 브랜드 자사몰 데이터로는 추천 후보가 부족합니다.
 
@@ -264,7 +264,7 @@ S15P21A306/
 │   │   └── build_persona_tables.py · holdout_rule.py · validate_persona_tables.py
 │   │       compare_holdout_rules.py · test_persona_tables.py · data/(미커밋)
 │   ├── samples/                           유효·무효 이벤트 표본 8종
-│   └── tests/                             계약 테스트 3종
+│   └── tests/                             계약 테스트 4종
 │
 ├── frontend/                          ★ React 19 + TypeScript 6 + Vite 8 (프론트)
 │   ├── index.html · dashboard.html · platform.html      엔트리 3개
@@ -281,14 +281,15 @@ S15P21A306/
 │   └── src/
 │       ├── main.tsx · App.tsx · index.css
 │       ├── types/     ★ log.ts (이벤트 43종·섹션·콘텐츠 종류·intent·LogEnvelope)
-│       │              product · review · persona · cart · feedback · recommendation
+│       │              product · review · persona · cart · feedback · recommendation · insight
 │       ├── lib/       logger.ts(조립·버퍼·재시도) · section.ts · auth · checkout · discount · brands …
 │       ├── hooks/     useImpression · useInteractionSignals · useExitSummary · useTextSelection
 │       │              useAuth · useCatalog · useRecommendation · useFeedback …
-│       ├── pages/     ProductListPage · ProductDetailPage · CartPage
+│       ├── pages/     ProductListPage · ProductDetailPage · CartPage · PrivacyPage · TermsPage
 │       ├── dashboard/ DashboardApp.tsx · screens/(15 파일 = 화면 13 + 공용 2) · lib/(martApi · martAdapter · insightApi · prescription) · css 4종
 │       ├── platform/  PlatformApp.tsx · lib
-│       ├── components/ account · auth · banner · cart · common · devtools · feedback · layout · product · review
+│       ├── components/ account · auth · banner · cart · common · devtools · feedback · layout · legal · notifications
+│       │              product · review · DemoBanner · ErrorBoundary
 │       ├── mocks/     SSAFY Beauty 카탈로그 · 시연용 시드(피드백 30건 등) · 스크립트 산출 샘플 JSON
 │       └── styles/
 │
@@ -300,7 +301,7 @@ S15P21A306/
 ├── shop_backend/                      Spring Boot 쇼핑몰 백엔드 8090 + MySQL (백엔드)
 │   ├── src/main/java/com/cosmetic/shopbackend/
 │   │       identity · brand · catalog · commerce · payment · feedback
-│   │       dashboard · admin · settlement · recommendation · security · common
+│   │       notification · dashboard · admin · settlement · recommendation · security · common
 │   ├── mysql-erd.sql · mysql-erd.md · ERD-TABLES.md      테이블 38개
 │   ├── migrations/ · docker-compose.mysql.yml · MYSQL-SETUP.md
 │   └── PERFORMANCE-BASELINE-NPLUS1.md
@@ -314,9 +315,10 @@ S15P21A306/
 │   │   ├── validate_pipeline_job.py       Q5 품질 검증 171개
 │   │   ├── publish_user_trait_job.py      dw projection 진입점 (staging→검증→원자적 스왑)
 │   │   ├── dw_projection_source.py        Parquet 읽기·DDL 대조
+│   │   ├── compact_raw_partition_job.py   Q1 Raw 날짜 파티션의 소형 파일 압축 (선택 실행, 기본 꺼짐)
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 재사용 어댑터
 │   ├── tools/replay_collector.py          gzip 행동 로그를 수집기로 재생 (SHA-256 회계)
-│   ├── tests/                             Spark 테스트 37개 파일
+│   ├── tests/                             Spark 테스트 38개 파일
 │   └── Dockerfile.dw · requirements-dw.txt · DW_PROJECTION.md · README.md
 │
 ├── batch/                             ★ 추천 배치 + 추천 추론 서버 (AI)
@@ -334,14 +336,14 @@ S15P21A306/
 │   │                                      item_cooc.npz(CF), ltr_model.pkl + meta, banner_axes.json,
 │   │                                      ingredient/concern vocab, product_ingredient.csv,
 │   │                                      backend_tables.sql, registered_products.jsonl
-│   ├── jobs/                              모델·평가 (37 파일, 테스트 13)
+│   ├── jobs/                              모델·평가 (44 파일, 테스트 17)
 │   │   ├── product_encoder.py · persona_feature.py · user_vector.py · recommender.py
 │   │   ├── ltr_features.py(피처 20개) · train_ltr.py · build_cooc.py
 │   │   ├── export_features.py · export_backend_tables.py · export_dashboard.py · banner_axes.py
 │   │   ├── eval_persona_feature.py · eval_dynamic.py · eval_review_replay.py · eval_cbf_flow.py
 │   │   ├── eval_metadata.py · persona_split.py · hidden_preference.py
 │   │   └── behavior_weights.py            frontend/src/types/log.ts 를 직접 읽는 가중치 로더
-│   └── serving/                           ★ 추천 추론 서버 8300 (테스트 13 파일)
+│   └── serving/                           ★ 추천 추론 서버 8300 (테스트 14 파일)
 │       ├── recommend_server.py                FastAPI 진입점
 │       ├── banners.py                         hero·배너 조립
 │       ├── prescription.py                    대시보드 처방 문장 (LLM)
@@ -374,7 +376,7 @@ S15P21A306/
 │   │   └── products.ssafy-beauty.json         시연 브랜드 상품 8개 (SB000001~)
 │   └── personas/
 │       ├── build_personas.py · holdout_exclude_dupaccounts.txt
-│       └── data/                              personas_9900 · _100_agent · _holdout_a/b · persona_style
+│       └── data/                              personas_9900 · _100_agent · _holdout_a/b/c · persona_style
 │
 ├── deploy/                            EC2 배포 (인프라·백엔드·AI)
 │   ├── backend.Dockerfile · shop_backend.Dockerfile · nginx.Dockerfile · nginx/default.conf
@@ -382,11 +384,16 @@ S15P21A306/
 │   ├── ec2-1/                             서비스 7종. backend · shop-backend · mysql · recommend · nginx · prometheus · grafana
 │   │   ├── docker-compose.yml · .env.example · prometheus.yml · README.md
 │   │   ├── migrations/20260917_dw_mart_columns.sql
-│   │   └── redeploy-local.sh · redeploy-recommend-from-dev.sh · reset-demo-local.sh
-│   │       reset-registered-local.sh · build-verbose-local.sh
+│   │   ├── redeploy-local.sh · redeploy-recommend-from-dev.sh · reset-demo-local.sh
+│   │   │   reset-registered-local.sh · build-verbose-local.sh
+│   │   ├── apply-shop-migrations.sh · deploy-helpers.sh      Jenkins 배포 단계가 부른다 (마이그레이션 적용 · 이전 이미지 태깅)
+│   │   ├── backup-mysql.sh · hwabun-mysql-backup.service · .timer    shop_backend + dw 백업 (7일 보관, 기본 비활성)
+│   │   └── retrain-ltr.sh · hwabun-ltr-retrain.service · .timer      LTR 주 1회 재학습
 │   └── ec2-2/                             Kafka · Spark master/worker/history · Q1 상시 · dw-projection
 │       ├── docker-compose.yml · .env.example · README.md
-│       └── run-daily-batch.sh · hwabun-daily-batch.service · hwabun-daily-batch.timer
+│       ├── run-daily-batch.sh · hwabun-daily-batch.service · hwabun-daily-batch.timer
+│       └── check-batch-freshness.sh · notify-batch-failure.sh · hwabun-batch-notify@.service
+│                                              배치 신선도 점검 · 실패 알림
 │
 ├── infra/                             로컬 개발 환경
 │   ├── kafka/    docker-compose.yml · topics.sh/ps1 · README.md
@@ -407,6 +414,7 @@ S15P21A306/
 │   │                 raw-event-storage-design · marketing-signal-research · event-weight-rationale.html
 │   ├── dashboard/    B2B 대시보드 조사·설계. b2b-dashboard-research · insight-catalog · metric-basis
 │   ├── localization/ 한국어화 검수본
+│   ├── presentation/ 발표 준비. business-model · data-sources · qa-prep · brand-data-consent-roadmap
 │   ├── data/ · captures/ · system-architecture*.png
 │   ├── api-spec.md                    쇼핑몰 백엔드 API 명세 (백엔드)
 │   ├── shop-backend-requests.md · recommend-trait-requests.md   프론트 → 백엔드·AI 요청서
