@@ -150,9 +150,16 @@ fi
 # The projection publishes each Mart atomically (staging table + RENAME) and keeps
 # going when one Mart fails, so a single bad Mart no longer blocks the others.
 stage="dw_projection"
-echo "publishing DW marts"
+# SKIP_PUBLISH=1 이면 Q2~Q5 만 돌리고 MySQL 발행은 하지 않는다 (2026-10-01, 리허설 동안 대시보드를
+# 그대로 두고 싶을 때). 나중에 발행만 하려면:
+#   docker compose --project-directory deploy/ec2-2 --profile dw run --rm --no-deps dw-projection
 publish_rc=0
+if [ "${SKIP_PUBLISH:-0}" = "1" ]; then
+  echo "SKIP_PUBLISH=1: DW 발행을 건너뛴다 (마트는 /opt/hwabun/data/marts 에 완성돼 있다)"
+else
+echo "publishing DW marts"
 "${compose[@]}" --profile dw run --rm --no-deps dw-projection || publish_rc=$?
+fi
 if [ "$publish_rc" -ne 0 ]; then
   echo "WARNING: DW publish reported failures (rc=$publish_rc)." >&2
   echo "         See the dw-projection report for the per-Mart status." >&2
